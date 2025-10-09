@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes move-x {
+	0% {
+		transform: translateX(var(--move-x-from));
+	}
+	100% {
+		transform: translateX(var(--move-x-to));
+	}
+}
+
+@keyframes shake {
+	0%,
+	100% {
+		transform: rotate(0deg);
+	}
+	25% {
+		transform: rotate(-5deg);
+	}
+	75% {
+		transform: rotate(5deg);
+	}
+}
