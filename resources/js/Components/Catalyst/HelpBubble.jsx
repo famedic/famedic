@@ -44,7 +44,7 @@ export default function HelpBubble({ className = "" }) {
 					<DropdownItem
 						onClick={() =>
 							window.open(
-								"https://wa.me/5531021237?text=Hola%2C%20quisiera%20mas%20informaci%C3%B3n%20sobre%20sus%20estudios%20de%20laboratorio",
+								"https://wa.me/5540572139?text=Hola%2C%20quisiera%20mas%20informaci%C3%B3n%20sobre%20sus%20estudios%20de%20laboratorio",
 								"_blank",
 							)
 						}
@@ -71,7 +71,7 @@ export default function HelpBubble({ className = "" }) {
 							No se que estudios de laboratorio comprar
 						</DropdownLabel>
 						<DropdownDescription>
-							<span className="text-xs">(553)-102-1237</span>
+							<span className="text-xs">(554)-057-2139</span>
 							<br />
 							<span>
 								Te ayudamos a elegir el estudio que necesitas.
