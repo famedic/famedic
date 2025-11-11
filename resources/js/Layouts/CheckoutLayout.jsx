@@ -9,7 +9,11 @@ export default function CheckoutLayout({
 	submit,
 }) {
 	const paymentButtonText = useMemo(() => {
-		return "Pagar " + summaryDetails[summaryDetails.length - 1]?.value;
+		return "Pagar ahora " + summaryDetails[summaryDetails.length - 1]?.value;
+	}, [summaryDetails]);
+
+	const paymentBranchButtonText = useMemo(() => {
+		return "Pagar en sucursal " + summaryDetails[summaryDetails.length - 1]?.value;
 	}, [summaryDetails]);
 
 	return (
@@ -31,8 +35,22 @@ export default function CheckoutLayout({
 								paymentDisabled && "opacity-50",
 							)}
 						>
-							<BanknotesIcon />
+							<CreditCardIcon />
 							{paymentButtonText}
+							{paymentProcessing && (
+								<ArrowPathIcon className="animate-spin" />
+							)}
+						</Button>
+						<Button
+							disabled={paymentDisabled}
+							type="submit"
+							className={clsx(
+								"w-full !py-3",
+								paymentDisabled && "opacity-50",
+							)}
+						>
+							<BuildingStorefrontIcon />
+							{paymentBranchButtonText}
 							{paymentProcessing && (
 								<ArrowPathIcon className="animate-spin" />
 							)}
@@ -346,6 +364,8 @@ import {
 	ArrowPathIcon,
 	BanknotesIcon,
 	PhoneIcon,
+	BuildingStorefrontIcon,
+  	CreditCardIcon 
 } from "@heroicons/react/16/solid";
 import { Subheading } from "@/Components/Catalyst/heading";
 import FocusedLayout from "@/Layouts/FocusedLayout";
