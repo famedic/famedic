@@ -9,6 +9,7 @@ use App\Http\Requests\Laboratories\LaboratoryPurchases\StoreLaboratoryPurchaseRe
 use App\Models\Address;
 use App\Models\Contact;
 use App\Models\LaboratoryPurchase;
+use App\Models\LaboratoryQuote;
 use App\Services\Tracking\Purchase;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -65,6 +66,11 @@ class LaboratoryPurchaseController extends Controller
             'laboratoryPurchases' => $request->user()->customer->laboratoryPurchases()
                 ->filter($filters)
                 ->with(['transactions', 'laboratoryPurchaseItems', 'invoice', 'invoiceRequest'])
+                ->latest()
+                ->get(),
+            'laboratoryQuotes' => $request->user()->customer->laboratoryQuotes()
+                ->filter($filters)
+                ->with(['appointment', 'user'])
                 ->latest()
                 ->get(),
         ]);
