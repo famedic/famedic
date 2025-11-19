@@ -266,4 +266,10 @@ class Customer extends Model
             ->ofBrand($laboratoryBrand)
             ->first();
     }
+
+    // En app/Models/Customer.php
+    public function laboratoryQuotes()
+    {
+        return $this->hasMany(LaboratoryQuote::class);
+    }
 }

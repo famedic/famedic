@@ -248,4 +248,9 @@ class LaboratoryPurchase extends Model
             get: fn () => $this->transactions->first()?->formatted_commission ?? formattedCentsPrice(0)
         );
     }
+
+    public function laboratoryQuote()
+    {
+        return $this->belongsTo(LaboratoryQuote::class);
+    }
 }
