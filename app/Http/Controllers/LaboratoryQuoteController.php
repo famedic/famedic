@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Actions\Laboratories\CreateGDAQuotationAction;
 use App\Http\Controllers\Controller;
 use App\Models\LaboratoryAppointment;
+use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryQuote;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Exception;
 
@@ -32,6 +34,9 @@ class LaboratoryQuoteController extends Controller
         $cartItems = $request->input('cart_items');
 
         try {
+            // Usar transacción para asegurar que todo se complete correctamente
+            DB::beginTransaction();
+
             $gdaResponse = ($this->createGDAQuotationAction)($cartItems);
 
             $total = collect($cartItems)->sum(fn($i) => $i['price'] * ($i['quantity'] ?? 1));
@@ -53,11 +58,38 @@ class LaboratoryQuoteController extends Controller
                 'expires_at' => now()->addHours(24),
             ]);
 
+            // Limpiar el carrito después de crear la cotización exitosamente
+            $this->clearCart();
+
+            DB::commit();
+
             return Inertia::location(route('laboratory.quote.success', $quote->id));
 
         } catch (Exception $e) {
+            DB::rollBack();
             return back()->with('error', 'Error al generar cotización: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Limpiar el carrito del usuario de la base de datos
+     */
+    protected function clearCart()
+    {
+        $customer = auth()->user()->customer;
+        
+        // Contar items antes de eliminar para logging
+        $itemsCount = LaboratoryCartItem::where('customer_id', $customer->id)->count();
+        
+        // Eliminar todos los items del carrito del cliente
+        LaboratoryCartItem::where('customer_id', $customer->id)->delete();
+        
+        // También limpiar cualquier sesión relacionada por si acaso
+        session()->forget('laboratory_cart');
+        session()->forget('cart_items');
+        
+        // Log para verificar que se limpió el carrito
+        logger("Carrito de laboratorio limpiado para el cliente {$customer->id}: {$itemsCount} items eliminados");
     }
 
     public function success(LaboratoryQuote $quote)
