@@ -2,109 +2,83 @@
 
 namespace App\Actions\Laboratories;
 
-use App\Models\Address;
-use App\Models\Contact;
-use App\Models\Customer;
+use App\Models\LaboratoryTest;
 use Exception;
 use Illuminate\Support\Facades\Http;
 
 class CreateGDAQuotationAction
 {
-    private CreatePatientAction $createPatientAction;
-    private CreatePractitionerAction $createPractitionerAction;
-
-    public function __construct(
-        CreatePatientAction $createPatientAction,
-        CreatePractitionerAction $createPractitionerAction
-    ) {
-        $this->createPatientAction = $createPatientAction;
-        $this->createPractitionerAction = $createPractitionerAction;
-    }
-
-    public function __invoke(Customer $customer, Address $address, Contact $contact, string $brand, $laboratoryCartItems, $laboratoryPurchaseId): array
+    public function __invoke(array $cartItems): array
     {
-        if (app()->environment('local')) {
-            return ['id' => uniqid()];
-        }
+        $labTests = LaboratoryTest::findMany(
+            collect($cartItems)->pluck('test_id')
+        )->keyBy('id');
 
-        $url = config('services.gda.url') . 'infogda-fullV3/service-request';
+        $subtotal = collect($cartItems)->sum(fn($i) => $i['price'] * ($i['quantity'] ?? 1));
+        $total = $subtotal;
 
-        $payload = [
-            "header" => [
-                "lineanegocio" => "De donde proviene",
-                "registro" => localizedDate(now())->isoFormat('YYYY-MM-DD\THH:mm:ss:SSS'),
-                "marca" => config('services.gda.brands.' . $brand . '.brand_id'),
-                "token" => config('services.gda.brands.' . $brand . '.token'),
-            ],
-            "resourceType" => "ServiceRequest",
-            "id" => "",
-            "requisition" => [
-                "system" => "urn:oid:2.16.840.1.113883.3.215.5.59",
-                "value" => $laboratoryPurchaseId,
-                "convenio" => config('services.gda.brands.' . $brand . '.brand_agreement_id'),
-            ],
-            "status" => "active",
-            "intent" => "order",
-            "priority" => "routine",
-            "code" => [
-                "coding" => $this->buildCoding(
-                    $this->buildDetails($laboratoryCartItems),
-                    config('services.gda.brands.' . $brand . '.brand_agreement_id')
-                ),
-            ],
-            "orderdetail" => "Check-up exam requested",
-            "quantityQuantity" => $laboratoryCartItems->count(),
-            "subject" => [
-                "reference" => "Patient/" . (string)($this->createPatientAction)($customer, $contact, $address, $brand),
-            ],
-            "requester" => [
-                "reference" => "Practitioner/" . (string)($this->createPractitionerAction)($brand),
-                "display" => "A QUIEN CORRESPONDA"
-            ],
-        ];
-
-        $response = Http::post($url, $payload);
-
-        logger($response->json());
-
-        if ($response->failed()) {
-            throw new Exception();
-        }
-
-        return $response->json();
-    }
-
-    private function buildCoding(array $laboratoryTestsDetail)
-    {
+        // Construir array de coding con todos los items
         $coding = [];
+        foreach ($cartItems as $item) {
+            $labTest = $labTests[$item['test_id']];
+            $itemSubtotal = $item['price'] * ($item['quantity'] ?? 1);
 
-        foreach ($laboratoryTestsDetail as $item) {
-            $coding[] =
-                [
-                    "system" => "urn:oid:2.16.840.1.113883.3.215.5.59",
-                    "code" => $item['code'],
-                    "display" => $item['name'],
-                    "infogda_status" => "on-hold",
-                    "infogda_muestras" => [],
-                    "infogda_preanaliticos" => [],
-                ];
-        }
-
-        return $coding;
-    }
-
-    private function buildDetails($laboratoryCartItems)
-    {
-        $details = [];
-
-        foreach ($laboratoryCartItems as $laboratoryCartItem) {
-            $details[] = [
-                'code' => $laboratoryCartItem->laboratoryTest->gda_id,
-                'name' => $laboratoryCartItem->laboratoryTest->name,
-                'price' => $laboratoryCartItem->laboratoryTest->famedic_price_cents
+            $coding[] = [
+                "system" => "System",
+                "code" => $labTest->gda_id,
+                "display" => $labTest->name,
+                "subtotal" => number_format($itemSubtotal, 2, '.', ''),
+                "descuentopromocion" => "0.00",
+                "pagopaciente" => number_format($itemSubtotal, 2, '.', ''),
+                "total" => number_format($itemSubtotal, 2, '.', ''),
+                "convenio" => "0",
+                "quantity" => $item['quantity'] ?? 1
             ];
         }
 
-        return $details;
+        $payload = [
+            "header" => [
+                "lineanegocio" => "Famedic",
+                "registro" => now()->format('Y-m-d\TH:i:s:v'),
+                "marca" => "1",
+                "token" => "wDC+haCjTkDPLViLdKbC5hkmX1F4e9C+TwCizK3sRUCH4LFM0kj24Y05+bZ3k5Dm"
+            ],
+            "resourceType" => "ServiceRequestCotizacion",
+            "id" => "",
+            "requisition" => [
+                "system" => "urn:oid:2.16.840.1.113883.3.215.5.59",
+                "value" => "42",
+                "convenio" => "17479",
+                "marca" => "1",
+                "subtotal" => number_format($subtotal, 2, '.', ''),
+                "descuentopromocion" => "0.00",
+                "pagopaciente" => number_format($total, 2, '.', ''),
+                "total" => number_format($total, 2, '.', '')
+            ],
+            "status" => "active",
+            "intent" => "order",
+            "code" => [
+                "coding" => $coding // ← Ahora incluye todos los items
+            ],
+            "orderdetail" => "",
+            "quantityQuantity" => (string) count($cartItems),
+            "subject" => [
+                "reference" => "Patient/4620606"
+            ],
+            "requester" => [
+                "reference" => "Practitioner/5228",
+                "display" => "A QUIEN CORRESPONDA"
+            ]
+        ];
+
+        $response = Http::withHeaders([
+            'Content-Type' => 'application/json',
+        ])->post(config('services.gda.url') . '/service-request-cotizacion', $payload);
+
+        if ($response->failed()) {
+            throw new Exception('Error GDA: ' . $response->body());
+        }
+
+        return $response->json();
     }
 }
