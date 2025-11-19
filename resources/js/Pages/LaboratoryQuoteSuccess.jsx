@@ -47,6 +47,26 @@ export default function LaboratoryQuoteSuccess({ quote, laboratoryBrand }) {
   const [pdfLoaded, setPdfLoaded] = useState(false);
   const [pdfError, setPdfError] = useState(false);
 
+  // CORRECCIÓN: Dividir entre 10000 para obtener el precio correcto en pesos
+  const total = quote?.total_cents ? quote.total_cents / 10000 : 0;
+  const subtotal = quote?.subtotal_cents ? quote.subtotal_cents / 10000 : 0;
+  const discount = quote?.discount_cents ? quote.discount_cents / 10000 : 0;
+
+  console.log('💰 Precios calculados CORREGIDOS:', { 
+    total_cents: quote?.total_cents,
+    total, 
+    subtotal, 
+    discount 
+  });
+
+  // Función para obtener el precio corregido de los items
+  const getItemPrice = (item) => {
+    const price = item.price || 0;
+    const quantity = item.quantity || 1;
+    // Si el precio parece estar en centavos (número muy grande), dividir entre 100
+    return price > 1000 ? (price * quantity) / 100 : price * quantity;
+  };
+
   const loadPdfInIframe = (base64) => {
     if (!base64 || !iframeRef.current) return;
 
@@ -145,7 +165,7 @@ export default function LaboratoryQuoteSuccess({ quote, laboratoryBrand }) {
 ¡Tu cotización GDA está lista! 
 
 *Referencia:* ${quote.gda_acuse || "N/A"}
-*Total:* $${(quote.total_cents / 100).toFixed(2)} MXN
+*Total:* $${total.toFixed(2)} MXN
 *Vence:* ${formatearFechaMX(quote.expires_at)}
 
 Paga en cualquier sucursal GDA con este código o el PDF adjunto.
@@ -288,7 +308,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                     <div className="flex justify-between items-start gap-2">
                       <dt className="text-zinc-600 dark:text-slate-300 flex-shrink-0">Nombre</dt>
                       <dd className="font-medium text-zinc-900 dark:text-white text-right break-words">
-                        {quote.contact.name || 'No especificado'}
+                        {quote.contact.name || 'No especificado'}  {quote.contact.paternal_lastname || 'No especificado'}  {quote.contact.maternal_lastname || 'No especificado'}
                       </dd>
                     </div>
                     {quote.contact.phone && (
@@ -346,45 +366,57 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                 <dl className="space-y-2 sm:space-y-3 text-sm sm:text-base">
                   <div className="flex justify-between items-start gap-2">
                     <dt className="text-zinc-600 dark:text-slate-300">Subtotal</dt>
-                    <dd className="text-zinc-900 dark:text-white">${(quote.subtotal_cents / 100).toFixed(2)} MXN</dd>
+                    <dd className="text-zinc-900 dark:text-white">${subtotal.toFixed(2)} MXN</dd>
                   </div>
-                  {quote.discount_cents > 0 && (
+                  {discount > 0 && (
                     <div className="flex justify-between items-start gap-2 text-green-600 dark:text-green-400">
                       <dt>Descuento</dt>
-                      <dd>-${(quote.discount_cents / 100).toFixed(2)} MXN</dd>
+                      <dd>-${discount.toFixed(2)} MXN</dd>
                     </div>
                   )}
                   <Divider className="dark:border-gray-600 my-2" />
                   <div className="flex justify-between items-start gap-2 text-base sm:text-lg font-bold">
                     <dt className="text-zinc-900 dark:text-white">Total</dt>
                     <dd className="text-famedic-dark dark:text-famedic-lime">
-                      ${(quote.total_cents / 100).toFixed(2)} MXN
+                      ${total.toFixed(2)} MXN
                     </dd>
                   </div>
                 </dl>
               </div>
 
-              {/* Estudios Solicitados */}
+              {/* Estudios Solicitados - CORREGIDO */}
               <div className="rounded-lg bg-white p-4 sm:p-6 shadow dark:bg-slate-800">
                 <Subheading className="mb-3 sm:mb-4 text-zinc-900 dark:text-white text-sm sm:text-base">
                   Estudios Solicitados
                 </Subheading>
                 <div className="space-y-2 sm:space-y-3 max-h-60 sm:max-h-80 overflow-y-auto">
-                  {quote.items && quote.items.map((item, index) => (
-                    <div key={index} className="flex justify-between items-start gap-2 py-2 border-b border-gray-100 dark:border-gray-600 last:border-b-0">
-                      <div className="flex-1 min-w-0">
-                        <Text className="font-medium text-xs sm:text-sm text-zinc-900 dark:text-white break-words">
-                          {item.name}
+                  {quote.items && quote.items.map((item, index) => {
+                    const itemTotal = getItemPrice(item);
+                    console.log(`📊 Item ${index}:`, { 
+                      name: item.name, 
+                      price: item.price, 
+                      quantity: item.quantity,
+                      itemTotal 
+                    });
+                    
+                    return (
+                      <div key={index} className="flex justify-between items-start gap-2 py-2 border-b border-gray-100 dark:border-gray-600 last:border-b-0">
+                        <div className="flex-1 min-w-0">
+                          <Text className="font-medium text-xs sm:text-sm text-zinc-900 dark:text-white break-words">
+                            {item.name}
+                          </Text>
+                          {item.quantity > 1 && (
+                            <Text className="text-xs text-gray-500 dark:text-slate-400">
+                              Cantidad: {item.quantity}
+                            </Text>
+                          )}
+                        </div>
+                        <Text className="font-medium whitespace-nowrap text-xs sm:text-sm ml-2 text-zinc-900 dark:text-white flex-shrink-0">
+                          ${itemTotal.toFixed(2)}
                         </Text>
-                        {item.quantity > 1 && (
-                          <Text className="text-xs text-gray-500 dark:text-slate-400">Cantidad: {item.quantity}</Text>
-                        )}
                       </div>
-                      <Text className="font-medium whitespace-nowrap text-xs sm:text-sm ml-2 text-zinc-900 dark:text-white flex-shrink-0">
-                        ${((item.price || 0) * (item.quantity || 1)).toFixed(2)}
-                      </Text>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 {(!quote.items || quote.items.length === 0) && (
                   <Text className="text-gray-500 dark:text-slate-400 text-center py-4 text-sm">
@@ -495,7 +527,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                   <div className="min-w-0">
                     <Text className="font-medium text-zinc-900 dark:text-white">Realiza el pago</Text>
                     <Text className="text-xs sm:text-sm text-gray-600 dark:text-slate-300 mt-1">
-                      Paga el monto total de <strong className="text-zinc-900 dark:text-white">${(quote.total_cents / 100).toFixed(2)} MXN</strong> en efectivo o con tarjeta
+                      Paga el monto total de <strong className="text-zinc-900 dark:text-white">${total.toFixed(2)} MXN</strong> en efectivo o con tarjeta
                     </Text>
                   </div>
                 </div>
