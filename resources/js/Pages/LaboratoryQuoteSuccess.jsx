@@ -40,6 +40,28 @@ const formatearFechaHoraMX = (fechaIso) => {
   });
 };
 
+// Función para formatear precios con separadores de miles
+const formatearPrecio = (precio) => {
+  if (precio === undefined || precio === null || isNaN(precio)) return '0.00';
+  
+  return new Intl.NumberFormat('es-MX', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(precio);
+};
+
+// Función para formatear precio con símbolo de moneda
+const formatearPrecioConMoneda = (precio) => {
+  if (precio === undefined || precio === null || isNaN(precio)) return '$0.00 MXN';
+  
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(precio);
+};
+
 export default function LaboratoryQuoteSuccess({ quote, laboratoryBrand }) {
   const iframeRef = useRef(null);
   const objectUrlRef = useRef(null);
@@ -165,7 +187,7 @@ export default function LaboratoryQuoteSuccess({ quote, laboratoryBrand }) {
 ¡Tu cotización GDA está lista! 
 
 *Referencia:* ${quote.gda_acuse || "N/A"}
-*Total:* $${total.toFixed(2)} MXN
+*Total:* ${formatearPrecioConMoneda(total)}
 *Vence:* ${formatearFechaMX(quote.expires_at)}
 
 Paga en cualquier sucursal GDA con este código o el PDF adjunto.
@@ -366,19 +388,19 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                 <dl className="space-y-2 sm:space-y-3 text-sm sm:text-base">
                   <div className="flex justify-between items-start gap-2">
                     <dt className="text-zinc-600 dark:text-slate-300">Subtotal</dt>
-                    <dd className="text-zinc-900 dark:text-white">${subtotal.toFixed(2)} MXN</dd>
+                    <dd className="text-zinc-900 dark:text-white">{formatearPrecioConMoneda(subtotal)} MXN</dd>
                   </div>
                   {discount > 0 && (
                     <div className="flex justify-between items-start gap-2 text-green-600 dark:text-green-400">
                       <dt>Descuento</dt>
-                      <dd>-${discount.toFixed(2)} MXN</dd>
+                      <dd>-{formatearPrecioConMoneda(discount)} MXN</dd>
                     </div>
                   )}
                   <Divider className="dark:border-gray-600 my-2" />
                   <div className="flex justify-between items-start gap-2 text-base sm:text-lg font-bold">
                     <dt className="text-zinc-900 dark:text-white">Total</dt>
                     <dd className="text-famedic-dark dark:text-famedic-lime">
-                      ${total.toFixed(2)} MXN
+                      {formatearPrecioConMoneda(total)} MXN
                     </dd>
                   </div>
                 </dl>
@@ -412,7 +434,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                           )}
                         </div>
                         <Text className="font-medium whitespace-nowrap text-xs sm:text-sm ml-2 text-zinc-900 dark:text-white flex-shrink-0">
-                          ${itemTotal.toFixed(2)}
+                          ${formatearPrecio(itemTotal)} MXN
                         </Text>
                       </div>
                     );
@@ -527,7 +549,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                   <div className="min-w-0">
                     <Text className="font-medium text-zinc-900 dark:text-white">Realiza el pago</Text>
                     <Text className="text-xs sm:text-sm text-gray-600 dark:text-slate-300 mt-1">
-                      Paga el monto total de <strong className="text-zinc-900 dark:text-white">${total.toFixed(2)} MXN</strong> en efectivo o con tarjeta
+                      Paga el monto total de <strong className="text-zinc-900 dark:text-white">{formatearPrecioConMoneda(total)} MXN</strong> en efectivo o con tarjeta
                     </Text>
                   </div>
                 </div>
