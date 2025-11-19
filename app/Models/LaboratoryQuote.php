@@ -16,8 +16,8 @@ class LaboratoryQuote extends Model
         'customer_id',
         'laboratory_brand',
         'appointment_id',
-        'contact_id', 
-        'address_id', 
+        'contact_id',
+        'address_id',
         'items',
         'subtotal',
         'discount',
@@ -40,6 +40,8 @@ class LaboratoryQuote extends Model
         'formatted_total',
         'formatted_expires_at',
         'total_cents',
+        'subtotal_cents',
+        'discount_cents',
     ];
 
     public function customer(): BelongsTo
@@ -77,31 +79,44 @@ class LaboratoryQuote extends Model
     protected function formattedCreatedAt(): Attribute
     {
         return Attribute::make(
-            get: fn () => localizedDate($this->created_at)?->isoFormat('D MMM Y h:mm a')
+            get: fn() => localizedDate($this->created_at)?->isoFormat('D MMM Y h:mm a')
         );
     }
 
     protected function formattedExpiresAt(): Attribute
     {
         return Attribute::make(
-            get: fn () => localizedDate($this->expires_at)?->isoFormat('D MMM Y h:mm a')
+            get: fn() => localizedDate($this->expires_at)?->isoFormat('D MMM Y h:mm a')
         );
     }
 
     protected function formattedTotal(): Attribute
     {
         return Attribute::make(
-            get: fn () => formattedCentsPrice($this->total_cents),
+            get: fn() => formattedCentsPrice($this->total_cents),
         );
     }
 
     protected function totalCents(): Attribute
     {
         return Attribute::make(
-            get: fn () => (int)($this->total * 100)
+            get: fn() => (int) ($this->total * 100)
         );
     }
 
+    protected function subtotalCents(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => (int) ($this->subtotal * 100)
+        );
+    }
+
+    protected function discountCents(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => (int) ($this->discount * 100)
+        );
+    }
     // Scopes
     public function scopeFilter($query, array $filters)
     {

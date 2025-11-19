@@ -65,13 +65,13 @@ class LaboratoryQuoteController extends Controller
         // Cargar las relaciones necesarias
         $quote->load(['contact', 'address', 'appointment.laboratoryStore']);
 
-        // Preparar los datos para Inertia
+        // Usar los accessors del modelo - CORREGIDO
         $quoteData = [
             'id' => $quote->id,
             'gda_acuse' => $quote->gda_acuse,
-            'total_cents' => $quote->total_cents,
-            'subtotal_cents' => (int)($quote->subtotal * 100),
-            'discount_cents' => (int)($quote->discount * 100),
+            'total_cents' => $quote->total_cents,      
+            'subtotal_cents' => $quote->subtotal_cents, 
+            'discount_cents' => $quote->discount_cents, 
             'expires_at' => $quote->expires_at,
             'created_at' => $quote->created_at,
             'status' => $quote->status,
@@ -84,6 +84,8 @@ class LaboratoryQuoteController extends Controller
         if ($quote->relationLoaded('contact') && $quote->contact) {
             $quoteData['contact'] = [
                 'name' => $quote->contact->name,
+                'paternal_lastname' => $quote->contact->paternal_lastname,
+                'maternal_lastname' => $quote->contact->maternal_lastname,
                 'phone' => $quote->contact->phone,
                 'email' => $quote->contact->email,
             ];
