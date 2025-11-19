@@ -9,6 +9,8 @@ use App\Http\Controllers\LaboratoryCheckoutController;
 use App\Http\Controllers\LaboratoryPurchaseController;
 use App\Http\Controllers\LaboratoryShoppingCartController;
 use App\Http\Controllers\LaboratoryStoreController;
+use App\Http\Controllers\LaboratoryQuoteController;
+
 use Illuminate\Support\Facades\Route;
 
 // Public browsing routes
@@ -56,4 +58,12 @@ Route::middleware([
 
     // Invoice requests
     Route::post('/laboratory-purchases/{laboratory_purchase}/invoice-request', InvoiceRequestController::class)->name('laboratory-purchases.invoice-request');
+
+    // Request for quotations
+    Route::post('/{laboratory_brand}/quote', [LaboratoryQuoteController::class, 'store'])
+         ->name('api.laboratory.quote.store');
+
+    // Route get quote success
+    Route::get('/cotizacion/{quote}', [LaboratoryQuoteController::class, 'success'])
+        ->name('laboratory.quote.success');
 });
