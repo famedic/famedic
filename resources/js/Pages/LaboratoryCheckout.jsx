@@ -48,15 +48,44 @@ export default function LaboratoryCheckout({
 		};
 	});
 
-	const submit = (e) => {
+	const submit = (e, isBranchPayment) => {
 		e.preventDefault();
 
-		if (!checkoutProcessing) {
-			post(
-				route("laboratory.checkout.store", {
-					laboratory_brand: laboratoryBrand.value,
-				}),
+		if (checkoutProcessing) return;
+
+		if (isBranchPayment) {
+			// PAGO EN SUCURSAL
+			const items = laboratoryCarts[laboratoryBrand.value].map(item => ({
+			test_id: item.laboratory_test.id,
+			name: item.laboratory_test.name,
+			price: item.laboratory_test.famedic_price_cents,
+			quantity: 1,
+			}));
+
+			router.post(
+			route("api.laboratory.quote.store", laboratoryBrand.value),
+			{
+				cart_items: items,
+				appointment_id: laboratoryAppointment?.id,
+				contact_id: data.contact,
+				address_id: data.address,
+			},
+			{
+				onSuccess: (page) => {
+				const redirectUrl = page.props.redirect_url;
+				if (redirectUrl) {
+					router.visit(redirectUrl);
+				}
+				},
+				onError: (errors) => {
+				console.error("Error GDA:", errors);
+				alert("Error al generar cotización. Intenta de nuevo.");
+				},
+			}
 			);
+		} else {
+			// PAGO ONLINE (tu lógica actual)
+			post(route("laboratory.checkout.store", { laboratory_brand: laboratoryBrand.value }));
 		}
 	};
 
@@ -161,11 +190,11 @@ export default function LaboratoryCheckout({
 				paymentDisabled={
 					checkoutProcessing ||
 					!addressStepIsComplete ||
-					!contactStepIsComplete ||
-					!paymentMethodStepIsComplete
+					!contactStepIsComplete
 				}
 				paymentProcessing={checkoutProcessing}
 				submit={submit}
+				showBranchPayment={true} // Para forzar doble botón
 			>
 				<>
 					{laboratoryAppointment ? (
@@ -347,3 +376,4 @@ import PaymentMethodStep from "@/Components/Checkout/PaymentMethodStep";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import Card from "@/Components/Card";
 import { Button } from "@/Components/Catalyst/button";
+import { router } from "@inertiajs/react";
