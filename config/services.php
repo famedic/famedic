@@ -76,7 +76,7 @@ return [
     ],
 
     'gda' => [
-        'url' => env('GDA_URL'),
+        'url' => env('GDA_URL'),        
         'report_emails' => env('GDA_REPORT_EMAILS') ? explode(',', env('GDA_REPORT_EMAILS')) : [],
         'concierge_emails' => env('GDA_CONCIERGE_EMAILS') ? explode(',', env('GDA_CONCIERGE_EMAILS')) : [],
         'brands' => [
@@ -104,6 +104,11 @@ return [
                 'brand_id' => env('GDA_LIACSA_ID'),
                 'brand_agreement_id' => env('GDA_LIACSA_AGREEMENT_ID'),
                 'token' => env('GDA_LIACSA_TOKEN'),
+            ],
+            'famedic' => [
+                'brand_id' => env('GDA_BRANDS_FAMEDIC_BRAND_ID'),
+                'token' => env('GDA_BRANDS_FAMEDIC_TOKEN'),
+                'brand_agreement_id' => env('GDA_BRANDS_FAMEDIC_BRAND_AGREEMENT_ID'),
             ],
         ]
     ],
