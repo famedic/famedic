@@ -89,6 +89,17 @@ export default function LaboratoryQuoteSuccess({ quote, laboratoryBrand }) {
     return price > 1000 ? (price * quantity) / 100 : price * quantity;
   };
 
+  // Función para obtener el nombre del laboratorio
+  const getLaboratoryName = () => {
+    return laboratoryBrand?.name || 'Laboratorio GDA';
+  };
+
+  // Función para obtener la ruta del logo - CORREGIDA (manteniendo tu formato original)
+  const getLaboratoryLogo = () => {
+    if (!laboratoryBrand?.name) return '/images/gda/logo-gda-default.png';
+    return `/images/gda/GDA-${laboratoryBrand.name}.png`;
+  };
+
   const loadPdfInIframe = (base64) => {
     if (!base64 || !iframeRef.current) return;
 
@@ -171,7 +182,7 @@ export default function LaboratoryQuoteSuccess({ quote, laboratoryBrand }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Cotizacion_GDA_${quote.gda_acuse || quote.id}.pdf`;
+      a.download = `Cotizacion_${getLaboratoryName()}_${quote.gda_acuse || quote.id}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -184,13 +195,13 @@ export default function LaboratoryQuoteSuccess({ quote, laboratoryBrand }) {
 
   const handleShareWhatsApp = () => {
     const mensaje = `
-¡Tu cotización GDA está lista! 
+¡Tu cotización ${getLaboratoryName()} está lista! 
 
 *Referencia:* ${quote.gda_acuse || "N/A"}
 *Total:* ${formatearPrecioConMoneda(total)}
 *Vence:* ${formatearFechaMX(quote.expires_at)}
 
-Paga en cualquier sucursal GDA con este código o el PDF adjunto.
+Paga en cualquier sucursal ${getLaboratoryName()} con este código o el PDF adjunto.
     `.trim();
 
     const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
@@ -240,7 +251,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
           </h1>
           <div className="mt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
             <Text className="text-sm sm:text-lg text-zinc-600 dark:text-slate-300">
-              Paga en cualquier sucursal GDA
+              Paga en cualquier sucursal {getLaboratoryName()}
             </Text>
             <span className={`inline-flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full border text-xs sm:text-sm font-medium ${statusBadge.color}`}>
               <StatusIcon className="size-3 sm:size-4" />
@@ -295,7 +306,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                 </Subheading>
                 <dl className="space-y-2 sm:space-y-3 text-sm sm:text-base">
                   <div className="flex justify-between items-start gap-2">
-                    <dt className="text-zinc-600 dark:text-slate-300 flex-shrink-0">Referencia GDA</dt>
+                    <dt className="text-zinc-600 dark:text-slate-300 flex-shrink-0">Referencia {getLaboratoryName()}</dt>
                     <dd className="font-mono font-medium text-famedic-dark dark:text-famedic-lime text-right break-all">
                       {quote.gda_acuse || "Pendiente"}
                     </dd>
@@ -355,7 +366,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                 </div>
               )}
 
-              {/* Información de Laboratorio */}
+              {/* Información de Laboratorio - CORREGIDO (logo con tu formato original) */}
               <div className="rounded-lg bg-white p-4 sm:p-6 shadow dark:bg-slate-800">
                 <Subheading className="mb-3 sm:mb-4 flex items-center gap-2 text-zinc-900 dark:text-white text-sm sm:text-base">
                   <BuildingStorefrontIcon className="size-4 sm:size-5 text-purple-500" />
@@ -363,16 +374,19 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                 </Subheading>
                 <div className="flex items-center gap-3 sm:gap-4">
                   <img
-                    src={`/images/gda/GDA-${laboratoryBrand.name}.png`}
-                    alt={`Logo ${laboratoryBrand.name}`}
+                    src={getLaboratoryLogo()}
+                    alt={`Logo ${getLaboratoryName()}`}
                     className="w-16 h-16 sm:w-24 sm:h-24 object-contain flex-shrink-0"
+                    onError={(e) => {
+                      e.target.src = '/images/gda/logo-gda-default.png';
+                    }}
                   />
                   <div className="min-w-0">
                     <Text className="font-bold text-sm sm:text-lg text-zinc-900 dark:text-white truncate">
-                      {laboratoryBrand.name}
+                      {getLaboratoryName()}
                     </Text>
                     <Text className="text-xs sm:text-sm text-gray-600 dark:text-slate-300">
-                      Presenta esta cotización en cualquier sucursal
+                      Presenta esta cotización en cualquier sucursal {getLaboratoryName()}
                     </Text>
                   </div>
                 </div>
@@ -497,7 +511,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                     <div>
                       <Text className="font-medium flex items-center gap-1 text-zinc-900 dark:text-white">
                         <BuildingStorefrontIcon className="size-3 sm:size-4" />
-                        Sucursal
+                        Sucursal {getLaboratoryName()}
                       </Text>
                       <Text className="text-zinc-900 dark:text-white text-xs sm:text-sm break-words">
                         {quote.appointment.laboratory_store.name || 'Sucursal no especificada'}
@@ -525,7 +539,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
               </div>
             )}
 
-            {/* Instrucciones de Pago */}
+            {/* Instrucciones de Pago - ACTUALIZADO */}
             <div className="rounded-lg bg-white p-4 sm:p-6 shadow dark:bg-slate-800 md:col-span-2">
               <Subheading className="mb-3 sm:mb-4 text-zinc-900 dark:text-white text-sm sm:text-base">
                 Instrucciones de Pago
@@ -536,7 +550,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                     <Text className="text-blue-600 dark:text-blue-300 font-bold text-xs sm:text-sm">1</Text>
                   </div>
                   <div className="min-w-0">
-                    <Text className="font-medium text-zinc-900 dark:text-white">Acude a cualquier sucursal GDA</Text>
+                    <Text className="font-medium text-zinc-900 dark:text-white">Acude a cualquier sucursal {getLaboratoryName()}</Text>
                     <Text className="text-xs sm:text-sm text-gray-600 dark:text-slate-300 mt-1 break-words">
                       Presenta tu referencia <strong className="font-mono text-zinc-900 dark:text-white">{quote.gda_acuse || quote.id}</strong> o el PDF de la cotización
                     </Text>
@@ -571,7 +585,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                   <div className="min-w-0">
                     <Text className="font-medium text-zinc-900 dark:text-white">Realiza tus estudios</Text>
                     <Text className="text-xs sm:text-sm text-gray-600 dark:text-slate-300 mt-1">
-                      Acude a tu cita programada o agenda una nueva en sucursal
+                      Acude a tu cita programada o agenda una nueva en sucursal {getLaboratoryName()}
                     </Text>
                   </div>
                 </div>
@@ -581,7 +595,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
               <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-lg">
                 <Text className="text-xs sm:text-sm text-yellow-800 dark:text-yellow-200 break-words">
                   <strong>Importante:</strong> Esta cotización vence el {formatearFechaMX(quote.expires_at)}. 
-                  Después de esta fecha, deberás generar una nueva cotización.
+                  Después de esta fecha, deberás generar una nueva cotización en {getLaboratoryName()}.
                 </Text>
               </div>
             </div>
@@ -593,7 +607,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
             <div className="rounded-lg bg-white p-4 sm:p-6 shadow dark:bg-slate-800">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                 <Subheading className="text-zinc-900 dark:text-white text-sm sm:text-base">
-                  Vista Previa del PDF
+                  Vista Previa del PDF - {getLaboratoryName()}
                 </Subheading>
                 <div className="flex gap-2 flex-wrap">
                   <Button
@@ -624,7 +638,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                     {!pdfLoaded && !pdfError && (
                       <div className="absolute inset-0 flex flex-col items-center justify-center bg-white dark:bg-gray-900 z-10">
                         <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-famedic-dark dark:border-famedic-lime"></div>
-                        <Text className="mt-3 text-zinc-600 dark:text-slate-300 text-sm">Cargando PDF...</Text>
+                        <Text className="mt-3 text-zinc-600 dark:text-slate-300 text-sm">Cargando PDF de {getLaboratoryName()}...</Text>
                       </div>
                     )}
                     
@@ -632,7 +646,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                       <div className="absolute inset-0 flex flex-col items-center justify-center bg-white dark:bg-gray-900 z-10">
                         <ExclamationTriangleIcon className="size-8 sm:size-12 text-red-500" />
                         <Text className="mt-3 text-red-600 dark:text-red-400 text-sm text-center px-4">
-                          Error al cargar el PDF
+                          Error al cargar el PDF de {getLaboratoryName()}
                         </Text>
                         <Button
                           onClick={() => loadPdfInIframe(quote.pdf_base64)}
@@ -646,7 +660,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                     <iframe
                       ref={iframeRef}
                       className={`absolute inset-0 w-full h-full ${!pdfLoaded || pdfError ? 'opacity-0' : 'opacity-100'}`}
-                      title="Cotización PDF"
+                      title={`Cotización ${getLaboratoryName()} PDF`}
                       sandbox="allow-scripts allow-same-origin"
                       loading="lazy"
                       onLoad={() => setPdfLoaded(true)}
@@ -656,7 +670,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full space-y-2 sm:space-y-3">
                     <DocumentArrowDownIcon className="size-8 sm:size-12 text-gray-400 dark:text-gray-500" />
-                    <Text className="text-zinc-500 dark:text-slate-400 text-sm">PDF no disponible</Text>
+                    <Text className="text-zinc-500 dark:text-slate-400 text-sm">PDF de {getLaboratoryName()} no disponible</Text>
                     <Text className="text-xs text-zinc-400 dark:text-slate-500 text-center px-4">
                       La cotización no incluye documento PDF
                     </Text>
@@ -693,7 +707,7 @@ Paga en cualquier sucursal GDA con este código o el PDF adjunto.
         </div>
 
         <Text className="mt-6 sm:mt-8 text-center text-xs sm:text-sm text-zinc-500 dark:text-slate-400 px-2">
-          Acude a cualquier sucursal GDA con tu referencia o el PDF antes del {formatearFechaMX(quote.expires_at)}.
+          Acude a cualquier sucursal {getLaboratoryName()} con tu referencia o el PDF antes del {formatearFechaMX(quote.expires_at)}.
         </Text>
       </div>
     </FocusedLayout>
