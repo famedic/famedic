@@ -117,7 +117,9 @@ class LaboratoryQuoteController extends Controller
 
                 logger('🎉 [CONTROLLER] ACTION COMPLETADO - Respuesta GDA:', [
                     'gda_response' => $gdaResponse,
-                    'tiene_id' => isset($gdaResponse['id'])
+                    'tiene_id' => isset($gdaResponse['id']),
+                    'tiene_acuse' => isset($gdaResponse['GDA_menssage']['acuse']),
+                    'mensaje_gda' => $gdaResponse['GDA_menssage']['mensaje'] ?? 'sin_mensaje'
                 ]);
 
             } catch (\Throwable $th) {
@@ -131,10 +133,31 @@ class LaboratoryQuoteController extends Controller
 
             $total = collect($cartItems)->sum(fn($i) => $i['price'] * ($i['quantity'] ?? 1));
 
+            // 🆕 NUEVA LÓGICA: Determinar status basado en respuesta GDA
+            $gdaAcuse = $gdaResponse['GDA_menssage']['acuse'] ?? null;
+            $gdaStatus = $gdaResponse['GDA_menssage']['mensaje'] ?? 'unknown';
+            $gdaDescription = $gdaResponse['GDA_menssage']['descripcion'] ?? null;
+            $gdaCodeHttp = $gdaResponse['GDA_menssage']['codeHttp'] ?? null;
+
+            // Determinar status de la cotización
+            $quoteStatus = $this->determineQuoteStatus($gdaStatus, $gdaCodeHttp, $gdaAcuse);
+            
+            // Determinar si hay warning
+            $hasGdaWarning = ($gdaStatus === 'error' && !empty($gdaAcuse));
+            $gdaWarningMessage = $hasGdaWarning ? $gdaDescription : null;
+
+            logger('🔄 [CONTROLLER] Determinando status de cotización:', [
+                'gda_status' => $gdaStatus,
+                'gda_code_http' => $gdaCodeHttp,
+                'gda_acuse' => $gdaAcuse,
+                'quote_status' => $quoteStatus,
+                'has_warning' => $hasGdaWarning,
+                'warning_message' => $gdaWarningMessage
+            ]);
+
             // Crear la cotización en BD
             logger('🟡 [CONTROLLER] CREANDO COTIZACIÓN EN BD...');
 
-            // En el método store, después de llamar al Action:
             $quote = LaboratoryQuote::create([
                 'user_id' => auth()->id(),
                 'customer_id' => $customer->id,
@@ -152,11 +175,16 @@ class LaboratoryQuoteController extends Controller
                 'subtotal' => $total,
                 'discount' => 0,
                 'total' => $total,
-                'status' => 'pending_branch_payment',
+                'status' => $quoteStatus, // 🆕 Status dinámico
                 'gda_response' => $gdaResponse,
-                'gda_acuse' => $gdaResponse['GDA_menssage']['acuse'] ?? $gdaResponse['id'] ?? null, // Adaptado
+                'gda_acuse' => $gdaAcuse,
+                'gda_code_http' => $gdaCodeHttp, // 🆕 Nuevo campo
+                'gda_mensaje' => $gdaStatus, // 🆕 Nuevo campo
+                'gda_descripcion' => $gdaDescription, // 🆕 Nuevo campo
                 'pdf_base64' => $gdaResponse['base64'] ?? null,
                 'expires_at' => now()->addHours(24),
+                'has_gda_warning' => $hasGdaWarning, // 🆕 Nuevo campo
+                'gda_warning_message' => $gdaWarningMessage, // 🆕 Nuevo campo
             ]);
 
             // CREAR ITEMS EN LA NUEVA TABLA
@@ -165,7 +193,18 @@ class LaboratoryQuoteController extends Controller
             $this->clearCart();
             DB::commit();
 
-            logger('✅ [CONTROLLER] COTIZACIÓN CREADA EXITOSAMENTE - ID: ' . $quote->id);
+            logger('✅ [CONTROLLER] COTIZACIÓN CREADA EXITOSAMENTE - ID: ' . $quote->id, [
+                'status' => $quoteStatus,
+                'acuse' => $gdaAcuse,
+                'has_warning' => $hasGdaWarning
+            ]);
+
+            // 🆕 Redirigir con mensaje de advertencia si es necesario
+            if ($hasGdaWarning) {
+                return Inertia::location(route('laboratory.quote.success', $quote->id))
+                    ->with('warning', 'Cotización generada con observaciones: ' . $gdaWarningMessage);
+            }
+
             return Inertia::location(route('laboratory.quote.success', $quote->id));
 
         } catch (Exception $e) {
@@ -184,6 +223,30 @@ class LaboratoryQuoteController extends Controller
     }
 
     /**
+     * 🆕 NUEVO MÉTODO: Determinar el status de la cotización basado en respuesta GDA
+     */
+    protected function determineQuoteStatus(string $gdaStatus, $gdaCodeHttp, $gdaAcuse): string
+    {
+        // Si GDA retorna éxito, todo bien
+        if ($gdaStatus === 'success') {
+            return 'pending_branch_payment';
+        }
+
+        // Si hay error PERO tenemos acuse válido, considerar como "éxito con advertencia"
+        if ($gdaStatus === 'error' && !empty($gdaAcuse)) {
+            return 'pending_branch_payment'; // 🆕 Permitir continuar con el proceso
+        }
+
+        // Si hay error y no hay acuse, es un error real
+        if ($gdaStatus === 'error') {
+            return 'gda_error';
+        }
+
+        // Caso por defecto
+        return 'pending_branch_payment';
+    }
+
+    /**
      * Formatear items para el nuevo Action (similar al OrderAction)
      */
     protected function formatCartItemsForAction(array $enrichedCartItems)
@@ -193,7 +256,8 @@ class LaboratoryQuoteController extends Controller
                 'laboratoryTest' => (object) [
                     'gda_id' => $item['gda_id'] ?? 'UNKNOWN',
                     'name' => $item['name'] ?? 'Sin nombre',
-                    'famedic_price_cents' => (int) (($item['price'] ?? 0) * 100)
+                    'famedic_price_cents' => (int) (($item['price'] ?? 0) * 100),
+                    'feature_list' => $item['feature_list'] ?? [] // 🆕 Agregar feature_list para paquetes
                 ]
             ];
         });
@@ -214,12 +278,15 @@ class LaboratoryQuoteController extends Controller
                 'indications' => $item['indications'] ?? null,
                 'price_cents' => (int) (($item['price'] ?? 0) * 100),
                 'quantity' => $item['quantity'] ?? 1,
+                'is_package' => $item['is_package'] ?? false, // 🆕 Nuevo campo
+                'feature_count' => !empty($item['feature_list']) ? count($item['feature_list']) : 0, // 🆕 Nuevo campo
             ]);
         }
 
         logger('✅ [CONTROLLER] Items de cotización creados:', [
             'quote_id' => $quote->id,
-            'total_items' => count($enrichedCartItems)
+            'total_items' => count($enrichedCartItems),
+            'paquetes_count' => collect($enrichedCartItems)->where('is_package', true)->count()
         ]);
     }
 
@@ -263,7 +330,8 @@ class LaboratoryQuoteController extends Controller
         })->toArray();
 
         logger('=== ITEMS ENRIQUECIDOS FINALES ===', [
-            'total_items' => count($enrichedItems)
+            'total_items' => count($enrichedItems),
+            'paquetes_count' => collect($enrichedItems)->where('is_package', true)->count()
         ]);
 
         return $enrichedItems;
@@ -310,7 +378,9 @@ class LaboratoryQuoteController extends Controller
         ]);
     }
 
-    // ... Los demás métodos (success, show, index, cancel, resendPdf) permanecen igual
+    /**
+     * 🆕 ACTUALIZADO: Mostrar éxito de cotización con manejo de advertencias
+     */
     public function success(LaboratoryQuote $quote)
     {
         $quote->load(['contact', 'address', 'appointment.laboratoryStore', 'quoteItems']);
@@ -330,6 +400,11 @@ class LaboratoryQuoteController extends Controller
             'items' => $quote->items,
             'quote_items' => $quote->quoteItems,
             'pdf_base64' => $quote->pdf_base64,
+            // 🆕 Nuevos campos para mostrar en la vista
+            'has_gda_warning' => $quote->has_gda_warning,
+            'gda_warning_message' => $quote->gda_warning_message,
+            'gda_mensaje' => $quote->gda_mensaje,
+            'gda_descripcion' => $quote->gda_descripcion,
         ];
 
         // Información de contacto
@@ -377,6 +452,7 @@ class LaboratoryQuoteController extends Controller
         ]);
     }
 
+    // Los demás métodos permanecen igual...
     public function show(LaboratoryQuote $quote)
     {
         if ($quote->user_id !== auth()->id()) {

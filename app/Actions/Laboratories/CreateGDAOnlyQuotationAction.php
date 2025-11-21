@@ -16,43 +16,34 @@ class CreateGDAOnlyQuotationAction
         logger('🎯 [ACTION] CreateGDAOnlyQuotationAction - LLAMADA REAL');
 
         try {
-            // CORREGIR URL - eliminar doble //
             $baseUrl = rtrim(config('services.gda.url'), '/');
             $url = $baseUrl . '/service-request-cotizacion';
             
-            logger('🔧 [ACTION] URL corregida:', ['url' => $url]);
+            logger('🔧 [ACTION] URL:', ['url' => $url]);
 
-            // Obtener configuraciones de la marca
             $brandConfig = config('services.gda.brands.' . $brand);
             
             if (!$brandConfig) {
                 throw new Exception("Configuración no encontrada para la marca: {$brand}");
             }
 
-            // VERIFICAR CREDENCIALES
             if (empty($brandConfig['token'])) {
                 throw new Exception("Token no configurado para la marca: {$brand}");
             }
 
-            logger('🔑 [ACTION] Usando configuración:', [
-                'brand_id' => $brandConfig['brand_id'],
-                'agreement_id' => $brandConfig['brand_agreement_id'],
-                'token_length' => strlen($brandConfig['token'])
-            ]);
-
-            // Construir payload CORREGIDO según el Excel
+            // Construir payload
             $payload = [
                 "header" => [
                     "lineanegocio" => "Famedic",
                     "registro" => Carbon::now()->format('Y-m-d\TH:i:s:v'),
-                    "marca" => (int) $brandConfig['brand_id'], // Asegurar que sea int
+                    "marca" => (int) $brandConfig['brand_id'],
                     "token" => $brandConfig['token'],
                 ],
-                "resourceType" => "ServiceRequestCotizacion", // ← SEGÚN EXCEL
+                "resourceType" => "ServiceRequestCotizacion",
                 "id" => "",
                 "requisition" => [
                     "system" => "urn:oid:2.16.840.1.113883.3.215.5.59",
-                    "value" => "42", // ← VALOR FIJO según Excel
+                    "value" => "42",
                     "convenio" => $brandConfig['brand_agreement_id'],
                     "marca" => $brandConfig['brand_id'],
                     "subtotal" => $this->calculateSubtotal($laboratoryCartItems),
@@ -63,36 +54,21 @@ class CreateGDAOnlyQuotationAction
                 "status" => "active",
                 "intent" => "order",
                 "code" => [
-                    "coding" => $this->buildCoding($laboratoryCartItems),
+                    "coding" => $this->buildCoding($laboratoryCartItems, $brandConfig['brand_agreement_id']),
                 ],
                 "orderdetail" => "",
                 "quantityQuantity" => (string) $laboratoryCartItems->count(),
                 "subject" => [
-                    "reference" => "Patient/4620606", // VALOR FIJO según testing
+                    "reference" => "Patient/4620606",
                 ],
                 "requester" => [
-                    "reference" => "Practitioner/5228", // VALOR FIJO según testing
+                    "reference" => "Practitioner/5228",
                     "display" => "A QUIEN CORRESPONDA"
-                ],
-                "GDA_menssage" => [ // ← AGREGAR según Excel
-                    "codeHttp" => "",
-                    "mensaje" => "error|success", 
-                    "descripcion" => "",
-                    "acuse" => ""
                 ]
             ];
 
-            logger('📤 [ACTION] Enviando payload a GDA:', [
-                'url' => $url,
-                'payload_keys' => array_keys($payload)
-            ]);
+            logger('📤 [ACTION] Enviando payload a GDA');
 
-            // LOG del payload completo (sin token por seguridad)
-            $payloadLog = $payload;
-            $payloadLog['header']['token'] = '***HIDDEN***';
-            logger('📋 [ACTION] Payload completo:', $payloadLog);
-
-            // Llamada a GDA con más detalles de debug
             $response = Http::timeout(60)
                           ->withHeaders([
                               'Content-Type' => 'application/json',
@@ -103,93 +79,114 @@ class CreateGDAOnlyQuotationAction
             $responseData = $response->json();
             $responseStatus = $response->status();
             
-            logger('📥 [ACTION] Respuesta GDA:', [
+            logger('📥 [ACTION] Respuesta GDA completa:', [
                 'status' => $responseStatus,
-                'headers' => $response->headers(),
-                'body' => $responseData
+                'response_data' => $responseData
             ]);
 
+            // ✅ MANEJO ESPECIAL: Aunque sea error 400, si tenemos acuse, es "éxito"
+            if (isset($responseData['GDA_menssage']['acuse']) && !empty($responseData['GDA_menssage']['acuse'])) {
+                logger('⚠️ [ACTION] GDA retornó error PERO con acuse válido - Considerando como éxito', [
+                    'acuse' => $responseData['GDA_menssage']['acuse'],
+                    'descripcion' => $responseData['GDA_menssage']['descripcion'] ?? 'Sin descripción'
+                ]);
+                
+                // Retornar la respuesta completa para que el controller la guarde
+                return $responseData;
+            }
+
+            // ❌ Error real sin acuse
             if ($response->failed()) {
                 $errorMessage = "Error GDA - Status: {$responseStatus}";
                 
-                // Agregar más detalles del error si están disponibles
-                if (isset($responseData['error'])) {
-                    $errorMessage .= " - Error: " . $responseData['error'];
-                }
-                if (isset($responseData['message'])) {
-                    $errorMessage .= " - Message: " . $responseData['message'];
+                if (isset($responseData['GDA_menssage']['descripcion'])) {
+                    $errorMessage .= " - " . $responseData['GDA_menssage']['descripcion'];
                 }
                 
                 throw new Exception($errorMessage);
             }
 
-            // Validar respuesta
-            if (empty($responseData)) {
-                throw new Exception('Respuesta GDA vacía');
-            }
-
+            // ✅ Éxito normal
             logger('✅ [ACTION] Llamada a GDA exitosa');
             return $responseData;
 
         } catch (\Throwable $th) {
             logger('❌ [ACTION] Error en CreateGDAOnlyQuotationAction:', [
-                'error' => $th->getMessage(),
-                'file' => $th->getFile(),
-                'line' => $th->getLine()
+                'error' => $th->getMessage()
             ]);
             throw $th;
         }
     }
 
     /**
-     * Calcular subtotal según formato GDA
+     * Calcular subtotal
      */
     private function calculateSubtotal($laboratoryCartItems): string
     {
         $total = 0;
         foreach ($laboratoryCartItems as $item) {
-            $total += $item->laboratoryTest->famedic_price_cents / 100; // Convertir a pesos
+            $total += $item->laboratoryTest->famedic_price_cents / 100;
         }
         
         return number_format($total, 2, '.', '');
     }
 
     /**
-     * Calcular total según formato GDA
+     * Calcular total
      */
     private function calculateTotal($laboratoryCartItems): string
     {
-        return $this->calculateSubtotal($laboratoryCartItems); // Por ahora sin descuentos
+        return $this->calculateSubtotal($laboratoryCartItems);
     }
 
     /**
-     * Construir coding según estructura del Excel
+     * Construir coding - CORREGIDO para paquetes
      */
-    private function buildCoding($laboratoryCartItems): array
+    private function buildCoding($laboratoryCartItems, $agreementId): array
     {
         $coding = [];
 
         foreach ($laboratoryCartItems as $item) {
-            $price = $item->laboratoryTest->famedic_price_cents / 100; // Convertir a pesos
+            $price = $item->laboratoryTest->famedic_price_cents / 100;
             
-            $coding[] = [
-                "system" => "System", // ← SEGÚN EXCEL
+            $codingItem = [
+                "system" => "System",
                 "code" => $item->laboratoryTest->gda_id,
                 "display" => $item->laboratoryTest->name,
                 "subtotal" => number_format($price, 2, '.', ''),
                 "descuentopromocion" => "0.00",
                 "pagopaciente" => number_format($price, 2, '.', ''),
                 "total" => number_format($price, 2, '.', ''),
-                "convenio" => "0", // ← SEGÚN EXCEL
-                "quantity" => "1" // ← AGREGAR quantity
+                "convenio" => "0",
+                "quantity" => "1"
             ];
+
+            // 🎯 POSIBLE PROBLEMA: GDA espera estudios individuales para paquetes
+            // Si es paquete, necesitamos enviar los estudios individuales
+            if ($this->isPackage($item)) {
+                logger('📦 [ACTION] Item es PAQUETE - Considerar desglose:', [
+                    'gda_id' => $item->laboratoryTest->gda_id,
+                    'name' => $item->laboratoryTest->name,
+                    'feature_count' => count($item->laboratoryTest->feature_list ?? [])
+                ]);
+                
+                // PARA PAQUETES: Podríamos necesitar enviar estudios individuales
+                // Por ahora mantenemos el paquete como está
+            }
+
+            $coding[] = $codingItem;
         }
 
-        logger('🔢 [ACTION] Coding construido:', [
-            'items_count' => count($coding),
-            'first_item' => $coding[0] ?? 'No items'
-        ]);
-
         return $coding;
+    }
+
+    /**
+     * Determinar si un item es paquete
+     */
+    private function isPackage($item): bool
+    {
+        return !empty($item->laboratoryTest->feature_list) && 
+               is_array($item->laboratoryTest->feature_list) &&
+               count($item->laboratoryTest->feature_list) > 0;
     }
 }

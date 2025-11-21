@@ -36,6 +36,11 @@ class LaboratoryQuote extends Model
         'status',
         'gda_response',
         'gda_acuse',
+        'gda_code_http',
+        'gda_mensaje',
+        'gda_description',
+        'has_gda_warning',
+        'gda_warning_message',
         'pdf_base64',
         'expires_at',
     ];
