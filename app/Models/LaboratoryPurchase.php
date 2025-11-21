@@ -247,10 +247,16 @@ class LaboratoryPurchase extends Model
         return Attribute::make(
             get: fn () => $this->transactions->first()?->formatted_commission ?? formattedCentsPrice(0)
         );
-    }
+    }    
 
-    public function laboratoryQuote()
+    // En App\Models\LaboratoryPurchase
+    public function laboratoryQuote(): BelongsTo
     {
         return $this->belongsTo(LaboratoryQuote::class);
+    }
+
+    public function scopeFromQuote($query, $quoteId)
+    {
+        return $query->where('laboratory_quote_id', $quoteId);
     }
 }

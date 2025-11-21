@@ -2,57 +2,37 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Laboratories\CreateGDAOnlyQuotationAction;
-use App\Actions\Laboratories\CreatePatientAction;
-use App\Actions\Laboratories\CreatePractitionerAction;
+use App\Actions\Laboratories\CreateGDAQuotationAction;
 use App\Http\Controllers\Controller;
-use App\Models\Address;
-use App\Models\Contact;
-use App\Models\Customer;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryQuote;
-use App\Models\LaboratoryQuoteItem;
 use App\Models\LaboratoryTest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Exception;
-use Carbon\Carbon;
 
-class LaboratoryQuoteController extends Controller
+class LaboratoryQuoteControllerVersionSimple extends Controller
 {
     public function __construct(
-        protected CreateGDAOnlyQuotationAction $createGDAOnlyQuotationAction,
-        protected CreatePatientAction $createPatientAction,
-        protected CreatePractitionerAction $createPractitionerAction
+        protected CreateGDAQuotationAction $createGDAQuotationAction
     ) {
     }
 
+    // En el método store del Controller, agrega estos logs:
     public function store(Request $request, string $laboratory_brand)
     {
-        logger('🔍 [DEBUG] Verificando Action:', [
-            'action_class' => get_class($this->createGDAOnlyQuotationAction),
-            'action_exists' => class_exists(CreateGDAOnlyQuotationAction::class),
-            'is_callable' => is_callable($this->createGDAOnlyQuotationAction)
-        ]);
-
+        
+        // LOG TEMPORAL PARA CONFIRMAR SI LLEGA LA REQUEST
         logger('🔴 [DEBUG] ¿LLEGÓ LA REQUEST AL CONTROLLER?', [
             'method' => $request->method(),
             'laboratory_brand' => $laboratory_brand,
-            'all_data' => $request->all()
+            'all_data' => $request->all(),
+            'headers' => $request->headers->all(),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent()
         ]);
-
-        // DEBUG: Verificar que los Actions se cargan correctamente
-        try {
-            logger('🔍 [DEBUG] Verificando Actions:', [
-                'createGDAOnlyQuotationAction' => get_class($this->createGDAOnlyQuotationAction),
-                'createPatientAction' => get_class($this->createPatientAction),
-                'createPractitionerAction' => get_class($this->createPractitionerAction),
-            ]);
-        } catch (\Throwable $th) {
-            logger('❌ [DEBUG] Error verificando Actions:', ['error' => $th->getMessage()]);
-        }
 
         $request->validate([
             'address_id' => 'required|exists:addresses,id',
@@ -65,87 +45,65 @@ class LaboratoryQuoteController extends Controller
         ]);
 
         $cartItems = $request->input('cart_items');
-        $customer = auth()->user()->customer;
-        $address = Address::find($request->address_id);
-        $contact = Contact::find($request->contact_id);
 
+        // LOG CRÍTICO 1: Ver EXACTAMENTE qué llega del frontend
         logger('🟡 [CONTROLLER] INICIANDO STORE - REQUEST COMPLETA:', [
             'laboratory_brand' => $laboratory_brand,
             'address_id' => $request->address_id,
             'contact_id' => $request->contact_id,
-            'customer_id' => $customer->id,
-            'cart_items_count' => count($cartItems)
+            'cart_items_raw' => $cartItems,
+            'user_id' => auth()->id(),
+            'customer_id' => auth()->user()->customer->id ?? 'NO_CUSTOMER'
         ]);
 
         try {
             DB::beginTransaction();
 
+            // LOG CRÍTICO 2: Antes de enriquecer items
+            logger('🟡 [CONTROLLER] ANTES DE ENRIQUECER ITEMS');
+
             // Enriquecer items
             $enrichedCartItems = $this->enrichCartItemsWithTestData($cartItems);
 
+            // LOG CRÍTICO 3: Después de enriquecer
             logger('🟢 [CONTROLLER] ITEMS ENRIQUECIDOS:', [
                 'total_items' => count($enrichedCartItems),
-                'primer_item' => $enrichedCartItems[0] ?? 'No items'
+                'primer_item_detallado' => $enrichedCartItems[0] ?? 'No items',
+                'tiene_gda_id' => isset($enrichedCartItems[0]['gda_id']),
+                'tiene_feature_list' => isset($enrichedCartItems[0]['feature_list']),
+                'feature_list_count' => count($enrichedCartItems[0]['feature_list'] ?? [])
             ]);
 
-            // Generar ID temporal para la cotización
-            $quoteTempId = 'QT_' . now()->format('YmdHis') . '_' . uniqid();
-
-            logger('🟡 [CONTROLLER] LLAMANDO AL ACTION CreateGDAOnlyQuotationAction...', [
+            // LOG CRÍTICO 4: Antes de llamar al Action
+            logger('🟡 [CONTROLLER] LLAMANDO AL ACTION CreateGDAQuotationAction...', [
                 'laboratory_brand' => $laboratory_brand,
-                'quote_temp_id' => $quoteTempId
+                'items_count' => count($enrichedCartItems)
             ]);
 
-            // Formatear items para el Action
-            $formattedItems = $this->formatCartItemsForAction($enrichedCartItems);
-
-            logger('🔍 [DEBUG] Items formateados para Action:', [
-                'count' => $formattedItems->count(),
-                'first_item' => $formattedItems->first()
+            //dd($enrichedCartItems, 'DEBUG - ITEMS ENRIQUECIDOS ANTES DEL ACTION');
+            // Llamar al Action - ESTA ES LA LÍNEA CLAVE
+            $gdaResponse = ($this->createGDAQuotationAction)($enrichedCartItems, $laboratory_brand);
+            //dd($gdaResponse, 'DEBUG - RESPUESTA DEL ACTION');
+            // LOG CRÍTICO 5: Si llegamos aquí, el Action funcionó
+            logger('🎉 [CONTROLLER] ACTION COMPLETADO EXITOSAMENTE - Respuesta GDA:', [
+                'tiene_acuse' => isset($gdaResponse['GDA_menssage']['acuse']),
+                'tiene_pdf' => isset($gdaResponse['base64']),
+                'acuse' => $gdaResponse['GDA_menssage']['acuse'] ?? 'NO_ACUSE',
+                'respuesta_completa' => $gdaResponse
             ]);
-
-            // Llamar al Action con try-catch específico
-            try {
-                $gdaResponse = ($this->createGDAOnlyQuotationAction)(
-                    $customer,
-                    $address,
-                    $contact,
-                    $laboratory_brand,
-                    $formattedItems,
-                    $quoteTempId
-                );
-
-                logger('🎉 [CONTROLLER] ACTION COMPLETADO - Respuesta GDA:', [
-                    'gda_response' => $gdaResponse,
-                    'tiene_id' => isset($gdaResponse['id'])
-                ]);
-
-            } catch (\Throwable $th) {
-                logger('❌ [CONTROLLER] ERROR EN ACTION:', [
-                    'error' => $th->getMessage(),
-                    'file' => $th->getFile(),
-                    'line' => $th->getLine()
-                ]);
-                throw $th; // Relanzar la excepción
-            }
 
             $total = collect($cartItems)->sum(fn($i) => $i['price'] * ($i['quantity'] ?? 1));
 
-            // Crear la cotización en BD
-            logger('🟡 [CONTROLLER] CREANDO COTIZACIÓN EN BD...');
+            // LOG CRÍTICO 6: Antes de crear la cotización
+            logger('🟡 [CONTROLLER] CREANDO COTIZACIÓN EN BD...', [
+                'total' => $total,
+                'customer_id' => auth()->user()->customer->id
+            ]);
 
-            // En el método store, después de llamar al Action:
             $quote = LaboratoryQuote::create([
                 'user_id' => auth()->id(),
-                'customer_id' => $customer->id,
+                'customer_id' => auth()->user()->customer->id,
                 'laboratory_brand' => $laboratory_brand,
-                'gda_order_id' => $gdaResponse['id'] ?? null,
-                'patient_name' => $contact->name,
-                'patient_paternal_lastname' => $contact->paternal_lastname,
-                'patient_maternal_lastname' => $contact->maternal_lastname,
-                'patient_phone' => $contact->phone,
-                'patient_birth_date' => $contact->birth_date,
-                'patient_gender' => $contact->gender,
                 'contact_id' => $request->contact_id,
                 'address_id' => $request->address_id,
                 'items' => $enrichedCartItems,
@@ -154,13 +112,10 @@ class LaboratoryQuoteController extends Controller
                 'total' => $total,
                 'status' => 'pending_branch_payment',
                 'gda_response' => $gdaResponse,
-                'gda_acuse' => $gdaResponse['GDA_menssage']['acuse'] ?? $gdaResponse['id'] ?? null, // Adaptado
+                'gda_acuse' => $gdaResponse['GDA_menssage']['acuse'] ?? null,
                 'pdf_base64' => $gdaResponse['base64'] ?? null,
                 'expires_at' => now()->addHours(24),
             ]);
-
-            // CREAR ITEMS EN LA NUEVA TABLA
-            $this->createQuoteItems($quote, $enrichedCartItems);
 
             $this->clearCart();
             DB::commit();
@@ -171,12 +126,19 @@ class LaboratoryQuoteController extends Controller
         } catch (Exception $e) {
             DB::rollBack();
 
+            // LOG CRÍTICO 7: Error capturado - DETALLADO
             logger('❌ [CONTROLLER] ERROR CAPTURADO EN STORE - DETALLES:', [
                 'error_message' => $e->getMessage(),
                 'error_class' => get_class($e),
                 'error_line' => $e->getLine(),
                 'error_file' => $e->getFile(),
-                'error_trace' => $e->getTraceAsString(),
+                'error_trace' => $e->getTraceAsString(), // ← ESTO ES CRÍTICO
+                'request_data' => [
+                    'laboratory_brand' => $laboratory_brand,
+                    'address_id' => $request->address_id,
+                    'contact_id' => $request->contact_id,
+                    'cart_items' => $cartItems
+                ]
             ]);
 
             return back()->with('error', 'Error al generar cotización: ' . $e->getMessage());
@@ -184,69 +146,63 @@ class LaboratoryQuoteController extends Controller
     }
 
     /**
-     * Formatear items para el nuevo Action (similar al OrderAction)
+     * Enriquecer los items del carrito con datos adicionales de LaboratoryTest
      */
-    protected function formatCartItemsForAction(array $enrichedCartItems)
-    {
-        return collect($enrichedCartItems)->map(function ($item) {
-            return (object) [
-                'laboratoryTest' => (object) [
-                    'gda_id' => $item['gda_id'] ?? 'UNKNOWN',
-                    'name' => $item['name'] ?? 'Sin nombre',
-                    'famedic_price_cents' => (int) (($item['price'] ?? 0) * 100)
-                ]
-            ];
-        });
-    }
-
-    /**
-     * Crear items en la nueva tabla laboratory_quote_items
-     */
-    protected function createQuoteItems(LaboratoryQuote $quote, array $enrichedCartItems): void
-    {
-        foreach ($enrichedCartItems as $item) {
-            LaboratoryQuoteItem::create([
-                'laboratory_quote_id' => $quote->id,
-                'gda_id' => $item['gda_id'] ?? 'UNKNOWN',
-                'name' => $item['name'] ?? 'Sin nombre',
-                'description' => $item['description'] ?? null,
-                'feature_list' => $item['feature_list'] ?? null,
-                'indications' => $item['indications'] ?? null,
-                'price_cents' => (int) (($item['price'] ?? 0) * 100),
-                'quantity' => $item['quantity'] ?? 1,
-            ]);
-        }
-
-        logger('✅ [CONTROLLER] Items de cotización creados:', [
-            'quote_id' => $quote->id,
-            'total_items' => count($enrichedCartItems)
-        ]);
-    }
-
     /**
      * Enriquecer los items del carrito con datos adicionales de LaboratoryTest
      */
     protected function enrichCartItemsWithTestData(array $cartItems): array
     {
         logger('=== ENRIQUECIENDO CART ITEMS CON TEST DATA ===');
+        logger('Cart items originales:', $cartItems);
 
         $testIds = collect($cartItems)->pluck('test_id')->filter()->unique();
+        logger('Test IDs encontrados:', $testIds->toArray());
 
         if ($testIds->isEmpty()) {
+            logger('No hay test IDs, retornando items originales');
             return $cartItems;
         }
 
         $labTests = LaboratoryTest::whereIn('id', $testIds)->get();
+
+        logger('LaboratoryTests cargados:', [
+            'cantidad' => $labTests->count(),
+            'ids' => $labTests->pluck('id')->toArray()
+        ]);
+
+        // Log detallado de cada test cargado
+        foreach ($labTests as $test) {
+            // CORRECCIÓN: Convertir feature_list y elements de JSON string a array
+            $featureList = $this->parseJsonField($test->feature_list);
+            $elements = $this->parseJsonField($test->elements);
+
+            logger("Test cargado - ID: {$test->id}, Nombre: {$test->name}", [
+                'gda_id' => $test->gda_id,
+                'elements' => $elements,
+                'feature_list' => $featureList,
+                'has_elements' => !empty($elements),
+                'has_feature_list' => !empty($featureList),
+                'feature_list_count' => !empty($featureList) ? count($featureList) : 0,
+                'elements_count' => !empty($elements) ? count($elements) : 0
+            ]);
+        }
+
         $labTestsKeyed = $labTests->keyBy('id');
 
         $enrichedItems = collect($cartItems)->map(function ($item) use ($labTestsKeyed) {
+            logger("Enriqueciendo item:", $item);
+
             if (isset($item['test_id']) && $labTest = $labTestsKeyed[$item['test_id']] ?? null) {
 
+                // CORRECCIÓN: Convertir campos JSON a arrays
                 $featureList = $this->parseJsonField($labTest->feature_list);
                 $elements = $this->parseJsonField($labTest->elements);
+
+                // Determinar si es paquete basado en feature_list
                 $isPackage = !empty($featureList) && is_array($featureList);
 
-                return array_merge($item, [
+                $enrichedItem = array_merge($item, [
                     'gda_id' => $labTest->gda_id,
                     'name' => $labTest->name,
                     'description' => $labTest->description,
@@ -256,14 +212,28 @@ class LaboratoryQuoteController extends Controller
                     'brand' => $labTest->brand,
                     'requires_appointment' => $labTest->requires_appointment,
                 ]);
+
+                logger("Item enriquecido:", [
+                    'name' => $enrichedItem['name'],
+                    'gda_id' => $enrichedItem['gda_id'],
+                    'es_paquete' => $isPackage ? 'SÍ' : 'NO',
+                    'feature_list_count' => $isPackage ? count($featureList) : 0,
+                    'elements_count' => !empty($elements) ? count($elements) : 0
+                ]);
+
+                return $enrichedItem;
             }
 
-            logger('⚠️ [CONTROLLER] Test no encontrado para item:', ['test_id' => $item['test_id'] ?? 'No definido']);
+            logger("Item NO enriquecido - test_id no encontrado:", [
+                'test_id' => $item['test_id'] ?? 'No definido',
+                'item' => $item
+            ]);
             return $item;
         })->toArray();
 
         logger('=== ITEMS ENRIQUECIDOS FINALES ===', [
-            'total_items' => count($enrichedItems)
+            'total_items' => count($enrichedItems),
+            'items' => $enrichedItems
         ]);
 
         return $enrichedItems;
@@ -274,65 +244,77 @@ class LaboratoryQuoteController extends Controller
      */
     protected function parseJsonField($field): array
     {
-        if (empty($field))
+        if (empty($field)) {
             return [];
-        if (is_array($field))
-            return $field;
+        }
 
+        // Si ya es un array, retornarlo directamente
+        if (is_array($field)) {
+            return $field;
+        }
+
+        // Si es string, intentar decodificar JSON
         if (is_string($field)) {
             try {
                 $decoded = json_decode($field, true);
                 return is_array($decoded) ? $decoded : [];
             } catch (Exception $e) {
-                logger('Error decodificando JSON field');
+                logger('Error decodificando JSON field:', [
+                    'field' => $field,
+                    'error' => $e->getMessage()
+                ]);
                 return [];
             }
         }
+
         return [];
     }
 
     /**
-     * Limpiar el carrito del usuario
+     * Limpiar el carrito del usuario de la base de datos
      */
     protected function clearCart()
     {
         $customer = auth()->user()->customer;
+
+        // Contar items antes de eliminar para logging
         $itemsCount = LaboratoryCartItem::where('customer_id', $customer->id)->count();
 
+        // Eliminar todos los items del carrito del cliente
         LaboratoryCartItem::where('customer_id', $customer->id)->delete();
 
+        // También limpiar cualquier sesión relacionada por si acaso
         session()->forget('laboratory_cart');
         session()->forget('cart_items');
 
+        // Log para verificar que se limpió el carrito
         logger("Carrito de laboratorio limpiado", [
             'customer_id' => $customer->id,
             'items_eliminados' => $itemsCount
         ]);
     }
 
-    // ... Los demás métodos (success, show, index, cancel, resendPdf) permanecen igual
     public function success(LaboratoryQuote $quote)
     {
-        $quote->load(['contact', 'address', 'appointment.laboratoryStore', 'quoteItems']);
+        // Cargar las relaciones necesarias
+        $quote->load(['contact', 'address', 'appointment.laboratoryStore']);
 
+        // Usar los accessors del modelo - CORREGIDO
         $quoteData = [
             'id' => $quote->id,
             'gda_acuse' => $quote->gda_acuse,
-            'gda_order_id' => $quote->gda_order_id,
             'total_cents' => $quote->total_cents,
             'subtotal_cents' => $quote->subtotal_cents,
             'discount_cents' => $quote->discount_cents,
             'expires_at' => $quote->expires_at,
             'created_at' => $quote->created_at,
             'status' => $quote->status,
-            'patient_name' => $quote->patient_full_name,
-            'patient_phone' => $quote->patient_phone,
+            'patient_name' => $quote->appointment?->patientFullName ?? 'Paciente',
             'items' => $quote->items,
-            'quote_items' => $quote->quoteItems,
             'pdf_base64' => $quote->pdf_base64,
         ];
 
-        // Información de contacto
+        // Solo agregar contact si existe la relación y el contacto
         if ($quote->relationLoaded('contact') && $quote->contact) {
             $quoteData['contact'] = [
                 'name' => $quote->contact->name,
@@ -341,9 +323,11 @@ class LaboratoryQuoteController extends Controller
                 'phone' => $quote->contact->phone,
                 'email' => $quote->contact->email,
             ];
+        } else {
+            $quoteData['contact'] = null;
         }
 
-        // Información de dirección
+        // Solo agregar address si existe la relación y la dirección
         if ($quote->relationLoaded('address') && $quote->address) {
             $quoteData['address'] = [
                 'street' => $quote->address->street,
@@ -355,9 +339,11 @@ class LaboratoryQuoteController extends Controller
                 'zip_code' => $quote->address->zip_code,
                 'full_address' => $quote->address->full_address,
             ];
+        } else {
+            $quoteData['address'] = null;
         }
 
-        // Información de cita
+        // Solo agregar appointment si existe la relación y la cita
         if ($quote->relationLoaded('appointment') && $quote->appointment) {
             $quoteData['appointment'] = [
                 'scheduled_at' => $quote->appointment->scheduled_at,
@@ -366,6 +352,8 @@ class LaboratoryQuoteController extends Controller
                     'address' => $quote->appointment->laboratoryStore->address,
                 ] : null,
             ];
+        } else {
+            $quoteData['appointment'] = null;
         }
 
         return inertia('LaboratoryQuoteSuccess', [
@@ -377,13 +365,17 @@ class LaboratoryQuoteController extends Controller
         ]);
     }
 
+    /**
+     * Mostrar detalles de una cotización específica
+     */
     public function show(LaboratoryQuote $quote)
     {
+        // Verificar que el usuario tiene permisos para ver esta cotización
         if ($quote->user_id !== auth()->id()) {
             abort(403, 'No tienes permisos para ver esta cotización.');
         }
 
-        $quote->load(['contact', 'address', 'appointment.laboratoryStore', 'quoteItems']);
+        $quote->load(['contact', 'address', 'appointment.laboratoryStore']);
 
         return inertia('LaboratoryQuoteShow', [
             'quote' => $quote,
@@ -394,10 +386,13 @@ class LaboratoryQuoteController extends Controller
         ]);
     }
 
+    /**
+     * Listar todas las cotizaciones del usuario
+     */
     public function index()
     {
         $quotes = LaboratoryQuote::where('user_id', auth()->id())
-            ->with(['contact', 'appointment', 'quoteItems'])
+            ->with(['contact', 'appointment'])
             ->orderBy('created_at', 'desc')
             ->paginate(10);
 
@@ -407,12 +402,17 @@ class LaboratoryQuoteController extends Controller
         ]);
     }
 
+    /**
+     * Cancelar una cotización
+     */
     public function cancel(LaboratoryQuote $quote)
     {
+        // Verificar que el usuario tiene permisos para cancelar esta cotización
         if ($quote->user_id !== auth()->id()) {
             abort(403, 'No tienes permisos para cancelar esta cotización.');
         }
 
+        // Solo se pueden cancelar cotizaciones pendientes
         if ($quote->status !== 'pending_branch_payment') {
             return back()->with('error', 'Solo se pueden cancelar cotizaciones pendientes de pago.');
         }
@@ -435,11 +435,18 @@ class LaboratoryQuoteController extends Controller
         }
     }
 
+    /**
+     * Reenviar PDF por email (si está implementado)
+     */
     public function resendPdf(LaboratoryQuote $quote)
     {
+        // Verificar que el usuario tiene permisos
         if ($quote->user_id !== auth()->id()) {
             abort(403, 'No tienes permisos para esta acción.');
         }
+
+        // Aquí iría la lógica para reenviar el PDF por email
+        // Por ahora solo retornamos un mensaje
 
         return back()->with('success', 'PDF reenviado exitosamente.');
     }
