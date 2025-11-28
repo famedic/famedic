@@ -10,6 +10,7 @@ use App\Http\Controllers\LaboratoryPurchaseController;
 use App\Http\Controllers\LaboratoryShoppingCartController;
 use App\Http\Controllers\LaboratoryStoreController;
 use App\Http\Controllers\LaboratoryQuoteController;
+use App\Http\Controllers\LaboratoryResultController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -61,9 +62,27 @@ Route::middleware([
 
     // Request for quotations
     Route::post('/{laboratory_brand}/quote', [LaboratoryQuoteController::class, 'store'])
-         ->name('api.laboratory.quote.store');
+        ->name('api.laboratory.quote.store');
 
     // Route get quote success
     Route::get('/cotizacion/{quote}', [LaboratoryQuoteController::class, 'success'])
         ->name('laboratory.quote.success');
+    /*
+    // Laboratory Results    
+    Route::get('/mis-resultados', [LaboratoryResultController::class, 'index'])
+        ->name('patient.results');
+
+    // Marcar como descargado (llamado desde el frontend)
+    Route::post('/api/lab-results/{resultId}/mark-downloaded', [LaboratoryResultController::class, 'markAsDownloaded'])
+        ->name('patient.results.mark-downloaded');
+    */
+
+
+    Route::get('/laboratory-results', [LaboratoryResultController::class, 'index'])->name('laboratory-results.index');
+    Route::post('/laboratory-results/{type}/{id}/mark-downloaded', [LaboratoryResultController::class, 'markAsDownloaded'])->name('laboratory-results.mark-downloaded');
+    Route::get('/laboratory-results/{type}/{id}/download', [LaboratoryResultController::class, 'download'])->name('laboratory-results.download');
+    Route::get('/laboratory-results/{type}/{id}/view', [LaboratoryResultController::class, 'view'])->name('laboratory-results.view');
+
+    
+    Route::post('/laboratory-results/notification/{notification}/mark-read', [LaboratoryResultController::class, 'markAsRead']);
 });

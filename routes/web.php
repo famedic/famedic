@@ -10,6 +10,7 @@ use App\Http\Controllers\ResultsController;
 use App\Http\Controllers\TermsOfServiceController;
 use App\Http\Controllers\VendorPaymentController;
 use App\Http\Controllers\WelcomeController;
+//use App\Http\Controllers\WebHook\GDAWebHookController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', WelcomeController::class)->name('welcome');
@@ -39,6 +40,7 @@ Route::get('/offline', function () {
     return 'offline';
 })->name('offline');
 
+
 require __DIR__.'/odessa.php';
 require __DIR__.'/admin.php';
 require __DIR__.'/settings.php';
@@ -46,3 +48,4 @@ require __DIR__.'/laboratories.php';
 require __DIR__.'/online-pharmacy.php';
 require __DIR__.'/medical-attention.php';
 require __DIR__.'/auth.php';
+require __DIR__.'/webhooks.php';
