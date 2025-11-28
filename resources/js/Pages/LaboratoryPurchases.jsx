@@ -59,7 +59,7 @@ export default function LaboratoryPurchases({ laboratoryPurchases, laboratoryQuo
 					<InputGroup>
 						<MagnifyingGlassIcon />
 						<Input
-							placeholder="Buscar pedidos y cotizaciones"
+							placeholder="Buscar pedidos por nombre, código o acuse"
 							value={data.search}
 							onChange={(e) => setData("search", e.target.value)}
 						/>
@@ -71,7 +71,7 @@ export default function LaboratoryPurchases({ laboratoryPurchases, laboratoryQuo
 			{laboratoryQuotes.length > 0 && (
 				<div className="mb-8 sm:mb-12">
 					<Subheading className="mb-4 sm:mb-6 text-base sm:text-lg font-semibold">
-						Mis Cotizaciones
+						Pedidos con Pago en sucursal
 					</Subheading>
 					<LaboratoryQuotesList
 						laboratoryQuotes={laboratoryQuotes}
@@ -206,7 +206,7 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 										<div className="text-center sm:text-left">
 											<Text className="text-sm sm:text-base">
 												<Strong className="break-words">
-													Cotización #{quote.gda_acuse || quote.id}
+													Pedido #{quote.gda_order_id || quote.id}
 												</Strong>
 											</Text>
 										</div>
@@ -279,7 +279,7 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 										</div>
 
 										<Subheading className="flex items-center text-sm sm:text-base group-hover:underline">
-											Ver cotización
+											Ver Pedido
 											<ArrowRightIcon className="ml-1 size-4 sm:size-5 transform transition-transform group-hover:translate-x-1 group-hover:scale-125" />
 										</Subheading>
 									</div>
@@ -324,7 +324,7 @@ function LaboratoryPurchasesList({ laboratoryPurchases }) {
 	if (laboratoryPurchases.length === 0)
 		return (
 			<EmptyListCard
-				heading="No tienes pedidos"
+				heading="No tienes pedidos con pagos en línea"
 				message="Puedes hacer pedidos de laboratorios y farmacia en línea desde el menú principal."
 			/>
 		);

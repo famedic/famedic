@@ -5,6 +5,8 @@ import VerticalNavbar from "@/Components/VerticalNavbar";
 import { usePage } from "@inertiajs/react";
 import {
 	ShoppingBagIcon,
+	DocumentCheckIcon,
+	BeakerIcon,
 	CreditCardIcon,
 	DocumentTextIcon,
 	MapPinIcon,
@@ -21,6 +23,8 @@ const iconMap = {
 	CreditCardIcon: CreditCardIcon,
 	DocumentTextIcon: DocumentTextIcon,
 	ShoppingBagIcon: ShoppingBagIcon,
+	DocumentCheckIcon: DocumentCheckIcon,
+	BeakerIcon: BeakerIcon,
 	IdentificationIcon: IdentificationIcon,
 	CommandLineIcon: CommandLineIcon,
 	UsersIcon: UsersIcon,

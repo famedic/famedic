@@ -1,3 +1,4 @@
+import SettingsLayout from "@/Layouts/SettingsLayout";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
@@ -18,6 +19,7 @@ import {
     ClockIcon,
     ExclamationTriangleIcon
 } from "@heroicons/react/16/solid";
+import { Navbar, NavbarItem } from "@/Components/Catalyst/navbar";
 
 // Función auxiliar nativa para formatear fecha como: 17 de noviembre de 2025
 const formatearFechaMX = (fechaIso) => {
@@ -241,7 +243,7 @@ Paga en cualquier sucursal ${getLaboratoryName()} con este código o el PDF adju
   const StatusIcon = statusBadge.icon;
 
   return (
-    <FocusedLayout title="Cotización generada" hideHelpBubble={true}>
+    <SettingsLayout title="Cotización generada" hideHelpBubble={true}>
       <div className="mx-auto max-w-6xl px-3 sm:px-4 py-6 sm:py-8 lg:px-8">
         {/* Header */}
         <div className="text-center mb-6 sm:mb-8">
@@ -710,6 +712,6 @@ Paga en cualquier sucursal ${getLaboratoryName()} con este código o el PDF adju
           Acude a cualquier sucursal {getLaboratoryName()} con tu referencia o el PDF antes del {formatearFechaMX(quote.expires_at)}.
         </Text>
       </div>
-    </FocusedLayout>
+    </SettingsLayout>
   );
 }
