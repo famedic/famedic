@@ -35,6 +35,10 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
         'full_phone',
         'formatted_birth_date',
         'formatted_gender',
+        'profile_is_complete',        // ya lo tenías
+        'pending_results_count',      // ← nuevo
+        'unread_lab_notifications_count', // ← nuevo
+        'has_pending_lab_results',    // ← nuevo
     ];
 
     protected function casts(): array
@@ -45,7 +49,7 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
             'password' => 'hashed',
             'birth_date' => 'date',
             'gender' => Gender::class,
-            'phone' => RawPhoneNumberCast::class.':country_field',
+            'phone' => RawPhoneNumberCast::class . ':country_field',
         ];
     }
 
@@ -77,7 +81,7 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
                 $fullName = trim($this->full_name);
                 $displayName = $fullName ?: $this->email;
 
-                if (! $displayName) {
+                if (!$displayName) {
                     return 'https://ui-avatars.com/api/?name=U&color=7F9CF5&background=EBF4FF';
                 }
 
@@ -90,7 +94,7 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
                     return mb_substr($segment, 0, 1);
                 })->join(' '));
 
-                return 'https://ui-avatars.com/api/?name='.urlencode($name).'&color=7F9CF5&background=EBF4FF';
+                return 'https://ui-avatars.com/api/?name=' . urlencode($name) . '&color=7F9CF5&background=EBF4FF';
             },
         );
     }
@@ -98,7 +102,7 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
     protected function birthDateString(): Attribute
     {
         return Attribute::make(
-            get: fn () => Carbon::parse($this->birth_date)->format('Y-m-d'),
+            get: fn() => Carbon::parse($this->birth_date)->format('Y-m-d'),
         );
     }
 
@@ -120,38 +124,145 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
     protected function fullPhone(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->phone?->formatE164()
+            get: fn() => $this->phone?->formatE164()
         );
     }
 
     protected function formattedBirthDate(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->birth_date?->isoFormat('D [de] MMM [de] YYYY'),
+            get: fn() => $this->birth_date?->isoFormat('D [de] MMM [de] YYYY'),
         );
     }
 
     protected function formattedGender(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->gender?->label()
+            get: fn() => $this->gender?->label()
         );
     }
 
     protected function profileIsComplete(): Attribute
     {
         return Attribute::make(
-            get: fn () => ! empty($this->name) &&
-                ! empty($this->paternal_lastname) &&
-                ! empty($this->maternal_lastname) &&
-                ! empty($this->phone) &&
-                ! empty($this->birth_date) &&
-                ! empty($this->gender)
+            get: fn() => !empty($this->name) &&
+            !empty($this->paternal_lastname) &&
+            !empty($this->maternal_lastname) &&
+            !empty($this->phone) &&
+            !empty($this->birth_date) &&
+            !empty($this->gender)
         );
     }
 
     public function routeNotificationForVonage(Notification $notification): string
     {
         return $this->phone?->formatInternational();
+    }
+
+    /**
+     * Cotizaciones de laboratorio del paciente
+     */
+    /*public function laboratoryQuotes(): HasMany
+    {
+        return $this->hasMany(LaboratoryQuote::class, 'patient_id');
+    }*/
+
+    /**
+     * Resultados listos (cotizaciones con ready_at no nulo)
+     */
+    /*public function laboratoryResults(): HasMany
+    {
+        return $this->hasMany(LaboratoryQuote::class, 'patient_id')
+            ->whereNotNull('ready_at');
+    }*/
+
+    /**
+     * Resultados listos pero NO descargados aún
+     */
+    public function pendingLaboratoryResults(): HasMany
+    {
+        return $this->hasMany(LaboratoryQuote::class, 'contact_id')  // ← Cambiar a contact_id
+            ->whereNotNull('ready_at')
+            ->whereNull('results_downloaded_at');
+    }
+
+    /**
+     * Notificaciones de laboratorio (modelo LaboratoryNotification)
+     */
+    public function laboratoryNotifications(): HasMany
+    {
+        return $this->hasMany(LaboratoryNotification::class, 'user_id')
+            ->orderByDesc('created_at');
+    }
+
+    /**
+     * Notificaciones de laboratorio NO leídas
+     */
+    public function unreadLaboratoryNotifications(): HasMany
+    {
+        return $this->hasMany(LaboratoryNotification::class, 'user_id')
+            ->whereNull('read_at');
+    }
+
+    /**
+     * Accesor: cantidad de resultados listos sin descargar
+     */
+    protected function pendingResultsCount(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => $this->pendingLaboratoryResults()->count()
+        );
+    }
+
+    /**
+     * Accesor: cantidad de notificaciones sin leer
+     */
+    protected function unreadLabNotificationsCount(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => $this->unreadLaboratoryNotifications()->count()
+        );
+    }
+
+    /**
+     * Accesor: ¿tiene resultados pendientes de descargar?
+     */
+    protected function hasPendingLabResults(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => $this->pendingResultsCount > 0
+        );
+    }
+
+    /**
+     * Accesor: ¿tiene notificaciones sin leer?
+     */
+    protected function hasUnreadLabNotifications(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => $this->unreadLabNotificationsCount > 0
+        );
+    }
+
+    /**
+     * Marcar todas las notificaciones de laboratorio como leídas
+     */
+    public function markLaboratoryNotificationsAsRead(): void
+    {
+        $this->unreadLaboratoryNotifications()->update([
+            'read_at' => now(),
+        ]);
+    }
+
+    /**
+     * Obtener los últimos resultados listos (útil para mostrar en dashboard)
+     */
+    public function latestLaboratoryResults(int $limit = 5)
+    {
+        return $this->laboratoryResults()
+            ->with('items')
+            ->latest('ready_at')
+            ->limit($limit)
+            ->get();
     }
 }

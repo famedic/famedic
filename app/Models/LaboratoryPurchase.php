@@ -37,7 +37,7 @@ class LaboratoryPurchase extends Model
             'brand' => LaboratoryBrand::class,
             'birth_date' => 'date',
             'gender' => Gender::class,
-            'phone' => RawPhoneNumberCast::class.':country_field',
+            'phone' => RawPhoneNumberCast::class . ':country_field',
             'temporarily_hide_gda_order_id' => 'boolean',
         ];
     }
@@ -45,7 +45,7 @@ class LaboratoryPurchase extends Model
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         // Apply filtering based on the deleted flag:
-        if (! isset($filters['deleted']) || $filters['deleted'] === '') {
+        if (!isset($filters['deleted']) || $filters['deleted'] === '') {
             // "Todos": include both active and trashed records.
             $query->withTrashed();
         } elseif ($filters['deleted'] === 'true') {
@@ -170,49 +170,49 @@ class LaboratoryPurchase extends Model
     protected function formattedCreatedAt(): Attribute
     {
         return Attribute::make(
-            get: fn () => localizedDate($this->created_at)?->isoFormat('D MMM Y h:mm a')
+            get: fn() => localizedDate($this->created_at)?->isoFormat('D MMM Y h:mm a')
         );
     }
 
     protected function formattedTotal(): Attribute
     {
         return Attribute::make(
-            get: fn () => formattedCentsPrice($this->total_cents),
+            get: fn() => formattedCentsPrice($this->total_cents),
         );
     }
 
     protected function total(): Attribute
     {
         return Attribute::make(
-            get: fn () => numberCents($this->total_cents)
+            get: fn() => numberCents($this->total_cents)
         );
     }
 
     protected function fullName(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->name.' '.$this->paternal_lastname.' '.$this->maternal_lastname
+            get: fn() => $this->name . ' ' . $this->paternal_lastname . ' ' . $this->maternal_lastname
         );
     }
 
     protected function fullPhone(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->phone?->formatE164()
+            get: fn() => $this->phone?->formatE164()
         );
     }
 
     protected function formattedBirthDate(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->birth_date?->isoFormat('D [de] MMM [de] YYYY'),
+            get: fn() => $this->birth_date?->isoFormat('D [de] MMM [de] YYYY'),
         );
     }
 
     protected function formattedGender(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->gender?->label()
+            get: fn() => $this->gender?->label()
         );
     }
 
@@ -220,7 +220,7 @@ class LaboratoryPurchase extends Model
     {
         return Attribute::make(
             get: function () {
-                if (! $this->results) {
+                if (!$this->results) {
                     return null;
                 }
 
@@ -238,25 +238,54 @@ class LaboratoryPurchase extends Model
     protected function temporarlyHideGdaOrderId(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->created_at?->lt(Carbon::parse('October 20, 2024')) ? true : false
+            get: fn() => $this->created_at?->lt(Carbon::parse('October 20, 2024')) ? true : false
         );
     }
 
     protected function formattedCommission(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->transactions->first()?->formatted_commission ?? formattedCentsPrice(0)
+            get: fn() => $this->transactions->first()?->formatted_commission ?? formattedCentsPrice(0)
         );
-    }    
+    }
 
     // En App\Models\LaboratoryPurchase
-    public function laboratoryQuote(): BelongsTo
+    /*public function laboratoryQuote(): BelongsTo
     {
         return $this->belongsTo(LaboratoryQuote::class);
-    }
+    }*/
 
     public function scopeFromQuote($query, $quoteId)
     {
         return $query->where('laboratory_quote_id', $quoteId);
+    }
+
+    // Agregar esta relación al modelo
+    public function laboratoryNotifications()
+    {
+        return $this->hasMany(LaboratoryNotification::class);
+    }
+
+    // Método para obtener notificaciones de resultados
+    public function resultNotifications()
+    {
+        return $this->laboratoryNotifications()
+            ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+            ->orderBy('created_at', 'desc');
+    }
+
+    // Método para verificar si tiene resultados
+    public function hasResults(): bool
+    {
+        return $this->resultNotifications()->whereNotNull('results_pdf_base64')->exists();
+    }
+
+    // Método para obtener el último PDF de resultados
+    public function getLatestResultsPdf()
+    {
+        return $this->resultNotifications()
+            ->whereNotNull('results_pdf_base64')
+            ->latest()
+            ->first();
     }
 }

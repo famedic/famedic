@@ -14,6 +14,7 @@ class LaboratoryQuote extends Model
     use SoftDeletes;
 
     protected $fillable = [
+        'gda_quote_id',
         'user_id',
         'customer_id',
         'laboratory_brand',
@@ -43,6 +44,12 @@ class LaboratoryQuote extends Model
         'gda_warning_message',
         'pdf_base64',
         'expires_at',
+        'gda_notification_response',
+        'gda_results_response',
+        'results_pdf_base64',
+        'results_received_at',
+        'notified_at',
+        'gda_external_id',
     ];
 
     protected $casts = [
@@ -50,6 +57,12 @@ class LaboratoryQuote extends Model
         'gda_response' => 'array',
         'expires_at' => 'datetime',
         'patient_birth_date' => 'date',
+        'gda_notification_response' => 'array',
+        'gda_results_response' => 'array',
+        'results_received_at' => 'datetime',
+        'notified_at' => 'datetime',
+        'ready_at' => 'datetime',
+        'results_downloaded_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -151,7 +164,7 @@ class LaboratoryQuote extends Model
                 $name = $this->patient_name ?? '';
                 $paternal = $this->patient_paternal_lastname ?? '';
                 $maternal = $this->patient_maternal_lastname ?? '';
-                
+
                 return trim("$name $paternal $maternal");
             }
         );
@@ -168,7 +181,7 @@ class LaboratoryQuote extends Model
     {
         return Attribute::make(
             get: function () {
-                return match($this->patient_gender) {
+                return match ($this->patient_gender) {
                     '1' => 'Masculino',
                     '2' => 'Femenino',
                     default => 'No especificado'
@@ -219,5 +232,64 @@ class LaboratoryQuote extends Model
     public function canBeConvertedToPurchase(): bool
     {
         return $this->status === 'pending_branch_payment' && !$this->isExpired();
+    }
+
+    // Agregar relación
+    public function gdaNotifications()
+    {
+        return $this->hasMany(GdaNotification::class);
+    }
+
+    // Método para verificar si tiene resultados
+    /*public function hasResults(): bool
+    {
+        return !empty($this->results_pdf_base64);
+    }*/
+
+    // Método para obtener el tipo de entidad
+    public function getEntityType(): string
+    {
+        return 'quote';
+    }
+
+    // Agregar esta relación al modelo
+    public function laboratoryNotifications()
+    {
+        return $this->hasMany(LaboratoryNotification::class);
+    }
+
+    // Método para obtener notificaciones de resultados
+    public function resultNotifications()
+    {
+        return $this->laboratoryNotifications()
+            ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+            ->orderBy('created_at', 'desc');
+    }
+
+    // Método para verificar si tiene resultados
+    public function hasResults(): bool
+    {
+        return $this->resultNotifications()->whereNotNull('results_pdf_base64')->exists();
+    }
+
+    // Método para obtener el último PDF de resultados
+    public function getLatestResultsPdf()
+    {
+        return $this->resultNotifications()
+            ->whereNotNull('results_pdf_base64')
+            ->latest()
+            ->first();
+    }
+
+    // Opcional: agregar un scope para buscar por gda_quote_id
+    public function scopeByGdaQuoteId($query, string $gdaQuoteId)
+    {
+        return $query->where('gda_quote_id', $gdaQuoteId);
+    }
+
+    // Opcional: método para verificar si tiene ID de GDA
+    public function hasGdaQuoteId(): bool
+    {
+        return !empty($this->gda_quote_id);
     }
 }
