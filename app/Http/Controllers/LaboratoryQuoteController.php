@@ -158,11 +158,12 @@ class LaboratoryQuoteController extends Controller
             // Crear la cotización en BD
             logger('🟡 [CONTROLLER] CREANDO COTIZACIÓN EN BD...');
 
-            $quote = LaboratoryQuote::create([
+            $quote = LaboratoryQuote::create([                
+                'gda_quote_id' => $gdaResponse['id'], // ID del proveedor
                 'user_id' => auth()->id(),
                 'customer_id' => $customer->id,
                 'laboratory_brand' => $laboratory_brand,
-                'gda_order_id' => $gdaResponse['id'] ?? null,
+                //'gda_order_id' => $gdaResponse['id'] ?? null,
                 'patient_name' => $contact->name,
                 'patient_paternal_lastname' => $contact->paternal_lastname,
                 'patient_maternal_lastname' => $contact->maternal_lastname,
