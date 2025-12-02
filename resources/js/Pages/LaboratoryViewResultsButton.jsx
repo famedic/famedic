@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/Components/Catalyst/button';
-import { Modal } from '@/Components/Catalyst/modal';
+import Modal from '@/Components/Catalyst/modal';
 import { Text } from '@/Components/Catalyst/text';
 
 export default function ViewResultsButton({ entity, entityType }) {
