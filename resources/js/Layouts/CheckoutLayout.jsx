@@ -1,3 +1,24 @@
+import { useMemo, useState } from "react";
+import { Button } from "@/Components/Catalyst/button";
+import { Badge } from "@/Components/Catalyst/badge";
+import { Text, Strong, Anchor } from "@/Components/Catalyst/text";
+import {
+  ArrowPathIcon,
+  PhoneIcon,
+  BuildingStorefrontIcon,
+  CreditCardIcon,
+  InformationCircleIcon as InformationCircleIconSolid,
+} from "@heroicons/react/16/solid";
+import { Subheading } from "@/Components/Catalyst/heading";
+import FocusedLayout from "@/Layouts/FocusedLayout";
+import { Divider } from "@/Components/Catalyst/divider";
+import { XMarkIcon, InformationCircleIcon } from "@heroicons/react/20/solid";
+import FAQs from "@/Components/FAQs";
+import FooterCopyrights from "@/Components/FooterCopyrights";
+import clsx from "clsx";
+import { PhotoIcon } from "@heroicons/react/24/solid";
+import { CheckIcon } from "@heroicons/react/24/outline";
+
 const emptyItemsContent = (
   <div className="text-center py-10">
     <Text className="text-zinc-500">Tu carrito está vacío.</Text>
@@ -11,13 +32,18 @@ export default function CheckoutLayout({
   children,
   header,
   paymentDisabled = false,
+  onlinePaymentDisabled = false,
+  branchPaymentDisabled = false,
+  paymentProcessing = false,
   submit,
   showBranchPayment = false,
-  data,
+  data = {},
 }) {
   const [isOnlineProcessing, setIsOnlineProcessing] = useState(false);
   const [isBranchProcessing, setIsBranchProcessing] = useState(false);
-  const onlinePaymentRequiresCard = showBranchPayment && !data?.payment_method;
+
+  const onlineDisabled = onlinePaymentDisabled !== undefined ? onlinePaymentDisabled : paymentDisabled;
+  const branchDisabled = branchPaymentDisabled !== undefined ? branchPaymentDisabled : paymentDisabled;
 
   const paymentButtonText = useMemo(() => {
     return "Pagar ahora " + (summaryDetails[summaryDetails.length - 1]?.value || "$0");
@@ -26,6 +52,12 @@ export default function CheckoutLayout({
   const paymentBranchButtonText = useMemo(() => {
     return "Pagar en sucursal " + (summaryDetails[summaryDetails.length - 1]?.value || "$0");
   }, [summaryDetails]);
+
+  console.log('CheckoutLayout - onlineDisabled:', onlineDisabled);
+  console.log('CheckoutLayout - branchDisabled:', branchDisabled);
+  console.log('CheckoutLayout - paymentProcessing:', paymentProcessing);
+  console.log('CheckoutLayout - data.payment_method:', data?.payment_method);
+  console.log('CheckoutLayout - showBranchPayment:', showBranchPayment);
 
   return (
     <FocusedLayout title={title} hideHelpBubble={true}>
@@ -52,47 +84,46 @@ export default function CheckoutLayout({
           className="flex w-full flex-col gap-8 lg:col-span-3"
         >
           {children}          
+          
           {/* PAGO ONLINE */}
-            <Button
-            disabled={
-                paymentDisabled || 
-                isOnlineProcessing || 
-                (showBranchPayment && data?.payment_method === undefined) // Seguro
-            }
+          <Button
+            disabled={onlineDisabled || isOnlineProcessing || paymentProcessing}
             type="submit"
             name="online_payment"
             className={clsx(
-                "w-full !py-3",
-                (paymentDisabled || isOnlineProcessing || (showBranchPayment && !data?.payment_method)) && "opacity-50"
+              "w-full !py-3",
+              (onlineDisabled || isOnlineProcessing || paymentProcessing) && "opacity-50"
             )}
-            >
+          >
             <CreditCardIcon className="w-5 h-5 mr-2" />
             {paymentButtonText}
-            {isOnlineProcessing && <ArrowPathIcon className="animate-spin ml-2 w-5 h-5" />}
-            </Button>
-            {showBranchPayment && !data?.payment_method && (
-                <Text className="mt-2 text-sm text-zinc-600 dark:text-slate-400 text-center">
-                    <InformationCircleIcon className="inline w-4 h-4 mr-1" />
-                    Agrega una tarjeta para pagar en línea
-                </Text>
-            )}
+            {(isOnlineProcessing || paymentProcessing) && <ArrowPathIcon className="animate-spin ml-2 w-5 h-5" />}
+          </Button>
+          
+          {showBranchPayment && !data?.payment_method && (
+            <Text className="mt-2 text-sm text-zinc-600 dark:text-slate-400 text-center">
+              <InformationCircleIconSolid className="inline w-4 h-4 mr-1" />
+              Agrega una tarjeta para pagar en línea
+            </Text>
+          )}
 
-            {/* PAGO EN SUCURSAL */}
-            {showBranchPayment && (
+          {/* PAGO EN SUCURSAL */}
+          {showBranchPayment && (
             <Button
-                disabled={paymentDisabled || isBranchProcessing}
-                type="submit"
-                name="branch_payment"
-                className={clsx(
+              disabled={branchDisabled || isBranchProcessing || paymentProcessing}
+              type="submit"
+              name="branch_payment"
+              className={clsx(
                 "w-full !py-3",
-                (paymentDisabled || isBranchProcessing) && "opacity-50"
-                )}
+                (branchDisabled || isBranchProcessing || paymentProcessing) && "opacity-50"
+              )}
             >
-                <BuildingStorefrontIcon className="w-5 h-5 mr-2" />
-                {paymentBranchButtonText}
-                {isBranchProcessing && <ArrowPathIcon className="animate-spin ml-2 w-5 h-5" />}
+              <BuildingStorefrontIcon className="w-5 h-5 mr-2" />
+              {paymentBranchButtonText}
+              {(isBranchProcessing || paymentProcessing) && <ArrowPathIcon className="animate-spin ml-2 w-5 h-5" />}
             </Button>
-            )}
+          )}
+          
           <Text className="mb-8 text-sm text-zinc-600 dark:text-slate-400">
             Al hacer clic en el botón "{paymentButtonText}",
             aceptas todos los{" "}
@@ -170,7 +201,7 @@ function CartDetail({ label, value, totalRow = false }) {
                 <dt>
                     {totalRow ? (
                         <Subheading
-                            className={totalRow && "dark:!text-famedic-light"}
+                            className={totalRow ? "dark:!text-famedic-light" : ""}
                         >
                             {label}
                         </Subheading>
@@ -182,9 +213,7 @@ function CartDetail({ label, value, totalRow = false }) {
                     <Text className="max-w-48 text-right">
                         {totalRow ? (
                             <Strong
-                                className={
-                                    totalRow && "dark:!text-famedic-light"
-                                }
+                                className={totalRow ? "dark:!text-famedic-light" : ""}
                             >
                                 {value}
                             </Strong>
@@ -222,6 +251,7 @@ function CartItem({
                             <img
                                 src={imgSrc}
                                 className="size-20 rounded-md object-cover object-center sm:size-24"
+                                alt={heading}
                             />
                         ) : (
                             <div className="flex size-20 items-center justify-center sm:size-24">
@@ -382,24 +412,3 @@ function Footer() {
         </>
     );
 }
-
-// resources/js/Layouts/CheckoutLayout.jsx
-import { useMemo, useState } from "react";
-import { Button } from "@/Components/Catalyst/button";
-import { Badge } from "@/Components/Catalyst/badge";
-import { Text, Strong, Anchor } from "@/Components/Catalyst/text";
-import {
-  ArrowPathIcon,
-  PhoneIcon,
-  BuildingStorefrontIcon,
-  CreditCardIcon,
-} from "@heroicons/react/16/solid";
-import { Subheading } from "@/Components/Catalyst/heading";
-import FocusedLayout from "@/Layouts/FocusedLayout";
-import { Divider } from "@/Components/Catalyst/divider";
-import { XMarkIcon, InformationCircleIcon } from "@heroicons/react/20/solid";
-import FAQs from "@/Components/FAQs";
-import FooterCopyrights from "@/Components/FooterCopyrights";
-import clsx from "clsx";
-import { PhotoIcon } from "@heroicons/react/24/solid";
-import { CheckIcon } from "@heroicons/react/24/outline";

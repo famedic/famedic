@@ -1,4 +1,3 @@
-// resources/js/Components/Laboratory/ViewResultsButton.jsx
 import { useState } from 'react';
 import { Button } from '@/Components/Catalyst/button';
 import { Modal } from '@/Components/Catalyst/modal';

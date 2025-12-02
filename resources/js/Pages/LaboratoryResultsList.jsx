@@ -9,7 +9,8 @@ import {
   ClockIcon,
   ArrowDownTrayIcon,
   EyeIcon,
-  DocumentChartBarIcon
+  DocumentChartBarIcon,
+  ExclamationTriangleIcon
 } from "@heroicons/react/24/solid";
 
 // Componente de carga
@@ -30,7 +31,7 @@ function ErrorState({ error }) {
     <div className="text-center py-12">
       <div className="mx-auto size-16 text-red-500">⚠️</div>
       <Text className="mt-4 text-lg text-red-600 dark:text-red-400">
-        Error al cargar las notificaciones
+        Error al cargar los resultados
       </Text>
       <Text className="text-sm text-red-500 dark:text-red-300 mt-2">
         {error}
@@ -41,6 +42,7 @@ function ErrorState({ error }) {
 
 export default function LaboratoryResultsList({ notifications = [], stats = {}, hasNotifications = false }) {
   const [downloadingId, setDownloadingId] = useState(null);
+  const [viewingId, setViewingId] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -93,6 +95,183 @@ export default function LaboratoryResultsList({ notifications = [], stats = {}, 
     }
   };
 
+  // Función para obtener el tipo de entidad y ID
+  const getEntityInfo = (notification) => {
+    if (!notification) return { type: 'notification', id: null };
+    
+    // Si es una cotización
+    if (notification.entity_type === 'quote' && notification.entity_id) {
+      return { type: 'quote', id: notification.entity_id };
+    }
+    
+    // Si es una compra
+    if (notification.entity_type === 'purchase' && notification.entity_id) {
+      return { type: 'purchase', id: notification.entity_id };
+    }
+    
+    // Fallback: usar notification_id como referencia
+    return { type: 'notification', id: notification.notification_id };
+  };
+
+  // Función para ver el PDF
+  const handleViewResult = async (notification) => {
+    if (!notification?.results_received_at) {
+      alert("Los resultados aún no están disponibles");
+      return;
+    }
+
+    const entityInfo = getEntityInfo(notification);
+    setViewingId(notification.notification_id);
+
+    try {
+      // Hacer petición al endpoint de ver PDF
+      const response = await fetch(`/laboratory-results/${entityInfo.type}/${entityInfo.id}/view`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Error al obtener el PDF');
+      }
+
+      // Obtener el blob del PDF
+      const blob = await response.blob();
+      
+      // Verificar si el blob es válido
+      if (blob.size === 0) {
+        throw new Error('El archivo PDF está vacío');
+      }
+      
+      const url = URL.createObjectURL(blob);
+      
+      // Abrir en nueva pestaña
+      const newWindow = window.open(url, '_blank');
+      if (!newWindow) {
+        alert('Por favor permite ventanas emergentes para ver el PDF');
+        URL.revokeObjectURL(url);
+      }
+      
+      // Marcar como leída después de ver
+      await markAsRead(notification.notification_id);
+
+    } catch (err) {
+      console.error('Error al ver el PDF:', err);
+      alert(err.message || "Error al visualizar el resultado");
+    } finally {
+      setViewingId(null);
+    }
+  };
+
+  // Función para descargar el PDF
+  const handleDownloadResult = async (notification) => {
+    if (!notification?.results_received_at) {
+      alert("Los resultados aún no están disponibles");
+      return;
+    }
+
+    const entityInfo = getEntityInfo(notification);
+    setDownloadingId(notification.notification_id);
+
+    try {
+      // Hacer petición al endpoint de descargar PDF
+      const response = await fetch(`/laboratory-results/${entityInfo.type}/${entityInfo.id}/download`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Error al descargar el PDF');
+      }
+
+      // Obtener el blob del PDF
+      const blob = await response.blob();
+      
+      // Verificar si el blob es válido
+      if (blob.size === 0) {
+        throw new Error('El archivo PDF está vacío');
+      }
+      
+      const url = URL.createObjectURL(blob);
+      
+      // Crear enlace de descarga
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Resultados_${notification.laboratory_brand || 'lab'}_${notification.gda_acuse || notification.notification_id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Marcar como leído
+      await markAsRead(notification.notification_id);
+
+    } catch (err) {
+      console.error('Error al descargar el PDF:', err);
+      alert(err.message || "Error al descargar los resultados");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  // Función para marcar como leída
+  const markAsRead = async (notificationId) => {
+    try {
+      await fetch(`/laboratory-results/notification/${notificationId}/mark-read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        }
+      });
+      
+      // Actualizar el estado local de la notificación
+      const notificationElement = document.querySelector(`[data-notification-id="${notificationId}"]`);
+      if (notificationElement) {
+        notificationElement.classList.remove('ring-2', 'ring-blue-500');
+      }
+    } catch (error) {
+      console.warn('No se pudo marcar como leída:', error);
+    }
+  };
+
+  // Función para forzar actualización de resultados
+  const handleRefreshResults = async (notification) => {
+    if (!confirm('¿Estás seguro de que quieres forzar la actualización de los resultados?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/laboratory-results/notification/${notification.notification_id}/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        }
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert('Resultados actualizados correctamente. Por favor, intenta ver/descargar nuevamente.');
+        // Recargar la página para mostrar los cambios
+        window.location.reload();
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (err) {
+      console.error('Error al actualizar resultados:', err);
+      alert('Error al actualizar resultados: ' + err.message);
+    }
+  };
+
   // Filtrar notificaciones de forma segura
   const filteredNotifications = Array.isArray(notifications) ? notifications.filter(notification => {
     if (!notification || typeof notification !== 'object') return false;
@@ -104,6 +283,8 @@ export default function LaboratoryResultsList({ notifications = [], stats = {}, 
         return notification.type === 'results';
       case 'unread':
         return !notification.read_at;
+      case 'available':
+        return notification.results_received_at !== null;
       default:
         return true;
     }
@@ -135,85 +316,38 @@ export default function LaboratoryResultsList({ notifications = [], stats = {}, 
       };
     }
     
-    if (notification.type === 'results') {
+    if (notification.results_received_at && !notification.has_pdf) {
       return {
         color: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-200',
+        icon: ExclamationTriangleIcon,
+        text: 'Resultados disponibles'
+      };
+    }
+    
+    if (notification.type === 'results') {
+      return {
+        color: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-200',
         icon: ClockIcon,
         text: 'Procesando resultados'
       };
     }
 
     return {
-      color: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-200',
+      color: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900 dark:text-gray-200',
       icon: DocumentTextIcon,
       text: getNotificationTypeLabel(notification.type)
     };
   };
 
-  const handleDownloadResult = async (notification) => {
-    if (!notification?.pdf_base64) return;
-
-    setDownloadingId(notification.notification_id);
-
-    try {
-      const binaryString = atob(notification.pdf_base64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Resultados_${notification.laboratory_brand || 'lab'}_${notification.gda_acuse || notification.notification_id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      // Intentar marcar como leída (manejar error silenciosamente)
-      try {
-        await fetch(`/laboratory-results/notification/${notification.notification_id}/mark-read`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
-          }
-        });
-      } catch (fetchError) {
-        console.warn('No se pudo marcar como leída:', fetchError);
-      }
-    } catch (err) {
-      alert("Error al descargar los resultados");
-      console.error(err);
-    } finally {
-      setDownloadingId(null);
-    }
-  };
-
-  const handleViewResult = (notification) => {
-    if (!notification?.pdf_base64) return;
-
-    try {
-      const binaryString = atob(notification.pdf_base64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-    } catch (err) {
-      alert("Error al visualizar el PDF");
-      console.error(err);
-    }
+  // Verificar si una notificación tiene resultados disponibles
+  const hasAvailableResults = (notification) => {
+    return notification.results_received_at !== null;
   };
 
   // Estados de carga y error
   if (loading) {
     return (
-      <SettingsLayout title="Mis Notificaciones de Laboratorio">
+      <SettingsLayout title="Mis Resultados de Laboratorio">
         <LoadingState />
       </SettingsLayout>
     );
@@ -221,23 +355,23 @@ export default function LaboratoryResultsList({ notifications = [], stats = {}, 
 
   if (error) {
     return (
-      <SettingsLayout title="Mis Notificaciones de Laboratorio">
+      <SettingsLayout title="Mis Resultados de Laboratorio">
         <ErrorState error={error} />
       </SettingsLayout>
     );
   }
 
   return (
-    <SettingsLayout title="Mis Notificaciones de Laboratorio">
+    <SettingsLayout title="Mis Resultados de Laboratorio">
       <div className="mx-auto max-w-6xl px-3 sm:px-4 py-6 sm:py-8 lg:px-8">
         {/* Header */}
         <div className="text-center mb-8">
           <DocumentChartBarIcon className="mx-auto size-12 sm:size-16 fill-famedic-dark dark:fill-famedic-lime" />
           <Heading className="mt-4 text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white">
-            Mis Notificaciones de Laboratorio
+            Mis Resultados de Laboratorio
           </Heading>
           <Text className="mt-2 text-zinc-600 dark:text-slate-300">
-            Todas las notificaciones y resultados de tus estudios
+            Gestiona y descarga todos los resultados de tus estudios de laboratorio
           </Text>
         </div>
 
@@ -266,13 +400,13 @@ export default function LaboratoryResultsList({ notifications = [], stats = {}, 
                 </div>
                 <div>
                   <Text className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                    {stats?.by_entity?.quote || 0}
+                    {stats?.available_results || 0}
                   </Text>
-                  <Text className="text-sm text-zinc-600 dark:text-slate-400">Cotizaciones</Text>
+                  <Text className="text-sm text-zinc-600 dark:text-slate-400">Disponibles</Text>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 justify-center">
                 <Button
                   onClick={() => setActiveFilter('all')}
                   plain={activeFilter !== 'all'}
@@ -281,18 +415,18 @@ export default function LaboratoryResultsList({ notifications = [], stats = {}, 
                   Todas
                 </Button>
                 <Button
-                  onClick={() => setActiveFilter('with_pdf')}
-                  plain={activeFilter !== 'with_pdf'}
-                  className={activeFilter === 'with_pdf' ? 'bg-green-600 text-white' : ''}
+                  onClick={() => setActiveFilter('available')}
+                  plain={activeFilter !== 'available'}
+                  className={activeFilter === 'available' ? 'bg-green-600 text-white' : ''}
                 >
-                  Con PDF
+                  Disponibles
                 </Button>
                 <Button
-                  onClick={() => setActiveFilter('results')}
-                  plain={activeFilter !== 'results'}
-                  className={activeFilter === 'results' ? 'bg-blue-600 text-white' : ''}
+                  onClick={() => setActiveFilter('with_pdf')}
+                  plain={activeFilter !== 'with_pdf'}
+                  className={activeFilter === 'with_pdf' ? 'bg-blue-600 text-white' : ''}
                 >
-                  Solo Resultados
+                  Con PDF
                 </Button>
                 <Button
                   onClick={() => setActiveFilter('unread')}
@@ -322,10 +456,12 @@ export default function LaboratoryResultsList({ notifications = [], stats = {}, 
             {filteredNotifications.map((notification, index) => {
               const status = getStatusConfig(notification);
               const StatusIcon = status.icon;
+              const hasResults = hasAvailableResults(notification);
 
               return (
                 <div
                   key={notification.notification_id || index}
+                  data-notification-id={notification.notification_id}
                   className={`rounded-lg bg-white dark:bg-slate-800 shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden ${
                     !notification.read_at ? 'ring-2 ring-blue-500' : ''
                   }`}
@@ -350,6 +486,12 @@ export default function LaboratoryResultsList({ notifications = [], stats = {}, 
                           {!notification.read_at && (
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                               Nuevo
+                            </span>
+                          )}
+
+                          {hasResults && !notification.has_pdf && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                              Descargar desde GDA
                             </span>
                           )}
                         </div>
@@ -407,24 +549,43 @@ export default function LaboratoryResultsList({ notifications = [], stats = {}, 
                               </div>
                             </div>
                           )}
+
+                          {/* Información de estado */}
+                          {hasResults && !notification.has_pdf && (
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                              <Text className="text-sm text-yellow-800 dark:text-yellow-200">
+                                <strong>Nota:</strong> Los resultados están disponibles pero necesitan ser descargados del laboratorio. Esto puede tomar unos segundos.
+                              </Text>
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       {/* Acciones */}
                       <div className="flex sm:flex-col gap-2 sm:ml-4">
-                        {notification.has_pdf ? (
+                        {hasResults ? (
                           <>
                             <Button
                               onClick={() => handleViewResult(notification)}
-                              className="flex items-center gap-2 whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white"
+                              disabled={viewingId === notification.notification_id}
+                              className="flex items-center gap-2 whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-400"
                             >
-                              <EyeIcon className="w-4 h-4" />
-                              Ver
+                              {viewingId === notification.notification_id ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                  Cargando...
+                                </>
+                              ) : (
+                                <>
+                                  <EyeIcon className="w-4 h-4" />
+                                  Ver
+                                </>
+                              )}
                             </Button>
                             <Button
                               onClick={() => handleDownloadResult(notification)}
                               disabled={downloadingId === notification.notification_id}
-                              className="flex items-center gap-2 whitespace-nowrap"
+                              className="flex items-center gap-2 whitespace-nowrap bg-green-600 hover:bg-green-700 text-white disabled:bg-green-400"
                             >
                               {downloadingId === notification.notification_id ? (
                                 <>
@@ -438,10 +599,20 @@ export default function LaboratoryResultsList({ notifications = [], stats = {}, 
                                 </>
                               )}
                             </Button>
+                            {!notification.has_pdf && (
+                              <Button
+                                onClick={() => handleRefreshResults(notification)}
+                                className="flex items-center gap-2 whitespace-nowrap bg-yellow-600 hover:bg-yellow-700 text-white text-xs"
+                              >
+                                <ArrowPathIcon className="w-3 h-3" />
+                                Actualizar
+                              </Button>
+                            )}
                           </>
                         ) : (
                           <Button disabled plain className="whitespace-nowrap">
-                            Sin PDF
+                            <ClockIcon className="w-4 h-4 mr-2" />
+                            Pendiente
                           </Button>
                         )}
                       </div>
@@ -452,7 +623,25 @@ export default function LaboratoryResultsList({ notifications = [], stats = {}, 
             })}
           </div>
         )}
+
+        {/* Información adicional */}
+        {notifications.length > 0 && (
+          <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <Text className="text-sm text-blue-800 dark:text-blue-200 text-center">
+              <strong>Nota:</strong> Los resultados se descargan automáticamente del laboratorio cuando los visualizas o descargas por primera vez.
+            </Text>
+          </div>
+        )}
       </div>
     </SettingsLayout>
+  );
+}
+
+// Componente de icono para actualizar (si no está importado)
+function ArrowPathIcon(props) {
+  return (
+    <svg fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+    </svg>
   );
 }
