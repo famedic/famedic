@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 use App\Models\LaboratoryQuote;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryNotification;
+use App\Actions\Laboratories\GetGDAResultsAction;
 
 class LaboratoryResultController extends Controller
 {
@@ -46,6 +48,7 @@ class LaboratoryResultController extends Controller
                     'gda_acuse' => $notification->gda_acuse,
                     'gda_order_id' => $notification->gda_order_id,
                     'resource_type' => $notification->resource_type,
+                    'laboratory_brand' => $notification->laboratory_brand,
                 ];
 
                 // Si es de una cotización
@@ -93,13 +96,12 @@ class LaboratoryResultController extends Controller
                 return array_merge($baseData, [
                     'entity_type' => 'unknown',
                     'entity_id' => null,
-                    'laboratory_brand' => null,
+                    'laboratory_brand' => $notification->laboratory_brand,
                     'patient_name' => null,
                     'items' => [],
                 ]);
             });
 
-        //dd($notifications->count());
         // Estadísticas para debug
         $stats = [
             'total_notifications' => $notifications->count(),
@@ -119,72 +121,61 @@ class LaboratoryResultController extends Controller
     }
 
     /**
-     * Marcar un resultado como descargado
+     * Obtener y guardar resultados PDF desde GDA
      */
-    public function markAsDownloaded(Request $request, $type, $id)
+    private function fetchAndSaveResults(LaboratoryNotification $notification)
     {
-        $user = Auth::user();
+        try {
+            // Verificar si ya tenemos resultados
+            if (!empty($notification->results_pdf_base64)) {
+                return $notification->results_pdf_base64;
+            }
 
-        if ($type === 'quote') {
-            $record = LaboratoryQuote::where('user_id', $user->id)
-                ->where('id', $id)
-                ->whereNotNull('ready_at')
-                ->firstOrFail();
-        } else {
-            $record = LaboratoryPurchase::where('customer_id', $user->customer->id)
-                ->where('id', $id)
-                ->whereNotNull('ready_at')
-                ->firstOrFail();
+            // Obtener información necesaria para la consulta GDA
+            $orderId = $notification->gda_order_id;
+            $brand = $notification->laboratory_brand;
+
+            if (!$orderId || !$brand) {
+                throw new \Exception('Falta información necesaria para obtener resultados');
+            }
+
+            // Usar el Action para obtener resultados de GDA
+            $gdaAction = app(GetGDAResultsAction::class);
+            $results = $gdaAction($orderId, $brand);
+
+            // Verificar si la respuesta contiene el PDF en base64
+            if (empty($results['infogda_resultado_b64'])) {
+                throw new \Exception('No se encontraron resultados PDF en la respuesta');
+            }
+
+            // Guardar el PDF en base64
+            $notification->update([
+                'results_pdf_base64' => $results['infogda_resultado_b64'],
+                'gda_message' => array_merge($notification->gda_message ?? [], [
+                    'results_fetched_at' => now()->toISOString(),
+                    'results_source' => 'gda_api'
+                ])
+            ]);
+
+            return $results['infogda_resultado_b64'];
+
+        } catch (\Exception $e) {
+            logger()->error('Error al obtener resultados de GDA:', [
+                'notification_id' => $notification->id,
+                'order_id' => $notification->gda_order_id,
+                'error' => $e->getMessage()
+            ]);
+
+            // Actualizar el mensaje de error
+            $notification->update([
+                'gda_message' => array_merge($notification->gda_message ?? [], [
+                    'last_error' => $e->getMessage(),
+                    'last_error_at' => now()->toISOString()
+                ])
+            ]);
+
+            throw $e;
         }
-
-        $record->update([
-            'results_downloaded_at' => now(),
-        ]);
-
-        return response()->json(['success' => true]);
-    }
-
-    /**
-     * Descargar un resultado específico
-     */
-    public function download($type, $id)
-    {
-        $user = Auth::user();
-
-        if ($type === 'quote') {
-            $record = LaboratoryQuote::where('user_id', $user->id)
-                ->where('id', $id)
-                ->whereNotNull('ready_at')
-                ->firstOrFail();
-
-            $latestResult = $record->laboratoryNotifications()
-                ->where('notification_type', 'results')
-                ->whereNotNull('results_pdf_base64')
-                ->latest()
-                ->first();
-        } else {
-            $record = LaboratoryPurchase::where('customer_id', $user->customer->id)
-                ->where('id', $id)
-                ->whereNotNull('ready_at')
-                ->firstOrFail();
-
-            $latestResult = $record->laboratoryNotifications()
-                ->where('notification_type', 'results')
-                ->whereNotNull('results_pdf_base64')
-                ->latest()
-                ->first();
-        }
-
-        if (!$latestResult || !$latestResult->results_pdf_base64) {
-            abort(404, 'Resultado no encontrado');
-        }
-
-        // Decodificar base64 y devolver PDF
-        $pdfContent = base64_decode($latestResult->results_pdf_base64);
-
-        return response($pdfContent)
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="resultados_' . $record->gda_order_id . '.pdf"');
     }
 
     /**
@@ -194,39 +185,156 @@ class LaboratoryResultController extends Controller
     {
         $user = Auth::user();
 
+        // Buscar la notificación basada en el tipo y ID
+        $notification = $this->findUserNotification($user, $type, $id);
+        
+        if (!$notification) {
+            abort(404, 'Notificación no encontrada');
+        }
+
+        try {
+            // Obtener el PDF (si ya existe o obtenerlo de GDA)
+            $pdfBase64 = $this->fetchAndSaveResults($notification);
+            
+            if (!$pdfBase64) {
+                abort(404, 'Resultado no disponible');
+            }
+
+            // Decodificar base64 y mostrar PDF en el navegador
+            $pdfContent = base64_decode($pdfBase64);
+
+            // Marcar como leída
+            $notification->markAsRead();
+
+            return response($pdfContent)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'inline; filename="resultados_' . $notification->gda_order_id . '.pdf"');
+
+        } catch (\Exception $e) {
+            logger()->error('Error en view PDF:', [
+                'notification_id' => $notification->id,
+                'error' => $e->getMessage()
+            ]);
+            
+            abort(500, 'Error al cargar el resultado: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Descargar resultado
+     */
+    public function download($type, $id)
+    {
+        $user = Auth::user();
+
+        // Buscar la notificación basada en el tipo y ID
+        $notification = $this->findUserNotification($user, $type, $id);
+        
+        if (!$notification) {
+            abort(404, 'Notificación no encontrada');
+        }
+
+        try {
+            // Obtener el PDF (si ya existe o obtenerlo de GDA)
+            $pdfBase64 = $this->fetchAndSaveResults($notification);
+            
+            if (!$pdfBase64) {
+                abort(404, 'Resultado no disponible');
+            }
+
+            // Decodificar base64 y descargar PDF
+            $pdfContent = base64_decode($pdfBase64);
+
+            // Marcar como leída
+            $notification->markAsRead();
+
+            return response($pdfContent)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'attachment; filename="resultados_' . $notification->gda_order_id . '.pdf"');
+
+        } catch (\Exception $e) {
+            logger()->error('Error en download PDF:', [
+                'notification_id' => $notification->id,
+                'error' => $e->getMessage()
+            ]);
+            
+            abort(500, 'Error al descargar el resultado: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Buscar notificación del usuario por tipo y ID
+     */
+    private function findUserNotification($user, $type, $id)
+    {
         if ($type === 'quote') {
-            $record = LaboratoryQuote::where('user_id', $user->id)
-                ->where('id', $id)
-                ->whereNotNull('ready_at')
-                ->firstOrFail();
-
-            $latestResult = $record->laboratoryNotifications()
-                ->where('notification_type', 'results')
-                ->whereNotNull('results_pdf_base64')
-                ->latest()
+            return LaboratoryNotification::where('user_id', $user->id)
+                ->where('laboratory_quote_id', $id)
+                ->whereNotNull('results_received_at') // Solo notificaciones con resultados disponibles
                 ->first();
-        } else {
-            $record = LaboratoryPurchase::where('customer_id', $user->customer->id)
+        } else if ($type === 'purchase') {
+            return LaboratoryNotification::where('user_id', $user->id)
+                ->where('laboratory_purchase_id', $id)
+                ->whereNotNull('results_received_at') // Solo notificaciones con resultados disponibles
+                ->first();
+        } else if ($type === 'notification') {
+            return LaboratoryNotification::where('user_id', $user->id)
                 ->where('id', $id)
-                ->whereNotNull('ready_at')
-                ->firstOrFail();
-
-            $latestResult = $record->laboratoryNotifications()
-                ->where('notification_type', 'results')
-                ->whereNotNull('results_pdf_base64')
-                ->latest()
+                ->whereNotNull('results_received_at') // Solo notificaciones con resultados disponibles
                 ->first();
         }
 
-        if (!$latestResult || !$latestResult->results_pdf_base64) {
-            abort(404, 'Resultado no encontrado');
+        return null;
+    }
+
+    /**
+     * Marcar notificación como leída
+     */
+    public function markAsRead($notificationId)
+    {
+        $user = Auth::user();
+        
+        $notification = LaboratoryNotification::where('user_id', $user->id)
+            ->where('id', $notificationId)
+            ->first();
+            
+        if ($notification) {
+            $notification->markAsRead();
         }
+        
+        return response()->json(['success' => true]);
+    }
 
-        // Decodificar base64 y mostrar PDF en el navegador
-        $pdfContent = base64_decode($latestResult->results_pdf_base64);
+    /**
+     * Forzar actualización de resultados desde GDA
+     */
+    public function refreshResults($notificationId)
+    {
+        $user = Auth::user();
+        
+        $notification = LaboratoryNotification::where('user_id', $user->id)
+            ->where('id', $notificationId)
+            ->firstOrFail();
 
-        return response($pdfContent)
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'inline; filename="resultados_' . $record->gda_order_id . '.pdf"');
+        try {
+            // Limpiar resultados existentes para forzar nueva descarga
+            $notification->update([
+                'results_pdf_base64' => null
+            ]);
+
+            // Obtener nuevos resultados
+            $this->fetchAndSaveResults($notification);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Resultados actualizados correctamente'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar resultados: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

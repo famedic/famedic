@@ -41,7 +41,7 @@ class LaboratoryNotification extends Model
         'gda_message',
         'results_pdf_base64',
         'results_received_at',
-        'read_at', // ← Agregar esta línea
+        'read_at',
     ];
 
     protected $casts = [
@@ -51,7 +51,7 @@ class LaboratoryNotification extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
-        'read_at' => 'datetime', // ← Agregar esta línea
+        'read_at' => 'datetime',
     ];
 
     /**
@@ -396,5 +396,49 @@ class LaboratoryNotification extends Model
     public function scopeRead($query)
     {
         return $query->whereNotNull('read_at');
+    }
+
+    /**
+     * Scope para notificaciones con resultados disponibles
+     */
+    public function scopeWithAvailableResults($query)
+    {
+        return $query->whereNotNull('results_received_at');
+    }
+
+    /**
+     * Scope para notificaciones sin PDF descargado
+     */
+    public function scopeWithoutPdf($query)
+    {
+        return $query->whereNull('results_pdf_base64');
+    }
+
+    /**
+     * Verificar si tiene resultados disponibles
+     */
+    public function hasAvailableResults(): bool
+    {
+        return !is_null($this->results_received_at);
+    }
+
+    /**
+     * Verificar si necesita obtener PDF de GDA
+     */
+    public function needsPdfFetch(): bool
+    {
+        return $this->hasAvailableResults() && empty($this->results_pdf_base64);
+    }
+
+    /**
+     * Marcar como resultados recibidos
+     */
+    public function markResultsReceived(): bool
+    {
+        return $this->update([
+            'results_received_at' => now(),
+            'status' => self::STATUS_PROCESSED,
+            'gda_status' => self::GDA_STATUS_COMPLETED
+        ]);
     }
 }
