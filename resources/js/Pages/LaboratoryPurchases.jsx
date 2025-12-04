@@ -197,7 +197,7 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 				return (
 					<PurchaseCard
 						key={quote.id}
-						href={route("laboratory.quote.success", { quote: quote.id })}
+						href={route("laboratory.quote.show", { quote: quote.id })}
 						cardContent={
 							<>
 								<div className="flex flex-col gap-4 sm:flex-row sm:justify-between">

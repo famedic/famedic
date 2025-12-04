@@ -224,11 +224,11 @@ Paga en cualquier sucursal ${getLaboratoryName()} con este código o el PDF adju
           icon: ExclamationTriangleIcon,
           text: 'Expirada'
         };
-      case 'completed':
+      case 'paid':
         return {
           color: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-200 dark:border-green-700',
           icon: CheckCircleIcon,
-          text: 'Completada'
+          text: 'Pagado en sucursal'
         };
       default:
         return {
@@ -249,7 +249,7 @@ Paga en cualquier sucursal ${getLaboratoryName()} con este código o el PDF adju
         <div className="text-center mb-6 sm:mb-8">
           <CheckCircleIcon className="mx-auto size-12 sm:size-16 fill-green-600 dark:fill-famedic-lime" />
           <h1 className="mt-3 sm:mt-4 text-xl sm:text-2xl lg:text-3xl font-bold text-zinc-900 dark:text-white">
-            ¡Cotización generada con éxito!
+            Comprobante para pago en sucursal {getLaboratoryName()}
           </h1>
           <div className="mt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
             <Text className="text-sm sm:text-lg text-zinc-600 dark:text-slate-300">
