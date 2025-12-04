@@ -27,6 +27,10 @@ use App\Http\Controllers\ExportLaboratoryPurchasesController;
 use App\Http\Controllers\ExportLaboratoryTestsController;
 use App\Http\Controllers\ExportMedicalAttentionSubscriptionsController;
 use App\Http\Controllers\ExportOnlinePharmacyPurchasesController;
+
+// === IMPORTACIONES NUEVAS ===
+use App\Http\Controllers\Admin\LaboratoryNotificationController;
+use App\Http\Controllers\Admin\LaboratoryQuoteController; // ← Aun existe
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')->middleware([
@@ -62,6 +66,17 @@ Route::prefix('admin')->middleware([
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request/{dev_assistance_request}/resolved', LaboratoryResolvedDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.resolved');
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request/{dev_assistance_request}/unresolved', LaboratoryUnresolvedDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.unresolved');
         Route::post('laboratory-purchases/export', ExportLaboratoryPurchasesController::class)->name('laboratory-purchases.export');
+        
+        // ===== RUTAS NUEVAS PARA NOTIFICACIONES DE LABORATORIO =====
+        Route::resource('laboratory-notifications', LaboratoryNotificationController::class)->only(['index', 'show']);
+        Route::post('laboratory-notifications/{notification}/resend', [LaboratoryNotificationController::class, 'resend'])
+            ->name('laboratory-notifications.resend');
+        Route::get('laboratory-notifications/{notification}/details', [LaboratoryNotificationController::class, 'showDetails'])
+            ->name('laboratory-notifications.details');
+        Route::delete('laboratory-notifications/{notification}/clean', [LaboratoryNotificationController::class, 'cleanError'])
+            ->name('laboratory-notifications.clean-error');
+        // ===========================================================
+        
         Route::resource('online-pharmacy-vendor-payments', OnlinePharmacyVendorPaymentsController::class)->parameters([
             'online-pharmacy-vendor-payments' => 'vendor_payment',
         ])->names([
@@ -83,5 +98,10 @@ Route::prefix('admin')->middleware([
         Route::post('medical-attention-subscriptions/export', ExportMedicalAttentionSubscriptionsController::class)->name('medical-attention-subscriptions.export');
         Route::get('documentation', [DocumentationController::class, 'index'])->name('documentation');
         Route::patch('documentation', [DocumentationController::class, 'update'])->name('documentation.update');
+
+        // ===== RUTAS PARA COTIZACIONES DE LABORATORIO (SI LAS NECESITAS) =====
+        // Si tienes un controller para quotes de laboratorio, agrégala aquí
+        // Route::resource('laboratory-quotes', LaboratoryQuoteController::class)->only(['index', 'show']);
+        
     });
 });

@@ -65,8 +65,8 @@ Route::middleware([
         ->name('api.laboratory.quote.store');
 
     // Route get quote success
-    Route::get('/cotizacion/{quote}', [LaboratoryQuoteController::class, 'success'])
-        ->name('laboratory.quote.success');
+    Route::get('/laboratory/quote/{quote}', [LaboratoryQuoteController::class, 'success'])
+        ->name('laboratory.quote.show');
     /*
     // Laboratory Results    
     Route::get('/mis-resultados', [LaboratoryResultController::class, 'index'])
@@ -92,6 +92,8 @@ Route::middleware([
     Route::post('/notification/{notification}/refresh', [LaboratoryResultController::class, 'refreshResults'])->name('laboratory-results.refresh');
     Route::get('/{type}/{id}/view', [LaboratoryResultController::class, 'view'])->name('laboratory-results.view');
     Route::get('/{type}/{id}/download', [LaboratoryResultController::class, 'download'])->name('laboratory-results.download');
+
+    Route::get('/debug/{notificationId}', [LaboratoryResultController::class, 'debugNotification'])->name('laboratory-results.debug');
 });
 });
 
