@@ -79,6 +79,36 @@ export default function NavBar() {
 			</NavbarSection>
 			<NavbarSpacer />
 			<NavbarSection>
+				{/* Bandera de México antes de los iconos de usuario */}
+				<div className="mr-4 flex items-center">
+					<svg 
+						className="size-5" 
+						viewBox="0 0 60 36" 
+						fill="none" 
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						{/* Franja verde */}
+						<rect width="20" height="36" fill="#006341"/>
+						
+						{/* Franja blanca */}
+						<rect x="20" width="20" height="36" fill="white"/>
+						
+						{/* Franja roja */}
+						<rect x="40" width="20" height="36" fill="#C8102E"/>
+						
+						{/* Escudo nacional simplificado */}
+						<g transform="translate(30, 18)">
+							<circle r="7" fill="#8C9157" stroke="#006341" strokeWidth="0.5"/>
+							<circle r="4.5" fill="#006341"/>
+							<circle r="2.5" fill="white"/>
+							<path d="M0,-6 L0.5,-4.5 L-0.5,-4.5 Z" fill="#8C9157"/>
+							<path d="M0,6 L0.5,4.5 L-0.5,4.5 Z" fill="#8C9157"/>
+							<path d="M-6,0 L-4.5,0.5 L-4.5,-0.5 Z" fill="#8C9157"/>
+							<path d="M6,0 L4.5,0.5 L4.5,-0.5 Z" fill="#8C9157"/>
+						</g>
+					</svg>
+				</div>
+				
 				{user ? (
 					<>
 						<Dropdown>
