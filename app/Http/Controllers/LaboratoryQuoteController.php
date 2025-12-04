@@ -183,7 +183,7 @@ class LaboratoryQuoteController extends Controller
                 'gda_mensaje' => $gdaStatus, // 🆕 Nuevo campo
                 'gda_descripcion' => $gdaDescription, // 🆕 Nuevo campo
                 'pdf_base64' => $gdaResponse['base64'] ?? null,
-                'expires_at' => now()->addHours(24),
+                'expires_at' => now()->addDays(9),
                 'has_gda_warning' => $hasGdaWarning, // 🆕 Nuevo campo
                 'gda_warning_message' => $gdaWarningMessage, // 🆕 Nuevo campo
             ]);
@@ -202,11 +202,11 @@ class LaboratoryQuoteController extends Controller
 
             // 🆕 Redirigir con mensaje de advertencia si es necesario
             if ($hasGdaWarning) {
-                return Inertia::location(route('laboratory.quote.success', $quote->id))
+                return Inertia::location(route('laboratory.quote.show', $quote->id))
                     ->with('warning', 'Cotización generada con observaciones: ' . $gdaWarningMessage);
             }
 
-            return Inertia::location(route('laboratory.quote.success', $quote->id));
+            return Inertia::location(route('laboratory.quote.show', $quote->id));
 
         } catch (Exception $e) {
             DB::rollBack();

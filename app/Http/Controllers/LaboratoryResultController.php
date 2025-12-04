@@ -121,29 +121,70 @@ class LaboratoryResultController extends Controller
     }
 
     /**
-     * Obtener y guardar resultados PDF desde GDA
+     * Obtener y guardar resultados PDF desde GDA (VERSIÓN SIMPLIFICADA)
      */
     private function fetchAndSaveResults(LaboratoryNotification $notification)
     {
         try {
             // Verificar si ya tenemos resultados
             if (!empty($notification->results_pdf_base64)) {
+                logger('✅ Resultados ya presentes en notificación', [
+                    'notification_id' => $notification->id,
+                    'order_id' => $notification->gda_order_id
+                ]);
                 return $notification->results_pdf_base64;
             }
 
-            // Obtener información necesaria para la consulta GDA
+            // Obtener información necesaria
             $orderId = $notification->gda_order_id;
-            $brand = $notification->laboratory_brand;
+            $payload = $notification->payload; // ← ¡YA TENEMOS EL PAYLOAD!
 
-            if (!$orderId || !$brand) {
-                throw new \Exception('Falta información necesaria para obtener resultados');
+            if (!$orderId) {
+                throw new \Exception('Falta el ID de orden GDA');
+            }
+            
+            if (!$payload || !is_array($payload)) {
+                // Intentar decodificar si es JSON string
+                if (is_string($notification->payload)) {
+                    $payload = json_decode($notification->payload, true);
+                }
+                
+                if (!$payload || !is_array($payload)) {
+                    throw new \Exception('No se pudo obtener el payload de la notificación');
+                }
             }
 
-            // Usar el Action para obtener resultados de GDA
-            $gdaAction = app(GetGDAResultsAction::class);
-            $results = $gdaAction($orderId, $brand);
+            // Verificar datos esenciales en el payload
+            $marca = $payload['header']['marca'] ?? null;
+            $convenio = $payload['requisition']['convenio'] ?? null;
+            
+            logger('🔍 Datos extraídos del payload:', [
+                'notification_id' => $notification->id,
+                'order_id' => $orderId,
+                'marca' => $marca,
+                'convenio' => $convenio,
+                'id_en_payload' => $payload['id'] ?? 'NO_ID'
+            ]);
 
-            // Verificar si la respuesta contiene el PDF en base64
+            if (!$marca) {
+                throw new \Exception('No se encontró la marca en el payload');
+            }
+            
+            if (!$convenio) {
+                throw new \Exception('No se encontró el convenio en el payload');
+            }
+
+            // Usar el Action modificado
+            logger('🚀 Llamando a GetGDAResultsAction con payload...', [
+                'order_id' => $orderId,
+                'marca' => $marca,
+                'convenio' => $convenio
+            ]);
+            
+            $gdaAction = app(GetGDAResultsAction::class);
+            $results = $gdaAction($orderId, $payload);
+
+            // Verificar si la respuesta contiene el PDF
             if (empty($results['infogda_resultado_b64'])) {
                 throw new \Exception('No se encontraron resultados PDF en la respuesta');
             }
@@ -151,31 +192,69 @@ class LaboratoryResultController extends Controller
             // Guardar el PDF en base64
             $notification->update([
                 'results_pdf_base64' => $results['infogda_resultado_b64'],
+                'laboratory_brand' => $this->extractBrandFromPayload($payload), // Opcional
                 'gda_message' => array_merge($notification->gda_message ?? [], [
                     'results_fetched_at' => now()->toISOString(),
-                    'results_source' => 'gda_api'
+                    'results_source' => 'gda_api',
+                    'marca_used' => $marca,
+                    'convenio_used' => $convenio
                 ])
+            ]);
+
+            logger('✅ Resultados guardados exitosamente:', [
+                'notification_id' => $notification->id,
+                'order_id' => $orderId,
+                'pdf_size' => strlen($results['infogda_resultado_b64'])
             ]);
 
             return $results['infogda_resultado_b64'];
 
         } catch (\Exception $e) {
-            logger()->error('Error al obtener resultados de GDA:', [
+            logger()->error('❌ Error al obtener resultados de GDA:', [
                 'notification_id' => $notification->id,
                 'order_id' => $notification->gda_order_id,
-                'error' => $e->getMessage()
+                'has_payload' => !empty($payload),
+                'marca' => $marca ?? 'NO_DEFINIDO',
+                'convenio' => $convenio ?? 'NO_DEFINIDO',
+                'error_message' => $e->getMessage()
             ]);
 
             // Actualizar el mensaje de error
             $notification->update([
                 'gda_message' => array_merge($notification->gda_message ?? [], [
                     'last_error' => $e->getMessage(),
-                    'last_error_at' => now()->toISOString()
+                    'last_error_at' => now()->toISOString(),
+                    'marca_attempted' => $marca ?? null,
+                    'convenio_attempted' => $convenio ?? null
                 ])
             ]);
 
             throw $e;
         }
+    }
+
+    /**
+     * Extraer brand del payload (opcional, para referencia)
+     */
+    private function extractBrandFromPayload(array $payload): ?string
+    {
+        $marca = $payload['header']['marca'] ?? null;
+        
+        if (!$marca) {
+            return null;
+        }
+        
+        // Mapeo simple (puedes ajustarlo)
+        $map = [
+            1 => 'olab',
+            4 => 'azteca',
+            5 => 'swisslab',
+            7 => 'jenner',
+            15 => 'liacsa',
+            6 => 'famedic',
+        ];
+        
+        return $map[$marca] ?? null;
     }
 
     /**
@@ -189,8 +268,19 @@ class LaboratoryResultController extends Controller
         $notification = $this->findUserNotification($user, $type, $id);
         
         if (!$notification) {
+            logger('❌ Notificación no encontrada para view:', [
+                'user_id' => $user->id,
+                'type' => $type,
+                'id' => $id
+            ]);
             abort(404, 'Notificación no encontrada');
         }
+
+        logger('🔍 Intentando view PDF:', [
+            'notification_id' => $notification->id,
+            'order_id' => $notification->gda_order_id,
+            'has_pdf' => !empty($notification->results_pdf_base64)
+        ]);
 
         try {
             // Obtener el PDF (si ya existe o obtenerlo de GDA)
@@ -206,14 +296,21 @@ class LaboratoryResultController extends Controller
             // Marcar como leída
             $notification->markAsRead();
 
+            logger('✅ PDF enviado al navegador:', [
+                'notification_id' => $notification->id,
+                'order_id' => $notification->gda_order_id,
+                'content_length' => strlen($pdfContent)
+            ]);
+
             return response($pdfContent)
                 ->header('Content-Type', 'application/pdf')
                 ->header('Content-Disposition', 'inline; filename="resultados_' . $notification->gda_order_id . '.pdf"');
 
         } catch (\Exception $e) {
-            logger()->error('Error en view PDF:', [
+            logger()->error('❌ Error en view PDF:', [
                 'notification_id' => $notification->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
             
             abort(500, 'Error al cargar el resultado: ' . $e->getMessage());
@@ -231,8 +328,19 @@ class LaboratoryResultController extends Controller
         $notification = $this->findUserNotification($user, $type, $id);
         
         if (!$notification) {
+            logger('❌ Notificación no encontrada para download:', [
+                'user_id' => $user->id,
+                'type' => $type,
+                'id' => $id
+            ]);
             abort(404, 'Notificación no encontrada');
         }
+
+        logger('🔍 Intentando download PDF:', [
+            'notification_id' => $notification->id,
+            'order_id' => $notification->gda_order_id,
+            'has_pdf' => !empty($notification->results_pdf_base64)
+        ]);
 
         try {
             // Obtener el PDF (si ya existe o obtenerlo de GDA)
@@ -248,14 +356,21 @@ class LaboratoryResultController extends Controller
             // Marcar como leída
             $notification->markAsRead();
 
+            logger('✅ PDF preparado para descarga:', [
+                'notification_id' => $notification->id,
+                'order_id' => $notification->gda_order_id,
+                'content_length' => strlen($pdfContent)
+            ]);
+
             return response($pdfContent)
                 ->header('Content-Type', 'application/pdf')
                 ->header('Content-Disposition', 'attachment; filename="resultados_' . $notification->gda_order_id . '.pdf"');
 
         } catch (\Exception $e) {
-            logger()->error('Error en download PDF:', [
+            logger()->error('❌ Error en download PDF:', [
                 'notification_id' => $notification->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
             
             abort(500, 'Error al descargar el resultado: ' . $e->getMessage());
@@ -267,6 +382,12 @@ class LaboratoryResultController extends Controller
      */
     private function findUserNotification($user, $type, $id)
     {
+        logger('🔎 Buscando notificación:', [
+            'user_id' => $user->id,
+            'type' => $type,
+            'id' => $id
+        ]);
+
         if ($type === 'quote') {
             return LaboratoryNotification::where('user_id', $user->id)
                 ->where('laboratory_quote_id', $id)
@@ -284,7 +405,63 @@ class LaboratoryResultController extends Controller
                 ->first();
         }
 
+        logger('⚠️ Tipo de notificación desconocido:', ['type' => $type]);
         return null;
+    }
+
+    /**
+     * Método de diagnóstico para ver notificación específica
+     */
+    public function debugNotification($notificationId)
+    {
+        $user = Auth::user();
+        
+        $notification = LaboratoryNotification::where('user_id', $user->id)
+            ->where('id', $notificationId)
+            ->with(['laboratoryQuote', 'laboratoryPurchase'])
+            ->first();
+        
+        if (!$notification) {
+            return response()->json(['error' => 'Notificación no encontrada'], 404);
+        }
+        
+        // === DEBUG EXTENDIDO ===
+        $response = [
+            'notification' => [
+                'id' => $notification->id,
+                'gda_order_id' => $notification->gda_order_id,
+                'laboratory_brand' => $notification->laboratory_brand,
+                'laboratory_quote_id' => $notification->laboratory_quote_id,
+                'laboratory_purchase_id' => $notification->laboratory_purchase_id,
+                'results_pdf_base64' => $notification->results_pdf_base64 ? 'PRESENTE (' . strlen($notification->results_pdf_base64) . ' bytes)' : 'AUSENTE',
+                'results_received_at' => $notification->results_received_at,
+                'gda_acuse' => $notification->gda_acuse,
+                'created_at' => $notification->created_at,
+                'payload_sample' => $notification->payload ? json_decode($notification->payload, true)['header'] ?? 'NO PAYLOAD' : 'NO PAYLOAD',
+            ],
+            'quote' => $notification->laboratoryQuote ? [
+                'id' => $notification->laboratoryQuote->id,
+                'laboratory_brand' => $notification->laboratoryQuote->laboratory_brand,
+                'status' => $notification->laboratoryQuote->status,
+                'gda_order_id' => $notification->laboratoryQuote->gda_order_id,
+                'gda_acuse' => $notification->laboratoryQuote->gda_acuse,
+            ] : null,
+            'purchase' => $notification->laboratoryPurchase ? [
+                'id' => $notification->laboratoryPurchase->id,
+                'brand' => $notification->laboratoryPurchase->brand,
+                'status' => $notification->laboratoryPurchase->status,
+                'gda_order_id' => $notification->laboratoryPurchase->gda_order_id,
+                'gda_acuse' => $notification->laboratoryPurchase->gda_acuse,
+            ] : null,
+            'config_check' => [
+                'brand_in_config' => $notification->laboratory_brand ? config('services.gda.brands.' . $notification->laboratory_brand) ? 'SÍ' : 'NO' : 'NO BRAND',
+                'available_brands' => array_keys(config('services.gda.brands', [])),
+            ]
+        ];
+        
+        logger('🔬 DEBUG NOTIFICATION:', $response);
+        
+        return response()->json($response);
     }
 
     /**
@@ -320,6 +497,11 @@ class LaboratoryResultController extends Controller
             // Limpiar resultados existentes para forzar nueva descarga
             $notification->update([
                 'results_pdf_base64' => null
+            ]);
+
+            logger('🔄 Forzando actualización de resultados:', [
+                'notification_id' => $notificationId,
+                'order_id' => $notification->gda_order_id
             ]);
 
             // Obtener nuevos resultados

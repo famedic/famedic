@@ -121,7 +121,7 @@ class LaboratoryQuoteControllerVersionSimple extends Controller
             DB::commit();
 
             logger('✅ [CONTROLLER] COTIZACIÓN CREADA EXITOSAMENTE - ID: ' . $quote->id);
-            return Inertia::location(route('laboratory.quote.success', $quote->id));
+            return Inertia::location(route('laboratory.quote.show', $quote->id));
 
         } catch (Exception $e) {
             DB::rollBack();
