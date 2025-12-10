@@ -82,7 +82,7 @@ export default function RequestInvoiceModal({
 						</>
 					) : purchase.invoice_request ? (
 						<Text>
-							Si lo deseas, puedes actulizar el perfil fiscal.{" "}
+							Si lo deseas, puedes actualizar el perfil fiscal.{" "}
 							<Strong>Recibirás tu factura de 3 a 5 días</Strong>{" "}
 							hábiles a partir de la fecha de solicitud.
 						</Text>

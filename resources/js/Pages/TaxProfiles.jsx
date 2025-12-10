@@ -45,7 +45,18 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 				<GradientHeading noDivider>
 					Mis perfiles fiscales
 				</GradientHeading>
-
+				<span className="text-zinc-500">	
+					Aquí puedes administrar tus perfiles fiscales 
+					Sube tu constancia de situación fiscal para emición de facturas correctamente.
+					<br></br>
+					*Solo se aceptan archivos en formato PDF.
+					<br></br>
+					**Recuerda que puedes tener varios perfiles fiscales.
+					<br></br>
+					***Solo se aceptan RFC tipo Persona Física.
+					<br></br>
+					Para más información sobre cómo obtener tu constancia de situación fiscal, visita el sitio web del SAT.
+				</span>
 				<Button
 					dusk="createTaxProfile"
 					preserveState
