@@ -4,7 +4,7 @@
 		"Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
 		"This file is @generated automatically"
 	],
-	"content-hash": "90bd0250e3efcfd2deb3aae33fa3a2ab",
+	"content-hash": "f9a4df949ee50e213c4dc61d7ce2db6b",
 	"packages": [
 		{
 			"name": "algolia/algoliasearch-client-php",
@@ -5682,6 +5682,57 @@
 				"source": "https://github.com/Riimu/Kit-PHPEncoder/tree/v2.4.2"
 			},
 			"time": "2022-12-10T18:12:25+00:00"
+		},
+		{
+			"name": "smalot/pdfparser",
+			"version": "v2.12.2",
+			"source": {
+				"type": "git",
+				"url": "https://github.com/smalot/pdfparser.git",
+				"reference": "370b7e983fafecb787a9bcfd73baab8038212ad1"
+			},
+			"dist": {
+				"type": "zip",
+				"url": "https://api.github.com/repos/smalot/pdfparser/zipball/370b7e983fafecb787a9bcfd73baab8038212ad1",
+				"reference": "370b7e983fafecb787a9bcfd73baab8038212ad1",
+				"shasum": ""
+			},
+			"require": {
+				"ext-iconv": "*",
+				"ext-zlib": "*",
+				"php": ">=7.1",
+				"symfony/polyfill-mbstring": "^1.18"
+			},
+			"type": "library",
+			"autoload": {
+				"psr-0": {
+					"Smalot\\PdfParser\\": "src/"
+				}
+			},
+			"notification-url": "https://packagist.org/downloads/",
+			"license": [
+				"LGPL-3.0"
+			],
+			"authors": [
+				{
+					"name": "Sebastien MALOT",
+					"email": "sebastien@malot.fr"
+				}
+			],
+			"description": "Pdf parser library. Can read and extract information from pdf file.",
+			"homepage": "https://www.pdfparser.org",
+			"keywords": [
+				"extract",
+				"parse",
+				"parser",
+				"pdf",
+				"text"
+			],
+			"support": {
+				"issues": "https://github.com/smalot/pdfparser/issues",
+				"source": "https://github.com/smalot/pdfparser/tree/v2.12.2"
+			},
+			"time": "2025-09-04T08:49:09+00:00"
 		},
 		{
 			"name": "spatie/browsershot",
