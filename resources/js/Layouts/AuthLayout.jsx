@@ -60,45 +60,38 @@ export default function AuthLayout({
 													<svg className="mt-0.5 h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
 														<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
 													</svg>
-													<span className="text-sm sm:text-base">Prueba 1 mes de atención médica para ti y tu familia sin costo!</span>
+													<span className="text-sm sm:text-base">Consultas médicas 24/7 para toda tu familia</span>
 												</li>
 												<li className="flex items-start gap-3">
 													<svg className="mt-0.5 h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
 														<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
 													</svg>
-													<span className="text-sm sm:text-base">Acceso a consultas en línea</span>
+													<span className="text-sm sm:text-base">Estudios de laboratorio e imagen con descuento de hasta 60%</span>
 												</li>
 												<li className="flex items-start gap-3">
 													<svg className="mt-0.5 h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
 														<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
 													</svg>
-													<span className="text-sm sm:text-base">Estudios de Laboratorio a precios exclusivos</span>
+													<span className="text-sm sm:text-base">Solicita tus medicamentos directo a tu(s) domicilio(s)</span>
 												</li>
 												<li className="flex items-start gap-3">
 													<svg className="mt-0.5 h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
 														<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
 													</svg>
-													<span className="text-sm sm:text-base">Resultados de laboratorio digitales</span>
+													<span className="text-sm sm:text-base">Accede a tus resultados clínicos</span>
 												</li>
 												<li className="flex items-start gap-3">
 													<svg className="mt-0.5 h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
 														<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
 													</svg>
-													<span className="text-sm sm:text-base">Descuentos exclusivos en farmacia</span>
+													<span className="text-sm sm:text-base">Solicita la factura de tus servicios</span>
 												</li>
 												<li className="flex items-start gap-3">
 													<svg className="mt-0.5 h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
 														<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
 													</svg>
-													<span className="text-sm sm:text-base">Servicio de entrega a domicilio</span>
-												</li>
-												<li className="flex items-start gap-3">
-													<svg className="mt-0.5 h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-														<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-													</svg>
-													<span className="text-sm sm:text-base">Historial médico seguro en la nube</span>
-												</li>
-												
+													<span className="text-sm sm:text-base">Recibe asesoría psicológica, nutricional y legal</span>
+												</li>												
 											</ul>
 										</div>
 										
