@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Cashier\Cashier;
 use Stripe\StripeClient;
+use App\Services\ConstanciaFiscalService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,6 +29,10 @@ class AppServiceProvider extends ServiceProvider
         if ($this->app->environment('local', 'testing')) {
             $this->app->register(DuskServiceProvider::class);
         }
+
+        $this->app->singleton(ConstanciaFiscalService::class, function ($app) {
+        return new ConstanciaFiscalService();
+    });
     }
 
     public function boot(): void
