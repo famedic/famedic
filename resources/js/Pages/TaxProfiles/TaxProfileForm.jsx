@@ -27,7 +27,7 @@ import {
 	ListboxLabel,
 	ListboxOption,
 } from "@/Components/Catalyst/listbox";
-import NotificationToast from "@/Components/NotificationToast";
+
 
 // Definimos los pasos del proceso
 const STEPS = {
@@ -57,14 +57,6 @@ export default function TaxProfileForm({ isOpen }) {
 	const [isEditing, setIsEditing] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
 	const [saveStep, setSaveStep] = useState("");
-
-	// Estados para la notificación
-	const [showNotification, setShowNotification] = useState(false);
-	const [notificationConfig, setNotificationConfig] = useState({
-		type: "success",
-		title: "",
-		message: ""
-	});
 
 	// Estados para drag & drop
 	const [isDragging, setIsDragging] = useState(false);
@@ -117,7 +109,6 @@ export default function TaxProfileForm({ isOpen }) {
 			setIsEditing(false);
 			setIsSaving(false);
 			setSaveStep("");
-			setShowNotification(false);
 			setIsDragging(false);
 			setDragReject(false);
 			setPasteHintVisible(false);
@@ -178,22 +169,6 @@ export default function TaxProfileForm({ isOpen }) {
 		});
 	}, [activeStep, uploadedFile, extractedData, processingPdf, isDragging, dragReject]);
 
-	// Función para mostrar notificación
-	const showNotificationToast = (type, title, message) => {
-		console.log("🔔 Mostrando notificación:", { type, title, message });
-		setNotificationConfig({
-			type,
-			title,
-			message
-		});
-		setShowNotification(true);
-	};
-
-	// Función para cerrar notificación
-	const closeNotification = () => {
-		setShowNotification(false);
-	};
-
 	// Función para procesar archivo (común para selección y pegado)
 	const handleFileProcess = async (file, fromPaste = false) => {
 		console.log("📄 handleFileProcess llamado con archivo:", file.name, "fromPaste:", fromPaste);
@@ -237,6 +212,7 @@ export default function TaxProfileForm({ isOpen }) {
 			const metaTag = document.querySelector('meta[name="csrf-token"]');
 			if (!metaTag) {
 				console.log("❌ CSRF token no encontrado");
+				console.log("🔔 Error de seguridad. Por favor, recarga la página.");
 				throw new Error("CSRF_TOKEN_NOT_FOUND");
 			}
 			const csrfToken = metaTag.getAttribute("content");
@@ -279,6 +255,7 @@ export default function TaxProfileForm({ isOpen }) {
 				console.log("✅ JSON parseado correctamente:", result.success ? "Éxito" : "Error");
 			} catch (jsonError) {
 				console.error("❌ Error parseando JSON:", jsonError);
+				console.log("🔔 Respuesta inválida del servidor.");
 				throw new Error("INVALID_JSON_RESPONSE");
 			}
 
@@ -317,13 +294,16 @@ export default function TaxProfileForm({ isOpen }) {
 				clearErrors();
 
 				// Mostrar mensaje de éxito
-				showNotificationToast(
-					"success",
-					"Archivo procesado",
-					fromPaste
+				console.log("🔔 Archivo procesado:", fromPaste
+					? "Archivo pegado y procesado exitosamente. Revisa los datos."
+					: "La información se extrajo correctamente. Revisa los datos.");
+				
+				setInfoMessage({
+					type: "success",
+					message: fromPaste
 						? "Archivo pegado y procesado exitosamente. Revisa los datos."
 						: "La información se extrajo correctamente. Revisa los datos."
-				);
+				});
 
 				// Avanzar al paso de revisión después de un breve retraso
 				console.log("⏰ Programando cambio a paso REVIEW en 800ms...");
@@ -345,6 +325,7 @@ export default function TaxProfileForm({ isOpen }) {
 
 			} else {
 				console.log("❌ Error en respuesta del servidor:", result?.message);
+				console.log("🔔 Error al procesar el archivo:", result?.message || `Error ${response.status}`);
 				throw new Error(result?.message || `Error ${response.status}`);
 			}
 		} catch (error) {
@@ -371,23 +352,26 @@ export default function TaxProfileForm({ isOpen }) {
 			setUploadProgress(0);
 			setActiveStep(STEPS.REVIEW);
 
-			// Mostrar notificación informativa
-			showNotificationToast(
-				"warning",
-				"Archivo subido",
-				fromPaste
+			// Mostrar mensaje informativo
+			console.log("🔔 Archivo subido:", fromPaste
+				? "Archivo pegado. Completa los datos manualmente."
+				: "Completa los datos manualmente.");
+			
+			setInfoMessage({
+				type: "warning",
+				message: fromPaste
 					? "Archivo pegado. Completa los datos manualmente."
 					: "Completa los datos manualmente."
-			);
+			});
 
 			// También mostrar notificación del error si es relevante
 			if (error.message && !error.message.includes("timeout")) {
+				console.log("🔔 Nota técnica:", `No se pudo extraer información automáticamente: ${error.message}`);
 				setTimeout(() => {
-					showNotificationToast(
-						"info",
-						"Nota técnica",
-						`No se pudo extraer información automáticamente: ${error.message}`
-					);
+					setInfoMessage({
+						type: "info",
+						message: `No se pudo extraer información automáticamente: ${error.message}`
+					});
 				}, 1000);
 			}
 		}
@@ -422,11 +406,12 @@ export default function TaxProfileForm({ isOpen }) {
 	// Función para activar el modo "pegar"
 	const activatePasteMode = () => {
 		setPasteHintVisible(true);
-		showNotificationToast(
-			"info",
-			"Modo pegar activado",
-			"Ahora haz clic en cualquier parte de la pantalla y usa Ctrl+V (Windows) o Cmd+V (Mac) para pegar un archivo PDF"
-		);
+		console.log("🔔 Modo pegar activado: Ahora haz clic en cualquier parte de la pantalla y usa Ctrl+V (Windows) o Cmd+V (Mac) para pegar un archivo PDF");
+		
+		setInfoMessage({
+			type: "info",
+			message: "Modo pegar activado. Haz clic en cualquier parte y usa Ctrl+V (Windows) o Cmd+V (Mac) para pegar un archivo PDF"
+		});
 		
 		// Desactivar después de 10 segundos
 		setTimeout(() => {
@@ -539,17 +524,17 @@ export default function TaxProfileForm({ isOpen }) {
 			
 			if (missingFields.length > 0) {
 				console.log("❌ Campos incompletos:", missingFields);
+				console.log("🔔 Complete todos los campos requeridos antes de continuar.");
 				
 				// Mostrar errores en los campos faltantes
 				missingFields.forEach(field => {
 					setError(field, `Este campo es requerido`);
 				});
 				
-				showNotificationToast(
-					"error",
-					"Campos incompletos",
-					"Complete todos los campos requeridos antes de continuar."
-				);
+				setInfoMessage({
+					type: "error",
+					message: "Complete todos los campos requeridos antes de continuar."
+				});
 				return;
 			}
 
@@ -557,11 +542,12 @@ export default function TaxProfileForm({ isOpen }) {
 			if (data.rfc && !validarRFC(data.rfc)) {
 				console.log("❌ RFC inválido:", data.rfc);
 				setError("rfc", "Formato RFC inválido");
-				showNotificationToast(
-					"error",
-					"RFC inválido",
-					"Verifique el formato de su RFC."
-				);
+				console.log("🔔 Verifique el formato de su RFC.");
+				
+				setInfoMessage({
+					type: "error",
+					message: "Verifique el formato de su RFC."
+				});
 				return;
 			}
 
@@ -569,11 +555,12 @@ export default function TaxProfileForm({ isOpen }) {
 			if (data.zipcode && !/^\d{5}$/.test(data.zipcode)) {
 				console.log("❌ Código postal inválido:", data.zipcode);
 				setError("zipcode", "Debe tener 5 dígitos");
-				showNotificationToast(
-					"error",
-					"Código postal inválido",
-					"El código postal debe tener 5 dígitos."
-				);
+				console.log("🔔 El código postal debe tener 5 dígitos.");
+				
+				setInfoMessage({
+					type: "error",
+					message: "El código postal debe tener 5 dígitos."
+				});
 				return;
 			}
 
@@ -674,7 +661,7 @@ export default function TaxProfileForm({ isOpen }) {
 				console.log('📋 Resultado:', result);
 
 				if (response.ok && result.success) {
-					// Éxito - Mostrar notificación de éxito
+					// Éxito - Mostrar mensaje de éxito
 					const successTitle = cachedEditMode
 						? '¡Perfil actualizado!'
 						: '¡Perfil creado exitosamente!';
@@ -683,8 +670,12 @@ export default function TaxProfileForm({ isOpen }) {
 						? 'Tu perfil fiscal ha sido actualizado correctamente.'
 						: 'Tu perfil fiscal ha sido creado correctamente.';
 
-					// Mostrar notificación de éxito
-					showNotificationToast("success", successTitle, successMessage);
+					console.log(`🔔 ${successTitle}: ${successMessage}`);
+					
+					setInfoMessage({
+						type: "success",
+						message: successMessage
+					});
 
 					// Redirigir después de 2 segundos (para que el usuario vea el mensaje)
 					setTimeout(() => {
@@ -705,19 +696,21 @@ export default function TaxProfileForm({ isOpen }) {
 							setError(key, result.errors[key][0]);
 						});
 
-						showNotificationToast(
-							"error",
-							"Error en el formulario",
-							'Por favor corrija los errores en el formulario.'
-						);
+						console.log('🔔 Por favor corrija los errores en el formulario.');
+						
+						setInfoMessage({
+							type: "error",
+							message: 'Por favor corrija los errores en el formulario.'
+						});
 
 					} else if (result.message) {
 						// Mostrar mensaje de error general
-						showNotificationToast(
-							"error",
-							"Error",
-							result.message
-						);
+						console.log(`🔔 Error: ${result.message}`);
+						
+						setInfoMessage({
+							type: "error",
+							message: result.message
+						});
 
 						// Si el error es sobre RFC duplicado, mostrarlo en el campo
 						if (result.message.includes('RFC') || result.message.includes('rfc')) {
@@ -733,17 +726,17 @@ export default function TaxProfileForm({ isOpen }) {
 				// Si no es JSON pero la respuesta fue exitosa, asumir éxito
 				if (response.ok) {
 					console.log('⚠️ Respuesta exitosa no-JSON');
+					console.log('🔔 La operación se completó correctamente.');
 					
-					// Mostrar notificación de éxito
+					// Mostrar mensaje de éxito
 					const successTitle = cachedEditMode 
 						? '¡Perfil actualizado!' 
 						: '¡Perfil creado exitosamente!';
 					
-					showNotificationToast(
-						"success", 
-						successTitle,
-						'La operación se completó correctamente.'
-					);
+					setInfoMessage({
+						type: "success",
+						message: 'La operación se completó correctamente.'
+					});
 
 					// Redirigir después de 2 segundos
 					setTimeout(() => {
@@ -754,22 +747,23 @@ export default function TaxProfileForm({ isOpen }) {
 					}, 2000);
 					
 				} else {
-					showNotificationToast(
-						"error",
-						"Error del servidor",
-						'Por favor intente nuevamente.'
-					);
+					console.log('🔔 Error del servidor. Por favor intente nuevamente.');
+					
+					setInfoMessage({
+						type: "error",
+						message: 'Por favor intente nuevamente.'
+					});
 				}
 			}
 
 		} catch (error) {
 			console.error('💥 Error de red:', error);
-
-			showNotificationToast(
-				"error",
-				"Error de conexión",
-				'Verifique su internet e intente nuevamente.'
-			);
+			console.log('🔔 Error de conexión. Verifique su internet e intente nuevamente.');
+			
+			setInfoMessage({
+				type: "error",
+				message: 'Verifique su internet e intente nuevamente.'
+			});
 
 		} finally {
 			setIsSaving(false);
@@ -1620,15 +1614,6 @@ export default function TaxProfileForm({ isOpen }) {
 
 	return (
 		<>
-			{/* Componente de notificación */}
-			<NotificationToast
-				show={showNotification}
-				onClick={closeNotification}
-				type={notificationConfig.type}
-				title={notificationConfig.title}
-				message={notificationConfig.message}
-			/>
-
 			{isSaving && <SavingProgress />}
 			<Dialog
 				open={isOpen}
