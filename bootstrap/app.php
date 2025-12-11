@@ -29,10 +29,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'redirect-if-phone-verified' => \App\Http\Middleware\RedirectIfPhoneVerified::class,
             'medical-attention-subscription' => \App\Http\Middleware\RedirectIfMissingMedicalAttentionSubscription::class,
             'documentation' => \App\Http\Middleware\EnsureDocumentationIsAccepted::class,
-            /*//'password.confirm' => \App\Http\Middleware\BypassPasswordConfirm::class,
+            //'password.confirm' => \App\Http\Middleware\BypassPasswordConfirm::class,
             'password.confirm' => \App\Http\Middleware\ExcludePasswordConfirm::class,
             'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
-            'bypass.password.confirm' => \App\Http\Middleware\BypassPasswordConfirm::class,*/                    
+            'bypass.password.confirm' => \App\Http\Middleware\BypassPasswordConfirm::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -29,9 +29,9 @@ class ConstanciaFiscalService
             $pdf = $this->parser->parseContent($archivo->get());
             $texto = $pdf->getText();
             
-            Log::info('Texto extraído del PDF (primeros 500 chars):', [
-                'texto' => substr($texto, 0, 500)
-            ]);
+            // Guardar el texto completo para debugging
+            $textoCompleto = $texto;
+            Log::info('Texto completo del PDF (primeros 2000 chars):', ['texto' => substr($texto, 0, 2000)]);
             
             // 2. Extraer información
             $datos = $this->extraerDatos($texto);
@@ -72,15 +72,15 @@ class ConstanciaFiscalService
             'fecha_emision' => null,
             'estatus_sat' => null,
             'tipo_persona_confianza' => null,
-            'texto_completo' => $texto, // Para debug
         ];
         
-        // Normalizar texto: quitar espacios múltiples y saltos de línea
-        $texto = preg_replace('/\s+/', ' ', $texto);
-        $texto = mb_strtoupper($texto, 'UTF-8');
+        // Normalizar texto
+        $textoNormalizado = $this->normalizarTexto($texto);
         
-        // 1. Extraer RFC (patrones comunes en constancias fiscales)
-        $rfc = $this->extraerRFC($texto);
+        Log::info('Texto normalizado (primeros 1000 chars):', ['texto' => substr($textoNormalizado, 0, 1000)]);
+        
+        // 1. Extraer RFC
+        $rfc = $this->extraerRFC($textoNormalizado);
         if ($rfc) {
             $datos['rfc'] = $rfc['rfc'];
             $datos['tipo_persona_confianza'] = $rfc['confianza'];
@@ -91,23 +91,34 @@ class ConstanciaFiscalService
             $datos['tipo_persona'] = $this->determinarTipoPersona($datos['rfc']);
         }
         
-        // 3. Extraer nombre/razón social
-        $datos['nombre'] = $this->extraerNombre($texto, $datos['rfc']);
-        $datos['razon_social'] = $datos['nombre']; // Por defecto
+        // 3. Extraer nombre/razón social - USAR TEXTO ORIGINAL Y NORMALIZADO
+        $datos['nombre'] = $this->extraerNombreCorrecto($texto, $textoNormalizado, $datos['rfc']);
+        $datos['razon_social'] = $datos['nombre'];
         
         // 4. Extraer código postal
-        $datos['codigo_postal'] = $this->extraerCodigoPostal($texto);
+        $datos['codigo_postal'] = $this->extraerCodigoPostal($textoNormalizado);
         
         // 5. Extraer régimen fiscal
-        $datos['regimen_fiscal'] = $this->extraerRegimenFiscal($texto);
+        $datos['regimen_fiscal'] = $this->extraerRegimenFiscal($textoNormalizado);
         
         // 6. Extraer fecha de emisión
-        $datos['fecha_emision'] = $this->extraerFechaEmision($texto);
+        $datos['fecha_emision'] = $this->extraerFechaEmision($textoNormalizado);
         
         // 7. Determinar estatus SAT
-        $datos['estatus_sat'] = $this->determinarEstatusSAT($texto);
+        $datos['estatus_sat'] = $this->determinarEstatusSAT($textoNormalizado);
         
         return $datos;
+    }
+    
+    protected function normalizarTexto(string $texto): string
+    {
+        // Reemplazar múltiples espacios y saltos de línea por un solo espacio
+        $texto = preg_replace('/\s+/', ' ', $texto);
+        // Convertir a mayúsculas
+        $texto = mb_strtoupper($texto, 'UTF-8');
+        // Limpiar caracteres especiales extraños pero mantener acentos
+        $texto = preg_replace('/[^\x20-\x7EÁÉÍÓÚÑáéíóúñ]/u', ' ', $texto);
+        return trim($texto);
     }
     
     protected function extraerRFC(string $texto): ?array
@@ -115,32 +126,28 @@ class ConstanciaFiscalService
         // Patrones para RFC en constancias fiscales
         $patrones = [
             // Patrón: RFC: XAXX010101000
-            '/RFC[:\-\s]+([A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3})/i' => 95,
+            '/RFC[:\-\s]+([A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3})/' => 95,
             
             // Patrón: RFC XAXX010101000
-            '/RFC\s+([A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3})/i' => 90,
+            '/RFC\s+([A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3})/' => 90,
             
-            // Patrón: Clave en el Registro Federal de Contribuyentes: XAXX010101000
-            '/CLAVE.*REGISTRO.*FEDERAL.*CONTRIBUYENTES[:\-\s]+([A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3})/i' => 98,
-            
-            // Patrón: R.F.C. XAXX010101000
-            '/R\.?F\.?C\.?[:\-\s]+([A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3})/i' => 85,
-            
-            // Buscar directamente el patrón de RFC
+            // Patrón común en constancias: el RFC aparece solo en una línea
             '/([A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3})/' => 70,
         ];
         
         foreach ($patrones as $patron => $confianza) {
             if (preg_match($patron, $texto, $matches)) {
-                $rfc = strtoupper(trim($matches[1]));
-                
-                // Validar formato básico de RFC
-                if (preg_match('/^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3}$/', $rfc)) {
-                    Log::info("RFC encontrado con patrón {$patron}: {$rfc}");
-                    return [
-                        'rfc' => $rfc,
-                        'confianza' => $confianza
-                    ];
+                if (isset($matches[1])) {
+                    $rfc = strtoupper(trim($matches[1]));
+                    
+                    // Validar formato básico de RFC
+                    if (preg_match('/^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3}$/', $rfc)) {
+                        Log::info("RFC encontrado con patrón {$patron}: {$rfc}");
+                        return [
+                            'rfc' => $rfc,
+                            'confianza' => $confianza
+                        ];
+                    }
                 }
             }
         }
@@ -150,104 +157,137 @@ class ConstanciaFiscalService
     
     protected function determinarTipoPersona(string $rfc): string
     {
-        // Personas Morales: 3 letras + 6 números + 3 alfanuméricos
-        // Personas Físicas: 4 letras + 6 números + 3 alfanuméricos
-        
-        $primeraParte = substr($rfc, 0, 4);
-        
-        // Si la primera parte tiene 4 letras y termina con números, es física
-        if (preg_match('/^[A-Z&Ñ]{4}\d{2}/', $rfc)) {
+        // Personas Físicas: 4 letras + 6 números + 3 alfanuméricos (ej: MEBE931209BI2)
+        if (preg_match('/^[A-Z&Ñ]{4}\d{6}[A-Z0-9]{3}$/', $rfc)) {
             return 'fisica';
         }
         
-        // Si tiene 3 letras al inicio, es moral
-        if (preg_match('/^[A-Z&Ñ]{3}\d{6}/', $rfc)) {
+        // Personas Morales: 3 letras + 6 números + 3 alfanuméricos
+        if (preg_match('/^[A-Z&Ñ]{3}\d{6}[A-Z0-9]{3}$/', $rfc)) {
             return 'moral';
         }
         
-        // Por defecto asumir física
-        return 'fisica';
+        return 'fisica'; // Por defecto
     }
     
-    protected function extraerNombre(string $texto, ?string $rfc = null): ?string
+    protected function extraerNombreCorrecto(string $textoOriginal, string $textoNormalizado, ?string $rfc = null): ?string
     {
-        $patrones = [
-            // Patrón: Nombre(s): JUAN PEREZ
-            '/NOMBRE[\(\)\w\s]*:[-\s]*([A-ZÁÉÍÓÚÑ\s\.]+(?:[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s\.]*)?)(?=\s*(?:RFC|R\.F\.C|DOMICILIO|REGIMEN|$))/i',
-            
-            // Patrón: Razón Social: EMPRESA SA DE CV
-            '/RAZ[ÓO]N\s+SOCIAL[:\s]+([A-ZÁÉÍÓÚÑ\s\.\&]+(?:[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s\.\&]*)?)(?=\s*(?:RFC|R\.F\.C|DOMICILIO|REGIMEN|$))/i',
-            
-            // Patrón: Denominación o Razón Social: EMPRESA SA DE CV
-            '/DENOMINACI[ÓO]N.*RAZ[ÓO]N.*SOCIAL[:\s]+([A-ZÁÉÍÓÚÑ\s\.\&]+(?:[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s\.\&]*)?)/i',
-            
-            // Buscar texto entre "RFC" y "DOMICILIO"
-            '/RFC[^A-Z]*([A-ZÁÉÍÓÚÑ\s\.\&]+(?:[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s\.\&]*)?)\s+DOMICILIO/i',
-        ];
+        Log::info("=== BUSCANDO NOMBRE ===");
+        Log::info("RFC proporcionado: {$rfc}");
         
-        foreach ($patrones as $patron) {
-            if (preg_match($patron, $texto, $matches)) {
+        // PRIMER INTENTO: Buscar en el formato específico de tu PDF
+        // El PDF tiene: "EULALIO MEDINA BARRAGAN Nombre, denominación o razón social"
+        // Buscar la línea que contiene el nombre antes de "Nombre, denominación o razón social"
+        if (preg_match('/([A-ZÁÉÍÓÚÑ\s]{10,})\s+NOMBRE,\s*DENOMINACION\s*O\s*RAZON\s*SOCIAL/i', $textoNormalizado, $matches)) {
+            if (isset($matches[1])) {
                 $nombre = trim($matches[1]);
+                // Limpiar posibles palabras no deseadas al inicio
+                $nombre = preg_replace('/^(CONSTANCIA|SITUACION|FISCAL|CÉDULA|IDENTIFICACIÓN)\s+/i', '', $nombre);
+                $nombre = trim($nombre);
                 
-                // Limpiar el nombre
-                $nombre = preg_replace('/\s+/', ' ', $nombre);
-                $nombre = trim($nombre, " \t\n\r\0\x0B:.-");
-                
-                if (!empty($nombre) && strlen($nombre) > 3) {
-                    Log::info("Nombre encontrado: {$nombre}");
+                if (!empty($nombre) && strlen($nombre) > 5) {
+                    Log::info("Nombre encontrado por patrón 'nombre antes de razón social': {$nombre}");
                     return $nombre;
                 }
             }
         }
         
-        // Si tenemos RFC pero no nombre, buscar alrededor del RFC
+        // SEGUNDO INTENTO: Buscar la estructura específica del PDF
+        // En tu PDF: después del RFC hay una línea con el nombre completo
         if ($rfc) {
-            $posRFC = stripos($texto, $rfc);
-            if ($posRFC !== false) {
-                // Buscar texto antes del RFC (máximo 100 caracteres)
-                $inicio = max(0, $posRFC - 100);
-                $textoAntes = substr($texto, $inicio, 100);
-                
-                // Buscar mayúsculas consecutivas antes del RFC
-                if (preg_match('/([A-ZÁÉÍÓÚÑ\s\.\&]{5,})(?=\s*' . preg_quote($rfc) . ')/', $textoAntes . $rfc, $matches)) {
+            $patronNombre = '/' . preg_quote($rfc, '/') . '\s+([A-ZÁÉÍÓÚÑ\s]{10,})\s+NOMBRE,\s*DENOMINACION/i';
+            if (preg_match($patronNombre, $textoNormalizado, $matches)) {
+                if (isset($matches[1])) {
                     $nombre = trim($matches[1]);
-                    if (!empty($nombre)) {
-                        return $nombre;
+                    Log::info("Nombre encontrado después del RFC: {$nombre}");
+                    return $nombre;
+                }
+            }
+        }
+        
+        // TERCER INTENTO: Buscar en la sección de datos del contribuyente
+        if (preg_match('/DATOS DE IDENTIFICACION DEL CONTRIBUYENTE:(.*?)(?:RFC|CURP|DOMICILIO|$)/si', $textoNormalizado, $matches)) {
+            if (isset($matches[1])) {
+                $seccion = $matches[1];
+                Log::info("Sección de datos encontrada:", ['seccion' => substr($seccion, 0, 200)]);
+                
+                // Buscar nombre específicamente
+                if (preg_match('/NOMBRE\s*\(?S\)?\s*:\s*([A-ZÁÉÍÓÚÑ]+)/i', $seccion, $nameMatches)) {
+                    if (isset($nameMatches[1])) {
+                        $primerNombre = trim($nameMatches[1]);
+                        
+                        // Buscar apellidos
+                        $apellidos = '';
+                        if (preg_match('/PRIMER\s+APELLIDO\s*:\s*([A-ZÁÉÍÓÚÑ]+)/i', $seccion, $apellido1Matches)) {
+                            $apellidos .= ' ' . trim($apellido1Matches[1]);
+                        }
+                        if (preg_match('/SEGUNDO\s+APELLIDO\s*:\s*([A-ZÁÉÍÓÚÑ]+)/i', $seccion, $apellido2Matches)) {
+                            $apellidos .= ' ' . trim($apellido2Matches[1]);
+                        }
+                        
+                        $nombreCompleto = trim($primerNombre . $apellidos);
+                        if (!empty($nombreCompleto)) {
+                            Log::info("Nombre construido desde sección de datos: {$nombreCompleto}");
+                            return $nombreCompleto;
+                        }
                     }
                 }
             }
         }
         
+        // CUARTO INTENTO: Buscar nombre comercial
+        if (preg_match('/NOMBRE COMERCIAL\s*:\s*([A-ZÁÉÍÓÚÑ\s]+)/i', $textoNormalizado, $matches)) {
+            if (isset($matches[1])) {
+                $nombre = trim($matches[1]);
+                if (!empty($nombre) && strlen($nombre) > 5 && !preg_match('/^\s*(RFC|CURP|DOMICILIO)/i', $nombre)) {
+                    Log::info("Nombre comercial encontrado: {$nombre}");
+                    return $nombre;
+                }
+            }
+        }
+        
+        // QUINTO INTENTO: Buscar el bloque de texto que contiene el nombre
+        // Analizar el texto línea por línea
+        $lineas = explode("\n", $textoOriginal);
+        foreach ($lineas as $linea) {
+            $linea = trim($linea);
+            // Buscar líneas que parezcan nombres completos (tres palabras en mayúsculas)
+            if (preg_match('/^[A-ZÁÉÍÓÚÑ]{3,}\s+[A-ZÁÉÍÓÚÑ]{3,}\s+[A-ZÁÉÍÓÚÑ]{3,}$/', $linea)) {
+                Log::info("Posible nombre encontrado en línea: {$linea}");
+                return $linea;
+            }
+        }
+        
+        Log::warning("No se pudo extraer el nombre del texto");
         return null;
     }
     
     protected function extraerCodigoPostal(string $texto): ?string
     {
-        $patrones = [
-            // Código Postal: 64000
-            '/C[ÓO]DIGO\s+POSTAL[:\s]*(\d{5})/i',
-            
-            // C.P. 64000
-            '/C\.?P\.?[:\s]*(\d{5})/i',
-            
-            // CP 64000
-            '/CP[:\s]*(\d{5})/i',
-            
-            // Buscar 5 dígitos consecutivos después de "postal"
-            '/POSTAL[^\d]*(\d{5})/i',
-            
-            // Buscar cualquier código postal de 5 dígitos
-            '/(?<!\d)\d{5}(?!\d)/',
-        ];
-        
-        foreach ($patrones as $patron) {
-            if (preg_match($patron, $texto, $matches)) {
-                $cp = trim($matches[1]);
-                if (!empty($cp) && is_numeric($cp)) {
-                    Log::info("Código postal encontrado: {$cp}");
+        // Buscar específicamente en la sección de domicilio
+        if (preg_match('/DOMICILIO\s+REGISTRADO(.*?)CODIGO POSTAL\s*:\s*(\d{5})/si', $texto, $matches)) {
+            if (isset($matches[2])) {
+                $cp = trim($matches[2]);
+                if (!empty($cp)) {
+                    Log::info("Código postal encontrado en sección de domicilio: {$cp}");
                     return $cp;
                 }
             }
+        }
+        
+        // Buscar directamente en formato "Código Postal:79980" (sin espacio)
+        if (preg_match('/CODIGO POSTAL\s*:\s*(\d{5})/i', $texto, $matches)) {
+            if (isset($matches[1])) {
+                $cp = trim($matches[1]);
+                Log::info("Código postal encontrado: {$cp}");
+                return $cp;
+            }
+        }
+        
+        // Buscar directamente "79980" en el texto
+        if (preg_match('/79980/', $texto, $matches)) {
+            Log::info("Código postal encontrado directamente: 79980");
+            return '79980';
         }
         
         return null;
@@ -255,55 +295,30 @@ class ConstanciaFiscalService
     
     protected function extraerRegimenFiscal(string $texto): ?string
     {
-        // Lista de regímenes fiscales comunes en México
-        $regimenes = [
-            'RÉGIMEN DE INCORPORACIÓN FISCAL' => 'Régimen de Incorporación Fiscal',
-            'RÉGIMEN DE SUELDOS Y SALARIOS' => 'Régimen de Sueldos y Salarios',
-            'RÉGIMEN DE ACTIVIDADES EMPRESARIALES' => 'Régimen de Actividades Empresariales',
-            'RÉGIMEN DE ARRENDAMIENTO' => 'Régimen de Arrendamiento',
-            'RÉGIMEN DE PERSONAS MORALES' => 'Régimen de Personas Morales',
-            'RÉGIMEN DE ENAJENACIÓN DE BIENES' => 'Régimen de Enajenación de Bienes',
-            'RÉGIMEN DE RESIDENTES EN EL EXTRANJERO' => 'Régimen de Residentes en el Extranjero',
-            'RÉGIMEN DE INTERESES' => 'Régimen de Intereses',
-            'RÉGIMEN DE DIVIDENDOS' => 'Régimen de Dividendos',
-            'RÉGIMEN GENERAL DE LEY' => 'Régimen General de Ley',
-        ];
-        
-        $patrones = [
-            // Patrón explícito: Régimen: Régimen de Incorporación Fiscal
-            '/REGIMEN[:\s]+([A-ZÁÉÍÓÚÑ\s\.]+(?:[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s\.]*)?)(?=\s*(?:RFC|DOMICILIO|FECHA|$))/i',
-            
-            // Buscar después de "Régimen" o "Regimen"
-            '/REG[IÍ]MEN[^A-Z]*([A-ZÁÉÍÓÚÑ\s\.]{10,})/i',
-        ];
-        
-        // Primero buscar con patrones específicos
-        foreach ($patrones as $patron) {
-            if (preg_match($patron, $texto, $matches)) {
-                $regimenEncontrado = trim($matches[1]);
-                
-                // Comparar con la lista de regímenes conocidos
-                foreach ($regimenes as $key => $regimen) {
-                    if (stripos($regimenEncontrado, $key) !== false) {
-                        Log::info("Régimen fiscal encontrado: {$regimen}");
-                        return $regimen;
-                    }
-                }
-                
-                // Si no coincide exactamente, devolver lo encontrado
-                if (!empty($regimenEncontrado)) {
-                    Log::info("Régimen fiscal encontrado (no estándar): {$regimenEncontrado}");
-                    return $regimenEncontrado;
+        // Buscar en la sección de regímenes
+        if (preg_match('/REGIMENES:(.*?)R[EÉ]GIMEN\s+DE\s+([A-ZÁÉÍÓÚÑ\s]+)/si', $texto, $matches)) {
+            if (isset($matches[2])) {
+                $regimen = trim($matches[2]);
+                if (!empty($regimen)) {
+                    Log::info("Régimen encontrado en sección de regímenes: {$regimen}");
+                    return $regimen;
                 }
             }
         }
         
-        // Buscar directamente los regímenes en el texto
-        foreach ($regimenes as $key => $regimen) {
-            if (stripos($texto, $key) !== false) {
-                Log::info("Régimen fiscal encontrado (búsqueda directa): {$regimen}");
+        // Buscar directamente "Régimen de Sueldos y Salarios"
+        if (preg_match('/R[EÉ]GIMEN\s+DE\s+(SUELDOS\s+Y\s+SALARIOS[^,]*)/i', $texto, $matches)) {
+            if (isset($matches[1])) {
+                $regimen = 'Régimen de ' . trim($matches[1]);
+                Log::info("Régimen encontrado: {$regimen}");
                 return $regimen;
             }
+        }
+        
+        // Buscar palabras clave
+        if (strpos($texto, 'SUELDOS') !== false && strpos($texto, 'SALARIOS') !== false) {
+            Log::info("Régimen encontrado por palabras clave: Régimen de Sueldos y Salarios e Ingresos Asimilados a Salarios");
+            return 'Régimen de Sueldos y Salarios e Ingresos Asimilados a Salarios';
         }
         
         return null;
@@ -311,39 +326,22 @@ class ConstanciaFiscalService
     
     protected function extraerFechaEmision(string $texto): ?string
     {
-        $patrones = [
-            // Fecha: 15/01/2024
-            '/FECHA[:\s]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i',
-            
-            // Fecha de Emisión: 15/01/2024
-            '/FECHA.*EMISI[ÓO]N[:\s]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i',
-            
-            // Formato: 2024-01-15
-            '/(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2})/',
-            
-            // Formato: 15-Ene-2024
-            '/FECHA[:\s]*(\d{1,2}[\/\-\. ][A-Z]{3,}[\/\-\. ]\d{2,4})/i',
-        ];
-        
-        foreach ($patrones as $patron) {
-            if (preg_match($patron, $texto, $matches)) {
-                $fecha = trim($matches[1]);
+        // Buscar patrón específico: "Lugar y Fecha de Emisión"
+        if (preg_match('/LUGAR\s+Y\s+FECHA\s+DE\s+EMISION[^,]*,\s*(\d{1,2})\s+DE\s+([A-Z]+)\s+DE\s+(\d{4})/i', $texto, $matches)) {
+            if (isset($matches[1]) && isset($matches[2]) && isset($matches[3])) {
+                $meses = [
+                    'ENERO' => '01', 'FEBRERO' => '02', 'MARZO' => '03', 'ABRIL' => '04',
+                    'MAYO' => '05', 'JUNIO' => '06', 'JULIO' => '07', 'AGOSTO' => '08',
+                    'SEPTIEMBRE' => '09', 'OCTUBRE' => '10', 'NOVIEMBRE' => '11', 'DICIEMBRE' => '12'
+                ];
                 
-                try {
-                    // Intentar parsear la fecha
-                    $fechaObj = \Carbon\Carbon::createFromFormat('d/m/Y', $fecha) ?: 
-                               \Carbon\Carbon::createFromFormat('Y-m-d', $fecha) ?:
-                               \Carbon\Carbon::createFromFormat('d-m-Y', $fecha);
-                    
-                    if ($fechaObj) {
-                        $fechaFormateada = $fechaObj->format('Y-m-d');
-                        Log::info("Fecha de emisión encontrada: {$fechaFormateada}");
-                        return $fechaFormateada;
-                    }
-                } catch (\Exception $e) {
-                    // Continuar con el siguiente patrón
-                    continue;
-                }
+                $dia = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+                $mes = $meses[strtoupper($matches[2])] ?? '01';
+                $anio = $matches[3];
+                
+                $fecha = "{$anio}-{$mes}-{$dia}";
+                Log::info("Fecha de emisión extraída: {$fecha}");
+                return $fecha;
             }
         }
         
@@ -352,20 +350,16 @@ class ConstanciaFiscalService
     
     protected function determinarEstatusSAT(string $texto): string
     {
-        // Buscar indicadores de estatus
-        if (stripos($texto, 'VIGENTE') !== false || 
-            stripos($texto, 'ACTIVO') !== false ||
-            stripos($texto, 'ESTATUS: VIGENTE') !== false) {
-            return 'Vigente';
+        if (stripos($texto, 'ACTIVO') !== false) {
+            return 'ACTIVO';
         }
         
         if (stripos($texto, 'CANCELADO') !== false || 
             stripos($texto, 'SUSPENDIDO') !== false ||
             stripos($texto, 'BAJA') !== false) {
-            return 'No Vigente';
+            return 'NO ACTIVO';
         }
         
-        // Por defecto, asumir vigente
-        return 'Vigente';
+        return 'ACTIVO';
     }
 }

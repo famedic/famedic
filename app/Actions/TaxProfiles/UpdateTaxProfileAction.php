@@ -43,8 +43,7 @@ class UpdateTaxProfileAction
             
             // Guardar nuevo archivo
             $certificatePath = $fiscalCertificate->store(
-                'tax-profiles/certificates',
-                'private'
+                'fiscal-certificates'
             );
             
             // Calcular nuevo hash

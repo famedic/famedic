@@ -6,6 +6,7 @@ use App\Models\TaxProfile;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Auth;
 
 class CreateTaxProfileAction
 {
@@ -14,75 +15,92 @@ class CreateTaxProfileAction
         string $rfc,
         string $zipcode,
         string $taxRegime,
-        string $cfdiUse,
+        ?string $cfdiUse = null,
         ?UploadedFile $fiscalCertificate = null,
-        ?array $extractedData = null // Agregar este parámetro
+        ?array $extractedData = null
     ): TaxProfile {
-        $customer = auth()->user()->customer;
+        // Variable para almacenar la ruta del archivo en caso de que falle el guardado
+        $newFilePath = null;
 
-        // Validar que no exista un perfil con el mismo RFC
-        $existingProfile = $customer->taxProfiles()->where('rfc', $rfc)->first();
-        if ($existingProfile) {
-            throw new \Exception('Ya existe un perfil fiscal con este RFC.');
-        }
+        try {
+            // Procesar el archivo de constancia fiscal
+            if ($fiscalCertificate) {
+                // Guardar el archivo de la misma forma que en tu ejemplo
+                $newFilePath = $fiscalCertificate->store('fiscal-certificates');
+            }
 
-        // Procesar el archivo de constancia fiscal
-        $certificatePath = null;
-        if ($fiscalCertificate) {
-            $certificatePath = $fiscalCertificate->store(
-                'tax-profiles/certificates',
-                'private'
-            );
-        }
+            // Calcular hash del archivo si existe
+            $hashConstancia = null;
+            if ($fiscalCertificate && $newFilePath) {
+                $hashConstancia = hash_file('sha256', $fiscalCertificate->path());
+            }
 
-        // Calcular hash del archivo si existe
-        $hashConstancia = null;
-        if ($fiscalCertificate && $certificatePath) {
-            $hashConstancia = hash_file('sha256', $fiscalCertificate->path());
-        }
+            // Preparar datos para crear el perfil
+            $taxProfileData = [
+                'name' => $name,
+                'razon_social' => $extractedData['razon_social'] ?? $name,
+                'rfc' => Str::upper($rfc),
+                'zipcode' => $zipcode,
+                'codigo_postal_original' => $extractedData['codigo_postal'] ?? $zipcode,
+                'tax_regime' => $taxRegime,
+                'regimen_fiscal_original' => $extractedData['regimen_fiscal'] ?? null,
+                'cfdi_use' => $cfdiUse ?? 'G03',
+                'fiscal_certificate' => $newFilePath,
+                'hash_constancia' => $hashConstancia,
+                
+                // Campos extraídos automáticamente
+                'tipo_persona' => $extractedData['tipo_persona'] ?? $this->determinarTipoPersona($rfc),
+                'fecha_emision_constancia' => $extractedData['fecha_emision'] ?? null,
+                'estatus_sat' => $extractedData['estatus_sat'] ?? 'Desconocido',
+                'tipo_persona_confianza' => $extractedData['tipo_persona_confianza'] ?? 0,
+                'tipo_persona_detectado_por' => $extractedData ? 'sistema' : null,
+                'verificado_automaticamente' => !empty($extractedData),
+                'fecha_verificacion' => !empty($extractedData) ? now() : null,
+                
+                // Campos adicionales si vienen en extractedData
+                'fecha_inscripcion' => $extractedData['fecha_inscripcion'] ?? null,
+                'domicilio_fiscal' => $extractedData['domicilio_fiscal'] ?? null,
+                'actividades_economicas' => $extractedData['actividades_economicas'] ?? null,
+            ];
 
-        // Crear el perfil fiscal
-        $taxProfile = $customer->taxProfiles()->create([
-            'name' => $name,
-            'razon_social' => $extractedData['razon_social'] ?? $name, // Usar razon_social si viene de extractedData
-            'rfc' => Str::upper($rfc),
-            'zipcode' => $zipcode,
-            'codigo_postal_original' => $extractedData['codigo_postal'] ?? $zipcode, // Guardar código postal original
-            'tax_regime' => $taxRegime,
-            'regimen_fiscal_original' => $extractedData['regimen_fiscal'] ?? null, // Guardar régimen original detectado
-            'cfdi_use' => $cfdiUse,
-            'fiscal_certificate' => $certificatePath,
-            'hash_constancia' => $hashConstancia,
+            // Crear el perfil fiscal
+            return Auth::user()->customer->taxProfiles()->create($taxProfileData);
+
+        } catch (\Throwable $e) {
+            // Si ocurrió un error y se guardó el archivo, eliminarlo
+            if ($newFilePath) {
+                dispatch(function () use ($newFilePath) {
+                    if (Storage::exists($newFilePath)) {
+                        Storage::delete($newFilePath);
+                    }
+                })->afterResponse();
+            }
             
-            // Campos extraídos automáticamente
-            'tipo_persona' => $extractedData['tipo_persona'] ?? $this->determinarTipoPersona($rfc),
-            'fecha_emision_constancia' => $extractedData['fecha_emision'] ?? null,
-            'estatus_sat' => $extractedData['estatus_sat'] ?? 'Desconocido',
-            'tipo_persona_confianza' => $extractedData['tipo_persona_confianza'] ?? 0,
-            'tipo_persona_detectado_por' => $extractedData ? 'sistema' : null,
-            'verificado_automaticamente' => !empty($extractedData),
-            'fecha_verificacion' => !empty($extractedData) ? now() : null,
-            
-            // Campos adicionales si vienen en extractedData
-            'fecha_inscripcion' => $extractedData['fecha_inscripcion'] ?? null,
-            'domicilio_fiscal' => $extractedData['domicilio_fiscal'] ?? null,
-            'actividades_economicas' => $extractedData['actividades_economicas'] ?? null,
-        ]);
-
-        return $taxProfile;
+            // Relanzar la excepción
+            throw $e;
+        }
     }
 
     protected function determinarTipoPersona(string $rfc): string
     {
-        // Personas Morales: 3 letras + 6 números + 3 alfanuméricos
-        // Personas Físicas: 4 letras + 6 números + 3 alfanuméricos
+        $rfc = Str::upper(trim($rfc));
         
-        // Si la primera parte tiene 4 letras y termina con números, es física
+        // Personas Morales: 3 letras + 6 números + 3 alfanuméricos (12 caracteres)
+        // Personas Físicas: 4 letras + 6 números + 3 alfanuméricos (13 caracteres)
+        
+        if (strlen($rfc) === 12) {
+            // RFC de persona moral
+            return 'moral';
+        } elseif (strlen($rfc) === 13) {
+            // RFC de persona física
+            return 'fisica';
+        }
+        
+        // Si no coincide con ninguno, intentar determinar por patrón
         if (preg_match('/^[A-Z&Ñ]{4}\d{2}/', $rfc)) {
             return 'fisica';
         }
         
-        // Si tiene 3 letras al inicio, es moral
         if (preg_match('/^[A-Z&Ñ]{3}\d{6}/', $rfc)) {
             return 'moral';
         }
