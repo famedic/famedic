@@ -3,12 +3,13 @@ import { Button } from "@/Components/Catalyst/button";
 import { Field, Label, ErrorMessage } from "@/Components/Catalyst/fieldset";
 import { router, useForm } from "@inertiajs/react";
 import { Input } from "@/Components/Catalyst/input";
-import CountryListbox from "@/Components/CountryListbox";
 import { Select } from "@/Components/Catalyst/select";
 import { Heading } from "@/Components/Catalyst/heading";
 import { Anchor, Text, TextLink } from "@/Components/Catalyst/text";
 import OdessaLinkingMessage from "@/Components/Auth/OdessaLinkingMessage";
 import { ArrowPathIcon } from "@heroicons/react/16/solid";
+import { useState, useEffect, useRef } from "react";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/20/solid";
 
 export default function Register({
 	genders,
@@ -24,260 +25,794 @@ export default function Register({
 		gender: "",
 		email: "",
 		phone: "",
-		phone_country: "MX",
+		phone_country: "MX", 
 		password: "",
 		password_confirmation: "",
 		referrer_id: inviter?.id || null,
+		g_recaptcha_response: "",
 	});
+
+	const [showPassword, setShowPassword] = useState(false);
+	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+	const [recaptchaLoaded, setRecaptchaLoaded] = useState(false);
+	const recaptchaRef = useRef(null);
+	const recaptchaWidgetId = useRef(null);
+	const recaptchaInitialized = useRef(false);
+
+	// Clave de reCAPTCHA (con fallback para desarrollo)
+	const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY || 
+	                         '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'; // Clave de prueba de Google
+
+	// Log para debug
+	useEffect(() => {
+		console.log('🔑 reCAPTCHA Site Key:', {
+			value: recaptchaSiteKey,
+			length: recaptchaSiteKey.length,
+			isTestKey: recaptchaSiteKey === '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI',
+			fromEnv: !!import.meta.env.VITE_RECAPTCHA_SITE_KEY
+		});
+	}, [recaptchaSiteKey]);
+
+	// DEBUG: Log cuando cambia el token
+	useEffect(() => {
+		console.log('🔍 reCAPTCHA token actualizado:', {
+			token: data.g_recaptcha_response,
+			length: data.g_recaptcha_response?.length || 0,
+			preview: data.g_recaptcha_response ? data.g_recaptcha_response.substring(0, 50) + '...' : 'empty'
+		});
+	}, [data.g_recaptcha_response]);
+
+	// Cargar reCAPTCHA
+	useEffect(() => {
+		console.log('🔄 Iniciando carga de reCAPTCHA...');
+		
+		// Si ya está inicializado, no hacer nada
+		if (recaptchaInitialized.current) {
+			console.log('✅ reCAPTCHA ya está inicializado');
+			return;
+		}
+
+		const loadRecaptcha = () => {
+			// Si ya está cargado, renderizar
+			if (window.grecaptcha && window.grecaptcha.render) {
+				console.log('✅ reCAPTCHA ya está en window');
+				initializeRecaptcha();
+				return;
+			}
+
+			console.log('📥 Cargando script de reCAPTCHA...');
+			
+			// Verificar si ya existe el script
+			const existingScript = document.querySelector('script[src*="google.com/recaptcha/api"]');
+			if (existingScript) {
+				console.log('📜 Script ya existe en el DOM');
+				// Si ya existe el script pero grecaptcha no está disponible aún,
+				// esperar un poco y volver a intentar
+				setTimeout(() => {
+					if (window.grecaptcha && window.grecaptcha.render) {
+						initializeRecaptcha();
+					} else {
+						console.log('⏳ Esperando que grecaptcha esté disponible...');
+						setTimeout(initializeRecaptcha, 1000);
+					}
+				}, 500);
+				return;
+			}
+
+			// Crear y cargar script
+			const script = document.createElement('script');
+			script.src = `https://www.google.com/recaptcha/api.js?render=explicit`;
+			script.async = true;
+			script.defer = true;
+			script.onload = () => {
+				console.log('✅ Script de reCAPTCHA cargado');
+				// Dar tiempo a que se inicialice grecaptcha
+				setTimeout(() => {
+					initializeRecaptcha();
+				}, 500);
+			};
+			script.onerror = (error) => {
+				console.error('❌ Error cargando script de reCAPTCHA:', error);
+			};
+			
+			document.head.appendChild(script);
+		};
+
+		// Esperar a que el DOM esté listo
+		const timer = setTimeout(loadRecaptcha, 1000);
+		
+		return () => {
+			clearTimeout(timer);
+			// Limpiar widget si existe
+			if (recaptchaWidgetId.current !== null && window.grecaptcha && window.grecaptcha.reset) {
+				try {
+					window.grecaptcha.reset(recaptchaWidgetId.current);
+				} catch (e) {
+					console.log('⚠️ Error reseteando reCAPTCHA en cleanup:', e);
+				}
+			}
+		};
+	}, []);
+
+	// Inicializar reCAPTCHA
+	const initializeRecaptcha = () => {
+		console.log('🎯 Inicializando reCAPTCHA...');
+		
+		if (recaptchaInitialized.current) {
+			console.log('⚠️ reCAPTCHA ya fue inicializado');
+			return;
+		}
+
+		if (!window.grecaptcha || !window.grecaptcha.render) {
+			console.error('❌ grecaptcha no disponible');
+			return;
+		}
+
+		if (!recaptchaRef.current) {
+			console.error('❌ Elemento de referencia no disponible');
+			return;
+		}
+
+		try {
+			// Marcar como inicializado antes de intentar renderizar
+			recaptchaInitialized.current = true;
+			
+			// Limpiar el contenedor completamente
+			if (recaptchaRef.current) {
+				recaptchaRef.current.innerHTML = '';
+				console.log('🧹 Contenedor limpiado');
+			}
+
+			// Crear un nuevo elemento div para el widget
+			const widgetContainer = document.createElement('div');
+			widgetContainer.id = 'recaptcha-widget-' + Date.now();
+			recaptchaRef.current.appendChild(widgetContainer);
+
+			console.log('🖌️ Renderizando widget de reCAPTCHA en:', widgetContainer.id);
+			
+			// Renderizar el widget
+			recaptchaWidgetId.current = window.grecaptcha.render(widgetContainer.id, {
+				sitekey: recaptchaSiteKey,
+				callback: onRecaptchaVerify,
+				'expired-callback': onRecaptchaExpired,
+				'error-callback': onRecaptchaError,
+				size: 'normal',
+				theme: 'light',
+				tabindex: 0,
+			});
+			
+			console.log('✅ Widget renderizado con ID:', recaptchaWidgetId.current);
+			setRecaptchaLoaded(true);
+			
+			// Verificar si ya hay un token (por si el usuario ya hizo clic antes de que cargara React)
+			setTimeout(() => {
+				if (window.grecaptcha && window.grecaptcha.getResponse) {
+					const existingToken = window.grecaptcha.getResponse(recaptchaWidgetId.current);
+					if (existingToken) {
+						console.log('🔍 Token existente encontrado:', existingToken.substring(0, 50) + '...');
+						setData('g_recaptcha_response', existingToken);
+					}
+				}
+			}, 100);
+			
+		} catch (error) {
+			console.error('💥 Error inicializando reCAPTCHA:', error);
+			console.error('💥 Stack trace:', error.stack);
+			
+			// Resetear flag para permitir reintento
+			recaptchaInitialized.current = false;
+			
+			// Intentar de nuevo después de un segundo
+			setTimeout(() => {
+				if (!recaptchaInitialized.current) {
+					console.log('🔄 Reintentando inicialización...');
+					initializeRecaptcha();
+				}
+			}, 1000);
+		}
+	};
+
+	// Función para manejar verificación de reCAPTCHA
+	const onRecaptchaVerify = (token) => {
+		console.log('✅ reCAPTCHA verificado! Token recibido:', {
+			token: token,
+			length: token.length,
+			preview: token.substring(0, 50) + '...'
+		});
+		setData('g_recaptcha_response', token);
+	};
+
+	const onRecaptchaExpired = () => {
+		console.log('⏰ reCAPTCHA expirado');
+		setData('g_recaptcha_response', '');
+		if (recaptchaWidgetId.current !== null && window.grecaptcha && window.grecaptcha.reset) {
+			try {
+				window.grecaptcha.reset(recaptchaWidgetId.current);
+			} catch (e) {
+				console.log('⚠️ Error reseteando reCAPTCHA expirado:', e);
+			}
+		}
+	};
+
+	const onRecaptchaError = () => {
+		console.error('❌ Error en reCAPTCHA');
+		setData('g_recaptcha_response', '');
+		if (recaptchaWidgetId.current !== null && window.grecaptcha && window.grecaptcha.reset) {
+			try {
+				window.grecaptcha.reset(recaptchaWidgetId.current);
+			} catch (e) {
+				console.log('⚠️ Error reseteando reCAPTCHA con error:', e);
+			}
+		}
+	};
+
+	// Función para formatear número de teléfono mexicano
+	const formatMexicanPhone = (value) => {
+		const numbers = value.replace(/\D/g, '');
+		
+		if (numbers.length <= 3) {
+			return numbers;
+		} else if (numbers.length <= 6) {
+			return `${numbers.slice(0, 3)} ${numbers.slice(3)}`;
+		} else if (numbers.length <= 10) {
+			return `${numbers.slice(0, 3)} ${numbers.slice(3, 6)} ${numbers.slice(6, 10)}`;
+		} else {
+			return `${numbers.slice(0, 3)} ${numbers.slice(3, 6)} ${numbers.slice(6, 10)}`;
+		}
+	};
+
+	const handlePhoneChange = (e) => {
+		const formatted = formatMexicanPhone(e.target.value);
+		setData("phone", formatted);
+	};
 
 	const submit = (e) => {
 		e.preventDefault();
 
+		console.log('🚀 Iniciando envío del formulario...');
+		console.log('📦 Datos a enviar:', {
+			...data,
+			password: '***', // Ocultar contraseña en logs
+			password_confirmation: '***',
+			g_recaptcha_response_preview: data.g_recaptcha_response ? 
+				data.g_recaptcha_response.substring(0, 50) + '...' : 
+				'empty',
+			g_recaptcha_response_length: data.g_recaptcha_response?.length || 0
+		});
+
+		// Validar reCAPTCHA
+		if (!data.g_recaptcha_response) {
+			console.error('❌ Error: Token de reCAPTCHA vacío');
+			alert('Por favor, verifica que no eres un robot');
+			// Forzar reset de reCAPTCHA
+			if (recaptchaWidgetId.current !== null && window.grecaptcha && window.grecaptcha.reset) {
+				try {
+					window.grecaptcha.reset(recaptchaWidgetId.current);
+				} catch (e) {
+					console.log('⚠️ Error reseteando reCAPTCHA en validación:', e);
+				}
+			}
+			return;
+		}
+
+		console.log('✅ Token de reCAPTCHA presente, procediendo con envío...');
+
 		if (!processing) {
 			if (odessaToken) {
+				console.log('🔗 Enviando registro con token Odessa...');
 				post(
 					route("odessa-register.store", {
 						odessa_token: odessaToken,
 					}),
 					{
-						onFinish: () =>
-							reset("password", "password_confirmation"),
+						onFinish: () => {
+							console.log('✅ Registro Odessa completado');
+							reset("password", "password_confirmation");
+							// Resetear reCAPTCHA
+							if (recaptchaWidgetId.current !== null && window.grecaptcha && window.grecaptcha.reset) {
+								try {
+									window.grecaptcha.reset(recaptchaWidgetId.current);
+								} catch (e) {
+									console.log('⚠️ Error reseteando reCAPTCHA en finish:', e);
+								}
+							}
+						},
+						onError: (errors) => {
+							console.error('❌ Error en registro Odessa:', errors);
+							if (errors.g_recaptcha_response) {
+								console.error('❌ Error específico de reCAPTCHA:', errors.g_recaptcha_response);
+								if (recaptchaWidgetId.current !== null && window.grecaptcha && window.grecaptcha.reset) {
+									try {
+										window.grecaptcha.reset(recaptchaWidgetId.current);
+									} catch (e) {
+										console.log('⚠️ Error reseteando reCAPTCHA en error:', e);
+									}
+								}
+							}
+						}
 					},
 				);
 			} else {
+				console.log('👤 Enviando registro regular...');
 				post(route("register"), {
-					onFinish: () => reset("password", "password_confirmation"),
+					onSuccess: () => {
+						console.log('✅ Registro exitoso');
+					},
+					onFinish: () => {
+						console.log('✅ Proceso de registro completado');
+						reset("password", "password_confirmation");
+						if (recaptchaWidgetId.current !== null && window.grecaptcha && window.grecaptcha.reset) {
+							try {
+								window.grecaptcha.reset(recaptchaWidgetId.current);
+							} catch (e) {
+								console.log('⚠️ Error reseteando reCAPTCHA en finish regular:', e);
+							}
+						}
+					},
+					onError: (errors) => {
+						console.error('❌ Error en registro:', errors);
+						if (errors.g_recaptcha_response) {
+							console.error('❌ Error de reCAPTCHA en respuesta:', errors.g_recaptcha_response);
+							console.log('🔍 Verificando estado actual del token:', {
+								token: data.g_recaptcha_response,
+								length: data.g_recaptcha_response?.length
+							});
+							if (recaptchaWidgetId.current !== null && window.grecaptcha && window.grecaptcha.reset) {
+								try {
+									window.grecaptcha.reset(recaptchaWidgetId.current);
+								} catch (e) {
+									console.log('⚠️ Error reseteando reCAPTCHA en error regular:', e);
+								}
+							}
+						}
+					}
 				});
 			}
 		}
 	};
 
-	return (
-		<AuthLayout
-			showOdessaLogo={!!odessaToken}
-			title="Regístrate"
-			header={
-				<>
-					<Heading>Crea tu nueva cuenta</Heading>
+	// Calcular edad mínima (18 años)
+	const getMinBirthDate = () => {
+		const today = new Date();
+		const minDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+		return minDate.toISOString().split('T')[0];
+	};
 
-					<Text>
-						¿Ya tienes una cuenta?{" "}
-						<TextLink href={route("login")}>Inicia sesión</TextLink>
-					</Text>
+	// Calcular edad máxima (120 años)
+	const getMaxBirthDate = () => {
+		const today = new Date();
+		const maxDate = new Date(today.getFullYear() - 120, today.getMonth(), today.getDate());
+		return maxDate.toISOString().split('T')[0];
+	};
 
-					{odessaToken && (
-						<OdessaLinkingMessage
-							secondsLeft={secondsLeft}
-							onTimerExpired={() => router.get(route("/"))}
-						/>
-					)}
-				</>
+	// Manejar errores de reCAPTCHA
+	useEffect(() => {
+		if (errors.g_recaptcha_response) {
+			console.error('⚠️ Error de reCAPTCHA detectado en errores:', errors.g_recaptcha_response);
+			if (recaptchaWidgetId.current !== null && window.grecaptcha && window.grecaptcha.reset) {
+				console.log('🔄 Reseteando reCAPTCHA debido a error');
+				try {
+					window.grecaptcha.reset(recaptchaWidgetId.current);
+				} catch (e) {
+					console.log('⚠️ Error reseteando reCAPTCHA en manejo de error:', e);
+				}
 			}
-		>
-			{inviter && (
-				<div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-slate-700 dark:bg-famedic-darker">
-					<Text className="text-center">
-						🎉{" "}
-						{inviter.name && inviter.name !== "Usuario" ? (
-							<>
-								<strong>{inviter.name}</strong> te ha invitado a
-								unirte y disfrutar los beneficios de Famedic!
-							</>
-						) : (
-							<>
-								Te han invitado a unirte y disfrutar los
-								beneficios de Famedic!
-							</>
+		}
+	}, [errors.g_recaptcha_response]);
+
+	return (
+		<>
+			<AuthLayout
+				showOdessaLogo={!!odessaToken}
+				title="Regístrate"
+				header={
+					<>
+						<Heading>Regístrate y disfruta de beneficios exclusivos en Famedic</Heading>
+
+						<Text>
+							¿Ya tienes una cuenta?{" "}
+							<TextLink href={route("login")} className="font-semibold">
+								Inicia sesión
+							</TextLink>
+						</Text>
+
+						{odessaToken && (
+							<OdessaLinkingMessage
+								secondsLeft={secondsLeft}
+								onTimerExpired={() => router.get(route("/"))}
+							/>
 						)}
-					</Text>
-				</div>
-			)}
-
-			<form className="space-y-6" onSubmit={submit}>
-				<Field>
-					<Label>Nombre</Label>
-					<Input
-						dusk="name"
-						required
-						type="text"
-						value={data.name}
-						autoComplete="given-name"
-						onChange={(e) => setData("name", e.target.value)}
-					/>
-					{errors.name && <ErrorMessage>{errors.name}</ErrorMessage>}
-				</Field>
-
-				<Field>
-					<Label>Apellido paterno</Label>
-					<Input
-						dusk="paternalLastname"
-						required
-						type="text"
-						value={data.paternal_lastname}
-						autoComplete="family-name"
-						onChange={(e) =>
-							setData("paternal_lastname", e.target.value)
-						}
-					/>
-					{errors.paternal_lastname && (
-						<ErrorMessage>{errors.paternal_lastname}</ErrorMessage>
-					)}
-				</Field>
-
-				<Field>
-					<Label>Apellido materno</Label>
-					<Input
-						dusk="maternalLastname"
-						required
-						type="text"
-						value={data.maternal_lastname}
-						autoComplete="family-name"
-						onChange={(e) =>
-							setData("maternal_lastname", e.target.value)
-						}
-					/>
-					{errors.maternal_lastname && (
-						<ErrorMessage>{errors.maternal_lastname}</ErrorMessage>
-					)}
-				</Field>
-
-				<Field>
-					<Label>Correo electrónico</Label>
-					<Input
-						dusk="email"
-						required
-						type="email"
-						value={data.email}
-						autoComplete="email"
-						onChange={(e) => setData("email", e.target.value)}
-					/>
-					{errors.email && (
-						<ErrorMessage>{errors.email}</ErrorMessage>
-					)}
-				</Field>
-
-				<Field>
-					<Label>Teléfono celular</Label>
-					<div data-slot="control" className="flex flex-1 gap-2">
-						<CountryListbox
-							setCountry={(e) => setData("phone_country", e)}
-							country={data.phone_country}
-							className="max-w-32"
-						/>
-						<Input
-							dusk="phone"
-							required
-							type="tel"
-							value={data.phone}
-							onChange={(e) => setData("phone", e.target.value)}
-							autoComplete="tel-national"
-						/>
+					</>
+				}
+			>
+				{inviter && (
+					<div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-900/20">
+						<Text className="text-center">
+							<span className="mr-2 text-lg">🎉</span>
+							{inviter.name && inviter.name !== "Usuario" ? (
+								<>
+									<strong className="font-semibold">{inviter.name}</strong> te ha invitado a
+									unirte y disfrutar los beneficios de Famedic!
+								</>
+							) : (
+								<>
+									Te han invitado a unirte y disfrutar los
+									beneficios de Famedic!
+								</>
+							)}
+						</Text>
 					</div>
-					{errors.phone && (
-						<ErrorMessage>{errors.phone}</ErrorMessage>
-					)}
-				</Field>
+				)}
 
-				<Field>
-					<Label>Fecha de nacimiento</Label>
-					<Input
-						dusk="birthDate"
-						required
-						type="date"
-						value={data.birth_date}
-						autoComplete="bday"
-						onChange={(e) => setData("birth_date", e.target.value)}
-					/>
-					{errors.birth_date && (
-						<ErrorMessage>{errors.birth_date}</ErrorMessage>
+				<form className="space-y-6" onSubmit={submit}>
+					{/* DEBUG: Mostrar token actual */}
+					{process.env.NODE_ENV === 'development' && (
+						<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-800 dark:bg-amber-900/20">
+							<div className="font-semibold">🔍 DEBUG reCAPTCHA:</div>
+							<div>Estado: {recaptchaLoaded ? '✅ Cargado' : '⏳ Cargando...'}</div>
+							<div>Token: {data.g_recaptcha_response ? '✅ Presente' : '❌ Ausente'}</div>
+							<div>Longitud: {data.g_recaptcha_response?.length || 0} caracteres</div>
+							<div>Site Key: {recaptchaSiteKey.substring(0, 10)}...</div>
+							{data.g_recaptcha_response && (
+								<div className="mt-1 break-all">Preview: {data.g_recaptcha_response.substring(0, 30)}...</div>
+							)}
+						</div>
 					)}
-				</Field>
 
-				<Field>
-					<Label>Sexo</Label>
-					<Select
-						dusk="gender"
-						required
-						value={data.gender}
-						onChange={(e) => setData("gender", e.target.value)}
-					>
-						<option value="" disabled>
-							Selecciona una opción
-						</option>
-						{genders.map(({ label, value }) => (
-							<option key={value} value={value}>
-								{label}
-							</option>
-						))}
-					</Select>
-					{errors.gender && (
-						<ErrorMessage>{errors.gender}</ErrorMessage>
-					)}
-				</Field>
+					{/* Nombre completo - Una línea */}
+					<Field>
+						<Label>
+							Nombre completo <span className="text-red-500">*</span>
+						</Label>
+						<Input
+							dusk="name"
+							required
+							type="text"
+							value={data.name}
+							autoComplete="given-name"
+							onChange={(e) => setData("name", e.target.value)}
+							placeholder="Ej. Juan Carlos"
+							className="w-full"
+						/>
+						{errors.name && <ErrorMessage>{errors.name}</ErrorMessage>}
+					</Field>
 
-				<Field>
-					<Label>Contraseña</Label>
-					<Input
-						dusk="password"
-						required
-						type="password"
-						value={data.password}
-						autoComplete="new-password"
-						onChange={(e) => setData("password", e.target.value)}
-					/>
-					{errors.password && (
-						<ErrorMessage>{errors.password}</ErrorMessage>
-					)}
-				</Field>
+					{/* Apellidos - Misma línea */}
+					<div className="grid gap-4 sm:grid-cols-2">
+						<Field>
+							<Label>
+								Apellido paterno <span className="text-red-500">*</span>
+							</Label>
+							<Input
+								dusk="paternalLastname"
+								required
+								type="text"
+								value={data.paternal_lastname}
+								autoComplete="family-name"
+								onChange={(e) =>
+									setData("paternal_lastname", e.target.value)
+								}
+								placeholder="Ej. Pérez"
+								className="w-full"
+							/>
+							{errors.paternal_lastname && (
+								<ErrorMessage>{errors.paternal_lastname}</ErrorMessage>
+							)}
+						</Field>
 
-				<Field>
-					<Label>Confirma tu Contraseña</Label>
-					<Input
-						dusk="passwordConfirmation"
-						required
-						type="password"
-						value={data.password_confirmation}
-						autoComplete="new-password"
-						onChange={(e) =>
-							setData("password_confirmation", e.target.value)
-						}
-					/>
-					{errors.password_confirmation && (
-						<ErrorMessage>
-							{errors.password_confirmation}
-						</ErrorMessage>
-					)}
-				</Field>
+						<Field>
+							<Label>
+								Apellido materno <span className="text-red-500">*</span>
+							</Label>
+							<Input
+								dusk="maternalLastname"
+								required
+								type="text"
+								value={data.maternal_lastname}
+								autoComplete="family-name"
+								onChange={(e) =>
+									setData("maternal_lastname", e.target.value)
+								}
+								placeholder="Ej. López"
+								className="w-full"
+							/>
+							{errors.maternal_lastname && (
+								<ErrorMessage>{errors.maternal_lastname}</ErrorMessage>
+							)}
+						</Field>
+					</div>
 
-				<div className="space-y-2">
+					{/* Correo electrónico - Una línea */}
+					<Field>
+						<Label>
+							Correo electrónico <span className="text-red-500">*</span>
+						</Label>
+						<Input
+							dusk="email"
+							required
+							type="email"
+							value={data.email}
+							autoComplete="email"
+							onChange={(e) => setData("email", e.target.value)}
+							placeholder="ejemplo@correo.com"
+							className="w-full"
+						/>
+						{errors.email && (
+							<ErrorMessage>{errors.email}</ErrorMessage>
+						)}
+					</Field>
+
+					{/* Teléfono celular - Una línea */}
+					<Field>
+						<Label>
+							Teléfono celular <span className="text-red-500">*</span>
+						</Label>
+						<div className="flex gap-3">
+							<div className="w-40 flex-shrink-0">
+								<select 
+									name="phone_country"
+									value="MX"
+									disabled
+									className="w-full cursor-not-allowed rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
+								>
+									<option value="MX">+52 México</option>
+								</select>
+							</div>
+							
+							<div className="flex-1">
+								<Input
+									dusk="phone"
+									name="phone"
+									required
+									type="tel"
+									value={data.phone}
+									onChange={handlePhoneChange}
+									autoComplete="tel-national"
+									placeholder="XXX XXX XXXX"
+									className="w-full"
+									maxLength="12"
+								/>
+							</div>
+						</div>
+						<Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+							Solo números mexicanos (10 dígitos)
+						</Text>
+						{errors.phone && (
+							<ErrorMessage>{errors.phone}</ErrorMessage>
+						)}
+					</Field>
+
+					{/* Fecha de nacimiento y Sexo - Misma línea */}
+					<div className="grid gap-4 sm:grid-cols-2">
+						<Field>
+							<Label>
+								Fecha de nacimiento <span className="text-red-500">*</span>
+							</Label>
+							<div>
+								<Input
+									dusk="birthDate"
+									required
+									type="date"
+									value={data.birth_date}
+									autoComplete="bday"
+									onChange={(e) => setData("birth_date", e.target.value)}
+									max={getMinBirthDate()}
+									min={getMaxBirthDate()}
+									className="w-full mt-3"
+								/>
+								<Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+									Debes ser mayor de 18 años
+								</Text>
+							</div>
+							{errors.birth_date && (
+								<ErrorMessage>{errors.birth_date}</ErrorMessage>
+							)}
+						</Field>
+
+						<Field>
+							<Label>
+								Sexo <span className="text-red-500">*</span>
+							</Label>
+							<Select
+								dusk="gender"
+								required
+								value={data.gender}
+								onChange={(e) => setData("gender", e.target.value)}
+								className="w-full"
+							>
+								<option value="" disabled>
+									Selecciona tu sexo
+								</option>
+								{genders.map(({ label, value }) => (
+									<option key={value} value={value}>
+										{label}
+									</option>
+								))}
+							</Select>
+							<Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+									Seleciona una opción
+								</Text>
+							{errors.gender && (
+								<ErrorMessage>{errors.gender}</ErrorMessage>
+							)}
+						</Field>
+					</div>
+
+					{/* Contraseñas - Misma línea */}
+					<div className="grid gap-4 sm:grid-cols-2">
+						<Field>
+							<Label>
+								Contraseña <span className="text-red-500">*</span>
+							</Label>
+							<div className="relative">
+								<Input
+									dusk="password"
+									required
+									type={showPassword ? "text" : "password"}
+									value={data.password}
+									autoComplete="new-password"
+									onChange={(e) => setData("password", e.target.value)}
+									placeholder="Mínimo 8 caracteres"
+									className="w-full pr-10"
+								/>
+								<button
+									type="button"
+									className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+									onClick={() => setShowPassword(!showPassword)}
+									aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+								>
+									{showPassword ? (
+										<EyeSlashIcon className="h-5 w-5" />
+									) : (
+										<EyeIcon className="h-5 w-5" />
+									)}
+								</button>
+							</div>
+							<Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+								Mínimo 8 caracteres
+							</Text>
+							{errors.password && (
+								<ErrorMessage>{errors.password}</ErrorMessage>
+							)}
+						</Field>
+
+						<Field>
+							<Label>
+								Confirmar contraseña <span className="text-red-500">*</span>
+							</Label>
+							<div className="relative">
+								<Input
+									dusk="passwordConfirmation"
+									required
+									type={showConfirmPassword ? "text" : "password"}
+									value={data.password_confirmation}
+									autoComplete="new-password"
+									onChange={(e) =>
+										setData("password_confirmation", e.target.value)
+									}
+									placeholder="Repite tu contraseña"
+									className="w-full pr-10"
+								/>
+								<button
+									type="button"
+									className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+									onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+									aria-label={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+								>
+									{showConfirmPassword ? (
+										<EyeSlashIcon className="h-5 w-5" />
+									) : (
+										<EyeIcon className="h-5 w-5" />
+									)}
+								</button>
+							</div>
+							<Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+								Mínimo 8 caracteres
+							</Text>
+							{errors.password_confirmation && (
+								<ErrorMessage>
+									{errors.password_confirmation}
+								</ErrorMessage>
+							)}
+						</Field>
+					</div>
+
+					{/* reCAPTCHA */}
+					<Field>
+						<Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+							Verificación de seguridad <span className="text-red-500">*</span>
+						</Label>
+						<div className="mt-3">
+							<div 
+								ref={recaptchaRef}
+								className="flex justify-center min-h-[78px]"
+							/>
+							{!recaptchaLoaded && (
+								<div className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+									Cargando verificación de seguridad...
+								</div>
+							)}
+						</div>
+						{errors.g_recaptcha_response && (
+							<ErrorMessage>{errors.g_recaptcha_response}</ErrorMessage>
+						)}
+					</Field>
+
+					{/* Términos y condiciones */}
+					<div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+						<Text className="text-sm">
+							Al hacer clic en el botón "Registrar", aceptas todos los{" "}
+							<Anchor
+								href={route("terms-of-service")}
+								target="_blank"
+								className="font-semibold underline hover:no-underline"
+							>
+								Términos y condiciones de servicio
+							</Anchor>{" "}
+							y la{" "}
+							<Anchor 
+								href={route("privacy-policy")} 
+								target="_blank"
+								className="font-semibold underline hover:no-underline"
+							>
+								Política de privacidad
+							</Anchor>
+							.
+						</Text>
+					</div>					
+
+					{/* Botón de registro */}
 					<Button
 						dusk="register"
-						className="w-full"
+						className="w-full py-3 text-base font-semibold"
 						disabled={processing}
 						type="submit"
+						onClick={(e) => {
+							// Debug adicional al hacer clic
+							console.log('🖱️ Botón clickeado - Token actual:', {
+								token: data.g_recaptcha_response,
+								length: data.g_recaptcha_response?.length
+							});
+							
+							// Intentar obtener token directamente si está vacío
+							if (!data.g_recaptcha_response && window.grecaptcha && recaptchaWidgetId.current !== null) {
+								try {
+									const directToken = window.grecaptcha.getResponse(recaptchaWidgetId.current);
+									console.log('🔍 Token obtenido directamente:', {
+										token: directToken,
+										length: directToken?.length
+									});
+									if (directToken) {
+										setData('g_recaptcha_response', directToken);
+									}
+								} catch (e) {
+									console.log('⚠️ Error obteniendo token directamente:', e);
+								}
+							}
+						}}
 					>
-						Registrar
-						{processing && (
-							<ArrowPathIcon className="animate-spin" />
+						{processing ? (
+							<>
+								<ArrowPathIcon className="mr-2 h-5 w-5 animate-spin" />
+								Creando cuenta...
+							</>
+						) : (
+							"Crear mi cuenta"
 						)}
 					</Button>
 
-					<Text className="mb-8">
-						Al hacer clic en el botón "Registrar", aceptas todos los{" "}
-						<Anchor
-							href={route("terms-of-service")}
-							target="_blank"
+					{/* Enlace a inicio de sesión */}
+					<Text className="text-center">
+						¿Ya tienes una cuenta?{" "}
+						<TextLink 
+							href={route("login")} 
+							className="font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 						>
-							Términos y condiciones de servicio
-						</Anchor>{" "}
-						y la{" "}
-						<Anchor href={route("privacy-policy")} target="_blank">
-							Política de privacidad
-						</Anchor>
-						.
+							Inicia sesión aquí
+						</TextLink>
 					</Text>
-				</div>
-			</form>
-		</AuthLayout>
+				</form>
+			</AuthLayout>
+		</>
 	);
 }

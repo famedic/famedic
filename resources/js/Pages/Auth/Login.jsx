@@ -9,6 +9,8 @@ import { Text, TextLink } from "@/Components/Catalyst/text";
 import { Divider } from "@/Components/Catalyst/divider";
 import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import ForgotPasswordLink from "@/Components/ForgotPasswordLink";
+import { useState } from "react"; 
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/20/solid"; 
 
 export default function Login() {
 	const { data, setData, post, processing, errors } = useForm({
@@ -16,6 +18,8 @@ export default function Login() {
 		password: "",
 		remember: false,
 	});
+
+	const [showPassword, setShowPassword] = useState(false); 
 
 	const submit = (e) => {
 		e.preventDefault();
@@ -29,7 +33,7 @@ export default function Login() {
 		<AuthLayout
 			title="Iniciar sesión"
 			header={
-				<>
+				<>										
 					<Heading>Inicia sesión en tu cuenta</Heading>
 
 					<Text>
@@ -59,14 +63,29 @@ export default function Login() {
 
 				<Field>
 					<Label>Contraseña</Label>
-					<Input
-						dusk="password"
-						required
-						type="password"
-						value={data.password}
-						autoComplete="current-password"
-						onChange={(e) => setData("password", e.target.value)}
-					/>
+					<div className="relative">
+						<Input
+							dusk="password"
+							required
+							type={showPassword ? "text" : "password"} 
+							value={data.password}
+							autoComplete="current-password"
+							onChange={(e) => setData("password", e.target.value)}
+							className="pr-10" 
+						/>
+						<button
+							type="button"
+							className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+							onClick={() => setShowPassword(!showPassword)}
+							aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+						>
+							{showPassword ? (
+								<EyeSlashIcon className="h-5 w-5" />
+							) : (
+								<EyeIcon className="h-5 w-5" />
+							)}
+						</button>
+					</div>
 					{errors.password && (
 						<ErrorMessage>{errors.password}</ErrorMessage>
 					)}

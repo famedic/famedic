@@ -11,6 +11,7 @@
 		"php": "^8.2",
 		"algolia/algoliasearch-client-php": "^3.2",
 		"algolia/scout-extended": "^3.0",
+		"biscolab/laravel-recaptcha": "^6.1",
 		"facebook/php-business-sdk": "^22.0",
 		"firebase/php-jwt": "^6.10",
 		"guzzlehttp/guzzle": "^7.9",
