@@ -6,6 +6,9 @@ use App\Http\Controllers\Checkout\ContactController as CheckoutContactController
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\FamilyController;
 use App\Http\Controllers\LaboratoryPurchaseController;
+use App\Http\Controllers\LaboratoryResultController;
+use App\Http\Controllers\LaboratoryQuoteController;
+
 use App\Http\Controllers\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\TaxProfileController;
@@ -39,6 +42,10 @@ Route::middleware([
     Route::post('checkout/contacts', CheckoutContactController::class)->name('checkout.contacts.store');
     Route::resource('payment-methods', PaymentMethodController::class)->only(['index', 'create', 'destroy']);
     Route::resource('laboratory-purchases', LaboratoryPurchaseController::class)->only(['index', 'show']);
+    
+    Route::resource('laboratory-quotes', LaboratoryQuoteController::class)->only(['index', 'show']);
+    Route::resource('laboratory-results', LaboratoryResultController::class)->only(['index', 'show']);
+
     Route::resource('online-pharmacy-purchases', OnlinePharmacyPurchaseController::class)->only(['index', 'show']);
 });
 

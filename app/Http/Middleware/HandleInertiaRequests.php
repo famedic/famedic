@@ -112,6 +112,18 @@ class HandleInertiaRequests extends Middleware
                 'icon' => 'ShoppingBagIcon',
                 'current' => Route::currentRouteName() === 'laboratory-purchases.index' || Route::currentRouteName() === 'laboratory-purchases.show' || Route::currentRouteName() === 'online-pharmacy-purchases.index' || Route::currentRouteName() === 'online-pharmacy-purchases.show',
             ],
+            /*[
+                'label' => 'Mis cotizaciones',
+                'url' => route('laboratory-quotes.index'),
+                'icon' => 'DocumentCheckIcon',
+                'current' => Route::currentRouteName() === 'laboratory-quotes.index' || Route::currentRouteName() === 'laboratory-quotes.show' || Route::currentRouteName() === 'online-pharmacy-purchases.index' || Route::currentRouteName() === 'online-pharmacy-purchases.show',
+            ],*/
+            [
+                'label' => 'Mis resultados',
+                'url' => route('laboratory-results.index'),
+                'icon' => 'BeakerIcon',
+                'current' => Route::currentRouteName() === 'laboratory-results.index' || Route::currentRouteName() === 'laboratory-results.show' || Route::currentRouteName() === 'online-pharmacy-purchases.index' || Route::currentRouteName() === 'online-pharmacy-purchases.show',
+            ],
             ...($family ? [
                 [
                     'label' => 'Mi familia',

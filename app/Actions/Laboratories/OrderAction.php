@@ -124,9 +124,15 @@ class OrderAction
                     $laboratoryPurchase->id
                 );
             }
-
+            // Actualizar la compra con los datos de GDA
             $laboratoryPurchase->update([
                 'gda_order_id' => $gdaQuotation['id'],
+                'gda_acuse' => $gdaQuotation['gda_acuse'] ?? null,
+                'gda_response' => $gdaQuotation['gda_response'] ?? null,
+                'gda_code_http' => $gdaQuotation['gda_code_http'] ?? null,
+                'gda_mensaje' => $gdaQuotation['gda_mensaje'] ?? null,
+                'gda_description' => $gdaQuotation['gda_description'] ?? null,
+                'pdf_base64' => $gdaQuotation['pdf_base64'] ?? null,
             ]);
 
             $this->clearCart($customer);

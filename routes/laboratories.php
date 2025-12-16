@@ -9,6 +9,9 @@ use App\Http\Controllers\LaboratoryCheckoutController;
 use App\Http\Controllers\LaboratoryPurchaseController;
 use App\Http\Controllers\LaboratoryShoppingCartController;
 use App\Http\Controllers\LaboratoryStoreController;
+use App\Http\Controllers\LaboratoryQuoteController;
+use App\Http\Controllers\LaboratoryResultController;
+
 use Illuminate\Support\Facades\Route;
 
 // Public browsing routes
@@ -56,4 +59,41 @@ Route::middleware([
 
     // Invoice requests
     Route::post('/laboratory-purchases/{laboratory_purchase}/invoice-request', InvoiceRequestController::class)->name('laboratory-purchases.invoice-request');
+
+    // Request for quotations
+    Route::post('/{laboratory_brand}/quote', [LaboratoryQuoteController::class, 'store'])
+        ->name('api.laboratory.quote.store');
+
+    // Route get quote success
+    Route::get('/laboratory/quote/{quote}', [LaboratoryQuoteController::class, 'success'])
+        ->name('laboratory.quote.show');
+    /*
+    // Laboratory Results    
+    Route::get('/mis-resultados', [LaboratoryResultController::class, 'index'])
+        ->name('patient.results');
+
+    // Marcar como descargado (llamado desde el frontend)
+    Route::post('/api/lab-results/{resultId}/mark-downloaded', [LaboratoryResultController::class, 'markAsDownloaded'])
+        ->name('patient.results.mark-downloaded');
+    */
+
+
+    //Route::get('/laboratory-results', [LaboratoryResultController::class, 'index'])->name('laboratory-results.index');
+    
+    //Route::get('/laboratory-results/{type}/{id}/download', [LaboratoryResultController::class, 'download'])->name('laboratory-results.download');
+    //Route::get('/laboratory-results/{type}/{id}/view', [LaboratoryResultController::class, 'view'])->name('laboratory-results.view');
+
+    
+    Route::post('/laboratory-results/notification/{notification}/mark-read', [LaboratoryResultController::class, 'markAsRead']);
+
+    Route::prefix('laboratory-results')->group(function () {
+    Route::get('/', [LaboratoryResultController::class, 'index'])->name('laboratory-results.index');
+    Route::post('/notification/{notification}/mark-read', [LaboratoryResultController::class, 'markAsRead'])->name('laboratory-results.mark-read');
+    Route::post('/notification/{notification}/refresh', [LaboratoryResultController::class, 'refreshResults'])->name('laboratory-results.refresh');
+    Route::get('/{type}/{id}/view', [LaboratoryResultController::class, 'view'])->name('laboratory-results.view');
+    Route::get('/{type}/{id}/download', [LaboratoryResultController::class, 'download'])->name('laboratory-results.download');
+
+    Route::get('/debug/{notificationId}', [LaboratoryResultController::class, 'debugNotification'])->name('laboratory-results.debug');
 });
+});
+

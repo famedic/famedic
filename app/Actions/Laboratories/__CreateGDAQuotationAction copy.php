@@ -8,7 +8,7 @@ use App\Models\Customer;
 use Exception;
 use Illuminate\Support\Facades\Http;
 
-class CreateGDAQuotationAction
+class BackupCreateGDAQuotationAction
 {
     private CreatePatientAction $createPatientAction;
     private CreatePractitionerAction $createPractitionerAction;
@@ -28,7 +28,7 @@ class CreateGDAQuotationAction
         }
 
         $url = config('services.gda.url') . '/service-request-cotizacion';
-        
+        dd($url);
         $payload = [
             "header" => [
                 "lineanegocio" => "Famedic Web",

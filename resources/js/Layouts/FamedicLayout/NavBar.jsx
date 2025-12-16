@@ -9,6 +9,9 @@ import {
 	NavbarSpacer,
 } from "@/Components/Catalyst/navbar";
 import { ShoppingCartIcon } from "@heroicons/react/20/solid";
+import { BeakerIcon } from "@heroicons/react/20/solid";
+import { DocumentCheckIcon } from "@heroicons/react/20/solid";
+
 import ApplicationLogo from "@/Components/ApplicationLogo";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import UserNavigationDropdown from "@/Components/UserNavigationDropdown";
