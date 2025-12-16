@@ -289,22 +289,38 @@ return new class extends Migration
 
     public function up(): void
     {
-        // 1. Add the description and feature_list columns
-        Schema::table('laboratory_tests', function (Blueprint $table) {
-            // 1. Add the description column only if it doesn't exist
-            if (!Schema::hasColumn('laboratory_tests', 'description')) {
-                Schema::table('laboratory_tests', function (Blueprint $table) {
-                    $table->text('description')->nullable()->after('name');
-                });
-            }
+        // 0. PRIMERO: Verificar/Crear la categoría con ID 12
+        $categoryId = 12;
+        $categoryExists = DB::table('laboratory_test_categories')
+            ->where('id', $categoryId)
+            ->exists();
+        
+        if (!$categoryExists) {
+            // Crear la categoría con ID 12
+            DB::table('laboratory_test_categories')->insert([
+                'id' => $categoryId,
+                'name' => 'Checkups',
+                'slug' => 'checkups', // Añade si tu tabla tiene slug
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            Log::info("Created laboratory_test_category with ID: {$categoryId}");
+        }
 
-            // 2. Add the feature_list column only if it doesn't exist
-            if (!Schema::hasColumn('laboratory_tests', 'feature_list')) {
-                Schema::table('laboratory_tests', function (Blueprint $table) {
-                    $table->json('feature_list')->nullable()->after('description');
-                });
+        // 1. CORREGIDO: Solo un Schema::table, no anidado
+        Schema::table('laboratory_tests', function (Blueprint $table) {
+            // Solo agregar description si no existe
+            if (!Schema::hasColumn('laboratory_tests', 'description')) {
+                $table->text('description')->nullable()->after('name');
             }
-            // Make indications nullable if it exists
+            
+            // Solo agregar feature_list si no existe
+            if (!Schema::hasColumn('laboratory_tests', 'feature_list')) {
+                $table->json('feature_list')->nullable()->after('description');
+            }
+            
+            // Hacer indications nullable si existe
+            // Nota: Para usar change() necesitas doctrine/dbal
             if (Schema::hasColumn('laboratory_tests', 'indications')) {
                 $table->text('indications')->nullable()->change();
             }
@@ -323,9 +339,18 @@ return new class extends Migration
         // 3. Assign featureLists to feature_list column for given ids
         foreach ($this->featureLists as $featureList) {
             foreach ($featureList['ids'] as $id) {
-                DB::table('laboratory_tests')
+                // Verificar que el registro exista antes de actualizar
+                $exists = DB::table('laboratory_tests')
                     ->where('id', $id)
-                    ->update(['feature_list' => json_encode($featureList['features'])]);
+                    ->exists();
+                
+                if ($exists) {
+                    DB::table('laboratory_tests')
+                        ->where('id', $id)
+                        ->update(['feature_list' => json_encode($featureList['features'])]);
+                } else {
+                    Log::warning("Laboratory test with ID {$id} not found for feature_list update");
+                }
             }
         }
 
@@ -333,29 +358,86 @@ return new class extends Migration
         if (app()->environment() !== 'testing') {
             foreach ($this->newPackages as $pkg) {
                 foreach ($pkg['brand_codes'] as $brand => $gda_id) {
-                    DB::table('laboratory_tests')->insert([
-                        'name' => $pkg['name'],
-                        'feature_list' => json_encode($pkg['feature_list']),
-                        'public_price_cents' => $pkg['public_price_cents'],
-                        'famedic_price_cents' => $pkg['famedic_price_cents'],
-                        'laboratory_test_category_id' => 12,
-                        'brand' => $brand,
-                        'gda_id' => $gda_id,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    // Verificar si ya existe esta combinación
+                    $exists = DB::table('laboratory_tests')
+                        ->where('name', $pkg['name'])
+                        ->where('brand', $brand)
+                        ->where('gda_id', $gda_id)
+                        ->exists();
+                    
+                    if (!$exists) {
+                        // Verificar nuevamente que la categoría existe
+                        $categoryCheck = DB::table('laboratory_test_categories')
+                            ->where('id', $categoryId)
+                            ->exists();
+                        
+                        if (!$categoryCheck) {
+                            Log::error("Category ID {$categoryId} does not exist. Cannot insert record for: {$pkg['name']}");
+                            continue; // Saltar este registro
+                        }
+                        
+                        try {
+                            DB::table('laboratory_tests')->insert([
+                                'name' => $pkg['name'],
+                                'feature_list' => json_encode($pkg['feature_list']),
+                                'public_price_cents' => $pkg['public_price_cents'],
+                                'famedic_price_cents' => $pkg['famedic_price_cents'],
+                                'laboratory_test_category_id' => $categoryId,
+                                'brand' => $brand,
+                                'gda_id' => $gda_id,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                            Log::info("Inserted new package: {$pkg['name']} for brand: {$brand}");
+                        } catch (\Exception $e) {
+                            Log::error("Failed to insert package {$pkg['name']} for brand {$brand}: " . $e->getMessage());
+                        }
+                    } else {
+                        Log::info("Package {$pkg['name']} for brand {$brand} already exists, skipping.");
+                    }
                 }
             }
         }
 
-        LaboratoryTest::whereName('Chequeo General Plus')->update([
+        // 5. Actualizar nombres de chequeos existentes
+        LaboratoryTest::where('name', 'Chequeo General Plus')->update([
             'indications' => null,
             'name' => "CHECKUP GENERAL PLUS"
         ]);
 
-        LaboratoryTest::whereName('Chequeo General Esencial')->update([
+        LaboratoryTest::where('name', 'Chequeo General Esencial')->update([
             'indications' => null,
             'name' => "CHECKUP GENERAL ESENCIAL"
         ]);
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        // Para el rollback, eliminar los nuevos registros insertados
+        foreach ($this->newPackages as $pkg) {
+            foreach ($pkg['brand_codes'] as $brand => $gda_id) {
+                DB::table('laboratory_tests')
+                    ->where('name', $pkg['name'])
+                    ->where('brand', $brand)
+                    ->where('gda_id', $gda_id)
+                    ->delete();
+            }
+        }
+        
+        // Revertir los nombres actualizados
+        LaboratoryTest::where('name', 'CHECKUP GENERAL PLUS')->update([
+            'name' => 'Chequeo General Plus'
+        ]);
+        
+        LaboratoryTest::where('name', 'CHECKUP GENERAL ESENCIAL')->update([
+            'name' => 'Chequeo General Esencial'
+        ]);
+        
+        // NOTA: No removemos las columnas description y feature_list
+        // para evitar pérdida de datos. Si necesitas removerlas,
+        // crea una migración separada.
     }
 };
