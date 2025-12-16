@@ -289,6 +289,15 @@ return new class extends Migration
 
     public function up(): void
     {
+        // 0. Asegurar que la tabla tiene columna slug
+        if (Schema::hasTable('laboratory_test_categories') && 
+            !Schema::hasColumn('laboratory_test_categories', 'slug')) {
+            Schema::table('laboratory_test_categories', function (Blueprint $table) {
+                $table->string('slug')->nullable()->after('name');
+            });
+            Log::info("Added slug column to laboratory_test_categories");
+        }
+
         // 0. PRIMERO: Verificar/Crear la categoría con ID 12
         $categoryId = 12;
         $categoryExists = DB::table('laboratory_test_categories')
