@@ -119,7 +119,41 @@ function LaboratoryPurchasesList({ laboratoryPurchases }) {
 											)}
 									</div>
 
-									<div className="flex flex-col gap-2">
+									{/* Accesos directos a factura y resultados */}
+									<div className="flex flex-wrap gap-2">
+										{/* Botón directo a factura */}
+										{laboratoryPurchase.invoice && (
+											<a
+												href={route("invoice", {
+													invoice: laboratoryPurchase.invoice,
+												})}
+												target="_blank"
+												rel="noopener noreferrer"
+												onClick={(e) => e.stopPropagation()}
+												className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-2 py-1 text-sm font-medium text-blue-800 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
+											>
+												<DocumentTextIcon className="size-4" />
+												Ver factura
+											</a>
+										)}
+
+										{/* Botón directo a resultados */}
+										{laboratoryPurchase.results && (
+											<a
+												href={route("laboratory-purchases.results", {
+													laboratory_purchase: laboratoryPurchase,
+												})}
+												target="_blank"
+												rel="noopener noreferrer"
+												onClick={(e) => e.stopPropagation()}
+												className="inline-flex items-center gap-1 rounded-md bg-green-100 px-2 py-1 text-sm font-medium text-green-800 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800"
+											>
+												<DocumentTextIcon className="size-4" />
+												Ver resultados
+											</a>
+										)}
+
+										{/* Badges de estado (manteniendo los originales) */}
 										<Badge color="slate">
 											{laboratoryPurchase.invoice ? (
 												<>

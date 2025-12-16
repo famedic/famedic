@@ -44,13 +44,11 @@ export default function Footer({ className, links }) {
 							<Strong className="!font-poppins">Famedic</Strong>
 						</Text>
 					</NavbarItem>
-					
-					<Text>
-						<span className="font-poppins">
+					<div className="space-y-2">
+						<span className="font-poppins block text-white">
 							Salud y tecnología a bajo costo.
 						</span>
-						<br />
-						<span className="font-poppins mt-1 block">
+						<span className="font-poppins block text-white">
 							Servicios con cobertura en todo México.
 						</span>
 						<div className="mt-2 flex justify-start items-center gap-4">
@@ -82,7 +80,7 @@ export default function Footer({ className, links }) {
 								</g>
 							</svg>
 						</div>
-					</Text>
+					</div>					
 				</div>
 				<div className="mt-12 grid gap-12 sm:grid-cols-2 lg:col-span-2 xl:mt-0">
 					{links}
