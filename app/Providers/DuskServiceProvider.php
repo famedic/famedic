@@ -11,10 +11,19 @@ use Laravel\Dusk\OperatingSystem;
 
 class DuskServiceProvider extends ServiceProvider
 {
-    public function register(): void {}
+    public function register(): void {
+        // Solo registrar en desarrollo/testing
+        if ($this->app->environment('local', 'testing')) {
+            $this->registerDuskMacros();
+        }
+    }
 
     public function boot(): void
     {
+        // Solo boot en desarrollo/testing
+        if ($this->app->environment('local', 'testing')) {
+            $this->bootDuskMacros();
+        }
         Browser::macro('inputDate', function ($selector, $date) {
             $date = $date instanceof CarbonInterface ? $date : Carbon::parse($date);
             $this->resolver->findOrFail($selector)
@@ -56,5 +65,18 @@ class DuskServiceProvider extends ServiceProvider
 
             return $this;
         });
+    }
+
+    protected function registerDuskMacros(): void
+    {
+        // Requerir clase solo si existe
+        if (class_exists(\Laravel\Dusk\Browser::class)) {
+            require_once base_path('app/Providers/DuskMacros.php');
+        }
+    }
+
+    protected function bootDuskMacros(): void
+    {
+        // Nada aquí, todo está en registerDuskMacros
     }
 }
