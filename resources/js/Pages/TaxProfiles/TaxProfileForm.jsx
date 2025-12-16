@@ -1498,7 +1498,7 @@ export default function TaxProfileForm({ isOpen }) {
 									)}
 								</div>
 							</div>
-							<div>
+							<div className="hidden">
 								<SimpleLabel className="text-gray-500">
 									Uso del CFDI
 								</SimpleLabel>
