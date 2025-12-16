@@ -291,8 +291,19 @@ return new class extends Migration
     {
         // 1. Add the description and feature_list columns
         Schema::table('laboratory_tests', function (Blueprint $table) {
-            $table->text('description')->nullable()->after('name');
-            $table->json('feature_list')->nullable()->after('description');
+            // 1. Add the description column only if it doesn't exist
+            if (!Schema::hasColumn('laboratory_tests', 'description')) {
+                Schema::table('laboratory_tests', function (Blueprint $table) {
+                    $table->text('description')->nullable()->after('name');
+                });
+            }
+
+            // 2. Add the feature_list column only if it doesn't exist
+            if (!Schema::hasColumn('laboratory_tests', 'feature_list')) {
+                Schema::table('laboratory_tests', function (Blueprint $table) {
+                    $table->json('feature_list')->nullable()->after('description');
+                });
+            }
             // Make indications nullable if it exists
             if (Schema::hasColumn('laboratory_tests', 'indications')) {
                 $table->text('indications')->nullable()->change();
