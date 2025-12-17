@@ -97,7 +97,7 @@ export default function AuthLayout({
 										
 										<div className="mt-6 pt-6 border-t border-blue-400/30 sm:mt-8">
 											<p className="text-xs opacity-90 sm:text-sm">
-												<strong>Asistencia 24/7:</strong>{" "}
+												<strong>Asistencia al:</strong>{" "}
 												<a 
 													href="tel:8128601893" 
 													className="hover:underline"
