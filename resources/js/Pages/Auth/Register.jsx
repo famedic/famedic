@@ -8,7 +8,7 @@ import { Heading } from "@/Components/Catalyst/heading";
 import { Anchor, Text, TextLink } from "@/Components/Catalyst/text";
 import OdessaLinkingMessage from "@/Components/Auth/OdessaLinkingMessage";
 import { ArrowPathIcon } from "@heroicons/react/16/solid";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState } from "react";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/20/solid";
 
 export default function Register({
@@ -29,311 +29,10 @@ export default function Register({
         password: "",
         password_confirmation: "",
         referrer_id: inviter?.id || null,
-        g_recaptcha_response: "",
     });
 
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [recaptchaLoaded, setRecaptchaLoaded] = useState(false);
-    const [recaptchaError, setRecaptchaError] = useState(false);
-    const recaptchaRef = useRef(null);
-    const recaptchaWidgetId = useRef(null);
-    const recaptchaInitialized = useRef(false);
-    const cleanupRef = useRef(null);
-    const retryTimeoutRef = useRef(null);
-    const retryCountRef = useRef(0);
-    const maxRetries = 3;
-
-    // Clave de reCAPTCHA
-    const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY ||
-        '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI';
-
-    // DEBUG: Log cuando cambia el token
-    useEffect(() => {
-        console.log('🔍 reCAPTCHA token actualizado:', {
-            token: data.g_recaptcha_response,
-            length: data.g_recaptcha_response?.length || 0,
-            preview: data.g_recaptcha_response ? data.g_recaptcha_response.substring(0, 50) + '...' : 'empty'
-        });
-    }, [data.g_recaptcha_response]);
-
-    // Función para limpiar reCAPTCHA completamente
-    const cleanupRecaptcha = useCallback(() => {
-        console.log('🧹 Limpiando reCAPTCHA...');
-        
-        // Limpiar timeout de reintento
-        if (retryTimeoutRef.current) {
-            clearTimeout(retryTimeoutRef.current);
-            retryTimeoutRef.current = null;
-        }
-
-        // Resetear widget si existe
-        if (recaptchaWidgetId.current !== null && window.grecaptcha && window.grecaptcha.reset) {
-            try {
-                console.log('🔄 Reseteando widget:', recaptchaWidgetId.current);
-                window.grecaptcha.reset(recaptchaWidgetId.current);
-            } catch (e) {
-                console.log('⚠️ Error reseteando reCAPTCHA:', e);
-            }
-        }
-
-        // Limpiar contenedor
-        if (recaptchaRef.current) {
-            recaptchaRef.current.innerHTML = '';
-            console.log('✅ Contenedor limpiado');
-        }
-
-        // Resetear estados
-        recaptchaWidgetId.current = null;
-        recaptchaInitialized.current = false;
-        setRecaptchaLoaded(false);
-        setRecaptchaError(false);
-        setData('g_recaptcha_response', '');
-        retryCountRef.current = 0;
-    }, [setData]);
-
-    // Cargar reCAPTCHA
-    useEffect(() => {
-        console.log('🔄 Iniciando carga de reCAPTCHA...');
-
-        // Limpiar cualquier reCAPTCHA anterior
-        cleanupRecaptcha();
-
-        const loadRecaptcha = () => {
-            // Si ya está cargado, renderizar
-            if (window.grecaptcha && window.grecaptcha.render) {
-                console.log('✅ reCAPTCHA ya está en window');
-                initializeRecaptcha();
-                return;
-            }
-
-            console.log('📥 Cargando script de reCAPTCHA...');
-
-            // Verificar si ya existe el script
-            const existingScript = document.querySelector('script[src*="google.com/recaptcha/api"]');
-            if (existingScript) {
-                console.log('📜 Script ya existe en el DOM, removiendo...');
-                existingScript.remove();
-            }
-
-            // Limpiar cualquier callback global existente
-            if (window.onRecaptchaLoaded) {
-                delete window.onRecaptchaLoaded;
-            }
-
-            // Crear y cargar script
-            const script = document.createElement('script');
-            script.src = `https://www.google.com/recaptcha/api.js?render=explicit`;
-            script.async = true;
-            script.defer = true;
-            
-            // Manejar carga exitosa
-            script.onload = () => {
-                console.log('✅ Script de reCAPTCHA cargado');
-                // Pequeño delay para asegurar que grecaptcha esté disponible
-                setTimeout(() => {
-                    if (window.grecaptcha && window.grecaptcha.render) {
-                        initializeRecaptcha();
-                    } else {
-                        console.error('❌ grecaptcha no disponible después de cargar script');
-                        setRecaptchaError(true);
-                    }
-                }, 300);
-            };
-
-            script.onerror = (error) => {
-                console.error('❌ Error cargando script de reCAPTCHA:', error);
-                setRecaptchaError(true);
-                // Reintentar después de un segundo si no hemos excedido los intentos
-                if (retryCountRef.current < maxRetries) {
-                    retryCountRef.current++;
-                    console.log(`🔄 Reintentando carga de script (intento ${retryCountRef.current}/${maxRetries})...`);
-                    retryTimeoutRef.current = setTimeout(() => {
-                        if (!recaptchaInitialized.current) {
-                            loadRecaptcha();
-                        }
-                    }, 1000);
-                }
-            };
-
-            document.head.appendChild(script);
-        };
-
-        // Pequeño delay antes de cargar para evitar conflictos con navegación SPA
-        const timer = setTimeout(loadRecaptcha, 100);
-
-        return () => {
-            clearTimeout(timer);
-            cleanupRecaptcha();
-        };
-    }, [cleanupRecaptcha]);
-
-    // Inicializar reCAPTCHA
-    const initializeRecaptcha = useCallback(() => {
-        console.log('🎯 Inicializando reCAPTCHA...');
-        
-        if (recaptchaInitialized.current) {
-            console.log('⚠️ reCAPTCHA ya fue inicializado');
-            return;
-        }
-
-        if (!window.grecaptcha || !window.grecaptcha.render) {
-            console.error('❌ grecaptcha no disponible para inicializar');
-            setRecaptchaError(true);
-            
-            // Reintentar después de un segundo si no hemos excedido los intentos
-            if (retryCountRef.current < maxRetries) {
-                retryCountRef.current++;
-                console.log(`🔄 Reintentando inicialización (intento ${retryCountRef.current}/${maxRetries})...`);
-                retryTimeoutRef.current = setTimeout(() => {
-                    if (!recaptchaInitialized.current) {
-                        initializeRecaptcha();
-                    }
-                }, 1000);
-            }
-            return;
-        }
-
-        if (!recaptchaRef.current) {
-            console.error('❌ Elemento de referencia no disponible');
-            setRecaptchaError(true);
-            return;
-        }
-
-        try {
-            // Marcar como inicializado
-            recaptchaInitialized.current = true;
-            
-            // Limpiar el contenedor
-            if (recaptchaRef.current) {
-                recaptchaRef.current.innerHTML = '';
-                console.log('🧹 Contenedor limpiado para inicialización');
-            }
-
-            // Crear un nuevo elemento div para el widget
-            const widgetContainer = document.createElement('div');
-            widgetContainer.id = 'recaptcha-widget-' + Date.now();
-            recaptchaRef.current.appendChild(widgetContainer);
-
-            console.log('🖌️ Renderizando widget de reCAPTCHA en:', widgetContainer.id);
-            
-            // Pequeño delay para asegurar que el DOM esté listo
-            setTimeout(() => {
-                try {
-                    recaptchaWidgetId.current = window.grecaptcha.render(widgetContainer.id, {
-                        sitekey: recaptchaSiteKey,
-                        callback: onRecaptchaVerify,
-                        'expired-callback': onRecaptchaExpired,
-                        'error-callback': onRecaptchaError,
-                        size: 'normal',
-                        theme: 'light',
-                        tabindex: 0,
-                    });
-                    
-                    console.log('✅ Widget renderizado con ID:', recaptchaWidgetId.current);
-                    setRecaptchaLoaded(true);
-                    setRecaptchaError(false);
-                    
-                    // Verificar si ya hay un token después de un breve momento
-                    setTimeout(() => {
-                        if (window.grecaptcha && window.grecaptcha.getResponse && recaptchaWidgetId.current !== null) {
-                            try {
-                                const existingToken = window.grecaptcha.getResponse(recaptchaWidgetId.current);
-                                if (existingToken) {
-                                    console.log('🔍 Token existente encontrado:', existingToken.substring(0, 50) + '...');
-                                    setData('g_recaptcha_response', existingToken);
-                                }
-                            } catch (e) {
-                                console.log('⚠️ Error obteniendo token existente:', e);
-                            }
-                        }
-                    }, 300);
-                    
-                } catch (error) {
-                    console.error('💥 Error renderizando reCAPTCHA:', error);
-                    recaptchaInitialized.current = false;
-                    setRecaptchaError(true);
-                    
-                    // Reintentar después de un segundo si no hemos excedido los intentos
-                    if (retryCountRef.current < maxRetries) {
-                        retryCountRef.current++;
-                        console.log(`🔄 Reintentando renderizado (intento ${retryCountRef.current}/${maxRetries})...`);
-                        retryTimeoutRef.current = setTimeout(() => {
-                            if (!recaptchaInitialized.current) {
-                                initializeRecaptcha();
-                            }
-                        }, 1000);
-                    }
-                }
-            }, 50);
-            
-        } catch (error) {
-            console.error('💥 Error inicializando reCAPTCHA:', error);
-            recaptchaInitialized.current = false;
-            setRecaptchaError(true);
-            
-            // Reintentar después de un segundo si no hemos excedido los intentos
-            if (retryCountRef.current < maxRetries) {
-                retryCountRef.current++;
-                console.log(`🔄 Reintentando inicialización (intento ${retryCountRef.current}/${maxRetries})...`);
-                retryTimeoutRef.current = setTimeout(() => {
-                    if (!recaptchaInitialized.current) {
-                        initializeRecaptcha();
-                    }
-                }, 1000);
-            }
-        }
-    }, [recaptchaSiteKey, setData]);
-
-    // Función para manejar verificación de reCAPTCHA
-    const onRecaptchaVerify = useCallback((token) => {
-        console.log('✅ reCAPTCHA verificado! Token recibido:', {
-            token: token,
-            length: token.length,
-            preview: token.substring(0, 50) + '...'
-        });
-        setData('g_recaptcha_response', token);
-        setRecaptchaError(false);
-    }, [setData]);
-
-    const onRecaptchaExpired = useCallback(() => {
-        console.log('⏰ reCAPTCHA expirado');
-        setData('g_recaptcha_response', '');
-        setRecaptchaError(true);
-    }, [setData]);
-
-    const onRecaptchaError = useCallback(() => {
-        console.error('❌ Error en reCAPTCHA');
-        setData('g_recaptcha_response', '');
-        setRecaptchaError(true);
-    }, [setData]);
-
-    // Efecto para manejar visibilidad de la página
-    useEffect(() => {
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                // Si la página se vuelve visible y reCAPTCHA no está cargado, reintentar
-                if (!recaptchaLoaded && !recaptchaInitialized.current) {
-                    console.log('👀 Página visible, verificando reCAPTCHA...');
-                    setTimeout(() => {
-                        if (!recaptchaInitialized.current) {
-                            console.log('🔄 Reintentando carga de reCAPTCHA después de visibilidad...');
-                            cleanupRecaptcha();
-                            retryTimeoutRef.current = setTimeout(() => {
-                                initializeRecaptcha();
-                            }, 300);
-                        }
-                    }, 500);
-                }
-            }
-        };
-
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-
-        return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-        };
-    }, [recaptchaLoaded, cleanupRecaptcha, initializeRecaptcha]);
 
     // Función para formatear número de teléfono mexicano
     const formatMexicanPhone = (value) => {
@@ -363,41 +62,9 @@ export default function Register({
             ...data,
             password: '***',
             password_confirmation: '***',
-            g_recaptcha_response_preview: data.g_recaptcha_response ?
-                data.g_recaptcha_response.substring(0, 50) + '...' :
-                'empty',
-            g_recaptcha_response_length: data.g_recaptcha_response?.length || 0
         });
 
-        // Validar reCAPTCHA
-        if (!data.g_recaptcha_response) {
-            console.error('❌ Error: Token de reCAPTCHA vacío');
-            
-            // Intentar obtener el token directamente
-            if (window.grecaptcha && recaptchaWidgetId.current !== null) {
-                try {
-                    const directToken = window.grecaptcha.getResponse(recaptchaWidgetId.current);
-                    if (directToken) {
-                        console.log('🔍 Token obtenido directamente al validar:', directToken.substring(0, 50) + '...');
-                        setData('g_recaptcha_response', directToken);
-                        
-                        // Reintentar envío después de actualizar el token
-                        setTimeout(() => {
-                            submit(e);
-                        }, 100);
-                        return;
-                    }
-                } catch (e) {
-                    console.log('⚠️ Error obteniendo token directamente en validación:', e);
-                }
-            }
-            
-            alert('Por favor, verifica que no eres un robot completando el reCAPTCHA');
-            setRecaptchaError(true);
-            return;
-        }
-
-        console.log('✅ Token de reCAPTCHA presente, procediendo con envío...');
+        console.log('✅ Procediendo con envío del formulario...');
 
         if (!processing) {
             if (odessaToken) {
@@ -413,13 +80,6 @@ export default function Register({
                         },
                         onError: (errors) => {
                             console.error('❌ Error en registro Odessa:', errors);
-                            if (errors.g_recaptcha_response) {
-                                console.error('❌ Error específico de reCAPTCHA:', errors.g_recaptcha_response);
-                                cleanupRecaptcha();
-                                setTimeout(() => {
-                                    initializeRecaptcha();
-                                }, 500);
-                            }
                         }
                     },
                 );
@@ -432,17 +92,9 @@ export default function Register({
                     onFinish: () => {
                         console.log('✅ Proceso de registro completado');
                         reset("password", "password_confirmation");
-                        cleanupRecaptcha();
                     },
                     onError: (errors) => {
                         console.error('❌ Error en registro:', errors);
-                        if (errors.g_recaptcha_response) {
-                            console.error('❌ Error de reCAPTCHA en respuesta:', errors.g_recaptcha_response);
-                            cleanupRecaptcha();
-                            setTimeout(() => {
-                                initializeRecaptcha();
-                            }, 500);
-                        }
                     }
                 });
             }
@@ -462,28 +114,6 @@ export default function Register({
         const maxDate = new Date(today.getFullYear() - 120, today.getMonth(), today.getDate());
         return maxDate.toISOString().split('T')[0];
     };
-
-    // Función para forzar recarga de reCAPTCHA
-    const reloadRecaptcha = () => {
-        console.log('🔁 Forzando recarga de reCAPTCHA...');
-        cleanupRecaptcha();
-        retryCountRef.current = 0;
-        setTimeout(() => {
-            initializeRecaptcha();
-        }, 300);
-    };
-
-    // Efecto para manejar errores de reCAPTCHA del servidor
-    useEffect(() => {
-        if (errors.g_recaptcha_response) {
-            console.error('⚠️ Error de reCAPTCHA detectado en errores:', errors.g_recaptcha_response);
-            setRecaptchaError(true);
-            cleanupRecaptcha();
-            setTimeout(() => {
-                initializeRecaptcha();
-            }, 500);
-        }
-    }, [errors.g_recaptcha_response, cleanupRecaptcha, initializeRecaptcha]);
 
     return (
         <>
@@ -530,28 +160,6 @@ export default function Register({
                 )}
 
                 <form className="space-y-6" onSubmit={submit}>
-                    {/* DEBUG: Mostrar token actual */}
-                    {process.env.NODE_ENV === 'development' && (
-                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-800 dark:bg-amber-900/20">
-                            <div className="font-semibold">🔍 DEBUG reCAPTCHA:</div>
-                            <div>Estado: {recaptchaLoaded ? '✅ Cargado' : '⏳ Cargando...'}</div>
-                            <div>Token: {data.g_recaptcha_response ? '✅ Presente' : '❌ Ausente'}</div>
-                            <div>Longitud: {data.g_recaptcha_response?.length || 0} caracteres</div>
-                            <div>Site Key: {recaptchaSiteKey.substring(0, 10)}...</div>
-                            <div>Error: {recaptchaError ? '❌ Sí' : '✅ No'}</div>
-                            {data.g_recaptcha_response && (
-                                <div className="mt-1 break-all">Preview: {data.g_recaptcha_response.substring(0, 30)}...</div>
-                            )}
-                            <button 
-                                type="button" 
-                                onClick={reloadRecaptcha}
-                                className="mt-2 text-blue-600 hover:text-blue-800"
-                            >
-                                Recargar reCAPTCHA
-                            </button>
-                        </div>
-                    )}
-
                     {/* Nombre completo - Una línea */}
                     <Field>
                         <Label>
@@ -723,8 +331,8 @@ export default function Register({
                                 ))}
                             </Select>
                             <Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                    Seleciona una opción
-                                </Text>
+                                Seleciona una opción
+                            </Text>
                             {errors.gender && (
                                 <ErrorMessage>{errors.gender}</ErrorMessage>
                             )}
@@ -810,39 +418,6 @@ export default function Register({
                         </Field>
                     </div>
 
-                    {/* reCAPTCHA */}
-                    <Field>
-                        <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Verificación de seguridad <span className="text-red-500">*</span>
-                        </Label>
-                        <div className="mt-3">
-                            <div 
-                                ref={recaptchaRef}
-                                className="flex justify-center min-h-[78px]"
-                            />
-                            {!recaptchaLoaded && !recaptchaError && (
-                                <div className="mt-2 text-sm text-amber-600 dark:text-amber-400">
-                                    Cargando verificación de seguridad...
-                                </div>
-                            )}
-                            {recaptchaError && (
-                                <div className="mt-2 text-sm text-red-600 dark:text-red-400">
-                                    .....
-                                </div>
-                            )}
-                            <button 
-                                type="button" 
-                                onClick={reloadRecaptcha}
-                                className="mt-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400"
-                            >
-                                ¿No ves el reCAPTCHA? <br></br> Haz clic aquí para activarlo
-                            </button>
-                        </div>
-                        {errors.g_recaptcha_response && (
-                            <ErrorMessage>{errors.g_recaptcha_response}</ErrorMessage>
-                        )}
-                    </Field>
-
                     {/* Términos y condiciones */}
                     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
                         <Text className="text-sm">
@@ -872,29 +447,6 @@ export default function Register({
                         className="w-full py-3 text-base font-semibold"
                         disabled={processing}
                         type="submit"
-                        onClick={(e) => {
-                            // Debug adicional al hacer clic
-                            console.log('🖱️ Botón clickeado - Token actual:', {
-                                token: data.g_recaptcha_response,
-                                length: data.g_recaptcha_response?.length
-                            });
-                            
-                            // Intentar obtener token directamente si está vacío
-                            if (!data.g_recaptcha_response && window.grecaptcha && recaptchaWidgetId.current !== null) {
-                                try {
-                                    const directToken = window.grecaptcha.getResponse(recaptchaWidgetId.current);
-                                    console.log('🔍 Token obtenido directamente:', {
-                                        token: directToken,
-                                        length: directToken?.length
-                                    });
-                                    if (directToken) {
-                                        setData('g_recaptcha_response', directToken);
-                                    }
-                                } catch (e) {
-                                    console.log('⚠️ Error obteniendo token directamente:', e);
-                                }
-                            }
-                        }}
                     >
                         {processing ? (
                             <>
