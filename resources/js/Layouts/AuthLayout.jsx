@@ -40,7 +40,7 @@ export default function AuthLayout({
 							</Heading>
 						</Button>
 						<p className="mt-2 sm:mt-3 text-sm text-gray-600 dark:text-gray-400 sm:text-lg">
-							Salud y tecnología a bajo costo • Cobertura nacional
+							Salud y tecnología a bajo costo • Cobertura nacional en México
 						</p>
 					</div>
 
