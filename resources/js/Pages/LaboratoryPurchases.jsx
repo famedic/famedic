@@ -176,6 +176,7 @@ const fixFormattedTotal = (totalValue, formattedTotal) => {
 };
 
 // Nuevo componente para Cotizaciones
+// Nuevo componente para Cotizaciones
 function LaboratoryQuotesList({ laboratoryQuotes }) {
 	return (
 		<div className="space-y-4 sm:space-y-6">
@@ -256,72 +257,9 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 										</div>
 									</div>
 
-									{/* Accesos directos a factura y resultados */}
-									<div className="flex flex-wrap gap-2">
-										{/* Botón directo a factura */}
-										{laboratoryPurchase.invoice && (
-											<a
-												href={route("invoice", {
-													invoice: laboratoryPurchase.invoice,
-												})}
-												target="_blank"
-												rel="noopener noreferrer"
-												onClick={(e) => e.stopPropagation()}
-												className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-2 py-1 text-sm font-medium text-blue-800 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
-											>
-												<DocumentTextIcon className="size-4" />
-												Ver factura
-											</a>
-										)}
-
-										{/* Botón directo a resultados */}
-										{laboratoryPurchase.results && (
-											<a
-												href={route("laboratory-purchases.results", {
-													laboratory_purchase: laboratoryPurchase,
-												})}
-												target="_blank"
-												rel="noopener noreferrer"
-												onClick={(e) => e.stopPropagation()}
-												className="inline-flex items-center gap-1 rounded-md bg-green-100 px-2 py-1 text-sm font-medium text-green-800 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800"
-											>
-												<DocumentTextIcon className="size-4" />
-												Ver resultados
-											</a>
-										)}
-
-										{/* Badges de estado (manteniendo los originales) */}
-										<Badge color="slate">
-											{laboratoryPurchase.invoice ? (
-												<>
-													<DocumentTextIcon className="size-4" />
-													Factura generada
-												</>
-											) : laboratoryPurchase.invoice_request ? (
-												<>
-													<ClockIcon className="size-4" />
-													Factura solicitada
-												</>
-											) : (
-												<>
-													<DocumentTextIcon className="size-4" />
-													Factura no solicitada
-												</>
-											)}
-										</Badge>
-
-										<Badge color="slate">
-											{laboratoryPurchase.results ? (
-												<>
-													<DocumentTextIcon className="size-4" />
-													Resultados cargados
-												</>
-											) : (
-												<>
-													<ClockIcon className="size-4" />
-													Resultados pendientes
-												</>
-											)}
+									{/* Información secundaria - Derecha */}
+									<div className="flex flex-col items-center gap-3 sm:items-end sm:gap-2">
+										<div className="flex flex-col items-center gap-2 sm:flex-row sm:items-end">
 											<img
 												src={`/images/gda/GDA-${quote.laboratory_brand?.toUpperCase() || 'GDA'}.png`}
 												className="order-1 sm:order-2 w-24 sm:w-36 rounded-lg object-contain flex-shrink-0"
