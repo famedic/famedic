@@ -75,7 +75,7 @@ class RegisterRequest extends FormRequest
             'birth_date' => 'fecha de nacimiento',
             'gender' => 'sexo',
             'password' => 'contraseña',
-            'g_recaptcha_response' => 'verificación de seguridad',
+            //'g_recaptcha_response' => 'verificación de seguridad',
         ];
     }
 }
