@@ -1288,7 +1288,7 @@ export default function TaxProfileForm({ isOpen }) {
 									)}
 							</Field>
 
-							<Field className="hidden">
+							<Field>
 								<Label>Uso del CFDI *</Label>
 								<select
 									value={data.cfdi_use}
@@ -1380,7 +1380,7 @@ export default function TaxProfileForm({ isOpen }) {
 										</p>
 									)}
 							</div>
-							<div className="bg-gray-50 p-4 rounded-lg hidden">
+							<div className="bg-gray-50 p-4 rounded-lg">
 								<SimpleLabel>Uso del CFDI</SimpleLabel>
 								<div className="text-lg">
 									{data.cfdi_use || "G03"}
@@ -1498,7 +1498,7 @@ export default function TaxProfileForm({ isOpen }) {
 									)}
 								</div>
 							</div>
-							<div className="hidden">
+							<div>
 								<SimpleLabel className="text-gray-500">
 									Uso del CFDI
 								</SimpleLabel>

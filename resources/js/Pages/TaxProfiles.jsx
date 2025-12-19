@@ -450,7 +450,7 @@ function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
 									</Badge>
 								</div>
 								
-								<div className="pt-2 hidden">
+								<div className="pt-2">
 									<p className="text-sm text-gray-600 mb-1">Uso CFDI:</p>
 									<Badge color="slate" className="w-full justify-center text-sm py-1.5">
 										{taxProfile.formatted_cfdi_use}
