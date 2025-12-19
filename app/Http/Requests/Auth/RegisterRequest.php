@@ -23,8 +23,9 @@ class RegisterRequest extends FormRequest
             'gender' => ['required', Rule::enum(Gender::class)],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'referrer_id' => 'nullable|exists:users,id',
-            'phone_country' => 'required|string|size:2', 
-            'g_recaptcha_response' => ['required', new Recaptcha], 
+            'phone_country' => 'required|string|size:2',             
+            // 'g_recaptcha_response' => ['required', new Recaptcha], // COMENTADO TEMPORALMENTE
+            'g_recaptcha_response' => 'nullable', 
         ];
     }
 
