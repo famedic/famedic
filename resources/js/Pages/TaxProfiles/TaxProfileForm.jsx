@@ -1288,7 +1288,7 @@ export default function TaxProfileForm({ isOpen }) {
 									)}
 							</Field>
 
-							<Field>
+							<Field className="hidden">
 								<Label>Uso del CFDI *</Label>
 								<select
 									value={data.cfdi_use}
@@ -1380,7 +1380,7 @@ export default function TaxProfileForm({ isOpen }) {
 										</p>
 									)}
 							</div>
-							<div className="bg-gray-50 p-4 rounded-lg">
+							<div className="bg-gray-50 p-4 rounded-lg hidden">
 								<SimpleLabel>Uso del CFDI</SimpleLabel>
 								<div className="text-lg">
 									{data.cfdi_use || "G03"}
@@ -1443,7 +1443,7 @@ export default function TaxProfileForm({ isOpen }) {
 								</h4>
 								<p className="text-sm text-yellow-700 mt-1">
 									Los datos que confirmes se utilizarán para
-									emitir tus facturas. Asegúrate de que sean
+									solicitar tus facturas. Asegúrate de que sean
 									correctos, ya que errores podrían afectar la
 									validez fiscal de tus compras.
 								</p>
@@ -1498,7 +1498,7 @@ export default function TaxProfileForm({ isOpen }) {
 									)}
 								</div>
 							</div>
-							<div>
+							<div className="hidden">
 								<SimpleLabel className="text-gray-500">
 									Uso del CFDI
 								</SimpleLabel>

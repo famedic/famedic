@@ -31,6 +31,7 @@ export default function RequestInvoiceModal({
 
 	const { data, setData, post, reset, processing, errors } = useForm({
 		tax_profile: null,
+		cfdi_use: "", // Cambiar a string vacío para el select
 	});
 
 	const submit = (e) => {
@@ -49,6 +50,23 @@ export default function RequestInvoiceModal({
 			reset();
 		}
 	}, [isOpen]);
+
+	// Opciones de CFDI según las que proporcionaste
+	const cfdiOptions = [
+		{ value: "G03", label: "G03", description: "Gastos en general" },
+		{ value: "G01", label: "G01", description: "Adquisición de mercancías" },
+		{ value: "G02", label: "G02", description: "Devoluciones, descuentos o bonificaciones" },
+		{ value: "P01", label: "P01", description: "Por definir" },
+		{ value: "D01", label: "D01", description: "Honorarios médicos, dentales y gastos hospitalarios" },
+		{ value: "D02", label: "D02", description: "Gastos de funeral" },
+		{ value: "D03", label: "D03", description: "Donativos" },
+		{ value: "D04", label: "D04", description: "Intereses reales efectivamente pagados por créditos hipotecarios" },
+		{ value: "D05", label: "D05", description: "Aportaciones voluntarias al SAR" },
+		{ value: "D06", label: "D06", description: "Primas por seguros de gastos médicos" },
+		{ value: "D07", label: "D07", description: "Gastos de transportación escolar obligatoria" },
+		{ value: "D08", label: "D08", description: "Depósitos en cuentas para el ahorro" },
+		{ value: "D09", label: "D09", description: "Pagos por servicios educativos (colegiaturas)" },
+	];
 
 	return (
 		<Dialog open={isOpen} onClose={close}>
@@ -88,7 +106,7 @@ export default function RequestInvoiceModal({
 						</Text>
 					) : (
 						<Text>
-							Elige el perfil fiscal que deseas utilizar para tu
+							Elige el perfil fiscal y uso de CFDI que deseas utilizar para tu
 							factura. Una vez que se haya solicitado,{" "}
 							<Strong>recibirás tu factura de 3 a 5 días</Strong>{" "}
 							hábiles.
@@ -138,11 +156,13 @@ export default function RequestInvoiceModal({
 									</SettingsCard>
 								</>
 							)}
+							
+							{/* Select para perfil fiscal */}
 							<Field>
 								<Label>
 									{purchase.invoice_request
-										? "Actualizar perfil fiscal"
-										: "Perfil fiscal"}
+										? "Actualizar perfil fiscal *"
+										: "Perfil fiscal *"}
 								</Label>
 								<Listbox
 									invalid={!!errors.tax_profile}
@@ -151,6 +171,7 @@ export default function RequestInvoiceModal({
 									onChange={(value) => {
 										setData("tax_profile", value);
 									}}
+									disabled={processing}
 								>
 									{taxProfiles.map((profile) => (
 										<ListboxOption
@@ -164,8 +185,8 @@ export default function RequestInvoiceModal({
 											</ListboxLabel>
 											<ListboxDescription className="w-40">
 												{profile.formatted_tax_regime}
-												<br />
-												{profile.formatted_cfdi_use}
+												{/*<br />
+												{profile.formatted_cfdi_use}*/}
 											</ListboxDescription>
 										</ListboxOption>
 									))}
@@ -173,6 +194,39 @@ export default function RequestInvoiceModal({
 								{errors.tax_profile && (
 									<ErrorMessage>
 										{errors.tax_profile}
+									</ErrorMessage>
+								)}
+							</Field>
+
+							{/* Select para Uso de CFDI - Mismo estilo que perfil fiscal */}
+							<Field>
+								<Label>Uso del CFDI *</Label>
+								<Listbox
+									invalid={!!errors.cfdi_use}
+									placeholder="Selecciona un uso de CFDI"
+									value={data.cfdi_use}
+									onChange={(value) => {
+										setData("cfdi_use", value);
+									}}
+									disabled={processing}
+								>
+									{cfdiOptions.map((option) => (
+										<ListboxOption
+											key={option.value}
+											value={option.value}
+										>
+											<ListboxLabel className="w-24">
+												{option.label}
+											</ListboxLabel>
+											<ListboxDescription className="flex-1">
+												{option.description}
+											</ListboxDescription>
+										</ListboxOption>
+									))}
+								</Listbox>
+								{errors.cfdi_use && (
+									<ErrorMessage>
+										{errors.cfdi_use}
 									</ErrorMessage>
 								)}
 							</Field>
@@ -185,9 +239,9 @@ export default function RequestInvoiceModal({
 					</Button>
 					{taxProfiles.length > 0 && (
 						<Button type="submit" disabled={processing}>
-							Solicitar factura
+							{purchase.invoice_request ? "Actualizar solicitud" : "Solicitar factura"}
 							{processing && (
-								<ArrowPathIcon className="animate-spin" />
+								<ArrowPathIcon className="animate-spin ml-2" />
 							)}
 						</Button>
 					)}
