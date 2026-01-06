@@ -36,11 +36,11 @@ export default function AuthLayout({
 							)}
 							<ApplicationLogo className="h-10 w-auto sm:h-12" />
 							<Heading className="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">
-								Famedic
+								Famedic MX
 							</Heading>
 						</Button>
 						<p className="mt-2 sm:mt-3 text-sm text-gray-600 dark:text-gray-400 sm:text-lg">
-							Salud y tecnología a bajo costo • Cobertura nacional
+							Salud y tecnología a bajo costo • Cobertura nacional en México
 						</p>
 					</div>
 
@@ -97,7 +97,7 @@ export default function AuthLayout({
 										
 										<div className="mt-6 pt-6 border-t border-blue-400/30 sm:mt-8">
 											<p className="text-xs opacity-90 sm:text-sm">
-												<strong>Asistencia 24/7:</strong>{" "}
+												<strong>Asistencia al:</strong>{" "}
 												<a 
 													href="tel:8128601893" 
 													className="hover:underline"

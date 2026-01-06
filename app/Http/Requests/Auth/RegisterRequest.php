@@ -24,7 +24,7 @@ class RegisterRequest extends FormRequest
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'referrer_id' => 'nullable|exists:users,id',
             'phone_country' => 'required|string|size:2', 
-            'g_recaptcha_response' => ['required', new Recaptcha], 
+            //'g_recaptcha_response' => ['required', new Recaptcha], 
         ];
     }
 
@@ -34,7 +34,7 @@ class RegisterRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'g_recaptcha_response.required' => 'Por favor, completa la verificación de seguridad.',
+            //'g_recaptcha_response.required' => 'Por favor, completa la verificación de seguridad.',
             'birth_date.before' => 'Debes ser mayor de 18 años para registrarte.',
             'phone.unique' => 'Este número de teléfono ya está registrado.',
             'email.unique' => 'Este correo electrónico ya está registrado.',
@@ -75,7 +75,7 @@ class RegisterRequest extends FormRequest
             'birth_date' => 'fecha de nacimiento',
             'gender' => 'sexo',
             'password' => 'contraseña',
-            'g_recaptcha_response' => 'verificación de seguridad',
+            //'g_recaptcha_response' => 'verificación de seguridad',
         ];
     }
 }

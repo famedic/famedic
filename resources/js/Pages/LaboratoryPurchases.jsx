@@ -176,6 +176,7 @@ const fixFormattedTotal = (totalValue, formattedTotal) => {
 };
 
 // Nuevo componente para Cotizaciones
+// Nuevo componente para Cotizaciones
 function LaboratoryQuotesList({ laboratoryQuotes }) {
 	return (
 		<div className="space-y-4 sm:space-y-6">
@@ -258,17 +259,7 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 
 									{/* Información secundaria - Derecha */}
 									<div className="flex flex-col items-center gap-3 sm:items-end sm:gap-2">
-										<Text className="text-xs sm:text-sm text-gray-500 text-center sm:text-right">
-											{quote.formatted_created_at}
-										</Text>
-										
 										<div className="flex flex-col items-center gap-2 sm:flex-row sm:items-end">
-											<Badge className="order-2 sm:order-1">
-												<QrCodeIcon className="size-4 sm:size-6" />
-												<span className="text-sm sm:text-xl font-mono">
-													{quote.gda_order_id || quote.id}
-												</span>
-											</Badge>
 											<img
 												src={`/images/gda/GDA-${quote.laboratory_brand?.toUpperCase() || 'GDA'}.png`}
 												className="order-1 sm:order-2 w-24 sm:w-36 rounded-lg object-contain flex-shrink-0"
