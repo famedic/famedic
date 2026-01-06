@@ -30,6 +30,7 @@
 		"smalot/pdfparser": "^2.12",
 		"spatie/laravel-pdf": "^1.5",
 		"spatie/laravel-permission": "^6.9",
+		"spomky-labs/otphp": "^11.4",
 		"symfony/http-client": "^7.2",
 		"symfony/mailgun-mailer": "^7.2",
 		"tightenco/ziggy": "^2.0",
