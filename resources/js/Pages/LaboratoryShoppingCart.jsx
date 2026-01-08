@@ -132,8 +132,8 @@ export default function LaboratoryShoppingCart({
 			<DeleteConfirmationModal
 				isOpen={!!laboratoryCartItemToDelete}
 				close={() => setLaboratoryCartItemToDelete(null)}
-				title="Eliminar del carrito"
-				description={`¿Estás seguro de que deseas eliminar ${laboratoryCartItemToDelete?.laboratory_test.name} del carrito?`}
+				title="Quitar del carrito"
+				description={`¿Estás seguro de que deseas quitarlo ${laboratoryCartItemToDelete?.laboratory_test.name} del carrito?`}
 				processing={processing}
 				destroy={destroyLaboratoryCartItem}
 			/>

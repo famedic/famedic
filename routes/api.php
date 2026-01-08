@@ -29,3 +29,15 @@ Route::prefix('laboratory/webhook')->name('laboratory.webhook.')->group(function
     Route::post('notifications', [LaboratoryWebhookController::class, 'handleNotification'])
         ->name('notifications');
 });
+
+// Ruta protegida para obtener el estado de una transacción Efevoo Pay
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::get('/transactions/{transaction}/status', function (Transaction $transaction) {
+        return response()->json([
+            'status' => $transaction->gateway_status ?? 'pending',
+            'transaction_id' => $transaction->id,
+            'created_at' => $transaction->created_at,
+            'updated_at' => $transaction->updated_at,
+        ]);
+    });
+});

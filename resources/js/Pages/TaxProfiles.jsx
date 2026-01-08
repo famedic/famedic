@@ -183,7 +183,7 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 										</div>
 										<div className="flex items-center gap-2">
 											<span className="w-4 h-4 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs font-bold">4</span>
-											<span>Facturación sin problemas</span>
+											<span>Solicita tus facturas sin problemas</span>
 										</div>
 									</div>
 								</div>
@@ -450,7 +450,7 @@ function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
 									</Badge>
 								</div>
 								
-								<div className="pt-2 hidden">
+								<div className="pt-2">
 									<p className="text-sm text-gray-600 mb-1">Uso CFDI:</p>
 									<Badge color="slate" className="w-full justify-center text-sm py-1.5">
 										{taxProfile.formatted_cfdi_use}

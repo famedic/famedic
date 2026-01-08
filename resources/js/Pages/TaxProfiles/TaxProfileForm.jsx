@@ -1443,7 +1443,7 @@ export default function TaxProfileForm({ isOpen }) {
 								</h4>
 								<p className="text-sm text-yellow-700 mt-1">
 									Los datos que confirmes se utilizarán para
-									emitir tus facturas. Asegúrate de que sean
+									solicitar tus facturas. Asegúrate de que sean
 									correctos, ya que errores podrían afectar la
 									validez fiscal de tus compras.
 								</p>

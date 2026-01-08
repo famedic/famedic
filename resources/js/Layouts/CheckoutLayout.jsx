@@ -108,7 +108,7 @@ export default function CheckoutLayout({
           )}
 
           {/* PAGO EN SUCURSAL */}
-          {showBranchPayment && (
+          {false && showBranchPayment && (
             <Button
               disabled={branchDisabled || isBranchProcessing || paymentProcessing}
               type="submit"

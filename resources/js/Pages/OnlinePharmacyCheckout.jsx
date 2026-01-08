@@ -200,8 +200,8 @@ export default function OnlinePharmacyCheckout({
 			<DeleteConfirmationModal
 				isOpen={!!onlinePharmacyCartItemToDelete}
 				close={() => setOnlinePharmacyCartItemToDelete(null)}
-				title="Eliminar del carrito"
-				description={`¿Estás seguro de que deseas eliminar ${onlinePharmacyCartItemToDelete?.vitau_product?.base.name} del carrito?`}
+				title="Quitar del carrito"
+				description={`¿Estás seguro de que deseas quitarlo ${onlinePharmacyCartItemToDelete?.vitau_product?.base.name} del carrito?`}
 				processing={processing}
 				destroy={destroyOnlinePharmacyCartItem}
 			/>
