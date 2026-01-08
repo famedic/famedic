@@ -25,6 +25,7 @@ class Customer extends Model
         'formatted_medical_attention_subscription_expires_at',
         'formatted_created_at',
         'medical_attention_subscription_is_active',
+        'has_saved_payment_methods'
     ];
 
     protected function casts(): array
@@ -271,5 +272,49 @@ class Customer extends Model
     public function laboratoryQuotes()
     {
         return $this->hasMany(LaboratoryQuote::class);
+    }
+
+    /**
+     * Métodos de pago del cliente
+     */
+    public function paymentMethods(): HasMany
+    {
+        return $this->hasMany(CustomerPaymentMethod::class);
+    }
+
+    public function activePaymentMethods(): HasMany
+    {
+        return $this->paymentMethods()->active()->verified();
+    }
+
+    public function defaultPaymentMethod(): HasOne
+    {
+        return $this->hasOne(CustomerPaymentMethod::class)->default();
+    }
+
+    /**
+     * Verificar si el cliente tiene métodos de pago guardados
+     */
+    protected function hasSavedPaymentMethods(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => $this->paymentMethods()->usable()->exists()
+        );
+    }
+
+    /**
+     * Obtener método de pago por defecto usable
+     */
+    public function getDefaultUsablePaymentMethod(): ?CustomerPaymentMethod
+    {
+        return $this->paymentMethods()
+            ->usable()
+            ->default()
+            ->first()
+            ?? $this->paymentMethods()
+                ->usable()
+                ->orderBy('last_used_at', 'desc')
+                ->orderBy('created_at', 'desc')
+                ->first();
     }
 }

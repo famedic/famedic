@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\EfevooPay;
 
 use App\Actions\Payments\CreateEfevooPayOrder;
 use App\Actions\Payments\CheckEfevooPayStatus;
@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\Controller;
 
 class EfevooPayController extends Controller
 {

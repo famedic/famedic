@@ -1,8 +1,8 @@
 <?php
 
-use App\Http\Controllers\EfevooPayWebsocketController;
-use App\Http\Controllers\EfevooPayController;
-#use App\Http\Controllers\LaboratoryEndpointController;
+use App\Http\Controllers\EfevooPay\EfevooPayWebsocketController;
+use App\Http\Controllers\EfevooPay\EfevooPayController;
+use App\Http\Controllers\EfevooPay\PaymentMethodCardController;
 #use App\Http\Controllers\Laboratory\LaboratoryWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -42,3 +42,21 @@ Route::post('/api/efevoopay/notification',
     [EfevooPayWebsocketController::class, 'handleNotification'])
     ->middleware('api')
     ->name('api.efevoopay.notification');
+
+// Payment Methods Routes
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::resource('payment-methods', PaymentMethodCardController::class)
+        ->except(['show']);
+    
+    Route::post('/payment-methods/{payment_method}/default', 
+        [PaymentMethodCardController::class, 'setAsDefault'])
+        ->name('payment-methods.set-default');
+});
+
+// API Routes (si necesitas para React)
+Route::middleware(['auth:sanctum'])->prefix('api')->group(function () {
+    Route::get('/payment-methods', 
+        [PaymentMethodCardController::class, 'apiIndex']);
+    Route::get('/payment-methods/{payment_method}', 
+        [PaymentMethodCardController::class, 'apiShow']);
+});

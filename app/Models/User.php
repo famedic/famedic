@@ -35,10 +35,11 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
         'full_phone',
         'formatted_birth_date',
         'formatted_gender',
-        'profile_is_complete',        // ya lo tenías
-        'pending_results_count',      // ← nuevo
-        'unread_lab_notifications_count', // ← nuevo
-        'has_pending_lab_results',    // ← nuevo
+        'profile_is_complete',
+        'pending_results_count',
+        'unread_lab_notifications_count',
+        'has_pending_lab_results',
+        'has_saved_payment_methods'
     ];
 
     protected function casts(): array
@@ -265,4 +266,51 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
             ->limit($limit)
             ->get();
     }
+
+    /**
+     * Métodos de pago del usuario (a través de su customer)
+     */
+    public function paymentMethods()
+    {
+        if (!$this->customer) {
+            return collect();
+        }
+
+        return $this->customer->paymentMethods();
+    }
+
+    /**
+     * Métodos de pago activos y verificados
+     */
+    public function activePaymentMethods()
+    {
+        if (!$this->customer) {
+            return collect();
+        }
+
+        return $this->customer->activePaymentMethods();
+    }
+
+    /**
+     * Método de pago por defecto
+     */
+    public function defaultPaymentMethod()
+    {
+        if (!$this->customer) {
+            return null;
+        }
+
+        return $this->customer->defaultPaymentMethod;
+    }
+
+    /**
+     * Verificar si tiene métodos de pago guardados
+     */
+    protected function hasSavedPaymentMethods(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => optional($this->customer)->has_saved_payment_methods ?? false
+        );
+    }
+
 }

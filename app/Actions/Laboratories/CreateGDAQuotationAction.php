@@ -23,12 +23,12 @@ class CreateGDAQuotationAction
 
     public function __invoke(Customer $customer, Address $address, Contact $contact, string $brand, $laboratoryCartItems, $laboratoryPurchaseId): array
     {
-        if (app()->environment(environments: 'local')) {
+        if (app()->environment('local')) {
             return ['id' => uniqid()];
         }
 
-        $url = config('services.gda.url') . '/service-request-cotizacion';
-        
+        $url = config('services.gda.url') . 'infogda-fullV3/service-request';
+
         $payload = [
             "header" => [
                 "lineanegocio" => "Famedic Web",

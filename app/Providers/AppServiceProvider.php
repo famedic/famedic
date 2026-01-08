@@ -31,6 +31,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(\App\Services\TOTPService::class);
         $this->app->singleton(\App\Services\EfevooPayService::class);
         $this->app->singleton(\App\Services\WebSocketService::class);
+        $this->app->singleton(\App\Services\PaymentMethodService::class); 
         
         // Registrar actions
         $this->app->singleton(\App\Actions\Payments\CreateEfevooPayOrder::class);
@@ -44,6 +45,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ConstanciaFiscalService::class, function ($app) {
             return new ConstanciaFiscalService();
         });
+
+
     }
 
     public function boot(): void
