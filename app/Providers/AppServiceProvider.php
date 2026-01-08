@@ -8,6 +8,7 @@ use App\Models\OnlinePharmacyPurchase;
 use App\Services\Tracking\Tracking;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Redirector;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Cashier\Cashier;
@@ -26,13 +27,23 @@ class AppServiceProvider extends ServiceProvider
             return new Tracking;
         });
 
+        // Registrar servicios de EfevooPay
+        $this->app->singleton(\App\Services\TOTPService::class);
+        $this->app->singleton(\App\Services\EfevooPayService::class);
+        $this->app->singleton(\App\Services\WebSocketService::class);
+        
+        // Registrar actions
+        $this->app->singleton(\App\Actions\Payments\CreateEfevooPayOrder::class);
+        $this->app->singleton(\App\Actions\Payments\CheckEfevooPayStatus::class);
+        $this->app->singleton(\App\Actions\Payments\ProcessEfevooPayCallback::class);
+
         if ($this->app->environment('local', 'testing')) {
             $this->app->register(DuskServiceProvider::class);
         }
 
         $this->app->singleton(ConstanciaFiscalService::class, function ($app) {
-        return new ConstanciaFiscalService();
-    });
+            return new ConstanciaFiscalService();
+        });
     }
 
     public function boot(): void
@@ -60,5 +71,32 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Cashier::useCustomerModel(Customer::class);
+        
+        // Registrar eventos y listeners
+        $this->registerEvents();
+    }
+    
+    /**
+     * Registrar eventos y listeners para EfevooPay
+     */
+    protected function registerEvents(): void
+    {
+        Event::listen(
+            \App\Events\PaymentStatusUpdated::class,
+            \App\Listeners\UpdateTransactionStatus::class
+        );
+        
+        Event::listen(
+            \App\Events\PaymentStatusUpdated::class,
+            \App\Listeners\SendPaymentNotification::class
+        );
+        
+        // También puedes usar el método listen con array
+        // Event::listen([
+        //     \App\Events\PaymentStatusUpdated::class => [
+        //         \App\Listeners\UpdateTransactionStatus::class,
+        //         \App\Listeners\SendPaymentNotification::class,
+        //     ],
+        // ]);
     }
 }

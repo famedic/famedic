@@ -5,6 +5,7 @@ namespace App\Actions\Laboratories;
 use App\Actions\Odessa\ChargeOdessaAction;
 use App\Actions\Stripe\ChargeStripePaymentMethodAction;
 use App\Actions\Transactions\RefundTransactionAction;
+use App\Actions\Payments\CreateEfevooPayOrder;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\UnmatchingTotalPriceException;
@@ -29,6 +30,8 @@ class OrderAction
     private RefundTransactionAction $refundTransactionAction;
 
     private Collection $laboratoryCartItems;
+
+    private CreateEfevooPayOrder $createEfevooPayOrder;
 
     public function __construct(
         CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
@@ -165,6 +168,45 @@ class OrderAction
     {
         if ($paymentMethod === 'odessa') {
             return ($this->chargeOdessaAction)($customer->customerable, $amountCents);
+        }
+
+        if ($paymentMethod === 'efevoopay') {
+            // Obtener items del carrito
+            $cartItems = $this->laboratoryCartItems->map(function ($item) {
+                return [
+                    'name' => $item->laboratoryTest->name,
+                    'price_cents' => $item->laboratoryTest->famedic_price_cents,
+                    'quantity' => 1,
+                    'gda_id' => $item->laboratoryTest->gda_id,
+                ];
+            })->toArray();
+
+            // Crear orden en EfevooPay
+            $result = ($this->createEfevooPayOrder)(
+                $customer,
+                $amountCents,
+                $cartItems,
+                [
+                    'laboratory_brand' => request()->laboratory_brand->value,
+                    'address_id' => request()->address,
+                    'contact_id' => request()->contact,
+                ]
+            );
+
+            if (!$result['success']) {
+                throw new \Exception($result['error']);
+            }
+
+            // Guardar checkout URL en sesión para redirección
+            session()->put('efevoopay_checkout_url', $result['checkout_url']);
+            session()->put('efevoopay_transaction_id', $result['transaction']->id);
+
+            // Programar job para monitorear el pago
+            MonitorEfevooPayment::dispatch($result['transaction'])
+                ->delay(now()->addSeconds(30))
+                ->onQueue('payments');
+
+            return $result['transaction'];
         }
 
         return ($this->chargeStripePaymentMethodAction)(
