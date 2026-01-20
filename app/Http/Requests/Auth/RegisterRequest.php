@@ -150,37 +150,7 @@ class RegisterRequest extends FormRequest
     /**
      * Configurar el validador.
      */
-    public function withValidator($validator): void
-    {
-        $validator->after(function ($validator) {
-            if ($validator->fails()) {
-                Log::error('❌ RegisterRequest: Validación fallida', [
-                    'errores' => $validator->errors()->toArray(),
-                    'datos_validados' => $validator->validated(),
-                    'datos_originales' => $this->all(),
-                    'total_errores' => count($validator->errors()),
-                ]);
-            } else {
-                Log::info('✅ RegisterRequest: Validación exitosa', [
-                    'datos_validados' => $validator->validated(),
-                    'email' => $this->email ?? 'NO_PRESENTE',
-                    'phone' => isset($this->phone) ? substr($this->phone, 0, 3) . '...' : 'NO_PRESENTE',
-                    'tiene_referrer' => !empty($this->referrer_id),
-                ]);
-            }
-        });
-
-        // Log de validación detallada
-        $validator->sometimes('*', '*', function ($input, $attribute) {
-            Log::debug('🔍 RegisterRequest: Validando campo', [
-                'campo' => $attribute,
-                'valor' => $input->$attribute ?? 'VACÍO',
-                'es_requerido' => in_array('required', $this->rules()[$attribute] ?? []),
-            ]);
-            
-            return true;
-        });
-    }
+    
 
     /**
      * Método para debugging adicional.

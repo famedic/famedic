@@ -261,6 +261,7 @@ export default function Register({
         
 
         // Verificar reCAPTCHA
+        
         if (!data.g_recaptcha_response) {
             // Intentar obtener el token directamente
             if (window.grecaptcha?.getResponse && recaptchaWidgetId.current !== null) {
