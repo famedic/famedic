@@ -6,6 +6,7 @@ use App\Enums\Gender;
 use App\Interfaces\MustVerifyPhone;
 use App\Traits\MustVerifyPhone as TraitsMustVerifyPhone;
 use Carbon\Carbon;
+use App\Data\StatesMexico;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -35,10 +36,10 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
         'full_phone',
         'formatted_birth_date',
         'formatted_gender',
-        'profile_is_complete',        // ya lo tenías
-        'pending_results_count',      // ← nuevo
-        'unread_lab_notifications_count', // ← nuevo
-        'has_pending_lab_results',    // ← nuevo
+        'profile_is_complete',        
+        'pending_results_count',      
+        'unread_lab_notifications_count', 
+        'has_pending_lab_results',    
     ];
 
     protected function casts(): array
@@ -264,5 +265,22 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
             ->latest('ready_at')
             ->limit($limit)
             ->get();
+    }
+
+    public function getEstadoNombreAttribute(): ?string
+    {
+        return StatesMexico::obtenerNombre($this->estado);
+    }
+    
+    public function scopePorEstado($query, $estado)
+    {
+        return $query->where('estado', $estado);
+    }
+    
+    public static function reglasEstado(): array
+    {
+        return [
+            'estado' => ['nullable', 'string', 'size:2', 'in:' . implode(',', StatesMexico::claves())]
+        ];
     }
 }

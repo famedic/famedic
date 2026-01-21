@@ -23,6 +23,7 @@ class CreateUserAction
         ?string $password = null,
         bool $documentationAccepted = false,
         ?int $referrerUserId = null,
+        ?string $state = null,
     ): User {
         $user = User::create([
             'name' => $name,
@@ -36,6 +37,7 @@ class CreateUserAction
             'password' => $password ? Hash::make($password) : null,
             'documentation_accepted_at' => $documentationAccepted ? now() : null,
             'referred_by' => $referrerUserId,
+            'state' => $state,
         ]);
 
         // Send notification to referrer if user was referred
