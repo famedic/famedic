@@ -5,9 +5,11 @@ namespace App\Actions\Register;
 use App\Actions\Customers\CreateRegularAccountCustomerAction;
 use App\Actions\Users\CreateUserAction;
 use App\Enums\Gender;
+use App\Events\UserRegistered;
 use App\Models\RegularAccount;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class RegisterRegularCustomerAction
 {
@@ -55,6 +57,45 @@ class RegisterRegularCustomerAction
             $regularAccount = ($this->createRegularCustomerAction)($user);
 
             DB::commit();
+
+            Log::info('RegisterRegularCustomerAction: Usuario creado', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'paternal_lastname' => $user->paternal_lastname,
+                'maternal_lastname' => $user->maternal_lastname,
+                'birth_date' => $user->birth_date,
+                'gender' => $user->gender?->value,
+                'phone' => $user->phone,
+                'phone_country' => $user->phone_country,
+                'state' => $user->state,
+                'referred_by' => $user->referred_by,
+            ]);
+            // ========================================
+            // NUEVO: Disparar evento para ActiveCampaign
+            // ========================================
+            if (config('activecampaign.sync.enabled', false)) {
+                $metadata = [
+                    'tags' => [
+                        config('activecampaign.tags.registro_nuevo', 'RegistroNuevo'),
+                        'Paciente',
+                        'RegistroWeb',
+                    ],
+                    'source' => 'web_registration',
+                    'registration_date' => now()->toISOString(),
+                ];
+
+                \App\Events\UserRegistered::dispatch($user, $metadata);
+
+                Log::info('ActiveCampaign: Evento disparado', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                ]);
+            }
+
+            Log::info('RegisterRegularCustomerAction: Evento UserRegistered disparado', [
+                'user_id' => $user->id,
+            ]);
+            // ========================================
         } catch (\Throwable $th) {
             DB::rollBack();
             throw $th;
