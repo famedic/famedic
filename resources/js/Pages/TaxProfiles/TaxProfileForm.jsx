@@ -21,6 +21,9 @@ import {
 	ArrowUpTrayIcon,
 	XMarkIcon,
 	ChevronRightIcon,
+	DocumentArrowUpIcon,
+	PencilSquareIcon,
+	ArrowLeftIcon,
 } from "@heroicons/react/24/solid";
 import {
 	Listbox,
@@ -28,12 +31,17 @@ import {
 	ListboxOption,
 } from "@/Components/Catalyst/listbox";
 
-
 // Definimos los pasos del proceso
 const STEPS = {
 	UPLOAD: 1,
 	REVIEW: 2,
 	CONFIRM: 3,
+};
+
+// Modos de entrada de datos
+const ENTRY_MODES = {
+	AUTOMATIC: 'automatic',
+	MANUAL: 'manual'
 };
 
 export default function TaxProfileForm({ isOpen }) {
@@ -57,6 +65,11 @@ export default function TaxProfileForm({ isOpen }) {
 	const [isEditing, setIsEditing] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
 	const [saveStep, setSaveStep] = useState("");
+	
+	// Nuevo estado para el modo de entrada
+	const [entryMode, setEntryMode] = useState(ENTRY_MODES.AUTOMATIC);
+	const [fileRequired, setFileRequired] = useState(true);
+	const [isModeSelected, setIsModeSelected] = useState(false);
 
 	// Estados para drag & drop
 	const [isDragging, setIsDragging] = useState(false);
@@ -80,6 +93,7 @@ export default function TaxProfileForm({ isOpen }) {
 	// Refs
 	const dropAreaRef = useRef(null);
 	const fileInputRef = useRef(null);
+	const manualFileInputRef = useRef(null);
 	const activeStepRef = useRef(activeStep);
 
 	// Actualizar ref cuando activeStep cambie
@@ -96,6 +110,7 @@ export default function TaxProfileForm({ isOpen }) {
 			const isEditMode = route().current("tax-profiles.edit") || false;
 			console.log("📝 Modo edición detectado:", isEditMode);
 			
+			// Resetear todo al abrir
 			setCachedTaxRegimes(taxRegimes || {});
 			setCachedTaxProfile(taxProfile || null);
 			setCachedEditMode(isEditMode);
@@ -112,16 +127,19 @@ export default function TaxProfileForm({ isOpen }) {
 			setIsDragging(false);
 			setDragReject(false);
 			setPasteHintVisible(false);
+			setEntryMode(ENTRY_MODES.AUTOMATIC);
+			setFileRequired(true);
+			setIsModeSelected(false);
 			
-			console.log("✅ Estado inicializado - activeStep:", STEPS.UPLOAD);
+			console.log("✅ Estado inicializado - activeStep:", STEPS.UPLOAD, "entryMode:", ENTRY_MODES.AUTOMATIC);
 		}
 
 		// Agregar event listeners cuando el componente se monta
 		const handlePaste = async (e) => {
 			console.log("📋 Evento de pegado detectado");
-			// Solo activar en el paso de subida de archivos
-			if (activeStepRef.current !== STEPS.UPLOAD || !isOpen) {
-				console.log("❌ No en paso UPLOAD o diálogo cerrado");
+			// Solo activar en el paso de subida de archivos y en modo automático
+			if (activeStepRef.current !== STEPS.UPLOAD || !isOpen || entryMode !== ENTRY_MODES.AUTOMATIC || !isModeSelected) {
+				console.log("❌ No en paso UPLOAD o modo manual activo o modo no seleccionado");
 				return;
 			}
 
@@ -161,15 +179,35 @@ export default function TaxProfileForm({ isOpen }) {
 	useEffect(() => {
 		console.log("📊 Estado actualizado:", {
 			activeStep,
+			entryMode,
 			uploadedFile: uploadedFile?.name,
 			extractedData: !!extractedData,
 			processingPdf,
 			isDragging,
-			dragReject
+			dragReject,
+			isModeSelected
 		});
-	}, [activeStep, uploadedFile, extractedData, processingPdf, isDragging, dragReject]);
+	}, [activeStep, entryMode, uploadedFile, extractedData, processingPdf, isDragging, dragReject, isModeSelected]);
 
-	// Función para procesar archivo (común para selección y pegado)
+	// Función para cambiar el modo de entrada
+	const handleEntryModeChange = (mode) => {
+		console.log("🔄 Cambiando modo de entrada a:", mode);
+		setEntryMode(mode);
+		setIsModeSelected(true);
+		
+		// En ambos modos el archivo es obligatorio
+		setFileRequired(true);
+		clearErrors("fiscal_certificate");
+		
+		// Resetear archivo si cambia de modo
+		if (uploadedFile) {
+			setUploadedFile(null);
+			setExtractedData(null);
+			setData("fiscal_certificate", null);
+		}
+	};
+
+	// Función para procesar archivo (común para selección y pegado) - SOLO PARA MODO AUTOMÁTICO
 	const handleFileProcess = async (file, fromPaste = false) => {
 		console.log("📄 handleFileProcess llamado con archivo:", file.name, "fromPaste:", fromPaste);
 		
@@ -326,7 +364,22 @@ export default function TaxProfileForm({ isOpen }) {
 			} else {
 				console.log("❌ Error en respuesta del servidor:", result?.message);
 				console.log("🔔 Error al procesar el archivo:", result?.message || `Error ${response.status}`);
-				throw new Error(result?.message || `Error ${response.status}`);
+				
+				// Manejar error pero mantener el archivo subido
+				setUploadedFile(file);
+				setData("fiscal_certificate", file);
+				
+				// Mostrar mensaje de error pero permitir continuar
+				setInfoMessage({
+					type: "warning",
+					message: "No se pudo extraer información automáticamente. Complete los datos manualmente."
+				});
+				
+				// Cambiar al paso 2 inmediatamente
+				setProcessingPdf(false);
+				setCurrentStep(null);
+				setUploadProgress(0);
+				setActiveStep(STEPS.REVIEW);
 			}
 		} catch (error) {
 			console.error("💥 Error en extracción:", error.name, error.message);
@@ -377,13 +430,42 @@ export default function TaxProfileForm({ isOpen }) {
 		}
 	};
 
-	// Función para manejar la selección de archivo
+	// Función para manejar la selección de archivo EN MODO AUTOMÁTICO
 	const handleFileUpload = async (e) => {
-		console.log("📁 handleFileUpload llamado");
+		console.log("📁 handleFileUpload llamado (modo automático)");
 		const file = e.target.files[0];
 		if (file) {
 			console.log("📄 Archivo seleccionado:", file.name);
 			await handleFileProcess(file, false);
+		} else {
+			console.log("❌ No se seleccionó ningún archivo");
+		}
+	};
+
+	// Función para manejar la selección de archivo EN MODO MANUAL
+	const handleManualFileUpload = (e) => {
+		console.log("📁 handleManualFileUpload llamado (modo manual)");
+		const file = e.target.files[0];
+		if (file) {
+			console.log("📄 Archivo seleccionado para modo manual:", file.name);
+			
+			if (file.type !== "application/pdf") {
+				console.log("❌ Tipo de archivo inválido:", file.type);
+				setError("fiscal_certificate", "Solo se aceptan archivos PDF");
+				return;
+			}
+
+			if (file.size > 5 * 1024 * 1024) {
+				console.log("❌ Archivo muy grande:", file.size);
+				setError("fiscal_certificate", "El archivo no debe superar 5MB");
+				return;
+			}
+
+			setUploadedFile(file);
+			setData("fiscal_certificate", file);
+			clearErrors("fiscal_certificate");
+			
+			console.log("✅ Archivo subido en modo manual:", file.name);
 		} else {
 			console.log("❌ No se seleccionó ningún archivo");
 		}
@@ -397,9 +479,11 @@ export default function TaxProfileForm({ isOpen }) {
 		setData("fiscal_certificate", null);
 		clearErrors("fiscal_certificate");
 		
-		// Resetear el input file
-		if (fileInputRef.current) {
+		// Resetear el input file correspondiente
+		if (entryMode === ENTRY_MODES.AUTOMATIC && fileInputRef.current) {
 			fileInputRef.current.value = '';
+		} else if (entryMode === ENTRY_MODES.MANUAL && manualFileInputRef.current) {
+			manualFileInputRef.current.value = '';
 		}
 	};
 
@@ -502,9 +586,26 @@ export default function TaxProfileForm({ isOpen }) {
 	const handleNextStep = () => {
 		console.log("➡️ handleNextStep llamado, activeStep actual:", activeStep);
 		
-		if (activeStep === STEPS.UPLOAD && uploadedFile) {
-			// Validar que se haya subido un archivo
-			console.log("✅ Archivo subido, avanzando a REVIEW");
+		if (activeStep === STEPS.UPLOAD) {
+			// Si estamos en el paso de selección de modo
+			if (!isModeSelected) {
+				console.log("❌ No se ha seleccionado un modo");
+				setInfoMessage({
+					type: "error",
+					message: "Por favor selecciona un método para ingresar tus datos"
+				});
+				return;
+			}
+			
+			// Si ya seleccionó modo pero aún no ha subido archivo (en modo automático)
+			if (entryMode === ENTRY_MODES.AUTOMATIC && !uploadedFile) {
+				console.log("❌ No se ha subido archivo en modo automático");
+				setError("fiscal_certificate", "Debe subir una constancia fiscal");
+				return;
+			}
+			
+			// Avanzar al siguiente paso
+			console.log("✅ Avanzando a REVIEW");
 			setActiveStep(STEPS.REVIEW);
 			
 		} else if (activeStep === STEPS.REVIEW) {
@@ -564,6 +665,17 @@ export default function TaxProfileForm({ isOpen }) {
 				return;
 			}
 
+			// En modo manual, validar que se haya subido archivo
+			if (entryMode === ENTRY_MODES.MANUAL && !uploadedFile) {
+				console.log("❌ No se ha subido archivo en modo manual");
+				setError("fiscal_certificate", "Debe subir una constancia fiscal");
+				setInfoMessage({
+					type: "error",
+					message: "Debe subir una constancia fiscal"
+				});
+				return;
+			}
+
 			console.log("✅ Todos los campos válidos, avanzando a CONFIRM");
 			setActiveStep(STEPS.CONFIRM);
 		}
@@ -575,7 +687,7 @@ export default function TaxProfileForm({ isOpen }) {
 		if (activeStep === STEPS.REVIEW) {
 			console.log("🔄 Regresando a UPLOAD desde REVIEW");
 			setActiveStep(STEPS.UPLOAD);
-			// No eliminar el archivo, solo regresar al paso anterior
+			
 		} else if (activeStep === STEPS.CONFIRM) {
 			console.log("🔄 Regresando a REVIEW desde CONFIRM");
 			setActiveStep(STEPS.REVIEW);
@@ -596,6 +708,7 @@ export default function TaxProfileForm({ isOpen }) {
 
 		try {
 			// Validaciones finales antes de enviar
+			// Requerir archivo en ambos modos
 			if (!data.fiscal_certificate) {
 				setError('fiscal_certificate', 'Debe subir una constancia fiscal');
 				setIsSaving(false);
@@ -615,7 +728,11 @@ export default function TaxProfileForm({ isOpen }) {
 			formData.append('zipcode', data.zipcode);
 			formData.append('tax_regime', data.tax_regime);
 			formData.append('cfdi_use', data.cfdi_use || 'G03');
+			formData.append('entry_mode', entryMode);
+			
+			// Agregar archivo (obligatorio en ambos modos)
 			formData.append('fiscal_certificate', data.fiscal_certificate);
+			
 			formData.append('confirm_data', data.confirm_data ? '1' : '0');
 
 			if (extractedData) {
@@ -780,94 +897,9 @@ export default function TaxProfileForm({ isOpen }) {
 		);
 	};
 
-	// Componente para mostrar el progreso de pasos
-	const StepIndicator = ({ step, label, isActive, isCompleted }) => (
-		<div className="flex flex-col items-center">
-			<div
-				className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${isCompleted
-					? "bg-green-100 border-green-600 text-green-600"
-					: isActive
-						? "bg-blue-100 border-blue-600 text-blue-600"
-						: "bg-gray-100 border-gray-300 text-gray-400"
-					}`}
-			>
-				{isCompleted ? (
-					<CheckCircleIcon className="w-6 h-6" />
-				) : (
-					<span className="font-semibold">{step}</span>
-				)}
-			</div>
-			<span
-				className={`mt-2 text-sm font-medium ${isActive || isCompleted ? "text-gray-900" : "text-gray-500"
-					}`}
-			>
-				{label}
-			</span>
-		</div>
-	);
-
-	// Componente Label personalizado para usar fuera de Field
-	const SimpleLabel = ({ children, className = "" }) => (
-		<div className={`text-sm font-medium text-gray-700 ${className}`}>
-			{children}
-		</div>
-	);
-
-	// Componente para mostrar progreso de guardado
-	const SavingProgress = () => (
-		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-			<div className="bg-white rounded-xl p-8 max-w-md w-full mx-4">
-				<div className="text-center">
-					<ArrowPathIcon className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
-					<h3 className="text-lg font-semibold text-gray-900 mb-2">
-						{cachedEditMode
-							? "Actualizando perfil fiscal..."
-							: "Guardando perfil fiscal..."}
-					</h3>
-					<p className="text-gray-600 mb-4">{saveStep}</p>
-					<div className="w-full bg-gray-200 rounded-full h-2">
-						<div className="bg-blue-600 h-2 rounded-full animate-pulse"></div>
-					</div>
-					<p className="text-xs text-gray-500 mt-4">
-						Por favor no cierre esta ventana
-					</p>
-				</div>
-			</div>
-		</div>
-	);
-
-	// Componente para mostrar información del archivo subido
-	const FileInfo = ({ file, onRemove }) => (
-		<div className="bg-green-50 border border-green-200 rounded-lg p-4">
-			<div className="flex items-center justify-between">
-				<div className="flex items-center space-x-3">
-					<div className="p-2 bg-green-100 rounded-lg">
-						<DocumentTextIcon className="h-6 w-6 text-green-600" />
-					</div>
-					<div>
-						<h4 className="font-medium text-green-800 text-sm">
-							Archivo listo para procesar
-						</h4>
-						<p className="text-xs text-green-700 mt-1">
-							{file.name} • {(file.size / 1024 / 1024).toFixed(2)} MB
-						</p>
-					</div>
-				</div>
-				<button
-					type="button"
-					onClick={onRemove}
-					className="p-1 hover:bg-red-100 rounded-full transition-colors"
-					disabled={processingPdf || isSaving}
-				>
-					<XMarkIcon className="h-5 w-5 text-red-500" />
-				</button>
-			</div>
-		</div>
-	);
-
-	// Paso 1: Subir archivo (SIMPLIFICADO - SIN "SUELTA AQUÍ")
-	const renderUploadStep = () => {
-		console.log("🖼️ Renderizando paso UPLOAD, uploadedFile:", uploadedFile?.name);
+	// Paso 1: Selección de modo de entrada
+	const renderModeSelectionStep = () => {
+		console.log("🖼️ Renderizando paso de selección de modo, isModeSelected:", isModeSelected);
 		
 		return (
 			<>
@@ -877,12 +909,185 @@ export default function TaxProfileForm({ isOpen }) {
 						: "Nuevo perfil fiscal"}
 				</DialogTitle>
 				<DialogDescription>
-					Sube tu constancia de situación fiscal para comenzar
+					Selecciona cómo deseas ingresar tu información fiscal
+				</DialogDescription>
+
+				<DialogBody className="space-y-6">
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+						{/* Opción 1: Modo Automático */}
+						<div 
+							className={`p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${entryMode === ENTRY_MODES.AUTOMATIC 
+								? 'border-blue-500 bg-blue-50' 
+								: 'border-gray-200 bg-white hover:border-gray-300'}`}
+							onClick={() => handleEntryModeChange(ENTRY_MODES.AUTOMATIC)}
+						>
+							<div className="text-center mb-4">
+								<div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
+									<DocumentArrowUpIcon className="h-8 w-8 text-blue-600" />
+								</div>
+								<h3 className="text-lg font-semibold text-gray-900 mb-2">
+									Extracción Automática
+								</h3>
+								<p className="text-sm text-gray-600">
+									Recomendado para mayor precisión
+								</p>
+							</div>
+							
+							<div className="space-y-3">
+								<div className="flex items-start">
+									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
+									<span className="text-sm text-gray-700">
+										Sube tu constancia fiscal (PDF)
+									</span>
+								</div>
+								<div className="flex items-start">
+									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
+									<span className="text-sm text-gray-700">
+										Extraemos automáticamente tus datos
+									</span>
+								</div>
+								<div className="flex items-start">
+									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
+									<span className="text-sm text-gray-700">
+										Revisa y confirma la información
+									</span>
+								</div>
+							</div>
+							
+							{entryMode === ENTRY_MODES.AUTOMATIC && (
+								<div className="mt-6 text-center">
+									<div className="text-sm font-medium text-blue-700 mb-2">
+										✓ Seleccionado
+									</div>
+									<p className="text-xs text-gray-500">
+										Haz clic en "Continuar" para subir tu archivo
+									</p>
+								</div>
+							)}
+						</div>
+
+						{/* Opción 2: Modo Manual */}
+						<div 
+							className={`p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${entryMode === ENTRY_MODES.MANUAL 
+								? 'border-green-500 bg-green-50' 
+								: 'border-gray-200 bg-white hover:border-gray-300'}`}
+							onClick={() => handleEntryModeChange(ENTRY_MODES.MANUAL)}
+						>
+							<div className="text-center mb-4">
+								<div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
+									<PencilSquareIcon className="h-8 w-8 text-green-600" />
+								</div>
+								<h3 className="text-lg font-semibold text-gray-900 mb-2">
+									Llenado Manual
+								</h3>
+								<p className="text-sm text-gray-600">
+									Cuando la extracción automática no funciona
+								</p>
+							</div>
+							
+							<div className="space-y-3">
+								<div className="flex items-start">
+									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
+									<span className="text-sm text-gray-700">
+										Ingresa tus datos manualmente
+									</span>
+								</div>
+								<div className="flex items-start">
+									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
+									<span className="text-sm text-gray-700">
+										Sube tu constancia fiscal (PDF obligatorio)
+									</span>
+								</div>
+								<div className="flex items-start">
+									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
+									<span className="text-sm text-gray-700">
+										Útil si la lectura automática falla
+									</span>
+								</div>
+							</div>
+							
+							{entryMode === ENTRY_MODES.MANUAL && (
+								<div className="mt-6 text-center">
+									<div className="text-sm font-medium text-green-700 mb-2">
+										✓ Seleccionado
+									</div>
+									<p className="text-xs text-gray-500">
+										Haz clic en "Continuar" para ingresar tus datos
+									</p>
+								</div>
+							)}
+						</div>
+					</div>
+
+					<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+						<div className="flex">
+							<ExclamationTriangleIcon className="h-5 w-5 text-yellow-400 mr-2 flex-shrink-0" />
+							<div>
+								<p className="text-sm text-yellow-700">
+									<strong>Importante:</strong> En ambos métodos deberás subir tu constancia fiscal en PDF. 
+									La diferencia es que en el modo automático intentaremos extraer los datos por ti, 
+									mientras que en el modo manual tú ingresarás los datos manualmente.
+								</p>
+							</div>
+						</div>
+					</div>
+				</DialogBody>
+
+				<DialogActions>
+					<Button
+						autoFocus
+						dusk="cancel"
+						plain
+						type="button"
+						onClick={closeDialog}
+						disabled={processingPdf || isSaving}
+					>
+						Cancelar
+					</Button>
+					<Button
+						type="button"
+						onClick={handleNextStep}
+						disabled={!isModeSelected || processingPdf || isSaving}
+					>
+						Continuar
+						<ChevronRightIcon className="ml-2 h-4 w-4" />
+					</Button>
+				</DialogActions>
+			</>
+		);
+	};
+
+	// Paso 1B: Subir archivo (solo para modo automático)
+	const renderUploadStep = () => {
+		console.log("🖼️ Renderizando paso UPLOAD (modo automático)");
+		
+		return (
+			<>
+				<DialogTitle>
+					<button
+						type="button"
+						onClick={() => {
+							// Regresar a la selección de modo
+							setActiveStep(STEPS.UPLOAD);
+							setUploadedFile(null);
+							setExtractedData(null);
+							setData("fiscal_certificate", null);
+							clearErrors();
+						}}
+						className="flex items-center text-sm text-gray-500 hover:text-gray-700 mb-2"
+					>
+						<ArrowLeftIcon className="h-4 w-4 mr-1" />
+						Cambiar método
+					</button>
+					Sube tu constancia fiscal
+				</DialogTitle>
+				<DialogDescription>
+					Sube el archivo PDF de tu constancia para extraer automáticamente tus datos
 				</DialogDescription>
 
 				<DialogBody className="space-y-6">
 					<Field>
-						<Label>Constancia de Situación Fiscal</Label>
+						<Label>Constancia de Situación Fiscal *</Label>
 						<Description>
 							Sube el archivo PDF de tu constancia (máximo 5MB). Debe
 							ser emitida en los últimos 3 meses.
@@ -978,8 +1183,8 @@ export default function TaxProfileForm({ isOpen }) {
 						</div>
 					</Field>
 
-					{/* Guía de métodos de subida - DISEÑO SIMPLIFICADO */}
-					{!uploadedFile && (
+					{/* Guía de métodos de subida - SOLO PARA MODO AUTOMÁTICO */}
+					{!uploadedFile && !processingPdf && (
 						<div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
 							<h4 className="font-semibold text-gray-800 mb-3">
 								Métodos para subir tu archivo
@@ -1043,7 +1248,35 @@ export default function TaxProfileForm({ isOpen }) {
 								</p>
 							</div>
 						</div>
-					)}					
+					)}
+					
+					{/* Opción para cambiar a modo manual si hay problemas */}
+					{uploadedFile && !processingPdf && (
+						<div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+							<div className="flex items-center justify-between">
+								<div>
+									<p className="text-sm text-gray-700">
+										¿Problemas con la extracción automática?
+									</p>
+									<p className="text-xs text-gray-500 mt-1">
+										Puedes cambiar al modo manual si no se extraen los datos correctamente
+									</p>
+								</div>
+								<Button
+									type="button"
+									plain
+									onClick={() => {
+										setEntryMode(ENTRY_MODES.MANUAL);
+										// Mantener el archivo subido
+										setActiveStep(STEPS.REVIEW);
+									}}
+									disabled={processingPdf || isSaving}
+								>
+									Cambiar a modo manual
+								</Button>
+							</div>
+						</div>
+					)}
 				</DialogBody>
 
 				<DialogActions>
@@ -1070,15 +1303,43 @@ export default function TaxProfileForm({ isOpen }) {
 		);
 	};
 
-	// Paso 2: Revisar y editar información
+	// Paso 2: Revisar y editar información (común para ambos modos)
 	const renderReviewStep = () => {
-		console.log("🖼️ Renderizando paso REVIEW");
+		console.log("🖼️ Renderizando paso REVIEW, entryMode:", entryMode);
 		
 		return (
 			<>
-				<DialogTitle>Revisa y completa tu información</DialogTitle>
+				<DialogTitle>
+					{entryMode === ENTRY_MODES.MANUAL ? (
+						<>
+							<button
+								type="button"
+								onClick={() => {
+									// Regresar al paso anterior
+									if (uploadedFile) {
+										// Si ya tiene archivo, regresar a UPLOAD
+										setActiveStep(STEPS.UPLOAD);
+									} else {
+										// Si no tiene archivo, regresar a selección de modo
+										setActiveStep(STEPS.UPLOAD);
+										setIsModeSelected(true);
+									}
+								}}
+								className="flex items-center text-sm text-gray-500 hover:text-gray-700 mb-2"
+							>
+								<ArrowLeftIcon className="h-4 w-4 mr-1" />
+								Volver
+							</button>
+							Completa tu información fiscal
+						</>
+					) : (
+						<>Revisa y completa tu información</>
+					)}
+				</DialogTitle>
 				<DialogDescription>
-					Verifica los datos extraídos y completa los campos faltantes
+					{entryMode === ENTRY_MODES.MANUAL
+						? "Ingresa manualmente tus datos fiscales"
+						: "Verifica los datos extraídos y completa los campos faltantes"}
 				</DialogDescription>
 
 				<DialogBody className="space-y-6">
@@ -1112,7 +1373,8 @@ export default function TaxProfileForm({ isOpen }) {
 						</div>
 					)}
 
-					{extractedData && (
+					{/* Mostrar resumen de datos extraídos solo en modo automático */}
+					{extractedData && entryMode === ENTRY_MODES.AUTOMATIC && (
 						<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
 							<h4 className="font-semibold text-blue-800 mb-2 flex items-center">
 								<DocumentTextIcon className="h-5 w-5 mr-2" />
@@ -1148,7 +1410,8 @@ export default function TaxProfileForm({ isOpen }) {
 						</div>
 					)}
 
-					{isEditing || !extractedData ? (
+					{/* Campos del formulario - Siempre editables en modo manual, en modo automático solo si isEditing es true */}
+					{(isEditing || !extractedData || entryMode === ENTRY_MODES.MANUAL) ? (
 						<>
 							<Field>
 								<Label>Nombre*</Label>
@@ -1163,6 +1426,7 @@ export default function TaxProfileForm({ isOpen }) {
 									type="text"
 									autoComplete="given-name"
 									disabled={isSaving}
+									placeholder="Ej: Juan Pérez García"
 								/>
 								{errors.name && (
 									<ErrorMessage>{errors.name}</ErrorMessage>
@@ -1190,7 +1454,7 @@ export default function TaxProfileForm({ isOpen }) {
 									}}
 									type="text"
 									disabled={isSaving}
-									placeholder="Ej: MEBE931209BI2 (13 caracteres)"
+									placeholder="Ej: MEBE931209BI2 (13 caracteres) o ABC123456XYZ (12 caracteres)"
 								/>
 								{errors.rfc && (
 									<ErrorMessage>{errors.rfc}</ErrorMessage>
@@ -1287,6 +1551,49 @@ export default function TaxProfileForm({ isOpen }) {
 										</p>
 									)}
 							</Field>
+
+							{/* Subida de archivo en modo manual (si aún no se ha subido) */}
+							{entryMode === ENTRY_MODES.MANUAL && !uploadedFile && (
+								<Field>
+									<Label>Constancia de Situación Fiscal *</Label>
+									<Description>
+										Sube el archivo PDF de tu constancia (máximo 5MB). Debe
+										ser emitida en los últimos 3 meses.
+									</Description>
+									
+									<div className="space-y-3">
+										<div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+											<DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+											<p className="text-sm text-gray-600 mb-4">
+												Sube tu constancia fiscal en PDF (máximo 5MB)
+											</p>
+											<Button
+												type="button"
+												onClick={(e) => {
+													e.stopPropagation();
+													manualFileInputRef.current?.click();
+												}}
+												className="inline-flex items-center gap-2"
+												disabled={isSaving}
+											>
+												<ArrowUpTrayIcon className="h-4 w-4" />
+												Seleccionar archivo
+												<input
+													ref={manualFileInputRef}
+													type="file"
+													className="hidden"
+													accept="application/pdf"
+													onChange={handleManualFileUpload}
+													disabled={isSaving}
+												/>
+											</Button>
+										</div>
+										{errors.fiscal_certificate && (
+											<ErrorMessage>{errors.fiscal_certificate}</ErrorMessage>
+										)}
+									</div>
+								</Field>
+							)}
 
 							<Field className="hidden">
 								<Label>Uso del CFDI *</Label>
@@ -1397,17 +1704,19 @@ export default function TaxProfileForm({ isOpen }) {
 						onClick={handlePrevStep}
 						disabled={isSaving}
 					>
-						Cambiar archivo
+						{entryMode === ENTRY_MODES.AUTOMATIC ? "Cambiar archivo" : "Volver"}
 					</Button>
 					<div className="flex gap-2">
-						<Button
-							plain
-							type="button"
-							onClick={() => setIsEditing(!isEditing)}
-							disabled={isSaving}
-						>
-							{isEditing ? "Ver resumen" : "Editar datos"}
-						</Button>
+						{extractedData && entryMode === ENTRY_MODES.AUTOMATIC && (
+							<Button
+								plain
+								type="button"
+								onClick={() => setIsEditing(!isEditing)}
+								disabled={isSaving}
+							>
+								{isEditing ? "Ver resumen" : "Editar datos"}
+							</Button>
+						)}
 						<Button
 							type="button"
 							onClick={handleNextStep}
@@ -1422,9 +1731,9 @@ export default function TaxProfileForm({ isOpen }) {
 		);
 	};
 
-	// Paso 3: Confirmar y guardar
+	// Paso 3: Confirmar y guardar (común para ambos modos)
 	const renderConfirmStep = () => {
-		console.log("🖼️ Renderizando paso CONFIRM");
+		console.log("🖼️ Renderizando paso CONFIRM, entryMode:", entryMode);
 		
 		return (
 			<>
@@ -1526,7 +1835,7 @@ export default function TaxProfileForm({ isOpen }) {
 						</div>
 					)}
 
-					{extractedData && (
+					{extractedData && entryMode === ENTRY_MODES.AUTOMATIC && (
 						<div className="border-t pt-4">
 							<label className="flex items-start space-x-3">
 								<input
@@ -1593,21 +1902,114 @@ export default function TaxProfileForm({ isOpen }) {
 		);
 	};
 
-	// Renderizar contenido basado en el paso activo
+	// Componente para mostrar el progreso de pasos
+	const StepIndicator = ({ step, label, isActive, isCompleted }) => (
+		<div className="flex flex-col items-center">
+			<div
+				className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${isCompleted
+					? "bg-green-100 border-green-600 text-green-600"
+					: isActive
+						? "bg-blue-100 border-blue-600 text-blue-600"
+						: "bg-gray-100 border-gray-300 text-gray-400"
+					}`}
+			>
+				{isCompleted ? (
+					<CheckCircleIcon className="w-6 h-6" />
+				) : (
+					<span className="font-semibold">{step}</span>
+				)}
+			</div>
+			<span
+				className={`mt-2 text-sm font-medium ${isActive || isCompleted ? "text-gray-900" : "text-gray-500"
+					}`}
+			>
+				{label}
+			</span>
+		</div>
+	);
+
+	// Componente Label personalizado para usar fuera de Field
+	const SimpleLabel = ({ children, className = "" }) => (
+		<div className={`text-sm font-medium text-gray-700 ${className}`}>
+			{children}
+		</div>
+	);
+
+	// Componente para mostrar progreso de guardado
+	const SavingProgress = () => (
+		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+			<div className="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+				<div className="text-center">
+					<ArrowPathIcon className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
+					<h3 className="text-lg font-semibold text-gray-900 mb-2">
+						{cachedEditMode
+							? "Actualizando perfil fiscal..."
+							: "Guardando perfil fiscal..."}
+					</h3>
+					<p className="text-gray-600 mb-4">{saveStep}</p>
+					<div className="w-full bg-gray-200 rounded-full h-2">
+						<div className="bg-blue-600 h-2 rounded-full animate-pulse"></div>
+					</div>
+					<p className="text-xs text-gray-500 mt-4">
+						Por favor no cierre esta ventana
+					</p>
+				</div>
+			</div>
+		</div>
+	);
+
+	// Componente para mostrar información del archivo subido
+	const FileInfo = ({ file, onRemove }) => (
+		<div className="bg-green-50 border border-green-200 rounded-lg p-4">
+			<div className="flex items-center justify-between">
+				<div className="flex items-center space-x-3">
+					<div className="p-2 bg-green-100 rounded-lg">
+						<DocumentTextIcon className="h-6 w-6 text-green-600" />
+					</div>
+					<div>
+						<h4 className="font-medium text-green-800 text-sm">
+							Archivo listo para procesar
+						</h4>
+						<p className="text-xs text-green-700 mt-1">
+							{file.name} • {(file.size / 1024 / 1024).toFixed(2)} MB
+						</p>
+					</div>
+				</div>
+				<button
+					type="button"
+					onClick={onRemove}
+					className="p-1 hover:bg-red-100 rounded-full transition-colors"
+					disabled={processingPdf || isSaving}
+				>
+					<XMarkIcon className="h-5 w-5 text-red-500" />
+				</button>
+			</div>
+		</div>
+	);
+
+	// Renderizar contenido basado en el paso activo y modo seleccionado
 	const renderContent = () => {
-		console.log("🎬 renderContent llamado, activeStep:", activeStep);
+		console.log("🎬 renderContent llamado, activeStep:", activeStep, "isModeSelected:", isModeSelected, "entryMode:", entryMode);
 		
-		switch (activeStep) {
-			case STEPS.UPLOAD:
+		if (activeStep === STEPS.UPLOAD) {
+			// Si ya seleccionó modo automático y no ha subido archivo, mostrar pantalla de subida
+			if (isModeSelected && entryMode === ENTRY_MODES.AUTOMATIC) {
 				return renderUploadStep();
-			case STEPS.REVIEW:
-				return renderReviewStep();
-			case STEPS.CONFIRM:
-				return renderConfirmStep();
-			default:
-				console.warn("⚠️ Paso desconocido, usando UPLOAD por defecto");
-				return renderUploadStep();
+			}
+			// Si ya seleccionó modo manual, ir directamente a review
+			if (isModeSelected && entryMode === ENTRY_MODES.MANUAL) {
+				setTimeout(() => setActiveStep(STEPS.REVIEW), 0);
+				return null;
+			}
+			// Mostrar selección de modo
+			return renderModeSelectionStep();
+		} else if (activeStep === STEPS.REVIEW) {
+			return renderReviewStep();
+		} else if (activeStep === STEPS.CONFIRM) {
+			return renderConfirmStep();
 		}
+		
+		return renderModeSelectionStep();
 	};
 
 	console.log("🏁 Renderizando componente principal, activeStep:", activeStep);
@@ -1625,7 +2027,7 @@ export default function TaxProfileForm({ isOpen }) {
 						<div className="flex justify-between items-center mb-6">
 							<StepIndicator
 								step="1"
-								label="Subir archivo"
+								label={entryMode === ENTRY_MODES.AUTOMATIC && isModeSelected ? "Subir archivo" : "Seleccionar método"}
 								isActive={activeStep === STEPS.UPLOAD}
 								isCompleted={activeStep > STEPS.UPLOAD}
 							/>
