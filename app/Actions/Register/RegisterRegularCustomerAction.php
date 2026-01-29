@@ -31,6 +31,7 @@ class RegisterRegularCustomerAction
         ?string $phoneCountry = null,
         ?string $password = null,
         ?int $referrerUserId = null,
+        ?string $state = null,
     ): RegularAccount {
 
         DB::beginTransaction();
@@ -47,7 +48,8 @@ class RegisterRegularCustomerAction
                 email: $email,
                 password: $password,
                 documentationAccepted: true,
-                referrerUserId: $referrerUserId
+                referrerUserId: $referrerUserId,
+                state: $state,
             );
 
             $regularAccount = ($this->createRegularCustomerAction)($user);
