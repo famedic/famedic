@@ -13,6 +13,9 @@ use Illuminate\Support\ServiceProvider;
 use Laravel\Cashier\Cashier;
 use Stripe\StripeClient;
 use App\Services\ConstanciaFiscalService;
+use App\Services\EfevooPayService;
+use App\Services\EfevooPayFactoryService;
+use App\Services\EfevooPaySimulatorService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -31,8 +34,26 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->app->singleton(ConstanciaFiscalService::class, function ($app) {
-        return new ConstanciaFiscalService();
-    });
+            return new ConstanciaFiscalService();
+        });
+
+        $this->app->register(\App\Providers\EfevooPayServiceProvider::class);
+
+        /*
+        $this->app->singleton(EfevooPayService::class, function ($app) {
+            return new EfevooPayService();
+        });
+        */
+        $this->app->singleton(EfevooPayFactoryService::class, function ($app) {
+            return new EfevooPayFactoryService(
+                $app->make(EfevooPayService::class),
+                $app->make(EfevooPaySimulatorService::class)
+            );
+        });
+        
+        // También mantener el servicio original disponible
+        $this->app->singleton(EfevooPayService::class);
+        $this->app->singleton(EfevooPaySimulatorService::class);
     }
 
     public function boot(): void
@@ -59,6 +80,6 @@ class AppServiceProvider extends ServiceProvider
             ]);
         });
 
-        Cashier::useCustomerModel(Customer::class);
+        Cashier::useCustomerModel(Customer::class);        
     }
 }
