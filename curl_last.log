@@ -1,0 +1,68 @@
+* Host test-intgapi.efevoopay.com:443 was resolved.
+* IPv6: 2606:4700:10::ac42:a3fa, 2606:4700:10::6814:1aab
+* IPv4: 172.66.163.250, 104.20.26.171
+*   Trying [2606:4700:10::ac42:a3fa]:443...
+* ALPN: curl offers h2,http/1.1
+* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / X25519 / id-ecPublicKey
+* ALPN: server accepted h2
+* Server certificate:
+*  subject: CN=efevoopay.com
+*  start date: Jan 18 09:21:01 2026 GMT
+*  expire date: Apr 18 10:20:50 2026 GMT
+*  issuer: C=US; O=Google Trust Services; CN=WE1
+*  SSL certificate verify result: unable to get local issuer certificate (20), continuing anyway.
+*   Certificate level 0: Public key type EC/prime256v1 (256/128 Bits/secBits), signed using ecdsa-with-SHA256
+*   Certificate level 1: Public key type EC/prime256v1 (256/128 Bits/secBits), signed using ecdsa-with-SHA384
+*   Certificate level 2: Public key type EC/secp384r1 (384/192 Bits/secBits), signed using sha256WithRSAEncryption
+* Connected to test-intgapi.efevoopay.com (2606:4700:10::ac42:a3fa) port 443
+* using HTTP/2
+* [HTTP/2] [1] OPENED stream for https://test-intgapi.efevoopay.com/v1/apiservice
+* [HTTP/2] [1] [:method: POST]
+* [HTTP/2] [1] [:scheme: https]
+* [HTTP/2] [1] [:authority: test-intgapi.efevoopay.com]
+* [HTTP/2] [1] [:path: /v1/apiservice]
+* [HTTP/2] [1] [accept: */*]
+* [HTTP/2] [1] [content-type: application/json]
+* [HTTP/2] [1] [x-api-user: Efevoo Pay]
+* [HTTP/2] [1] [x-api-key: Hq#J0hs)jK+YqF6J]
+* [HTTP/2] [1] [content-length: 105]
+> POST /v1/apiservice HTTP/2
+Host: test-intgapi.efevoopay.com
+Accept: */*
+Content-Type: application/json
+X-API-USER: Efevoo Pay
+X-API-KEY: Hq#J0hs)jK+YqF6J
+Content-Length: 105
+
+* upload completely sent off: 105 bytes
+< HTTP/2 200 
+< date: Fri, 30 Jan 2026 02:59:54 GMT
+< content-type: application/json
+< cf-ray: 9c5db73d79b5d980-QRO
+< cf-cache-status: DYNAMIC
+< access-control-allow-origin: https://efevoopay.com
+< cache-control: no-store, max-age=0
+< x-xss-protection: 1; mode=block
+< expires: 0
+< server: cloudflare
+< set-cookie: __Secure-=EGr2Uqn6b6t9mfeV8b8tH5grN36nj3fKr5wkdqcULc8KgvXH7MhBNPZKrzsgRnNr; max-age=10800; SameSite=Lax; Secure; HttpOnly
+< strict-transport-security: max-age=31536000; includeSubDomains; preload
+< vary: Origin, accept-encoding
+< pragma: no-cache
+< access-control-allow-credentials: true
+< access-control-allow-headers: Content-Type,Authorization
+< access-control-allow-methods: POST, GET
+< access-control-max-age: 240
+< content-security-policy: default-src 'none';script-src-elem static.cloudflareinsights.com ; img-src efv-emi-lambda.s3.amazonaws.com ; connect-src *.efevoopay.com *.efevoopaylbda.com ; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; object-src 'none'; upgrade-insecure-requests; block-all-mixed-content;
+< cross-origin-embedder-policy: require-corp; report-to='https://report.efevoopay.com/report';
+< cross-origin-embedder-policy-report-only: require-corp; report-to='https://report.efevoopay.com/report';
+< cross-origin-opener-policy: same-origin; report-to='https://report.efevoopay.com/report';
+< cross-origin-opener-policy-report-only: same-origin; report-to='https://report.efevoopay.com/report';
+< permissions-policy: geolocation=(), microphone=(), camera=()
+< expect-ct: max-age=86400, enforce
+< referrer-policy: same-origin
+< x-content-type-options: nosniff
+< x-frame-options: SAMEORIGIN
+< alt-svc: h3=":443"; ma=86400
+< 
+* Connection #0 to host test-intgapi.efevoopay.com left intact
