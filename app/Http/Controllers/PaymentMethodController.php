@@ -2,41 +2,332 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Stripe\CreateStripeCheckoutSessionAction;
-use App\Actions\Stripe\DeleteStripePaymentMethodAction;
+use App\Services\EfevooPayFactoryService;
+// Eliminar: use App\Services\EfevooPayService;
+use App\Http\Requests\PaymentMethods\StorePaymentMethodRequest;
 use App\Http\Requests\PaymentMethods\DestroyPaymentMethodRequest;
+use App\Models\EfevooToken;
+use App\Models\Customer;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Log;
 
 class PaymentMethodController extends Controller
 {
+    protected $efevooPayService;
+    
+    public function __construct(EfevooPayFactoryService $efevooPayService)
+    {
+        $this->efevooPayService = $efevooPayService;
+    }
+    
     public function index(Request $request)
     {
-        if ($request->has('success')) {
-            return redirect()->route('payment-methods.index')
-                ->flashMessage('Tarjeta guardada exitosamente.');
+        $customer = $this->getCustomer($request->user());
+        
+        if (!$customer) {
+            return redirect()->route('dashboard')
+                ->with('error', 'No tienes un perfil de cliente configurado.');
         }
+        
+        $tokens = EfevooToken::where('customer_id', $customer->id)
+            ->active()
+            ->latest()
+            ->get()
+            ->map(function ($token) {
+                return $this->formatTokenForFrontend($token);
+            });
+        
+        // Obtener tarjetas de prueba del simulador si está disponible
+        $testCards = $this->efevooPayService->getTestCards();
+        
         return Inertia::render('PaymentMethods', [
-            'paymentMethods' => $request->user()->customer->paymentMethods(),
-            'hasOdessaPay' => $request->user()->customer->has_odessa_afiliate_account,
+            'paymentMethods' => $tokens,
+            'hasOdessaPay' => $customer->has_odessa_afiliate_account ?? false,
+            'efevooConfig' => [
+                'environment' => config('efevoopay.environment'),
+                'tokenization_amount' => config('efevoopay.test_amounts.default') / 100,
+                'force_simulation' => config('efevoopay.force_simulation', false),
+            ],
+            'testCards' => $testCards, // Enviar tarjetas de prueba al frontend
+        ]);
+    }
+    
+    public function create(Request $request)
+    {
+        $customer = $this->getCustomer($request->user());
+        
+        if (!$customer) {
+            return redirect()->route('dashboard')
+                ->with('error', 'No tienes un perfil de cliente configurado.');
+        }
+        
+        // Obtener tarjetas de prueba
+        $testCards = $this->efevooPayService->getTestCards();
+        
+        return Inertia::render('PaymentMethods/Create', [
+            'efevooConfig' => [
+                'environment' => config('efevoopay.environment'),
+                'tokenization_amount' => config('efevoopay.test_amounts.default') / 100,
+                'force_simulation' => config('efevoopay.force_simulation', false),
+            ],
+            'testCards' => $testCards,
+        ]);
+    }
+    
+    public function store(StorePaymentMethodRequest $request)
+    {
+        try {
+            $user = $request->user();
+            $customer = $this->getCustomer($user);
+            
+            if (!$customer) {
+                return back()->withErrors([
+                    'card' => 'No tienes un perfil de cliente configurado.',
+                ]);
+            }
+            
+            // Validar límite de tarjetas
+            if ($this->exceedsCardLimit($customer->id)) {
+                return back()->withErrors([
+                    'card' => 'Has alcanzado el límite máximo de 5 tarjetas guardadas.',
+                ]);
+            }
+            
+            // Preparar datos para tokenización
+            $cardData = [
+                'card_number' => str_replace(' ', '', $request->card_number),
+                'expiration' => $request->exp_month . $request->exp_year_short,
+                'card_holder' => $request->card_holder,
+                'amount' => config('efevoopay.test_amounts.default') / 100,
+                'alias' => $request->alias, // Incluir el alias
+            ];
+            
+            Log::info('Iniciando tokenización', [
+                'customer_id' => $customer->id,
+                'user_id' => $user->id,
+                'last_four' => substr($cardData['card_number'], -4),
+                'alias' => $cardData['alias'],
+                'expiration' => $cardData['expiration'],
+            ]);
+            
+            // Usar el factory service
+            $result = $this->efevooPayService->tokenizeCard($cardData, $customer->id);
+            
+            // Usar el método tokenizeCard en lugar de fastTokenize
+            //$result = $this->efevooPayService->tokenizeCard($cardData, $customer->id);
+            
+            Log::info('Resultado de tokenización', [
+                'success' => $result['success'] ?? false,
+                'message' => $result['message'] ?? 'Sin mensaje',
+                'has_token_id' => isset($result['token_id']),
+                'has_errors' => isset($result['errors']),
+            ]);
+            
+            if (!$result['success']) {
+                $errorMessage = $result['message'] ?? 'Error al tokenizar la tarjeta';
+                
+                // Si hay errores de validación, mostrarlos
+                if (isset($result['errors'])) {
+                    return back()->withErrors($result['errors']);
+                }
+                
+                return back()->withErrors([
+                    'card' => $errorMessage,
+                ]);
+            }
+            
+            Log::info('Tokenización exitosa', [
+                'token_id' => $result['token_id'] ?? null,
+                'customer_id' => $customer->id,
+            ]);
+            
+            return redirect()->route('payment-methods.index')
+                ->with('success', 'Tarjeta guardada exitosamente. Se realizó un cargo de verificación.');
+                
+        } catch (\Exception $e) {
+            Log::error('Excepción en store payment method', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            return back()->withErrors([
+                'card' => 'Error al procesar la tarjeta: ' . $e->getMessage(),
+            ]);
+        }
+    }
+    
+    public function destroy(DestroyPaymentMethodRequest $request, string $tokenId)
+    {
+        $user = $request->user();
+        $customer = $this->getCustomer($user);
+        
+        if (!$customer) {
+            return back()->withErrors([
+                'card' => 'No tienes un perfil de cliente configurado.',
+            ]);
+        }
+        
+        $token = EfevooToken::where('id', $tokenId)
+            ->where('customer_id', $customer->id)
+            ->firstOrFail();
+        
+        // Verificar transacciones pendientes
+        if ($this->hasPendingTransactions($token)) {
+            return back()->withErrors([
+                'card' => 'No puedes eliminar esta tarjeta porque tiene transacciones pendientes.',
+            ]);
+        }
+        
+        // Soft delete
+        $token->update([
+            'is_active' => false,
+            'deleted_at' => now(),
+        ]);
+        
+        Log::info('Tarjeta eliminada', [
+            'token_id' => $token->id,
+            'customer_id' => $customer->id,
+            'alias' => $token->alias,
+        ]);
+        
+        return back()->with('success', 'Tarjeta eliminada exitosamente.');
+    }
+    
+    public function health()
+    {
+        $health = $this->efevooPayService->healthCheck();
+        
+        return response()->json([
+            'status' => $health['status'],
+            'environment' => $health['environment'],
+            'message' => $health['status'] === 'online' ? 'Servicio operativo' : 'Servicio inactivo',
+            'timestamp' => $health['timestamp'],
+        ]);
+    }
+    
+    /**
+     * Obtener el customer del usuario
+     */
+    private function getCustomer(User $user): ?Customer
+    {
+        // Primero intentar obtener el customer directamente
+        if ($user->customer) {
+            return $user->customer;
+        }
+        
+        // Si no existe, buscar por user_id
+        return Customer::where('user_id', $user->id)->first();
+    }
+    
+    /**
+     * Formatear token para frontend
+     */
+    private function formatTokenForFrontend(EfevooToken $token): array
+    {
+        return [
+            'id' => $token->id,
+            'object' => 'efevoo_token',
+            'card' => [
+                'brand' => strtolower($token->card_brand),
+                'last4' => $token->card_last_four,
+                'exp_month' => substr($token->card_expiration, 0, 2),
+                'exp_year' => '20' . substr($token->card_expiration, 2, 2),
+                'exp_year_short' => substr($token->card_expiration, 2, 2),
+            ],
+            'billing_details' => [
+                'name' => $token->card_holder,
+            ],
+            'alias' => $token->alias ?? $token->generateAlias(),
+            'created' => $token->created_at->timestamp,
+            'metadata' => array_merge(
+                $token->metadata ?? [],
+                [
+                    'alias' => $token->alias,
+                    'environment' => $token->environment,
+                    'expires_at' => $token->expires_at?->toISOString(),
+                ]
+            ),
+        ];
+    }
+    
+    /**
+     * Verificar si excede límite de tarjetas
+     */
+    private function exceedsCardLimit(int $customerId): bool
+    {
+        return EfevooToken::where('customer_id', $customerId)
+            ->active()
+            ->count() >= 5;
+    }
+    
+    /**
+     * Verificar transacciones pendientes
+     */
+    private function hasPendingTransactions(EfevooToken $token): bool
+    {
+        return $token->transactions()
+            ->whereIn('status', ['pending', 'approved'])
+            ->where('transaction_type', 'payment')
+            ->exists();
+    }
+    
+    /**
+     * Método para actualizar el alias de una tarjeta
+     */
+    public function updateAlias(Request $request, string $tokenId)
+    {
+        $user = $request->user();
+        $customer = $this->getCustomer($user);
+        
+        if (!$customer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes un perfil de cliente configurado.'
+            ], 403);
+        }
+        
+        $request->validate([
+            'alias' => 'required|string|max:50',
+        ]);
+        
+        $token = EfevooToken::where('id', $tokenId)
+            ->where('customer_id', $customer->id)
+            ->firstOrFail();
+        
+        $token->update([
+            'alias' => $request->alias,
+        ]);
+        
+        Log::info('Alias actualizado', [
+            'token_id' => $token->id,
+            'old_alias' => $token->getOriginal('alias'),
+            'new_alias' => $request->alias,
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Alias actualizado correctamente',
+            'alias' => $request->alias,
         ]);
     }
 
-    public function create(Request $request, CreateStripeCheckoutSessionAction $action)
+    // Añadir método para forzar simulación (útil para pruebas)
+    public function forceSimulation(Request $request)
     {
-        return Inertia::location(
-            $action(
-                $request->user()->customer->stripe_customer,
-                $request->return_url ?? route('payment-methods.index', ['success' => true]),
-                $request->return_url ?? route('payment-methods.index')
-            )->url
-        );
-    }
-
-    public function destroy(DestroyPaymentMethodRequest $request, string $paymentMethod, DeleteStripePaymentMethodAction $action)
-    {
-        $action($request->user()->customer, $paymentMethod);
-
-        return back()->flashMessage('Tarjeta eliminada exitosamente.');
+        $request->validate([
+            'force' => 'required|boolean',
+        ]);
+        
+        $this->efevooPayService->forceSimulation($request->force);
+        
+        return response()->json([
+            'success' => true,
+            'message' => $request->force 
+                ? 'Simulación forzada activada' 
+                : 'Simulación forzada desactivada',
+            'force_simulation' => $request->force,
+        ]);
     }
 }
