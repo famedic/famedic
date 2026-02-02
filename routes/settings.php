@@ -8,7 +8,9 @@ use App\Http\Controllers\FamilyController;
 use App\Http\Controllers\LaboratoryPurchaseController;
 use App\Http\Controllers\LaboratoryResultController;
 use App\Http\Controllers\LaboratoryQuoteController;
-
+use App\Http\Controllers\EfevooWebhookController;
+use App\Http\Controllers\TestEfevooController;
+use App\Http\Controllers\TestEfevooFinalController;
 use App\Http\Controllers\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\TaxProfileController;
@@ -40,7 +42,48 @@ Route::middleware([
     Route::post('checkout/addresses', CheckoutAddressController::class)->name('checkout.addresses.store');
     Route::resource('contacts', ContactController::class)->except('show');
     Route::post('checkout/contacts', CheckoutContactController::class)->name('checkout.contacts.store');
-    Route::resource('payment-methods', PaymentMethodController::class)->only(['index', 'create', 'destroy']);
+
+    //Route::resource('payment-methods', PaymentMethodController::class)->only(['index', 'create', 'destroy']);
+    // Métodos de pago con EfevooPay
+    Route::resource('payment-methods', PaymentMethodController::class)->only([
+        'index', 'create', 'store', 'destroy'
+    ]);
+
+    Route::patch('/payment-methods/{token}/alias', [PaymentMethodController::class, 'updateAlias'])->name('payment-methods.update-alias');
+    
+    //Route::get('/payment-methods', [PaymentMethodController::class, 'index'])->name('payment-methods.index');
+    Route::get('/payment-methods/create', [PaymentMethodController::class, 'create'])->name('payment-methods.create');
+    Route::post('/payment-methods', [PaymentMethodController::class, 'store'])->name('payment-methods.store');
+    Route::delete('/payment-methods/{token}', [PaymentMethodController::class, 'destroy'])->name('payment-methods.destroy');
+    
+    // Nueva ruta para actualizar alias
+    Route::patch('/payment-methods/{token}/alias', [PaymentMethodController::class, 'updateAlias'])->name('payment-methods.update-alias');
+    
+    //rutas temporales para pruebas de efevoo ------------------------------   
+    Route::get('/test/efevoo', [TestEfevooController::class, 'testConnection'])
+        ->name('test.efevoo');
+        
+    Route::post('/test/efevoo/tokenize', [TestEfevooController::class, 'testManualToken'])
+        ->name('test.efevoo.tokenize');
+
+    // Ruta para verificar estado del servicio
+    Route::get('payment-methods/health', [PaymentMethodController::class, 'health'])
+        ->name('payment-methods.health');
+    Route::get('/test/efevoo/correct', [TestEfevooFinalController::class, 'testWithCorrectFormat'])
+        ->name('test.efevoo.correct');
+        
+    Route::get('/test/efevoo/direct', [TestEfevooFinalController::class, 'testDirectPayment'])
+        ->name('test.efevoo.direct');
+        
+    Route::get('/test/efevoo/tokens', [TestEfevooFinalController::class, 'listTokens'])
+        ->name('test.efevoo.tokens');    
+    //termina pruebas efevoo ------------------------------
+
+    // Webhook para notificaciones de EfevooPay
+    Route::post('efevoo/webhook', [EfevooWebhookController::class, 'handle'])
+        ->name('efevoo.webhook')
+        ->withoutMiddleware(['auth', 'customer']);
+
     Route::resource('laboratory-purchases', LaboratoryPurchaseController::class)->only(['index', 'show']);
     
     Route::resource('laboratory-quotes', LaboratoryQuoteController::class)->only(['index', 'show']);

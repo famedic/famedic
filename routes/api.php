@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\EfevooPayController;
+
 use App\Http\Controllers\TestApiController;
 use App\Http\Controllers\LaboratoryEndpointController;
 use App\Http\Controllers\Laboratory\LaboratoryWebhookController;
@@ -28,4 +30,22 @@ Route::prefix('laboratory/webhook')->name('laboratory.webhook.')->group(function
     // Webhook principal (GDA)
     Route::post('notifications', [LaboratoryWebhookController::class, 'handleNotification'])
         ->name('notifications');
+});
+
+// Rutas para EfevooPay
+Route::prefix('efevoopay')->group(function () {
+    // Health check
+    Route::get('health', [EfevooPayController::class, 'healthCheck']);
+    
+    // Tokenización y manejo de tokens
+    Route::post('tokenize', [EfevooPayController::class, 'tokenizeCard']);
+    Route::get('tokens', [EfevooPayController::class, 'getUserTokens']);
+    Route::delete('tokens/{token}', [EfevooPayController::class, 'deleteToken']);
+    
+    // Pagos y reembolsos
+    Route::post('payment', [EfevooPayController::class, 'processPayment']);
+    Route::post('refund', [EfevooPayController::class, 'refund']);
+    
+    // Consultas
+    Route::post('transactions/search', [EfevooPayController::class, 'searchTransactions']);
 });
