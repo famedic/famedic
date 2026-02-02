@@ -2,29 +2,32 @@
 
 namespace App\Http\Requests\PaymentMethods;
 
+use App\Models\EfevooToken;
 use Illuminate\Foundation\Http\FormRequest;
 
 class DestroyPaymentMethodRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
-    public function authorize(): bool
+    public function authorize()
     {
-        $paymentMethod = $this->user()->customer?->findPaymentMethod($this->route('payment_method'));
-
-        return $paymentMethod ? true : false;
+        $tokenId = $this->route('payment_method');
+        $customerId = $this->user()->customer->id;
+        
+        return EfevooToken::where('id', $tokenId)
+            ->where('customer_id', $customerId)
+            ->exists();
     }
-
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
-    public function rules(): array
+    
+    public function rules()
     {
         return [
-            //
+            // No se necesitan reglas adicionales para eliminar
+        ];
+    }
+    
+    public function messages()
+    {
+        return [
+            'authorize' => 'No tienes permiso para eliminar esta tarjeta.',
         ];
     }
 }
