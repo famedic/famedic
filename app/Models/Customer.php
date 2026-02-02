@@ -272,4 +272,12 @@ class Customer extends Model
     {
         return $this->hasMany(LaboratoryQuote::class);
     }
+
+    /**
+     * Relación con tokens de Efevoo
+     */
+    public function efevooTokens()
+    {
+        return $this->hasMany(EfevooToken::class, 'customer_id');
+    }
 }
