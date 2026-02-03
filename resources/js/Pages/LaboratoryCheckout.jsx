@@ -1,3 +1,4 @@
+// LaboratoryCheckout.jsx - Versión actualizada y corregida
 import { useDeleteLaboratoryCartItem } from "@/Hooks/useDeleteLaboratoryCartItem";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import { Badge } from "@/Components/Catalyst/badge";
@@ -47,10 +48,8 @@ export default function LaboratoryCheckout({
     const initialFormData = {
         contact:
             new URLSearchParams(window.location.search).get("contact") || null,
-
         address:
             new URLSearchParams(window.location.search).get("address") || null,
-
         payment_method:
             new URLSearchParams(window.location.search).get("payment_method") ||
             null,
@@ -64,28 +63,68 @@ export default function LaboratoryCheckout({
         clearErrors,
         post,
         processing: checkoutProcessing,
+        setError,
     } = useForm(initialFormData);
 
-    // DEBUG: Agrega este useEffect para ver los cambios
+    // DEBUG: Log para ver los datos del formulario
     useEffect(() => {
-        console.log('DEBUG - Form data updated:', data);
-        console.log('DEBUG - Contact:', data.contact, 'Type:', typeof data.contact);
-        console.log('DEBUG - Address:', data.address, 'Type:', typeof data.address);
-        console.log('DEBUG - Payment method:', data.payment_method, 'Type:', typeof data.payment_method);
+        console.log('DEBUG - Form data updated:', {
+            contact: data.contact,
+            address: data.address,
+            payment_method: data.payment_method,
+            payment_method_type: typeof data.payment_method,
+            is_string: typeof data.payment_method === 'string',
+            is_number: typeof data.payment_method === 'number',
+        });
     }, [data]);
 
+    // Transformar datos antes de enviar
     transform((data) => {
-        return {
+        console.log('DEBUG - Transformando datos antes de enviar:', {
+            original_payment_method: data.payment_method,
+            original_type: typeof data.payment_method,
+        });
+
+        // Asegurar que payment_method sea string
+        const transformedData = {
             ...data,
+            payment_method: String(data.payment_method), // Convertir explícitamente a string
             laboratory_appointment: laboratoryAppointment?.id,
             total: total,
         };
+
+        console.log('DEBUG - Datos transformados:', {
+            transformed_payment_method: transformedData.payment_method,
+            transformed_type: typeof transformedData.payment_method,
+        });
+
+        return transformedData;
     });
 
     const submit = (e, isBranchPayment) => {
         e.preventDefault();
 
         if (checkoutProcessing) return;
+
+        console.log('DEBUG - Enviando formulario:', {
+            isBranchPayment,
+            formData: data,
+            payment_method: data.payment_method,
+            payment_method_type: typeof data.payment_method,
+            laboratoryBrand: laboratoryBrand.value,
+            total: total,
+        });
+
+        // Validaciones adicionales
+        if (!data.address) {
+            setError('address', 'Debes seleccionar una dirección');
+            return;
+        }
+
+        if (!data.payment_method && !isBranchPayment) {
+            setError('payment_method', 'Debes seleccionar un método de pago');
+            return;
+        }
 
         if (isBranchPayment) {
             // PAGO EN SUCURSAL
@@ -95,6 +134,13 @@ export default function LaboratoryCheckout({
                 price: item.laboratory_test.famedic_price_cents,
                 quantity: 1,
             }));
+
+            console.log('DEBUG - Generando cotización para pago en sucursal:', {
+                items_count: items.length,
+                appointment_id: laboratoryAppointment?.id,
+                contact_id: data.contact,
+                address_id: data.address,
+            });
 
             router.post(
                 route("api.laboratory.quote.store", laboratoryBrand.value),
@@ -108,6 +154,7 @@ export default function LaboratoryCheckout({
                     onSuccess: (page) => {
                         const redirectUrl = page.props.redirect_url;
                         if (redirectUrl) {
+                            console.log('DEBUG - Redirigiendo a:', redirectUrl);
                             router.visit(redirectUrl);
                         }
                     },
@@ -118,8 +165,35 @@ export default function LaboratoryCheckout({
                 }
             );
         } else {
-            // PAGO ONLINE (tu lógica actual)
-            post(route("laboratory.checkout.store", { laboratory_brand: laboratoryBrand.value }));
+            // PAGO ONLINE
+            console.log('DEBUG - Enviando pago online a:', 
+                route("laboratory.checkout.store", { 
+                    laboratory_brand: laboratoryBrand.value 
+                })
+            );
+
+            post(route("laboratory.checkout.store", { 
+                laboratory_brand: laboratoryBrand.value 
+            }), {
+                onSuccess: (page) => {
+                    console.log('DEBUG - Pago exitoso, redirigiendo');
+                },
+                onError: (errors) => {
+                    console.error('DEBUG - Errores del backend:', errors);
+                    
+                    // Manejar errores específicos
+                    if (errors.payment_method) {
+                        alert(`Error en método de pago: ${errors.payment_method}`);
+                    } else if (errors.message) {
+                        alert(errors.message);
+                    } else {
+                        alert('Error al procesar el pago. Por favor intenta de nuevo.');
+                    }
+                },
+                onFinish: () => {
+                    console.log('DEBUG - Petición completada');
+                }
+            });
         }
     };
 
@@ -131,27 +205,38 @@ export default function LaboratoryCheckout({
     );
 
     const toggleAddressForm = () => setShowAddressForm((prev) => !prev);
-    const toggleContactForm = () => setShowContactForm((prev) => !prev);
+    const toggleContactForm = () => setContactForm((prev) => !prev);
 
     const contactStepIsComplete = useMemo(() => {
         const isComplete = !!data.contact || laboratoryAppointment;
-        console.log('DEBUG - Contact step complete:', isComplete, 'contact:', data.contact, 'appointment:', laboratoryAppointment);
+        console.log('DEBUG - Contact step complete:', { 
+            isComplete, 
+            contact: data.contact, 
+            appointment: laboratoryAppointment 
+        });
         return isComplete;
     }, [data.contact, laboratoryAppointment]);
 
     const addressStepIsComplete = useMemo(() => {
         const isComplete = !!data.address;
-        console.log('DEBUG - Address step complete:', isComplete, 'address:', data.address);
+        console.log('DEBUG - Address step complete:', { 
+            isComplete, 
+            address: data.address 
+        });
         return isComplete;
     }, [data.address]);
 
     const paymentMethodStepIsComplete = useMemo(() => {
         const isComplete = !!data.payment_method;
-        console.log('DEBUG - Payment method step complete:', isComplete, 'payment_method:', data.payment_method);
+        console.log('DEBUG - Payment method step complete:', { 
+            isComplete, 
+            payment_method: data.payment_method,
+            type: typeof data.payment_method 
+        });
         return isComplete;
     }, [data.payment_method]);
 
-    // CONDICIONES SEPARADAS PARA CADA TIPO DE PAGO
+    // Condiciones para habilitar/deshabilitar botones
     const onlinePaymentDisabled = checkoutProcessing ||
         !addressStepIsComplete ||
         !contactStepIsComplete ||
@@ -161,12 +246,17 @@ export default function LaboratoryCheckout({
         !addressStepIsComplete ||
         !contactStepIsComplete;
 
-    console.log('DEBUG - Online payment disabled:', onlinePaymentDisabled);
-    console.log('DEBUG - Branch payment disabled:', branchPaymentDisabled);
-    console.log('DEBUG - Steps:', {
-        contact: contactStepIsComplete,
-        address: addressStepIsComplete,
-        payment: paymentMethodStepIsComplete
+    console.log('DEBUG - Estado del checkout:', {
+        onlinePaymentDisabled,
+        branchPaymentDisabled,
+        steps: {
+            contact: contactStepIsComplete,
+            address: addressStepIsComplete,
+            payment: paymentMethodStepIsComplete
+        },
+        paymentMethodsCount: paymentMethods?.length || 0,
+        hasOdessaPay,
+        laboratoryBrand: laboratoryBrand.value,
     });
 
     const addCardReturnUrl = useMemo(() => {
