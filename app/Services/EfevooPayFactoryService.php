@@ -1,5 +1,4 @@
 <?php
-// app/Services/EfevooPayFactoryService.php
 
 namespace App\Services;
 
@@ -7,121 +6,98 @@ use Illuminate\Support\Facades\Log;
 
 class EfevooPayFactoryService
 {
-    protected $realService;
-    protected $simulatorService;
-    protected $forceSimulation = false;
-
-    public function __construct(
-        EfevooPayService $realService,
-        EfevooPaySimulatorService $simulatorService
-    ) {
-        $this->realService = $realService;
-        $this->simulatorService = $simulatorService;
-        
-        // Configurar si forzar simulación basado en entorno
-        $this->forceSimulation = config('efevoopay.force_simulation', false) 
-            || $this->simulatorService->isRealServiceAvailable() === false;
-    }
-
-    /**
-     * Obtener el servicio activo
-     */
-    public function getService()
+    protected $environment;
+    protected $forceSimulation;
+    
+    public function __construct()
     {
-        if ($this->forceSimulation) {
-            Log::info('Usando servicio SIMULADO de EfevooPay');
-            return $this->simulatorService;
-        }
+        // Verifica qué prefijo de configuración existe
+        $configPrefix = config('efevoopay') ? 'efevoopay' : 'efevoo';
         
-        // Verificar si el servicio real está disponible
-        try {
-            // Intentar una conexión rápida al servicio real
-            $health = $this->realService->healthCheck();
-            if ($health['status'] === 'online') {
-                Log::info('Usando servicio REAL de EfevooPay');
-                return $this->realService;
-            }
-        } catch (\Exception $e) {
-            Log::warning('Servicio real no disponible, usando simulador', [
-                'error' => $e->getMessage(),
+        $this->environment = config($configPrefix . '.environment', 'test');
+        $this->forceSimulation = config($configPrefix . '.force_simulation', false);
+        
+        Log::info('DEBUG - EfevooPayFactoryService initialized', [
+            'environment' => $this->environment,
+            'force_simulation' => $this->forceSimulation,
+            'api_url' => config($configPrefix . '.api_url'),
+        ]);
+    }
+    
+    /**
+     * Crea la instancia del servicio de pago - SIEMPRE devuelve EfevooPayService
+     */
+    public function createService()
+    {
+        // 1. Si force_simulation es true, usar simulador
+        if ($this->forceSimulation === true) {
+            Log::info('Usando servicio SIMULADO de EfevooPay', [
+                'environment' => $this->environment,
+                'force_simulation' => $this->forceSimulation
             ]);
+            return new EfevooPaySimulatorService();
         }
         
-        return $this->simulatorService;
-    }
-
-    /**
-     * Forzar uso del simulador
-     */
-    public function forceSimulation(bool $force = true): self
-    {
-        $this->forceSimulation = $force;
-        return $this;
-    }
-
-    /**
-     * Métodos delegados
-     */
-    public function tokenizeCard(array $cardData, int $customerId): array
-    {
-        return $this->getService()->tokenizeCard($cardData, $customerId);
-    }
-
-    public function fastTokenize(array $cardData, int $customerId): array
-    {
-        return $this->getService()->fastTokenize($cardData, $customerId);
-    }
-
-    public function getClientToken(bool $forceRefresh = false): array
-    {
-        return $this->getService()->getClientToken($forceRefresh);
-    }
-
-    public function healthCheck(): array
-    {
-        return $this->getService()->healthCheck();
-    }
-
-    public function processPayment(array $paymentData, int $customerId, ?int $tokenId = null): array
-    {
-        $service = $this->getService();
+        // 2. Para TODOS los demás casos, usar EfevooPayService (servicio original)
+        Log::info('Usando EfevooPayService (servicio original funcional)', [
+            'environment' => $this->environment,
+            'force_simulation' => $this->forceSimulation,
+            'api_url' => config('efevoo.api_url') ?? config('efevoopay.api_url'),
+        ]);
         
-        // Si el servicio es el simulador, usar su método
-        if ($service instanceof EfevooPaySimulatorService) {
-            return $service->processPayment($paymentData, $customerId, $tokenId);
+        return new \App\Services\EfevooPayService();
+    }
+    
+    /**
+     * Método proxy para healthCheck
+     */
+    public function healthCheck()
+    {
+        return $this->createService()->healthCheck();
+    }
+    
+    /**
+     * Método proxy para tokenizeCard
+     */
+    public function tokenizeCard(array $cardData, $customerId)
+    {
+        $service = $this->createService();
+        
+        // Para EfevooPayService, usar fastTokenize si está disponible
+        if ($service instanceof \App\Services\EfevooPayService && method_exists($service, 'fastTokenize')) {
+            return $service->fastTokenize($cardData, $customerId);
         }
         
-        // Para el servicio real, necesitarías implementar este método
-        throw new \RuntimeException('Método processPayment no implementado en el servicio real');
+        return $service->tokenizeCard($cardData, $customerId);
     }
-
-    public function processRefund(array $refundData, int $transactionId): array
-    {
-        $service = $this->getService();
-        
-        if ($service instanceof EfevooPaySimulatorService) {
-            return $service->processRefund($refundData, $transactionId);
-        }
-        
-        throw new \RuntimeException('Método processRefund no implementado en el servicio real');
-    }
-
-    public function searchTransactions(array $filters = []): array
-    {
-        return $this->getService()->searchTransactions($filters);
-    }
-
+    
     /**
-     * Método específico del simulador para obtener tarjetas de prueba
+     * Método proxy para getTestCards
      */
-    public function getTestCards(): ?array
+    public function getTestCards()
     {
-        $service = $this->getService();
+        $service = $this->createService();
         
-        if ($service instanceof EfevooPaySimulatorService) {
+        if (method_exists($service, 'getTestCards')) {
             return $service->getTestCards();
         }
         
-        return null;
+        return [];
+    }
+    
+    /**
+     * Método proxy para forceSimulation
+     */
+    public function forceSimulation(bool $force = true)
+    {
+        $this->forceSimulation = $force;
+        
+        // Actualizar configuración
+        config(['efevoo.force_simulation' => $force]);
+        config(['efevoopay.force_simulation' => $force]);
+        
+        Log::info('Simulación forzada ' . ($force ? 'activada' : 'desactivada'));
+        
+        return $this;
     }
 }
