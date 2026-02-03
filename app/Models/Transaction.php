@@ -15,12 +15,29 @@ class Transaction extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected static $unguarded = true;
+    protected $fillable = [
+        'transaction_amount_cents',
+        'payment_method', // 'stripe', 'efevoopay', 'odessa'
+        'reference_id',
+        'details',
+        'description',
+        'gateway', // 'stripe', 'efevoopay', 'odessa'
+        'gateway_transaction_id',
+        'gateway_status',
+        'gateway_response',
+        'gateway_token',
+        'gateway_processed_at',
+    ];
 
     protected $casts = [
         'details' => 'array',
+        'gateway_response' => 'array',
+        'gateway_processed_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
+    protected static $unguarded = true;
+    
     protected $appends = [
         'formatted_amount',
         'formatted_created_at',
@@ -71,10 +88,10 @@ class Transaction extends Model
         return $this->morphedByMany(OnlinePharmacyPurchase::class, 'transactionable');
     }
 
-    public function laboratoryPurchases()
+    /*public function laboratoryPurchases()
     {
         return $this->morphedByMany(LaboratoryPurchase::class, 'transactionable');
-    }
+    }*/
 
     public function medicalAttentionSubscriptions()
     {
@@ -115,5 +132,53 @@ class Transaction extends Model
 
             return 0;
         }
+    }
+
+    /**
+     * Obtener el cliente a través de los detalles
+     */
+    public function customer()
+    {
+        $customerId = $this->details['customer_id'] ?? null;
+        if ($customerId) {
+            return Customer::find($customerId);
+        }
+        return null;
+    }
+
+    /**
+     * Obtener el token de EfevooPay
+     */
+    public function efevooToken()
+    {
+        $tokenId = $this->details['token_id'] ?? null;
+        if ($tokenId) {
+            return EfevooToken::find($tokenId);
+        }
+        return null;
+    }
+
+    /**
+     * Formatear el monto
+     */
+    public function getFormattedAmountAttribute()
+    {
+        return number_format($this->transaction_amount_cents / 100, 2);
+    }
+
+    /**
+     * Verificar si es transacción de EfevooPay
+     */
+    public function isEfevooPay(): bool
+    {
+        return $this->payment_method === 'efevoopay' || $this->gateway === 'efevoopay';
+    }
+
+    /**
+     * Verificar si es transacción simulada
+     */
+    public function isSimulated(): bool
+    {
+        return $this->details['simulated'] ?? false;
     }
 }

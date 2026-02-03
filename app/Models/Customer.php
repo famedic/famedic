@@ -280,4 +280,128 @@ class Customer extends Model
     {
         return $this->hasMany(EfevooToken::class, 'customer_id');
     }
+
+    /**
+     * Obtener el total del carrito de laboratorio para una marca específica
+     */
+    public function getLaboratoryCartTotal(LaboratoryBrand $laboratoryBrand): int
+    {
+        return $this->laboratoryCartItems()
+            ->ofBrand($laboratoryBrand)
+            ->with('laboratoryTest')
+            ->get()
+            ->sum(function ($item) {
+                return $item->laboratoryTest->famedic_price_cents;
+            });
+    }
+
+    /**
+     * Obtener el subtotal del carrito de laboratorio
+     */
+    public function getLaboratoryCartSubtotal(LaboratoryBrand $laboratoryBrand): int
+    {
+        // Si tienes lógica de precios base diferente, ajústala
+        return $this->getLaboratoryCartTotal($laboratoryBrand);
+    }
+
+    /**
+     * Obtener el descuento del carrito de laboratorio
+     */
+    public function getLaboratoryCartDiscount(LaboratoryBrand $laboratoryBrand): int
+    {
+        return $this->laboratoryCartItems()
+            ->ofBrand($laboratoryBrand)
+            ->with('laboratoryTest')
+            ->get()
+            ->sum(function ($item) {
+                $publicPrice = $item->laboratoryTest->public_price_cents ?? 0;
+                $famedicPrice = $item->laboratoryTest->famedic_price_cents;
+
+                return max(0, $publicPrice - $famedicPrice);
+            });
+    }
+
+    public function paymentMethods()
+    {
+        return $this->efevooTokens()
+            ->active()
+            ->get()
+            ->map(function ($token) {
+                // Crear un objeto stdClass para mantener compatibilidad
+                $paymentMethod = new \stdClass();
+                $paymentMethod->id = $token->id;
+                $paymentMethod->object = 'efevoo_token';
+                $paymentMethod->card = (object) [
+                    'brand' => strtolower($token->card_brand),
+                    'last4' => $token->card_last_four,
+                    'exp_month' => substr($token->card_expiration, 0, 2),
+                    'exp_year' => '20' . substr($token->card_expiration, 2, 2),
+                    'exp_year_short' => substr($token->card_expiration, 2, 2),
+                ];
+                $paymentMethod->billing_details = (object) [
+                    'name' => $token->card_holder,
+                ];
+                $paymentMethod->alias = $token->alias ?? $token->generateAlias();
+                $paymentMethod->metadata = (object) [
+                    'environment' => $token->environment,
+                    'expires_at' => $token->expires_at?->toISOString(),
+                ];
+
+                return $paymentMethod;
+            });
+    }
+
+    /**
+     * Método alternativo que devuelve arrays (para nuevas implementaciones)
+     */
+    public function getEfevooPaymentMethods()
+    {
+        return $this->efevooTokens()
+            ->active()
+            ->get()
+            ->map(function ($token) {
+                return [
+                    'id' => $token->id,
+                    'object' => 'efevoo_token',
+                    'card' => [
+                        'brand' => strtolower($token->card_brand),
+                        'last4' => $token->card_last_four,
+                        'exp_month' => substr($token->card_expiration, 0, 2),
+                        'exp_year' => '20' . substr($token->card_expiration, 2, 2),
+                        'exp_year_short' => substr($token->card_expiration, 2, 2),
+                    ],
+                    'billing_details' => [
+                        'name' => $token->card_holder,
+                    ],
+                    'alias' => $token->alias ?? $token->generateAlias(),
+                    'metadata' => [
+                        'environment' => $token->environment,
+                        'expires_at' => $token->expires_at?->toISOString(),
+                    ],
+                ];
+            })->toArray();
+    }
+
+    private function formatEfevooTokenForPaymentMethod(EfevooToken $token)
+    {
+        return [
+            'id' => $token->id,
+            'object' => 'efevoo_token',
+            'card' => [
+                'brand' => strtolower($token->card_brand),
+                'last4' => $token->card_last_four,
+                'exp_month' => substr($token->card_expiration, 0, 2),
+                'exp_year' => '20' . substr($token->card_expiration, 2, 2),
+                'exp_year_short' => substr($token->card_expiration, 2, 2),
+            ],
+            'billing_details' => [
+                'name' => $token->card_holder,
+            ],
+            'alias' => $token->alias ?? $token->generateAlias(),
+            'metadata' => [
+                'environment' => $token->environment,
+                'expires_at' => $token->expires_at?->toISOString(),
+            ]
+        ];
+    }
 }
