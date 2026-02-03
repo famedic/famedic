@@ -3,7 +3,7 @@
 namespace App\Actions\Laboratories;
 
 use App\Actions\Odessa\ChargeOdessaAction;
-use App\Actions\Stripe\ChargeStripePaymentMethodAction;
+use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction; // Cambiado
 use App\Actions\Transactions\RefundTransactionAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\MissingLaboratoryAppointmentException;
@@ -23,7 +23,7 @@ use Propaganistas\LaravelPhone\PhoneNumber;
 class OrderAction
 {
     private CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction;
-    private ChargeStripePaymentMethodAction $chargeStripePaymentMethodAction;
+    private ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction; // Cambiado
     private ChargeOdessaAction $chargeOdessaAction;
     private CreateGDAQuotationAction $createGDAQuotationAction;
     private RefundTransactionAction $refundTransactionAction;
@@ -32,13 +32,13 @@ class OrderAction
 
     public function __construct(
         CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
-        ChargeStripePaymentMethodAction $chargeStripePaymentMethodAction,
+        ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction, // Cambiado
         ChargeOdessaAction $chargeOdessaAction,
         CreateGDAQuotationAction $createGDAQuotationAction,
         RefundTransactionAction $refundTransactionAction
     ) {
         $this->calculateTotalsAndDiscountAction = $calculateTotalsAndDiscountAction;
-        $this->chargeStripePaymentMethodAction = $chargeStripePaymentMethodAction;
+        $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction; // Cambiado
         $this->chargeOdessaAction = $chargeOdessaAction;
         $this->createGDAQuotationAction = $createGDAQuotationAction;
         $this->refundTransactionAction = $refundTransactionAction;
@@ -124,6 +124,7 @@ class OrderAction
                     $laboratoryPurchase->id
                 );
             }
+            
             // Actualizar la compra con los datos de GDA
             $laboratoryPurchase->update([
                 'gda_order_id' => $gdaQuotation['id'],
@@ -137,7 +138,6 @@ class OrderAction
 
             $this->clearCart($customer);
 
-
             DB::commit();
 
             $laboratoryPurchase->customer->user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));
@@ -147,7 +147,7 @@ class OrderAction
             DB::rollBack();
 
             if ($transaction) {
-                ($this->refundTransactionAction)($transaction);
+                ($this->refundTransactionAction)->refund($transaction);
             }
 
             throw $th;
@@ -167,7 +167,8 @@ class OrderAction
             return ($this->chargeOdessaAction)($customer->customerable, $amountCents);
         }
 
-        return ($this->chargeStripePaymentMethodAction)(
+        // Usar EfevooPay en lugar de Stripe
+        return ($this->chargeEfevooPaymentMethodAction)(
             $customer,
             $amountCents,
             $paymentMethod
