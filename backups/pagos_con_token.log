@@ -1,0 +1,16 @@
+{
+    "fecha": "2026-02-03 23:11:53",
+    "token_tarjeta": "AQICAHgOOyb5rLTXp65fv05fzH9ang...",
+    "monto": "0.01",
+    "metodo": "getPayment",
+    "cav": "TOKENPAY20260203231145634",
+    "respuesta": {
+        "numtxn": "000041",
+        "numref": "853743",
+        "codigo": "00",
+        "descripcion": "Aprobado o completado con \u00e9xito",
+        "id": "596858",
+        "datcr": "2026-02-03 17:11:49.000000"
+    }
+}
+

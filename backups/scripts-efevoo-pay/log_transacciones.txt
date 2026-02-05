@@ -1,0 +1,30 @@
+========== [2026-02-03 22:38:11] ==========
+{
+    "tipo": "PAGO_CON_TOKEN_EXISTENTE",
+    "fecha": "2026-02-03 22:38:11",
+    "token_tarjeta_corto": "AQICAHgOOyb5rLTXp65fv05fzH9ang...",
+    "monto": "3.00",
+    "cav": "PAY20260203223759403",
+    "respuesta": {
+        "error": "Not Found",
+        "message": "La ruta solicitada no existe."
+    }
+}
+
+========== [2026-02-04 00:34:14] ==========
+{
+    "tipo": "PAGO_CON_TOKEN_EXISTENTE",
+    "fecha": "2026-02-04 00:34:14",
+    "token_tarjeta_corto": "AQICAHgOOyb5rLTXp65fv05fzH9ang...",
+    "monto": "3.00",
+    "cav": "PAY20260204003403117",
+    "respuesta": {
+        "numtxn": "000043",
+        "numref": "201945",
+        "codigo": "00",
+        "descripcion": "Aprobado o completado con éxito",
+        "id": "596860",
+        "datcr": "2026-02-03 18:34:07.000000"
+    }
+}
+
