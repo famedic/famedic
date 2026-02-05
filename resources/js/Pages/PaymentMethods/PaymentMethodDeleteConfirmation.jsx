@@ -21,7 +21,7 @@ export default function PaymentMethodDeleteConfirmation({
 		if (!processing && cachedPaymentMethod) {
 			destroy(
 				route("payment-methods.destroy", {
-					payment_method: cachedPaymentMethod.id,
+					token: cachedPaymentMethod.id,
 				}),
 				{
 					preserveScroll: true,
