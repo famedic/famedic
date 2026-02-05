@@ -52,4 +52,26 @@ return [
         'response_delay_min' => 500, // milisegundos
         'response_delay_max' => 2000, // milisegundos
     ],
+
+    // Configuración de operaciones
+    'operations' => [
+        'tokenize' => [
+            'method' => 'getTokenize',
+            'token_type' => 'fixed', // Puede usar token fijo
+        ],
+        'payment' => [
+            'method' => 'getPayment',
+            'token_type' => 'dynamic', // SIEMPRE dinámico
+        ],
+        'search' => [
+            'method' => 'getTranSearch',
+            'token_type' => 'dynamic',
+        ],
+        'refund' => [
+            'method' => 'getRefund',
+            'token_type' => 'dynamic',
+        ],
+    ],
+    
+    'default_payment_method' => env('EFEVOO_DEFAULT_PAYMENT_METHOD', 'sale'),
 ];
