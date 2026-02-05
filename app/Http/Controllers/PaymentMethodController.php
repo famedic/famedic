@@ -206,25 +206,47 @@ class PaymentMethodController extends Controller
 
     public function destroy(DestroyPaymentMethodRequest $request, string $tokenId)
     {
+        \Log::info('=== INICIANDO ELIMINACIÓN ===', [
+            'user_id' => $request->user()->id,
+            'token_id_recibido' => $tokenId,
+            'input_data' => $request->all(),
+        ]);
+
         $user = $request->user();
         $customer = $this->getCustomer($user);
 
         if (!$customer) {
+            \Log::warning('Customer no encontrado', ['user_id' => $user->id]);
             return back()->withErrors([
                 'card' => 'No tienes un perfil de cliente configurado.',
             ]);
         }
 
+        \Log::info('Buscando token', [
+            'token_id' => $tokenId,
+            'customer_id' => $customer->id,
+        ]);
+
         $token = EfevooToken::where('id', $tokenId)
             ->where('customer_id', $customer->id)
-            ->firstOrFail();
+            ->first();
 
-        // Verificar transacciones pendientes
-        if ($this->hasPendingTransactions($token)) {
+        if (!$token) {
+            \Log::warning('Token no encontrado', [
+                'token_id' => $tokenId,
+                'customer_id' => $customer->id,
+            ]);
             return back()->withErrors([
-                'card' => 'No puedes eliminar esta tarjeta porque tiene transacciones pendientes.',
+                'card' => 'La tarjeta no fue encontrada.',
             ]);
         }
+
+        \Log::info('Token encontrado', [
+            'token_id' => $token->id,
+            'alias' => $token->alias,
+            'last4' => $token->card_last_four,
+            'is_active_actual' => $token->is_active,
+        ]);
 
         // Soft delete
         $token->update([
@@ -232,7 +254,14 @@ class PaymentMethodController extends Controller
             'deleted_at' => now(),
         ]);
 
-        Log::info('Tarjeta eliminada', [
+        // Verificar la actualización
+        $token->refresh();
+        \Log::info('Token actualizado', [
+            'is_active_nuevo' => $token->is_active,
+            'deleted_at' => $token->deleted_at,
+        ]);
+
+        \Log::info('Tarjeta eliminada', [
             'token_id' => $token->id,
             'customer_id' => $customer->id,
             'alias' => $token->alias,
