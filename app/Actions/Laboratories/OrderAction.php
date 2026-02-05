@@ -23,7 +23,7 @@ use Propaganistas\LaravelPhone\PhoneNumber;
 class OrderAction
 {
     private CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction;
-    private ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction; // Cambiado
+    private ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction;
     private ChargeOdessaAction $chargeOdessaAction;
     private CreateGDAQuotationAction $createGDAQuotationAction;
     private RefundTransactionAction $refundTransactionAction;
@@ -32,13 +32,13 @@ class OrderAction
 
     public function __construct(
         CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
-        ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction, // Cambiado
+        ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction,
         ChargeOdessaAction $chargeOdessaAction,
         CreateGDAQuotationAction $createGDAQuotationAction,
         RefundTransactionAction $refundTransactionAction
     ) {
         $this->calculateTotalsAndDiscountAction = $calculateTotalsAndDiscountAction;
-        $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction; // Cambiado
+        $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction;
         $this->chargeOdessaAction = $chargeOdessaAction;
         $this->createGDAQuotationAction = $createGDAQuotationAction;
         $this->refundTransactionAction = $refundTransactionAction;
@@ -112,6 +112,12 @@ class OrderAction
                 $laboratoryAppointment->save();
             }
 
+            logger('=== GDA BRAND DEBUG ===');
+            logger('LaboratoryBrand Enum value: ' . $laboratoryBrand->value);
+            logger('Request laboratory_brand value: ' . request()->laboratory_brand->value ?? 'NULL');
+            logger('Request laboratory_brand type: ' . gettype(request()->laboratory_brand));
+            logger('Request laboratory_brand: ' . json_encode(request()->laboratory_brand));
+
             if (app()->environment('local')) {
                 $gdaQuotation = ['id' => rand(100000, 999999)];
             } else {
@@ -119,12 +125,12 @@ class OrderAction
                     $customer,
                     $patientAddress,
                     $patient,
-                    request()->laboratory_brand->value,
+                    request()->laboratory_brand->value ?? $laboratoryBrand->value,
                     $this->laboratoryCartItems,
                     $laboratoryPurchase->id
                 );
             }
-            
+
             // Actualizar la compra con los datos de GDA
             $laboratoryPurchase->update([
                 'gda_order_id' => $gdaQuotation['id'],
@@ -147,7 +153,8 @@ class OrderAction
             DB::rollBack();
 
             if ($transaction) {
-                ($this->refundTransactionAction)->refund($transaction);
+                //($this->refundTransactionAction)->refund($transaction);
+                ($this->refundTransactionAction)($transaction);
             }
 
             throw $th;

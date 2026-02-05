@@ -15,11 +15,11 @@ class RefundTransactionAction
         try {
             // Usar el nuevo método refund() que maneja todos los gateways
             $result = $this->refund($transaction);
-            
+
             if ($result) {
                 $transaction->delete();
             }
-            
+
             return $result;
         } catch (\Exception $e) {
             throw $e;
@@ -265,7 +265,7 @@ class RefundTransactionAction
 
             // Reembolso real con Stripe
             $customer->refund($transaction->reference_id);
-            
+
             // Actualizar transacción
             $transaction->update([
                 'refunded_at' => now(),
@@ -297,7 +297,7 @@ class RefundTransactionAction
 
             // Llamar al método antiguo para mantener funcionalidad
             $this->refundOdessaTransactionOld($transaction);
-            
+
             // Actualizar transacción
             $transaction->update([
                 'refunded_at' => now(),
@@ -319,7 +319,7 @@ class RefundTransactionAction
     private function getCustomerFromTransaction(Transaction $transaction): Customer
     {
         try {
-            // Método 1: Intentar obtener desde details
+            // Método 1: Intentar obtener desde details (ya existe)
             $details = $transaction->details ?? [];
             if (is_string($details)) {
                 $details = json_decode($details, true) ?? [];
@@ -359,10 +359,22 @@ class RefundTransactionAction
             }
 
             // Método 4: Buscar en laboratory_purchases relacionadas
-            if ($transaction->laboratoryPurchases()->exists()) {
-                $laboratoryPurchase = $transaction->laboratoryPurchases()->first();
-                if ($laboratoryPurchase && $laboratoryPurchase->customer) {
-                    return $laboratoryPurchase->customer;
+            if ($transaction->transactionable) {
+                // Obtener el modelo relacionado
+                $transactionable = $transaction->transactionable()->first();
+
+                if ($transactionable) {
+                    // Verificar el tipo de modelo y obtener el customer
+                    switch (get_class($transactionable)) {
+                        case \App\Models\LaboratoryPurchase::class:
+                            return $transactionable->customer;
+
+                        case \App\Models\OnlinePharmacyPurchase::class:
+                            return $transactionable->customer;
+
+                        case \App\Models\MedicalAttentionSubscription::class:
+                            return $transactionable->customer;
+                    }
                 }
             }
 
