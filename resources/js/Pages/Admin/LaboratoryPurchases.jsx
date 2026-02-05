@@ -40,6 +40,8 @@ import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import OdessaLogo from "@/Components/OdessaLogo";
 import OdessaBadge from "@/Components/OdessaBadge";
 import StatusBadge from "@/Components/StatusBadge";
+import EfevooPayLogo from "@/Components/EfevooPayLogo";
+import EfevooPayBadge from "@/Components/EfevooPayBadge";
 
 export default function LaboratoryPurchases({
 	laboratoryPurchases,
@@ -80,11 +82,11 @@ export default function LaboratoryPurchases({
 			(data.start_date || "") !== (filters.start_date || "") ||
 			(data.end_date || "") !== (filters.end_date || "") ||
 			(data.invoice_requested || "") !==
-				(filters.invoice_requested || "") ||
+			(filters.invoice_requested || "") ||
 			(data.results_uploaded || "") !==
-				(filters.results_uploaded || "") ||
+			(filters.results_uploaded || "") ||
 			(data.invoice_uploaded || "") !==
-				(filters.invoice_uploaded || "") ||
+			(filters.invoice_uploaded || "") ||
 			(data.payment_method || "") !== (filters.payment_method || "") ||
 			(data.brand || "") !== (filters.brand || "") ||
 			(data.dev_assistance || "") !== (filters.dev_assistance || ""),
@@ -189,6 +191,10 @@ export default function LaboratoryPurchases({
 					<CreditCardIcon className="size-4" />
 					Pago con tarjeta
 				</Badge>,
+			);
+		} else if (filters.payment_method === "efevoopay") {
+			badges.push(
+				<EfevooPayBadge>Efevoo Pay</EfevooPayBadge>
 			);
 		}
 
@@ -401,6 +407,10 @@ function Filters({ data, setData, errors, brands }) {
 				<ListboxOption value="stripe" className="group">
 					<CreditCardIcon />
 					<ListboxLabel>Pago con tarjeta</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="efevoopay" className="group">
+					<EfevooPayLogo className="size-4" />
+					<ListboxLabel>Efevoo Pay</ListboxLabel>
 				</ListboxOption>
 			</ListboxFilter>
 			<ListboxFilter
