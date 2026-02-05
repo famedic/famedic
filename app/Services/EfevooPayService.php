@@ -68,24 +68,21 @@ class EfevooPayService
         ]);
 
         try {
-            // 1. Obtener token - DEBE usar el fijo
-            $clientTokenResult = $this->getClientToken();
-
-            Log::info('🔵 Resultado getClientToken', [
-                'success' => $clientTokenResult['success'] ?? false,
-                'is_fixed' => $clientTokenResult['fixed'] ?? false,
-                'is_correct_token' => $clientTokenResult['is_correct_token'] ?? null,
-                'token_preview' => isset($clientTokenResult['token']) ?
-                    substr($clientTokenResult['token'], 0, 50) . '...' : 'NO TOKEN',
-                'message' => $clientTokenResult['message'] ?? null,
-            ]);
+            // Obtener token FIJO para tokenización
+            $clientTokenResult = $this->getClientToken(false, 'tokenize');
 
             if (!$clientTokenResult['success']) {
-                Log::error('❌ Error obteniendo token para tokenización', $clientTokenResult);
                 return $clientTokenResult;
             }
 
+            // El token puede ser fijo o dinámico (fallback)
             $clientToken = $clientTokenResult['token'];
+            $tokenType = $clientTokenResult['type'] ?? 'unknown';
+
+            Log::info('Token para tokenización', [
+                'type' => $tokenType,
+                'preview' => substr($clientToken, 0, 30) . '...',
+            ]);
 
             // 2. CONVERTIR expiración: MMYY → YYMM
             $expiration = $cardData['expiration'];
@@ -398,46 +395,41 @@ class EfevooPayService
     }
 
     /**
-     * Obtener token de cliente con caché
+     * Obtener token de cliente con caché - VERSIÓN MEJORADA
      */
-    public function getClientToken(bool $forceRefresh = false): array
+    public function getClientToken(bool $forceRefresh = false, string $operationType = 'default'): array
     {
-        $cacheKey = "efevoo_client_token_{$this->environment}";
+        $cacheKey = "efevoo_client_token_{$this->environment}_{$operationType}";
 
-        // SIEMPRE usar token fijo si está configurado
-        if (!empty($this->config['fixed_token'])) {
+        // Determinar si necesitamos token dinámico basado en la operación
+        $needsDynamicToken = in_array($operationType, ['payment', 'refund', 'search']) ||
+            $forceRefresh ||
+            $this->environment === 'production';
+
+        // Token fijo SOLO para tokenización
+        if (!$needsDynamicToken && $operationType === 'tokenize' && !empty($this->config['fixed_token'])) {
             $this->clientToken = $this->config['fixed_token'];
 
-            Log::info('🔐 Usando TOKEN FIJO VÁLIDO configurado', [
-                'token_preview' => substr($this->clientToken, 0, 50) . '...',
-                'token_length' => strlen($this->clientToken),
-                'note' => 'Este token ya demostró funcionar en pruebas',
+            Log::info('🔐 Usando token fijo para tokenización', [
+                'operation' => $operationType,
+                'token_preview' => substr($this->clientToken, 0, 30) . '...',
             ]);
-
-            // Verificar que sea el token correcto
-            $expectedToken = 'eGZ6ajlJcGJPSUNlSHpwMENJeWlNQlFSZ3BSWWRDb3lVNVI1cy9xb1V3Zz0=';
-            $isCorrectToken = hash_equals($this->clientToken, $expectedToken);
-
-            if (!$isCorrectToken) {
-                Log::warning('Token fijo diferente al esperado', [
-                    'expected_preview' => substr($expectedToken, 0, 50) . '...',
-                    'actual_preview' => substr($this->clientToken, 0, 50) . '...',
-                ]);
-            }
 
             return [
                 'success' => true,
                 'token' => $this->clientToken,
-                'cached' => false,
-                'fixed' => true,
-                'is_correct_token' => $isCorrectToken,
-                'message' => 'Usando token fijo válido',
+                'type' => 'fixed',
+                'operation' => $operationType,
+                'message' => 'Token fijo para tokenización',
             ];
         }
 
-        Log::warning('⚠️ NO hay token fijo configurado, generando dinámico (puede fallar)');
+        // Para cualquier otra operación (especialmente pagos): TOKEN DINÁMICO
+        Log::info('🔵 Generando token dinámico', [
+            'operation' => $operationType,
+            'reason' => $needsDynamicToken ? 'Operación requiere token dinámico' : 'Tokenización fallback',
+        ]);
 
-        // Solo si realmente no hay token fijo, generar dinámico
         $totp = $this->generateTOTP();
         $hash = $this->generateHash($totp);
 
@@ -453,22 +445,34 @@ class EfevooPayService
 
         if ($response['success'] && isset($response['data']['token'])) {
             $this->clientToken = $response['data']['token'];
-            Cache::put($cacheKey, $this->clientToken, now()->addMonths(11));
+
+            // Cache diferente para cada tipo de operación
+            $cacheTime = $operationType === 'payment' ? now()->addMinutes(30) : now()->addHours(1);
+            Cache::put($cacheKey, $this->clientToken, $cacheTime);
+
+            Log::info('✅ Token dinámico generado', [
+                'operation' => $operationType,
+                'token_preview' => substr($this->clientToken, 0, 30) . '...',
+                'cache_time' => $cacheTime->diffForHumans(),
+            ]);
 
             return [
                 'success' => true,
                 'token' => $this->clientToken,
-                'cached' => false,
-                'fixed' => false,
+                'type' => 'dynamic',
+                'operation' => $operationType,
+                'message' => 'Token dinámico generado',
             ];
         }
 
-        Log::error('Error obteniendo token dinámico', $response);
+        Log::error('❌ Error obteniendo token dinámico', $response);
 
         return [
             'success' => false,
             'message' => $response['message'] ?? 'Error al obtener token',
             'code' => $response['code'] ?? null,
+            'data' => $response['data'] ?? [],
+            'type' => 'error',
         ];
     }
 
@@ -507,20 +511,20 @@ class EfevooPayService
     }
 
     /**
-     * Realizar solicitud a API
+     * Realizar solicitud a API - VERSIÓN MEJORADA
      */
     protected function makeApiRequest(array $payload): array
     {
         $method = $payload['method'] ?? 'unknown';
 
-        // USAR SIEMPRE LA MISMA URL BASE - NO agregar endpoints
-        $url = $this->config['api_url']; // Esto ya es: https://test-intgapi.efevoopay.com/v1/apiservice
+        // URL base - NO agregar nada más
+        $url = $this->config['api_url'];
 
-        Log::info('=== MAKE API REQUEST ===', [
+        Log::info('🔵 === MAKE API REQUEST ===', [
             'method' => $method,
-            'url' => $url, // URL completa sin agregar nada
+            'url' => $url,
             'api_user' => $this->config['api_user'] ?? 'No config',
-            'payload_method' => $method,
+            'environment' => $this->environment,
         ]);
 
         $headers = [
@@ -529,12 +533,12 @@ class EfevooPayService
             'X-API-KEY: ' . $this->config['api_key'],
         ];
 
-        // El payload YA debe tener la estructura correcta
         $body = json_encode($payload, JSON_UNESCAPED_UNICODE);
 
-        Log::debug('Request body completo', [
-            'body' => $body,
-            'expected_structure' => '{"payload":{"token":"...","encrypt":"..."},"method":"getTokenize"}',
+        Log::debug('🔵 Request body', [
+            'method' => $method,
+            'body_preview' => substr($body, 0, 200) . '...',
+            'body_length' => strlen($body),
         ]);
 
         $ch = curl_init();
@@ -554,20 +558,18 @@ class EfevooPayService
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
 
-        $curlInfo = curl_getinfo($ch);
-
         curl_close($ch);
 
-        Log::info('=== API RAW RESPONSE ===', [
+        Log::info('🔵 === API RAW RESPONSE ===', [
             'method' => $method,
             'http_code' => $httpCode,
             'curl_error' => $error ?: 'None',
             'response_length' => strlen($response),
-            'response_preview' => substr($response, 0, 500),
+            'response_preview' => substr($response, 0, 200),
         ]);
 
         if ($error) {
-            Log::error('Error cURL en EfevooPay API', [
+            Log::error('❌ Error cURL en EfevooPay API', [
                 'method' => $method,
                 'error' => $error,
                 'http_code' => $httpCode,
@@ -584,7 +586,7 @@ class EfevooPayService
         $data = json_decode($response, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            Log::error('Error decodificando JSON de EfevooPay', [
+            Log::error('❌ Error decodificando JSON de EfevooPay', [
                 'method' => $method,
                 'json_error' => json_last_error_msg(),
                 'response_raw' => $response,
@@ -600,14 +602,17 @@ class EfevooPayService
             ];
         }
 
-        Log::info('=== API RESPONSE DECODED ===', [
+        Log::info('🔵 === API RESPONSE DECODED ===', [
             'method' => $method,
             'data_keys' => array_keys($data),
             'has_codigo' => isset($data['codigo']),
-            'has_token' => isset($data['token']) || isset($data['token_usuario']),
+            'has_id' => isset($data['id']),
             'has_descripcion' => isset($data['descripcion']),
+            'has_error' => isset($data['error']),
+            'http_code' => $httpCode,
         ]);
 
+        // Determinar éxito
         $success = $httpCode >= 200 && $httpCode < 300;
         $code = $data['codigo'] ?? $data['response_code'] ?? $data['code'] ?? null;
 
@@ -873,21 +878,24 @@ class EfevooPayService
     }
 
     /**
-     * Realizar un cargo con tarjeta tokenizada
+     * Realizar un cargo con tarjeta tokenizada - VERSIÓN CORREGIDA
      */
     public function chargeCard(array $chargeData): array
     {
-        Log::info('EfevooPayService::chargeCard - Iniciando cargo', [
-            'charge_data_masked' => $this->maskChargeData($chargeData),
+        Log::info('🔵 EfevooPayService::chargeCard - Iniciando cargo CON TOKEN DINÁMICO', [
+            'customer_id' => $chargeData['customer_id'] ?? 'unknown',
+            'amount_mxn' => $chargeData['amount'] ?? 0,
+            'reference' => $chargeData['reference'] ?? 'no-reference',
         ]);
 
         try {
-            // Validar datos requeridos
+            // Validar datos
             $validator = validator($chargeData, [
                 'token_id' => 'required|string',
                 'amount' => 'required|numeric|min:0.01',
                 'description' => 'nullable|string|max:255',
-                'reference' => 'nullable|string|max:50',
+                'reference' => 'required|string|max:50',
+                'customer_id' => 'required|integer',
             ]);
 
             if ($validator->fails()) {
@@ -898,67 +906,93 @@ class EfevooPayService
                 ];
             }
 
-            // 1. Obtener token de cliente
-            $clientTokenResult = $this->getClientToken();
+            // 1. Obtener token DINÁMICO para pago
+            $clientTokenResult = $this->getClientToken(false, 'payment');
+
             if (!$clientTokenResult['success']) {
                 return $clientTokenResult;
             }
+
+            // Verificar que sea dinámico
+            if (($clientTokenResult['type'] ?? '') !== 'dynamic') {
+                Log::error('❌ Token incorrecto para pago', $clientTokenResult);
+                return [
+                    'success' => false,
+                    'message' => 'Error de configuración: Se requiere token dinámico para pagos',
+                    'code' => 'INVALID_TOKEN_TYPE',
+                ];
+            }
+
             $clientToken = $clientTokenResult['token'];
 
-            // 2. Preparar datos para encriptación
+
+            // 2. Preparar datos de pago
+            $cav = 'PAY' . date('YmdHis') . rand(100, 999);
+
             $encryptData = [
-                'token' => $chargeData['token_id'],
+                'track2' => $chargeData['token_id'],
                 'amount' => number_format($chargeData['amount'], 2, '.', ''),
-                'description' => $chargeData['description'] ?? 'Pago en línea',
-                'reference' => $chargeData['reference'] ?? 'PAY-' . Str::random(8),
+                'cvv' => '',
+                'cav' => $cav,
+                'msi' => 0,
+                'contrato' => '',
+                'fiid_comercio' => '',
+                'referencia' => $chargeData['reference'],
             ];
 
+            Log::info('🔵 Datos para pago', [
+                'track2_preview' => substr($encryptData['track2'], 0, 30) . '...',
+                'amount' => $encryptData['amount'],
+                'cav' => $encryptData['cav'],
+                'referencia' => $encryptData['referencia'],
+            ]);
+
+            // 3. Encriptar
             $encrypted = $this->encryptData($encryptData);
 
-            // 3. Crear transacción en DB
-            $transaction = EfevooTransaction::create([
-                'reference' => $encryptData['reference'],
+            // 4. Crear transacción en DB
+            $transaction = \App\Models\EfevooTransaction::create([
+                'reference' => $encryptData['referencia'],
                 'amount' => $chargeData['amount'],
-                'transaction_type' => EfevooTransaction::TYPE_PAYMENT,
-                'status' => EfevooTransaction::STATUS_PENDING,
+                'transaction_type' => \App\Models\EfevooTransaction::TYPE_PAYMENT,
+                'status' => \App\Models\EfevooTransaction::STATUS_PENDING,
                 'request_data' => [
                     'token_id' => $chargeData['token_id'],
                     'amount' => $chargeData['amount'],
-                    'description' => $encryptData['description'],
+                    'description' => $chargeData['description'] ?? 'Pago en línea',
+                    'customer_id' => $chargeData['customer_id'],
+                    'cav' => $encryptData['cav'],
+                    'original_reference' => $chargeData['reference'],
+                    'token_type' => 'dynamic', // Registrar que usamos token dinámico
                 ],
-                'cav' => Str::upper(Str::random(10)),
+                'cav' => $encryptData['cav'],
+                'customer_id' => $chargeData['customer_id'],
             ]);
 
-            // 4. Enviar solicitud a API
+            // 5. Enviar pago
             $payload = [
                 'payload' => [
                     'token' => $clientToken,
                     'encrypt' => $encrypted,
                 ],
-                'method' => 'getPayment', // Método para pagos
+                'method' => 'getPayment',
             ];
 
-            Log::info('Enviando cargo a EfevooPay', [
+            Log::info('🔵 Enviando pago con token dinámico', [
                 'method' => 'getPayment',
-                'reference' => $encryptData['reference'],
-                'amount' => $encryptData['amount'],
+                'token_dynamic' => true,
+                'token_preview' => substr($clientToken, 0, 30) . '...',
             ]);
 
             $apiResponse = $this->makeApiRequest($payload);
 
-            Log::info('Respuesta de cargo recibida', [
-                'success' => $apiResponse['success'],
-                'code' => $apiResponse['code'] ?? null,
-                'reference' => $encryptData['reference'],
-            ]);
-
-            // 5. Procesar respuesta
-            return $this->processPaymentResult($apiResponse, $transaction);
+            // 6. Procesar resultado
+            return $this->processPaymentResult($apiResponse, $transaction, 'getPayment');
 
         } catch (\Exception $e) {
-            Log::error('Error en chargeCard', [
+            Log::error('❌ Error en chargeCard', [
                 'error' => $e->getMessage(),
-                'charge_data' => $this->maskChargeData($chargeData),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return [
@@ -990,46 +1024,86 @@ class EfevooPayService
     }
 
     /**
-     * Procesar resultado de pago
+     * Procesar resultado de pago - ACTUALIZADO
      */
-    protected function processPaymentResult(array $apiResponse, EfevooTransaction $transaction): array
+    protected function processPaymentResult(array $apiResponse, EfevooTransaction $transaction, string $methodUsed): array
     {
         $code = $apiResponse['code'] ?? '';
-        $isSuccess = in_array($code, ['00', '100']);
+        $data = $apiResponse['data'] ?? [];
+
+        Log::info('🔵 Procesando resultado de pago', [
+            'transaction_id' => $transaction->id,
+            'method_used' => $methodUsed,
+            'code' => $code,
+            'has_data' => !empty($data),
+        ]);
+
+        // Determinar éxito basado en códigos comunes de aprobación
+        $isSuccess = in_array($code, ['00', '01', '100', '200', 'OK', 'APROBADA', 'APPROVED']) ||
+            (isset($data['descripcion']) && stripos($data['descripcion'], 'aprobado') !== false) ||
+            (isset($data['status']) && in_array(strtoupper($data['status']), ['APPROVED', 'COMPLETED', 'SUCCESS']));
 
         if ($isSuccess) {
             $transaction->update([
                 'status' => EfevooTransaction::STATUS_APPROVED,
                 'response_code' => $code,
-                'response_message' => $apiResponse['data']['descripcion'] ?? 'Aprobado',
-                'response_data' => $apiResponse['data'],
+                'response_message' => $data['descripcion'] ?? $data['mensaje'] ?? $data['msg'] ?? $data['message'] ?? 'Aprobado',
+                'response_data' => $data,
+                'transaction_id' => $data['id'] ?? $data['numtxn'] ?? $data['transaction_id'] ?? null,
+                'authorization_code' => $data['auth'] ?? $data['numref'] ?? $data['authorization_code'] ?? null,
                 'processed_at' => now(),
+                'method_used' => $methodUsed, // Guardar qué método funcionó
+            ]);
+
+            Log::info('🎉 PAGO APROBADO', [
+                'transaction_id' => $transaction->id,
+                'method_used' => $methodUsed,
+                'efevoo_id' => $data['id'] ?? null,
+                'code' => $code,
             ]);
 
             return [
                 'success' => true,
-                'message' => 'Pago procesado exitosamente',
+                'message' => $data['descripcion'] ?? $data['mensaje'] ?? 'Pago procesado exitosamente',
                 'transaction_id' => $transaction->id,
+                'efevoo_transaction_id' => $data['id'] ?? null,
                 'reference' => $transaction->reference,
                 'code' => $code,
-                'data' => $apiResponse['data'],
+                'data' => $data,
+                'authorization_code' => $data['auth'] ?? $data['numref'] ?? null,
+                'method_used' => $methodUsed,
             ];
         } else {
+            $errorMessage = $apiResponse['message'] ??
+                $data['descripcion'] ??
+                $data['error'] ??
+                $data['mensaje'] ??
+                $data['message'] ??
+                'Error en pago';
+
             $transaction->update([
                 'status' => EfevooTransaction::STATUS_DECLINED,
                 'response_code' => $code,
-                'response_message' => $apiResponse['message'] ?? $apiResponse['data']['descripcion'] ?? 'Declinado',
-                'response_data' => $apiResponse['data'] ?? [],
+                'response_message' => $errorMessage,
+                'response_data' => $data,
+                'method_used' => $methodUsed,
                 'processed_at' => now(),
             ]);
 
-            $errorMessage = $apiResponse['message'] ?? $apiResponse['data']['descripcion'] ?? 'Error en pago';
+            Log::error('❌ PAGO DECLINADO', [
+                'transaction_id' => $transaction->id,
+                'method_used' => $methodUsed,
+                'code' => $code,
+                'error_message' => $errorMessage,
+            ]);
 
             return [
                 'success' => false,
                 'message' => $errorMessage,
                 'code' => $code,
-                'data' => $apiResponse['data'] ?? [],
+                'data' => $data,
+                'transaction_id' => $transaction->id,
+                'method_used' => $methodUsed,
             ];
         }
     }
@@ -1061,5 +1135,61 @@ class EfevooPayService
         }
 
         return $this;
+    }
+
+    /***************************************************************/
+    /**
+     * Método público para pruebas - NO usar en producción
+     */
+    public function debugEncryptData(array $data): string
+    {
+        Log::info('🔵 DEBUG encryptData llamado', [
+            'data_keys' => array_keys($data),
+            'has_track2' => isset($data['track2']),
+            'track2_preview' => isset($data['track2']) ? substr($data['track2'], 0, 30) . '...' : null,
+        ]);
+
+        return $this->encryptData($data);
+    }
+
+    /**
+     * Método público para pruebas de pago directo
+     */
+    public function debugProcessPayment(array $paymentData): array
+    {
+        Log::info('🔵 DEBUG processPayment llamado', $paymentData);
+
+        // 1. Obtener token de cliente
+        $tokenResult = $this->getClientToken();
+        if (!$tokenResult['success']) {
+            return $tokenResult;
+        }
+
+        // 2. Preparar datos
+        $cav = 'DEBUG' . date('YmdHis') . rand(100, 999);
+        $encryptData = [
+            'track2' => $paymentData['token_id'],
+            'amount' => number_format($paymentData['amount'], 2, '.', ''),
+            'cvv' => '',
+            'cav' => $cav,
+            'msi' => 0,
+            'contrato' => '',
+            'fiid_comercio' => '',
+            'referencia' => $paymentData['reference'] ?? 'TestFAMEDIC',
+        ];
+
+        // 3. Encriptar
+        $encrypted = $this->encryptData($encryptData);
+
+        // 4. Enviar
+        $payload = [
+            'payload' => [
+                'token' => $tokenResult['token'],
+                'encrypt' => $encrypted,
+            ],
+            'method' => 'getPayment',
+        ];
+
+        return $this->makeApiRequest($payload);
     }
 }
