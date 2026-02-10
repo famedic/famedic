@@ -1,0 +1,17 @@
+{
+    "timestamp": "2026-02-10 16:25:31",
+    "token_obtenido": "bERIdDc5MkFMTVJsSldqS1A4UFh0YnRvTlpWcHNpUHhycVBKYX...",
+    "3ds_result": {
+        "status": {
+            "code": "7005",
+            "description": "ERROR: No fue posible generar la transaccion correctamente."
+        },
+        "payload": []
+    },
+    "files_generated": {
+        "3ds_getlink_response.json": true,
+        "3ds_getstatus_response.json": false,
+        "3ds_iframe.html": false,
+        "token_tarjeta_normal.txt": false
+    }
+}

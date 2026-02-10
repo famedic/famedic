@@ -1,19 +1,18 @@
 <?php
-
 // ============================================
 // CONFIGURACIÓN
 // ============================================
 
 $config = [
-    'api_url' => 'https://test-intgapi.efevoopay.com/v1/apiservice',
-    'api_user' => 'Efevoo Pay',
-    'api_key' => 'Hq#J0hs)jK+YqF6J',
-    'totp_secret' => 'I7WHOTIN7VVQFAMSDI4X2WFTTAEP653Q',
-    'clave' => '6nugHedWzw27MNB8',
-    'cliente' => 'TestFAMEDIC',
-    'vector' => 'MszjlcnTjGLNpNy3'
+    'api_url' => 'https://intgapi.efevoopay.com/v1/apiservice',
+    'api_user' => 'Famedic',
+    'api_key' => '9e21f21d434ba4ab219a3cd3ad6c3171c142ece4ff87b0f12b4035106b22e162',
+    'totp_secret' => 'PIBOFBXR6P3TWXRFJQF5VRAMV5RFR3Y5',
+    'clave' => '2NF2g75uJ4VXqJ7D',
+    'cliente' => 'GFAMEDIC',
+    'vector' => '1XGYCKGIneuhhGFq',
+    'idagep_empresa' => 1827
 ];
-
 // ============================================
 // FUNCIONES
 // ============================================

@@ -266,4 +266,3 @@ if ($resultBusqueda['code'] == 200) {
 } else {
     echo "❌ Error al buscar transacciones\n";
 }
-
