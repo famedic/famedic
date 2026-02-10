@@ -19,7 +19,7 @@ use App\Services\EfevooPaySimulatorService;
 use App\Actions\Efevoo\ChargeEfevooTokenAction;
 use App\Actions\Efevoo\RefundEfevooTransactionAction;
 use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction;
-
+use Inertia\Inertia;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -92,6 +92,15 @@ class AppServiceProvider extends ServiceProvider
 
         Cashier::useCustomerModel(Customer::class);       
         
-        
+        Inertia::share([
+            'flash' => function () {
+                return [
+                    'success' => session('success'),
+                    'error' => session('error'),
+                    'warning' => session('warning'),
+                    'info' => session('info'),
+                ];
+            },
+        ]);
     }
 }
