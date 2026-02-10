@@ -74,4 +74,13 @@ return [
     ],
     
     'default_payment_method' => env('EFEVOO_DEFAULT_PAYMENT_METHOD', 'sale'),
+
+    'requires_3ds' => env('EFEVOO_REQUIRES_3DS', true),
+
+    // Para 3DS
+    //'fiid_comercio' => env('EFEVOO_FIID_COMERCIO', ''),
+    'fiid_comercio' => env('EFEVOO_FIID_COMERCIO', '123678'),
+    'iframe_timeout' => 300, // 5 minutos para el iframe 3DS
+    '3ds_redirect_url' => env('APP_URL') . '/payment-methods/3ds/callback',
+    
 ];
