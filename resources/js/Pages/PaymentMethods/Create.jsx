@@ -1,16 +1,16 @@
-// resources/js/Pages/PaymentMethods/Create.jsx
 import SettingsLayout from "@/Layouts/SettingsLayout";
 import { GradientHeading } from "@/Components/Catalyst/heading";
 import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
 import { useForm } from "@inertiajs/react";
-import { ArrowLeftIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, InformationCircleIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import CreditCardBrand from "@/Components/CreditCardBrand";
 import SimpleField from "@/Components/Form/SimpleField";
 import SimpleInput from "@/Components/Form/SimpleInput";
 
-export default function Create({ efevooConfig }) {
+// ACTUALIZA ESTA LÍNEA: Agrega hasPending3ds en las props
+export default function Create({ efevooConfig, hasPending3ds = false }) {
     const { data, setData, post, processing, errors } = useForm({
         card_number: "",
         exp_month: "",
@@ -38,7 +38,7 @@ export default function Create({ efevooConfig }) {
         else if (/^(?:2131|1800|35)/.test(cleaned)) type = "jcb";
 
         setCardType(type);
-        
+
         // Generar alias automático cuando hay número de tarjeta y no hay alias personalizado
         if (cleaned.length >= 4 && !data.alias.trim()) {
             const lastFour = cleaned.slice(-4);
@@ -46,7 +46,7 @@ export default function Create({ efevooConfig }) {
             const generatedAlias = `${brand}-${lastFour}`;
             setData("alias", generatedAlias);
         }
-        
+
         return type;
     };
 
@@ -60,11 +60,11 @@ export default function Create({ efevooConfig }) {
     // Generar alias basado en los datos de la tarjeta
     const generateAlias = () => {
         if (!data.card_number || data.card_number.length < 4) return;
-        
+
         const lastFour = data.card_number.slice(-4);
         const brand = cardType || "tarjeta";
         const newAlias = `${brand}-${lastFour}`;
-        
+
         setData("alias", newAlias);
     };
 
@@ -101,14 +101,14 @@ export default function Create({ efevooConfig }) {
         if (!month || !year || month.length !== 2 || year.length !== 2) {
             return false;
         }
-        
+
         const currentDate = new Date();
         const currentYear = currentDate.getFullYear() % 100;
         const currentMonth = currentDate.getMonth() + 1;
-        
+
         const expYear = parseInt(year, 10);
         const expMonth = parseInt(month, 10);
-        
+
         return expYear < currentYear || (expYear === currentYear && expMonth < currentMonth);
     };
 
@@ -124,6 +124,60 @@ export default function Create({ efevooConfig }) {
                 </Button>
                 <GradientHeading noDivider>Agregar nueva tarjeta</GradientHeading>
             </div>
+
+            {/* Sección de verificación pendiente */}
+            {hasPending3ds && (
+                <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                    <div className="flex items-start">
+                        <InformationCircleIcon className="mr-3 mt-0.5 size-5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+                        <div className="flex-1">
+                            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                                Tienes una verificación pendiente
+                            </h3>
+                            <div className="mt-2 text-sm text-blue-700 dark:text-blue-400">
+                                <p>
+                                    Tienes una verificación de tarjeta en proceso. Por favor completa
+                                    esa verificación antes de agregar una nueva tarjeta.
+                                </p>
+                                <Button
+                                    href={route('payment-methods.index')}
+                                    size="sm"
+                                    className="mt-2"
+                                >
+                                    Ver verificaciones pendientes
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Información sobre 3DS */}
+            {efevooConfig.requires_3ds && !hasPending3ds && (
+                <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                    <div className="flex items-start">
+                        <ExclamationTriangleIcon className="mr-3 mt-0.5 size-5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+                        <div className="flex-1">
+                            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                                Verificación de seguridad requerida (3D Secure)
+                            </h3>
+                            <div className="mt-2 text-sm text-blue-700 dark:text-blue-400">
+                                <p className="mb-2">
+                                    Para proteger tu tarjeta, utilizaremos <strong>3D Secure</strong>,
+                                    el estándar de seguridad internacional requerido por tu banco.
+                                </p>
+                                <ul className="ml-4 list-disc space-y-1">
+                                    <li>Tu banco te pedirá un código de verificación</li>
+                                    <li>Recibirás el código por SMS o en tu app bancaria</li>
+                                    <li>El proceso toma solo unos segundos</li>
+                                    <li>Es obligatorio por regulaciones de seguridad</li>
+                                    <li>Solo necesitas hacerlo una vez por tarjeta</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <form onSubmit={handleSubmit} className="mt-8 max-w-2xl">
                 <div className="space-y-8">
@@ -157,6 +211,7 @@ export default function Create({ efevooConfig }) {
                             required
                             autoComplete="cc-number"
                             error={errors.card_number}
+                            disabled={hasPending3ds}
                         />
                     </SimpleField>
 
@@ -179,6 +234,7 @@ export default function Create({ efevooConfig }) {
                                 autoComplete="cc-exp-month"
                                 error={errors.exp_month}
                                 className={isCardExpired(data.exp_month, data.exp_year) ? 'border-red-300' : ''}
+                                disabled={hasPending3ds}
                             />
                         </SimpleField>
 
@@ -200,6 +256,7 @@ export default function Create({ efevooConfig }) {
                                 autoComplete="cc-exp-year"
                                 error={errors.exp_year}
                                 className={isCardExpired(data.exp_month, data.exp_year) ? 'border-red-300' : ''}
+                                disabled={hasPending3ds}
                             />
                             {isCardExpired(data.exp_month, data.exp_year) && !errors.exp_year && (
                                 <p className="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -225,6 +282,7 @@ export default function Create({ efevooConfig }) {
                                 required
                                 autoComplete="cc-csc"
                                 error={errors.cvv}
+                                disabled={hasPending3ds}
                             />
                         </SimpleField>
                     </div>
@@ -244,6 +302,7 @@ export default function Create({ efevooConfig }) {
                             required
                             autoComplete="cc-name"
                             error={errors.card_holder}
+                            disabled={hasPending3ds}
                         />
                     </SimpleField>
 
@@ -265,12 +324,12 @@ export default function Create({ efevooConfig }) {
                                 type="button"
                                 onClick={generateAlias}
                                 className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                                disabled={!data.card_number || data.card_number.length < 4}
+                                disabled={!data.card_number || data.card_number.length < 4 || hasPending3ds}
                             >
                                 Generar automáticamente
                             </button>
                         </div>
-                        
+
                         {showAliasTip && (
                             <div className="mb-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                                 <p className="font-medium mb-1">¿Qué es un alias?</p>
@@ -289,14 +348,16 @@ export default function Create({ efevooConfig }) {
                             maxLength={50}
                             autoComplete="off"
                             error={errors.alias}
+                            disabled={hasPending3ds}
                         />
-                        
+
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-500">
                             <span className="text-xs">Ejemplos: </span>
                             <button
                                 type="button"
                                 onClick={() => setData("alias", "Tarjeta Principal")}
                                 className="rounded-full bg-zinc-100 px-3 py-1 text-xs hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                                disabled={hasPending3ds}
                             >
                                 Tarjeta Principal
                             </button>
@@ -304,6 +365,7 @@ export default function Create({ efevooConfig }) {
                                 type="button"
                                 onClick={() => setData("alias", "Compras Online")}
                                 className="rounded-full bg-zinc-100 px-3 py-1 text-xs hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                                disabled={hasPending3ds}
                             >
                                 Compras Online
                             </button>
@@ -314,6 +376,7 @@ export default function Create({ efevooConfig }) {
                                     setData("alias", `${cardType || "Tarjeta"}-${lastFour}`);
                                 }}
                                 className="rounded-full bg-zinc-100 px-3 py-1 text-xs hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                                disabled={hasPending3ds}
                             >
                                 {cardType || "Tarjeta"}-{data.card_number ? data.card_number.slice(-4) : "****"}
                             </button>
@@ -357,6 +420,14 @@ export default function Create({ efevooConfig }) {
                                         El alias te ayudará a identificar esta tarjeta fácilmente en tu lista de métodos de pago
                                     </span>
                                 </li>
+                                {efevooConfig.requires_3ds && (
+                                    <li className="flex items-start gap-2">
+                                        <span className="mt-1">•</span>
+                                        <span>
+                                            Se requiere <strong>verificación 3D Secure</strong> por seguridad
+                                        </span>
+                                    </li>
+                                )}
                             </ul>
                         </div>
                     </div>
@@ -365,7 +436,7 @@ export default function Create({ efevooConfig }) {
                     <div className="flex gap-4">
                         <Button
                             type="submit"
-                            disabled={processing || isSubmitting || isCardExpired(data.exp_month, data.exp_year)}
+                            disabled={processing || isSubmitting || isCardExpired(data.exp_month, data.exp_year) || hasPending3ds}
                             className="min-w-32"
                         >
                             {(processing || isSubmitting) ? (
@@ -373,6 +444,8 @@ export default function Create({ efevooConfig }) {
                                     <span className="mr-2">⏳</span>
                                     Procesando...
                                 </>
+                            ) : hasPending3ds ? (
+                                "Verificación pendiente"
                             ) : (
                                 "Guardar tarjeta"
                             )}
@@ -385,6 +458,18 @@ export default function Create({ efevooConfig }) {
                             Cancelar
                         </Button>
                     </div>
+
+                    {/* Aviso de verificación pendiente */}
+                    {hasPending3ds && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+                            <div className="flex items-center">
+                                <InformationCircleIcon className="mr-3 size-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+                                <Text className="text-sm text-amber-700 dark:text-amber-400">
+                                    Tienes una verificación pendiente. Completa ese proceso primero.
+                                </Text>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </form>
         </SettingsLayout>
