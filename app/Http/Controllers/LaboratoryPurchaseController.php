@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Laboratories\OrderAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\OdessaInsufficientFundsException;
-use App\Exceptions\EfevooPaymentException; // Nueva excepción
+use App\Exceptions\EfevooPaymentException; 
 use App\Http\Requests\Laboratories\LaboratoryPurchases\StoreLaboratoryPurchaseRequest;
 use App\Models\Address;
 use App\Models\Contact;
@@ -14,7 +14,7 @@ use App\Models\LaboratoryQuote;
 use App\Services\Tracking\Purchase;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-// Eliminar: use Stripe\Exception\CardException;
+
 
 class LaboratoryPurchaseController extends Controller
 {

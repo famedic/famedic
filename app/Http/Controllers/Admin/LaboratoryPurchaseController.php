@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LaboratoryPurchases\DestroyLaboratoryPurchaseRequest;
 use App\Http\Requests\Admin\LaboratoryPurchases\IndexLaboratoryPurchaseRequest;
 use App\Http\Requests\Admin\LaboratoryPurchases\ShowLaboratoryPurchaseRequest;
+use Illuminate\Support\Facades\Log;
 use App\Models\LaboratoryPurchase;
 use Carbon\Carbon;
 use Inertia\Inertia;
@@ -50,7 +51,7 @@ class LaboratoryPurchaseController extends Controller
         $laboratoryDailyChart = null;
         if (!empty($filters['start_date']) || !empty($filters['end_date'])) {
             $purchasesForChart = (clone $laboratoryPurchasesQuery)->get();
-            
+
             $laboratoryDailyChart = $buildDailyChartDataAction(
                 $purchasesForChart,
                 $request->start_date ? Carbon::parse($request->start_date, 'America/Monterrey') : null,
@@ -95,11 +96,39 @@ class LaboratoryPurchaseController extends Controller
         ]);
     }
 
-    public function destroy(DestroyLaboratoryPurchaseRequest $request, LaboratoryPurchase $laboratoryPurchase, DeleteLaboratoryPurchaseAction $deleteLaboratoryPurchaseAction)
-    {
-        ($deleteLaboratoryPurchaseAction)($laboratoryPurchase);
+    public function destroy(
+        DestroyLaboratoryPurchaseRequest $request,
+        LaboratoryPurchase $laboratoryPurchase,
+        DeleteLaboratoryPurchaseAction $deleteLaboratoryPurchaseAction
+    ) {
+        Log::info('🗑️ LaboratoryPurchaseController@destroy INICIO', [
+            'laboratory_purchase_id' => $laboratoryPurchase->id,
+            'gda_order_id' => $laboratoryPurchase->gda_order_id,
+            'transactions_count' => $laboratoryPurchase->transactions->count(),
+            'user_id' => $request->user()->id,
+        ]);
 
-        return redirect()->route('admin.laboratory-purchases.index')
-            ->flashMessage('Orden de laboratorio eliminada correctamente.');
+        try {
+            ($deleteLaboratoryPurchaseAction)($laboratoryPurchase);
+
+            Log::info('✅ LaboratoryPurchaseController@destroy COMPLETADO', [
+                'laboratory_purchase_id' => $laboratoryPurchase->id,
+            ]);
+
+            return redirect()->route('admin.laboratory-purchases.index')
+                ->flashMessage('Orden de laboratorio eliminada correctamente.');
+
+        } catch (\Exception $e) {
+
+            Log::error('❌ LaboratoryPurchaseController@destroy ERROR', [
+                'laboratory_purchase_id' => $laboratoryPurchase->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->withErrors([
+                'error' => 'No se pudo cancelar el pedido: ' . $e->getMessage()
+            ]);
+        }
     }
+
 }
