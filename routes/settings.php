@@ -51,10 +51,6 @@ Route::middleware([
         'store',
         'destroy'
     ]);
-    
-    Route::get('/payment-methods/create', [PaymentMethodController::class, 'create'])->name('payment-methods.create');
-    Route::post('/payment-methods', [PaymentMethodController::class, 'store'])->name('payment-methods.store');
-    Route::delete('/payment-methods/{token}', [PaymentMethodController::class, 'destroy'])->name('payment-methods.destroy');
 
     // Nueva ruta para actualizar alias
     Route::patch('/payment-methods/{token}/alias', [PaymentMethodController::class, 'updateAlias'])->name('payment-methods.update-alias');

@@ -1,17 +1,21 @@
 <?php
 
 return [
-    // Solo un ambiente para simplificar
-    'environment' => env('EFEVOO_ENVIRONMENT', 'test'),
+    // Ambiente productivo
+    'environment' => env('EFEVOO_ENVIRONMENT', 'production'),
     
-    // Configuración única (misma para test y producción)
-    'api_url' => env('EFEVOO_API_URL', 'https://test-intgapi.efevoopay.com/v1/apiservice'),
-    'api_user' => env('EFEVOO_API_USER', 'Efevoo Pay'),
-    'api_key' => env('EFEVOO_API_KEY', 'Hq#J0hs)jK+YqF6J'),
-    'totp_secret' => env('EFEVOO_TOTP_SECRET', 'I7WHOTIN7VVQFAMSDI4X2WFTTAEP653Q'),
-    'clave' => env('EFEVOO_CLAVE', '6nugHedWzw27MNB8'),
-    'cliente' => env('EFEVOO_CLIENTE', 'TestFAMEDIC'),
-    'vector' => env('EFEVOO_VECTOR', 'MszjlcnTjGLNpNy3'),
+    // Configuración PRODUCTIVA (basada en script exitoso)
+    'api_url' => env('EFEVOO_API_URL', 'https://intgapi.efevoopay.com/v1/apiservice'),
+    'api_user' => env('EFEVOO_API_USER', 'Famedic'),
+    'api_key' => env('EFEVOO_API_KEY', '9e21f21d434ba4ab219a3cd3ad6c3171c142ece4ff87b0f12b4035106b22e162'),
+    'totp_secret' => env('EFEVOO_TOTP_SECRET', 'PIBOFBXR6P3TWXRFJQF5VRAMV5RFR3Y5'),
+    'clave' => env('EFEVOO_CLAVE', '2NF2g75uJ4VXqJ7D'),
+    'cliente' => env('EFEVOO_CLIENTE', 'GFAMEDIC'),
+    'vector' => env('EFEVOO_VECTOR', '1XGYCKGIneuhhGFq'),
+    'idagep_empresa' => env('EFEVOO_IDAGEP_EMPRESA', 1827),
+    
+    // Token fijo proporcionado por EFEVOOPAY
+    'fixed_token' => env('EFEVOOPAY_FIXED_TOKEN', 'QUZqMHdBVU50ZFpxMktYMEMxUjFiYkhSeVRiTk5NYXpoTTE4RWpodGRKND0='),
     
     // Configuración global
     'timeout' => 30,
@@ -22,46 +26,37 @@ return [
     // Montos de prueba (en centavos)
     'test_amounts' => [
         'min' => 1,      // $0.01 MXN
-        'default' => 150, // $1.50 MXN
+        'default' => 150, // $1.50 MXN (monto que funcionó)
         'max' => 300,    // $3.00 MXN
     ],
     
-    // Token fijo si es necesario
-    'fixed_token' => env('EFEVOOPAY_FIXED_TOKEN'),
-    
-    // Códigos de respuesta
+    // Códigos de respuesta (basados en respuestas reales)
     'response_codes' => [
         '00' => 'Aprobado o completado con éxito',
         '05' => 'No honrar',
         '30' => 'Error de formato',
-        '100' => 'Operación exitosa',
-        '102' => 'Credenciales incorrectas',
-        '103' => 'Token inválido o expirado',
+        '100' => 'Token generado exitosamente',
+        '51' => 'Fondos insuficientes',
+        '54' => 'Tarjeta vencida',
+        '55' => 'Contraseña incorrecta',
+        '57' => 'Transacción no permitida',
+        '61' => 'Monto excede límite',
+        '62' => 'Tarjeta restringida',
+        '96' => 'Sistema no disponible',
     ],
     
-    // Formatos de fecha
-    'date_formats' => [
-        'expiration' => 'my',  // MMYY para tarjetas
-        'api' => 'Y-m-d H:i:s',
-    ],
-
-    // Configuración del simulador
+    // Configuración del simulador (desactivar en producción)
     'force_simulation' => env('EFEVOOPAY_FORCE_SIMULATION', false),
-    'simulator' => [
-        'weekend_mode' => env('EFEVOOPAY_SIMULATOR_WEEKEND', true),
-        'response_delay_min' => 500, // milisegundos
-        'response_delay_max' => 2000, // milisegundos
-    ],
-
+    
     // Configuración de operaciones
     'operations' => [
         'tokenize' => [
             'method' => 'getTokenize',
-            'token_type' => 'fixed', // Puede usar token fijo
+            'token_type' => 'fixed', // Usar token fijo para tokenización
         ],
         'payment' => [
             'method' => 'getPayment',
-            'token_type' => 'dynamic', // SIEMPRE dinámico
+            'token_type' => 'dynamic', // SIEMPRE dinámico para pagos
         ],
         'search' => [
             'method' => 'getTranSearch',
@@ -71,16 +66,25 @@ return [
             'method' => 'getRefund',
             'token_type' => 'dynamic',
         ],
+        'client_token' => [
+            'method' => 'getClientToken',
+            'token_type' => 'dynamic',
+        ],
     ],
     
-    'default_payment_method' => env('EFEVOO_DEFAULT_PAYMENT_METHOD', 'sale'),
-
-    'requires_3ds' => env('EFEVOO_REQUIRES_3DS', true),
-
-    // Para 3DS
-    //'fiid_comercio' => env('EFEVOO_FIID_COMERCIO', ''),
-    'fiid_comercio' => env('EFEVOO_FIID_COMERCIO', '123678'),
-    'iframe_timeout' => 300, // 5 minutos para el iframe 3DS
-    '3ds_redirect_url' => env('APP_URL') . '/payment-methods/3ds/callback',
+    // Para 3DS (si es necesario)
+    'fiid_comercio' => env('EFEVOO_FIID_COMERCIO', '9890713'),
+    'requires_3ds' => env('EFEVOO_REQUIRES_3DS', false), // Desactivar temporalmente
+    'iframe_timeout' => 300,
     
+    // Headers adicionales para evitar problemas CORS
+    'additional_headers' => [
+        'Origin: https://efevoopay.com',
+        'Referer: https://efevoopay.com/',
+        'Accept: application/json',
+        'Accept-Language: es-MX,es;q=0.9',
+        'Accept-Encoding: gzip, deflate',
+        'Connection: keep-alive',
+        'Cache-Control: no-cache',
+    ],
 ];
