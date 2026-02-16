@@ -340,7 +340,7 @@ export default function PrivacyPolicy({ name }) {
                                     <div className="mt-4">
                                         <Link 
                                             href={route('rights-arco')}
-                                            className="inline-flex items-center px-4 py-2 bg-famedic-light text-white rounded-md hover:bg-famedic-dark transition-colors"
+                                            className="inline-flex items-center px-4 py-2 text-dark rounded-md transition-colors"
                                         >
                                             Solicitud Única Para Ejercer Derechos ARCO
                                         </Link>

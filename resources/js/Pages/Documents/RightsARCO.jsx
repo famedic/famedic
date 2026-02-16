@@ -37,18 +37,18 @@ export default function RightsARCO({ name, flash = {} }) {
             setShowSuccess(flash.success);
             setFolioGenerado(flash.success.folio);
             reset();
-            
+
             // Desplazarse al inicio para ver el mensaje
             window.scrollTo({ top: 0, behavior: 'smooth' });
-            
+
             // Ocultar después de 15 segundos
             const timer = setTimeout(() => {
                 setShowSuccess(null);
             }, 15000);
-            
+
             return () => clearTimeout(timer);
         }
-        
+
         if (flash.error) {
             // Manejar errores flash si es necesario
             console.error('Error flash:', flash.error);
@@ -61,47 +61,47 @@ export default function RightsARCO({ name, flash = {} }) {
             // Generar un folio temporal mientras esperamos la respuesta del backend
             const tempFolio = `ARCO-TEMP-${Date.now().toString().slice(-6)}`;
             setFolioGenerado(tempFolio);
-            
+
             setShowSuccess({
                 title: '¡Solicitud enviada exitosamente!',
                 message: 'Tu solicitud está siendo procesada',
                 folio: tempFolio
             });
-            
+
             reset();
             clearErrors();
-            
+
             // Desplazarse al inicio para ver el mensaje
             window.scrollTo({ top: 0, behavior: 'smooth' });
-            
+
             // Ocultar después de 10 segundos
             const timer = setTimeout(() => {
                 setShowSuccess(null);
             }, 10000);
-            
+
             return () => clearTimeout(timer);
         }
     }, [recentlySuccessful, reset, clearErrors]);
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        
+
         // Validación frontend adicional
         if (data.derechos_arco.length === 0) {
             alert('Por favor, selecciona al menos un derecho ARCO.');
             return;
         }
-        
+
         if (data.razon_solicitud.length < 20) {
             alert('La razón de la solicitud debe tener al menos 20 caracteres.');
             return;
         }
-        
+
         if (!data.es_usuario) {
             alert('Por favor, indica si eres usuario FAMEDIC.');
             return;
         }
-        
+
         // Enviar formulario
         post(route('store-arco'), {
             preserveScroll: true,
@@ -126,7 +126,7 @@ export default function RightsARCO({ name, flash = {} }) {
         const newDerechos = data.derechos_arco.includes(derecho)
             ? data.derechos_arco.filter(d => d !== derecho)
             : [...data.derechos_arco, derecho];
-        
+
         setData('derechos_arco', newDerechos);
     };
 
@@ -270,9 +270,9 @@ export default function RightsARCO({ name, flash = {} }) {
                         </div>
 
                         {/* Formulario */}
-                        <form 
+                        <form
                             ref={formRef}
-                            onSubmit={handleSubmit} 
+                            onSubmit={handleSubmit}
                             className="bg-white shadow-lg rounded-b-lg p-4 md:p-6 space-y-6"
                         >
                             {/* 1. Identificación del solicitante */}
@@ -281,7 +281,7 @@ export default function RightsARCO({ name, flash = {} }) {
                                     <span className="bg-famedic-light text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-sm mr-2">1</span>
                                     Identificación del solicitante
                                 </h3>
-                                
+
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         ¿Es usuario FAMEDIC? *
@@ -318,9 +318,8 @@ export default function RightsARCO({ name, flash = {} }) {
                                         name="nombre_completo"
                                         value={data.nombre_completo}
                                         onChange={(e) => setData('nombre_completo', e.target.value)}
-                                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-famedic-light ${
-                                            errors.nombre_completo ? 'border-red-300' : 'border-gray-300'
-                                        }`}
+                                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-famedic-light ${errors.nombre_completo ? 'border-red-300' : 'border-gray-300'
+                                            }`}
                                         placeholder="Ingrese su nombre completo"
                                         required
                                     />
@@ -355,9 +354,8 @@ export default function RightsARCO({ name, flash = {} }) {
                                             name="rfc"
                                             value={data.rfc}
                                             onChange={(e) => handleRFCChange(e.target.value)}
-                                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-famedic-light ${
-                                                errors.rfc ? 'border-red-300' : 'border-gray-300'
-                                            }`}
+                                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-famedic-light ${errors.rfc ? 'border-red-300' : 'border-gray-300'
+                                                }`}
                                             placeholder="Ej: XAXX010101000"
                                         />
                                         <p className="mt-1 text-xs text-gray-500">
@@ -376,7 +374,7 @@ export default function RightsARCO({ name, flash = {} }) {
                                     <span className="bg-famedic-light text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-sm mr-2">2</span>
                                     Domicilio
                                 </h3>
-                                
+
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -450,9 +448,8 @@ export default function RightsARCO({ name, flash = {} }) {
                                             name="codigo_postal"
                                             value={data.codigo_postal}
                                             onChange={(e) => handleCodigoPostalChange(e.target.value)}
-                                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-famedic-light ${
-                                                errors.codigo_postal ? 'border-red-300' : 'border-gray-300'
-                                            }`}
+                                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-famedic-light ${errors.codigo_postal ? 'border-red-300' : 'border-gray-300'
+                                                }`}
                                             placeholder="00000"
                                             maxLength="5"
                                             required
@@ -470,7 +467,7 @@ export default function RightsARCO({ name, flash = {} }) {
                                     <span className="bg-famedic-light text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-sm mr-2">3</span>
                                     Información de contacto
                                 </h3>
-                                
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -481,9 +478,8 @@ export default function RightsARCO({ name, flash = {} }) {
                                             name="telefono_fijo"
                                             value={data.telefono_fijo}
                                             onChange={(e) => handleTelefonoChange('telefono_fijo', e.target.value)}
-                                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-famedic-light ${
-                                                errors.telefono_fijo ? 'border-red-300' : 'border-gray-300'
-                                            }`}
+                                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-famedic-light ${errors.telefono_fijo ? 'border-red-300' : 'border-gray-300'
+                                                }`}
                                             placeholder="(00) 0000 0000"
                                         />
                                         {errors.telefono_fijo && (
@@ -499,9 +495,8 @@ export default function RightsARCO({ name, flash = {} }) {
                                             name="telefono_celular"
                                             value={data.telefono_celular}
                                             onChange={(e) => handleTelefonoChange('telefono_celular', e.target.value)}
-                                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-famedic-light ${
-                                                errors.telefono_celular ? 'border-red-300' : 'border-gray-300'
-                                            }`}
+                                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-famedic-light ${errors.telefono_celular ? 'border-red-300' : 'border-gray-300'
+                                                }`}
                                             placeholder="(00) 0000 0000"
                                             required
                                         />
@@ -521,7 +516,7 @@ export default function RightsARCO({ name, flash = {} }) {
                                     <span className="bg-famedic-light text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-sm mr-2">4</span>
                                     Derechos ARCO a ejercer *
                                 </h3>
-                                
+
                                 <div className="space-y-3">
                                     {[
                                         { id: 'acceso', label: 'Acceso', description: 'Conocer los datos personales que tenemos de usted.' },
@@ -530,13 +525,12 @@ export default function RightsARCO({ name, flash = {} }) {
                                         { id: 'oposicion', label: 'Oposición', description: 'Oponerse al tratamiento de sus datos para fines específicos.' },
                                         { id: 'revocacion', label: 'Revocación', description: 'Revocar el consentimiento para el tratamiento de sus datos.' },
                                     ].map((derecho) => (
-                                        <label 
-                                            key={derecho.id} 
-                                            className={`flex items-start p-3 border rounded-lg cursor-pointer transition-all duration-200 ${
-                                                data.derechos_arco.includes(derecho.id)
+                                        <label
+                                            key={derecho.id}
+                                            className={`flex items-start p-3 border rounded-lg cursor-pointer transition-all duration-200 ${data.derechos_arco.includes(derecho.id)
                                                     ? 'border-famedic-light bg-famedic-light/10 shadow-sm'
                                                     : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-                                            }`}
+                                                }`}
                                         >
                                             <input
                                                 type="checkbox"
@@ -556,13 +550,13 @@ export default function RightsARCO({ name, flash = {} }) {
                                         </label>
                                     ))}
                                 </div>
-                                
+
                                 {errors.derechos_arco && (
                                     <div className="rounded-md bg-red-50 p-3 border border-red-200">
                                         <p className="text-sm text-red-600 font-medium">{errors.derechos_arco}</p>
                                     </div>
                                 )}
-                                
+
                                 {!tieneDerechosSeleccionados && (
                                     <div className="rounded-md bg-yellow-50 p-3 border border-yellow-200">
                                         <div className="flex">
@@ -587,7 +581,7 @@ export default function RightsARCO({ name, flash = {} }) {
                                     <span className="bg-famedic-light text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-sm mr-2">5</span>
                                     Descripción de la solicitud *
                                 </h3>
-                                
+
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Breve razón de su solicitud
@@ -597,17 +591,16 @@ export default function RightsARCO({ name, flash = {} }) {
                                         value={data.razon_solicitud}
                                         onChange={(e) => setData('razon_solicitud', e.target.value)}
                                         rows={5}
-                                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-famedic-light resize-y ${
-                                            errors.razon_solicitud ? 'border-red-300' : 'border-gray-300'
-                                        } ${!razonIsValid && razonLength > 0 ? 'border-yellow-300' : ''}`}
+                                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-famedic-light resize-y ${errors.razon_solicitud ? 'border-red-300' : 'border-gray-300'
+                                            } ${!razonIsValid && razonLength > 0 ? 'border-yellow-300' : ''}`}
                                         placeholder="Describa detalladamente el motivo de su solicitud, incluyendo información relevante que nos permita atender su petición de manera eficiente."
                                         required
                                     />
                                     <div className="mt-2 flex flex-col sm:flex-row sm:justify-between text-sm">
                                         <div className={`font-medium ${razonIsValid ? 'text-green-600' : razonLength > 0 ? 'text-yellow-600' : 'text-gray-500'}`}>
-                                            {razonLength < 20 ? `Mínimo ${20 - razonLength} caracteres más` : 
-                                             razonLength > 2000 ? `Excede por ${razonLength - 2000} caracteres` : 
-                                             'Longitud adecuada'}
+                                            {razonLength < 20 ? `Mínimo ${20 - razonLength} caracteres más` :
+                                                razonLength > 2000 ? `Excede por ${razonLength - 2000} caracteres` :
+                                                    'Longitud adecuada'}
                                         </div>
                                         <div className="text-gray-500 mt-1 sm:mt-0">
                                             {razonLength} / 2000 caracteres
@@ -625,13 +618,12 @@ export default function RightsARCO({ name, flash = {} }) {
                                     <span className="bg-famedic-light text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-sm mr-2">6</span>
                                     Solicitud presentada por *
                                 </h3>
-                                
+
                                 <div className="space-y-3">
-                                    <label className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200 ${
-                                        data.solicitado_por === 'titular'
+                                    <label className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200 ${data.solicitado_por === 'titular'
                                             ? 'border-famedic-light bg-famedic-light/10 shadow-sm'
                                             : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-                                    }`}>
+                                        }`}>
                                         <input
                                             type="radio"
                                             name="solicitado_por"
@@ -649,12 +641,11 @@ export default function RightsARCO({ name, flash = {} }) {
                                             </p>
                                         </div>
                                     </label>
-                                    
-                                    <label className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200 ${
-                                        data.solicitado_por === 'representante'
+
+                                    <label className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200 ${data.solicitado_por === 'representante'
                                             ? 'border-famedic-light bg-famedic-light/10 shadow-sm'
                                             : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-                                    }`}>
+                                        }`}>
                                         <input
                                             type="radio"
                                             name="solicitado_por"
@@ -673,7 +664,7 @@ export default function RightsARCO({ name, flash = {} }) {
                                         </div>
                                     </label>
                                 </div>
-                                
+
                                 {errors.solicitado_por && (
                                     <p className="mt-1 text-sm text-red-600">{errors.solicitado_por}</p>
                                 )}
@@ -693,7 +684,7 @@ export default function RightsARCO({ name, flash = {} }) {
                                         </h3>
                                         <div className="mt-1 text-sm text-blue-700">
                                             <p>
-                                                De conformidad con el Capítulo II de la Ley Federal de Protección de Datos Personales en Posesión de Particulares, 
+                                                De conformidad con el Capítulo II de la Ley Federal de Protección de Datos Personales en Posesión de Particulares,
                                                 usted recibirá una respuesta a la presente solicitud dentro de los próximos <strong>20 (veinte) días hábiles</strong> posteriores a su recepción.
                                             </p>
                                         </div>
@@ -778,23 +769,23 @@ export default function RightsARCO({ name, flash = {} }) {
                     </div>
                 </div>
             </div>
-            
+
             {/* Estilos inline para animaciones */}
-            <style jsx>{`
-                @keyframes fade-in {
-                    from {
-                        opacity: 0;
-                        transform: translateY(-10px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
-                }
-                .animate-fade-in {
-                    animation: fade-in 0.3s ease-out;
-                }
-            `}</style>
+            <style>{`
+    @keyframes fade-in {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    .animate-fade-in {
+        animation: fade-in 0.3s ease-out;
+    }
+`}</style>
         </FamedicLayout>
     );
 }

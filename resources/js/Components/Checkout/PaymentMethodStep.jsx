@@ -236,10 +236,7 @@ function PaymentMethodSelection({
                     </Text>
                     <Text className="text-xs text-gray-600 dark:text-gray-400">
                         Tu información está protegida con cifrado de seguridad
-                    </Text>
-                    <Text className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                        * Se realizará un pequeño cargo de verificación que será reembolsado
-                    </Text>
+                    </Text>                    
                 </div>
             </CheckoutSelectionCard>
         </ul>

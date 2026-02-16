@@ -13,31 +13,24 @@ export default function ThreeDSRedirect({ sessionId, orderId, url3ds, token3ds, 
     useEffect(() => {
         // Verificar estado después de 5 segundos
         const checkStatus = () => {
-            router.get(route('payment-methods.3ds-status', { sessionId }), {}, {
-                preserveScroll: true,
-                preserveState: true,
-                onSuccess: (response) => {
-                    if (response.props.flash?.success) {
+            fetch(route('payment-methods.3ds-status', { sessionId }))
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
                         setStatus('success');
                         setMessage('¡Verificación completada!');
-                        
-                        // Redirigir a resultado después de 2 segundos
+
                         setTimeout(() => {
                             router.visit(route('payment-methods.3ds-result', { sessionId }));
                         }, 2000);
-                    } else if (response.props.flash?.error) {
-                        setStatus('error');
-                        setMessage(response.props.flash.error);
                     } else {
-                        // Seguir verificando cada 5 segundos
                         setTimeout(checkStatus, 5000);
                     }
-                },
-                onError: () => {
+                })
+                .catch(() => {
                     setStatus('error');
-                    setMessage('Error verificando estado. Por favor intenta de nuevo.');
-                }
-            });
+                    setMessage('Error verificando estado.');
+                });
         };
 
         // Iniciar primera verificación después de 5 segundos
@@ -92,7 +85,7 @@ export default function ThreeDSRedirect({ sessionId, orderId, url3ds, token3ds, 
                             <Text className="text-xs text-green-600 dark:text-green-400">Conectando...</Text>
                         </div>
                     </div>
-                    
+
                     <div className="relative rounded-lg border border-zinc-300 bg-white shadow-sm dark:border-zinc-600 dark:bg-zinc-800">
                         <div className="absolute inset-0 flex items-center justify-center" style={{ minHeight: '400px' }}>
                             <div className="text-center">
@@ -107,7 +100,7 @@ export default function ThreeDSRedirect({ sessionId, orderId, url3ds, token3ds, 
                                 </Text>
                             </div>
                         </div>
-                        <div 
+                        <div
                             className="iframe-container"
                             dangerouslySetInnerHTML={{ __html: iframeHtml }}
                         />
@@ -121,13 +114,13 @@ export default function ThreeDSRedirect({ sessionId, orderId, url3ds, token3ds, 
                             <Text className="font-medium text-zinc-900 dark:text-white">
                                 Estado de la verificación
                             </Text>
-                            <Text className={`mt-1 text-sm ${status === 'success' ? 'text-green-600 dark:text-green-400' : 
-                                            status === 'error' ? 'text-red-600 dark:text-red-400' : 
-                                            'text-zinc-600 dark:text-zinc-400'}`}>
+                            <Text className={`mt-1 text-sm ${status === 'success' ? 'text-green-600 dark:text-green-400' :
+                                status === 'error' ? 'text-red-600 dark:text-red-400' :
+                                    'text-zinc-600 dark:text-zinc-400'}`}>
                                 {message}
                             </Text>
                         </div>
-                        
+
                         <div className="flex gap-3">
                             <Button
                                 href={route('payment-methods.3ds-result', { sessionId })}
@@ -144,7 +137,7 @@ export default function ThreeDSRedirect({ sessionId, orderId, url3ds, token3ds, 
                             </Button>
                         </div>
                     </div>
-                    
+
                     {/* ID de sesión para debugging */}
                     <div className="mt-6 border-t border-zinc-200 pt-4 dark:border-zinc-700">
                         <Text className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -179,14 +172,14 @@ export default function ThreeDSRedirect({ sessionId, orderId, url3ds, token3ds, 
                 </div>
             </div>
 
-            <style jsx>{`
-                .iframe-container iframe {
-                    width: 100%;
-                    min-height: 400px;
-                    border: none;
-                    border-radius: 0.5rem;
-                }
-            `}</style>
+            <style>{`
+    .iframe-container iframe {
+        width: 100%;
+        min-height: 400px;
+        border: none;
+        border-radius: 0.5rem;
+    }
+`}</style>
         </SettingsLayout>
     );
 }

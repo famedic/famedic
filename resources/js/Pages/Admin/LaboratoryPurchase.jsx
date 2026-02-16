@@ -333,9 +333,7 @@ function DeleteDialog({ laboratoryPurchase, className = "" }) {
 			<DeleteConfirmationModal
 				isOpen={isOpen}
 				close={() => setIsOpen(false)}
-				title="Ca
-				
-				ncelar pedido"
+				title="Cancelar pedido"
 				description="¿Estás seguro de que deseas cancelar este pedido? Se reembolsará el total pagado y se mandará un correo al cliente."
 				processing={processing}
 				destroy={handleDelete}
