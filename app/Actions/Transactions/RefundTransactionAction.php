@@ -13,7 +13,6 @@ class RefundTransactionAction
     public function __invoke(Transaction $transaction)
     {
         try {
-            // Usar el nuevo método refund() que maneja todos los gateways
             $result = $this->refund($transaction);
 
             if ($result) {
@@ -26,10 +25,7 @@ class RefundTransactionAction
         }
     }
 
-    /**
-     * Método antiguo para reembolsos Stripe (mantener por compatibilidad)
-     * Se usa desde __invoke() original
-     */
+
     private function refundStripeTransactionOld(Transaction $transaction)
     {
         $customer = $this->getCustomerFromTransaction($transaction);
@@ -130,9 +126,6 @@ class RefundTransactionAction
         }
     }
 
-    /**
-     * Determinar el gateway real basado en múltiples campos
-     */
     private function determineGateway(Transaction $transaction): string
     {
         // Prioridad 1: Verificar gateway_transaction_id
@@ -184,63 +177,56 @@ class RefundTransactionAction
     private function refundEfevooPayTransaction(Transaction $transaction, Customer $customer): bool
     {
         try {
-            Log::info('RefundTransactionAction::refundEfevooPayTransaction', [
+            Log::info('Refund EfevooPay iniciado', [
                 'transaction_id' => $transaction->id,
                 'gateway_transaction_id' => $transaction->gateway_transaction_id,
-                'customer_id' => $customer->id,
-                'amount_cents' => $transaction->transaction_amount_cents,
             ]);
 
-            // Si es una transacción simulada, solo marcar como reembolsada
-            $details = $transaction->details ?? [];
-            if (is_string($details)) {
-                $details = json_decode($details, true) ?? [];
+            if (!$transaction->gateway_transaction_id) {
+                Log::error('No existe gateway_transaction_id');
+                return false;
             }
 
-            if ($details['simulated'] ?? false) {
-                Log::info('Reembolso simulado para transacción EfevooPay', [
-                    'transaction_id' => $transaction->id,
-                    'simulated' => true,
-                ]);
+            $efevooService = app(\App\Services\EfevooPayService::class);
 
-                $transaction->update([
-                    'refunded_at' => now(),
-                    'gateway_status' => 'refunded',
-                    'gateway_response' => json_encode(array_merge(
-                        json_decode($transaction->gateway_response ?? '{}', true) ?? [],
-                        [
-                            'refunded_at' => now()->toISOString(),
-                            'refund_simulated' => true,
-                            'refund_note' => 'Reembolso simulado - Error GDA',
-                        ]
-                    )),
-                ]);
+            $response = $efevooService->refundTransaction(
+                (int) $transaction->gateway_transaction_id
+            );
 
-                return true;
+            Log::info('Refund response EfevooPay', $response);
+
+            if (!$response['success']) {
+                Log::error('Refund falló por HTTP');
+                return false;
             }
 
-            // TODO: Implementar reembolso real con EfevooPay API
-            // Por ahora, marcar como reembolsado
+            $data = $response['data'] ?? [];
+
+            // Validar código de negocio
+            if (isset($data['codigo']) && $data['codigo'] !== '00') {
+                Log::error('Refund rechazado por EfevooPay', $data);
+                return false;
+            }
+
             $transaction->update([
                 'refunded_at' => now(),
                 'gateway_status' => 'refunded',
-            ]);
-
-            Log::info('Reembolso EfevooPay marcado como completado', [
-                'transaction_id' => $transaction->id,
+                'gateway_response' => $response, // SIN json_encode
             ]);
 
             return true;
 
         } catch (\Exception $e) {
-            Log::error('Error en reembolso EfevooPay', [
-                'transaction_id' => $transaction->id,
+            Log::error('Error refund EfevooPay', [
                 'error' => $e->getMessage(),
             ]);
 
             return false;
         }
     }
+
+
+
 
     /**
      * Reembolso para transacciones Stripe (nuevo método con Customer param)
@@ -263,7 +249,6 @@ class RefundTransactionAction
                 return $this->refundEfevooPayTransaction($transaction, $customer);
             }
 
-            // Reembolso real con Stripe
             $customer->refund($transaction->reference_id);
 
             // Actualizar transacción
@@ -325,8 +310,8 @@ class RefundTransactionAction
                 $details = json_decode($details, true) ?? [];
             }
 
-            if (isset($details['customer_id'])) {
-                $customer = Customer::find($details['customer_id']);
+            if (isset($details['customer_info']['customer_id'])) {
+                $customer = Customer::find($details['customer_info']['customer_id']);
                 if ($customer) {
                     return $customer;
                 }

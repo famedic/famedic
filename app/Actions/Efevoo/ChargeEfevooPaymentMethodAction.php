@@ -19,45 +19,45 @@ class ChargeEfevooPaymentMethodAction
     public function __invoke(Customer $customer, int $amountCents, string $paymentMethod): Transaction
     {
         try {
+
             Log::info('Iniciando cargo con EfevooPay', [
                 'customer_id' => $customer->id,
                 'amount_cents' => $amountCents,
-                'payment_method' => $paymentMethod,
-                'amount_mxn' => $amountCents / 100,
+                'payment_method_id' => $paymentMethod,
             ]);
 
-            // Verificar si el paymentMethod es un token de Efevoo
-            if (!str_starts_with($paymentMethod, 'tok_')) {
-                throw new \Exception('Formato de token de pago inválido');
+            // 🔥 1. Buscar token real en base de datos
+            $token = \App\Models\EfevooToken::where('id', $paymentMethod)
+                ->where('customer_id', $customer->id)
+                ->active()
+                ->firstOrFail();
+
+            Log::info('Token encontrado', [
+                'token_id_db' => $token->id,
+                'environment_token' => $token->environment,
+                'card_token_preview' => substr($token->card_token, 0, 20)
+            ]);
+
+            // 🔥 2. Validar ambiente
+            if ($token->environment !== config('efevoopay.environment')) {
+                throw new \Exception('Token pertenece a otro ambiente');
             }
 
-            // Preparar datos para el cargo
+            // 🔥 3. Preparar datos con card_token real
             $chargeData = [
-                'token_id' => $paymentMethod,
-                'amount' => $amountCents / 100, // Convertir centavos a pesos
-                'description' => 'Compra de estudios de laboratorio',
-                'customer_id' => $customer->id,
+                'token_id' => $token->card_token, // 👈 AQUÍ ESTÁ LA CLAVE
+                'amount' => $amountCents / 100,
+                'reference' => 'LAB-' . $customer->id . '-' . time(),
             ];
 
-            // Realizar el cargo
             $result = $this->efevooPayService->chargeCard($chargeData);
 
             if (!$result['success']) {
-                Log::error('Error en cargo EfevooPay', [
-                    'result' => $result,
-                    'customer_id' => $customer->id,
-                ]);
                 throw new \Exception($result['message'] ?? 'Error al procesar el pago');
             }
 
-            Log::info('Cargo exitoso con EfevooPay', [
-                'transaction_id' => $result['transaction_id'] ?? null,
-                'authorization_code' => $result['authorization_code'] ?? null,
-                'customer_id' => $customer->id,
-            ]);
-
-            // Crear transacción en la base de datos
-            $transaction = Transaction::create([
+            // 🔥 4. Crear transacción
+            return Transaction::create([
                 'customer_id' => $customer->id,
                 'amount_cents' => $amountCents,
                 'currency' => 'MXN',
@@ -67,20 +67,19 @@ class ChargeEfevooPaymentMethodAction
                 'status' => $result['status'] ?? 'completed',
                 'metadata' => [
                     'efevoo_response' => $result,
-                    'token_id' => $paymentMethod,
-                    'description' => 'Laboratory purchase',
+                    'efevoo_token_id' => $token->id,
                 ],
             ]);
 
-            return $transaction;
-
         } catch (\Exception $e) {
-            Log::error('Excepción en ChargeEfevooPaymentMethodAction', [
+
+            Log::error('Error en ChargeEfevooPaymentMethodAction', [
                 'error' => $e->getMessage(),
                 'customer_id' => $customer->id,
-                'trace' => $e->getTraceAsString(),
             ]);
+
             throw $e;
         }
     }
+
 }

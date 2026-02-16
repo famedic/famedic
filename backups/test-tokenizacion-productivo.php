@@ -2,6 +2,7 @@
 // test-tokenizacion-productivo.php
 // ============================================
 // CONFIGURACIÓN PRODUCTIVO
+//EFEVOO_FIID_COMERCIO=9890713
 // ============================================
 $config = [
     'api_url' => 'https://intgapi.efevoopay.com/v1/apiservice',
