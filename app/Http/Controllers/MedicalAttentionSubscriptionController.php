@@ -6,27 +6,61 @@ use App\Actions\MedicalAttention\PurchaseRegularSubscriptionAction;
 use App\Exceptions\MurguiaConflictException;
 use App\Exceptions\OdessaInsufficientFundsException;
 use App\Exceptions\UnmatchingTotalPriceException;
+use App\Exceptions\EfevooPaymentException;
 use App\Http\Requests\MedicalAttention\MedicalAttentionSubscriptionRequest;
-use Stripe\Exception\CardException;
+use Illuminate\Support\Facades\Log;
 
 class MedicalAttentionSubscriptionController extends Controller
 {
-    public function __invoke(MedicalAttentionSubscriptionRequest $request, PurchaseRegularSubscriptionAction $purchaseAction)
-    {
+    public function __invoke(
+        MedicalAttentionSubscriptionRequest $request,
+        PurchaseRegularSubscriptionAction $purchaseAction
+    ) {
+
+        Log::info('🟢 [STEP 1] Controller reached - MedicalAttentionSubscriptionController');
+
+        Log::info('🟢 [STEP 2] Request basic data', [
+            'user_id' => optional($request->user())->id,
+            'customer_id' => optional($request->user()?->customer)->id,
+            'payment_method' => $request->payment_method,
+            'total' => $request->total,
+            'route' => $request->route()?->getName(),
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+        ]);
+
         try {
-            $purchaseAction($request->user()->customer, $request->payment_method, $request->total);
-            return redirect()->route('medical-attention')
+
+            Log::info('🟡 [STEP 3] About to execute PurchaseRegularSubscriptionAction');
+
+            $purchaseAction(
+                $request->user()->customer,
+                $request->payment_method,
+                config('famedic.medical_attention_subscription_price_cents')
+            );
+
+            Log::info('🟢 [STEP 4] Subscription action finished successfully');
+
+            return redirect()
+                ->route('medical-attention')
                 ->with('confetti', true)
                 ->flashMessage('Tu suscripción de atención médica ha comenzado exitosamente.');
-        } catch (UnmatchingTotalPriceException $e) {
-            return redirect()->back()->withErrors(['total' => 'El precio ha cambiado. Por favor actualiza la página.']);
-        } catch (CardException $e) {
-            return redirect()->back()->withErrors(['payment_method' => 'No pudimos procesar tu pago. Por favor verifica la información de tu método de pago.']);
-        } catch (OdessaInsufficientFundsException $e) {
-            return redirect()->back()->withErrors(['payment_method' => 'No cuentas con suficiente Saldo a la Vista para realizar el pago.']);
-        } catch (MurguiaConflictException $e) {
-            // The PurchaseRegularSubscriptionAction should handle transaction rollback and refund
-            return redirect()->back()->flashMessage('No se pudo completar la suscripción. Se ha procesado el reembolso. Por favor contacta soporte.', 'error');
+
+        } catch (\Throwable $e) {
+
+            Log::error('🔴 [ERROR] Exception caught in controller', [
+                'type' => get_class($e),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return redirect()->back()
+                ->withErrors(['general' => 'Ocurrió un error durante la suscripción.']);
+        } finally {
+
+            Log::info('⚫ [FINAL] Controller execution ended');
         }
     }
+
 }

@@ -297,7 +297,7 @@ function SubscribeToMedicalAttention({
 						? "Suscribirse por " + formattedPrice
 						: "Comenzar prueba gratuita"}
 				</DialogTitle>
-				<DialogDescription className="space-y-4">
+				<DialogDescription as="div" className="space-y-4">
 					{!formattedMedicalAttentionSubscriptionExpiresAt && (
 						<p>
 							No se necesita una tarjeta de crédito para el

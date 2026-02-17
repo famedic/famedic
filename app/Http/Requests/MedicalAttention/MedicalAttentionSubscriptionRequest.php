@@ -10,16 +10,22 @@ class MedicalAttentionSubscriptionRequest extends FormRequest
     public function authorize(): bool
     {
         $customer = $this->user()->customer;
-        
-        // Can't purchase if already have active subscription
-        return !$customer->medicalAttentionSubscriptions()->active()->exists();
+
+        // No permitir compra si ya tiene suscripción activa
+        return !$customer
+            ->medicalAttentionSubscriptions()
+            ->active()
+            ->exists();
     }
 
     public function rules(): array
     {
         return [
-            'payment_method' => ['required', 'string', Rule::in($this->getAllowedPaymentMethods())],
-            'total' => ['required', 'integer', 'min:0'],
+            'payment_method' => [
+                'required',
+                'string',
+                Rule::in($this->getAllowedPaymentMethods()),
+            ],
         ];
     }
 
@@ -27,11 +33,15 @@ class MedicalAttentionSubscriptionRequest extends FormRequest
     {
         $allowedPaymentMethods = [];
 
-        auth()->user()->customer->paymentMethods()->each(function ($paymentMethod) use (&$allowedPaymentMethods) {
-            $allowedPaymentMethods[] = $paymentMethod->id;
+        $customer = $this->user()->customer;
+
+        // Métodos guardados (EfevooPay)
+        $customer->paymentMethods()->each(function ($paymentMethod) use (&$allowedPaymentMethods) {
+            $allowedPaymentMethods[] = (string) $paymentMethod->id;
         });
 
-        if (auth()->user()->customer->has_odessa_afiliate_account) {
+        // Odessa si aplica
+        if ($customer->has_odessa_afiliate_account) {
             $allowedPaymentMethods[] = 'odessa';
         }
 
