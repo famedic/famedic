@@ -1,4 +1,4 @@
-export default function CreditCardBrand({ brand }) {
+export default function CreditCardBrand({ brand, className = "size-6" }) {
 	const brandSVGsMap = {
 		visa: {
 			light: "https://cdn.simpleicons.org/visa",
@@ -12,25 +12,54 @@ export default function CreditCardBrand({ brand }) {
 			light: "https://cdn.simpleicons.org/americanexpress",
 			dark: "https://cdn.simpleicons.org/americanexpress/FFFFFF",
 		},
+		// Agregar más marcas según EfevooPay
+		'american express': {
+			light: "https://cdn.simpleicons.org/americanexpress",
+			dark: "https://cdn.simpleicons.org/americanexpress/FFFFFF",
+		},
+		discover: {
+			light: "https://cdn.simpleicons.org/discover",
+			dark: "https://cdn.simpleicons.org/discover/FFFFFF",
+		},
 	};
 
-	brand = brand.toLowerCase();
-	if (brandSVGsMap[brand]) {
+	if (!brand) return null;
+	
+	// Normalizar nombres de marcas
+	let normalizedBrand = brand.toLowerCase();
+	
+	// Mapear nombres alternativos
+	const brandMapping = {
+		'americanexpress': 'amex',
+		'american express': 'amex',
+		'master card': 'mastercard',
+	};
+	
+	if (brandMapping[normalizedBrand]) {
+		normalizedBrand = brandMapping[normalizedBrand];
+	}
+
+	if (brandSVGsMap[normalizedBrand]) {
 		return (
 			<>
 				<img
-					src={brandSVGsMap[brand].light}
+					src={brandSVGsMap[normalizedBrand].light}
 					alt={brand}
-					className="size-6 stroke-zinc-500/40 dark:hidden"
+					className={`${className} stroke-zinc-500/40 dark:hidden`}
 				/>
 				<img
-					src={brandSVGsMap[brand].dark}
+					src={brandSVGsMap[normalizedBrand].dark}
 					alt={brand}
-					className="hidden size-6 stroke-zinc-500/40 dark:block"
+					className={`${className} hidden stroke-zinc-500/40 dark:block`}
 				/>
 			</>
 		);
 	}
 
-	return;
+	// Icono por defecto
+	return (
+		<div className={`${className} rounded border border-gray-300 flex items-center justify-center bg-white`}>
+			<CreditCardIcon className="size-4 text-gray-600" />
+		</div>
+	);
 }

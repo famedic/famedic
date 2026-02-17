@@ -1,0 +1,22 @@
+Método: getPayment
+Fecha: 2026-02-03 23:01:10
+Respuesta: {
+    "numtxn": "000040",
+    "numref": "972578",
+    "codigo": "00",
+    "descripcion": "Aprobado o completado con \u00e9xito",
+    "id": "596856",
+    "datcr": "2026-02-03 17:00:59.000000"
+}
+
+Método: getPayment
+Fecha: 2026-02-04 00:33:31
+Respuesta: {
+    "numtxn": "000042",
+    "numref": "458957",
+    "codigo": "00",
+    "descripcion": "Aprobado o completado con \u00e9xito",
+    "id": "596859",
+    "datcr": "2026-02-03 18:33:18.000000"
+}
+

@@ -1,0 +1,11 @@
+{
+    "token": "akVUWno5b2pQdllpTlBQUXZtV2hOVTUvVVhXajFhRCtvakd1dGVWWWxKQT0=",
+    "cliente": "TestFAMEDIC",
+    "fecha_generacion": "2026-01-27 16:55:19",
+    "vigencia": "1 a\u00f1o",
+    "api_url": "https:\/\/test-intgapi.efevoopay.com\/v1\/apiservice",
+    "headers": {
+        "X-API-USER": "Efevoo Pay",
+        "X-API-KEY": "Hq#J0hs)jK+YqF6J"
+    }
+}

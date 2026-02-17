@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Laboratories\OrderAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\OdessaInsufficientFundsException;
+use App\Exceptions\EfevooPaymentException; 
 use App\Http\Requests\Laboratories\LaboratoryPurchases\StoreLaboratoryPurchaseRequest;
 use App\Models\Address;
 use App\Models\Contact;
@@ -13,7 +14,7 @@ use App\Models\LaboratoryQuote;
 use App\Services\Tracking\Purchase;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Stripe\Exception\CardException;
+
 
 class LaboratoryPurchaseController extends Controller
 {
@@ -28,7 +29,7 @@ class LaboratoryPurchaseController extends Controller
                 laboratoryBrand: $laboratoryBrand,
                 totalCents: $request->total,
             );
-        } catch (CardException $e) {
+        } catch (EfevooPaymentException $e) { // Cambiado
             return redirect()->back()
                 ->withErrors(['payment_method' => 'No pudimos procesar tu pago. Por favor verifica la información de tu método de pago o intenta con uno diferente.']);
         } catch (OdessaInsufficientFundsException $e) {

@@ -23,7 +23,7 @@ class LaboratoryCheckoutController extends Controller
             contents: [
                 ...$laboratoryCartItems->map(function ($item) {
                     return [
-                        'id' => (string)$item->laboratoryTest->gda_id,
+                        'id' => (string) $item->laboratoryTest->gda_id,
                         'quantity' => 1
                     ];
                 })->all(),
@@ -44,7 +44,30 @@ class LaboratoryCheckoutController extends Controller
             'contacts' => $request->user()->customer->contacts,
             'genders' => Gender::casesWithLabels(),
             'addresses' => $request->user()->customer->addresses,
-            'paymentMethods' => $request->user()->customer->paymentMethods(),
+            'paymentMethods' => $request->user()->customer->efevooTokens()
+                ->active()
+                ->get()
+                ->map(function ($token) {
+                    return [
+                        'id' => $token->id,
+                        'object' => 'efevoo_token',
+                        'card' => [
+                            'brand' => strtolower($token->card_brand),
+                            'last4' => $token->card_last_four,
+                            'exp_month' => substr($token->card_expiration, 0, 2),
+                            'exp_year' => '20' . substr($token->card_expiration, 2, 2),
+                            'exp_year_short' => substr($token->card_expiration, 2, 2),
+                        ],
+                        'billing_details' => [
+                            'name' => $token->card_holder,
+                        ],
+                        'alias' => $token->alias ?? $token->generateAlias(),
+                        'metadata' => [
+                            'environment' => $token->environment,
+                            'expires_at' => $token->expires_at?->toISOString(),
+                        ]
+                    ];
+                })->toArray(),
             'hasOdessaPay' => $request->user()->customer->has_odessa_afiliate_account,
             'mexicanStates' => config('mexicanstates'),
         ]);

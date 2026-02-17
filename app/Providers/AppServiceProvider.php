@@ -13,11 +13,21 @@ use Illuminate\Support\ServiceProvider;
 use Laravel\Cashier\Cashier;
 use Stripe\StripeClient;
 use App\Services\ConstanciaFiscalService;
+use App\Services\EfevooPayService;
+use App\Services\EfevooPayFactoryService;
+use App\Services\EfevooPaySimulatorService;
+use App\Actions\Efevoo\ChargeEfevooTokenAction;
+use App\Actions\Efevoo\RefundEfevooTransactionAction;
+use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction;
+use Inertia\Inertia;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->singleton(ChargeEfevooTokenAction::class);
+        $this->app->singleton(RefundEfevooTransactionAction::class);
+
         $this->app->singleton(StripeClient::class, function ($app) {
             return new StripeClient(config('services.stripe.secret'));
         });
@@ -31,8 +41,29 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->app->singleton(ConstanciaFiscalService::class, function ($app) {
-        return new ConstanciaFiscalService();
-    });
+            return new ConstanciaFiscalService();
+        });
+
+        $this->app->register(\App\Providers\EfevooPayServiceProvider::class);
+
+        // Servicios de EfevooPay
+        $this->app->singleton(EfevooPayFactoryService::class, function ($app) {
+            return new EfevooPayFactoryService(
+                $app->make(EfevooPayService::class),
+                $app->make(EfevooPaySimulatorService::class)
+            );
+        });
+        
+        $this->app->singleton(EfevooPayService::class);
+        $this->app->singleton(EfevooPaySimulatorService::class);
+        
+        // Acciones de EfevooPay
+        $this->app->singleton(ChargeEfevooTokenAction::class);
+        $this->app->singleton(RefundEfevooTransactionAction::class);
+        $this->app->singleton(ChargeEfevooPaymentMethodAction::class);
+        
+        // También mantener el servicio original disponible
+        $this->app->singleton(EfevooPayFactoryService::class);
     }
 
     public function boot(): void
@@ -57,8 +88,19 @@ class AppServiceProvider extends ServiceProvider
                 'type' => $type,
                 'message' => $message,
             ]);
-        });
+        });       
 
-        Cashier::useCustomerModel(Customer::class);
+        Cashier::useCustomerModel(Customer::class);       
+        
+        Inertia::share([
+            'flash' => function () {
+                return [
+                    'success' => session('success'),
+                    'error' => session('error'),
+                    'warning' => session('warning'),
+                    'info' => session('info'),
+                ];
+            },
+        ]);
     }
 }

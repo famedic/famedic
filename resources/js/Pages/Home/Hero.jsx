@@ -16,14 +16,14 @@ export default function Hero({ invitationUrl, auth }) {
 			imageSrc:
 				"https://images.pexels.com/photos/4176850/pexels-photo-4176850.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
 		},
-		{
+		/*{
 			name: "Farmacia en línea",
 			description:
 				"Accede al inventario más grande de medicamentos con entrega directa a tu domicilio.",
 			routeName: "online-pharmacy",
 			imageSrc:
 				"https://images.pexels.com/photos/3683037/pexels-photo-3683037.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
-		},
+		},*/
 	];
 
 	return (

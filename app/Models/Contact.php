@@ -71,4 +71,74 @@ class Contact extends Model
     {
         return $query->whereCustomerId($customer->id);
     }
+
+    /**
+     * Formatear contacto para el checkout
+     */
+    public function forCheckout(): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'paternal_lastname' => $this->paternal_lastname,
+            'maternal_lastname' => $this->maternal_lastname,
+            'full_name' => $this->getFullNameAttribute(),
+            'birth_date' => $this->birth_date,
+            'formatted_birth_date' => $this->birth_date 
+                ? \Carbon\Carbon::parse($this->birth_date)->format('d/m/Y')
+                : null,
+            'gender' => $this->gender,
+            'formatted_gender' => $this->getFormattedGenderAttribute(),
+            'phone' => $this->phone,
+            'phone_country' => $this->phone_country,
+            'formatted_phone' => $this->getFormattedPhoneAttribute(),
+        ];
+    }
+
+    /**
+     * Atributo: Nombre completo
+     */
+    public function getFullNameAttribute(): string
+    {
+        $parts = [
+            $this->name,
+            $this->paternal_lastname,
+            $this->maternal_lastname,
+        ];
+
+        return implode(' ', array_filter($parts, function ($part) {
+            return !empty($part) && trim($part) !== '';
+        }));
+    }
+
+    /**
+     * Atributo: Género formateado
+     */
+    public function getFormattedGenderAttribute(): string
+    {
+        return match($this->gender) {
+            'M' => 'Masculino',
+            'F' => 'Femenino',
+            default => 'No especificado',
+        };
+    }
+
+    /**
+     * Atributo: Teléfono formateado
+     */
+    public function getFormattedPhoneAttribute(): string
+    {
+        if (empty($this->phone)) {
+            return '';
+        }
+
+        // Formato básico: +52 55 1234 5678
+        $phone = preg_replace('/\D/', '', $this->phone);
+        
+        if (strlen($phone) === 10) {
+            return '+52 ' . substr($phone, 0, 2) . ' ' . substr($phone, 2, 4) . ' ' . substr($phone, 6, 4);
+        }
+        
+        return $this->phone;
+    }
 }

@@ -13,6 +13,8 @@ import {
 import { QrCodeIcon } from "@heroicons/react/20/solid";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import PaymentMethodBadge from "@/Components/PaymentMethodBadge";
+import EfevooPayBadge from "@/Components/EfevooPayBadge";
+import OdessaBadge from "@/Components/OdessaBadge";
 
 export default function LaboratoryPurchaseTableRow({
 	laboratoryPurchase,

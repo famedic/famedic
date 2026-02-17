@@ -21,11 +21,15 @@ export default function ShoppingCartDropdown({
 							<Button outline={!selected}>Laboratorios</Button>
 						)}
 					</Tab>
-					<Tab as={Fragment}>
-						{({ selected }) => (
-							<Button outline={!selected}>Farmacia</Button>
-						)}
-					</Tab>
+
+					{/* 
+						<Tab as={Fragment}>
+							{({ selected }) => (
+								<Button outline={!selected}>Farmacia</Button>
+							)}
+						</Tab>
+					*/}
+
 				</TabList>
 
 				<DropdownDivider />
