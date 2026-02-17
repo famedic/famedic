@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('transactions', function (Blueprint $table) {
             if (!Schema::hasColumn('transactions', 'refunded_at')) {
-                $table->timestamp('refunded_at')->nullable()->after('gateway_processed_at');
+                $table->timestamp('refunded_at')->nullable();
             }
         });
     }

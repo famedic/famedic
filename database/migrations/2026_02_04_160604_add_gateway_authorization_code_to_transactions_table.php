@@ -14,7 +14,6 @@ return new class extends Migration {
             // Agregar columna nullable
             $table->string('gateway_authorization_code', 100)
                 ->nullable()
-                ->after('gateway_token')
                 ->comment('Código de autorización del gateway de pago');
         });
     }
