@@ -55,9 +55,10 @@ class PaymentMethodController extends Controller
                 ->with('error', 'No tienes un perfil de cliente configurado.');
         }
 
-        $hasPending3ds = \App\Models\Efevoo3dsSession::where('customer_id', $customer->id)
+        /*$hasPending3ds = \App\Models\Efevoo3dsSession::where('customer_id', $customer->id)
             ->whereIn('status', ['pending', 'redirect_required'])
-            ->exists();
+            ->exists();*/
+        $hasPending3ds = false;
 
         return \Inertia\Inertia::render('PaymentMethods/Create', [
             'efevooConfig' => [
