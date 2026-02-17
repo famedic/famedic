@@ -59,11 +59,11 @@ class HandleInertiaRequests extends Middleware
                     'url' => route('laboratory-brand-selection'),
                     'current' => Route::currentRouteName() === 'laboratory-brand-selection' || Route::currentRouteName() === 'laboratory-stores.index' || Route::currentRouteName() === 'laboratory-tests' || Route::currentRouteName() === 'laboratory.shopping-cart',
                 ],
-                [
+                /*[
                     'label' => 'Farmacía en línea',
                     'url' => route('online-pharmacy'),
                     'current' => Route::currentRouteName() === 'online-pharmacy' || Route::currentRouteName() === 'online-pharmacy-search' || Route::currentRouteName() === 'online-pharmacy.shopping-cart',
-                ],
+                ],*/
             ],
             'userNavigation' => $request->user() ? $this->getUserNavigation((bool) $request->user()->administrator, (bool) $request->user()?->customer?->medical_attention_subscription_is_active) : [],
             'flashMessage' => session('flashMessage'),
