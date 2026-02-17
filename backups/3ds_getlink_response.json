@@ -1,7 +1,0 @@
-{
-    "status": {
-        "code": "7005",
-        "description": "ERROR: No fue posible generar la transaccion correctamente."
-    },
-    "payload": []
-}
