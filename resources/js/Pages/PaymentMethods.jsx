@@ -68,7 +68,7 @@ export default function PaymentMethods({
                     </GradientHeading>
                     <div className="flex items-center gap-2">
                         <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                            {efevooConfig?.environment?.toUpperCase() ?? 'TEST'}
+                            {efevooConfig?.environment?.toUpperCase() ?? ''}
                         </span>
                         {sortedCards.length > 0 && (
                             <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">

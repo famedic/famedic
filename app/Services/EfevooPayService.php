@@ -33,7 +33,20 @@ class EfevooPayService
     {
         $cacheKey = "efevoo_token_{$operation}";
 
+        /**
+         * 🔥 Nunca cachear tokens para operaciones críticas
+         * 3DS y Payment deben usar token fresco siempre
+         */
+        if (in_array($operation, ['3ds', 'payment'])) {
+            $force = true;
+        }
+
+        // Usar cache solo si NO es forzado
         if (!$force && Cache::has($cacheKey)) {
+            Log::info('[Efevoo] Using cached token', [
+                'operation' => $operation
+            ]);
+
             return [
                 'success' => true,
                 'token' => Cache::get($cacheKey),
@@ -41,41 +54,84 @@ class EfevooPayService
             ];
         }
 
+        /**
+         * 🔐 Generar nuevo token dinámico
+         */
+        try {
+            $totp = $this->generateTOTP();
 
-        $totp = $this->generateTOTP();
-        $hash = base64_encode(hash_hmac('sha256', $this->config['clave'], $totp, true));
+            $hash = base64_encode(
+                hash_hmac('sha256', $this->config['clave'], $totp, true)
+            );
 
-        $payload = [
-            'payload' => [
-                'hash' => $hash,
-                'cliente' => $this->config['cliente'],
-            ],
-            'method' => 'getClientToken'
-        ];
+            $payload = [
+                'payload' => [
+                    'hash' => $hash,
+                    'cliente' => $this->config['cliente'],
+                ],
+                'method' => 'getClientToken'
+            ];
 
-        Log::info('[Efevoo] TOKEN REQUEST', [
-            'url' => $this->config['api_url'],
-            'payload' => $payload
-        ]);
-        $response = $this->request($payload);
+            Log::info('[Efevoo] TOKEN REQUEST', [
+                'operation' => $operation,
+                'url' => $this->config['api_url']
+            ]);
 
-        if (
-            $response['success'] &&
-            isset($response['data']['token']) &&
-            $response['data']['token'] !== 'NA'
-        ) {
-            Cache::put($cacheKey, $response['data']['token'], now()->addMinutes(30));
+            $response = $this->request($payload);
+
+            if (
+                $response['success'] &&
+                isset($response['data']['codigo']) &&
+                $response['data']['codigo'] === '100' &&
+                !empty($response['data']['token']) &&
+                $response['data']['token'] !== 'NA'
+            ) {
+
+                $token = $response['data']['token'];
+
+                // Cache solo si no es forzado
+                if (!$force) {
+                    Cache::put($cacheKey, $token, now()->addMinutes(25));
+                }
+
+                Log::info('[Efevoo] TOKEN GENERATED', [
+                    'operation' => $operation,
+                    'type' => $force ? 'dynamic_forced' : 'dynamic'
+                ]);
+
+                return [
+                    'success' => true,
+                    'token' => $token,
+                    'type' => $force ? 'dynamic_forced' : 'dynamic'
+                ];
+            }
+
+            Log::error('[Efevoo] TOKEN ERROR', [
+                'operation' => $operation,
+                'response' => $response
+            ]);
 
             return [
-                'success' => true,
-                'token' => $response['data']['token'],
-                'type' => 'dynamic'
+                'success' => false,
+                'message' => $response['data']['msg'] ?? 'Error generando token Efevoo',
+                'raw' => $response
+            ];
+
+        } catch (\Throwable $e) {
+
+            Log::error('[Efevoo] TOKEN EXCEPTION', [
+                'operation' => $operation,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Excepción generando token Efevoo',
+                'error' => $e->getMessage()
             ];
         }
-
-        Log::info('[Efevoo] TOKEN RESPONSE', $response);
-        return $response;
     }
+
 
     /* ==========================================================
      *  3DS INIT
@@ -240,53 +296,53 @@ class EfevooPayService
      * ========================================================== */
 
     public function chargeCard(array $data): array
-{
-    $tokenResult = $this->getClientToken(false, 'payment');
-    if (!$tokenResult['success']) {
-        return $tokenResult;
-    }
+    {
+        $tokenResult = $this->getClientToken(false, 'payment');
+        if (!$tokenResult['success']) {
+            return $tokenResult;
+        }
 
-    $payload = [
-        'payload' => [
-            'token' => $tokenResult['token'],
-            'encrypt' => $this->encrypt([
-                'track2' => $data['token_id'],
-                'amount' => number_format($data['amount'], 2, '.', ''),
-                'cav' => 'PAY' . time(),
-                'referencia' => $data['reference'] ?? 'REF-' . time()
-            ])
-        ],
-        'method' => 'getPayment'
-    ];
+        $payload = [
+            'payload' => [
+                'token' => $tokenResult['token'],
+                'encrypt' => $this->encrypt([
+                    'track2' => $data['token_id'],
+                    'amount' => number_format($data['amount'], 2, '.', ''),
+                    'cav' => 'PAY' . time(),
+                    'referencia' => $data['reference'] ?? 'REF-' . time()
+                ])
+            ],
+            'method' => 'getPayment'
+        ];
 
-    $response = $this->request($payload);
+        $response = $this->request($payload);
 
-    if (!$response['success']) {
-        return $response;
-    }
+        if (!$response['success']) {
+            return $response;
+        }
 
-    $data = $response['data'];
+        $data = $response['data'];
 
-    // 🔥 Manejo seguro si no existe codigo
-    if (!isset($data['codigo'])) {
+        // 🔥 Manejo seguro si no existe codigo
+        if (!isset($data['codigo'])) {
+            return [
+                'success' => false,
+                'status' => 'failed',
+                'message' => $data['mensaje'] ?? 'Error desconocido en Efevoo',
+                'raw' => $data
+            ];
+        }
+
         return [
-            'success' => false,
-            'status' => 'failed',
-            'message' => $data['mensaje'] ?? 'Error desconocido en Efevoo',
-            'raw' => $data
+            'success' => $data['codigo'] === '00',
+            'status' => $data['codigo'] === '00' ? 'completed' : 'failed',
+            'transaction_id' => $data['id'] ?? null,
+            'authorization_code' => $data['numref'] ?? null,
+            'numtxn' => $data['numtxn'] ?? null,
+            'message' => $data['descripcion'] ?? null,
+            'raw' => $data,
         ];
     }
-
-    return [
-        'success' => $data['codigo'] === '00',
-        'status' => $data['codigo'] === '00' ? 'completed' : 'failed',
-        'transaction_id' => $data['id'] ?? null,
-        'authorization_code' => $data['numref'] ?? null,
-        'numtxn' => $data['numtxn'] ?? null,
-        'message' => $data['descripcion'] ?? null,
-        'raw' => $data,
-    ];
-}
 
     /* ==========================================================
      *  REFUND
