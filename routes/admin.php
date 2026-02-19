@@ -51,14 +51,14 @@ Route::prefix('admin')->middleware([
         Route::resource('laboratory-vendor-payments', LaboratoryVendorPaymentsController::class)->parameters([
             'laboratory-vendor-payments' => 'vendor_payment',
         ])->names([
-            'index' => 'laboratory-purchases.vendor-payments.index',
-            'create' => 'laboratory-purchases.vendor-payments.create',
-            'store' => 'laboratory-purchases.vendor-payments.store',
-            'show' => 'laboratory-purchases.vendor-payments.show',
-            'edit' => 'laboratory-purchases.vendor-payments.edit',
-            'update' => 'laboratory-purchases.vendor-payments.update',
-            'destroy' => 'laboratory-purchases.vendor-payments.destroy',
-        ]);
+                    'index' => 'laboratory-purchases.vendor-payments.index',
+                    'create' => 'laboratory-purchases.vendor-payments.create',
+                    'store' => 'laboratory-purchases.vendor-payments.store',
+                    'show' => 'laboratory-purchases.vendor-payments.show',
+                    'edit' => 'laboratory-purchases.vendor-payments.edit',
+                    'update' => 'laboratory-purchases.vendor-payments.update',
+                    'destroy' => 'laboratory-purchases.vendor-payments.destroy',
+                ]);
         Route::resource('laboratory-purchases', LaboratoryPurchaseController::class)->only(['index', 'show', 'destroy']);
         Route::post('laboratory-purchases/{laboratory_purchase}/invoice', InvoiceController::class)->name('laboratory-purchases.invoice');
         Route::post('laboratory-purchases/{laboratory_purchase}/results', ResultsController::class)->name('laboratory-purchases.results');
@@ -66,7 +66,7 @@ Route::prefix('admin')->middleware([
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request/{dev_assistance_request}/resolved', LaboratoryResolvedDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.resolved');
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request/{dev_assistance_request}/unresolved', LaboratoryUnresolvedDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.unresolved');
         Route::post('laboratory-purchases/export', ExportLaboratoryPurchasesController::class)->name('laboratory-purchases.export');
-        
+
         // ===== RUTAS NUEVAS PARA NOTIFICACIONES DE LABORATORIO =====
         Route::resource('laboratory-notifications', LaboratoryNotificationController::class)->only(['index', 'show']);
         Route::post('laboratory-notifications/{notification}/resend', [LaboratoryNotificationController::class, 'resend'])
@@ -76,18 +76,18 @@ Route::prefix('admin')->middleware([
         Route::delete('laboratory-notifications/{notification}/clean', [LaboratoryNotificationController::class, 'cleanError'])
             ->name('laboratory-notifications.clean-error');
         // ===========================================================
-        
+
         Route::resource('online-pharmacy-vendor-payments', OnlinePharmacyVendorPaymentsController::class)->parameters([
             'online-pharmacy-vendor-payments' => 'vendor_payment',
         ])->names([
-            'index' => 'online-pharmacy-purchases.vendor-payments.index',
-            'create' => 'online-pharmacy-purchases.vendor-payments.create',
-            'store' => 'online-pharmacy-purchases.vendor-payments.store',
-            'show' => 'online-pharmacy-purchases.vendor-payments.show',
-            'edit' => 'online-pharmacy-purchases.vendor-payments.edit',
-            'update' => 'online-pharmacy-purchases.vendor-payments.update',
-            'destroy' => 'online-pharmacy-purchases.vendor-payments.destroy',
-        ]);
+                    'index' => 'online-pharmacy-purchases.vendor-payments.index',
+                    'create' => 'online-pharmacy-purchases.vendor-payments.create',
+                    'store' => 'online-pharmacy-purchases.vendor-payments.store',
+                    'show' => 'online-pharmacy-purchases.vendor-payments.show',
+                    'edit' => 'online-pharmacy-purchases.vendor-payments.edit',
+                    'update' => 'online-pharmacy-purchases.vendor-payments.update',
+                    'destroy' => 'online-pharmacy-purchases.vendor-payments.destroy',
+                ]);
         Route::resource('online-pharmacy-purchases', OnlinePharmacyPurchaseController::class)->only(['index', 'show']);
         Route::post('online-pharmacy-purchases/{online_pharmacy_purchase}/invoice', OnlinePharmacyPurchasesInvoiceController::class)->name('online-pharmacy-purchases.invoice');
         Route::post('online-pharmacy-purchases/{online_pharmacy_purchase}/dev-assistance-request', OnlinePharmacyDevAssistanceRequestController::class)->name('online-pharmacy-purchases.dev-assistance-request.store');
@@ -102,6 +102,22 @@ Route::prefix('admin')->middleware([
         // ===== RUTAS PARA COTIZACIONES DE LABORATORIO (SI LAS NECESITAS) =====
         // Si tienes un controller para quotes de laboratorio, agrégala aquí
         // Route::resource('laboratory-quotes', LaboratoryQuoteController::class)->only(['index', 'show']);
-        
+
     });
+});
+
+//Ruta Temporal
+use App\Services\InstitutionalUserImportService;
+Route::get('/admin/import-institutional-users', function (InstitutionalUserImportService $service) {
+
+    if (request('key') !== 'LALO123') {
+        abort(403);
+    }
+
+    $batch = (int) request('batch', 1);
+
+    return response()->json(
+        $service->run($batch)
+    );
+
 });
