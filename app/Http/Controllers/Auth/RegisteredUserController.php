@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Actions\Register\RegisterRegularCustomerAction;
+use App\Services\ActiveCampaign\ActiveCampaignService;
 use App\Enums\Gender;
 use App\Data\StatesMexico;
 use App\Http\Controllers\Controller;
@@ -55,8 +56,11 @@ class RegisteredUserController extends Controller
         ]);
     }
 
-    public function store(RegisterRequest $request, RegisterRegularCustomerAction $action): RedirectResponse
-    {
+    public function store(
+        RegisterRequest $request,
+        RegisterRegularCustomerAction $action,
+        ActiveCampaignService $activeCampaign
+    ): RedirectResponse {
         // LOG 1: Inicio del proceso
         Log::channel('single')->info('🚀 REGISTER: Iniciando proceso de registro (store)', [
             'action' => 'store',
@@ -76,7 +80,7 @@ class RegisteredUserController extends Controller
             'maternal_lastname' => $request->maternal_lastname,
             'email' => $request->email,
             'phone_masked' => $request->phone ? substr($request->phone, 0, 3) . '****' . substr($request->phone, -3) : null,
-            'gender' => $request->gender,
+            'gender' => $request->gender == 1 ? 'Femenino' : 'Masculino',
             'state' => $request->state,
             'birth_date' => $request->birth_date,
             'phone_country' => $request->phone_country,
@@ -124,6 +128,25 @@ class RegisteredUserController extends Controller
             ]);
 
             Auth::login($regularAccount->customer->user);
+
+            try {
+                $activeCampaign->newRegistration([
+                    'email' => $request->email,
+                    'first_name' => $request->name,
+                    'paternal_lastname' => $request->paternal_lastname,
+                    'maternal_lastname' => $request->maternal_lastname,
+                    'phone' => $request->phone,
+                    'birth_date' => Carbon::parse($request->birth_date)->format('Y-m-d'),
+                    'gender' => $request->gender == 1 ? 'Femenino' : 'Masculino',
+                    'state' => $request->state,
+                    'phone_country' => $request->phone_country,
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('ActiveCampaign error', [
+                    'error' => $e->getMessage()
+                ]);
+            }
+
 
             // LOG 6: Después de autenticar
             Log::channel('single')->info('🔓 REGISTER: Usuario autenticado', [
