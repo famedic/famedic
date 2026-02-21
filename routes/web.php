@@ -331,3 +331,23 @@ Route::get('/create-new-test-token', function () {
 });
 
 
+use App\Http\Controllers\ActiveCampaignDebugController;
+use App\Services\ActiveCampaign\ActiveCampaignService;
+
+
+// Rutas existentes
+Route::get('/ac/fields', [ActiveCampaignDebugController::class, 'fields']);
+
+// Nuevas rutas para tags
+Route::get('/ac/tags', [ActiveCampaignDebugController::class, 'tags']);
+Route::get('/ac/tags/search', [ActiveCampaignDebugController::class, 'searchTags']);
+Route::post('/ac/tags/create', [ActiveCampaignDebugController::class, 'createTag']);
+Route::post('/ac/tags/create-missing', [ActiveCampaignDebugController::class, 'createMissingTags']);
+
+use App\Http\Controllers\ActiveCampaignFieldsController;
+
+// Rutas para campos personalizados
+// Rutas para campos personalizados
+Route::get('/ac/fields/list', [ActiveCampaignFieldsController::class, 'index']);
+Route::post('/ac/fields/create-membership', [ActiveCampaignFieldsController::class, 'createMembershipFields']);
+Route::get('/ac/fields/relevant', [ActiveCampaignFieldsController::class, 'getRelevantFields']);
