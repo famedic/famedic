@@ -62,19 +62,23 @@ export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
                 .then(res => res.json())
                 .then(data => {
 
-                    if (data.success) {
-                        clearInterval(interval);
-                        setStatus("success");
+                    if (data.final) {
 
-                        setTimeout(() => {
-                            router.visit(route("payment-methods.3ds-result", { sessionId }));
-                        }, 1200);
-                    }
-
-                    if (data.error) {
                         clearInterval(interval);
-                        setStatus("error");
-                        setMessage(data.message || "Error en verificación");
+
+                        if (data.status === "completed") {
+                            setStatus("success");
+                            setMessage(data.message);
+
+                            setTimeout(() => {
+                                router.visit(route("payment-methods.3ds-result", { sessionId }));
+                            }, 1500);
+
+                        } else {
+
+                            setStatus("error");
+                            setMessage(data.message);
+                        }
                     }
 
                 })
@@ -84,7 +88,7 @@ export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
                     setMessage("Error verificando estado");
                 });
 
-        }, 2500);
+        }, 3000);
 
         return () => clearInterval(interval);
 
@@ -142,14 +146,21 @@ export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
                     )}
 
                     {status === "error" && (
-                        <div className="flex flex-col items-center">
+                        <div className="flex flex-col items-center text-center">
                             <ExclamationTriangleIcon className="size-16 text-red-600" />
                             <h2 className="mt-4 font-semibold text-red-700">
-                                Error en verificación
+                                No se pudo completar el proceso
                             </h2>
-                            <p className="mt-2 text-sm text-zinc-600">
+                            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 max-w-md">
                                 {message}
                             </p>
+
+                            <Button
+                                className="mt-6"
+                                href={route("payment-methods.create")}
+                            >
+                                Intentar nuevamente
+                            </Button>
                         </div>
                     )}
 
