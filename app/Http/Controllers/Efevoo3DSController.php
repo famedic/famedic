@@ -1,267 +1,174 @@
 <?php
+
 namespace App\Http\Controllers;
 
+use App\Models\Efevoo3dsSession;
 use App\Services\EfevooPayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Session;
 
 class Efevoo3DSController extends Controller
 {
-    protected $efevooService;
+    protected EfevooPayService $efevooService;
 
     public function __construct(EfevooPayService $efevooService)
     {
         $this->efevooService = $efevooService;
     }
 
-    /**
-     * Iniciar proceso 3DS para tokenización
-     */
+    /* ==========================================================
+     * 1️⃣ INICIAR 3DS
+     * ========================================================== */
+
     public function initiate3DS(Request $request)
     {
         $validated = $request->validate([
-            'card_number' => 'required|string|size:16',
-            'expiration' => 'required|string|size:4',
-            'cvv' => 'required|string|min:3|max:4',
-            'card_holder' => 'required|string|max:100',
-            'amount' => 'required|numeric|min:0.01',
-            'customer_id' => 'required|integer',
+            'card_number'  => 'required|string|size:16',
+            'expiration'   => 'required|string|size:4', // MMYY
+            'cvv'          => 'required|string|min:3|max:4',
+            'card_holder'  => 'required|string|max:100',
+            'amount'       => 'required|numeric|min:0.01',
         ]);
 
         try {
-            $result = $this->efevooService->initiate3DSProcess($validated, $validated['customer_id']);
 
-            if ($result['success']) {
-                return response()->json([
-                    'success' => true,
-                    'session_id' => $result['session_id'],
-                    'requires_3ds' => $result['requires_3ds'] ?? false,
-                    'next_step' => $result['requires_3ds'] ? 'redirect_to_3ds' : 'tokenize_directly',
-                    'data' => $result,
-                ]);
-            }
-
-            return response()->json($result, 400);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * Verificar estado de sesión 3DS
-     */
-    public function checkStatus(Request $request)
-    {
-        $validated = $request->validate([
-            'session_id' => 'required|string',
-            'order_id' => 'required|integer',
-        ]);
-
-        try {
-            // En un caso real, necesitarías recuperar los datos de la tarjeta de storage seguro
             $cardData = [
-                'card_number' => '', // Se obtendría de la sesión
-                'expiration' => '',
-                'cvv' => '',
+                'card_number' => $validated['card_number'],
+                'expiration'  => $validated['expiration'],
+                'cvv'         => $validated['cvv'],
+                'card_holder' => $validated['card_holder'],
+                'amount'      => $validated['amount'],
             ];
 
-            $result = $this->efevooService->check3DSStatus(
-                $validated['session_id'],
-                $validated['order_id'],
-                $cardData
+            // Guardamos datos temporalmente en sesión
+            Session::put('3ds_card_data', $cardData);
+
+            $result = $this->efevooService->initiate3DS(
+                $cardData,
+                auth()->id()
             );
 
-            return response()->json($result);
+            if (!$result['success']) {
+                return response()->json($result, 400);
+            }
 
-        } catch (\Exception $e) {
+            return response()->json([
+                'success'      => true,
+                'session_id'   => $result['session_id'],
+                'url_3dsecure' => $result['url_3dsecure'],
+                'token_3dsecure' => $result['token_3dsecure'],
+            ]);
+
+        } catch (\Throwable $e) {
+
+            Log::error('[3DS] initiate error', [
+                'error' => $e->getMessage()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Error iniciando verificación 3DS'
             ], 500);
         }
     }
 
-    /**
-     * Callback de 3DS (para redirección bancaria)
-     */
+    /* ==========================================================
+     * 2️⃣ CALLBACK DEL BANCO (REDIRECCIÓN REAL)
+     * ========================================================== */
+
     public function handleCallback(Request $request)
     {
-        Log::info('3DS Callback recibido', $request->all());
+        Log::info('[3DS] Callback recibido', $request->all());
 
         try {
-            $result = $this->efevooService->handle3DSCallback($request->all());
 
-            // Redirigir al frontend con el resultado
-            if (isset($result['session_id'])) {
-                return redirect()->away(
-                    config('app.frontend_url') . 
-                    '/payment/3ds/callback?session_id=' . $result['session_id'] .
-                    '&success=' . ($result['success'] ? 'true' : 'false')
-                );
-            }
+            $orderId = $request->input('order_id');
 
-            return response()->json($result);
-
-        } catch (\Exception $e) {
-            Log::error('Error en callback 3DS', ['error' => $e->getMessage()]);
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-    }
-
-    /**
-     * Realizar reembolso
-     */
-    public function refundTransaction(Request $request, $transactionId)
-    {
-        $validated = $request->validate([
-            'amount' => 'nullable|numeric|min:0.01',
-            'reason' => 'nullable|string|max:255',
-        ]);
-
-        try {
-            $result = $this->efevooService->refundTransaction(
-                $transactionId,
-                $validated['amount'] ?? null
-            );
-
-            if ($result['success']) {
+            if (!$orderId) {
                 return response()->json([
-                    'success' => true,
-                    'message' => 'Reembolso procesado exitosamente',
-                    'refund_id' => $result['refund_id'],
-                    'refund_transaction' => $result['refund_transaction'] ?? null,
-                ]);
+                    'success' => false,
+                    'message' => 'Order ID no recibido'
+                ], 400);
             }
 
-            return response()->json($result, 400);
+            $session = Efevoo3dsSession::where('order_id', $orderId)->firstOrFail();
 
-        } catch (\Exception $e) {
+            $cardData = Session::get('3ds_card_data');
+
+            if (!$cardData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Datos de tarjeta no encontrados en sesión'
+                ], 400);
+            }
+
+            $result = $this->efevooService->complete3DS($session, $cardData);
+
+            return redirect()->route('payment-methods.3ds-result', [
+                'sessionId' => $session->id
+            ]);
+
+        } catch (\Throwable $e) {
+
+            Log::error('[3DS] Callback error', [
+                'error' => $e->getMessage()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Error procesando callback 3DS'
             ], 500);
         }
     }
 
-    /**
- * Test específico para 3DS según documentación
- */
-public function test3dsDocumentation(Request $request)
-{
-    Log::info('🔵 ========== TEST 3DS SEGÚN DOCUMENTACIÓN ==========');
+    /* ==========================================================
+     * 3️⃣ VER RESULTADO
+     * ========================================================== */
 
-    try {
-        $service = $this->efevooPayService;
+    public function showResult($sessionId)
+    {
+        $session = Efevoo3dsSession::findOrFail($sessionId);
 
-        // 1. Test de cifrado
-        $encryptionTest = [];
-        if (method_exists($service, 'test3DSEncryption')) {
-            $encryptionTest = $service->test3DSEncryption();
-        }
+        return response()->json([
+            'success'        => $session->status === 'completed',
+            'status'         => $session->status,
+            'card_last_four' => $session->card_last_four,
+            'amount'         => $session->amount,
+            'created_at'     => $session->created_at,
+        ]);
+    }
 
-        // 2. Probar con datos EXACTOS de la documentación
-        $exactDocData = [
-            'track' => '5123000011112222',
-            'cvv' => '111',
-            'exp' => '11/11', // Formato MM/YY
-            'fiid_comercio' => '123678', // De la documentación
-            'msi' => 0,
-            'amount' => '1.00',
-            'browser' => [
-                'browserAcceptHeader' => 'application/json',
-                'browserJavaEnabled' => false,
-                'browserJavaScriptEnabled' => true,
-                'browserLanguage' => 'es-419',
-                'browserTZ' => '360', // NOTA: Sin signo, como en la doc
-                'browserUserAgent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
-            ],
-        ];
+    /* ==========================================================
+     * 4️⃣ REFUND
+     * ========================================================== */
 
-        Log::info('🔵 Datos exactos de documentación', $exactDocData);
+    public function refundTransaction(Request $request, $transactionId)
+    {
+        try {
 
-        // 3. Obtener token
-        $tokenResult = $service->getClientToken(false, 'tokenize');
-        
-        if (!$tokenResult['success']) {
-            throw new \Exception('Error obteniendo token: ' . $tokenResult['message']);
-        }
+            $result = $this->efevooService->refundTransaction((int)$transactionId);
 
-        // 4. Encriptar
-        if (method_exists($service, 'encryptData3DS')) {
-            $encrypted = $service->encryptData3DS($exactDocData);
-            
-            // 5. Crear payload exacto como documentación
-            $payload = [
-                'payload' => [
-                    'token' => $tokenResult['token'],
-                    'encrypt' => $encrypted,
-                ],
-                'method' => 'payments3DS_GetLink',
-            ];
+            if (!$result['success']) {
+                return response()->json($result, 400);
+            }
 
-            Log::info('🔵 Payload para enviar (según doc)', [
-                'method' => $payload['method'],
-                'token_preview' => substr($payload['payload']['token'], 0, 30) . '...',
-                'encrypted_preview' => substr($payload['payload']['encrypt'], 0, 50) . '...',
-                'encrypted_length' => strlen($payload['payload']['encrypt']),
+            return response()->json([
+                'success' => true,
+                'message' => 'Reembolso procesado correctamente',
+                'data'    => $result['data'] ?? null,
             ]);
 
-            // 6. Enviar a API
-            $response = $service->makeApiRequest($payload);
+        } catch (\Throwable $e) {
 
-            Log::info('🔵 Respuesta de API con datos de documentación', [
-                'success' => $response['success'] ?? false,
-                'status' => $response['status'] ?? null,
-                'code' => $response['code'] ?? null,
-                'message' => $response['message'] ?? null,
-                'has_data' => !empty($response['data']),
-                'data_keys' => !empty($response['data']) ? array_keys($response['data']) : [],
+            Log::error('[Refund] Error', [
+                'error' => $e->getMessage()
             ]);
 
             return response()->json([
-                'test' => '3DS según documentación',
-                'timestamp' => now()->toISOString(),
-                'encryption_test' => $encryptionTest,
-                'sent_data' => $exactDocData,
-                'token_info' => [
-                    'success' => $tokenResult['success'],
-                    'type' => $tokenResult['type'] ?? 'unknown',
-                    'token_preview' => $tokenResult['success'] ? substr($tokenResult['token'], 0, 30) . '...' : 'N/A',
-                ],
-                'payload_sent' => [
-                    'method' => $payload['method'],
-                    'token_length' => strlen($payload['payload']['token']),
-                    'encrypted_length' => strlen($payload['payload']['encrypt']),
-                ],
-                'api_response' => $response,
-                'analysis' => [
-                    'is_3ds_available' => $response['success'] ?? false,
-                    'error_if_any' => !$response['success'] ? $response['message'] : 'None',
-                    'has_url_3dsecure' => isset($response['data']['url_3dsecure']),
-                    'has_token_3dsecure' => isset($response['data']['token_3dsecure']),
-                    'next_step' => $response['success'] ? 
-                        (isset($response['data']['url_3dsecure']) ? 'Redirect to iframe' : 'Call GetStatus') : 
-                        'Fix the error',
-                ],
-            ]);
-        } else {
-            throw new \Exception('Método encryptData3DS no disponible');
+                'success' => false,
+                'message' => 'Error procesando reembolso'
+            ], 500);
         }
-
-    } catch (\Exception $e) {
-        Log::error('❌ ERROR EN TEST DOCUMENTACIÓN', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ]);
-
-        return response()->json([
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ], 500);
     }
-}
 }

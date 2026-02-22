@@ -59,11 +59,9 @@ Route::middleware([
     Route::get('/payment-methods/3ds/redirect/{sessionId}', [PaymentMethodController::class, 'show3dsRedirect'])
         ->name('payment-methods.3ds-redirect');
 
-    Route::get('/payment-methods/3ds/status/{sessionId}', [PaymentMethodController::class, 'check3dsStatus'])
-        ->name('payment-methods.3ds-status');
-
     Route::post('/payment-methods/3ds/callback', [PaymentMethodController::class, 'handle3dsCallback'])
-        ->name('payment-methods.3ds-callback');
+        ->name('payment-methods.3ds-callback')
+        ->withoutMiddleware(['auth']); // importante
 
     Route::get('/payment-methods/3ds/result/{sessionId}', [PaymentMethodController::class, 'show3dsResult'])
         ->name('payment-methods.3ds-result');
@@ -71,6 +69,10 @@ Route::middleware([
     Route::post('/payment-methods/3ds/cancel/{sessionId}', [PaymentMethodController::class, 'cancel3dsSession'])
         ->name('payment-methods.3ds-cancel');
 
+    Route::get(
+        '/payment-methods/3ds-status/{sessionId}',
+        [PaymentMethodController::class, 'check3dsStatus']
+    )->name('payment-methods.3ds-status');
     /*
     Route::post('/efevoo/3ds/initiate', [Efevoo3DSController::class, 'initiate3DS']);
     Route::post('/efevoo/3ds/check-status', [Efevoo3DSController::class, 'checkStatus']);
