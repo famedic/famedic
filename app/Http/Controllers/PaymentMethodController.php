@@ -92,7 +92,7 @@ class PaymentMethodController extends Controller
             return back()->withErrors([
                 'exp_year' => 'La tarjeta está vencida'
             ]);
-        }        
+        }
 
         $cardData = [
             'card_number' => $validated['card_number'],
@@ -209,31 +209,55 @@ class PaymentMethodController extends Controller
             ->where('customer_id', $customer->id)
             ->firstOrFail();
 
-        if ($session->status === 'completed') {
+        // Si ya es estado final, no reprocesar
+        if (
+            in_array($session->status, [
+                'completed',
+                'declined',
+                'tokenization_failed'
+            ])
+        ) {
+
             return response()->json([
-                'success' => true
+                'final' => true,
+                'status' => $session->status,
+                'message' => $this->resolveStatusMessage($session->status)
             ]);
         }
 
-        // Aquí llamamos a complete3DS
+        // Recuperar cardData correcto
         $cardData = Session::get('3ds_card_data_' . $sessionId);
 
         if (!$cardData) {
             return response()->json([
-                'success' => false
+                'final' => true,
+                'status' => 'error',
+                'message' => 'Sesión 3DS inválida'
             ]);
         }
 
-        $this->service->complete3DS($session, $cardData);
-        if ($session->status === 'completed') {
-            Session::forget('3ds_card_data_' . $sessionId);
-        }
+        $result = $this->service->complete3DS($session, $cardData);
 
         $session->refresh();
 
         return response()->json([
-            'success' => $session->status === 'completed',
-            'status' => $session->status
+            'final' => in_array($session->status, [
+                'completed',
+                'declined',
+                'tokenization_failed'
+            ]),
+            'status' => $session->status,
+            'message' => $result['message'] ?? $this->resolveStatusMessage($session->status)
         ]);
+    }
+
+    private function resolveStatusMessage(string $status): string
+    {
+        return match ($status) {
+            'completed' => 'Tarjeta verificada y guardada correctamente.',
+            'declined' => 'La autenticación fue rechazada por el banco.',
+            'tokenization_failed' => 'La tarjeta fue autenticada, pero no pudo guardarse para uso futuro.',
+            default => 'Procesando verificación...'
+        };
     }
 }
