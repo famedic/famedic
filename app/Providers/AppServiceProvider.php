@@ -13,6 +13,7 @@ use Illuminate\Support\ServiceProvider;
 use Laravel\Cashier\Cashier;
 use Stripe\StripeClient;
 use App\Services\ConstanciaFiscalService;
+use Illuminate\Support\Facades\URL;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -37,6 +38,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Forzar HTTPS en entorno local con ngrok
+        if (str_contains(config('app.url'), 'ngrok-free.dev')) {
+            URL::forceScheme('https');
+        }
+
         Route::bind('laboratory_purchase', function ($value) {
             return LaboratoryPurchase::withTrashed()->findOrFail($value);
         });
