@@ -25,7 +25,7 @@ Route::post('/documentation-accept', [DocumentationAcceptController::class, 'sto
 // Rutas de documentos de servicio (TOS, Privacy Policy, ARCO)
 Route::get('/terms-of-service', [DocumentsServiceController::class, 'termsOfService'])->name('terms-of-service');
 Route::get('/privacy-policy', [DocumentsServiceController::class, 'privacyPolicy'])->name('privacy-policy');
-Route::get('/rights-arco', [DocumentsServiceController::class, 'rightsARCO'])->name('rights-arco');
+//Route::get('/rights-arco', [DocumentsServiceController::class, 'rightsARCO'])->name('rights-arco');
 
 // Derechos ARCO
 Route::get('/derechos-arco', [DocumentsServiceController::class, 'rightsARCO'])->name('rights-arco');
