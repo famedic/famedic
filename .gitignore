@@ -21,3 +21,4 @@ yarn-error.log
 /.vscode
 .env_production
 /backups
+efevoopay-cli-tool.php
