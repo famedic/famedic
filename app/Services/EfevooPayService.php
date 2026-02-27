@@ -294,6 +294,15 @@ class EfevooPayService
     {
         Log::info('[Efevoo] chargeCard');
 
+
+        if (empty($data['card_token'])) {
+            Log::error('[Efevoo] card_token vacío en chargeCard');
+            return [
+                'success' => false,
+                'message' => 'Token de tarjeta inválido'
+            ];
+        }
+
         $tokenResult = $this->getClientToken('payment');
 
         if (!$tokenResult['success']) {
@@ -304,7 +313,7 @@ class EfevooPayService
             'payload' => [
                 'token' => $tokenResult['token'],
                 'encrypt' => $this->encrypt([
-                    'track2' => $data['token_id'],
+                    'track2' => $data['card_token'],
                     'amount' => number_format($data['amount'], 2, '.', ''),
                     'referencia' => $data['reference'] ?? 'REF-' . time()
                 ])

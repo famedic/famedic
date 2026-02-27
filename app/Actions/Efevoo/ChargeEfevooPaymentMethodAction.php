@@ -4,14 +4,14 @@ namespace App\Actions\EfevooPay;
 
 use App\Models\Customer;
 use App\Models\Transaction;
-use App\Services\EfevooPayFactoryService;
+use App\Services\EfevooPayService;
 use Illuminate\Support\Facades\Log;
 
 class ChargeEfevooPaymentMethodAction
 {
-    protected EfevooPayFactoryService $efevooPayService;
+    protected EfevooPayService $efevooPayService;
 
-    public function __construct(EfevooPayFactoryService $efevooPayService)
+    public function __construct(EfevooPayService $efevooPayService)
     {
         $this->efevooPayService = $efevooPayService;
     }
@@ -45,7 +45,7 @@ class ChargeEfevooPaymentMethodAction
 
             // 🔥 3. Preparar datos con card_token real
             $chargeData = [
-                'token_id' => $token->card_token, // 👈 AQUÍ ESTÁ LA CLAVE
+                'card_token' => $token->card_token,
                 'amount' => $amountCents / 100,
                 'reference' => 'LAB-' . $customer->id . '-' . time(),
             ];

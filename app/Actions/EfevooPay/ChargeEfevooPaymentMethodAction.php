@@ -65,7 +65,7 @@ class ChargeEfevooPaymentMethodAction
             $reference = 'LAB-' . $customer->id . '-' . time() . '-' . rand(1000, 9999);
 
             $chargeData = [
-                'token_id' => $cardToken,
+                'card_token' => $cardToken,
                 'amount' => $amountCents / 100,
                 'reference' => $reference,
             ];
