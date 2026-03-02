@@ -41,6 +41,7 @@ class LaboratoryNotification extends Model
         'email_recipient_email',
         'email_error',
         'notes',
+        'lineanegocio',
         'gda_status',
         'resource_type',
         'payload',

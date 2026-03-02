@@ -22,10 +22,22 @@ class LaboratoryWebhookController extends Controller
      */
     public function handleNotification(Request $request): JsonResponse
     {
-        Log::info('Laboratory webhook received', [
+        // LOG 1: Payload completo recibido
+        Log::info('===== LABORATORY WEBHOOK RECEIVED =====', [
             'ip' => $request->ip(),
             'user_agent' => $request->userAgent(),
-            'payload' => $request->all()
+            'full_payload' => $request->all(),
+            'headers' => $request->headers->all()
+        ]);
+
+        // LOG 2: Verificar específicamente el header.lineanegocio
+        $payload = $request->all();
+        Log::info('Verificando header.lineanegocio', [
+            'header_exists' => isset($payload['header']),
+            'header_content' => $payload['header'] ?? 'NO HEADER',
+            'lineanegocio_exists' => isset($payload['header']['lineanegocio']),
+            'lineanegocio_value' => $payload['header']['lineanegocio'] ?? 'NO VALUE',
+            'lineanegocio_type' => isset($payload['header']['lineanegocio']) ? gettype($payload['header']['lineanegocio']) : 'N/A'
         ]);
 
         // Validación del payload
@@ -48,9 +60,13 @@ class LaboratoryWebhookController extends Controller
         ]);
 
         if ($validator->fails()) {
-            Log::error('Laboratory webhook validation failed', [
+            // LOG 3: Errores de validación
+            Log::error('===== VALIDATION FAILED =====', [
                 'errors' => $validator->errors()->toArray(),
-                'payload' => $request->all()
+                'payload' => $request->all(),
+                'lineanegocio_error' => $validator->errors()->has('header.lineanegocio')
+                    ? $validator->errors()->first('header.lineanegocio')
+                    : 'No error'
             ]);
 
             return response()->json([
@@ -60,7 +76,13 @@ class LaboratoryWebhookController extends Controller
             ], 422);
         }
 
+        // LOG 4: Datos validados exitosamente
         $data = $validator->validated();
+        Log::info('===== VALIDATION SUCCESSFUL =====', [
+            'validated_data' => $data,
+            'lineanegocio_validated' => $data['header']['lineanegocio'] ?? 'NOT FOUND',
+            'lineanegocio_type' => isset($data['header']['lineanegocio']) ? gettype($data['header']['lineanegocio']) : 'N/A'
+        ]);
 
         try {
             // Determinar tipo de notificación basado en el status
@@ -71,8 +93,8 @@ class LaboratoryWebhookController extends Controller
 
             Log::info('References found for webhook', $references);
 
-            // Crear la notificación
-            $notification = LaboratoryNotification::create([
+            // LOG 5: Antes de crear la notificación
+            $notificationData = [
                 'notification_type' => $notificationType,
                 'gda_order_id' => $data['id'],
                 'gda_external_id' => $data['requisition']['value'] ?? null,
@@ -80,6 +102,7 @@ class LaboratoryWebhookController extends Controller
                 'gda_status' => $data['status'],
                 'resource_type' => $data['resourceType'],
                 'payload' => $request->all(),
+                'lineanegocio' => $data['header']['lineanegocio'] ?? null,
                 'gda_message' => $data['GDA_menssage'] ?? null,
                 'laboratory_quote_id' => $references['quote_id'] ?? null,
                 'laboratory_purchase_id' => $references['purchase_id'] ?? null,
@@ -87,14 +110,34 @@ class LaboratoryWebhookController extends Controller
                 'contact_id' => $references['contact_id'] ?? null,
                 'status' => LaboratoryNotification::STATUS_RECEIVED,
                 'results_received_at' => now()
+            ];
+
+            Log::info('Preparing to create notification with data:', [
+                'lineanegocio_to_save' => $notificationData['lineanegocio'],
+                'lineanegocio_source' => $data['header']['lineanegocio'] ?? 'NO SOURCE',
+                'full_notification_data' => $notificationData
             ]);
 
-            Log::info('Laboratory notification saved', [
+            // Crear la notificación
+            $notification = LaboratoryNotification::create($notificationData);
+
+            // LOG 6: Verificar que se guardó correctamente
+            $savedNotification = LaboratoryNotification::find($notification->id);
+            Log::info('===== NOTIFICATION SAVED =====', [
                 'notification_id' => $notification->id,
+                'lineanegocio_saved' => $savedNotification->lineanegocio,
+                'lineanegocio_from_create' => $notification->lineanegocio,
+                'all_notification_attributes' => $savedNotification->toArray(),
                 'gda_order_id' => $data['id'],
                 'type' => $notificationType,
-                'quote_id' => $references['quote_id'] ?? 'not_found',
-                'purchase_id' => $references['purchase_id'] ?? 'not_found'
+            ]);
+
+            // LOG 7: Verificar columnas de la tabla
+            $tableColumns = Schema::getColumnListing('laboratory_notifications');
+            Log::info('Laboratory notifications table columns:', [
+                'columns' => $tableColumns,
+                'has_lineanegocio' => in_array('lineanegocio', $tableColumns),
+                'lineanegocio_column_exists' => in_array('lineanegocio', $tableColumns) ? 'YES' : 'NO'
             ]);
 
             // Procesar según el tipo de notificación
@@ -104,6 +147,7 @@ class LaboratoryWebhookController extends Controller
                 'success' => true,
                 'message' => 'Notification received and processed successfully',
                 'notification_id' => $notification->id,
+                'lineanegocio_saved' => $notification->lineanegocio,
                 'gda_acuse' => $notification->gda_acuse,
                 'related_entities' => [
                     'quote_id' => $references['quote_id'] ?? null,
@@ -113,9 +157,11 @@ class LaboratoryWebhookController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
-            Log::error('Error processing laboratory webhook', [
+            // LOG 8: Error al guardar
+            Log::error('===== ERROR SAVING NOTIFICATION =====', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
+                'lineanegocio_value' => $data['header']['lineanegocio'] ?? 'NOT SET',
                 'payload' => $request->all()
             ]);
 

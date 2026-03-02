@@ -36,6 +36,7 @@ class LaboratoryEndpointController extends Controller
             'resource_type' => 'nullable|string|in:ServiceRequest,ServiceRequestCotizacion',
             'payload' => 'nullable|array',
             'gda_message' => 'nullable|array',
+            'lineanegocio' => 'nullable|string|max:255',
             'laboratory_quote_id' => 'nullable|integer|exists:laboratory_quotes,id',
             'laboratory_purchase_id' => 'nullable|integer|exists:laboratory_purchases,id',
             'user_id' => 'nullable|integer|exists:users,id',
