@@ -205,7 +205,8 @@ export default function LaboratoryCheckout({
     );
 
     const toggleAddressForm = () => setShowAddressForm((prev) => !prev);
-    const toggleContactForm = () => setContactForm((prev) => !prev);
+    const toggleContactForm = () => 
+    setShowContactForm((prev) => !prev);
 
     const contactStepIsComplete = useMemo(() => {
         const isComplete = !!data.contact || laboratoryAppointment;
