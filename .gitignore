@@ -22,3 +22,7 @@ yarn-error.log
 .env_production
 /backups
 efevoopay-cli-tool.php
+private.pem
+public.pem
+odessa_public.pem
+private_base64.txt
