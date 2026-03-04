@@ -39,6 +39,7 @@ class LaboratoryPurchase extends Model
             'gender' => Gender::class,
             'phone' => RawPhoneNumberCast::class . ':country_field',
             'temporarily_hide_gda_order_id' => 'boolean',
+            'gda_consecutivo' => 'integer',
         ];
     }
 
