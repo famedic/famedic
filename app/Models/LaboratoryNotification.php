@@ -31,6 +31,7 @@ class LaboratoryNotification extends Model
         'laboratory_quote_id',
         'laboratory_purchase_id',
         'gda_order_id',
+        'gda_consecutivo',
         'gda_external_id',
         'gda_acuse',
         'notification_type',

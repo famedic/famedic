@@ -97,6 +97,7 @@ class LaboratoryWebhookController extends Controller
             $notificationData = [
                 'notification_type' => $notificationType,
                 'gda_order_id' => $data['id'],
+                'gda_consecutivo' => $data['id'],
                 'gda_external_id' => $data['requisition']['value'] ?? null,
                 'gda_acuse' => $data['GDA_menssage']['acuse'] ?? null,
                 'gda_status' => $data['status'],
