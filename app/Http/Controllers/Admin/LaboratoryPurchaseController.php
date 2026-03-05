@@ -32,7 +32,7 @@ class LaboratoryPurchaseController extends Controller
         ]))->filter()->all();
 
         // Aplicar filtro de fecha por defecto (último año en ambiente local)
-        if (empty($filters['start_date']) && empty($filters['end_date']) && app()->environment('local')) {
+        if (empty($filters['start_date']) && empty($filters['end_date']) && app()->environment('staging')) {
             $filters['start_date'] = Carbon::now('America/Monterrey')->subYear()->startOfDay()->toDateString();
             $filters['end_date'] = Carbon::now('America/Monterrey')->endOfDay()->toDateString();
         }
@@ -80,19 +80,32 @@ class LaboratoryPurchaseController extends Controller
 
     public function show(ShowLaboratoryPurchaseRequest $request, LaboratoryPurchase $laboratoryPurchase)
     {
+        $laboratoryPurchase->load([
+            'transactions',
+            'vendorPayments',
+            'laboratoryPurchaseItems',
+            'customer.user',
+            'invoice',
+            'invoiceRequest',
+            'laboratoryAppointment.laboratoryStore',
+            'devAssistanceRequests.administrator.user',
+            'devAssistanceRequests.comments.administrator.user',
+            'laboratoryNotifications',
+        ]);
+
         return Inertia::render('Admin/LaboratoryPurchase', [
-            'laboratoryPurchase' => $laboratoryPurchase->load([
-                'transactions',
-                'vendorPayments',
-                'laboratoryPurchaseItems',
-                'customer.user',
-                'invoice',
-                'invoiceRequest',
-                'laboratoryAppointment.laboratoryStore',
-                'devAssistanceRequests.administrator.user',
-                'devAssistanceRequests.comments.administrator.user',
-            ]),
+            'laboratoryPurchase' => $laboratoryPurchase,
             'showDeleteButton' => $request->user()->can('delete', $laboratoryPurchase),
+            
+            'hasSampleCollected' => $laboratoryPurchase->hasSampleCollected(),
+            'hasResultsAvailable' => $laboratoryPurchase->hasResultsAvailable(),
+            'latestSampleCollectionAt' => optional(
+                $laboratoryPurchase->latestSampleCollection()?->created_at
+            )?->isoFormat('D MMM Y h:mm a'),
+
+            'latestResultsAt' => optional(
+                $laboratoryPurchase->latestResultsNotification()?->created_at
+            )?->isoFormat('D MMM Y h:mm a'),
         ]);
     }
 
