@@ -39,6 +39,7 @@ class LaboratoryPurchase extends Model
             'gender' => Gender::class,
             'phone' => RawPhoneNumberCast::class . ':country_field',
             'temporarily_hide_gda_order_id' => 'boolean',
+            'gda_consecutivo' => 'integer',
         ];
     }
 
@@ -260,10 +261,14 @@ class LaboratoryPurchase extends Model
         return $query->where('laboratory_quote_id', $quoteId);
     }
 
-    // Agregar esta relación al modelo
+    // Relacion para obtener notificaciones de laboratorio asociadas a esta compra
     public function laboratoryNotifications()
     {
-        return $this->hasMany(LaboratoryNotification::class);
+        return $this->hasMany(
+            LaboratoryNotification::class,
+            'gda_consecutivo',
+            'gda_consecutivo'
+        );
     }
 
     // Método para obtener notificaciones de resultados
@@ -287,5 +292,39 @@ class LaboratoryPurchase extends Model
             ->whereNotNull('results_pdf_base64')
             ->latest()
             ->first();
+    }
+
+    public function sampleCollectionNotification()
+    {
+        return $this->laboratoryNotifications()
+            ->where('lineanegocio', 'Notificacion-Toma-Muestra')
+            ->latest('created_at');
+    }
+
+    public function resultsNotification()
+    {
+        return $this->laboratoryNotifications()
+            ->where('lineanegocio', 'Notificaion-Resultados')
+            ->latest('created_at');
+    }
+
+    public function hasSampleCollected(): bool
+    {
+        return $this->sampleCollectionNotification()->exists();
+    }
+
+    public function hasResultsAvailable(): bool
+    {
+        return $this->resultsNotification()->exists();
+    }
+
+    public function latestSampleCollection()
+    {
+        return $this->sampleCollectionNotification()->first();
+    }
+
+    public function latestResultsNotification()
+    {
+        return $this->resultsNotification()->first();
     }
 }

@@ -97,6 +97,7 @@ class LaboratoryWebhookController extends Controller
             $notificationData = [
                 'notification_type' => $notificationType,
                 'gda_order_id' => $data['id'],
+                'gda_consecutivo' => $data['id'],
                 'gda_external_id' => $data['requisition']['value'] ?? null,
                 'gda_acuse' => $data['GDA_menssage']['acuse'] ?? null,
                 'gda_status' => $data['status'],
@@ -282,6 +283,18 @@ class LaboratoryWebhookController extends Controller
         $columns = Schema::getColumnListing('laboratory_quotes');
         Log::info('Available columns in laboratory_quotes', $columns);
 
+        // Primero por gda_consecutivo (NUEVO)
+        if (in_array('gda_consecutivo', $columns)) {
+            $quote = LaboratoryQuote::where('gda_consecutivo', $gdaOrderId)->first();
+            if ($quote) {
+                Log::info('Found quote by gda_consecutivo', [
+                    'gda_consecutivo' => $gdaOrderId,
+                    'quote_id' => $quote->id
+                ]);
+                return $quote;
+            }
+        }
+
         // Primero por gda_acuse (si existe la columna)
         if ($gdaAcuse && in_array('gda_acuse', $columns)) {
             $quote = LaboratoryQuote::where('gda_acuse', $gdaAcuse)->first();
@@ -291,7 +304,7 @@ class LaboratoryWebhookController extends Controller
             }
         }
 
-        // Luego por gda_order_id (si existe la columna)
+        // Luego por gda_order_id
         if (in_array('gda_order_id', $columns)) {
             $quote = LaboratoryQuote::where('gda_order_id', $gdaOrderId)->first();
             if ($quote) {
@@ -345,29 +358,38 @@ class LaboratoryWebhookController extends Controller
         $columns = Schema::getColumnListing('laboratory_purchases');
         Log::info('Available columns in laboratory_purchases', $columns);
 
-        // Primero buscar por gda_acuse si la columna existe
+        // Primero buscar por gda_consecutivo (NUEVO)
+        if (in_array('gda_consecutivo', $columns)) {
+            $purchase = LaboratoryPurchase::where('gda_consecutivo', $gdaOrderId)->first();
+            if ($purchase) {
+                Log::info('Found purchase by gda_consecutivo', [
+                    'gda_consecutivo' => $gdaOrderId,
+                    'purchase_id' => $purchase->id
+                ]);
+                return $purchase;
+            }
+        }
+
+        // Luego buscar por gda_acuse si la columna existe
         if ($gdaAcuse && in_array('gda_acuse', $columns)) {
             $purchase = LaboratoryPurchase::where('gda_acuse', $gdaAcuse)->first();
             if ($purchase) {
-                Log::info('Found purchase by gda_acuse', ['gda_acuse' => $gdaAcuse, 'purchase_id' => $purchase->id]);
+                Log::info('Found purchase by gda_acuse', [
+                    'gda_acuse' => $gdaAcuse,
+                    'purchase_id' => $purchase->id
+                ]);
                 return $purchase;
             }
         }
 
-        // Luego por gda_order_id (si existe la columna)
+        // Luego por gda_order_id
         if (in_array('gda_order_id', $columns)) {
             $purchase = LaboratoryPurchase::where('gda_order_id', $gdaOrderId)->first();
             if ($purchase) {
-                Log::info('Found purchase by gda_order_id', ['gda_order_id' => $gdaOrderId, 'purchase_id' => $purchase->id]);
-                return $purchase;
-            }
-        }
-
-        // Si no, por gda_external_id (SOLO si existe la columna)
-        if ($gdaExternalId && in_array('gda_external_id', $columns)) {
-            $purchase = LaboratoryPurchase::where('gda_external_id', $gdaExternalId)->first();
-            if ($purchase) {
-                Log::info('Found purchase by gda_external_id', ['gda_external_id' => $gdaExternalId, 'purchase_id' => $purchase->id]);
+                Log::info('Found purchase by gda_order_id', [
+                    'gda_order_id' => $gdaOrderId,
+                    'purchase_id' => $purchase->id
+                ]);
                 return $purchase;
             }
         }
@@ -726,6 +748,15 @@ class LaboratoryWebhookController extends Controller
             // Verificar columnas disponibles en purchases
             $purchaseColumns = Schema::getColumnListing('laboratory_purchases');
 
+            // Actualizar gda_consecutivo si no está guardado (NUEVO)
+            if (in_array('gda_consecutivo', $purchaseColumns) && empty($purchase->gda_consecutivo)) {
+                $updates['gda_consecutivo'] = $data['id'];
+                Log::info('Setting gda_consecutivo on purchase', [
+                    'purchase_id' => $purchase->id,
+                    'gda_consecutivo' => $data['id']
+                ]);
+            }
+
             // Usar columna existente para timestamp
             if (in_array('results_downloaded_at', $purchaseColumns)) {
                 $updates['results_downloaded_at'] = now();
@@ -756,7 +787,7 @@ class LaboratoryWebhookController extends Controller
         }
 
         // ========= ENVIAR NOTIFICACIÓN POR EMAIL =========
-        if ($userToNotify) {
+        /*if ($userToNotify) {
             try {
                 // Verificar que el usuario tenga email
                 if (empty($userToNotify->email)) {
@@ -833,7 +864,7 @@ class LaboratoryWebhookController extends Controller
                 'status' => LaboratoryNotification::STATUS_PROCESSED,
                 'notes' => 'Results processed but no user found to notify'
             ]);
-        }
+        }*/
     }
 
 
@@ -942,9 +973,10 @@ class LaboratoryWebhookController extends Controller
                 'laboratory_quotes_columns' => $quoteColumns,
                 'laboratory_purchases_columns' => $purchaseColumns,
                 'contacts_columns' => $contactColumns,
+                'new_field_added' => 'gda_consecutivo - Se guarda el ID del JSON del webhook'
             ],
             'webhook_format' => 'GDA FHIR-like JSON',
-            'note' => 'El sistema verificará dinámicamente las columnas disponibles antes de realizar búsquedas'
+            'note' => 'El sistema ahora guarda gda_consecutivo (ID del JSON) además de gda_order_id'
         ]);
     }
 

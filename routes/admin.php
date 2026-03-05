@@ -31,6 +31,7 @@ use App\Http\Controllers\ExportOnlinePharmacyPurchasesController;
 // === IMPORTACIONES NUEVAS ===
 use App\Http\Controllers\Admin\LaboratoryNotificationController;
 use App\Http\Controllers\Admin\LaboratoryQuoteController; // ← Aun existe
+use App\Http\Controllers\Admin\LaboratoryResultController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')->middleware([
@@ -75,7 +76,11 @@ Route::prefix('admin')->middleware([
             ->name('laboratory-notifications.details');
         Route::delete('laboratory-notifications/{notification}/clean', [LaboratoryNotificationController::class, 'cleanError'])
             ->name('laboratory-notifications.clean-error');
-        // ===========================================================
+
+        // ===== RUTAS PARA OBTENER RESULTADOS DE LABORATORIO =====
+        Route::post('/laboratory-purchases/{laboratoryPurchase}/fetch-results',[LaboratoryResultController::class, 'fetch']
+        )->name('laboratory-purchases.fetch-results');
+
 
         Route::resource('online-pharmacy-vendor-payments', OnlinePharmacyVendorPaymentsController::class)->parameters([
             'online-pharmacy-vendor-payments' => 'vendor_payment',
@@ -106,18 +111,3 @@ Route::prefix('admin')->middleware([
     });
 });
 
-//Ruta Temporal
-use App\Services\InstitutionalUserImportService;
-Route::get('/admin/import-institutional-users', function (InstitutionalUserImportService $service) {
-
-    if (request('key') !== 'LALO123') {
-        abort(403);
-    }
-
-    $batch = (int) request('batch', 1);
-
-    return response()->json(
-        $service->run($batch)
-    );
-
-});
