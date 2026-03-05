@@ -226,22 +226,72 @@ function Header({
 					{laboratoryPurchase.customer.user.full_name}
 				</CustomerLink>
 
-				{hasResultsAvailable && (
+				<InvoiceDialog
+					storeRoute={route("admin.laboratory-purchases.invoice", {
+						laboratory_purchase: laboratoryPurchase.id,
+					})}
+					invoiceRoute={
+						laboratoryPurchase.invoice
+							? route("invoice", {
+								invoice: laboratoryPurchase.invoice.id,
+							})
+							: null
+					}
+					invoiceRequest={laboratoryPurchase.invoice_request}
+					hasInvoice={!!laboratoryPurchase.invoice}
+				/>
 
+				<ResultsDialog
+					storeRoute={route("admin.laboratory-purchases.results", {
+						laboratory_purchase: laboratoryPurchase,
+					})}
+					resultsRoute={
+						laboratoryPurchase.results
+							? route("laboratory-purchases.results", {
+								laboratory_purchase: laboratoryPurchase,
+							})
+							: null
+					}
+					hasResults={!!laboratoryPurchase.results}
+				/>
+
+				{hasResultsAvailable && (
 					<Button
 						color="emerald"
 						onClick={fetchResults}
 						disabled={loadingResults}
 					>
-
 						<DocumentTextIcon />
-
 						{loadingResults
 							? "Consultando GDA..."
 							: "Consultar resultados GDA"}
-
 					</Button>
+				)}
 
+				{laboratoryPurchase.dev_assistance_requests.length === 0 ? (
+					<DevAssistanceButton
+						storeRoute={route(
+							"admin.laboratory-purchases.dev-assistance-request.store",
+							{
+								laboratory_purchase: laboratoryPurchase.id,
+							}
+						)}
+					/>
+				) : (
+					<DevAssistanceDropdown
+						requests={laboratoryPurchase.dev_assistance_requests}
+						storeRoute={route(
+							"admin.laboratory-purchases.dev-assistance-request.store",
+							{
+								laboratory_purchase: laboratoryPurchase.id,
+							}
+						)}
+						resolveRouteName="admin.laboratory-purchases.dev-assistance-request.resolved"
+						unresolveRouteName="admin.laboratory-purchases.dev-assistance-request.unresolved"
+						routeParams={{
+							laboratory_purchase: laboratoryPurchase.id,
+						}}
+					/>
 				)}
 
 			</div>
@@ -257,7 +307,7 @@ function Header({
 						<div>
 							<div className="text-yellow-300">REQUEST</div>
 							<pre>
-{JSON.stringify(debugRequest, null, 2)}
+								{JSON.stringify(debugRequest, null, 2)}
 							</pre>
 						</div>
 					)}
@@ -266,7 +316,7 @@ function Header({
 						<div>
 							<div className="text-blue-300">RESPONSE</div>
 							<pre>
-{JSON.stringify(debugResponse, null, 2)}
+								{JSON.stringify(debugResponse, null, 2)}
 							</pre>
 						</div>
 					)}
@@ -275,7 +325,7 @@ function Header({
 						<div>
 							<div className="text-red-400">ERROR</div>
 							<pre>
-{JSON.stringify(debugError, null, 2)}
+								{JSON.stringify(debugError, null, 2)}
 							</pre>
 						</div>
 					)}
