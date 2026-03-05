@@ -79,21 +79,21 @@ Route::middleware([
 
 
     //Route::get('/laboratory-results', [LaboratoryResultController::class, 'index'])->name('laboratory-results.index');
-    
+
     //Route::get('/laboratory-results/{type}/{id}/download', [LaboratoryResultController::class, 'download'])->name('laboratory-results.download');
     //Route::get('/laboratory-results/{type}/{id}/view', [LaboratoryResultController::class, 'view'])->name('laboratory-results.view');
 
-    
+
     Route::post('/laboratory-results/notification/{notification}/mark-read', [LaboratoryResultController::class, 'markAsRead']);
 
     Route::prefix('laboratory-results')->group(function () {
-    Route::get('/', [LaboratoryResultController::class, 'index'])->name('laboratory-results.index');
-    Route::post('/notification/{notification}/mark-read', [LaboratoryResultController::class, 'markAsRead'])->name('laboratory-results.mark-read');
-    Route::post('/notification/{notification}/refresh', [LaboratoryResultController::class, 'refreshResults'])->name('laboratory-results.refresh');
-    Route::get('/{type}/{id}/view', [LaboratoryResultController::class, 'view'])->name('laboratory-results.view');
-    Route::get('/{type}/{id}/download', [LaboratoryResultController::class, 'download'])->name('laboratory-results.download');
+        Route::get('/', [LaboratoryResultController::class, 'index'])->name('laboratory-results.index');
+        Route::post('/notification/{notification}/mark-read', [LaboratoryResultController::class, 'markAsRead'])->name('laboratory-results.mark-read');
+        Route::post('/notification/{notification}/refresh', [LaboratoryResultController::class, 'refreshResults'])->name('laboratory-results.refresh');
+        Route::get('/{type}/{id}/view', [LaboratoryResultController::class, 'view'])->name('laboratory-results.view');
+        Route::get('/{type}/{id}/download', [LaboratoryResultController::class, 'download'])->name('laboratory-results.download');
 
-    Route::get('/debug/{notificationId}', [LaboratoryResultController::class, 'debugNotification'])->name('laboratory-results.debug');
-});
+        Route::get('/debug/{notificationId}', [LaboratoryResultController::class, 'debugNotification'])->name('laboratory-results.debug');
+    });
 });
 
