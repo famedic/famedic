@@ -52,45 +52,70 @@ export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
     }, [url3ds, token3ds, isFrictionless]);
 
     /* ==========================================================
-     * Polling estado 3DS
-     * ========================================================== */
+ * Polling estado 3DS (con delay inicial)
+ * ========================================================== */
+    const POLLING_DELAY = 5000;
+    const POLLING_INTERVAL = 5000;
+
     useEffect(() => {
 
-        const interval = setInterval(() => {
+        let interval = null;
 
-            fetch(route("payment-methods.3ds-status", { sessionId }))
-                .then(res => res.json())
-                .then(data => {
+        const startPolling = () => {
 
-                    if (data.final) {
+            interval = setInterval(() => {
+
+                fetch(route("payment-methods.3ds-status", { sessionId }))
+                    .then(res => res.json())
+                    .then(data => {
+
+                        if (data.final) {
+
+                            clearInterval(interval);
+
+                            if (data.status === "completed") {
+
+                                setStatus("success");
+                                setMessage(data.message);
+
+                                setTimeout(() => {
+                                    router.visit(route("payment-methods.3ds-result", { sessionId }));
+                                }, 1500);
+
+                            } else {
+
+                                setStatus("error");
+                                setMessage(data.message);
+                            }
+                        }
+
+                    })
+                    .catch(() => {
 
                         clearInterval(interval);
 
-                        if (data.status === "completed") {
-                            setStatus("success");
-                            setMessage(data.message);
+                        setStatus("error");
+                        setMessage("Error verificando estado");
 
-                            setTimeout(() => {
-                                router.visit(route("payment-methods.3ds-result", { sessionId }));
-                            }, 1500);
+                    });
 
-                        } else {
+            }, POLLING_INTERVAL);
 
-                            setStatus("error");
-                            setMessage(data.message);
-                        }
-                    }
+        };
 
-                })
-                .catch(() => {
-                    clearInterval(interval);
-                    setStatus("error");
-                    setMessage("Error verificando estado");
-                });
+        // ⏳ esperar 5 segundos antes de empezar polling
+        const delay = setTimeout(() => {
 
-        }, 3000);
+            startPolling();
 
-        return () => clearInterval(interval);
+        }, POLLING_DELAY);
+
+        return () => {
+
+            clearTimeout(delay);
+            if (interval) clearInterval(interval);
+
+        };
 
     }, [sessionId]);
 
