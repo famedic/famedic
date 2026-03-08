@@ -29,14 +29,14 @@ class LaboratoryResultController extends Controller
         ]);
 
         $notification = LaboratoryNotification::where('gda_consecutivo', $laboratoryPurchase->gda_consecutivo)
-            ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+            ->where('lineanegocio', LaboratoryNotification::TYPE_RESULTS)
             ->latest()
             ->first();
 
         Log::info('📋 [CONTROLLER] Resultado búsqueda notificación', [
             'found' => $notification ? 'SI' : 'NO',
             'notification_id' => $notification->id ?? null,
-            'notification_type' => $notification->notification_type ?? null,
+            'lineanegocio' => $notification->lineanegocio ?? null,
             'has_pdf_cached' => $notification && !empty($notification->results_pdf_base64) ? 'SI' : 'NO'
         ]);
 
