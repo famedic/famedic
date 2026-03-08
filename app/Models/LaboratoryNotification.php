@@ -66,7 +66,8 @@ class LaboratoryNotification extends Model
      * Tipos de notificación
      */
     const TYPE_NOTIFICATION = 'notification';
-    const TYPE_RESULTS = 'results';
+    const TYPE_SAMPLE_COLLECTION = 'sample_collection';
+    const TYPE_RESULTS = 'Notificaion-Resultados';
     const TYPE_STATUS_UPDATE = 'status_update';
 
     /**
@@ -84,12 +85,16 @@ class LaboratoryNotification extends Model
     const GDA_STATUS_CANCELLED = 'cancelled';
     const GDA_STATUS_ACTIVE = 'active';
 
+     // Valores de lineanegocio que vienen de GDA
+    const LINEA_NEGOCIO_SAMPLE = 'Notificacion-Toma-Muestra';
+    const LINEA_NEGOCIO_RESULTS = 'Notificaion-Resultados';
+    
     /**
      * Resource types
      */
     const RESOURCE_SERVICE_REQUEST = 'ServiceRequest';
     const RESOURCE_SERVICE_REQUEST_COTIZACION = 'ServiceRequestCotizacion';
-
+    
     /**
      * Relación con LaboratoryQuote
      */
