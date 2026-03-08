@@ -10,7 +10,7 @@ use App\Http\Controllers\LaboratoryPurchaseController;
 use App\Http\Controllers\LaboratoryShoppingCartController;
 use App\Http\Controllers\LaboratoryStoreController;
 use App\Http\Controllers\LaboratoryQuoteController;
-use App\Http\Controllers\LaboratoryResultController;
+use App\Http\Controllers\LaboratoryResultsController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -95,5 +95,11 @@ Route::middleware([
 
         Route::get('/debug/{notificationId}', [LaboratoryResultController::class, 'debugNotification'])->name('laboratory-results.debug');
     });
+
+    // Route for fetching results via AJAX
+    Route::post(
+        '/laboratory-purchases/{laboratoryPurchase}/results-automatic-fetch',
+        [LaboratoryResultsController::class, 'fetch']
+    )->name('laboratory-purchases.results.automatic-fetch');
 });
 
