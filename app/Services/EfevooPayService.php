@@ -141,7 +141,8 @@ class EfevooPayService
                     'browserJavaEnabled' => false,
                     'browserJavaScriptEnabled' => true,
                     'browserLanguage' => 'es-419',
-                    'browserTZ' => (string) $tzMinutes, // ahora correcto
+                    //'browserTZ' => (string) $tzMinutes,
+                    'browserTZ' => (string) abs($tzMinutes),
                     'browserUserAgent' => request()->header('User-Agent')
                         ?? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36',
                 ]

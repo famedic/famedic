@@ -34,37 +34,8 @@ class OdessaRegisterController extends Controller
             'timestamp' => now()->toDateTimeString()
         ]);
 
-        // Ver el token JWT sin decodificar (payload RAW)
-        $tokenParts = explode('.', $odessaToken);
-        if (count($tokenParts) === 3) {
-            $payload = base64_decode($tokenParts[1]);
-            $decodedPayload = json_decode($payload, true);
-            Log::info('📄 [ODESSA_REGISTRO] Payload RAW del token en index', [
-                'raw_payload' => $payload,
-                'decoded_json' => $decodedPayload,
-                'headers' => base64_decode($tokenParts[0])
-            ]);
-        }
-
         try {
             $odessaTokenData = ($decodeOdessaTokenAction)($odessaToken);
-
-            // LOG: Datos completos de Odessa al mostrar formulario
-            Log::info('📦 [ODESSA_REGISTRO] Datos de Odessa al mostrar formulario', [
-                'full_token_data' => json_encode($odessaTokenData, JSON_PRETTY_PRINT),
-                'afiliate_data' => [
-                    'id' => $odessaTokenData->odessaAfiliateAccount->id ?? null,
-                    'email' => $odessaTokenData->odessaAfiliateAccount->email ?? null,
-                    'name' => $odessaTokenData->odessaAfiliateAccount->name ?? null,
-                    'paternal_lastname' => $odessaTokenData->odessaAfiliateAccount->paternal_lastname ?? null,
-                    'maternal_lastname' => $odessaTokenData->odessaAfiliateAccount->maternal_lastname ?? null,
-                    'phone' => $odessaTokenData->odessaAfiliateAccount->phone ?? null,
-                    'birth_date' => $odessaTokenData->odessaAfiliateAccount->birth_date ?? null,
-                    'gender' => $odessaTokenData->odessaAfiliateAccount->gender ?? null,
-                ],
-                'token_expiration' => $odessaTokenData->expiration->toDateTimeString(),
-                'token_issued_at' => $odessaTokenData->issuedAt ?? null,
-            ]);
 
             // Verificar si el afiliado ya tiene usuario vinculado
             if (
@@ -149,18 +120,6 @@ class OdessaRegisterController extends Controller
             'request_headers_keys' => array_keys($request->headers->all())
         ]);
 
-        // Ver el token JWT sin decodificar (payload RAW)
-        $tokenParts = explode('.', $odessaToken);
-        if (count($tokenParts) === 3) {
-            $payload = base64_decode($tokenParts[1]);
-            $decodedPayload = json_decode($payload, true);
-            Log::info('📄 [ODESSA_REGISTRO] Payload RAW del token en store', [
-                'raw_payload' => $payload,
-                'decoded_json' => $decodedPayload,
-                'headers' => base64_decode($tokenParts[0])
-            ]);
-        }
-
         // LOG 2: Validar estructura básica del token antes de procesar
         if (empty($odessaToken)) {
             Log::warning('⚠️ [ODESSA_REGISTRO] Token vacío recibido', [
@@ -178,8 +137,6 @@ class OdessaRegisterController extends Controller
         // LOG 3: Validación de datos de entrada
         Log::debug('📋 [ODESSA_REGISTRO] Datos de entrada recibidos', [
             'name' => $request->name,
-            'paternal_lastname' => $request->paternal_lastname,
-            'maternal_lastname' => $request->maternal_lastname,
             'email' => $request->email,
             'phone' => $request->phone,
             'birth_date' => $request->birth_date,
@@ -216,51 +173,12 @@ class OdessaRegisterController extends Controller
                 'token_type' => get_class($odessaTokenData)
             ]);
 
-            // LOG 6.5: DATOS COMPLETOS DE ODESSA (inspección profunda)
-            $afiliateAccount = $odessaTokenData->odessaAfiliateAccount ?? null;
-            
-            Log::info('🔍 [ODESSA_REGISTRO] DATOS COMPLETOS DE ODESSA', [
-                'odessa_token_data_structure' => [
-                    'class' => get_class($odessaTokenData),
-                    'properties' => get_object_vars($odessaTokenData),
-                    'methods' => get_class_methods($odessaTokenData)
-                ],
-                'odessa_afiliate_account_complete' => $afiliateAccount ? [
-                    'id' => $afiliateAccount->id ?? null,
-                    'email' => $afiliateAccount->email ?? null,
-                    'name' => $afiliateAccount->name ?? null,
-                    'paternal_lastname' => $afiliateAccount->paternal_lastname ?? null,
-                    'maternal_lastname' => $afiliateAccount->maternal_lastname ?? null,
-                    'phone' => $afiliateAccount->phone ?? null,
-                    'birth_date' => $afiliateAccount->birth_date ?? null,
-                    'gender' => $afiliateAccount->gender ?? null,
-                    'document_type' => $afiliateAccount->document_type ?? null,
-                    'document_number' => $afiliateAccount->document_number ?? null,
-                    'address' => $afiliateAccount->address ?? null,
-                    'city' => $afiliateAccount->city ?? null,
-                    'country' => $afiliateAccount->country ?? null,
-                    'all_attributes' => method_exists($afiliateAccount, 'toArray') 
-                        ? $afiliateAccount->toArray() 
-                        : (is_object($afiliateAccount) ? get_object_vars($afiliateAccount) : 'No es un objeto')
-                ] : 'NO_ACCOUNT_DATA',
-                'token_metadata' => [
-                    'expiration' => $odessaTokenData->expiration ?? null,
-                    'issued_at' => $odessaTokenData->issuedAt ?? null,
-                    'custom_claims' => property_exists($odessaTokenData, 'claims') ? $odessaTokenData->claims : null,
-                ],
-                'raw_token_payload' => method_exists($odessaTokenData, 'getOriginalPayload') 
-                    ? $odessaTokenData->getOriginalPayload() 
-                    : 'No disponible'
-            ]);
-
             // LOG 7: Antes de registrar al afiliado
             Log::info('👤 [ODESSA_REGISTRO] Iniciando registro de afiliado Odessa', [
                 'action_class' => get_class($registerOdessaAfiliateMemberAction),
                 'email_provided' => $request->email,
                 'email_from_token' => $odessaTokenData->odessaAfiliateAccount->email ?? 'unknown',
-                'email_match' => ($request->email === ($odessaTokenData->odessaAfiliateAccount->email ?? null)),
-                'name_match' => ($request->name === ($odessaTokenData->odessaAfiliateAccount->name ?? null)),
-                'phone_match' => ($request->phone === ($odessaTokenData->odessaAfiliateAccount->phone ?? null))
+                'email_match' => ($request->email === ($odessaTokenData->odessaAfiliateAccount->email ?? null))
             ]);
 
             // Registrar al afiliado de Odessa como usuario
@@ -323,11 +241,6 @@ class OdessaRegisterController extends Controller
                 'odessa_afiliate_id' => $odessaAfiliateAccount->id,
                 'email' => $request->email,
                 'name' => $request->name,
-                'paternal_lastname' => $request->paternal_lastname,
-                'maternal_lastname' => $request->maternal_lastname,
-                'phone' => $request->phone,
-                'birth_date' => $request->birth_date,
-                'gender' => $request->gender,
                 'registration_time' => now()->toDateTimeString(),
                 'redirect_to' => 'home'
             ]);
@@ -373,10 +286,6 @@ class OdessaRegisterController extends Controller
                 'odessa_afiliate_id' => $odessaTokenData->odessaAfiliateAccount->id ?? 'unknown',
                 'email_provided' => $request->email,
                 'email_in_token' => $odessaTokenData->odessaAfiliateAccount->email ?? 'unknown',
-                'name_provided' => $request->name,
-                'name_in_token' => $odessaTokenData->odessaAfiliateAccount->name ?? 'unknown',
-                'phone_provided' => $request->phone,
-                'phone_in_token' => $odessaTokenData->odessaAfiliateAccount->phone ?? 'unknown',
                 'error' => $e->getMessage(),
                 'ip' => $request->ip(),
                 'step_failed' => 'data_validation'
