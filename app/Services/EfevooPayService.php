@@ -120,7 +120,7 @@ class EfevooPayService
             $expFormatted = substr($expiration, 0, 2) . '/' . substr($expiration, 2, 2);
 
             // Timezone correcto con signo
-            $tzMinutes = (int) ((new \DateTime())->getOffset() / 60);
+            $tzMinutes = (int) ((new \DateTime())->getOffset() / 60);            
 
             // Accept header realista (no confiar en request)
             $acceptHeader = request()->header('Accept');
@@ -131,6 +131,7 @@ class EfevooPayService
 
             $body = [
                 'track' => $cardData['card_number'],
+                //'track' => $track,
                 'cvv' => $cardData['cvv'],
                 'exp' => $expFormatted,
                 'fiid_comercio' => $this->config['fiid_comercio'],
@@ -142,7 +143,8 @@ class EfevooPayService
                     'browserJavaScriptEnabled' => true,
                     'browserLanguage' => 'es-419',
                     //'browserTZ' => (string) $tzMinutes,
-                    'browserTZ' => (string) abs($tzMinutes),
+                    //'browserTZ' => (string) abs($tzMinutes),
+                    'browserTZ' => '360',
                     'browserUserAgent' => request()->header('User-Agent')
                         ?? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36',
                 ]
