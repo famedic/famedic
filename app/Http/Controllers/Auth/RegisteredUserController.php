@@ -91,12 +91,6 @@ class RegisteredUserController extends Controller
         ]);
 
         try {
-            // LOG 3: Antes de llamar a la acción
-            Log::channel('single')->info('🔧 REGISTER: Llamando a RegisterRegularCustomerAction', [
-                'step' => 'before_action',
-                'email' => $request->email,
-                'parsed_birth_date' => Carbon::parse($request->birth_date)->toDateString(),
-            ]);
 
             $regularAccount = $action(
                 name: $request->name,
@@ -112,21 +106,6 @@ class RegisteredUserController extends Controller
                 referrerUserId: $request->referrer_id,
             );
 
-            // LOG 4: Después de crear la cuenta
-            Log::channel('single')->info('✅ REGISTER: Usuario creado exitosamente', [
-                'step' => 'account_created',
-                'user_id' => $regularAccount->customer->user->id ?? 'NO_ID',
-                'user_email' => $regularAccount->customer->user->email ?? 'NO_EMAIL',
-                'account_type' => get_class($regularAccount),
-                'customer_id' => $regularAccount->customer->id ?? 'NO_CUSTOMER_ID',
-            ]);
-
-            // LOG 5: Antes de autenticar
-            Log::channel('single')->debug('🔐 REGISTER: Intentando autenticar usuario', [
-                'step' => 'before_auth',
-                'user_id_to_auth' => $regularAccount->customer->user->id ?? 'NO_ID',
-            ]);
-
             Auth::login($regularAccount->customer->user);
 
             try {
@@ -141,25 +120,13 @@ class RegisteredUserController extends Controller
                     'state' => $request->state,
                     'phone_country' => $request->phone_country,
                 ]);
+                Log::channel('single')->info('ActiveCampaign: Contacto sincronizado');
             } catch (\Throwable $e) {
                 Log::error('ActiveCampaign error', [
                     'error' => $e->getMessage()
                 ]);
             }
 
-
-            // LOG 6: Después de autenticar
-            Log::channel('single')->info('🔓 REGISTER: Usuario autenticado', [
-                'step' => 'after_auth',
-                'authenticated_user_id' => Auth::id(),
-                'is_authenticated' => Auth::check(),
-                'auth_via_remember' => Auth::viaRemember(),
-            ]);
-
-            // LOG 7: Antes de tracking
-            Log::channel('single')->debug('📊 REGISTER: Ejecutando CompleteRegistration::track()', [
-                'step' => 'before_tracking',
-            ]);
 
             CompleteRegistration::track();
 
@@ -173,7 +140,6 @@ class RegisteredUserController extends Controller
 
             return to_route('home')
                 ->flashMessage('Registro exitoso. ¡Bienvenido a Famedic!');
-
         } catch (\Throwable $e) {
             // LOG 9: Error en el proceso
             Log::channel('single')->error('❌ REGISTER: Error en el proceso de registro', [
@@ -188,7 +154,7 @@ class RegisteredUserController extends Controller
                     'name' => $request->name,
                     'phone_masked' => $request->phone ? substr($request->phone, 0, 3) . '****' : null,
                 ],
-                'trace' => $e->getTraceAsString(), // Solo en desarrollo
+                'trace' => $e->getTraceAsString(),
             ]);
 
             // Re-lanzar la excepción
