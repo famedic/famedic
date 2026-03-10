@@ -6,6 +6,7 @@ use App\Actions\Customers\GenerateMedicalAttentionIdAction;
 use App\Models\Customer;
 use App\Models\OdessaAfiliateAccount;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
 class CreateOdessaAfiliateAccountCustomerAction
@@ -27,6 +28,21 @@ class CreateOdessaAfiliateAccountCustomerAction
         try {
             $odessaAfiliateAccount = OdessaAfiliateAccount::create([
                 'odessa_identifier' => $odessaAfiliateIdentifier
+            ]);
+
+            /*            
+            //Ver la forma de traer estos datos sin necesidad de decodificar el token nuevamente
+            $odessaAfiliateAccount = OdessaAfiliateAccount::create([
+                'odessa_identifier' => $odessaAfiliateIdentifier,
+                'client_id' => $odessaTokenData->clientId,
+                'empresa' => $odessaTokenData->empresa,
+                'nombre' => $odessaTokenData->nombre,
+                'planta_id' => $odessaTokenData->plantaId,
+            ]);
+            */
+            Log::info('CREATING ODESSA AFILIATE ACCOUNT', [
+                'odessa_identifier' => $odessaAfiliateIdentifier,
+                'user_id' => $user->id
             ]);
 
             $odessaAfiliateAccount->customer()->save(new Customer([
