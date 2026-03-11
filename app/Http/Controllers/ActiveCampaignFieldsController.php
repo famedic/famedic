@@ -14,6 +14,17 @@ class ActiveCampaignFieldsController extends Controller
         $this->service = $service;
     }
 
+    public function index()
+    {
+        $fields = $this->service->getCustomFields(); // <-- Este método no existe
+
+        return response()->json([
+            'success' => true,
+            'total' => count($fields),
+            'fields' => $fields
+        ], 200, [], JSON_PRETTY_PRINT);
+    }
+
     /**
      * Crear los campos de membresía y compras faltantes
      */
@@ -106,7 +117,7 @@ class ActiveCampaignFieldsController extends Controller
     private function createFieldIfNotExists(array $fieldData)
     {
         $existingField = $this->service->findCustomFieldByTitle($fieldData['title']);
-        
+
         if ($existingField) {
             return [
                 'status' => 'exists',
@@ -117,7 +128,7 @@ class ActiveCampaignFieldsController extends Controller
         }
 
         $newField = $this->service->createCustomField($fieldData);
-        
+
         if ($newField) {
             return [
                 'status' => 'created',
@@ -139,7 +150,7 @@ class ActiveCampaignFieldsController extends Controller
     public function getRelevantFields()
     {
         $allFields = $this->service->getCustomFields();
-        
+
         $relevantTitles = [
             'Membresía Activa',
             'Fecha Inicio Membresía',
@@ -157,7 +168,7 @@ class ActiveCampaignFieldsController extends Controller
         ];
 
         $relevantFields = [];
-        
+
         foreach ($allFields as $field) {
             if (in_array($field['title'], $relevantTitles)) {
                 $relevantFields[$field['title']] = [
