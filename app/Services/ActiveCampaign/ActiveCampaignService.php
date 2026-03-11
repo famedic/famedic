@@ -89,7 +89,6 @@ class ActiveCampaignService
             ]);
 
             return $contactId;
-
         } catch (\Throwable $e) {
 
             Log::error('AC: Excepción syncContact', [
@@ -118,7 +117,6 @@ class ActiveCampaignService
             Log::info('AC: Contacto agregado a lista', [
                 'contact_id' => $contactId,
             ]);
-
         } catch (\Throwable $e) {
             Log::error('AC: Error addToList', [
                 'error' => $e->getMessage(),
@@ -143,7 +141,6 @@ class ActiveCampaignService
             Log::info('AC: Tag agregado', [
                 'contact_id' => $contactId,
             ]);
-
         } catch (\Throwable $e) {
             Log::error('AC: Error addTag', [
                 'error' => $e->getMessage(),
@@ -214,7 +211,6 @@ class ActiveCampaignService
 
                 // Verificar si hay más páginas
                 $totalTags = $data['meta']['total'] ?? 0;
-
             } while ($offset < $totalTags);
 
             Log::info('AC: Tags obtenidos exitosamente', [
@@ -222,7 +218,6 @@ class ActiveCampaignService
             ]);
 
             return $allTags;
-
         } catch (\Throwable $e) {
             Log::error('AC: Excepción getTags', [
                 'error' => $e->getMessage()
@@ -245,7 +240,7 @@ class ActiveCampaignService
                 'date' => 'date',
                 'datetime' => 'datetime',
                 'number' => 'number',
-                'decimal' => 'number', // ActiveCampaign usa 'number' para decimales
+                'decimal' => 'number',
                 'dropdown' => 'dropdown',
                 'radio' => 'radio',
                 'checkbox' => 'checkbox',
@@ -296,7 +291,6 @@ class ActiveCampaignService
             ]);
 
             return $field;
-
         } catch (\Throwable $e) {
             Log::error('AC: Excepción createCustomField', [
                 'error' => $e->getMessage(),
@@ -394,23 +388,381 @@ class ActiveCampaignService
                 }
 
                 $data = $response->json();
-                
+
                 if (isset($data['fields']) && is_array($data['fields'])) {
                     $allFields = array_merge($allFields, $data['fields']);
                 }
 
                 $offset += $limit;
                 $totalFields = $data['meta']['total'] ?? 0;
-                
             } while ($offset < $totalFields);
 
             return $allFields;
-
         } catch (\Throwable $e) {
             Log::error('AC: Excepción getCustomFields', [
                 'error' => $e->getMessage()
             ]);
             return [];
         }
+    }
+
+    /**
+     * Buscar un contacto por email
+     */
+    public function findContactByEmail(string $email): ?array
+    {
+        try {
+
+            $response = $this->client()->get('/contacts', [
+                'email' => $email
+            ]);
+
+            if (!$response->successful()) {
+                return null;
+            }
+
+            return $response->json()['contacts'][0] ?? null;
+        } catch (\Throwable $e) {
+
+            Log::error('AC: Error findContactByEmail', [
+                'error' => $e->getMessage()
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Agregar un tag a un contacto
+     */
+    public function addTagToContact(int $contactId, int $tagId): void
+    {
+        try {
+
+            $this->client()->post('/contactTags', [
+                'contactTag' => [
+                    'contact' => $contactId,
+                    'tag' => $tagId,
+                ],
+            ]);
+
+            Log::info('AC: Tag agregado', [
+                'contact_id' => $contactId,
+                'tag_id' => $tagId
+            ]);
+        } catch (\Throwable $e) {
+
+            Log::error('AC: Error addTagToContact', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Crear una orden
+     */
+    public function createOrder(array $data): void
+    {
+        try {
+
+            $response = $this->client()->post('/ecomOrders', [
+                'order' => $data
+            ]);
+
+            if (!$response->successful()) {
+
+                Log::error('AC: Error creando orden', [
+                    'response' => $response->body(),
+                    'data' => $data
+                ]);
+
+                return;
+            }
+
+            Log::info('AC: Orden registrada', [
+                'external_id' => $data['externalid'],
+            ]);
+        } catch (\Throwable $e) {
+
+            Log::error('AC: Excepción createOrder', [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Crear una orden para una compra de laboratorio
+     */
+    public function laboratoryPurchase($purchase): void
+    {
+        try {
+
+            $email = $purchase->customer->user->email;
+
+            $products = $purchase->laboratoryPurchaseItems->map(function ($item) {
+
+                return [
+                    'name' => $item->name,
+                    'price' => $item->price_cents / 100,
+                    'quantity' => 1,
+                    'category' => 'Laboratorio',
+                ];
+            })->toArray();
+
+            $this->createOrder([
+                'externalid' => 'LAB-' . $purchase->id,
+                'email' => $email,
+                'currency' => 'MXN',
+                'totalPrice' => $purchase->total_cents / 100,
+                'orderDate' => $purchase->paid_at ?? now(),
+                'connectionid' => 1,
+                'products' => $products,
+            ]);
+        } catch (\Throwable $e) {
+
+            Log::error('AC: Error laboratoryPurchase', [
+                'error' => $e->getMessage(),
+                'purchase_id' => $purchase->id
+            ]);
+        }
+    }
+
+    /**
+     * Crear una orden para una compra de farmacia
+     */
+    public function pharmacyPurchase($purchase): void
+    {
+        try {
+
+            $email = $purchase->customer->user->email;
+
+            $products = $purchase->onlinePharmacyPurchaseItems->map(function ($item) {
+
+                return [
+                    'name' => $item->name,
+                    'price' => $item->price_cents / 100,
+                    'quantity' => 1,
+                    'category' => 'Farmacia',
+                ];
+            })->toArray();
+
+            $this->createOrder([
+                'externalid' => 'PHARM-' . $purchase->id,
+                'email' => $email,
+                'currency' => 'MXN',
+                'totalPrice' => $purchase->total_cents / 100,
+                'orderDate' => $purchase->created_at,
+                'connectionid' => 1,
+                'products' => $products,
+            ]);
+        } catch (\Throwable $e) {
+
+            Log::error('AC: Error pharmacyPurchase', [
+                'error' => $e->getMessage(),
+                'purchase_id' => $purchase->id
+            ]);
+        }
+    }
+
+    /**
+     * Activar una membresía
+     */
+    public function activateMembership($subscription): void
+    {
+        try {
+
+            $email = $subscription->customer->user->email;
+
+            $contact = $this->findContactByEmail($email);
+
+            if (!$contact) {
+                return;
+            }
+
+            $this->addTagToContact(
+                $contact['id'],
+                21 // Membresía Activa
+            );
+        } catch (\Throwable $e) {
+
+            Log::error('AC: Error activateMembership', [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Terminar una membresía
+     */
+    public function endMembership($subscription): void
+    {
+        try {
+
+            $email = $subscription->customer->user->email;
+
+            $contact = $this->findContactByEmail($email);
+
+            if (!$contact) {
+                return;
+            }
+
+            $this->addTagToContact(
+                $contact['id'],
+                22 // Membresía Terminada
+            );
+        } catch (\Throwable $e) {
+
+            Log::error('AC: Error endMembership', [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Obtener el ID de un contacto por email
+     */
+    protected function getContactIdByEmail(string $email): ?int
+    {
+        $contact = $this->findContactByEmail($email);
+
+        return $contact['id'] ?? null;
+    }
+
+    /**
+     * Registrar una compra completada
+     */
+    public function completedPurchase(string $email, string $externalId, float $total, array $products, string $category): void
+    {
+        try {
+
+            $this->createOrder([
+                'externalid' => $externalId,
+                'email' => $email,
+                'currency' => 'MXN',
+                'totalPrice' => $total,
+                'orderDate' => now()->toIso8601String(),
+                'connectionid' => 1,
+                'products' => $products,
+            ]);
+
+            Log::info('AC: Compra registrada', [
+                'email' => $email,
+                'external_id' => $externalId
+            ]);
+        } catch (\Throwable $e) {
+
+            Log::error('AC: Error completedPurchase', [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Registrar un producto agregado al carrito
+     */
+    public function cartAdded(string $email): void
+    {
+        $contactId = $this->getContactIdByEmail($email);
+
+        if (!$contactId) {
+            return;
+        }
+
+        $this->addTagToContact($contactId, 19);
+    }
+
+    /**
+     * Registrar un carrito abandonado
+     */
+    public function cartAbandoned(string $email): void
+    {
+        $contactId = $this->getContactIdByEmail($email);
+
+        if (!$contactId) {
+            return;
+        }
+
+        $this->addTagToContact($contactId, 20);
+    }
+
+    /**
+     * Registrar una membresía activada
+     */
+    public function membershipActivated(string $email): void
+    {
+        $contactId = $this->getContactIdByEmail($email);
+
+        if (!$contactId) {
+            return;
+        }
+
+        $this->addTagToContact($contactId, 21);
+    }
+
+    /**
+     * Registrar una membresía terminada
+     */
+    public function membershipEnded(string $email): void
+    {
+        $contactId = $this->getContactIdByEmail($email);
+
+        if (!$contactId) {
+            return;
+        }
+
+        $this->addTagToContact($contactId, 22);
+    }
+
+    /**
+     * Registrar un paciente agregado al laboratorio
+     */
+    public function laboratoryPatientAdded(string $email): void
+    {
+        $contactId = $this->getContactIdByEmail($email);
+
+        if (!$contactId) {
+            return;
+        }
+
+        $this->addTagToContact($contactId, 23);
+    }
+
+    /**
+     * Registrar resultados disponibles
+     */
+    public function resultsAvailable(string $email): void
+    {
+        $contactId = $this->getContactIdByEmail($email);
+
+        if (!$contactId) {
+            return;
+        }
+
+        $this->addTagToContact($contactId, 24);
+    }
+
+    /**
+     * Registrar una factura disponible
+     */
+    public function invoiceAvailable(string $email): void
+    {
+        $contactId = $this->getContactIdByEmail($email);
+
+        if (!$contactId) {
+            return;
+        }
+
+        $this->addTagToContact($contactId, 25);
+    }
+
+    public function sampleCollected(string $email): void
+    {
+        $contactId = $this->getContactIdByEmail($email);
+
+        if (!$contactId) {
+            return;
+        }
+
+        $this->addTagToContact($contactId, 26);
     }
 }
