@@ -20,7 +20,8 @@ yarn-error.log
 /.idea
 /.vscode
 .env_production
-/backups
+/backups/Backend
+/backups/Frontend
 efevoopay-cli-tool.php
 private.pem
 public.pem
