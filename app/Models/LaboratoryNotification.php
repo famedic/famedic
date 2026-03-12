@@ -1,5 +1,4 @@
 <?php
-// app/Models/LaboratoryNotification.php
 
 namespace App\Models;
 
@@ -24,7 +23,7 @@ class LaboratoryNotification extends Model
      *
      * @var array<int, string>
      */
-    // En app/Models/LaboratoryNotification.php
+    
     protected $fillable = [
         'user_id',
         'contact_id',
