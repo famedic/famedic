@@ -11,7 +11,7 @@ export default function TermsOfService({ name }) {
                             {name}
                         </h1>
                         <p className="mt-2 text-sm text-gray-600">
-                            Última Revisión: 19 de enero de 2023
+                            Última Revisión: 10 de febrero de 2026
                         </p>
                     </div>
 
