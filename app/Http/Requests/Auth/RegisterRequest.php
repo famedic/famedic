@@ -30,11 +30,6 @@ class RegisterRequest extends FormRequest
 
     public function rules(): array
     {
-        Log::info('📋 RegisterRequest: rules() iniciado', [
-            'tiene_datos' => !empty($this->all()),
-            'campos_recibidos' => array_keys($this->all()),
-            'recaptcha_presente' => isset($this->g_recaptcha_response),
-        ]);
 
         $rules = [
             'name' => 'required|string|max:255',
@@ -50,12 +45,7 @@ class RegisterRequest extends FormRequest
             'phone_country' => 'required|string|size:2',             
             // 'g_recaptcha_response' => ['required', new Recaptcha], // COMENTADO TEMPORALMENTE
             'g_recaptcha_response' => 'nullable', 
-        ];
-
-        Log::debug('📝 RegisterRequest: Reglas definidas', [
-            'total_reglas' => count($rules),
-            'campos_con_reglas' => array_keys($rules),
-        ]);
+        ];        
 
         return $rules;
     }
@@ -90,15 +80,9 @@ class RegisterRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        Log::info('🔧 RegisterRequest: prepareForValidation() iniciado', [
-            'datos_originales' => $this->all(),
-            'phone_country_original' => $this->phone_country ?? 'NO_PRESENTE',
-            'phone_original' => $this->phone ?? 'NO_PRESENTE',
-        ]);
 
         // Asegurarse de que phone_country siempre sea MX si está vacío
         if (empty($this->phone_country)) {
-            Log::debug('🌎 RegisterRequest: phone_country vacío, asignando MX por defecto');
             $this->merge([
                 'phone_country' => 'MX',
             ]);
@@ -108,21 +92,11 @@ class RegisterRequest extends FormRequest
         if ($this->phone) {
             $phoneOriginal = $this->phone;
             $phoneLimpio = preg_replace('/\s+/', '', $this->phone);
-            
-            Log::debug('📞 RegisterRequest: Limpiando teléfono', [
-                'original' => $phoneOriginal,
-                'limpio' => $phoneLimpio,
-                'cambio' => $phoneOriginal !== $phoneLimpio,
-            ]);
-            
+
             $this->merge([
                 'phone' => $phoneLimpio,
             ]);
-        }
-
-        Log::debug('✅ RegisterRequest: Datos después de prepareForValidation', [
-            'datos_finales' => $this->all(),
-        ]);
+        }        
     }
 
     /**
@@ -157,18 +131,7 @@ class RegisterRequest extends FormRequest
      */
     public function validateResolved(): void
     {
-        Log::info('🚀 RegisterRequest: validateResolved() - Inicio de validación completa', [
-            'todos_los_datos' => $this->all(),
-            'claves_estados' => StatesMexico::claves(),
-            'total_estados' => count(StatesMexico::claves()),
-        ]);
-
         parent::validateResolved();
-
-        Log::info('🎯 RegisterRequest: validateResolved() - Validación completada', [
-            'datos_validados' => $this->validated(),
-            'autorizado' => $this->authorize(),
-        ]);
     }
 
     /**
@@ -177,7 +140,6 @@ class RegisterRequest extends FormRequest
     public function validated($key = null, $default = null)
     {
         $validated = parent::validated($key, $default);
-        
         if ($key === null) {
             Log::info('📄 RegisterRequest: Datos validados obtenidos', [
                 'total_campos' => count($validated),
