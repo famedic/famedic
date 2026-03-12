@@ -11,7 +11,7 @@ class MedicalAttentionController extends Controller
     {
         $medicalAttentionSubscriptionIsActive = $request->user()?->customer?->medical_attention_subscription_is_active ?? false;
 
-        return Inertia::render('MedicalAttention', [
+        return Inertia::render('MedicalAttention/Index', [
             ...($request->user() && $medicalAttentionSubscriptionIsActive ? [
                 'familyAccounts' => $request->user()->customer->familyAccounts()->with('customer.user')->get(),
             ] : []),
