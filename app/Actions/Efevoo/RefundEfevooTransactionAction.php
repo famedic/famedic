@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Actions\EfevooPay;
+namespace App\Actions\Efevoo;
 
 use App\Models\Transaction;
 use App\Services\EfevooPayFactoryService;
