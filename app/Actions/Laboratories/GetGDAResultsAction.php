@@ -21,7 +21,6 @@ class GetGDAResultsAction
 
         $marca = $notificationPayload['header']['marca'] ?? null;
         $convenio = $notificationPayload['requisition']['convenio'] ?? null;
-        $requisitionValue = $notificationPayload['requisition']['value'] ?? null;
 
         if (!$marca || !$convenio) {
             throw new Exception('Faltan datos marca o convenio en el payload');
@@ -33,45 +32,28 @@ class GetGDAResultsAction
             throw new Exception("No se encontró configuración para marca={$marca}, convenio={$convenio}");
         }
 
-        $url = config('services.gda.url') . '/consult';
+        //$url = config('services.gda.consult_url');
+        $url = config('services.gda.url') . 'infogda-fullV3/consult';
 
-        $payload = [
-            "header" => [
-                "lineanegocio" => "",
-                "registro" => now()->format('Y-m-d\TH:i:s:v'),
-                "marca" => (int) $marca,
-                "token" => $brandConfig['token'],
-            ],
-            "resourceType" => "ServiceRequest",
-            "id" => (string) $orderId,
-            "requisition" => [
-                "system" => "urn:oid:2.16.840.1.113883.3.215.5.59",
-                "value" => $requisitionValue,
-                "convenio" => (int) $convenio,
-            ],
-            "status" => "completed",
-            "intent" => "order",
-            "priority" => "routine",
-            "code" => [
-                "coding" => $this->buildCoding($orderId),
-            ],
-            "orderdetail" => "Liberado",
-            "quantityQuantity" => "1",
-            "subject" => [
-                "reference" => "Patient/4620606"
-            ],
-            "requester" => [
-                "reference" => "Practitioner/5228",
-                "display" => "A QUIEN CORRESPONDA"
-            ],
-        ];
+        /**
+         * Usamos el payload original enviado por GDA
+         */
+        $payload = $notificationPayload;
 
-        Log::info('📤 Enviando petición a GDA', [
-            'url' => $url,
-            'order_id' => $orderId
-        ]);
+        /**
+         * Ajustamos el header
+         */
+        $payload['header']['token'] = $brandConfig['token'];
+        $payload['header']['registro'] = now()->format('Y-m-d\TH:i:s:v');
+        $payload['id'] = $notificationPayload['requisition']['value'];
+        
+        /**
+         * Eliminamos campos que no deben enviarse
+         */
+        unset($payload['GDA_menssage']);
 
-        Log::info('📦 PAYLOAD EXACTO ENVIADO A GDA', $payload);
+        Log::info('📦 PAYLOAD FINAL ENVIADO A GDA', $payload);
+
         $response = Http::timeout(60)->post($url, $payload);
 
         $responseData = $response->json();
@@ -103,18 +85,16 @@ class GetGDAResultsAction
         ]);
 
         foreach ($brands as $key => $config) {
+
             $brandId = (int) ($config['brand_id'] ?? 0);
             $agreementId = (int) ($config['brand_agreement_id'] ?? 0);
 
-            $matchByMarca = ($brandId === $marca);
-            $matchByConvenio = ($agreementId === $convenio);
+            if ($brandId === $marca || $agreementId === $convenio) {
 
-            if ($matchByMarca || $matchByConvenio) {
-                Log::info('✅ [ACTION] Brand encontrado:', [
+                Log::info('✅ [ACTION] Brand encontrado', [
                     'brand_key' => $key,
                     'brand_id_config' => $brandId,
-                    'agreement_id_config' => $agreementId,
-                    'match_by' => $matchByMarca ? 'MARCA' : 'CONVENIO'
+                    'agreement_id_config' => $agreementId
                 ]);
 
                 return array_merge($config, ['key' => $key]);
@@ -127,32 +107,5 @@ class GetGDAResultsAction
         ]);
 
         return null;
-    }
-
-    private function buildCoding(string $orderId): array
-    {
-        return [
-            [
-                "system" => "urn:oid:2.16.840.1.113883.3.215.5.59",
-                "code" => "561256",
-                "display" => "BIOMETRIA HEMATICA COMPLETA",
-                "infogda_status" => "completed",
-                "infogda_cexamen" => "561256",
-                "infogda_orden" => $orderId,
-                //"infogda_orden"=> "122455",
-
-                "infogda_muestras" => [
-                    [
-                        //"infogda_etiqueta" => $orderId . "02",
-                        "infogda_etiqueta" => "FB0L12245502",
-                        "infogda_contenedor" => "TUBO TAPON LILA CON EDTA",
-                        "infogda_muestra" => "SANGRE TOTAL",
-                        "infogda_kmuestrasucursal" => 40099781,
-                        "infogda_contenedoracronim" => "TTL"
-                    ]
-                ],
-                "infogda_preanaliticos" => []
-            ]
-        ];
     }
 }
