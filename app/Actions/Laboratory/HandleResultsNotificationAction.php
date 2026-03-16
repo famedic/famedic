@@ -33,14 +33,62 @@ class HandleResultsNotificationAction
         // Actualizar purchase
         $purchase = $this->updatePurchase($references, $data, $hasResultsInPayload);
 
+        // Determinar si ya se recibieron todas las notificaciones de la orden
+        $shouldSendEmail = $this->shouldSendEmailForPurchase($purchase);
+
         // Encontrar usuario
         $userToNotify = $this->findUserToNotify($references, $quote, $purchase);
 
-        // Enviar email
-        $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase, $hasResultsInPayload);
+        // Enviar email solo cuando ya se completaron todas las notificaciones de la orden
+        if ($shouldSendEmail) {
+            $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase, $hasResultsInPayload);
+        } else {
+            Log::info('Skipping results email until all studies for order have reported', [
+                'notification_id' => $notification->id,
+                'purchase_id' => $purchase?->id,
+            ]);
+        }
 
         // Marcar como procesada
         $notification->update(['status' => LaboratoryNotification::STATUS_PROCESSED]);
+    }
+
+    /**
+     * Determina si ya se recibieron todas las notificaciones de resultados para una orden
+     * y por lo tanto es momento de enviar el correo (solo uno por orden).
+     */
+    protected function shouldSendEmailForPurchase(?LaboratoryPurchase $purchase): bool
+    {
+        if (! $purchase) {
+            // Si no hay compra asociada, mantenemos el comportamiento actual (un correo por notificación)
+            return true;
+        }
+
+        // Número de estudios de la orden (items de la compra)
+        $studiesCount = $purchase->laboratoryPurchaseItems()->count();
+
+        if ($studiesCount === 0) {
+            // Si por alguna razón no hay estudios asociados, no bloqueamos el envío
+            return true;
+        }
+
+        // Número de notificaciones de resultados recibidas para esta orden
+        $notificationsCount = LaboratoryNotification::query()
+            ->where('laboratory_purchase_id', $purchase->id)
+            ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+            ->whereNotNull('results_received_at')
+            ->count();
+
+        Log::info('Checking if should send consolidated results email', [
+            'purchase_id' => $purchase->id,
+            'studies_count' => $studiesCount,
+            'notifications_count' => $notificationsCount,
+        ]);
+
+        // Solo enviamos cuando ya tenemos al menos tanta notificación de resultados como estudios
+        // (cuando se procese el último estudio, counts serán iguales)
+        return $notificationsCount >= $studiesCount;
+
     }
 
     protected function updateNotification(LaboratoryNotification $notification, array $data, bool $hasResultsInPayload): void
@@ -111,7 +159,7 @@ class HandleResultsNotificationAction
         // Actualizar status de pago si está pendiente
         if ($quote->status === 'pending_branch_payment' && in_array('status', $quoteColumns)) {
             $updates['status'] = 'paid';
-            
+
             if (in_array('paid_at', $quoteColumns)) {
                 $updates['paid_at'] = now();
             }
@@ -119,7 +167,7 @@ class HandleResultsNotificationAction
 
         if (!empty($updates)) {
             $quote->update($updates);
-            
+
             Log::info('Quote updated with results', [
                 'quote_id' => $quote->id,
                 'updates' => array_keys($updates)
@@ -179,7 +227,7 @@ class HandleResultsNotificationAction
         // Marcar timestamps de resultados
         $updates['results_downloaded_at'] = now();
         $updates['completed_at'] = now();
-        
+
         // Actualizar status
         $updates['status'] = 'completed';
 
@@ -233,7 +281,6 @@ class HandleResultsNotificationAction
                 'email_recipient_id' => $user->id,
                 'email_recipient_email' => $user->email,
             ]);
-
         } catch (\Exception $e) {
             Log::error('Failed to send results email', [
                 'user_id' => $user->id,
