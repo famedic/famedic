@@ -117,6 +117,42 @@ class EnsureUserHasAdminAccount
                     'icon' => 'BookOpenIcon',
                     'current' => Route::currentRouteName() === 'admin.documentation',
                 ]] : [],
+                // Monitoreo y herramientas internas solo para administradores
+                [
+                    'label' => 'Monitoreo',
+                    'icon' => 'ClipboardDocumentListIcon',
+                    'items' => [
+                        [
+                            'label' => 'Logs generales',
+                            'url' => route('admin.logs-general.manage'),
+                            'current' => Route::currentRouteName() === 'admin.logs-general.manage',
+                        ],
+                        [
+                            'label' => 'Usuarios',
+                            'url' => route('admin.users.index'),
+                            'current' => Route::currentRouteName() === 'admin.users.index'
+                                || Route::currentRouteName() === 'admin.users.show',
+                        ],
+                        [
+                            'label' => 'Tokens Efevoo',
+                            'url' => route('admin.efevoo-tokens.index'),
+                            'current' => Route::currentRouteName() === 'admin.efevoo-tokens.index'
+                                || Route::currentRouteName() === 'admin.efevoo-tokens.show',
+                        ],
+                        [
+                            'label' => 'Perfiles fiscales',
+                            'url' => route('admin.tax-profiles.index'),
+                            'current' => Route::currentRouteName() === 'admin.tax-profiles.index'
+                                || Route::currentRouteName() === 'admin.tax-profiles.show',
+                        ],
+                        [
+                            'label' => 'Intentos de pago',
+                            'url' => route('admin.payment-attempts.index'),
+                            'current' => Route::currentRouteName() === 'admin.payment-attempts.index'
+                                || Route::currentRouteName() === 'admin.payment-attempts.show',
+                        ],
+                    ],
+                ],
             ],
             'adminUserNavigation' => [
                 [
