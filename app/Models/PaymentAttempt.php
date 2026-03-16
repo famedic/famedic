@@ -2,6 +2,7 @@
 
 namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PaymentAttempt extends Model
 {
@@ -24,4 +25,9 @@ class PaymentAttempt extends Model
         'raw_response' => 'array',
         'processed_at' => 'datetime'
     ];
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
 }
