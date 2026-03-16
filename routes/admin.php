@@ -27,10 +27,15 @@ use App\Http\Controllers\ExportLaboratoryPurchasesController;
 use App\Http\Controllers\ExportLaboratoryTestsController;
 use App\Http\Controllers\ExportMedicalAttentionSubscriptionsController;
 use App\Http\Controllers\ExportOnlinePharmacyPurchasesController;
+use App\Http\Controllers\Admin\LogsGeneralController;
+use App\Http\Controllers\Admin\EfevooTokenController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\TaxProfileController as AdminTaxProfileController;
+use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
 
 // === IMPORTACIONES NUEVAS ===
 use App\Http\Controllers\Admin\LaboratoryNotificationController;
-use App\Http\Controllers\Admin\LaboratoryQuoteController; // ← Aun existe
+//use App\Http\Controllers\Admin\LaboratoryQuoteController; // ← Aun existe
 use App\Http\Controllers\Admin\LaboratoryResultController;
 use Illuminate\Support\Facades\Route;
 
@@ -45,6 +50,7 @@ Route::prefix('admin')->middleware([
         Route::post('administrators/export', ExportAdministratorsController::class)->name('administrators.export');
         Route::resource('customers', CustomerController::class)->only(['index', 'show', 'destroy']);
         Route::post('customers/export', ExportCustomersController::class)->name('customers.export');
+        Route::resource('users', UserController::class)->only(['index', 'show']);
         Route::resource('roles', RoleController::class)->except('show');
         Route::resource('laboratory-tests', LaboratoryTestController::class)->except(['destroy']);
         Route::post('laboratory-tests/export', ExportLaboratoryTestsController::class)->name('laboratory-tests.export');
@@ -107,6 +113,18 @@ Route::prefix('admin')->middleware([
         // ===== RUTAS PARA COTIZACIONES DE LABORATORIO (SI LAS NECESITAS) =====
         // Si tienes un controller para quotes de laboratorio, agrégala aquí
         // Route::resource('laboratory-quotes', LaboratoryQuoteController::class)->only(['index', 'show']);
+        Route::get('logs-general/manage', [LogsGeneralController::class, 'index'])->name('logs-general.manage');
+        Route::get('logs-general/download', [LogsGeneralController::class, 'download'])->name('logs-general.download');
+
+        // Tokens de Efevoo
+        Route::resource('efevoo-tokens', EfevooTokenController::class)->only(['index', 'show']);
+
+        // Perfiles fiscales (agrupados por usuario/cliente)
+        Route::get('tax-profiles', [AdminTaxProfileController::class, 'index'])->name('tax-profiles.index');
+        Route::get('tax-profiles/{customer}', [AdminTaxProfileController::class, 'show'])->name('tax-profiles.show');
+
+        // Intentos de pago
+        Route::resource('payment-attempts', AdminPaymentAttemptController::class)->only(['index', 'show']);
 
     });
 });
