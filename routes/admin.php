@@ -32,6 +32,7 @@ use App\Http\Controllers\Admin\EfevooTokenController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TaxProfileController as AdminTaxProfileController;
 use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
+use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
 
 // === IMPORTACIONES NUEVAS ===
 use App\Http\Controllers\Admin\LaboratoryNotificationController;
@@ -125,6 +126,12 @@ Route::prefix('admin')->middleware([
 
         // Intentos de pago
         Route::resource('payment-attempts', AdminPaymentAttemptController::class)->only(['index', 'show']);
+
+        // Monitoreo de notificaciones de laboratorio (toma de muestra vs resultados)
+        Route::get('laboratory-notifications-monitor', [LaboratoryNotificationMonitorController::class, 'index'])
+            ->name('laboratory-notifications-monitor.index');
+        Route::get('laboratory-notifications-monitor/{gdaOrderId}', [LaboratoryNotificationMonitorController::class, 'show'])
+            ->name('laboratory-notifications-monitor.show');
 
     });
 });
