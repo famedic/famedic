@@ -3,7 +3,7 @@
 namespace App\Actions\Laboratories;
 
 use App\Actions\Odessa\ChargeOdessaAction;
-use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction; // Cambiado
+use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction;
 use App\Actions\Transactions\RefundTransactionAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\MissingLaboratoryAppointmentException;

@@ -76,7 +76,7 @@ export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
                             if (data.status === "completed") {
 
                                 setStatus("success");
-                                setMessage(data.message);
+                                setMessage(data.message ?? "Tarjeta verificada correctamente");
 
                                 setTimeout(() => {
                                     router.visit(route("payment-methods.3ds-result", { sessionId }));
@@ -85,7 +85,10 @@ export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
                             } else {
 
                                 setStatus("error");
-                                setMessage(data.message);
+                                setMessage(data.message ?? "No se pudo completar la verificación");
+                                setTimeout(() => {
+                                    router.visit(route("payment-methods.3ds-result", { sessionId }));
+                                }, 2500);
                             }
                         }
 

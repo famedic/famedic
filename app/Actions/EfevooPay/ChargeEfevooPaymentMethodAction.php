@@ -4,6 +4,7 @@ namespace App\Actions\EfevooPay;
 
 use App\Models\Customer;
 use App\Models\Transaction;
+use App\Models\PaymentAttempt;
 use App\Services\EfevooPayService;
 use Illuminate\Support\Facades\Log;
 use App\Exceptions\EfevooPaymentException;
@@ -22,10 +23,13 @@ class ChargeEfevooPaymentMethodAction
         $chargeData = [];
         $token = null;
         $result = null;
+        $attempt = null;
+        $reference = null;
+        $cardToken = null;
 
         try {
 
-            Log::info('ChargeEfevooPaymentMethodAction - Iniciando', [
+            Log::info('[EfevooPay] ChargeEfevooPaymentMethodAction - Iniciando', [
                 'customer_id' => $customer->id,
                 'amount_cents' => $amountCents,
                 'payment_method_input' => $paymentMethod,
@@ -70,28 +74,101 @@ class ChargeEfevooPaymentMethodAction
                 'reference' => $reference,
             ];
 
+            // Registrar intento ANTES de llamar al gateway (rastreo desde el inicio)
+            $attempt = PaymentAttempt::create([
+                'customer_id' => $customer->id,
+                'token_id' => $token->id,
+                'amount_cents' => $amountCents,
+                'gateway' => 'efevoopay',
+                'reference' => $reference,
+                'status' => 'processing',
+            ]);
+
+            Log::info('[EfevooPay] PaymentAttempt creado, llamando al gateway', [
+                'attempt_id' => $attempt->id,
+                'reference' => $reference,
+                'customer_id' => $customer->id,
+            ]);
+
             $result = $this->efevooPayService->chargeCard($chargeData);
 
+            // Extraer respuesta del gateway para el intento
+            $rawData = $result['raw']['data'] ?? $result['raw'] ?? [];
+            $processorCode = $rawData['codigo'] ?? null;
+            $processorMessage = $result['message']
+                ?? $rawData['descripcion']
+                ?? $rawData['msg']
+                ?? null;
+            $processorTransactionId = $result['transaction_id']
+                ?? $rawData['id']
+                ?? $rawData['numtxn']
+                ?? null;
+
+            $attempt->update([
+                'status' => $result['success'] ? 'approved' : 'declined',
+                'processor_code' => $processorCode,
+                'processor_message' => is_string($processorMessage) ? $processorMessage : json_encode($processorMessage),
+                'processor_transaction_id' => $processorTransactionId,
+                'raw_response' => $result['raw'] ?? null,
+                'processed_at' => now(),
+            ]);
+
+            Log::info('[EfevooPay] PaymentAttempt actualizado con respuesta del gateway', [
+                'attempt_id' => $attempt->id,
+                'status' => $attempt->status,
+                'processor_code' => $processorCode,
+                'processor_transaction_id' => $processorTransactionId,
+            ]);
+
             if (!$result['success']) {
-                throw new EfevooPaymentException(
-                    $result['message'] ?? 'Error al procesar el pago',
-                    $result['code'] ?? null,
-                    $result
+
+                $message = \App\Support\PaymentErrorClassifier::message($processorCode);
+
+                throw new \App\Exceptions\EfevooPaymentException(
+                    $message,
+                    $processorCode
                 );
             }
 
             $gatewayTransactionId =
                 $result['transaction_id']
                 ?? $result['efevoo_transaction_id']
+                ?? $rawData['id']
                 ?? 'EFV-' . time();
 
         } catch (EfevooPaymentException $e) {
+
+            if ($attempt) {
+                $attempt->update([
+                    'status' => 'error',
+                    'processor_message' => $e->getMessage(),
+                    'processor_code' => $e->getCode() ?: null,
+                    'processed_at' => now(),
+                ]);
+                Log::info('[EfevooPay] PaymentAttempt actualizado tras excepción de pago', [
+                    'attempt_id' => $attempt->id,
+                    'status' => 'error',
+                    'message' => $e->getMessage(),
+                ]);
+            }
+
             throw $e;
         } catch (\Exception $e) {
-            Log::error('Excepción en ChargeEfevooPaymentMethodAction', [
+
+            Log::error('[EfevooPay] Excepción en ChargeEfevooPaymentMethodAction', [
                 'error' => $e->getMessage(),
                 'customer_id' => $customer->id,
+                'attempt_id' => $attempt?->id,
             ]);
+
+            if ($attempt) {
+                $attempt->update([
+                    'status' => 'error',
+                    'processor_message' => $e->getMessage(),
+                    'raw_response' => ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()],
+                    'processed_at' => now(),
+                ]);
+            }
 
             throw new EfevooPaymentException(
                 'Error al procesar el pago con EfevooPay: ' . $e->getMessage()
@@ -147,9 +224,11 @@ class ChargeEfevooPaymentMethodAction
                 ],
             ]);
 
-            Log::info('Transacción creada exitosamente', [
+            Log::info('[EfevooPay] Transacción creada exitosamente', [
                 'transaction_id' => $transaction->id,
                 'gateway_transaction_id' => $gatewayTransactionId,
+                'payment_attempt_id' => $attempt?->id,
+                'reference' => $reference,
             ]);
 
             return $transaction;

@@ -235,6 +235,33 @@ class EfevooPayService
     {
         Log::info('[Efevoo] tokenizeCard');
 
+        $lastFour = substr(preg_replace('/\D/', '', $cardData['card_number']), -4);
+        $expiration = preg_replace('/[^0-9]/', '', $cardData['expiration'] ?? '');
+        if (strlen($expiration) !== 4) {
+            return [
+                'success' => false,
+                'message' => 'Formato de fecha de expiración inválido',
+            ];
+        }
+
+        // Evitar registrar la misma tarjeta más de una vez (mismo cliente + últimos 4 + expiración)
+        $existing = EfevooToken::where('customer_id', $customerId)
+            ->where('card_last_four', $lastFour)
+            ->where('card_expiration', $expiration)
+            ->where('is_active', true)
+            ->first();
+
+        if ($existing) {
+            Log::info('[Efevoo] Tarjeta ya registrada para este cliente', [
+                'customer_id' => $customerId,
+                'card_last_four' => $lastFour,
+            ]);
+            return [
+                'success' => false,
+                'message' => 'Esta tarjeta ya está registrada en tu cuenta. Si no la ves, revisa que no esté desactivada.',
+            ];
+        }
+
         $tokenResult = $this->getClientToken('tokenize');
 
         if (!$tokenResult['success']) {
@@ -242,8 +269,8 @@ class EfevooPayService
         }
 
         $track2 = $cardData['card_number'] . '=' .
-            substr($cardData['expiration'], 2, 2) .
-            substr($cardData['expiration'], 0, 2);
+            substr($expiration, 2, 2) .
+            substr($expiration, 0, 2);
 
         $payload = [
             'payload' => [
@@ -264,12 +291,13 @@ class EfevooPayService
             !$response['success'] ||
             empty($response['data']['token_usuario'])
         ) {
+            $message = $response['data']['descripcion']
+                ?? $response['data']['msg']
+                ?? $response['data']['message']
+                ?? 'Tokenización no aprobada';
             return [
                 'success' => false,
-                'message' =>
-                    $response['data']['descripcion']
-                    ?? $response['data']['msg']
-                    ?? 'Tokenización no aprobada',
+                'message' => is_string($message) ? $message : 'Tokenización no aprobada',
                 'raw' => $response
             ];
         }
@@ -277,10 +305,12 @@ class EfevooPayService
         $token = EfevooToken::create([
             'customer_id' => $customerId,
             'card_token' => $response['data']['token_usuario'],
-            'card_last_four' => substr($cardData['card_number'], -4),
-            'card_expiration' => $cardData['expiration'],
-            'card_holder' => $cardData['card_holder'],
+            'client_token' => $response['data']['token'] ?? null,
+            'card_last_four' => $lastFour,
+            'card_expiration' => $expiration,
+            'card_holder' => $cardData['card_holder'] ?? '',
             'alias' => $cardData['alias'] ?? null,
+            'environment' => config('efevoopay.environment', 'test'),
         ]);
 
         return [
@@ -579,6 +609,12 @@ class EfevooPayService
         $statusCode = $statusResponse['data']['status']['code'] ?? null;
         $payloadStatus = $statusResponse['data']['payload']['status'] ?? null;
 
+        Log::info('[Efevoo] GetStatus payload', [
+            'order_id' => $session->order_id,
+            'payload_status' => $payloadStatus,
+            'payload_full' => $statusResponse['data']['payload'] ?? null,
+        ]);
+
         if ($statusCode !== '0') {
             Log::warning('[Efevoo] Error consultando 3DS', [
                 'status_code' => $statusCode
@@ -611,18 +647,20 @@ class EfevooPayService
 
         if (in_array($payloadStatus, ['declined', 'rejected'])) {
 
+            $declineMessage = 'La verificación fue rechazada por tu banco. Puede deberse a que cancelaste el proceso o el banco no autorizó la operación.';
             Log::warning('[Efevoo] 3DS rechazado por el banco', [
                 'payload_status' => $payloadStatus
             ]);
 
             $session->update([
                 'status' => 'declined',
-                'status_checked_at' => now()
+                'status_checked_at' => now(),
+                'error_message' => $declineMessage,
             ]);
 
             return [
                 'success' => false,
-                'message' => '3DS rechazado por el banco'
+                'message' => $declineMessage
             ];
         }
 
@@ -655,13 +693,15 @@ class EfevooPayService
 
             Log::error('[Efevoo] Error tokenizando después de 3DS', $tokenResult);
 
+            $errorMessage = $tokenResult['message'] ?? 'Error tokenizando tarjeta';
             $session->update([
-                'status' => 'tokenization_failed'
+                'status' => 'tokenization_failed',
+                'error_message' => $errorMessage,
             ]);
 
             return [
                 'success' => false,
-                'message' => $tokenResult['message'] ?? 'Error tokenizando tarjeta',
+                'message' => $errorMessage,
                 'raw' => $tokenResult
             ];
         }

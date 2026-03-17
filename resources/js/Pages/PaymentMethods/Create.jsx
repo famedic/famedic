@@ -33,6 +33,12 @@ export default function Create({ efevooConfig = {}, hasPending3ds = false }) {
     const [showSecurityInfo, setShowSecurityInfo] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
+    const currentYear = new Date().getFullYear();
+    const months = Array.from({ length: 12 }, (_, i) =>
+        String(i + 1).padStart(2, "0")
+    );
+    const years = Array.from({ length: 11 }, (_, i) => currentYear + i);
+
     /* ==========================================================
      * DETECT CARD TYPE
      * ========================================================== */
@@ -72,8 +78,8 @@ export default function Create({ efevooConfig = {}, hasPending3ds = false }) {
 
         const formattedData = {
             ...data,
-            exp_month: data.exp_month.padStart(2, "0"),
-            exp_year: data.exp_year.slice(-2),
+            exp_month: String(data.exp_month).padStart(2, "0"),
+            exp_year: String(data.exp_year).slice(-2),
         };
 
         post(route("payment-methods.store"), {
@@ -114,6 +120,13 @@ export default function Create({ efevooConfig = {}, hasPending3ds = false }) {
                 </div>
             )}
 
+            {errors.error && (
+                <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+                    <p className="font-medium">No se pudo iniciar la verificación</p>
+                    <p className="mt-1">{errors.error}</p>
+                </div>
+            )}
+
             <form onSubmit={handleSubmit} className="max-w-2xl relative">
 
                 {/* Overlay mientras envía */}
@@ -148,20 +161,60 @@ export default function Create({ efevooConfig = {}, hasPending3ds = false }) {
                     </SimpleField>
 
                     <div className="grid grid-cols-3 gap-3">
-                        <SimpleInput
-                            label="Mes"
-                            value={data.exp_month}
-                            onChange={(e) => setData("exp_month", e.target.value.replace(/\D/g, ""))}
-                            maxLength={2}
-                            required
-                        />
-                        <SimpleInput
-                            label="Año"
-                            value={data.exp_year}
-                            onChange={(e) => setData("exp_year", e.target.value.replace(/\D/g, ""))}
-                            maxLength={2}
-                            required
-                        />
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Mes
+                            </label>
+                            <select
+                                value={data.exp_month}
+                                onChange={(e) => setData("exp_month", e.target.value)}
+                                required
+                                className={`block w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 dark:bg-gray-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 ${
+                                    errors.exp_month
+                                        ? "border-red-300 focus:ring-red-500/25 dark:border-red-700"
+                                        : "border-gray-300 focus:ring-blue-500/25 dark:border-gray-600"
+                                }`}
+                            >
+                                <option value="">Selecciona</option>
+                                {months.map((m) => (
+                                    <option key={m} value={m}>
+                                        {m}
+                                    </option>
+                                ))}
+                            </select>
+                            {errors.exp_month && (
+                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                                    {errors.exp_month}
+                                </p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Año
+                            </label>
+                            <select
+                                value={data.exp_year}
+                                onChange={(e) => setData("exp_year", e.target.value)}
+                                required
+                                className={`block w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 dark:bg-gray-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 ${
+                                    errors.exp_year
+                                        ? "border-red-300 focus:ring-red-500/25 dark:border-red-700"
+                                        : "border-gray-300 focus:ring-blue-500/25 dark:border-gray-600"
+                                }`}
+                            >
+                                <option value="">Selecciona</option>
+                                {years.map((y) => (
+                                    <option key={y} value={y}>
+                                        {y}
+                                    </option>
+                                ))}
+                            </select>
+                            {errors.exp_year && (
+                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                                    {errors.exp_year}
+                                </p>
+                            )}
+                        </div>
                         <SimpleInput
                             label="CVV"
                             type="password"

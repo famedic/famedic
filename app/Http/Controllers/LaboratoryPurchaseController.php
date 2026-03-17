@@ -32,7 +32,7 @@ class LaboratoryPurchaseController extends Controller
             );
         } catch (EfevooPaymentException $e) {
             return redirect()->back()
-                ->withErrors(['payment_method' => 'No pudimos procesar tu pago. Por favor verifica la información de tu método de pago o intenta con uno diferente.']);
+                ->withErrors(['payment_method' => $e->getMessage()]);
         } catch (OdessaInsufficientFundsException $e) {
             return redirect()->back()
                 ->withErrors(['payment_method' => 'No cuentas con suficiente Saldo a la Vista en tu caja de ahorro para realizar el pago.']);

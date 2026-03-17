@@ -16,6 +16,7 @@ export default function ThreeDSResult({
     sessionId,
     success,
     message,
+    errorDetail,
     status,
     cardLastFour,
     amount,
@@ -91,14 +92,21 @@ export default function ThreeDSResult({
                                 ? "text-green-800 dark:text-green-300"
                                 : "text-red-800 dark:text-red-300"
                         }`}>
-                            {message}
+                            {success ? "Tarjeta verificada correctamente" : "Verificación no completada"}
                         </h2>
 
                         <p className="mt-4 text-zinc-600 dark:text-zinc-400 max-w-md">
                             {success
                                 ? "Tu tarjeta fue verificada correctamente y ahora está lista para usarse."
-                                : "No pudimos completar la verificación. Puedes intentarlo nuevamente."}
+                                : message}
                         </p>
+
+                        {!success && errorDetail && errorDetail !== message && (
+                            <div className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 p-4 text-left">
+                                <p className="text-xs font-medium uppercase tracking-wide text-red-600 dark:text-red-400">Motivo</p>
+                                <p className="mt-1 text-sm text-red-800 dark:text-red-200">{errorDetail}</p>
+                            </div>
+                        )}
 
                         {/* CARD INFO */}
                         {cardLastFour && (

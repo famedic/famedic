@@ -29,11 +29,16 @@ class PaymentMethodController extends Controller
 
         $tokens = EfevooToken::where('customer_id', $customer->id)
             ->where('is_active', true)
-            ->latest()
+            ->orderByDesc('created_at')
             ->get();
 
+        // Evitar mostrar duplicados: una tarjeta por combinación últimos 4 dígitos + expiración
+        $paymentMethods = $tokens->unique(function (EfevooToken $t) {
+            return $t->card_last_four . '-' . ($t->card_expiration ?? '');
+        })->values()->all();
+
         return Inertia::render('PaymentMethods', [
-            'paymentMethods' => $tokens,
+            'paymentMethods' => $paymentMethods,
             'environment' => config('efevoopay.environment'),
         ]);
     }
@@ -149,13 +154,15 @@ class PaymentMethodController extends Controller
             ->firstOrFail();
 
         $success = $session->status === 'completed';
+        $displayMessage = $success
+            ? 'Tarjeta verificada correctamente'
+            : ($session->error_message ?: $this->resolveStatusMessage($session->status));
 
         return Inertia::render('PaymentMethods/ThreeDSResult', [
             'sessionId' => $session->id,
             'success' => $success,
-            'message' => $success
-                ? 'Tarjeta verificada correctamente'
-                : 'La verificación no fue completada',
+            'message' => $displayMessage,
+            'errorDetail' => $session->error_message,
             'status' => $session->status,
             'cardLastFour' => $session->card_last_four,
             'amount' => $session->amount,
@@ -217,11 +224,12 @@ class PaymentMethodController extends Controller
                 'tokenization_failed'
             ])
         ) {
-
+            $message = $session->error_message ?: $this->resolveStatusMessage($session->status);
             return response()->json([
                 'final' => true,
                 'status' => $session->status,
-                'message' => $this->resolveStatusMessage($session->status)
+                'message' => $message,
+                'error_detail' => $session->error_message,
             ]);
         }
 
@@ -240,6 +248,10 @@ class PaymentMethodController extends Controller
 
         $session->refresh();
 
+        $message = $session->error_message
+            ?? $result['message']
+            ?? $this->resolveStatusMessage($session->status);
+
         return response()->json([
             'final' => in_array($session->status, [
                 'completed',
@@ -247,7 +259,8 @@ class PaymentMethodController extends Controller
                 'tokenization_failed'
             ]),
             'status' => $session->status,
-            'message' => $result['message'] ?? $this->resolveStatusMessage($session->status)
+            'message' => $message,
+            'error_detail' => $session->error_message,
         ]);
     }
 
@@ -255,8 +268,10 @@ class PaymentMethodController extends Controller
     {
         return match ($status) {
             'completed' => 'Tarjeta verificada y guardada correctamente.',
-            'declined' => 'La autenticación fue rechazada por el banco.',
-            'tokenization_failed' => 'La tarjeta fue autenticada, pero no pudo guardarse para uso futuro.',
+            'declined' => 'La verificación fue rechazada por tu banco. Puede deberse a que cancelaste el proceso o el banco no autorizó la operación.',
+            'tokenization_failed' => 'La tarjeta fue autenticada, pero no pudo guardarse. Revisa el motivo más abajo o contacta a soporte.',
+            'authenticated' => 'Verificación exitosa. Guardando tarjeta...',
+            'pending' => 'Esperando que completes la verificación en la ventana de tu banco.',
             default => 'Procesando verificación...'
         };
     }
