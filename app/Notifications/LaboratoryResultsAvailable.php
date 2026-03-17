@@ -8,6 +8,7 @@ use Illuminate\Notifications\Notification;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryQuote;
 use App\Models\User;
+use Carbon\Carbon;
 
 class LaboratoryResultsAvailable extends Notification
 {
@@ -48,7 +49,21 @@ class LaboratoryResultsAvailable extends Notification
         
         // Incluir fecha si está disponible
         if ($this->laboratoryPurchase?->created_at) {
-            $mailMessage->line('**Fecha del estudio:** ' . $this->laboratoryPurchase->created_at->format('d/m/Y'));
+            $dt = $this->laboratoryPurchase->created_at instanceof Carbon
+                ? $this->laboratoryPurchase->created_at
+                : Carbon::parse($this->laboratoryPurchase->created_at);
+
+            $dt = $dt->copy()->timezone(config('app.timezone'))->locale('es');
+
+            $formattedStudyDate = sprintf(
+                '%s %s de %s de %s',
+                ucfirst($dt->isoFormat('dddd')),
+                $dt->isoFormat('D'),
+                ucfirst($dt->isoFormat('MMMM')),
+                $dt->isoFormat('YYYY')
+            );
+
+            $mailMessage->line('**Fecha del estudio:** ' . $formattedStudyDate);
         }
         
         // Agregar enlace según lo que tengamos
