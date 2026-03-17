@@ -19,6 +19,13 @@ import {
 	GlobeAltIcon,
 } from "@heroicons/react/16/solid";
 
+function maskToken(value, visibleChars = 8) {
+	if (!value) return "—";
+	const s = String(value);
+	if (s.length <= visibleChars) return s;
+	return `...${s.slice(-visibleChars)}`;
+}
+
 export default function EfevooToken({ token }) {
 	return (
 		<AdminLayout title={`Token ${token.alias || token.id}`}>
@@ -162,11 +169,11 @@ export default function EfevooToken({ token }) {
 					</Heading>
 					<Text>
 						<Strong>Client token:</Strong>{" "}
-						<Code>{token.client_token}</Code>
+						<Code>{maskToken(token.client_token, 12)}</Code>
 					</Text>
 					<Text>
 						<Strong>Card token:</Strong>{" "}
-						<Code>{token.card_token}</Code>
+						<Code>{maskToken(token.card_token, 12)}</Code>
 					</Text>
 				</div>
 			</div>
