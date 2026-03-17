@@ -32,6 +32,8 @@ class ActiveCampaignService
      */
     public function syncContact(array $data): ?int
     {
+        Log::info('AC: syncContact iniciado', ['email' => $data['email'] ?? null]);
+
         try {
 
             $response = $this->client()->post('/contact/sync', [
@@ -153,14 +155,18 @@ class ActiveCampaignService
      */
     public function newRegistration(array $data): void
     {
+        Log::info('AC: newRegistration iniciado', ['email' => $data['email'] ?? null]);
+
         $contactId = $this->syncContact($data);
 
         if (!$contactId) {
+            Log::warning('AC: newRegistration omitido — syncContact no devolvió contacto', ['email' => $data['email'] ?? null]);
             return;
         }
 
         $this->addToList($contactId);
         $this->addTag($contactId);
+        Log::info('AC: newRegistration completado', ['contact_id' => $contactId, 'email' => $data['email'] ?? null]);
     }
 
     public function getFields(): array
@@ -418,14 +424,23 @@ class ActiveCampaignService
             ]);
 
             if (!$response->successful()) {
+                Log::warning('AC: findContactByEmail — respuesta no exitosa', ['email' => $email, 'status' => $response->status()]);
                 return null;
             }
 
-            return $response->json()['contacts'][0] ?? null;
+            $contacts = $response->json()['contacts'] ?? [];
+            $contact = $contacts[0] ?? null;
+
+            if (!$contact) {
+                Log::debug('AC: findContactByEmail — contacto no encontrado', ['email' => $email]);
+            }
+
+            return $contact;
         } catch (\Throwable $e) {
 
             Log::error('AC: Error findContactByEmail', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'email' => $email,
             ]);
 
             return null;
@@ -495,6 +510,8 @@ class ActiveCampaignService
      */
     public function laboratoryPurchase($purchase): void
     {
+        Log::info('AC: laboratoryPurchase iniciado', ['purchase_id' => $purchase->id]);
+
         try {
 
             $email = $purchase->customer->user->email;
@@ -518,6 +535,8 @@ class ActiveCampaignService
                 'connectionid' => 1,
                 'products' => $products,
             ]);
+
+            Log::info('AC: laboratoryPurchase completado', ['purchase_id' => $purchase->id, 'email' => $email]);
         } catch (\Throwable $e) {
 
             Log::error('AC: Error laboratoryPurchase', [
@@ -532,6 +551,8 @@ class ActiveCampaignService
      */
     public function pharmacyPurchase($purchase): void
     {
+        Log::info('AC: pharmacyPurchase iniciado', ['purchase_id' => $purchase->id]);
+
         try {
 
             $email = $purchase->customer->user->email;
@@ -555,6 +576,8 @@ class ActiveCampaignService
                 'connectionid' => 1,
                 'products' => $products,
             ]);
+
+            Log::info('AC: pharmacyPurchase completado', ['purchase_id' => $purchase->id, 'email' => $email]);
         } catch (\Throwable $e) {
 
             Log::error('AC: Error pharmacyPurchase', [
@@ -569,13 +592,15 @@ class ActiveCampaignService
      */
     public function activateMembership($subscription): void
     {
-        try {
+        $email = $subscription->customer->user->email ?? null;
+        Log::info('AC: activateMembership iniciado', ['email' => $email, 'subscription_id' => $subscription->id ?? null]);
 
-            $email = $subscription->customer->user->email;
+        try {
 
             $contact = $this->findContactByEmail($email);
 
             if (!$contact) {
+                Log::warning('AC: activateMembership omitido — contacto no encontrado en AC', ['email' => $email]);
                 return;
             }
 
@@ -583,10 +608,12 @@ class ActiveCampaignService
                 $contact['id'],
                 21 // Membresía Activa
             );
+            Log::info('AC: activateMembership completado', ['contact_id' => $contact['id'], 'email' => $email]);
         } catch (\Throwable $e) {
 
             Log::error('AC: Error activateMembership', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'email' => $email,
             ]);
         }
     }
@@ -596,13 +623,15 @@ class ActiveCampaignService
      */
     public function endMembership($subscription): void
     {
-        try {
+        $email = $subscription->customer->user->email ?? null;
+        Log::info('AC: endMembership iniciado', ['email' => $email, 'subscription_id' => $subscription->id ?? null]);
 
-            $email = $subscription->customer->user->email;
+        try {
 
             $contact = $this->findContactByEmail($email);
 
             if (!$contact) {
+                Log::warning('AC: endMembership omitido — contacto no encontrado en AC', ['email' => $email]);
                 return;
             }
 
@@ -610,10 +639,12 @@ class ActiveCampaignService
                 $contact['id'],
                 22 // Membresía Terminada
             );
+            Log::info('AC: endMembership completado', ['contact_id' => $contact['id'], 'email' => $email]);
         } catch (\Throwable $e) {
 
             Log::error('AC: Error endMembership', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'email' => $email,
             ]);
         }
     }
@@ -662,13 +693,8 @@ class ActiveCampaignService
      */
     public function cartAdded(string $email): void
     {
-        $contactId = $this->getContactIdByEmail($email);
-
-        if (!$contactId) {
-            return;
-        }
-
-        $this->addTagToContact($contactId, 19);
+        Log::info('AC: cartAdded ejecutado', ['email' => $email]);
+        $this->tagByEmail($email, 19);
     }
 
     /**
@@ -676,13 +702,17 @@ class ActiveCampaignService
      */
     public function cartAbandoned(string $email): void
     {
+        Log::info('AC: cartAbandoned iniciado', ['email' => $email]);
+
         $contactId = $this->getContactIdByEmail($email);
 
         if (!$contactId) {
+            Log::warning('AC: cartAbandoned omitido — contacto no encontrado en AC', ['email' => $email]);
             return;
         }
 
         $this->addTagToContact($contactId, 20);
+        Log::info('AC: cartAbandoned completado', ['contact_id' => $contactId, 'email' => $email]);
     }
 
     /**
@@ -690,13 +720,17 @@ class ActiveCampaignService
      */
     public function membershipActivated(string $email): void
     {
+        Log::info('AC: membershipActivated iniciado', ['email' => $email]);
+
         $contactId = $this->getContactIdByEmail($email);
 
         if (!$contactId) {
+            Log::warning('AC: membershipActivated omitido — contacto no encontrado en AC', ['email' => $email]);
             return;
         }
 
         $this->addTagToContact($contactId, 21);
+        Log::info('AC: membershipActivated completado', ['contact_id' => $contactId, 'email' => $email]);
     }
 
     /**
@@ -704,13 +738,17 @@ class ActiveCampaignService
      */
     public function membershipEnded(string $email): void
     {
+        Log::info('AC: membershipEnded iniciado', ['email' => $email]);
+
         $contactId = $this->getContactIdByEmail($email);
 
         if (!$contactId) {
+            Log::warning('AC: membershipEnded omitido — contacto no encontrado en AC', ['email' => $email]);
             return;
         }
 
         $this->addTagToContact($contactId, 22);
+        Log::info('AC: membershipEnded completado', ['contact_id' => $contactId, 'email' => $email]);
     }
 
     /**
@@ -718,13 +756,17 @@ class ActiveCampaignService
      */
     public function laboratoryPatientAdded(string $email): void
     {
+        Log::info('AC: laboratoryPatientAdded iniciado', ['email' => $email]);
+
         $contactId = $this->getContactIdByEmail($email);
 
         if (!$contactId) {
+            Log::warning('AC: laboratoryPatientAdded omitido — contacto no encontrado en AC', ['email' => $email]);
             return;
         }
 
         $this->addTagToContact($contactId, 23);
+        Log::info('AC: laboratoryPatientAdded completado', ['contact_id' => $contactId, 'email' => $email]);
     }
 
     /**
@@ -732,13 +774,17 @@ class ActiveCampaignService
      */
     public function resultsAvailable(string $email): void
     {
+        Log::info('AC: resultsAvailable iniciado', ['email' => $email]);
+
         $contactId = $this->getContactIdByEmail($email);
 
         if (!$contactId) {
+            Log::warning('AC: resultsAvailable omitido — contacto no encontrado en AC', ['email' => $email]);
             return;
         }
 
         $this->addTagToContact($contactId, 24);
+        Log::info('AC: resultsAvailable completado', ['contact_id' => $contactId, 'email' => $email]);
     }
 
     /**
@@ -746,23 +792,130 @@ class ActiveCampaignService
      */
     public function invoiceAvailable(string $email): void
     {
+        Log::info('AC: invoiceAvailable iniciado', ['email' => $email]);
+
         $contactId = $this->getContactIdByEmail($email);
 
         if (!$contactId) {
+            Log::warning('AC: invoiceAvailable omitido — contacto no encontrado en AC', ['email' => $email]);
             return;
         }
 
         $this->addTagToContact($contactId, 25);
+        Log::info('AC: invoiceAvailable completado', ['contact_id' => $contactId, 'email' => $email]);
     }
 
     public function sampleCollected(string $email): void
     {
+        Log::info('AC: sampleCollected iniciado', ['email' => $email]);
+
         $contactId = $this->getContactIdByEmail($email);
 
         if (!$contactId) {
+            Log::warning('AC: sampleCollected omitido — contacto no encontrado en AC', ['email' => $email]);
             return;
         }
 
         $this->addTagToContact($contactId, 26);
+        Log::info('AC: sampleCollected completado', ['contact_id' => $contactId, 'email' => $email]);
+    }
+
+    public function patientCreated($contact): void
+    {
+        $email = $contact->customer->user->email ?? null;
+        Log::info('AC: patientCreated iniciado', ['contact_id' => $contact->id, 'email' => $email]);
+
+        try {
+            // 1. Asegurar contacto principal
+            $contactId = $this->getContactIdByEmail($email);
+
+            if (!$contactId) {
+                Log::info('AC: patientCreated — contacto no en AC, sincronizando', ['email' => $email]);
+                $user = $contact->customer->user;
+                $contactId = $this->syncContact([
+                    'email' => $email,
+                    'first_name' => $user->name ?? '',
+                    'paternal_lastname' => $user->paternal_lastname ?? '',
+                    'maternal_lastname' => $user->maternal_lastname ?? '',
+                    'phone' => $user->phone ?? '',
+                    'gender' => $contact->gender?->value ?? '',
+                    'birth_date' => $contact->birth_date?->format('Y-m-d') ?? '',
+                    'phone_country' => '',
+                    'state' => '',
+                ]);
+            }
+
+            if (!$contactId) {
+                Log::warning('AC: patientCreated omitido — no se pudo obtener/crear contacto en AC', ['email' => $email]);
+                return;
+            }
+
+            // 2. Tag
+            $this->addTagToContact($contactId, 23);
+
+            // 3. Evento
+            $this->trackEvent($email, 'patient_created', [
+                'patient_name' => $contact->name,
+                'patient_id' => $contact->id,
+            ]);
+
+            Log::info('AC: patientCreated completado', ['contact_id' => $contactId, 'patient_id' => $contact->id, 'email' => $email]);
+        } catch (\Throwable $e) {
+            Log::error('AC: Error patientCreated', [
+                'error' => $e->getMessage(),
+                'contact_id' => $contact->id,
+                'email' => $email,
+            ]);
+        }
+    }
+
+    protected function tagByEmail(string $email, int $tagId): void
+    {
+        $contactId = $this->getContactIdByEmail($email);
+
+        if (!$contactId) {
+            Log::warning('AC: tagByEmail omitido — contacto no encontrado', ['email' => $email, 'tag_id' => $tagId]);
+            return;
+        }
+
+        $this->addTagToContact($contactId, $tagId);
+    }
+
+    public function trackEvent(string $email, string $eventName, array $eventData = []): void
+    {
+        try {
+
+            $response = Http::withHeaders([
+                'Api-Token' => $this->apiKey,
+                'Content-Type' => 'application/json',
+            ])->post($this->baseUrl . '/api/3/eventTracking', [
+                'event' => $eventName,
+                'eventdata' => json_encode($eventData),
+                'visit' => [
+                    'email' => $email,
+                ],
+            ]);
+
+            if (!$response->successful()) {
+                Log::error('AC: Error trackEvent', [
+                    'response' => $response->body(),
+                    'event' => $eventName,
+                    'email' => $email
+                ]);
+                return;
+            }
+
+            Log::info('AC: Evento registrado', [
+                'event' => $eventName,
+                'email' => $email,
+                'data' => $eventData
+            ]);
+        } catch (\Throwable $e) {
+
+            Log::error('AC: Excepción trackEvent', [
+                'error' => $e->getMessage(),
+                'event' => $eventName
+            ]);
+        }
     }
 }
