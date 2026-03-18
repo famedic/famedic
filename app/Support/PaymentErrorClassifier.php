@@ -14,7 +14,7 @@ class PaymentErrorClassifier
 
             '51' => 'La tarjeta no tiene fondos suficientes.',
 
-            '57' => 'La tarjeta no permite realizar compras en línea. Contacta a tu banco o intenta con otra tarjeta.',
+            '57' => 'Tu tarjeta no tiene habilitadas compras en línea o el banco la bloqueó.',
 
             '91' => 'El banco no está disponible temporalmente. Intenta nuevamente en unos minutos.',
 
