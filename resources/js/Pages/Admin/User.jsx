@@ -23,12 +23,15 @@ import {
 	CreditCardIcon,
 	BellAlertIcon,
 } from "@heroicons/react/16/solid";
+import { router } from "@inertiajs/react";
 
 export default function UserPage({
 	user,
 	customer,
 	efevooTokens,
 	efevooTransactions,
+	laboratoryNotifications,
+	unreadLabNotificationsCount,
 }) {
 	return (
 		<AdminLayout title={user.full_name || user.email || "Usuario"}>
@@ -52,7 +55,10 @@ export default function UserPage({
 					<EfevooTransactionsCard transactions={efevooTransactions} />
 				</div>
 
-				<NotificationsCard user={user} />
+				<NotificationsCard
+					notifications={laboratoryNotifications}
+					unreadCount={unreadLabNotificationsCount}
+				/>
 			</div>
 		</AdminLayout>
 	);
@@ -202,7 +208,9 @@ function AddressesCard({ customer }) {
 						<Text>
 							<Strong>{address.alias || "Dirección"}</Strong>
 						</Text>
-						<Text>{address.formatted_address || address.full_address}</Text>
+						<Text className="whitespace-pre-line">
+							{address.formatted_address || address.full_address}
+						</Text>
 					</li>
 				))}
 			</ul>
@@ -462,9 +470,17 @@ function EfevooTransactionsCard({ transactions }) {
 	);
 }
 
-function NotificationsCard({ user }) {
-	const notifications = user.laboratory_notifications || [];
-	const unreadCount = user.unread_lab_notifications_count || 0;
+function NotificationsCard({ notifications = [], unreadCount = 0 }) {
+	const requestResults = (purchaseId) => {
+		if (!purchaseId) return;
+		router.post(
+			route("admin.laboratory-purchases.fetch-results", {
+				laboratoryPurchase: purchaseId,
+			}),
+			{},
+			{ preserveScroll: true },
+		);
+	};
 
 	return (
 		<div className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
@@ -484,19 +500,45 @@ function NotificationsCard({ user }) {
 				<Table>
 					<TableHead>
 						<TableRow>
+							<TableHeader>Orden</TableHeader>
+							<TableHeader>Línea negocio</TableHeader>
 							<TableHeader>Tipo</TableHeader>
 							<TableHeader>Estatus</TableHeader>
-							<TableHeader>Orden</TableHeader>
 							<TableHeader>Fecha</TableHeader>
+							<TableHeader></TableHeader>
 						</TableRow>
 					</TableHead>
 					<TableBody>
 						{notifications.map((n) => (
 							<TableRow key={n.id}>
+								<TableCell>{n.gda_order_id || "—"}</TableCell>
+								<TableCell>
+									<Text className="text-xs">{n.lineanegocio || "—"}</Text>
+								</TableCell>
 								<TableCell>{n.notification_type}</TableCell>
 								<TableCell>{n.status}</TableCell>
-								<TableCell>{n.gda_order_id}</TableCell>
-								<TableCell>{n.created_at}</TableCell>
+								<TableCell>
+									<Text className="text-xs">
+										{n.created_at
+											? new Date(n.created_at).toLocaleString("es-MX")
+											: "—"}
+									</Text>
+								</TableCell>
+								<TableCell>
+									{(n.notification_type === "Notificaion-Resultados" ||
+										n.lineanegocio === "Notificaion-Resultados") &&
+										n.laboratory_purchase_id && (
+											<Button
+												outline
+												size="sm"
+												onClick={() =>
+													requestResults(n.laboratory_purchase_id)
+												}
+											>
+												Solicitar resultados
+											</Button>
+										)}
+								</TableCell>
 							</TableRow>
 						))}
 					</TableBody>
