@@ -45,7 +45,9 @@ class LaboratoryPurchaseController extends Controller
             'invoice',
             'invoiceRequest',
             'devAssistanceRequests',
-        ])->filter($filters);
+        ])
+            ->withNotificationStatus()
+            ->filter($filters);
 
         // Obtener datos para el chart (solo si hay fechas definidas para evitar cargar todo)
         $laboratoryDailyChart = null;

@@ -475,10 +475,11 @@ function LaboratoryPurchasesList({
 						<TableRow>
 							<TableHeader>Detalles</TableHeader>
 							<TableHeader>Paciente</TableHeader>
-							<TableHeader>Marca</TableHeader>
 							<TableHeader className="text-right">
 								Detalles adicionales
 							</TableHeader>
+							<TableHeader>Marca</TableHeader>
+							<TableHeader>Notificaciones</TableHeader>
 						</TableRow>
 					</TableHead>
 					<TableBody>

@@ -16,6 +16,40 @@ import PaymentMethodBadge from "@/Components/PaymentMethodBadge";
 import EfevooPayBadge from "@/Components/EfevooPayBadge";
 import OdessaBadge from "@/Components/OdessaBadge";
 
+function NotificationStatusTags({ laboratoryPurchase }) {
+	const hasSample = Boolean(laboratoryPurchase.has_sample_collected);
+	const hasResults = Boolean(laboratoryPurchase.has_results_available);
+
+	if (!hasSample && !hasResults) {
+		return (
+			<Badge color="zinc" className="text-zinc-500 dark:text-slate-500">
+				⏳ Esperando
+			</Badge>
+		);
+	}
+
+	return (
+		<div className="flex flex-wrap gap-1.5">
+			{hasSample && (
+				<Badge
+					color="amber"
+					className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+				>
+					🩸 Toma de muestra
+				</Badge>
+			)}
+			{hasResults && (
+				<Badge
+					color="green"
+					className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
+				>
+					✅ Resultados
+				</Badge>
+			)}
+		</div>
+	);
+}
+
 export default function LaboratoryPurchaseTableRow({
 	laboratoryPurchase,
 	showBrand = false,
@@ -40,10 +74,17 @@ export default function LaboratoryPurchaseTableRow({
 							)}
 						</div>
 						<div>
-							<Badge color="sky">
-								<QrCodeIcon className="size-4" />
-								{laboratoryPurchase.gda_order_id}
-							</Badge>
+							<div className="flex flex-wrap items-center gap-2">
+								<Badge color="sky">
+									<QrCodeIcon className="size-4" />
+									{laboratoryPurchase.gda_order_id}
+								</Badge>
+								{laboratoryPurchase.gda_consecutivo != null && (
+									<Badge color="zinc">
+										Consecutivo: {laboratoryPurchase.gda_consecutivo}
+									</Badge>
+								)}
+							</div>
 
 							<br />
 							{laboratoryPurchase.formatted_created_at}
@@ -88,7 +129,10 @@ export default function LaboratoryPurchaseTableRow({
 					<PhoneIcon className="size-4 fill-zinc-400 dark:fill-slate-600" />
 					{laboratoryPurchase.phone}
 				</div>
-				<div className="mt-1 flex items-center gap-2">
+				<div className="mt-1 flex flex-wrap items-center gap-2">
+					{laboratoryPurchase.state && (
+						<Badge color="slate">{laboratoryPurchase.state}</Badge>
+					)}
 					<Badge color="slate">
 						{laboratoryPurchase.formatted_gender}
 					</Badge>
@@ -97,19 +141,6 @@ export default function LaboratoryPurchaseTableRow({
 					</Badge>
 				</div>
 			</TableCell>
-
-			{showBrand && (
-				<TableCell>
-					<LaboratoryBrandCard
-						src={
-							"/images/gda/GDA-" +
-							laboratoryPurchase.brand.toUpperCase() +
-							".png"
-						}
-						className="w-32 p-4"
-					/>
-				</TableCell>
-			)}
 
 			<TableCell className="text-right">
 				<div className="flex items-center justify-end gap-1">
@@ -155,6 +186,23 @@ export default function LaboratoryPurchaseTableRow({
 						)}
 					</div>
 				)}
+			</TableCell>
+
+			{showBrand && (
+				<TableCell>
+					<LaboratoryBrandCard
+						src={
+							"/images/gda/GDA-" +
+							laboratoryPurchase.brand.toUpperCase() +
+							".png"
+						}
+						className="w-32 p-4"
+					/>
+				</TableCell>
+			)}
+
+			<TableCell>
+				<NotificationStatusTags laboratoryPurchase={laboratoryPurchase} />
 			</TableCell>
 		</TableRow>
 	);
