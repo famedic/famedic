@@ -13,6 +13,11 @@ class Address extends Model
 
     protected $guarded = [];
 
+    protected $appends = [
+        'full_address',
+        'formatted_address',
+    ];
+
     public function customer()
     {
         return $this->belongsTo(Customer::class);
