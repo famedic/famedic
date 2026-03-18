@@ -57,20 +57,11 @@ Route::get('/offline', function () {
 })->name('offline');
 
 
-require __DIR__.'/odessa.php';
-require __DIR__.'/admin.php';
-require __DIR__.'/settings.php';
-require __DIR__.'/laboratories.php';
-require __DIR__.'/online-pharmacy.php';
-require __DIR__.'/medical-attention.php';
-require __DIR__.'/auth.php';
-require __DIR__.'/webhooks.php';
-
-Route::get('/auth-debug', function () {
-    return [
-        'auth_check' => auth()->check(),
-        'user' => auth()->user(),
-        'session_id' => session()->getId(),
-        'cookie_session' => request()->cookie(config('session.cookie')),
-    ];
-});
+require __DIR__ . '/odessa.php';
+require __DIR__ . '/admin.php';
+require __DIR__ . '/settings.php';
+require __DIR__ . '/laboratories.php';
+require __DIR__ . '/online-pharmacy.php';
+require __DIR__ . '/medical-attention.php';
+require __DIR__ . '/auth.php';
+require __DIR__ . '/webhooks.php';

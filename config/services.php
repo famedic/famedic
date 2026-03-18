@@ -21,7 +21,7 @@ return [
     ],
 
     'facebook' => [
-        'pixel_id'   => env('FB_PIXEL_ID'),
+        'pixel_id' => env('FB_PIXEL_ID'),
         'capi_token' => env('FB_CAPI_TOKEN'),
         'test_event_code' => env('FB_TEST_EVENT_CODE'),
         'batch_size_limit' => env('FB_BATCH_SIZE_LIMIT', 10),
@@ -76,7 +76,7 @@ return [
     ],
 
     'gda' => [
-        'url' => env('GDA_URL'),        
+        'url' => env('GDA_URL'),
         'report_emails' => env('GDA_REPORT_EMAILS') ? explode(',', env('GDA_REPORT_EMAILS')) : [],
         'concierge_emails' => env('GDA_CONCIERGE_EMAILS') ? explode(',', env('GDA_CONCIERGE_EMAILS')) : [],
         'brands' => [
@@ -121,5 +121,11 @@ return [
     'recaptcha' => [
         'secret_key' => env('RECAPTCHA_SECRET_KEY'),
         'site_key' => env('RECAPTCHA_SITE_KEY'),
+    ],
+    'activecampaign' => [
+        'endpoint' => env('ACTIVE_CAMPAIGN_API_ENDPOINT'),
+        'token' => env('ACTIVE_CAMPAIGN_API_TOKEN'),
+        'list_new_users' => env('ACTIVE_CAMPAIGN_LIST_NEW_USERS'),
+        'tag_registro_web' => env('ACTIVE_CAMPAIGN_TAG_REGISTRO_WEB'),
     ],
 ];
