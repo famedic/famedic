@@ -32,13 +32,16 @@ class LaboratorySampleCollected extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $orderId = $this->laboratoryPurchase?->gda_order_id 
-            ?? $this->laboratoryQuote?->gda_external_id 
-            ?? $this->gdaOrderId 
+        $orderId = $this->laboratoryPurchase?->gda_order_id
+            ?? $this->laboratoryQuote?->gda_external_id
+            ?? $this->gdaOrderId
             ?? 'N/A';
 
-        $firstName = explode(' ', $notifiable->name)[0]; // Obtener solo el primer nombre
-        $collectionDateTime = $this->laboratoryPurchase?->ready_at ?? $this->laboratoryQuote?->ready_at ?? now();
+        $firstName = explode(' ', $notifiable->name)[0];
+
+        $collectionDateTime = $this->laboratoryPurchase?->ready_at
+            ?? $this->laboratoryQuote?->ready_at
+            ?? now();
 
         $dt = $collectionDateTime instanceof Carbon
             ? $collectionDateTime
@@ -52,28 +55,28 @@ class LaboratorySampleCollected extends Notification
             $dt->isoFormat('D'),
             ucfirst($dt->isoFormat('MMMM')),
             $dt->isoFormat('YYYY'),
-            $dt->isoFormat('hh:mm A')
+            strtolower($dt->isoFormat('hh:mm A')) // formato tipo "09:40 a. m."
         );
 
         $mailMessage = (new MailMessage)
             ->subject('Confirmación de toma de muestra — Orden ' . $orderId)
             ->greeting('Hola ' . $firstName . ',')
-            ->line('Te confirmamos que la toma de muestra para tu estudio de laboratorio **se realizó exitosamente**.')
+            ->line('Te confirmamos que la toma de muestra para tu estudio de laboratorio se realizó exitosamente.')
             ->line('')
-            ->line('**Detalles de tu estudio**')
-            ->line('• **Número de orden:** ' . $orderId)
-            ->line('• **Fecha y hora:** ' . $formattedCollectionDateTime)
+            ->line('Sabemos que tus resultados son lo más importante para ti. Por eso, te notificaremos automáticamente en cuanto el laboratorio termine de procesar tus estudios, para que puedas consultarlos de inmediato en tu cuenta.')
             ->line('')
-            ->line('**¿Qué sigue?**')
-            ->line('Nuestro laboratorio ya está procesando tus muestras. Te compartiremos tus resultados en las próximas horas, de acuerdo con el tipo de estudio solicitado. En cuanto estén listos, recibirás una nueva notificación y podrás consultarlos en tu cuenta.')
+            ->line('Detalles de tu estudio')
+            ->line('• Número de orden: ' . $orderId)
+            ->line('• Fecha y hora: ' . $formattedCollectionDateTime)
             ->line('')
-            ->line('Recuerda: en Famedic cuentas con **precios preferenciales** en una amplia variedad de estudios de laboratorio. Si necesitas complementar o repetir algún estudio, podemos ayudarte.')
-            ->line('');
+            ->line('¿Qué sigue?')
+            ->line('Nuestro laboratorio ya está procesando tus muestras. El tiempo de entrega puede variar según el tipo de estudio solicitado. En cuanto estén listos, recibirás una nueva notificación y podrás verlos en tu cuenta.')
+            ->line('')
+            ->line('Recuerda: en Famedic cuentas con precios preferenciales en una amplia variedad de estudios de laboratorio. Si necesitas complementar o repetir algún estudio, con gusto te ayudamos.');
 
-        // Agregar acción si tenemos URL disponible
         if ($this->laboratoryPurchase) {
             $mailMessage->action(
-                'Ver detalles de mi orden', 
+                'Ver detalles de mi orden',
                 url(route('laboratory-purchases.show', $this->laboratoryPurchase->id))
             );
         }
@@ -84,7 +87,7 @@ class LaboratorySampleCollected extends Notification
             ->line('📧 contacto@famedic.com | 📱 (81) 8172-2882')
             ->line('')
             ->line('Gracias por confiar en nosotros,')
-            ->line('**Equipo Famedic**');
+            ->line('Equipo Famedic');
 
         return $mailMessage;
     }
