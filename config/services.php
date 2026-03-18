@@ -125,7 +125,24 @@ return [
     'activecampaign' => [
         'endpoint' => env('ACTIVE_CAMPAIGN_API_ENDPOINT'),
         'token' => env('ACTIVE_CAMPAIGN_API_TOKEN'),
+        'account_id' => env('ACTIVE_CAMPAIGN_ACCOUNT_ID'),
+        'event_key' => env('ACTIVE_CAMPAIGN_EVENT_KEY'),
         'list_new_users' => env('ACTIVE_CAMPAIGN_LIST_NEW_USERS'),
         'tag_registro_web' => env('ACTIVE_CAMPAIGN_TAG_REGISTRO_WEB'),
+        // Tags específicos laboratorio
+        'tag_registro_nuevo' => (function () {
+            $raw = env('ACTIVE_CAMPAIGN_TAG_REGISTRO_NUEVO');
+            if (is_numeric($raw)) {
+                return (int) $raw;
+            }
+
+            if (is_string($raw) && preg_match('/\d+/', $raw, $m)) {
+                return (int) $m[0];
+            }
+
+            return 3; // RegistroNuevo
+        })(),
+        'tag_lab_sample_collected' => env('ACTIVE_CAMPAIGN_TAG_LAB_SAMPLE_COLLECTED', 32),
+        'tag_lab_results_available' => env('ACTIVE_CAMPAIGN_TAG_LAB_RESULTS_AVAILABLE', 33),
     ],
 ];

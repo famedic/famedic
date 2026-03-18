@@ -9,11 +9,11 @@ class LaboratoryNotificationObserver
 {
     public function updated(LaboratoryNotification $notification): void
     {
-        // Resultados disponibles cuando es tipo results y se establece results_received_at
+        // Despachar solo cuando el correo realmente se marcó como enviado.
         $isResultsType = $notification->isResultsType();
-        $resultsJustReceived = $notification->isDirty('results_received_at') && $notification->results_received_at !== null;
+        $emailJustSent = $notification->isDirty('email_sent_at') && $notification->email_sent_at !== null;
 
-        if ($isResultsType && $resultsJustReceived) {
+        if ($isResultsType && $emailJustSent) {
             SendResultsAvailableToActiveCampaignJob::dispatch($notification);
         }
     }

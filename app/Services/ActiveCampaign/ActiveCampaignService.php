@@ -4,6 +4,7 @@ namespace App\Services\ActiveCampaign;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class ActiveCampaignService
 {
@@ -12,8 +13,16 @@ class ActiveCampaignService
 
     public function __construct()
     {
-        $this->baseUrl = config('services.activecampaign.endpoint')
+        $endpoint = config('services.activecampaign.endpoint')
             ?? throw new \Exception('ActiveCampaign endpoint not configured');
+
+        // Aceptar endpoint configurado con o sin "/api/3"
+        $endpoint = rtrim($endpoint, '/');
+        if (str_ends_with($endpoint, '/api/3')) {
+            $endpoint = substr($endpoint, 0, -strlen('/api/3'));
+        }
+
+        $this->baseUrl = $endpoint;
 
         $this->apiKey = config('services.activecampaign.token')
             ?? throw new \Exception('ActiveCampaign token not configured');
@@ -25,6 +34,18 @@ class ActiveCampaignService
             'Api-Token' => $this->apiKey,
             'Accept' => 'application/json',
         ])->baseUrl($this->baseUrl . '/api/3');
+    }
+
+    protected function generatePersTag(string $title): string
+    {
+        // ActiveCampaign usa "perstag" como identificador tipo %MI_CAMPO%.
+        $slug = mb_strtoupper(trim($title));
+        $slug = preg_replace('/[^\p{L}\p{N}\s_-]/u', '', $slug);
+        $slug = preg_replace('/\s+/', '_', $slug);
+        $slug = preg_replace('/_+/', '_', $slug);
+        $slug = trim($slug, '_');
+
+        return '%' . $slug . '%';
     }
 
     /**
@@ -133,15 +154,34 @@ class ActiveCampaignService
     {
         try {
 
-            $this->client()->post('/contactTags', [
+            // En registros, el tag que queremos aplicar es RegistroNuevo (id=3)
+            $tagRaw = config('services.activecampaign.tag_registro_nuevo', 3);
+            $tagId = is_numeric($tagRaw) ? (int) $tagRaw : 0;
+            if ($tagId <= 0) {
+                // Si el env trae "RegistroNuevo" (nombre) en vez del ID, fallback.
+                $tagId = 3;
+            }
+
+            $response = $this->client()->post('/contactTags', [
                 'contactTag' => [
                     'contact' => $contactId,
-                    'tag' => config('services.activecampaign.tag_registro_web'),
+                    'tag' => $tagId,
                 ],
             ]);
 
-            Log::info('AC: Tag agregado', [
+            if (!$response->successful()) {
+                Log::error('AC: Error addTag (RegistroNuevo)', [
+                    'contact_id' => $contactId,
+                    'tag_id' => $tagId,
+                    'status' => $response->status(),
+                    'response' => $response->body(),
+                ]);
+                return;
+            }
+
+            Log::info('AC: Tag agregado (RegistroNuevo)', [
                 'contact_id' => $contactId,
+                'tag_id' => $tagId,
             ]);
         } catch (\Throwable $e) {
             Log::error('AC: Error addTag', [
@@ -660,6 +700,59 @@ class ActiveCampaignService
     }
 
     /**
+     * Variante pública para Jobs/servicios externos.
+     */
+    public function getContactIdByEmailPublic(string $email): ?int
+    {
+        return $this->getContactIdByEmail($email);
+    }
+
+    /**
+     * Resolver tagId por nombre (cacheado).
+     */
+    public function getTagIdByName(string $tagName): ?int
+    {
+        $normalized = mb_strtolower(trim(preg_replace('/\s+/', ' ', $tagName)));
+
+        return Cache::remember("ac_tag_id_by_name:$normalized", now()->addHours(6), function () use ($normalized, $tagName) {
+            $tags = $this->getTags();
+
+            foreach ($tags as $tag) {
+                $name = $tag['tag'] ?? $tag['name'] ?? null;
+                if (!$name) {
+                    continue;
+                }
+
+                $candidate = mb_strtolower(trim(preg_replace('/\s+/', ' ', $name)));
+                if ($candidate === $normalized) {
+                    return (int) ($tag['id'] ?? 0) ?: null;
+                }
+            }
+
+            Log::warning('AC: tag no encontrado por nombre', [
+                'tag_name' => $tagName,
+            ]);
+
+            return null;
+        });
+    }
+
+    public function addTagToContactByName(int $contactId, string $tagName): void
+    {
+        $tagId = $this->getTagIdByName($tagName);
+
+        if (!$tagId) {
+            Log::warning('AC: omitiendo addTagToContactByName — tag_id no resuelto', [
+                'contact_id' => $contactId,
+                'tag_name' => $tagName,
+            ]);
+            return;
+        }
+
+        $this->addTagToContact($contactId, $tagId);
+    }
+
+    /**
      * Registrar una compra completada
      */
     public function completedPurchase(string $email, string $externalId, float $total, array $products, string $category): void
@@ -854,10 +947,10 @@ class ActiveCampaignService
             $this->addTagToContact($contactId, 23);
 
             // 3. Evento
-            $this->trackEvent($email, 'patient_created', [
+            /*$this->trackEvent($email, 'patient_created', [
                 'patient_name' => $contact->name,
                 'patient_id' => $contact->id,
-            ]);
+            ]);*/
 
             Log::info('AC: patientCreated completado', ['contact_id' => $contactId, 'patient_id' => $contact->id, 'email' => $email]);
         } catch (\Throwable $e) {
@@ -883,17 +976,23 @@ class ActiveCampaignService
 
     public function trackEvent(string $email, string $eventName, array $eventData = []): void
     {
-        try {
-
-            $response = Http::withHeaders([
-                'Api-Token' => $this->apiKey,
-                'Content-Type' => 'application/json',
-            ])->post($this->baseUrl . '/api/3/eventTracking', [
+        if (!config('services.activecampaign.track_events')) {
+            Log::info('AC: trackEvent deshabilitado', [
                 'event' => $eventName,
-                'eventdata' => json_encode($eventData),
-                'visit' => [
+                'email' => $email
+            ]);
+            return;
+        }
+
+        try {
+            $response = Http::asForm()->post('https://trackcmp.net/event', [
+                'actid' => config('services.activecampaign.account_id'),
+                'key' => config('services.activecampaign.event_key'),
+                'event' => $eventName,
+                'eventdata' => json_encode([
                     'email' => $email,
-                ],
+                    ...$eventData
+                ]),
             ]);
 
             if (!$response->successful()) {
@@ -905,13 +1004,12 @@ class ActiveCampaignService
                 return;
             }
 
-            Log::info('AC: Evento registrado', [
+            Log::info('AC: Evento registrado correctamente', [
                 'event' => $eventName,
                 'email' => $email,
                 'data' => $eventData
             ]);
         } catch (\Throwable $e) {
-
             Log::error('AC: Excepción trackEvent', [
                 'error' => $e->getMessage(),
                 'event' => $eventName

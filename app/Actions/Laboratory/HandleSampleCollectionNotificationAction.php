@@ -7,6 +7,7 @@ use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryQuote;
 use App\Models\LaboratoryPurchase;
 use App\Models\User;
+use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Notifications\LaboratorySampleCollected;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -228,6 +229,18 @@ class HandleSampleCollectionNotificationAction
                 'email_sent_at' => now(),
                 'email_recipient_id' => $user->id,
                 'email_recipient_email' => $user->email,
+            ]);
+
+            TagLaboratoryEmailToActiveCampaignJob::dispatch(
+                $user->email,
+                (int) config('services.activecampaign.tag_lab_sample_collected', 32)
+            );
+
+            Log::info('AC: Job de tag (Toma de muestra) despachado', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'notification_id' => $notification->id,
+                'gda_order_id' => $data['id'],
             ]);
 
         } catch (\Exception $e) {

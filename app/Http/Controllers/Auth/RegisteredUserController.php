@@ -80,7 +80,7 @@ class RegisteredUserController extends Controller
             'maternal_lastname' => $request->maternal_lastname,
             'email' => $request->email,
             'phone_masked' => $request->phone ? substr($request->phone, 0, 3) . '****' . substr($request->phone, -3) : null,
-            'gender' => $request->gender == 1 ? 'Femenino' : 'Masculino',
+            'gender' => $request->gender == 1 ? 'Masculino' : 'Femenino',
             'state' => $request->state,
             'birth_date' => $request->birth_date,
             'phone_country' => $request->phone_country,
@@ -116,7 +116,7 @@ class RegisteredUserController extends Controller
                     'maternal_lastname' => $request->maternal_lastname,
                     'phone' => $request->phone,
                     'birth_date' => Carbon::parse($request->birth_date)->format('Y-m-d'),
-                    'gender' => $request->gender == 1 ? 'Femenino' : 'Masculino',
+                    'gender' => $request->gender == 1 ? 'Masculino' : 'Femenino',
                     'state' => $request->state,
                     'phone_country' => $request->phone_country,
                 ]);

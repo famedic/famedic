@@ -3,6 +3,7 @@
 
 <head>
     <link rel="manifest" href="/manifest.json">
+    
     <!-- ios support -->
     <link rel="apple-touch-icon" href="images/icons/ios/16.png" />
     <link rel="apple-touch-icon" href="images/icons/ios/20.png" />
@@ -127,6 +128,14 @@
         gtag('config', 'G-F5VNYJNMBP');
         </script>
         <!-- End Google tag (gtag.js) -->
+
+        <!-- ActiveCampaign Tracking Code for https://famedic.com.mx -->
+        <script>
+            (function(e,t,o,n,p,r,i){e.visitorGlobalObjectAlias=n;e[e.visitorGlobalObjectAlias]=e[e.visitorGlobalObjectAlias]||function(){(e[e.visitorGlobalObjectAlias].q=e[e.visitorGlobalObjectAlias].q||[]).push(arguments)};e[e.visitorGlobalObjectAlias].l=(new Date).getTime();r=t.createElement("script");r.src=o;r.async=true;i=t.getElementsByTagName("script")[0];i.parentNode.insertBefore(r,i)})(window,document,"https://diffuser-cdn.app-us1.com/diffuser/diffuser.js","vgo");
+            vgo('setAccount', '69689492');
+            vgo('setTrackByDefault', true);
+            vgo('process');
+        </script>
         @endenv
 </body>
 

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\LaboratoryNotification;
+use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Services\ActiveCampaign\ActiveCampaignService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -33,7 +34,10 @@ class SendResultsAvailableToActiveCampaignJob implements ShouldQueue
             return;
         }
 
-        $activeCampaignService->resultsAvailable($email);
+        TagLaboratoryEmailToActiveCampaignJob::dispatch(
+            $email,
+            (int) config('services.activecampaign.tag_lab_results_available', 33)
+        );
     }
 }
 

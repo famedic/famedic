@@ -7,6 +7,7 @@ use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryQuote;
 use App\Models\LaboratoryPurchase;
 use App\Models\User;
+use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Notifications\LaboratoryResultsAvailable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -280,6 +281,18 @@ class HandleResultsNotificationAction
                 'email_sent_at' => now(),
                 'email_recipient_id' => $user->id,
                 'email_recipient_email' => $user->email,
+            ]);
+
+            TagLaboratoryEmailToActiveCampaignJob::dispatch(
+                $user->email,
+                (int) config('services.activecampaign.tag_lab_results_available', 33)
+            );
+
+            Log::info('AC: Job de tag (Resultados) despachado', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'notification_id' => $notification->id,
+                'gda_order_id' => $data['id'],
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to send results email', [
