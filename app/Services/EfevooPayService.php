@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\EfevooToken;
-use App\Models\EfevooTransaction;
 use App\Models\Efevoo3dsSession;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -11,54 +10,41 @@ use Illuminate\Support\Facades\Log;
 class EfevooPayService
 {
     protected array $config;
-    protected string $environment;
 
     public function __construct()
     {
         $this->config = config('efevoopay');
-        $this->environment = $this->config['environment'] ?? 'test';
+
+        Log::info('[Efevoo] Service booting');
+        Log::info('[Efevoo] DEBUG KEYS', [
+            'cliente' => $this->config['cliente'],
+            'clave_preview' => substr($this->config['clave'], 0, 5),
+            'vector_preview' => substr($this->config['vector'], 0, 5),
+            'totp_preview' => substr($this->config['totp_secret'], 0, 5),
+        ]);
 
         $this->validateConfig();
 
-        Log::info('EfevooPayService iniciado', [
-            'environment' => $this->environment
+        Log::info('[Efevoo] Config loaded', [
+            'cliente' => $this->config['cliente'],
+            'api_url' => $this->config['api_url'],
+            'env' => config('app.env'),
         ]);
     }
 
     /* ==========================================================
-     *  CLIENT TOKEN
+     * CLIENT TOKEN
      * ========================================================== */
 
-    public function getClientToken(bool $force = false, string $operation = 'default'): array
+    public function getClientToken(string $operation = 'default'): array
     {
-        $cacheKey = "efevoo_token_{$operation}";
+        Log::info('[Efevoo] getClientToken', ['operation' => $operation]);
 
-        /**
-         * 🔥 Nunca cachear tokens para operaciones críticas
-         * 3DS y Payment deben usar token fresco siempre
-         */
-        if (in_array($operation, ['3ds', 'payment'])) {
-            $force = true;
-        }
-
-        // Usar cache solo si NO es forzado
-        if (!$force && Cache::has($cacheKey)) {
-            Log::info('[Efevoo] Using cached token', [
-                'operation' => $operation
-            ]);
-
-            return [
-                'success' => true,
-                'token' => Cache::get($cacheKey),
-                'type' => 'cached'
-            ];
-        }
-
-        /**
-         * 🔐 Generar nuevo token dinámico
-         */
         try {
+
             $totp = $this->generateTOTP();
+
+            Log::info('[Efevoo] TOTP generado', ['totp' => $totp]);
 
             $hash = base64_encode(
                 hash_hmac('sha256', $this->config['clave'], $totp, true)
@@ -72,190 +58,219 @@ class EfevooPayService
                 'method' => 'getClientToken'
             ];
 
-            Log::info('[Efevoo] TOKEN REQUEST', [
-                'operation' => $operation,
-                'url' => $this->config['api_url']
-            ]);
-
             $response = $this->request($payload);
 
             if (
                 $response['success'] &&
-                isset($response['data']['codigo']) &&
-                $response['data']['codigo'] === '100' &&
-                !empty($response['data']['token']) &&
-                $response['data']['token'] !== 'NA'
+                ($response['data']['codigo'] ?? null) === '100' &&
+                !empty($response['data']['token'])
             ) {
-
-                $token = $response['data']['token'];
-
-                // Cache solo si no es forzado
-                if (!$force) {
-                    Cache::put($cacheKey, $token, now()->addMinutes(25));
-                }
-
-                Log::info('[Efevoo] TOKEN GENERATED', [
-                    'operation' => $operation,
-                    'type' => $force ? 'dynamic_forced' : 'dynamic'
-                ]);
-
                 return [
                     'success' => true,
-                    'token' => $token,
-                    'type' => $force ? 'dynamic_forced' : 'dynamic'
+                    'token' => $response['data']['token'],
                 ];
             }
 
-            Log::error('[Efevoo] TOKEN ERROR', [
-                'operation' => $operation,
-                'response' => $response
-            ]);
-
             return [
                 'success' => false,
-                'message' => $response['data']['msg'] ?? 'Error generando token Efevoo',
+                'message' => 'Token inválido',
                 'raw' => $response
             ];
 
         } catch (\Throwable $e) {
 
-            Log::error('[Efevoo] TOKEN EXCEPTION', [
-                'operation' => $operation,
-                'error' => $e->getMessage()
-            ]);
-
             return [
                 'success' => false,
-                'message' => 'Excepción generando token Efevoo',
-                'error' => $e->getMessage()
+                'message' => 'Excepción generando token',
             ];
         }
     }
 
-
     /* ==========================================================
-     *  3DS INIT
+     * 3DS INIT
      * ========================================================== */
 
-    public function initiate3DSProcess(array $cardData, int $customerId, array $browserInfo = []): array
+    public function initiate3DS(array $cardData, int $customerId): array
     {
-        Log::info('Iniciando 3DS', [
-            'customer_id' => $customerId,
-            'last4' => substr($cardData['card_number'], -4),
-        ]);
+        Log::info('[Efevoo] initiate3DS');
 
-        $tokenResult = $this->getClientToken(false, '3ds');
-        if (!$tokenResult['success'])
-            return $tokenResult;
+        try {
 
-        $expiration = $cardData['expiration'];
+            $tokenResult = $this->getClientToken('3ds');
 
-        $body = [
-            'track' => $cardData['card_number'],
-            'cvv' => $cardData['cvv'],
-            'exp' => $expiration,
-            'fiid_comercio' => $this->config['fiid_comercio'],
-            'msi' => 0,
-            'amount' => number_format($cardData['amount'], 2, '.', ''),
-            'browser' => [
-                "browserAcceptHeader" => "application/json",
-                "browserJavaEnabled" => false,
-                "browserJavaScriptEnabled" => true,
-                "browserLanguage" => "es-419",
-                "browserTZ" => "360",
-                "browserUserAgent" => request()->header('User-Agent')
-            ]
-        ];
+            if (!$tokenResult['success']) {
+                Log::warning('[Efevoo] Token failed 3DS', $tokenResult);
+                return $tokenResult;
+            }
 
-        Log::info('[Efevoo] 3DS RAW BODY', [
-            'url' => $this->config['api_url'],
-            'body_array' => $body,
-            'json' => json_encode($body, JSON_UNESCAPED_UNICODE)
-        ]);
+            // Normalizar expiración
+            $expiration = preg_replace('/[^0-9]/', '', $cardData['expiration']);
 
-        $encrypted = $this->encrypt($body);
+            if (strlen($expiration) !== 4) {
+                Log::error('[Efevoo] Expiration format inválido', [
+                    'received' => $cardData['expiration']
+                ]);
 
-        $session = Efevoo3dsSession::create([
-            'customer_id' => $customerId,
-            'card_last_four' => substr($cardData['card_number'], -4),
-            'amount' => $cardData['amount'],
-            'status' => 'pending',
-        ]);
+                return [
+                    'success' => false,
+                    'message' => 'Formato de expiración inválido'
+                ];
+            }
 
-        Log::info('[Efevoo] 3DS ENCRYPTED', [
-            'encrypt_length' => strlen($encrypted),
-            'encrypt_sample' => substr($encrypted, 0, 40) . '...'
-        ]);
+            $expFormatted = substr($expiration, 0, 2) . '/' . substr($expiration, 2, 2);
 
-        $payload = [
-            'payload' => [
-                'token' => $tokenResult['token'],
-                'encrypt' => $encrypted
-            ],
-            'method' => 'payments3DS_GetLink'
-        ];
+            // Timezone correcto con signo
+            $tzMinutes = (int) ((new \DateTime())->getOffset() / 60);            
 
-        Log::info('[Efevoo] 3DS FINAL PAYLOAD', [
-            'method' => 'payments3DS_GetLink',
-            'payload' => $payload
-        ]);
-        $response = $this->request($payload);
+            // Accept header realista (no confiar en request)
+            $acceptHeader = request()->header('Accept');
 
-        if (!$response['success']) {
-            $session->update(['status' => 'failed']);
-            return $response;
-        }
+            if (!$acceptHeader || str_contains($acceptHeader, 'application/json')) {
+                $acceptHeader = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8';
+            }
 
-        $data = $response['data']['payload'] ?? null;
+            $body = [
+                'track' => $cardData['card_number'],
+                //'track' => $track,
+                'cvv' => $cardData['cvv'],
+                'exp' => $expFormatted,
+                'fiid_comercio' => $this->config['fiid_comercio'],
+                'msi' => 0,
+                'amount' => number_format($cardData['amount'], 2, '.', ''),
+                'browser' => [
+                    'browserAcceptHeader' => $acceptHeader,
+                    'browserJavaEnabled' => false,
+                    'browserJavaScriptEnabled' => true,
+                    'browserLanguage' => 'es-419',
+                    //'browserTZ' => (string) $tzMinutes,
+                    //'browserTZ' => (string) abs($tzMinutes),
+                    'browserTZ' => '360',
+                    'browserUserAgent' => request()->header('User-Agent')
+                        ?? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36',
+                ]
+            ];
 
-        Log::info('[Efevoo] 3DS GetLink Response', $data);
-        if ($data && !empty($data['url_3dsecure']) && !empty($data['token_3dsecure'])) {
+            Log::info('[Efevoo] Body before encrypt 3DS', $body);
 
-            Log::info('[Efevoo] 3DS GetLink Response', $data);
-            $session->update([
-                'status' => 'redirect_required',
+            $encrypted = $this->encrypt($body);
+
+            $payload = [
+                'payload' => [
+                    'token' => $tokenResult['token'],
+                    'encrypt' => $encrypted
+                ],
+                'method' => 'payments3DS_GetLink'
+            ];
+
+            $response = $this->request($payload);
+
+            Log::info('[Efevoo] 3DS GetLink response', $response);
+
+            if (!$response['success']) {
+                return $response;
+            }
+
+            // Validar código de status
+            $statusCode = $response['data']['status']['code'] ?? null;
+
+            if ($statusCode !== '0') {
+                Log::warning('[Efevoo] 3DS estructura inválida', [
+                    'status_code' => $statusCode,
+                    'description' => $response['data']['status']['description'] ?? null
+                ]);
+
+                return [
+                    'success' => false,
+                    'message' => $response['data']['status']['description'] ?? 'Error en 3DS',
+                    'raw' => $response
+                ];
+            }
+
+            $data = $response['data']['payload'] ?? null;
+
+            if (!$data || empty($data['order_id'])) {
+                return [
+                    'success' => false,
+                    'message' => 'Respuesta inválida de 3DS',
+                    'raw' => $response
+                ];
+            }
+
+            $session = Efevoo3dsSession::create([
+                'customer_id' => $customerId,
                 'order_id' => $data['order_id'],
-                'url_3dsecure' => $data['url_3dsecure'],
-                'token_3dsecure' => $data['token_3dsecure'],
+                'card_last_four' => substr($cardData['card_number'], -4),
+                'amount' => $cardData['amount'],
+                'status' => 'redirect_required',
+                'url_3dsecure' => $data['url_3dsecure'] ?? null,
+                'token_3dsecure' => $data['token_3dsecure'] ?? null,
             ]);
 
             return [
                 'success' => true,
-                'requires_3ds' => true,
                 'session_id' => $session->id,
                 'url_3dsecure' => $data['url_3dsecure'],
                 'token_3dsecure' => $data['token_3dsecure'],
             ];
-        }
 
-        return $this->complete3DS($session, $cardData);
+        } catch (\Throwable $e) {
+
+            Log::error('[Efevoo] initiate3DS exception', [
+                'message' => $e->getMessage(),
+                'line' => $e->getLine()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Error interno iniciando 3DS'
+            ];
+        }
     }
 
     /* ==========================================================
-     *  COMPLETE 3DS
-     * ========================================================== */
-
-    /*public function check3DSStatus(string $sessionId, int $orderId, array $cardData): array
-    {
-        $session = Efevoo3dsSession::findOrFail($sessionId);
-
-        return $this->complete3DS($session, $cardData);
-    }*/
-
-
-    /* ==========================================================
-     *  TOKENIZE
+     * TOKENIZE
      * ========================================================== */
 
     public function tokenizeCard(array $cardData, int $customerId): array
     {
-        $tokenResult = $this->getClientToken(false, 'tokenize');
-        if (!$tokenResult['success'])
+        Log::info('[Efevoo] tokenizeCard');
+
+        $lastFour = substr(preg_replace('/\D/', '', $cardData['card_number']), -4);
+        $expiration = preg_replace('/[^0-9]/', '', $cardData['expiration'] ?? '');
+        if (strlen($expiration) !== 4) {
+            return [
+                'success' => false,
+                'message' => 'Formato de fecha de expiración inválido',
+            ];
+        }
+
+        // Evitar registrar la misma tarjeta más de una vez (mismo cliente + últimos 4 + expiración)
+        $existing = EfevooToken::where('customer_id', $customerId)
+            ->where('card_last_four', $lastFour)
+            ->where('card_expiration', $expiration)
+            ->where('is_active', true)
+            ->first();
+
+        if ($existing) {
+            Log::info('[Efevoo] Tarjeta ya registrada para este cliente', [
+                'customer_id' => $customerId,
+                'card_last_four' => $lastFour,
+            ]);
+            return [
+                'success' => false,
+                'message' => 'Esta tarjeta ya está registrada en tu cuenta. Si no la ves, revisa que no esté desactivada.',
+            ];
+        }
+
+        $tokenResult = $this->getClientToken('tokenize');
+
+        if (!$tokenResult['success']) {
             return $tokenResult;
+        }
 
         $track2 = $cardData['card_number'] . '=' .
-            substr($cardData['expiration'], 2, 2) .
-            substr($cardData['expiration'], 0, 2);
+            substr($expiration, 2, 2) .
+            substr($expiration, 0, 2);
 
         $payload = [
             'payload' => [
@@ -270,34 +285,59 @@ class EfevooPayService
 
         $response = $this->request($payload);
 
-        if ($response['success'] && isset($response['data']['token_usuario'])) {
+        Log::info('[Efevoo] Tokenize response', $response);
 
-            $token = EfevooToken::create([
-                'customer_id' => $customerId,
-                'card_token' => $response['data']['token_usuario'],
-                'card_last_four' => substr($cardData['card_number'], -4),
-                'card_expiration' => $cardData['expiration'],
-                'card_holder' => $cardData['card_holder'],
-                'alias' => $cardData['alias'] ?? null,
-                'environment' => $this->environment,
-            ]);
-
+        if (
+            !$response['success'] ||
+            empty($response['data']['token_usuario'])
+        ) {
+            $message = $response['data']['descripcion']
+                ?? $response['data']['msg']
+                ?? $response['data']['message']
+                ?? 'Tokenización no aprobada';
             return [
-                'success' => true,
-                'token_id' => $token->id
+                'success' => false,
+                'message' => is_string($message) ? $message : 'Tokenización no aprobada',
+                'raw' => $response
             ];
         }
 
-        return $response;
+        $token = EfevooToken::create([
+            'customer_id' => $customerId,
+            'card_token' => $response['data']['token_usuario'],
+            'client_token' => $response['data']['token'] ?? null,
+            'card_last_four' => $lastFour,
+            'card_expiration' => $expiration,
+            'card_holder' => $cardData['card_holder'] ?? '',
+            'alias' => $cardData['alias'] ?? null,
+            'environment' => config('efevoopay.environment', 'test'),
+        ]);
+
+        return [
+            'success' => true,
+            'token_id' => $token->id
+        ];
     }
 
     /* ==========================================================
-     *  CHARGE
+     * CHARGE
      * ========================================================== */
 
     public function chargeCard(array $data): array
     {
-        $tokenResult = $this->getClientToken(false, 'payment');
+        Log::info('[Efevoo] chargeCard');
+
+
+        if (empty($data['card_token'])) {
+            Log::error('[Efevoo] card_token vacío en chargeCard');
+            return [
+                'success' => false,
+                'message' => 'Token de tarjeta inválido'
+            ];
+        }
+
+        $tokenResult = $this->getClientToken('payment');
+
         if (!$tokenResult['success']) {
             return $tokenResult;
         }
@@ -306,9 +346,8 @@ class EfevooPayService
             'payload' => [
                 'token' => $tokenResult['token'],
                 'encrypt' => $this->encrypt([
-                    'track2' => $data['token_id'],
+                    'track2' => $data['card_token'],
                     'amount' => number_format($data['amount'], 2, '.', ''),
-                    'cav' => 'PAY' . time(),
                     'referencia' => $data['reference'] ?? 'REF-' . time()
                 ])
             ],
@@ -317,42 +356,42 @@ class EfevooPayService
 
         $response = $this->request($payload);
 
-        if (!$response['success']) {
-            return $response;
-        }
+        Log::info('[Efevoo] Payment response', $response);
 
-        $data = $response['data'];
+        $codigo = $response['data']['codigo'] ?? null;
 
-        // 🔥 Manejo seguro si no existe codigo
-        if (!isset($data['codigo'])) {
+        if ($codigo !== '00') {
             return [
                 'success' => false,
-                'status' => 'failed',
-                'message' => $data['mensaje'] ?? 'Error desconocido en Efevoo',
-                'raw' => $data
+                'message' =>
+                    $response['data']['descripcion']
+                    ?? $response['data']['msg']
+                    ?? 'Pago no aprobado',
+                'raw' => $response
             ];
         }
 
         return [
-            'success' => $data['codigo'] === '00',
-            'status' => $data['codigo'] === '00' ? 'completed' : 'failed',
-            'transaction_id' => $data['id'] ?? null,
-            'authorization_code' => $data['numref'] ?? null,
-            'numtxn' => $data['numtxn'] ?? null,
-            'message' => $data['descripcion'] ?? null,
-            'raw' => $data,
+            'success' => true,
+            'transaction_id' => $response['data']['id'] ?? null,
+            'authorization_code' => $response['data']['numref'] ?? null,
+            'raw' => $response
         ];
     }
 
     /* ==========================================================
-     *  REFUND
+     * REFUND
      * ========================================================== */
 
     public function refundTransaction(int $transactionId): array
     {
-        $tokenResult = $this->getClientToken(false, 'refund');
-        if (!$tokenResult['success'])
+        Log::info('[Efevoo] refundTransaction', ['transaction_id' => $transactionId]);
+
+        $tokenResult = $this->getClientToken('refund');
+
+        if (!$tokenResult['success']) {
             return $tokenResult;
+        }
 
         $payload = [
             'payload' => [
@@ -362,18 +401,26 @@ class EfevooPayService
             'method' => 'getRefund'
         ];
 
-        return $this->request($payload);
+        $response = $this->request($payload);
+
+        Log::info('[Efevoo] Refund response', $response);
+
+        return $response;
     }
 
     /* ==========================================================
-     *  SEARCH
+     * SEARCH
      * ========================================================== */
 
     public function searchTransactions(array $filters = []): array
     {
-        $tokenResult = $this->getClientToken(false, 'search');
-        if (!$tokenResult['success'])
+        Log::info('[Efevoo] searchTransactions');
+
+        $tokenResult = $this->getClientToken('search');
+
+        if (!$tokenResult['success']) {
             return $tokenResult;
+        }
 
         return $this->request([
             'payload' => ['token' => $tokenResult['token']] + $filters,
@@ -382,31 +429,25 @@ class EfevooPayService
     }
 
     /* ==========================================================
-     *  HEALTH CHECK
+     * HEALTH CHECK
      * ========================================================== */
 
     public function healthCheck(): array
     {
-        $token = $this->getClientToken(true, 'health');
+        $token = $this->getClientToken('health');
 
         return [
             'status' => $token['success'] ? 'online' : 'offline',
-            'environment' => $this->environment,
             'timestamp' => now()->toISOString()
         ];
     }
 
     /* ==========================================================
-     *  INTERNAL HELPERS
+     * REQUEST
      * ========================================================== */
 
     protected function request(array $payload): array
     {
-        Log::info('[Efevoo] REQUEST OUTGOING', [
-            'url' => $this->config['api_url'],
-            'payload' => $payload
-        ]);
-
         $ch = curl_init($this->config['api_url']);
 
         curl_setopt_array($ch, [
@@ -420,43 +461,43 @@ class EfevooPayService
                 'X-API-KEY: ' . $this->config['api_key'],
                 'Origin: https://efevoopay.com',
                 'Referer: https://efevoopay.com/',
-                'User-Agent: Mozilla/5.0'
+                'User-Agent: Mozilla/5.0',
             ],
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_ENCODING => '',
-            CURLOPT_FOLLOWLOCATION => true
         ]);
 
         $response = curl_exec($ch);
         $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
+        $error = curl_error($ch);
 
         curl_close($ch);
 
-        Log::info('[Efevoo] RESPONSE RAW', [
-            'http_code' => $http,
-            'curl_error' => $curlError,
-            'response_raw' => $response
-        ]);
+        Log::info('[Efevoo] HTTP status', ['status' => $http]);
+        Log::info('[Efevoo] RAW response', ['response' => $response]);
 
-        $data = json_decode($response, true);
+        if ($error) {
+            Log::error('[Efevoo] CURL error', ['error' => $error]);
+        }
 
         return [
             'success' => $http >= 200 && $http < 300,
             'status' => $http,
-            'data' => $data,
-            'message' => $data['descripcion'] ?? null
+            'data' => json_decode($response, true)
         ];
     }
 
+    /* ==========================================================
+     * ENCRYPT
+     * ========================================================== */
 
     protected function encrypt(array $data): string
     {
-        $json = json_encode($data, JSON_UNESCAPED_UNICODE);
-
         $encrypted = openssl_encrypt(
-            $json,
+            json_encode($data),
             'AES-128-CBC',
             $this->config['clave'],
             OPENSSL_RAW_DATA,
@@ -470,10 +511,13 @@ class EfevooPayService
         return base64_encode($encrypted);
     }
 
+    /* ==========================================================
+     * TOTP
+     * ========================================================== */
+
     protected function generateTOTP(): string
     {
         $secret = $this->config['totp_secret'];
-
         $timestamp = floor(time() / 30);
 
         $base32Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -483,13 +527,10 @@ class EfevooPayService
         $bitsLeft = 0;
         $result = '';
 
-        // Decodificar Base32
         for ($i = 0; $i < strlen($secret); $i++) {
             $ch = $secret[$i];
-
-            if (!isset($base32Lookup[$ch])) {
+            if (!isset($base32Lookup[$ch]))
                 continue;
-            }
 
             $buffer = ($buffer << 5) | $base32Lookup[$ch];
             $bitsLeft += 5;
@@ -501,11 +542,8 @@ class EfevooPayService
         }
 
         $secretKey = $result;
-
         $timestampBytes = pack('N*', 0) . pack('N*', $timestamp);
-
         $hash = hash_hmac('sha1', $timestampBytes, $secretKey, true);
-
         $offset = ord($hash[19]) & 0xf;
 
         $code = (
@@ -513,59 +551,27 @@ class EfevooPayService
             ((ord($hash[$offset + 1]) & 0xff) << 16) |
             ((ord($hash[$offset + 2]) & 0xff) << 8) |
             (ord($hash[$offset + 3]) & 0xff)
-        ) % pow(10, 6);
+        ) % 1000000;
 
         return str_pad($code, 6, '0', STR_PAD_LEFT);
     }
-
 
     protected function validateConfig(): void
     {
         foreach (['api_url', 'clave', 'vector', 'cliente', 'totp_secret'] as $key) {
             if (empty($this->config[$key])) {
+                Log::error('[Efevoo] Config missing', ['key' => $key]);
                 throw new \RuntimeException("Configuración faltante: {$key}");
             }
         }
     }
 
-    public function payments3DSGetStatus(int $orderId): array
+    public function complete3DS(Efevoo3dsSession $session, array $cardData): array
     {
-        Log::info('[Efevoo] payments3DSGetStatus', [
-            'order_id' => $orderId
-        ]);
-
-        $tokenResult = $this->getClientToken(false, '3ds');
-
-        if (!$tokenResult['success']) {
-            return $tokenResult;
-        }
-
-        $payload = [
-            'payload' => [
-                'token' => $tokenResult['token'],
-                'order_id' => $orderId
-            ],
-            'method' => 'payments3DS_GetStatus'
-        ];
-
-        $response = $this->request($payload);
-
-        if (!$response['success']) {
-            return $response;
-        }
-
-        return [
-            'success' => true,
-            'data' => $response['data']
-        ];
-    }
-
-
-    public function complete3DS(Efevoo3dsSession $session, array $cardData = []): array
-    {
-        Log::info('[Efevoo] Completing 3DS', [
+        Log::info('[Efevoo] complete3DS', [
             'session_id' => $session->id,
             'order_id' => $session->order_id,
+            'current_status' => $session->status
         ]);
 
         if (!$session->order_id) {
@@ -575,125 +581,186 @@ class EfevooPayService
             ];
         }
 
-        $statusResponse = $this->payments3DSGetStatus((int) $session->order_id);
+        // 🔒 Evita reprocesar si ya terminó
+        if (in_array($session->status, ['completed', 'tokenization_failed', 'declined'])) {
+            Log::info('[Efevoo] 3DS ya procesado previamente');
+            return [
+                'success' => $session->status === 'completed',
+                'message' => '3DS ya procesado'
+            ];
+        }
+
+        // ==========================================================
+        // CONSULTAR ESTADO REAL EN EFEVOO
+        // ==========================================================
+
+        $statusResponse = $this->payments3DSGetStatus($cardData, $session->order_id);
+
+        Log::info('[Efevoo] GetStatus response', $statusResponse);
 
         if (!$statusResponse['success']) {
-            $session->update([
-                'status' => Efevoo3dsSession::STATUS_FAILED,
-                'error_message' => $statusResponse['message'] ?? 'Error verificando 3DS'
-            ]);
-
-            return $statusResponse;
+            return [
+                'success' => false,
+                'message' => 'Error consultando estado 3DS',
+                'raw' => $statusResponse
+            ];
         }
 
-        // Aquí puedes validar status_code si la API lo devuelve
-        // Ejemplo:
-        // if ($statusResponse['data']['status'] !== 'approved') { ... }
+        $statusCode = $statusResponse['data']['status']['code'] ?? null;
+        $payloadStatus = $statusResponse['data']['payload']['status'] ?? null;
 
-        $session->update([
-            'status' => Efevoo3dsSession::STATUS_AUTHENTICATED,
-            'status_check_response' => $statusResponse['data'],
-            'status_checked_at' => now(),
+        Log::info('[Efevoo] GetStatus payload', [
+            'order_id' => $session->order_id,
+            'payload_status' => $payloadStatus,
+            'payload_full' => $statusResponse['data']['payload'] ?? null,
         ]);
 
-        // Ahora tokenizamos la tarjeta
-        if (!empty($cardData)) {
+        if ($statusCode !== '0') {
+            Log::warning('[Efevoo] Error consultando 3DS', [
+                'status_code' => $statusCode
+            ]);
 
-            $tokenResult = $this->tokenizeCard($cardData, $session->customer_id);
-
-            if ($tokenResult['success']) {
-                $session->update([
-                    'status' => Efevoo3dsSession::STATUS_COMPLETED,
-                    'efevoo_token_id' => $tokenResult['token_id'],
-                    'completed_at' => now(),
-                ]);
-            } else {
-                $session->update([
-                    'status' => Efevoo3dsSession::STATUS_TOKENIZATION_FAILED,
-                    'error_message' => $tokenResult['message'] ?? 'Error tokenizando tarjeta'
-                ]);
-            }
-
-            return $tokenResult;
+            return [
+                'success' => false,
+                'message' => 'Error validando 3DS'
+            ];
         }
+
+        // ==========================================================
+        // ESTADOS POSIBLES DEL PAYLOAD
+        // ==========================================================
+
+        if ($payloadStatus === 'pending') {
+
+            Log::info('[Efevoo] 3DS aún pendiente');
+
+            $session->update([
+                'status' => 'pending',
+                'status_checked_at' => now()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => '3DS aún pendiente'
+            ];
+        }
+
+        if (in_array($payloadStatus, ['declined', 'rejected'])) {
+
+            $declineMessage = 'La verificación fue rechazada por tu banco. Puede deberse a que cancelaste el proceso o el banco no autorizó la operación.';
+            Log::warning('[Efevoo] 3DS rechazado por el banco', [
+                'payload_status' => $payloadStatus
+            ]);
+
+            $session->update([
+                'status' => 'declined',
+                'status_checked_at' => now(),
+                'error_message' => $declineMessage,
+            ]);
+
+            return [
+                'success' => false,
+                'message' => $declineMessage
+            ];
+        }
+
+        if (!in_array($payloadStatus, ['authenticated', 'approved'])) {
+
+            Log::warning('[Efevoo] Estado 3DS desconocido', [
+                'payload_status' => $payloadStatus
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Estado 3DS desconocido'
+            ];
+        }
+
+        // ==========================================================
+        // AUTENTICADO CORRECTAMENTE
+        // ==========================================================
+
+        $session->update([
+            'status' => 'authenticated',
+            'status_checked_at' => now()
+        ]);
+
+        Log::info('[Efevoo] 3DS autenticado, iniciando tokenización');
+
+        $tokenResult = $this->tokenizeCard($cardData, $session->customer_id);
+
+        if (!$tokenResult['success']) {
+
+            Log::error('[Efevoo] Error tokenizando después de 3DS', $tokenResult);
+
+            $errorMessage = $tokenResult['message'] ?? 'Error tokenizando tarjeta';
+            $session->update([
+                'status' => 'tokenization_failed',
+                'error_message' => $errorMessage,
+            ]);
+
+            return [
+                'success' => false,
+                'message' => $errorMessage,
+                'raw' => $tokenResult
+            ];
+        }
+
+        // ==========================================================
+        // COMPLETADO EXITOSAMENTE
+        // ==========================================================
+
+        $session->update([
+            'status' => 'completed',
+            'efevoo_token_id' => $tokenResult['token_id'],
+            'completed_at' => now()
+        ]);
+
+        Log::info('[Efevoo] 3DS completado correctamente');
 
         return [
             'success' => true,
-            'message' => '3DS autenticado'
+            'message' => '3DS completado correctamente'
         ];
     }
 
-
-    private function apiCall(array $body): array
+    /* ==========================================================
+     * 3DS STATUS
+     * ========================================================== */
+    public function payments3DSGetStatus(array $cardData, string $orderId): array
     {
-        $url = config('efevoopay.api_url');
+        Log::info('[Efevoo] payments3DSGetStatus', [
+            'order_id' => $orderId
+        ]);
 
-        $headers = [
-            'Content-Type: application/json',
-            'X-API-USER: ' . config('efevoopay.api_user'),
-            'X-API-KEY: ' . config('efevoopay.api_key'),
-            'Accept: application/json',
+        $tokenResult = $this->getClientToken('3ds');
+
+        if (!$tokenResult['success']) {
+            return $tokenResult;
+        }
+
+        $bodyToEncrypt = [
+            'track' => $cardData['card_number'],
+            'cvv' => $cardData['cvv'],
+            'exp' => substr($cardData['expiration'], 0, 2) . '/' . substr($cardData['expiration'], 2, 2),
+            'order_id' => (int) $orderId
         ];
 
-        \Log::info('[Efevoo] API Request', [
-            'method' => $body['method'] ?? null,
-            'url' => $url
-        ]);
+        Log::info('[Efevoo] Body before encrypt GetStatus', $bodyToEncrypt);
+        $encrypt = $this->encrypt($bodyToEncrypt);
 
-        $ch = curl_init();
+        $payload = [
+            'payload' => [
+                'token' => $tokenResult['token'],
+                'encrypt' => $encrypt
+            ],
+            'method' => 'payments3DS_GetStatus'
+        ];
 
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($body),
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_SSL_VERIFYPEER => app()->environment('production'),
-            CURLOPT_FOLLOWLOCATION => true,
-        ]);
+        $response = $this->request($payload);
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
+        Log::info('[Efevoo] 3DS Status response', $response);
 
-        curl_close($ch);
-
-        if ($curlError) {
-            \Log::error('[Efevoo] cURL Error', [
-                'error' => $curlError
-            ]);
-
-            throw new \Exception('Error de conexión con EfevooPay');
-        }
-
-        if ($httpCode !== 200) {
-            \Log::error('[Efevoo] HTTP Error', [
-                'http_code' => $httpCode,
-                'response' => $response
-            ]);
-
-            throw new \Exception("Error HTTP {$httpCode} con EfevooPay");
-        }
-
-        $decoded = json_decode($response, true);
-
-        if (!$decoded) {
-            \Log::error('[Efevoo] JSON inválido', [
-                'response' => $response
-            ]);
-
-            throw new \Exception('Respuesta inválida de EfevooPay');
-        }
-
-        \Log::info('[Efevoo] API Response OK', [
-            'method' => $body['method'] ?? null,
-            'status_code' => $decoded['status']['code'] ?? null
-        ]);
-
-        return $decoded;
+        return $response;
     }
-
 }

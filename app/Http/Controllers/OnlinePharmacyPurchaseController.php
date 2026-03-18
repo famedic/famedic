@@ -26,8 +26,18 @@ class OnlinePharmacyPurchaseController extends Controller
                 totalCents: $request->total,
             );
         } catch (CardException $e) {
+            $message = $e->getMessage();
+            if (str_contains($message, 'Your card has insufficient funds')) {
+                $message = 'La tarjeta no tiene fondos suficientes.';
+            } elseif (str_contains($message, 'Your card was declined')) {
+                $message = 'La tarjeta fue rechazada. Por favor verifica con tu banco o intenta con otra tarjeta.';
+            } elseif (str_contains($message, 'expired')) {
+                $message = 'La tarjeta ha expirado. Usa otro método de pago.';
+            } elseif (! str_contains($message, 'La ') && ! str_contains($message, 'El ')) {
+                $message = 'No pudimos procesar tu pago. Por favor verifica tu método de pago o intenta con otro.';
+            }
             return redirect()->back()
-                ->withErrors(['payment_method' => 'No pudimos procesar tu pago. Por favor verifica la información de tu método de pago o intenta con uno diferente.']);
+                ->withErrors(['payment_method' => $message]);
         } catch (OdessaInsufficientFundsException $e) {
             return redirect()->back()
                 ->withErrors(['payment_method' => 'No cuentas con suficiente Saldo a la Vista en tu caja de ahorro para realizar el pago.']);

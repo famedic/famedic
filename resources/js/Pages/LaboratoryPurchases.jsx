@@ -7,6 +7,8 @@ import {
 	ClockIcon,
 	MagnifyingGlassIcon,
 	ExclamationTriangleIcon,
+	CheckCircleIcon,
+	BeakerIcon,
 } from "@heroicons/react/16/solid";
 import { TableCell, TableHeader, TableRow } from "@/Components/Catalyst/table";
 import { Navbar, NavbarItem } from "@/Components/Catalyst/navbar";
@@ -89,10 +91,8 @@ export default function LaboratoryPurchases({ laboratoryPurchases, laboratoryQuo
 
 // Función para formatear precios correctamente
 const formatPrice = (price) => {
-	// Si el precio es undefined o null, retornar vacío
 	if (price === undefined || price === null) return '';
-	
-	// Si ya es un número, formatear directamente
+
 	if (typeof price === 'number') {
 		return new Intl.NumberFormat('es-MX', {
 			style: 'currency',
@@ -101,18 +101,16 @@ const formatPrice = (price) => {
 			maximumFractionDigits: 2
 		}).format(price);
 	}
-	
-	// Si es string, limpiarlo y convertir
+
 	if (typeof price === 'string') {
-		// Remover todos los caracteres no numéricos excepto el punto decimal
 		const cleanPrice = price.replace(/[^\d.]/g, '');
 		const numberPrice = parseFloat(cleanPrice);
-		
+
 		if (isNaN(numberPrice)) {
 			console.warn('No se pudo convertir el precio:', price);
-			return price; // Devolver el original si no se puede convertir
+			return price;
 		}
-		
+
 		return new Intl.NumberFormat('es-MX', {
 			style: 'currency',
 			currency: 'MXN',
@@ -120,23 +118,21 @@ const formatPrice = (price) => {
 			maximumFractionDigits: 2
 		}).format(numberPrice);
 	}
-	
+
 	return price;
 };
 
 // Función para convertir precio de centavos a pesos
 const convertFromCents = (price) => {
 	if (price === undefined || price === null) return 0;
-	
-	// Si es string, convertir a número primero
+
 	const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
-	
+
 	if (isNaN(numericPrice)) {
 		console.warn('Precio inválido para conversión:', price);
 		return 0;
 	}
-	
-	// Dividir entre 100 para convertir de centavos a pesos
+
 	return numericPrice / 100;
 };
 
@@ -144,171 +140,151 @@ const convertFromCents = (price) => {
 const calculateItemTotal = (item) => {
 	const quantity = item.quantity || 1;
 	let price;
-	
+
 	if (typeof item.price === 'string') {
-		// Limpiar el precio del string y convertir de centavos
 		price = convertFromCents(item.price);
 	} else {
 		price = convertFromCents(item.price);
 	}
-	
+
 	if (isNaN(price)) {
 		console.warn('Precio inválido para item:', item);
 		return 0;
 	}
-	
+
 	return price * quantity;
 };
 
 // Función específica para manejar formatted_total incorrecto
 const fixFormattedTotal = (totalValue, formattedTotal) => {
-	// Priorizar el valor numérico total y convertirlo de centavos
 	if (totalValue !== undefined && totalValue !== null) {
 		return formatPrice(convertFromCents(totalValue));
 	}
-	
-	// Si no hay total numérico, intentar arreglar el formatted_total
+
 	if (formattedTotal) {
 		return formatPrice(formattedTotal);
 	}
-	
+
 	return '';
 };
 
-// Nuevo componente para Cotizaciones
-// Nuevo componente para Cotizaciones
+// Componente para Cotizaciones
 function LaboratoryQuotesList({ laboratoryQuotes }) {
 	return (
 		<div className="space-y-4 sm:space-y-6">
-			{laboratoryQuotes.map((quote) => {
-				// Agrega esto temporalmente para debuggear
-				console.log('Quote data:', {
-					id: quote.id,
-					total: quote.total,
-					formatted_total: quote.formatted_total,
-					converted_total: convertFromCents(quote.total),
-					items: quote.items.map(item => ({
-						name: item.name,
-						price: item.price,
-						converted_price: convertFromCents(item.price),
-						quantity: item.quantity
-					}))
-				});
-
-				return (
-					<PurchaseCard
-						key={quote.id}
-						href={route("laboratory.quote.show", { quote: quote.id })}
-						cardContent={
-							<>
-								<div className="flex flex-col gap-4 sm:flex-row sm:justify-between">
-									{/* Información principal - Izquierda */}
-									<div className="flex-1 min-w-0 space-y-3">
-										<div className="text-center sm:text-left">
-											<Text className="text-sm sm:text-base">
-												<Strong className="break-words">
-													Pedido #{quote.gda_order_id || quote.id}
-												</Strong>
-											</Text>
-										</div>
-
-										{/* Precio y estado */}
-										<div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
-											<Text className="text-sm sm:text-base whitespace-nowrap">
-												{fixFormattedTotal(quote.total, quote.formatted_total)} MXN
-											</Text>
-										</div>
-
-										{/* Badges informativos */}
-										<div className="flex flex-col gap-2">
-											<Badge color="blue" className="justify-center sm:justify-start">
-												<ClockIcon className="size-3 sm:size-4" />
-												<span className="text-xs sm:text-sm">Vence: {quote.formatted_expires_at}</span>
-											</Badge>
-											{quote.appointment && (
-												<Badge color="slate" className="justify-center sm:justify-start">
-													<DocumentTextIcon className="size-3 sm:size-4" />
-													<span className="text-xs sm:text-sm">Cita programada</span>
-												</Badge>
-											)}
-											<Badge color={
-												quote.status === 'pending_branch_payment' ? 'yellow' : 
-												quote.status === 'expired' ? 'red' : 'green'
-											} className="flex-shrink-0">
-												{quote.status === 'pending_branch_payment' && (
-													<>
-														<ClockIcon className="size-3 sm:size-4" />
-														<span className="text-xs sm:text-sm">Pendiente</span>
-													</>
-												)}
-												{quote.status === 'expired' && (
-													<>
-														<ExclamationTriangleIcon className="size-3 sm:size-4" />
-														<span className="text-xs sm:text-sm">Expirada</span>
-													</>
-												)}
-												{quote.status === 'completed' && (
-													<>
-														<DocumentTextIcon className="size-3 sm:size-4" />
-														<span className="text-xs sm:text-sm">Completada</span>
-													</>
-												)}
-											</Badge>
-										</div>
+			{laboratoryQuotes.map((quote) => (
+				<PurchaseCard
+					key={quote.id}
+					href={route("laboratory.quote.show", { quote: quote.id })}
+					cardContent={
+						<>
+							<div className="flex flex-col gap-4 sm:flex-row sm:justify-between">
+								{/* Información principal - Izquierda */}
+								<div className="flex-1 min-w-0 space-y-3">
+									<div className="text-center sm:text-left">
+										<Text className="text-sm sm:text-base">
+											<Strong className="break-words">
+												Pedido #{quote.gda_order_id || quote.id}
+											</Strong>
+										</Text>
 									</div>
 
-									{/* Información secundaria - Derecha */}
-									<div className="flex flex-col items-center gap-3 sm:items-end sm:gap-2">
-										<div className="flex flex-col items-center gap-2 sm:flex-row sm:items-end">
-											<img
-												src={`/images/gda/GDA-${quote.laboratory_brand?.toUpperCase() || 'GDA'}.png`}
-												className="order-1 sm:order-2 w-24 sm:w-36 rounded-lg object-contain flex-shrink-0"
-												alt={`Logo ${quote.laboratory_brand}`}
-											/>
-										</div>
+									{/* Precio y estado */}
+									<div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
+										<Text className="text-sm sm:text-base whitespace-nowrap">
+											{fixFormattedTotal(quote.total, quote.formatted_total)} MXN
+										</Text>
+									</div>
 
-										<Subheading className="flex items-center text-sm sm:text-base group-hover:underline">
-											Ver Pedido
-											<ArrowRightIcon className="ml-1 size-4 sm:size-5 transform transition-transform group-hover:translate-x-1 group-hover:scale-125" />
-										</Subheading>
+									{/* Badges informativos */}
+									<div className="flex flex-col gap-2">
+										<Badge color="blue" className="justify-center sm:justify-start">
+											<ClockIcon className="size-3 sm:size-4" />
+											<span className="text-xs sm:text-sm">Vence: {quote.formatted_expires_at}</span>
+										</Badge>
+										{quote.appointment && (
+											<Badge color="slate" className="justify-center sm:justify-start">
+												<DocumentTextIcon className="size-3 sm:size-4" />
+												<span className="text-xs sm:text-sm">Cita programada</span>
+											</Badge>
+										)}
+										<Badge color={
+											quote.status === 'pending_branch_payment' ? 'yellow' :
+												quote.status === 'expired' ? 'red' : 'green'
+										} className="flex-shrink-0">
+											{quote.status === 'pending_branch_payment' && (
+												<>
+													<ClockIcon className="size-3 sm:size-4" />
+													<span className="text-xs sm:text-sm">Pendiente</span>
+												</>
+											)}
+											{quote.status === 'expired' && (
+												<>
+													<ExclamationTriangleIcon className="size-3 sm:size-4" />
+													<span className="text-xs sm:text-sm">Expirada</span>
+												</>
+											)}
+											{quote.status === 'completed' && (
+												<>
+													<DocumentTextIcon className="size-3 sm:size-4" />
+													<span className="text-xs sm:text-sm">Completada</span>
+												</>
+											)}
+										</Badge>
 									</div>
 								</div>
-							</>
-						}
-						tableHeaders={
-							<>
-								<TableHeader className="text-xs sm:text-sm">Estudio</TableHeader>
-								<TableHeader className="text-xs sm:text-sm">Cantidad</TableHeader>
-								<TableHeader className="text-right text-xs sm:text-sm">
-									Precio
-								</TableHeader>
-							</>
-						}
-						tableRows={
-							<>
-								{quote.items.map((item, index) => (
-									<TableRow key={index}>
-										<TableCell className="text-xs sm:text-sm">
-											<span className="break-words">{item.name}</span>
-										</TableCell>
-										<TableCell className="text-xs sm:text-sm">
-											{item.quantity || 1}
-										</TableCell>
-										<TableCell className="text-right text-xs sm:text-sm whitespace-nowrap">
-											{formatPrice(calculateItemTotal(item))} MXN 
-										</TableCell>
-									</TableRow>
-								))}
-							</>
-						}
-					/>
-				);
-			})}
+
+								{/* Información secundaria - Derecha */}
+								<div className="flex flex-col items-center gap-3 sm:items-end sm:gap-2">
+									<div className="flex flex-col items-center gap-2 sm:flex-row sm:items-end">
+										<img
+											src={`/images/gda/GDA-${quote.laboratory_brand?.toUpperCase() || 'GDA'}.png`}
+											className="order-1 sm:order-2 w-24 sm:w-36 rounded-lg object-contain flex-shrink-0"
+											alt={`Logo ${quote.laboratory_brand}`}
+										/>
+									</div>
+
+									<Subheading className="flex items-center text-sm sm:text-base group-hover:underline">
+										Ver Pedido
+										<ArrowRightIcon className="ml-1 size-4 sm:size-5 transform transition-transform group-hover:translate-x-1 group-hover:scale-125" />
+									</Subheading>
+								</div>
+							</div>
+						</>
+					}
+					tableHeaders={
+						<>
+							<TableHeader className="text-xs sm:text-sm">Estudio</TableHeader>
+							<TableHeader className="text-xs sm:text-sm">Cantidad</TableHeader>
+							<TableHeader className="text-right text-xs sm:text-sm">
+								Precio
+							</TableHeader>
+						</>
+					}
+					tableRows={
+						<>
+							{quote.items.map((item, index) => (
+								<TableRow key={index}>
+									<TableCell className="text-xs sm:text-sm">
+										<span className="break-words">{item.name}</span>
+									</TableCell>
+									<TableCell className="text-xs sm:text-sm">
+										{item.quantity || 1}
+									</TableCell>
+									<TableCell className="text-right text-xs sm:text-sm whitespace-nowrap">
+										{formatPrice(calculateItemTotal(item))} MXN
+									</TableCell>
+								</TableRow>
+							))}
+						</>
+					}
+				/>
+			))}
 		</div>
 	);
 }
 
-// Componente existente para Pedidos (mejorado para responsividad)
+// Componente para Pedidos con badges de estado GDA
 function LaboratoryPurchasesList({ laboratoryPurchases }) {
 	if (laboratoryPurchases.length === 0)
 		return (
@@ -318,21 +294,54 @@ function LaboratoryPurchasesList({ laboratoryPurchases }) {
 			/>
 		);
 
+	// Función para determinar el color del badge según el estado
+	const getStatusBadgeColor = (hasSample, hasResults) => {
+		if (hasResults) return "emerald";
+		if (hasSample) return "amber";
+		return "zinc";
+	};
+
+	// Función para obtener el icono según el estado
+	const getStatusIcon = (hasSample, hasResults) => {
+		if (hasResults) return CheckCircleIcon;
+		if (hasSample) return BeakerIcon;
+		return ClockIcon;
+	};
+
+	// Función para obtener el texto según el estado
+	const getStatusText = (hasSample, hasResults, sampleDate, resultsDate) => {
+		if (hasResults) {
+			return resultsDate
+				? `Resultados: ${resultsDate}`
+				: "Resultados disponibles (fecha por confirmar)";
+		}
+		if (hasSample) {
+			return sampleDate
+				? `Muestra tomada: ${sampleDate}`
+				: "Muestra tomada (fecha por confirmar)";
+		}
+		return "Procesando orden";
+	};
+
 	return (
 		<div className="mb-12 sm:mb-20 space-y-12 sm:space-y-20">
 			{laboratoryPurchases.map((laboratoryPurchase) => {
-				// Debug para pedidos también
-				console.log('Purchase data:', {
+				// CORREGIDO: Usar los nombres correctos del modelo
+				// En LaboratoryPurchasesList component, dentro del map
+				const hasSampleCollection = laboratoryPurchase.has_sample_collected || false;
+				const hasResults = laboratoryPurchase.has_results_available || false;
+				const sampleDate = laboratoryPurchase.formatted_sample_collection_at;
+				const resultsDate = laboratoryPurchase.formatted_results_at;
+
+				// Log para debugging (puedes quitarlo después)
+				console.log('✅ Datos recibidos:', {
 					id: laboratoryPurchase.id,
-					total: laboratoryPurchase.total,
-					formatted_total: laboratoryPurchase.formatted_total,
-					converted_total: convertFromCents(laboratoryPurchase.total),
-					items: laboratoryPurchase.laboratory_purchase_items.map(item => ({
-						name: item.name,
-						price: item.price,
-						formatted_price: item.formatted_price,
-						converted_price: convertFromCents(item.price)
-					}))
+					has_sample_collected: laboratoryPurchase.has_sample_collected,
+					has_results_available: laboratoryPurchase.has_results_available,
+					formatted_sample_collection_at: laboratoryPurchase.formatted_sample_collection_at,
+					formatted_results_at: laboratoryPurchase.formatted_results_at,
+					sampleDate,
+					resultsDate
 				});
 
 				return (
@@ -377,6 +386,31 @@ function LaboratoryPurchasesList({ laboratoryPurchases }) {
 
 										{/* Badges informativos */}
 										<div className="flex flex-col gap-2">
+											{/* Badge de muestra tomada */}
+											{hasSampleCollection && (
+												<Badge color="amber" className="justify-center sm:justify-start">
+													<BeakerIcon className="size-3 sm:size-4" />
+													<span className="text-xs sm:text-sm">
+														{sampleDate
+															? `Muestra tomada: ${sampleDate}`
+															: "Muestra tomada (fecha por confirmar)"}
+													</span>
+												</Badge>
+											)}
+
+											{/* Badge de resultados GDA */}
+											{hasResults && (
+												<Badge color="emerald" className="justify-center sm:justify-start">
+													<CheckCircleIcon className="size-3 sm:size-4" />
+													<span className="text-xs sm:text-sm">
+														{resultsDate
+															? `Resultados: ${resultsDate}`
+															: "Resultados disponibles (fecha por confirmar)"}
+													</span>
+												</Badge>
+											)}
+
+											{/* Badge de factura */}
 											<Badge color="slate" className="justify-center sm:justify-start">
 												{laboratoryPurchase.invoice ? (
 													<>
@@ -396,19 +430,13 @@ function LaboratoryPurchasesList({ laboratoryPurchases }) {
 												)}
 											</Badge>
 
-											<Badge color="slate" className="justify-center sm:justify-start">
-												{laboratoryPurchase.results ? (
-													<>
-														<DocumentTextIcon className="size-3 sm:size-4" />
-														<span className="text-xs sm:text-sm">Resultados cargados</span>
-													</>
-												) : (
-													<>
-														<ClockIcon className="size-3 sm:size-4" />
-														<span className="text-xs sm:text-sm">Resultados pendientes</span>
-													</>
-												)}
-											</Badge>
+											{/* Badge de resultados manuales */}
+											{laboratoryPurchase.results && (
+												<Badge color="emerald" className="justify-center sm:justify-start">
+													<DocumentTextIcon className="size-3 sm:size-4" />
+													<span className="text-xs sm:text-sm">Resultados cargados manualmente</span>
+												</Badge>
+											)}
 										</div>
 									</div>
 
@@ -417,7 +445,7 @@ function LaboratoryPurchasesList({ laboratoryPurchases }) {
 										<Text className="text-xs sm:text-sm text-gray-500 text-center sm:text-right">
 											{laboratoryPurchase.formatted_created_at}
 										</Text>
-										
+
 										<div className="flex flex-col items-center gap-2 sm:flex-row sm:items-end">
 											<Badge className="order-2 sm:order-1">
 												<QrCodeIcon className="size-4 sm:size-6" />

@@ -10,8 +10,17 @@ use App\Http\Controllers\OnlinePharmacyShoppingCartController;
 use Illuminate\Support\Facades\Route;
 
 // Public browsing routes
-Route::get('/online-pharmacy', OnlinePharmacyController::class)->name('online-pharmacy');
-Route::get('/online-pharmacy/search', OnlinePharmacySearchController::class)->name('online-pharmacy-search');
+Route::get('/online-pharmacy', function () {
+    return redirect()
+        ->route('welcome')
+        ->with('warning', 'La farmacia en línea está temporalmente deshabilitada.');
+})->name('online-pharmacy');
+
+Route::get('/online-pharmacy/search', function () {
+    return redirect()
+        ->route('welcome')
+        ->with('warning', 'La farmacia en línea está temporalmente deshabilitada.');
+})->name('online-pharmacy-search');
 
 // Protected routes requiring authentication
 Route::middleware([

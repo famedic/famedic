@@ -29,6 +29,10 @@ class LaboratoryPurchase extends Model
         'full_name',
         'full_phone',
         'temporarly_hide_gda_order_id',
+        'has_sample_collected',
+        'has_results_available',
+        'formatted_sample_collection_at',
+        'formatted_results_at',
     ];
 
     protected function casts(): array
@@ -39,6 +43,7 @@ class LaboratoryPurchase extends Model
             'gender' => Gender::class,
             'phone' => RawPhoneNumberCast::class . ':country_field',
             'temporarily_hide_gda_order_id' => 'boolean',
+            'gda_consecutivo' => 'integer',
         ];
     }
 
@@ -260,10 +265,14 @@ class LaboratoryPurchase extends Model
         return $query->where('laboratory_quote_id', $quoteId);
     }
 
-    // Agregar esta relación al modelo
+    // Relacion para obtener notificaciones de laboratorio asociadas a esta compra
     public function laboratoryNotifications()
     {
-        return $this->hasMany(LaboratoryNotification::class);
+        return $this->hasMany(
+            LaboratoryNotification::class,
+            'gda_consecutivo',
+            'gda_consecutivo'
+        );
     }
 
     // Método para obtener notificaciones de resultados
@@ -288,4 +297,159 @@ class LaboratoryPurchase extends Model
             ->latest()
             ->first();
     }
+
+    public function sampleCollectionNotification()
+    {
+        return $this->laboratoryNotifications()
+            ->where(function ($query) {
+                $query->where('notification_type', LaboratoryNotification::TYPE_SAMPLE_COLLECTION)
+                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_SAMPLE);
+            })
+            ->latest('created_at');
+    }
+
+    public function resultsNotification()
+    {
+        return $this->laboratoryNotifications()
+            ->where(function ($query) {
+                $query->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
+            })
+            ->latest('created_at');
+    }
+
+    public function hasSampleCollected(): bool
+    {
+        return $this->laboratoryNotifications()
+            ->where(function ($query) {
+                $query->where('notification_type', LaboratoryNotification::TYPE_SAMPLE_COLLECTION)
+                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_SAMPLE);
+            })
+            ->exists();
+    }
+
+    public function hasResultsAvailable(): bool
+    {
+        return $this->laboratoryNotifications()
+            ->where(function ($query) {
+                $query->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
+            })
+            ->exists();
+    }
+
+    public function latestSampleCollection()
+    {
+        return $this->sampleCollectionNotification()->first();
+    }
+
+    public function latestResultsNotification()
+    {
+        return $this->resultsNotification()->first();
+    }   
+
+    public function scopeWithNotificationStatus($query)
+    {
+        return $query->addSelect([
+            'has_sample_collected' => LaboratoryNotification::selectRaw('COUNT(*) > 0')
+                ->whereColumn('gda_consecutivo', 'laboratory_purchases.gda_consecutivo')
+                ->where(function ($q) {
+                    $q->where('notification_type', LaboratoryNotification::TYPE_SAMPLE_COLLECTION)
+                        ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_SAMPLE);
+                })
+                ->limit(1),
+
+            'has_results_available' => LaboratoryNotification::selectRaw('COUNT(*) > 0')
+                ->whereColumn('gda_consecutivo', 'laboratory_purchases.gda_consecutivo')
+                ->where(function ($q) {
+                    $q->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                        ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
+                })
+                ->limit(1),
+
+            'latest_sample_collection_at' => LaboratoryNotification::select('created_at')
+                ->whereColumn('gda_consecutivo', 'laboratory_purchases.gda_consecutivo')
+                ->where(function ($q) {
+                    $q->where('notification_type', LaboratoryNotification::TYPE_SAMPLE_COLLECTION)
+                        ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_SAMPLE);
+                })
+                ->latest()
+                ->limit(1),
+
+            'latest_results_at' => LaboratoryNotification::select('created_at')
+                ->whereColumn('gda_consecutivo', 'laboratory_purchases.gda_consecutivo')
+                ->where(function ($q) {
+                    $q->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                        ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
+                })
+                ->latest()
+                ->limit(1),
+        ]);
+    }
+
+    public function getHasSampleCollectionAttribute()
+    {
+        return !is_null($this->latest_sample_collection_at ?? null);
+    }
+
+    public function getHasResultsAvailableAttribute()
+    {
+        return !is_null($this->latest_results_at ?? null);
+    }
+
+
+    public function getFormattedResultsAtAttribute()
+    {
+        if (is_null($this->latest_results_at)) {
+            return null;
+        }
+
+        try {
+            $date = $this->latest_results_at;
+
+            // Si es string, convertir a Carbon primero
+            if (is_string($date)) {
+                $date = \Carbon\Carbon::parse($date);
+            }
+
+            return localizedDate($date)->isoFormat('D MMM Y h:mm a');
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error formateando fecha resultados', [
+                'purchase_id' => $this->id,
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
+    }
+
+    public function getFormattedSampleCollectionAtAttribute()
+    {
+        if (is_null($this->latest_sample_collection_at)) {
+            return null;
+        }
+
+        try {
+            $date = $this->latest_sample_collection_at;
+
+            // Si es string, convertir a Carbon primero
+            if (is_string($date)) {
+                $date = \Carbon\Carbon::parse($date);
+            }
+
+            return localizedDate($date)->isoFormat('D MMM Y h:mm a');
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error formateando fecha sample', [
+                'purchase_id' => $this->id,
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
+    }
+
+    // Estos métodos ya existen, pero verifica que estén correctos
+    public function getHasSampleCollectedAttribute()
+    {
+        return !is_null($this->latest_sample_collection_at ?? null);
+    }
+
 }

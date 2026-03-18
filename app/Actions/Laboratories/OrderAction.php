@@ -3,7 +3,7 @@
 namespace App\Actions\Laboratories;
 
 use App\Actions\Odessa\ChargeOdessaAction;
-use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction; // Cambiado
+use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction;
 use App\Actions\Transactions\RefundTransactionAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\MissingLaboratoryAppointmentException;
@@ -134,6 +134,7 @@ class OrderAction
             // Actualizar la compra con los datos de GDA
             $laboratoryPurchase->update([
                 'gda_order_id' => $gdaQuotation['id'],
+                'gda_consecutivo' => $gdaQuotation['infogda_consecutivo'] ?? null,
                 'gda_acuse' => $gdaQuotation['gda_acuse'] ?? null,
                 'gda_response' => $gdaQuotation['gda_response'] ?? null,
                 'gda_code_http' => $gdaQuotation['gda_code_http'] ?? null,

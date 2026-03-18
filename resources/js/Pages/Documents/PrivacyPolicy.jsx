@@ -19,10 +19,10 @@ export default function PrivacyPolicy({ name }) {
                         </h1>
                         <h2 className="mt-4 text-2xl font-semibold text-famedic-light">{name}</h2>
                         <p className="mt-2 text-sm text-gray-600">
-                            Última actualización: 10 / octubre / 2024
+                            Última actualización: 10 / febrero / 2026
                         </p>
                         <p className="mt-2 text-sm text-gray-600">
-                            Última revisión: 10 / octubre / 2024
+                            Última revisión: 10 / febrero / 2026
                         </p>
                     </div>
 

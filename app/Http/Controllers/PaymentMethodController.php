@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\EfevooPayService;
 use App\Models\EfevooToken;
 use App\Models\Efevoo3dsSession;
-use App\Models\Customer;
+use App\Services\EfevooPayService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
@@ -19,151 +19,133 @@ class PaymentMethodController extends Controller
         $this->service = $service;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | INDEX
-    |--------------------------------------------------------------------------
-    */
+    /* ==========================================================
+     * INDEX
+     * ========================================================== */
+
     public function index(Request $request)
     {
         $customer = $request->user()->customer;
 
         $tokens = EfevooToken::where('customer_id', $customer->id)
-            ->active()
-            ->latest()
+            ->where('is_active', true)
+            ->orderByDesc('created_at')
             ->get();
 
+        // Evitar mostrar duplicados: una tarjeta por combinación últimos 4 dígitos + expiración
+        $paymentMethods = $tokens->unique(function (EfevooToken $t) {
+            return $t->card_last_four . '-' . ($t->card_expiration ?? '');
+        })->values()->all();
+
         return Inertia::render('PaymentMethods', [
-            'paymentMethods' => $tokens,
+            'paymentMethods' => $paymentMethods,
             'environment' => config('efevoopay.environment'),
         ]);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | CREATE
-    |--------------------------------------------------------------------------
-    */
-    public function create(Request $request)
+    /* ==========================================================
+     * CREATE
+     * ========================================================== */
+
+    public function create()
     {
-        \Log::info('🔵 PaymentMethodController::create');
-
-        $customer = $this->getCustomer($request->user());
-
-        if (!$customer) {
-            return redirect()->route('dashboard')
-                ->with('error', 'No tienes un perfil de cliente configurado.');
-        }
-
-        /*$hasPending3ds = \App\Models\Efevoo3dsSession::where('customer_id', $customer->id)
-            ->whereIn('status', ['pending', 'redirect_required'])
-            ->exists();*/
-        $hasPending3ds = false;
-
-        return \Inertia\Inertia::render('PaymentMethods/Create', [
+        return Inertia::render('PaymentMethods/Create', [
             'efevooConfig' => [
                 'environment' => config('efevoopay.environment'),
                 'tokenization_amount' => config('efevoopay.test_amounts.default') / 100,
-                'requires_3ds' => config('efevoopay.requires_3ds', true),
+                'requires_3ds' => true,
             ],
-            'hasPending3ds' => $hasPending3ds,
+            'hasPending3ds' => false,
         ]);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | STORE (INICIAR 3DS)
-    |--------------------------------------------------------------------------
-    */
+    /* ==========================================================
+     * STORE (INICIAR 3DS)
+     * ========================================================== */
+
     public function store(Request $request)
     {
-        $customer = $request->user()->customer;
-
-        $cardData = [
-            'card_number' => str_replace(' ', '', $request->card_number),
-            'expiration' => $request->exp_month . $request->exp_year_short,
-            'cvv' => $request->cvv,
-            'card_holder' => $request->card_holder,
-            'alias' => $request->alias,
-            'amount' => config('efevoopay.tokenization_amount', 1.00),
-        ];
-
-        Log::info('🔵 Iniciando 3DS', [
-            'customer_id' => $customer->id,
-            'last4' => substr($cardData['card_number'], -4),
+        $validated = $request->validate([
+            'card_number' => 'required|string',
+            'exp_month' => 'required|string',
+            'exp_year' => 'required|string',
+            'cvv' => 'required|string',
+            'card_holder' => 'required|string',
+            'alias' => 'required|string',
+            'terms_accepted' => 'accepted',
         ]);
 
-        $result = $this->service->initiate3DSProcess($cardData, $customer->id);
+        $customer = $request->user()->customer;
+
+        $month = str_pad($validated['exp_month'], 2, '0', STR_PAD_LEFT);
+        $year = substr($validated['exp_year'], -2);
+
+        if ((int) $month < 1 || (int) $month > 12) {
+            return back()->withErrors([
+                'exp_month' => 'Mes inválido'
+            ]);
+        }
+
+        $currentYear = date('y');
+        $currentMonth = date('m');
+
+        if (
+            (int) $year < (int) $currentYear ||
+            ((int) $year === (int) $currentYear && (int) $month < (int) $currentMonth)
+        ) {
+
+            return back()->withErrors([
+                'exp_year' => 'La tarjeta está vencida'
+            ]);
+        }
+
+        $cardData = [
+            'card_number' => $validated['card_number'],
+            'expiration' => $month . $year,
+            'cvv' => $validated['cvv'],
+            'card_holder' => $validated['card_holder'],
+            'alias' => $validated['alias'],
+            'amount' => config('efevoopay.test_amounts.default') / 100,
+        ];
+
+        Log::info('[3DS] Iniciando proceso');
+
+        $result = $this->service->initiate3DS($cardData, $customer->id);
 
         if (!$result['success']) {
             return back()->withErrors([
-                'card' => $result['message'] ?? 'Error iniciando verificación 3DS'
+                'error' => $result['message'] ?? 'Error iniciando verificación'
             ]);
         }
 
-        if (!empty($result['requires_3ds']) && $result['requires_3ds'] === true) {
+        // Guardar datos de tarjeta por sessionId
+        Session::put('3ds_card_data_' . $result['session_id'], $cardData);
 
-            session([
-                '3ds_card_data_' . $result['session_id'] => $cardData
-            ]);
-
-            // 👇 ESTA ES LA FORMA CORRECTA CON INERTIA
-            return Inertia::location(
-                route('payment-methods.3ds-redirect', [
-                    'sessionId' => $result['session_id']
-                ])
-            );
-        }
-
-        return redirect()->route('payment-methods.index')
-            ->with('success', 'Tarjeta guardada correctamente');
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | CHECK STATUS (COMPLETAR 3DS)
-    |--------------------------------------------------------------------------
-    */
-    public function check3dsStatus(Request $request, string $sessionId)
-    {
-        $customer = $request->user()->customer;
-
-        $session = Efevoo3dsSession::where('id', $sessionId)
-            ->where('customer_id', $customer->id)
-            ->firstOrFail();
-
-        $cardData = session('3ds_card_data_' . $sessionId);
-
-        if (!$cardData) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Datos de tarjeta no encontrados'
-            ]);
-        }
-
-        Log::info('🔵 Verificando estado 3DS', [
-            'session_id' => $sessionId
+        return redirect()->route('payment-methods.3ds-redirect', [
+            'sessionId' => $result['session_id']
         ]);
-
-        $result = $this->service->complete3DS(
-            $session,
-            $cardData
-        );
-
-        if ($result['success']) {
-            session()->forget('3ds_card_data_' . $sessionId);
-        }
-
-        return response()->json($result);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | RESULT VIEW
-    |--------------------------------------------------------------------------
-    */
-    public function show3dsResult(Request $request, string $sessionId)
+    /* ==========================================================
+     * VIEW IFRAME 3DS
+     * ========================================================== */
+
+    public function show3dsRedirect($sessionId)
+    {
+        $session = Efevoo3dsSession::findOrFail($sessionId);
+
+        return Inertia::render('PaymentMethods/ThreeDSRedirect', [
+            'sessionId' => $session->id,
+            'url3ds' => $session->url_3dsecure,
+            'token3ds' => $session->token_3dsecure,
+        ]);
+    }
+
+    /* ==========================================================
+     * RESULT VIEW
+     * ========================================================== */
+
+    public function show3dsResult(Request $request, $sessionId)
     {
         $customer = $request->user()->customer;
 
@@ -171,14 +153,16 @@ class PaymentMethodController extends Controller
             ->where('customer_id', $customer->id)
             ->firstOrFail();
 
-        $success = $session->status === Efevoo3dsSession::STATUS_COMPLETED;
+        $success = $session->status === 'completed';
+        $displayMessage = $success
+            ? 'Tarjeta verificada correctamente'
+            : ($session->error_message ?: $this->resolveStatusMessage($session->status));
 
         return Inertia::render('PaymentMethods/ThreeDSResult', [
             'sessionId' => $session->id,
             'success' => $success,
-            'message' => $success
-                ? 'Tarjeta verificada correctamente'
-                : 'La verificación no fue completada',
+            'message' => $displayMessage,
+            'errorDetail' => $session->error_message,
             'status' => $session->status,
             'cardLastFour' => $session->card_last_four,
             'amount' => $session->amount,
@@ -186,13 +170,11 @@ class PaymentMethodController extends Controller
         ]);
     }
 
+    /* ==========================================================
+     * DELETE TOKEN
+     * ========================================================== */
 
-    /*
-    |--------------------------------------------------------------------------
-    | DELETE TOKEN
-    |--------------------------------------------------------------------------
-    */
-    public function destroy(Request $request, string $tokenId)
+    public function destroy(Request $request, $tokenId)
     {
         $customer = $request->user()->customer;
 
@@ -205,14 +187,13 @@ class PaymentMethodController extends Controller
             'deleted_at' => now(),
         ]);
 
-        return back()->with('success', 'Tarjeta eliminada');
+        return back()->with('success', 'Tarjeta eliminada correctamente');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | HEALTH
-    |--------------------------------------------------------------------------
-    */
+    /* ==========================================================
+     * HEALTH CHECK
+     * ========================================================== */
+
     public function health()
     {
         return response()->json(
@@ -220,55 +201,78 @@ class PaymentMethodController extends Controller
         );
     }
 
-    /*
-        |--------------------------------------------------------------------------
-        | Obtener el customer del usuario autenticado
-        |--------------------------------------------------------------------------
-        */
-    private function getCustomer(\App\Models\User $user): ?\App\Models\Customer
+    /* ==========================================================
+     * POLLING STATUS 3DS
+     * ========================================================== */
+    public function check3dsStatus(Request $request, $sessionId)
     {
-        if (!$user) {
-            return null;
-        }
+        Log::info('[3DS] check3dsStatus llamado', [
+            'session_id' => $sessionId
+        ]);
 
-        // Si existe relación directa
-        if ($user->customer) {
-            return $user->customer;
-        }
-
-        // Fallback por user_id
-        return \App\Models\Customer::where('user_id', $user->id)->first();
-    }
-
-    public function show3dsRedirect(Request $request, string $sessionId)
-    {
         $customer = $request->user()->customer;
 
         $session = Efevoo3dsSession::where('id', $sessionId)
             ->where('customer_id', $customer->id)
             ->firstOrFail();
 
-        if ($session->status !== 'redirect_required') {
-            return redirect()->route('payment-methods.index');
+        // Si ya es estado final, no reprocesar
+        if (
+            in_array($session->status, [
+                'completed',
+                'declined',
+                'tokenization_failed'
+            ])
+        ) {
+            $message = $session->error_message ?: $this->resolveStatusMessage($session->status);
+            return response()->json([
+                'final' => true,
+                'status' => $session->status,
+                'message' => $message,
+                'error_detail' => $session->error_message,
+            ]);
         }
 
-        $iframeHtml = '
-        <form id="threeDSForm" method="POST" action="' . $session->url_3dsecure . '">
-            <input type="hidden" name="token_3dsecure" value="' . $session->token_3dsecure . '" />
-        </form>
-        <script>
-            document.getElementById("threeDSForm").submit();
-        </script>
-    ';
+        // Recuperar cardData correcto
+        $cardData = Session::get('3ds_card_data_' . $sessionId);
 
-        return Inertia::render('PaymentMethods/ThreeDSRedirect', [
-            'sessionId' => $session->id,
-            'orderId' => $session->order_id,
-            'url3ds' => $session->url_3dsecure,
-            'token3ds' => $session->token_3dsecure,
-            'iframeHtml' => $iframeHtml,
+        if (!$cardData) {
+            return response()->json([
+                'final' => true,
+                'status' => 'error',
+                'message' => 'Sesión 3DS inválida'
+            ]);
+        }
+
+        $result = $this->service->complete3DS($session, $cardData);
+
+        $session->refresh();
+
+        $message = $session->error_message
+            ?? $result['message']
+            ?? $this->resolveStatusMessage($session->status);
+
+        return response()->json([
+            'final' => in_array($session->status, [
+                'completed',
+                'declined',
+                'tokenization_failed'
+            ]),
+            'status' => $session->status,
+            'message' => $message,
+            'error_detail' => $session->error_message,
         ]);
     }
 
-
+    private function resolveStatusMessage(string $status): string
+    {
+        return match ($status) {
+            'completed' => 'Tarjeta verificada y guardada correctamente.',
+            'declined' => 'La verificación fue rechazada por tu banco. Puede deberse a que cancelaste el proceso o el banco no autorizó la operación.',
+            'tokenization_failed' => 'La tarjeta fue autenticada, pero no pudo guardarse. Revisa el motivo más abajo o contacta a soporte.',
+            'authenticated' => 'Verificación exitosa. Guardando tarjeta...',
+            'pending' => 'Esperando que completes la verificación en la ventana de tu banco.',
+            default => 'Procesando verificación...'
+        };
+    }
 }

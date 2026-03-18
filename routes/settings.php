@@ -18,10 +18,6 @@ use App\Http\Controllers\TaxProfileController;
 use App\Http\Controllers\TaxProfiles\FiscalCertificateController;
 use Illuminate\Support\Facades\Route;
 
-// Ruta temporal para debugging - SIN middlewares
-Route::post('/debug/extract-data', [TaxProfileController::class, 'extractDataDebug'])
-    ->name('debug.extract-data');
-
 // Grupo principal SIN password.confirm
 Route::middleware([
     'auth',
@@ -59,11 +55,9 @@ Route::middleware([
     Route::get('/payment-methods/3ds/redirect/{sessionId}', [PaymentMethodController::class, 'show3dsRedirect'])
         ->name('payment-methods.3ds-redirect');
 
-    Route::get('/payment-methods/3ds/status/{sessionId}', [PaymentMethodController::class, 'check3dsStatus'])
-        ->name('payment-methods.3ds-status');
-
     Route::post('/payment-methods/3ds/callback', [PaymentMethodController::class, 'handle3dsCallback'])
-        ->name('payment-methods.3ds-callback');
+        ->name('payment-methods.3ds-callback')
+        ->withoutMiddleware(['auth']); // importante
 
     Route::get('/payment-methods/3ds/result/{sessionId}', [PaymentMethodController::class, 'show3dsResult'])
         ->name('payment-methods.3ds-result');
@@ -71,37 +65,10 @@ Route::middleware([
     Route::post('/payment-methods/3ds/cancel/{sessionId}', [PaymentMethodController::class, 'cancel3dsSession'])
         ->name('payment-methods.3ds-cancel');
 
-    /*
-    Route::post('/efevoo/3ds/initiate', [Efevoo3DSController::class, 'initiate3DS']);
-    Route::post('/efevoo/3ds/check-status', [Efevoo3DSController::class, 'checkStatus']);
-    Route::post('/efevoo/3ds/callback', [Efevoo3DSController::class, 'handleCallback']);
-    Route::post('/efevoo/3ds/cancel/{sessionId}', [Efevoo3DSController::class, 'cancelSession']);
-    */
-    // Ruta para reembolsos
-    //Route::post('/efevoo/transactions/{id}/refund', [Efevoo3DSController::class, 'refundTransaction']);
-
-
-    /*
-    //rutas temporales para pruebas de efevoo ------------------------------   
-    Route::get('/test/efevoo', [TestEfevooController::class, 'testConnection'])
-        ->name('test.efevoo');
-
-    Route::post('/test/efevoo/tokenize', [TestEfevooController::class, 'testManualToken'])
-        ->name('test.efevoo.tokenize');
-
-    // Ruta para verificar estado del servicio
-    Route::get('payment-methods/health', [PaymentMethodController::class, 'health'])
-        ->name('payment-methods.health');
-    Route::get('/test/efevoo/correct', [TestEfevooFinalController::class, 'testWithCorrectFormat'])
-        ->name('test.efevoo.correct');
-
-    Route::get('/test/efevoo/direct', [TestEfevooFinalController::class, 'testDirectPayment'])
-        ->name('test.efevoo.direct');
-
-    Route::get('/test/efevoo/tokens', [TestEfevooFinalController::class, 'listTokens'])
-        ->name('test.efevoo.tokens');    
-    //termina pruebas efevoo ------------------------------
-    */
+    Route::get(
+        '/payment-methods/3ds-status/{sessionId}',
+        [PaymentMethodController::class, 'check3dsStatus']
+    )->name('payment-methods.3ds-status');    
 
     // Webhook para notificaciones de EfevooPay
     Route::post('efevoo/webhook', [EfevooWebhookController::class, 'handle'])

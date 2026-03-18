@@ -40,6 +40,24 @@ return [
             ['manage' => 'Administrar membresías médicas'],
             ['manage.invoices' => 'Subir y actualizar facturas'],
         ],
+        'laboratory-notifications' => [
+            ['monitor' => 'Monitorear notificaciones de laboratorio'],
+        ],
+        'logs-general' => [
+            ['manage' => 'Ver y descargar logs'],
+        ],
+        'users' => [
+            ['manage' => 'Ver listado y detalle de usuarios'],
+        ],
+        'efevoo-tokens' => [
+            ['manage' => 'Ver tokens de Efevoo'],
+        ],
+        'tax-profiles' => [
+            ['manage' => 'Monitorear perfiles fiscales'],
+        ],
+        'payment-attempts' => [
+            ['manage' => 'Monitorear intentos de pago'],
+        ],
     ],
 
     'medical_attention_subscription_price_cents' => 30000,

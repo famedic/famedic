@@ -1,5 +1,4 @@
 <?php
-// app/Models/LaboratoryNotification.php
 
 namespace App\Models;
 
@@ -24,13 +23,14 @@ class LaboratoryNotification extends Model
      *
      * @var array<int, string>
      */
-    // En app/Models/LaboratoryNotification.php
+    
     protected $fillable = [
         'user_id',
         'contact_id',
         'laboratory_quote_id',
         'laboratory_purchase_id',
         'gda_order_id',
+        'gda_consecutivo',
         'gda_external_id',
         'gda_acuse',
         'notification_type',
@@ -41,6 +41,7 @@ class LaboratoryNotification extends Model
         'email_recipient_email',
         'email_error',
         'notes',
+        'lineanegocio',
         'gda_status',
         'resource_type',
         'payload',
@@ -64,7 +65,8 @@ class LaboratoryNotification extends Model
      * Tipos de notificación
      */
     const TYPE_NOTIFICATION = 'notification';
-    const TYPE_RESULTS = 'results';
+    const TYPE_SAMPLE_COLLECTION = 'sample_collection';
+    const TYPE_RESULTS = 'Notificaion-Resultados';
     const TYPE_STATUS_UPDATE = 'status_update';
 
     /**
@@ -82,12 +84,16 @@ class LaboratoryNotification extends Model
     const GDA_STATUS_CANCELLED = 'cancelled';
     const GDA_STATUS_ACTIVE = 'active';
 
+     // Valores de lineanegocio que vienen de GDA
+    const LINEA_NEGOCIO_SAMPLE = 'Notificacion-Toma-Muestra';
+    const LINEA_NEGOCIO_RESULTS = 'Notificaion-Resultados';
+    
     /**
      * Resource types
      */
     const RESOURCE_SERVICE_REQUEST = 'ServiceRequest';
     const RESOURCE_SERVICE_REQUEST_COTIZACION = 'ServiceRequestCotizacion';
-
+    
     /**
      * Relación con LaboratoryQuote
      */

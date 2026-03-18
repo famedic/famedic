@@ -5,6 +5,7 @@ namespace App\Actions\Odessa;
 use App\Actions\Odessa\GenerateOdessaKeyAction;
 use App\DTOs\OdessaTokenData;
 use Firebase\JWT\JWT;
+use Illuminate\Support\Facades\Log;
 
 class DecodeOdessaTokenAction
 {
@@ -17,11 +18,15 @@ class DecodeOdessaTokenAction
 
     public function __invoke(string $odessaToken): OdessaTokenData
     {
-        return OdessaTokenData::fromObject(
-            JWT::decode(
-                $odessaToken,
-                ($this->generateOdessaKeyAction)()
-            )
+        $decoded = JWT::decode(
+            $odessaToken,
+            ($this->generateOdessaKeyAction)()
         );
+
+        Log::info('ODESSA TOKEN DECODED', [
+            'data' => (array) $decoded
+        ]);
+
+        return OdessaTokenData::fromObject($decoded);
     }
 }
