@@ -12,6 +12,8 @@ class PaymentAttemptController extends Controller
 {
     public function index(Request $request)
     {
+        $request->user()->administrator->hasPermissionTo('payment-attempts.manage') || abort(403);
+
         $filters = collect($request->only([
             'search',
             'gateway',
@@ -65,6 +67,8 @@ class PaymentAttemptController extends Controller
 
     public function show(PaymentAttempt $paymentAttempt)
     {
+        request()->user()->administrator->hasPermissionTo('payment-attempts.manage') || abort(403);
+
         $paymentAttempt->load(['customer.user']);
 
         return Inertia::render('Admin/PaymentAttempt', [

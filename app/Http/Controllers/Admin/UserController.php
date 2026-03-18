@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\EfevooToken;
 use App\Models\EfevooTransaction;
+use App\Models\LaboratoryNotification;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -14,6 +15,8 @@ class UserController extends Controller
 {
     public function index(Request $request)
     {
+        $request->user()->administrator->hasPermissionTo('users.manage') || abort(403);
+
         $filters = collect($request->only([
             'search',
             'verified',
@@ -55,29 +58,33 @@ class UserController extends Controller
 
     public function show(User $user)
     {
+        request()->user()->administrator->hasPermissionTo('users.manage') || abort(403);
+
         $user->load([
-            'customer.addresses',
-            'customer.contacts',
-            'customer.taxProfiles',
-            'customer.laboratoryPurchases' => function ($query) {
-                $query->latest()->limit(10)->with(['transactions', 'vendorPayments']);
-            },
-            'customer.onlinePharmacyPurchases' => function ($query) {
-                $query->latest()->limit(10)->with(['transactions', 'vendorPayments']);
-            },
-            'customer.medicalAttentionSubscriptions' => function ($query) {
-                $query->latest()->limit(10)->with(['transactions']);
-            },
             'pendingLaboratoryResults',
-            'laboratoryNotifications' => function ($query) {
-                $query->latest()->limit(20);
-            },
-            'unreadLaboratoryNotifications',
             'referrer',
             'referrals',
         ]);
 
-        $customer = $user->customer;
+        // Para admin: si el customer está soft-deleted, User::customer() no lo trae.
+        // Usamos withTrashed para no perder direcciones / compras / etc.
+        $customer = Customer::withTrashed()
+            ->where('user_id', $user->id)
+            ->with([
+                'addresses',
+                'contacts',
+                'taxProfiles',
+                'laboratoryPurchases' => function ($query) {
+                    $query->latest()->limit(10)->with(['transactions', 'vendorPayments']);
+                },
+                'onlinePharmacyPurchases' => function ($query) {
+                    $query->latest()->limit(10)->with(['transactions', 'vendorPayments']);
+                },
+                'medicalAttentionSubscriptions' => function ($query) {
+                    $query->latest()->limit(10)->with(['transactions']);
+                },
+            ])
+            ->first();
 
         $efevooTokens = collect();
         $efevooTransactions = collect();
@@ -95,11 +102,35 @@ class UserController extends Controller
             }
         }
 
+        // Notificaciones: muchas llegan ligadas a la compra (laboratory_purchase_id) y pueden no traer user_id.
+        // Para el detalle de usuario, traemos por:
+        // - user_id = user.id
+        // - email_recipient_id = user.id
+        // - laboratoryPurchase.customer_id = customer.id (si existe)
+        $labNotificationsQuery = LaboratoryNotification::query()
+            ->with(['laboratoryPurchase', 'laboratoryQuote'])
+            ->where(function ($q) use ($user, $customer) {
+                $q->where('user_id', $user->id)
+                    ->orWhere('email_recipient_id', $user->id);
+
+                if ($customer) {
+                    $q->orWhereHas('laboratoryPurchase', function ($p) use ($customer) {
+                        $p->where('customer_id', $customer->id);
+                    });
+                }
+            })
+            ->latest();
+
+        $labNotifications = $labNotificationsQuery->limit(25)->get();
+        $unreadLabNotificationsCount = (clone $labNotificationsQuery)->whereNull('read_at')->count();
+
         return Inertia::render('Admin/User', [
             'user' => $user,
             'customer' => $customer,
             'efevooTokens' => $efevooTokens,
             'efevooTransactions' => $efevooTransactions,
+            'laboratoryNotifications' => $labNotifications,
+            'unreadLabNotificationsCount' => $unreadLabNotificationsCount,
         ]);
     }
 }

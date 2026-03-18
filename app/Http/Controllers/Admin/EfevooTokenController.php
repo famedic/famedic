@@ -12,6 +12,8 @@ class EfevooTokenController extends Controller
 {
     public function index(Request $request)
     {
+        $request->user()->administrator->hasPermissionTo('efevoo-tokens.manage') || abort(403);
+
         $filters = collect($request->only([
             'search',
             'environment',
@@ -79,6 +81,8 @@ class EfevooTokenController extends Controller
 
     public function show(EfevooToken $efevooToken)
     {
+        request()->user()->administrator->hasPermissionTo('efevoo-tokens.manage') || abort(403);
+
         $efevooToken->load(['customer.user', 'transactions' => function ($query) {
             $query->latest()->limit(20);
         }]);

@@ -11,6 +11,8 @@ class TaxProfileController extends Controller
 {
     public function index(Request $request)
     {
+        $request->user()->administrator->hasPermissionTo('tax-profiles.manage') || abort(403);
+
         $filters = collect($request->only([
             'search',
         ]))->filter()->all();
@@ -41,6 +43,8 @@ class TaxProfileController extends Controller
 
     public function show(Customer $customer)
     {
+        request()->user()->administrator->hasPermissionTo('tax-profiles.manage') || abort(403);
+
         $customer->load([
             'user',
             'taxProfiles' => function ($query) {

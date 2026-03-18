@@ -62,6 +62,8 @@ class LogsGeneralController extends Controller
      */
     public function index(Request $request)
     {
+        $request->user()->administrator->hasPermissionTo('logs-general.manage') || abort(403);
+
         $path = $this->getLogPath();
         $lines = (int) $request->get('lines', 500);
         $lines = min(max(100, $lines), 5000);
@@ -84,6 +86,8 @@ class LogsGeneralController extends Controller
      */
     public function download(): StreamedResponse
     {
+        request()->user()->administrator->hasPermissionTo('logs-general.manage') || abort(403);
+
         $path = $this->getLogPath();
 
         if (!File::exists($path)) {
