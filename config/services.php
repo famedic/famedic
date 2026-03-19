@@ -129,6 +129,7 @@ return [
         'event_key' => env('ACTIVE_CAMPAIGN_EVENT_KEY'),
         'list_new_users' => env('ACTIVE_CAMPAIGN_LIST_NEW_USERS'),
         'tag_registro_web' => env('ACTIVE_CAMPAIGN_TAG_REGISTRO_WEB'),
+        'cart_abandoned_minutes' => (int) env('ACTIVE_CAMPAIGN_CART_ABANDONED_MINUTES', 60),
         // Tags específicos laboratorio
         'tag_registro_nuevo' => (function () {
             $raw = env('ACTIVE_CAMPAIGN_TAG_REGISTRO_NUEVO');
