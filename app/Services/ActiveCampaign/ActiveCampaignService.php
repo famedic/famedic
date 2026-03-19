@@ -900,17 +900,17 @@ class ActiveCampaignService
 
     public function sampleCollected(string $email): void
     {
-        Log::info('AC: sampleCollected iniciado', ['email' => $email]);
+        Log::info('AC: Cita confirmed iniciado', ['email' => $email]);
 
         $contactId = $this->getContactIdByEmail($email);
 
         if (!$contactId) {
-            Log::warning('AC: sampleCollected omitido — contacto no encontrado en AC', ['email' => $email]);
+            Log::warning('AC: Cita confirmed omitido — contacto no encontrado en AC', ['email' => $email]);
             return;
         }
 
-        $this->addTagToContact($contactId, 26);
-        Log::info('AC: sampleCollected completado', ['contact_id' => $contactId, 'email' => $email]);
+        $this->addTagToContact($contactId, 24);
+        Log::info('AC: Cita confirmed completado', ['contact_id' => $contactId, 'email' => $email]);
     }
 
     public function patientCreated($contact): void
