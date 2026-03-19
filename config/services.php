@@ -130,6 +130,8 @@ return [
         'list_new_users' => env('ACTIVE_CAMPAIGN_LIST_NEW_USERS'),
         'tag_registro_web' => env('ACTIVE_CAMPAIGN_TAG_REGISTRO_WEB'),
         'cart_abandoned_minutes' => (int) env('ACTIVE_CAMPAIGN_CART_ABANDONED_MINUTES', 60),
+        'tag_pharmacy_purchase_completed' => (int) env('ACTIVE_CAMPAIGN_TAG_PHARMACY_PURCHASE_COMPLETED', 17),
+        'tag_laboratory_purchase_completed' => (int) env('ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_COMPLETED', 18),
         // Tags específicos laboratorio
         'tag_registro_nuevo' => (function () {
             $raw = env('ACTIVE_CAMPAIGN_TAG_REGISTRO_NUEVO');

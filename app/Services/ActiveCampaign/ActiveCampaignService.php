@@ -576,6 +576,16 @@ class ActiveCampaignService
                 'products' => $products,
             ]);
 
+            $tagId = (int) config('services.activecampaign.tag_laboratory_purchase_completed', 18);
+            if ($tagId > 0) {
+                $this->tagByEmail($email, $tagId);
+                Log::info('AC: Tag compra laboratorio enviado', [
+                    'email' => $email,
+                    'purchase_id' => $purchase->id,
+                    'tag_id' => $tagId,
+                ]);
+            }
+
             Log::info('AC: laboratoryPurchase completado', ['purchase_id' => $purchase->id, 'email' => $email]);
         } catch (\Throwable $e) {
 
@@ -616,6 +626,16 @@ class ActiveCampaignService
                 'connectionid' => 1,
                 'products' => $products,
             ]);
+
+            $tagId = (int) config('services.activecampaign.tag_pharmacy_purchase_completed', 17);
+            if ($tagId > 0) {
+                $this->tagByEmail($email, $tagId);
+                Log::info('AC: Tag compra farmacia enviado', [
+                    'email' => $email,
+                    'purchase_id' => $purchase->id,
+                    'tag_id' => $tagId,
+                ]);
+            }
 
             Log::info('AC: pharmacyPurchase completado', ['purchase_id' => $purchase->id, 'email' => $email]);
         } catch (\Throwable $e) {
