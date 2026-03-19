@@ -120,7 +120,7 @@ class EfevooPayService
             $expFormatted = substr($expiration, 0, 2) . '/' . substr($expiration, 2, 2);
 
             // Timezone correcto con signo
-            $tzMinutes = (int) ((new \DateTime())->getOffset() / 60);            
+            $tzMinutes = (int) ((new \DateTime())->getOffset() / 60);
 
             // Accept header realista (no confiar en request)
             $acceptHeader = request()->header('Accept');
@@ -252,13 +252,24 @@ class EfevooPayService
             ->first();
 
         if ($existing) {
-            Log::info('[Efevoo] Tarjeta ya registrada para este cliente', [
+            Log::info('[Efevoo] Tarjeta ya existente, reutilizando', [
                 'customer_id' => $customerId,
                 'card_last_four' => $lastFour,
+                'expiration' => $expiration,
+                'token_id' => $existing->id,
             ]);
+
+            // Opcional: actualizar alias o holder si cambió
+            $existing->update([
+                'alias' => $cardData['alias'] ?? $existing->alias,
+                'card_holder' => $cardData['card_holder'] ?? $existing->card_holder,
+                'updated_at' => now(),
+            ]);
+
             return [
-                'success' => false,
-                'message' => 'Esta tarjeta ya está registrada en tu cuenta. Si no la ves, revisa que no esté desactivada.',
+                'success' => true,
+                'token_id' => $existing->id,
+                'reused' => true,
             ];
         }
 
