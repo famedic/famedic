@@ -32,3 +32,5 @@ docs/ACTIVECAMPAIGN_TAGS.md
 /docs/*
 desktop.ini
 /backups/*
+start-dev.bat
+start-dev.ps1
