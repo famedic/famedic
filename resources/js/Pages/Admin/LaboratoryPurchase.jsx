@@ -182,6 +182,15 @@ function Header({
 							</span>
 						</Badge>
 
+						{/* New badge for gda_consecutivo */}
+						{laboratoryPurchase.gda_consecutivo && (
+							<Badge color="purple">
+								<span className="text-lg">
+									{laboratoryPurchase.gda_consecutivo}
+								</span>
+							</Badge>
+						)}
+
 						<Badge color={hasSampleCollected ? "amber" : "slate"}>
 							{hasSampleCollected ? "Muestra tomada" : "Pendiente toma"}
 
