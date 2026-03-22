@@ -255,6 +255,7 @@ function Header({
 					hasResults={!!laboratoryPurchase.results}
 				/>
 
+				{/*}	
 				{hasResultsAvailable && (
 					<Button
 						color="emerald"
@@ -267,7 +268,7 @@ function Header({
 							: "Consultar resultados GDA"}
 					</Button>
 				)}
-
+				*/}	
 				{laboratoryPurchase.dev_assistance_requests.length === 0 ? (
 					<DevAssistanceButton
 						storeRoute={route(
