@@ -102,6 +102,7 @@ export default function Purchase({ purchase, isLabPurchase = false }) {
 				</div>
 			)}
 
+			{/* COMENTADO: Esta información ahora está en los tabs 
 			<PurchaseDetails
 				purchase={purchase}
 				isLabPurchase={isLabPurchase}
@@ -110,6 +111,7 @@ export default function Purchase({ purchase, isLabPurchase = false }) {
 			<Items purchase={purchase} isLabPurchase={isLabPurchase} />
 
 			<Totals purchase={purchase} isLabPurchase={isLabPurchase} />
+			*/}
 
 			<InvoiceModal
 				purchase={purchase}
@@ -163,7 +165,7 @@ function Header({ purchase, isLabPurchase }) {
 
 			<div className="gap-6 max-md:space-y-6 md:flex md:items-center">
 				<GradientHeading noDivider className="flex-1">
-					!Gracias por tu pedido!
+					¡Gracias por tu pedido!
 				</GradientHeading>
 
 				{isLabPurchase && (
@@ -182,12 +184,22 @@ function Header({ purchase, isLabPurchase }) {
 				<div className="flex flex-col gap-2">
 					<Subheading className="flex gap-2">Folio</Subheading>
 
-					<Badge color="famedic" className="w-min !text-4xl">
-						<QrCodeIcon className="size-10" />
-						{isLabPurchase
-							? purchase.gda_order_id
-							: purchase.vitau_order_id}
-					</Badge>
+					<div className="flex flex-col gap-1">
+						<Badge color="famedic" className="w-min !text-4xl">
+							<QrCodeIcon className="size-10" />
+							{isLabPurchase
+								? purchase.gda_order_id
+								: purchase.vitau_order_id}
+						</Badge>
+						
+						{/* Mostrar consecutivo si existe */}
+						{isLabPurchase && purchase.gda_consecutivo && (
+							<Badge color="slate" className="w-min !text-4xl">
+								<QrCodeIcon className="size-10" />
+								{purchase.gda_consecutivo}								
+							</Badge>
+						)}
+					</div>
 				</div>
 			</div>
 
@@ -205,6 +217,8 @@ function Header({ purchase, isLabPurchase }) {
 	);
 }
 
+// COMENTADOS: Estos componentes ahora están en los tabs respectivos
+/*
 function PurchaseDetails({ purchase, isLabPurchase }) {
 	return (
 		<div className="xl:mr-40 xl:pr-6">
@@ -537,6 +551,7 @@ function Totals({ purchase, isLabPurchase }) {
 		</div>
 	);
 }
+*/
 
 function InvoiceModal({
 	purchase,
@@ -610,4 +625,3 @@ function InvoiceRequestWarningBanner({ daysLeftToRequestInvoice, purchase }) {
 		</Card>
 	);
 }
-
