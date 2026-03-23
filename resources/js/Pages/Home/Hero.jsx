@@ -10,7 +10,7 @@ import { Text } from "@/Components/Catalyst/text";
 import InvitationLink from "@/Pages/Home/InvitationLink";
 import WelcomeMessage from "@/Components/WelcomeMessage";
 
-export default function Hero({ invitationUrl, auth }) {
+export default function Hero({ invitationUrl, auth, userStats, recentResults }) {
     const [isVisible, setIsVisible] = useState(false);
     
     useEffect(() => {
@@ -52,12 +52,14 @@ export default function Hero({ invitationUrl, auth }) {
                 </div>
                 
                 <div className="relative pb-16 pt-32">
-                    {/* Mensaje de bienvenida para usuarios autenticados */}
+                    {/* Mensaje de bienvenida con estadísticas para usuarios autenticados */}
                     {auth?.user && (
                         <WelcomeMessage 
                             user={auth.user}
+                            stats={userStats}
+                            recentResults={recentResults}
                             className={clsx(
-                                "mb-8 transform transition-all duration-700",
+                                "mb-6 transform transition-all duration-700",
                                 isVisible ? "translate-y-0 opacity-100" : "-translate-y-10 opacity-0"
                             )}
                         />

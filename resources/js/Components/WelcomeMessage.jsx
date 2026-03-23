@@ -3,92 +3,87 @@ import { useEffect, useState } from "react";
 import { SunIcon, MoonIcon, CloudIcon } from "@heroicons/react/24/outline";
 import { SparklesIcon } from "@heroicons/react/24/solid";
 import clsx from "clsx";
+import UserDashboardStats from "./UserDashboardStats";
 
-export default function WelcomeMessage({ user, className }) {
+// Paleta de colores sobrios para el gradiente
+const colors = {
+    primary: "#1e2a3e",
+    primaryLight: "#2d3a4e",
+    secondary: "#4a5b6e",
+    accent: "#2c3e50",
+};
+
+export default function WelcomeMessage({ user, stats, recentResults, className }) {
     const [greeting, setGreeting] = useState("");
     const [icon, setIcon] = useState(null);
-    const [timeColor, setTimeColor] = useState("");
     const [message, setMessage] = useState("");
+    const [currentTime, setCurrentTime] = useState(new Date());
 
     useEffect(() => {
-        const hour = new Date().getHours();
+        const hour = currentTime.getHours();
         
-        // Determinar el saludo según la hora
         if (hour >= 5 && hour < 12) {
             setGreeting("Buenos días");
             setIcon(SunIcon);
-            setTimeColor("from-amber-400 to-orange-500");
-            setMessage("Que tengas un día lleno de energía y salud");
+            setMessage("🌅 Que tengas un día productivo");
         } else if (hour >= 12 && hour < 18) {
             setGreeting("Buenas tardes");
             setIcon(SunIcon);
-            setTimeColor("from-yellow-400 to-amber-500");
-            setMessage("Sigue cuidando tu bienestar esta tarde");
+            setMessage("☀️ Continúa cuidando tu bienestar");
         } else if (hour >= 18 && hour < 22) {
             setGreeting("Buenas noches");
             setIcon(CloudIcon);
-            setTimeColor("from-indigo-400 to-purple-500");
-            setMessage("Relájate y prepárate para descansar");
+            setMessage("🌙 Un momento para descansar");
         } else {
             setGreeting("Buenas noches");
             setIcon(MoonIcon);
-            setTimeColor("from-blue-400 to-indigo-600");
-            setMessage("Descansa bien, mañana te esperamos");
+            setMessage("✨ Descansa, mañana te esperamos");
         }
-    }, []);
+        
+        const interval = setInterval(() => {
+            setCurrentTime(new Date());
+        }, 60000);
+        
+        return () => clearInterval(interval);
+    }, [currentTime]);
 
     const GreetingIcon = icon;
-
-    // Obtener el primer nombre del usuario
-    const getFirstName = () => {
-        if (!user) return "Usuario";
-        if (user.name && typeof user.name === 'string') {
-            return user.name.split(" ")[0];
-        }
-        if (typeof user === 'string') return user.split(" ")[0];
-        return "Usuario";
-    };
-
-    const firstName = getFirstName();
+    const firstName = user?.full_name?.split(" ")[0] || user?.name?.split(" ")[0] || "Usuario";
 
     return (
-        <div className={clsx(
-            "relative overflow-hidden rounded-2xl bg-gradient-to-r p-6 shadow-lg transition-all duration-500 hover:shadow-xl",
-            timeColor,
-            className
-        )}>
-            {/* Fondo decorativo */}
-            <div className="absolute inset-0 bg-black opacity-10" />
-            
-            {/* Efecto de brillo */}
-            <div className="absolute -inset-1 bg-gradient-to-r from-transparent via-white/20 to-transparent blur-xl" />
-            
-            <div className="relative flex items-center gap-4">
-                {/* Icono animado */}
-                <div className="animate-pulse rounded-full bg-white/20 p-3 backdrop-blur-sm">
-                    {GreetingIcon && (
-                        <GreetingIcon className="h-8 w-8 text-white md:h-10 md:w-10" />
-                    )}
-                </div>
-                
-                {/* Contenido del mensaje */}
-                <div className="flex-1 text-left">
-                    <div className="flex flex-col gap-1">
-                        <h2 className="text-2xl font-bold text-white md:text-3xl">
-                            {greeting}, {firstName}!
+        <div className="space-y-3">
+            {/* Mensaje de bienvenida con gradiente sobrio */}
+            <div className={clsx(
+                "relative overflow-hidden rounded-xl p-4 shadow-md",
+                className
+            )} style={{ background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%)` }}>
+                <div className="absolute inset-0 bg-black opacity-10" />
+                <div className="relative flex items-center gap-3">
+                    <div className="rounded-full bg-white/20 p-2">
+                        {GreetingIcon && (
+                            <GreetingIcon className="h-5 w-5 text-white md:h-6 md:w-6" />
+                        )}
+                    </div>
+                    <div className="flex-1">
+                        <h2 className="text-base font-bold text-white md:text-lg">
+                            {greeting}, {firstName}
                         </h2>
-                        <p className="text-sm text-white/90 md:text-base">
+                        <p className="text-xs text-white/80">
                             {message}
                         </p>
-                        <p className="mt-1 text-xs text-white/70">
-                            Bienvenido a Famedic, tu salud es nuestra prioridad
-                        </p>
                     </div>
+                    <SparklesIcon className="h-4 w-4 text-white/40" />
                 </div>
-                
-                {/* Detalle decorativo */}
-                <SparklesIcon className="absolute bottom-2 right-2 h-6 w-6 text-white/20 md:h-8 md:w-8" />
             </div>
+            
+            {/* Estadísticas compactas */}
+            {stats && (
+                <UserDashboardStats 
+                    user={user} 
+                    stats={stats} 
+                    recentResults={recentResults}
+                />
+            )}
         </div>
     );
 }
