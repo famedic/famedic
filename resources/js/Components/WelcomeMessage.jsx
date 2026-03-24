@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { SunIcon, MoonIcon, CloudIcon } from "@heroicons/react/24/outline";
 import { SparklesIcon } from "@heroicons/react/24/solid";
 import clsx from "clsx";
-import UserDashboardStats from "./UserDashboardStats";
+// import UserDashboardStats from "./UserDashboardStats"; // Comentado temporalmente
 
 // Paleta de colores sobrios para el gradiente
 const colors = {
@@ -21,7 +21,7 @@ export default function WelcomeMessage({ user, stats, recentResults, className }
 
     useEffect(() => {
         const hour = currentTime.getHours();
-        
+
         if (hour >= 5 && hour < 12) {
             setGreeting("Buenos días");
             setIcon(SunIcon);
@@ -39,11 +39,11 @@ export default function WelcomeMessage({ user, stats, recentResults, className }
             setIcon(MoonIcon);
             setMessage("✨ Descansa, mañana te esperamos");
         }
-        
+
         const interval = setInterval(() => {
             setCurrentTime(new Date());
         }, 60000);
-        
+
         return () => clearInterval(interval);
     }, [currentTime]);
 
@@ -75,15 +75,15 @@ export default function WelcomeMessage({ user, stats, recentResults, className }
                     <SparklesIcon className="h-4 w-4 text-white/40" />
                 </div>
             </div>
-            
-            {/* Estadísticas compactas */}
-            {stats && (
-                <UserDashboardStats 
-                    user={user} 
-                    stats={stats} 
+
+            {/* Estadísticas compactas - COMENTADO TEMPORALMENTE */}
+            {/* {stats && (
+                <UserDashboardStats
+                    user={user}
+                    stats={stats}
                     recentResults={recentResults}
                 />
-            )}
+            )} */}
         </div>
     );
 }
