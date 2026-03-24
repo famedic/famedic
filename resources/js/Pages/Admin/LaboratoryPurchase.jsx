@@ -182,6 +182,15 @@ function Header({
 							</span>
 						</Badge>
 
+						{/* New badge for gda_consecutivo */}
+						{laboratoryPurchase.gda_consecutivo && (
+							<Badge color="purple">
+								<span className="text-lg">
+									{laboratoryPurchase.gda_consecutivo}
+								</span>
+							</Badge>
+						)}
+
 						<Badge color={hasSampleCollected ? "amber" : "slate"}>
 							{hasSampleCollected ? "Muestra tomada" : "Pendiente toma"}
 
@@ -255,6 +264,7 @@ function Header({
 					hasResults={!!laboratoryPurchase.results}
 				/>
 
+				{/*}	
 				{hasResultsAvailable && (
 					<Button
 						color="emerald"
@@ -267,7 +277,7 @@ function Header({
 							: "Consultar resultados GDA"}
 					</Button>
 				)}
-
+				*/}	
 				{laboratoryPurchase.dev_assistance_requests.length === 0 ? (
 					<DevAssistanceButton
 						storeRoute={route(

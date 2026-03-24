@@ -1,8 +1,17 @@
 import SettingsLayout from "@/Layouts/SettingsLayout";
 import Purchase from "@/Components/Purchase";
+import { useEffect, useState } from "react";
+import LaboratoryPurchaseTabs from "@/Components/Laboratory/LaboratoryPurchaseTabs";
 import Card from "@/Components/Card";
-import LaboratoryStatusPanel from "@/Components/Laboratory/LaboratoryStatusPanel";
-import { useEffect } from "react";
+import PatientTabContent from "@/Components/Laboratory/Tabs/PatientTabContent";
+import OrderInfoTabContent from "@/Components/Laboratory/Tabs/OrderInfoTabContent";
+import StoresTabContent from "@/Components/Laboratory/Tabs/StoresTabContent";
+import PaymentTabContent from "@/Components/Laboratory/Tabs/PaymentTabContent";
+import AddressTabContent from "@/Components/Laboratory/Tabs/AddressTabContent";
+import DetailsTabContent from "@/Components/Laboratory/Tabs/DetailsTabContent";
+import ResultsTabContent from "@/Components/Laboratory/Tabs/ResultsTabContent";
+import InvoiceTabContent from "@/Components/Laboratory/Tabs/InvoiceTabContent";
+import StatusTabContent from "@/Components/Laboratory/Tabs/StatusTabContent";
 
 export default function LaboratoryPurchase({
     laboratoryPurchase,
@@ -12,11 +21,13 @@ export default function LaboratoryPurchase({
     hasSampleCollected,
     hasResultsAvailable
 }) {
+    const [activeTab, setActiveTab] = useState("paciente");
+    
+    // Determinar si hay resultados (automáticos o manuales)
+    const hasAnyResults = hasResultsAvailable || !!laboratoryPurchase.results;
 
     useEffect(() => {
-
         if (laboratoryPurchase && !window.ga4PurchaseSent) {
-
             window.dataLayer = window.dataLayer || [];
 
             const totalValue = laboratoryPurchase.total_cents / 100;
@@ -45,30 +56,75 @@ export default function LaboratoryPurchase({
 
             window.ga4PurchaseSent = true;
         }
-
     }, [laboratoryPurchase]);
 
     return (
-
         <SettingsLayout title="Pedido de laboratorio">
-
-            <Card className="space-y-8 p-6 lg:space-y-10 lg:p-12">
-
+            <Card className="space-y-6 p-6 lg:space-y-8 lg:p-8">
+                {/* Header Section - Información de compra y agradecimiento */}
                 <Purchase
                     purchase={laboratoryPurchase}
                     isLabPurchase={true}
                 />
-
-                <LaboratoryStatusPanel
-                    laboratoryPurchase={laboratoryPurchase}
-                    latestSampleCollectionAt={latestSampleCollectionAt}
-                    latestResultsAt={latestResultsAt}
-                    hasSampleCollected={hasSampleCollected}
-                    hasResultsAvailable={hasResultsAvailable}
+                
+                {/* Tabs Navigation */}
+                <LaboratoryPurchaseTabs 
+                    activeTab={activeTab} 
+                    onTabChange={setActiveTab}
+                    hasResults={hasAnyResults}
+                    hasInvoice={!!laboratoryPurchase.invoice}
                 />
 
+                {/* Tab Content */}
+                <div className="mt-6">
+                    {activeTab === "paciente" && (
+                        <PatientTabContent purchase={laboratoryPurchase} />
+                    )}
+                    
+                    {activeTab === "orden" && (
+                        <OrderInfoTabContent purchase={laboratoryPurchase} />
+                    )}
+                    
+                    {activeTab === "sucursales" && (
+                        <StoresTabContent purchase={laboratoryPurchase} />
+                    )}
+                    
+                    {activeTab === "pago" && (
+                        <PaymentTabContent purchase={laboratoryPurchase} />
+                    )}
+                    
+                    {activeTab === "direccion" && (
+                        <AddressTabContent purchase={laboratoryPurchase} />
+                    )}
+                    
+                    {activeTab === "detalles" && (
+                        <DetailsTabContent purchase={laboratoryPurchase} />
+                    )}
+                    
+                    {activeTab === "resultados" && (
+                        <ResultsTabContent 
+                            laboratoryPurchase={laboratoryPurchase}
+                            latestResultsAt={latestResultsAt}
+                            hasResultsAvailable={hasResultsAvailable}
+                            hasManualResults={!!laboratoryPurchase.results}
+                        />
+                    )}
+                    
+                    {activeTab === "facturas" && (
+                        <InvoiceTabContent purchase={laboratoryPurchase} />
+                    )}
+                    
+                    {activeTab === "estado" && (
+                        <StatusTabContent 
+                            laboratoryPurchase={laboratoryPurchase}
+                            latestSampleCollectionAt={latestSampleCollectionAt}
+                            latestResultsAt={latestResultsAt}
+                            hasSampleCollected={hasSampleCollected}
+                            hasResultsAvailable={hasResultsAvailable}
+                        />
+                    )}
+                </div>
             </Card>
-
         </SettingsLayout>
     );
 }
