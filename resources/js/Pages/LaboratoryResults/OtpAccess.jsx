@@ -1,3 +1,4 @@
+import ApplicationLogo from "@/Components/ApplicationLogo";
 import { Head, useForm } from "@inertiajs/react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -70,38 +71,69 @@ export default function OtpAccess({
 
   return (
     <>
-      <Head title="Acceso a resultados de laboratorio" />
-      <div className="min-h-screen bg-zinc-50 px-4 py-10 dark:bg-slate-950">
-        <div className="mx-auto max-w-5xl rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-            Resultados de laboratorio
-          </h1>
+      <Head title="Resultados de laboratorio | Famedic" />
 
+      {/* HEADER */}
+      <div className="border-b bg-white dark:bg-slate-900 dark:border-slate-800">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+          <a href="/" className="flex items-center gap-2" aria-label="Famedic — inicio">
+            <ApplicationLogo className="h-8 w-auto sm:h-9" />
+            <span className="text-xl font-bold text-zinc-900 dark:text-white">Famedic</span>
+          </a>
+
+          <a
+            href="/dashboard"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Ir a mi cuenta
+          </a>
+        </div>
+      </div>
+
+      {/* MAIN */}
+      <div className="min-h-screen bg-zinc-50 px-4 py-10 dark:bg-slate-950">
+        <div className="mx-auto max-w-5xl space-y-6">
+
+          {/* TITLE */}
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+              Resultados de laboratorio
+            </h1>
+            <p className="text-sm text-zinc-600 dark:text-slate-400">
+              Accede de forma segura a tus resultados médicos
+            </p>
+          </div>
+
+          {/* ERROR */}
           {errorMessage && (
-            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
               {errorMessage}
             </div>
           )}
 
+          {/* OTP */}
           {!errorMessage && !alreadyVerified && (
-            <div className="mt-5 grid gap-6 md:grid-cols-2">
-              <div className="rounded-lg border border-zinc-200 p-4 dark:border-slate-700">
-                <h2 className="font-semibold text-zinc-900 dark:text-white">Validación OTP</h2>
+            <div className="grid gap-6 md:grid-cols-2">
+
+              {/* OTP CARD */}
+              <div className="rounded-xl border bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+                  Verificación de seguridad
+                </h2>
+
                 <p className="mt-2 text-sm text-zinc-600 dark:text-slate-300">
-                  Enviamos un código SMS de 6 dígitos a {maskedPhone || "tu teléfono"}.
+                  Enviamos un código SMS a{" "}
+                  <strong>{maskedPhone || "tu teléfono"}</strong>
                 </p>
 
-                <div className="mt-3 space-y-1 text-sm">
-                  <p className="text-zinc-700 dark:text-slate-300">
-                    Expira en: <strong>{formatCountdown(otpSecondsLeft)}</strong>
-                  </p>
-                  <p className="text-zinc-700 dark:text-slate-300">
-                    Intentos restantes: <strong>{attemptsLeft}</strong> de {maxAttempts}
-                  </p>
+                <div className="mt-4 flex justify-between text-sm text-zinc-600 dark:text-slate-300">
+                  <span>Expira en: <strong>{formatCountdown(otpSecondsLeft)}</strong></span>
+                  <span>Intentos: <strong>{attemptsLeft}/{maxAttempts}</strong></span>
                 </div>
 
-                <form className="mt-4 space-y-3" onSubmit={submitVerify}>
+                <form className="mt-5 space-y-4" onSubmit={submitVerify}>
                   <input type="hidden" name="token" value={verifyForm.data.token} />
+
                   <input
                     type="text"
                     inputMode="numeric"
@@ -110,36 +142,25 @@ export default function OtpAccess({
                     onChange={(e) =>
                       verifyForm.setData("code", e.target.value.replace(/\D/g, "").slice(0, 6))
                     }
-                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-center text-lg tracking-[0.25em] text-zinc-900 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-zinc-300 px-4 py-3 text-center text-2xl tracking-[0.4em] focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                     placeholder="000000"
                   />
-
-                  {(verifyForm.errors.otp || verifyForm.errors.code || verifyForm.errors.attempts) && (
-                    <div className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
-                      {verifyForm.errors.otp || verifyForm.errors.code || verifyForm.errors.attempts}
-                    </div>
-                  )}
-
-                  {resendForm.errors.otp && (
-                    <div className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
-                      {resendForm.errors.otp}
-                    </div>
-                  )}
 
                   <button
                     type="submit"
                     disabled={verifyForm.processing || otpSecondsLeft === 0}
-                    className="w-full rounded-md bg-blue-600 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:bg-blue-400"
+                    className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white hover:bg-blue-700 disabled:bg-blue-400"
                   >
                     {verifyForm.processing ? "Validando..." : "Validar código"}
                   </button>
                 </form>
 
+                {/* RESEND */}
                 <button
                   type="button"
                   onClick={submitResend}
                   disabled={!canResend || resendForm.processing}
-                  className="mt-3 w-full rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-200"
+                  className="mt-4 w-full text-sm text-blue-600 hover:underline disabled:opacity-50"
                 >
                   {resendForm.processing
                     ? "Reenviando..."
@@ -149,26 +170,32 @@ export default function OtpAccess({
                 </button>
               </div>
 
-              <div className="rounded-lg border border-zinc-200 p-4 dark:border-slate-700">
-                <h3 className="font-semibold text-zinc-900 dark:text-white">Seguridad</h3>
-                <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-zinc-600 dark:text-slate-300">
-                  <li>El acceso requiere OTP para cada orden.</li>
-                  <li>El código es temporal y se almacena hasheado.</li>
-                  <li>Se invalidan códigos previos al generar uno nuevo.</li>
+              {/* INFO */}
+              <div className="rounded-xl border bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <h3 className="font-semibold text-zinc-900 dark:text-white">
+                  🔒 Seguridad de tu información
+                </h3>
+
+                <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-slate-300">
+                  <li>• Acceso protegido con verificación SMS</li>
+                  <li>• Código temporal y seguro</li>
+                  <li>• Protección de datos médicos sensibles</li>
                 </ul>
               </div>
             </div>
           )}
 
+          {/* PDF */}
           {alreadyVerified && pdfBase64 && (
-            <div className="mt-5">
-              <p className="mb-3 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300">
-                Código verificado correctamente. Mostrando resultados.
-              </p>
+            <div className="rounded-xl border bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                ✅ Verificación exitosa. Aquí están tus resultados.
+              </div>
+
               <iframe
-                title="Resultados de laboratorio"
+                title="Resultados"
                 src={`data:application/pdf;base64,${pdfBase64}`}
-                className="h-[75vh] w-full rounded-md border border-zinc-200 dark:border-slate-700"
+                className="h-[75vh] w-full rounded-lg border"
               />
             </div>
           )}
