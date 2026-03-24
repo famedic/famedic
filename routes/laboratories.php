@@ -11,6 +11,7 @@ use App\Http\Controllers\LaboratoryShoppingCartController;
 use App\Http\Controllers\LaboratoryStoreController;
 use App\Http\Controllers\LaboratoryQuoteController;
 use App\Http\Controllers\LaboratoryResultsController;
+use App\Http\Controllers\LabResultsAccessController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -19,6 +20,9 @@ Route::get('/laboratory-brand-selection', LaboratoryBrandSelectionController::cl
 Route::get('/laboratory/{laboratory_brand}/laboratory-tests', [LaboratoryTestsController::class, 'index'])->name('laboratory-tests');
 Route::get('/laboratory-tests/{laboratory_test}', [LaboratoryTestsController::class, 'show'])->name('laboratory-tests.test');
 Route::resource('laboratory-stores', LaboratoryStoreController::class)->only(['index']);
+Route::get('/lab-results/{token}', [LabResultsAccessController::class, 'show'])->name('lab-results.show');
+Route::post('/lab-results/verify', [LabResultsAccessController::class, 'verify'])->name('lab-results.verify');
+Route::post('/lab-results/resend', [LabResultsAccessController::class, 'resend'])->name('lab-results.resend');
 
 // Protected routes requiring authentication
 Route::middleware([
