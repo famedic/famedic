@@ -31,3 +31,5 @@ docs/ACTIVECAMPAIGN_PRUEBAS.md
 docs/ACTIVECAMPAIGN_TAGS.md
 /docs/*
 desktop.ini
+start-dev.bat
+start-dev.ps1
