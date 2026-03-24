@@ -9,11 +9,17 @@ use App\Models\LaboratoryPurchase;
 use App\Models\User;
 use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Notifications\LaboratorySampleCollected;
+use App\Services\Laboratory\LabOrderNotificationGateService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class HandleSampleCollectionNotificationAction
 {
+    public function __construct(
+        protected LabOrderNotificationGateService $notificationGateService
+    ) {
+    }
+
     public function execute(LaboratoryNotification $notification, array $data, array $references): void
     {
         Log::info('Processing sample collection notification', [
@@ -35,14 +41,62 @@ class HandleSampleCollectionNotificationAction
         // Actualizar purchase si existe
         $purchase = $this->updatePurchase($references, $data);
 
+        $studyExternalId = $this->extractStudyExternalId($data);
+        $gdaOrderId = (string) ($data['id'] ?? '');
+
+        $gateResult = $this->notificationGateService->registerEvent(
+            gdaOrderId: $gdaOrderId,
+            eventType: LabOrderNotificationGateService::EVENT_SAMPLE,
+            purchase: $purchase,
+            studyExternalId: $studyExternalId,
+            providerEventId: $data['GDA_menssage']['acuse'] ?? null,
+            payload: $data
+        );
+
         // Encontrar usuario para notificar
         $userToNotify = $this->findUserToNotify($references, $quote, $purchase);
 
-        // Enviar notificación por email
-        $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase);
+        if ($gateResult['should_send_sample_email']) {
+            $wasSent = $this->notificationGateService->sendSampleOnce($gdaOrderId, function () use (
+                $userToNotify,
+                $notification,
+                $data,
+                $quote,
+                $purchase
+            ) {
+                $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase);
+            });
+
+            if (! $wasSent) {
+                Log::info('Sample email skipped because it was already sent for order', [
+                    'gda_order_id' => $gdaOrderId,
+                    'notification_id' => $notification->id,
+                ]);
+            }
+        } else {
+            Log::info('Sample email pending until all studies are notified', [
+                'gda_order_id' => $gdaOrderId,
+                'notification_id' => $notification->id,
+                'is_new_event' => $gateResult['is_new_event'],
+                'sample_received_count' => $gateResult['state']->sample_received_count,
+                'total_studies' => max(1, (int) $gateResult['state']->total_studies),
+            ]);
+        }
 
         // Marcar como procesada
         $notification->update(['status' => LaboratoryNotification::STATUS_PROCESSED]);
+    }
+
+    protected function extractStudyExternalId(array $data): ?string
+    {
+        $code = $data['code']['coding'][0]['code'] ?? null;
+        $display = $data['code']['coding'][0]['display'] ?? null;
+
+        if ($code || $display) {
+            return trim(($code ?? 'unknown') . '|' . ($display ?? 'unknown'));
+        }
+
+        return $data['requisition']['value'] ?? null;
     }
 
     protected function updateQuote(array $references, array $data): ?LaboratoryQuote

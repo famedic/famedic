@@ -9,11 +9,17 @@ use App\Models\LaboratoryPurchase;
 use App\Models\User;
 use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Notifications\LaboratoryResultsAvailable;
+use App\Services\Laboratory\LabOrderNotificationGateService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class HandleResultsNotificationAction
 {
+    public function __construct(
+        protected LabOrderNotificationGateService $notificationGateService
+    ) {
+    }
+
     public function execute(LaboratoryNotification $notification, array $data, array $references): void
     {
         Log::info('Processing results notification', [
@@ -34,19 +40,45 @@ class HandleResultsNotificationAction
         // Actualizar purchase
         $purchase = $this->updatePurchase($references, $data, $hasResultsInPayload);
 
-        // Determinar si ya se recibieron todas las notificaciones de la orden
-        $shouldSendEmail = $this->shouldSendEmailForPurchase($purchase);
+        $studyExternalId = $this->extractStudyExternalId($data);
+        $gdaOrderId = (string) ($data['id'] ?? '');
+
+        $gateResult = $this->notificationGateService->registerEvent(
+            gdaOrderId: $gdaOrderId,
+            eventType: LabOrderNotificationGateService::EVENT_RESULTS,
+            purchase: $purchase,
+            studyExternalId: $studyExternalId,
+            providerEventId: $data['GDA_menssage']['acuse'] ?? null,
+            payload: $data
+        );
 
         // Encontrar usuario
         $userToNotify = $this->findUserToNotify($references, $quote, $purchase);
 
-        // Enviar email solo cuando ya se completaron todas las notificaciones de la orden
-        if ($shouldSendEmail) {
-            $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase, $hasResultsInPayload);
+        if ($gateResult['should_send_results_email']) {
+            $wasSent = $this->notificationGateService->sendResultsOnce($gdaOrderId, function () use (
+                $userToNotify,
+                $notification,
+                $data,
+                $quote,
+                $purchase,
+                $hasResultsInPayload
+            ) {
+                $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase, $hasResultsInPayload);
+            });
+
+            if (! $wasSent) {
+                Log::info('Results email skipped because it was already sent for order', [
+                    'gda_order_id' => $gdaOrderId,
+                    'notification_id' => $notification->id,
+                ]);
+            }
         } else {
-            Log::info('Skipping results email until all studies for order have reported', [
+            Log::info('Skipping results email because order already notified or event duplicated', [
                 'notification_id' => $notification->id,
                 'purchase_id' => $purchase?->id,
+                'gda_order_id' => $gdaOrderId,
+                'is_new_event' => $gateResult['is_new_event'],
             ]);
         }
 
@@ -54,42 +86,16 @@ class HandleResultsNotificationAction
         $notification->update(['status' => LaboratoryNotification::STATUS_PROCESSED]);
     }
 
-    /**
-     * Determina si ya se recibieron todas las notificaciones de resultados para una orden
-     * y por lo tanto es momento de enviar el correo (solo uno por orden).
-     */
-    protected function shouldSendEmailForPurchase(?LaboratoryPurchase $purchase): bool
+    protected function extractStudyExternalId(array $data): ?string
     {
-        if (! $purchase) {
-            // Si no hay compra asociada, mantenemos el comportamiento actual (un correo por notificación)
-            return true;
+        $code = $data['code']['coding'][0]['code'] ?? null;
+        $display = $data['code']['coding'][0]['display'] ?? null;
+
+        if ($code || $display) {
+            return trim(($code ?? 'unknown') . '|' . ($display ?? 'unknown'));
         }
 
-        // Número de estudios de la orden (items de la compra)
-        $studiesCount = $purchase->laboratoryPurchaseItems()->count();
-
-        if ($studiesCount === 0) {
-            // Si por alguna razón no hay estudios asociados, no bloqueamos el envío
-            return true;
-        }
-
-        // Número de notificaciones de resultados recibidas para esta orden
-        $notificationsCount = LaboratoryNotification::query()
-            ->where('laboratory_purchase_id', $purchase->id)
-            ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
-            ->whereNotNull('results_received_at')
-            ->count();
-
-        Log::info('Checking if should send consolidated results email', [
-            'purchase_id' => $purchase->id,
-            'studies_count' => $studiesCount,
-            'notifications_count' => $notificationsCount,
-        ]);
-
-        // Solo enviamos cuando ya tenemos al menos tanta notificación de resultados como estudios
-        // (cuando se procese el último estudio, counts serán iguales)
-        return $notificationsCount >= $studiesCount;
-
+        return $data['requisition']['value'] ?? null;
     }
 
     protected function updateNotification(LaboratoryNotification $notification, array $data, bool $hasResultsInPayload): void
