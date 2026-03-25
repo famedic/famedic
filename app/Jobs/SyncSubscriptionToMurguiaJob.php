@@ -21,7 +21,9 @@ class SyncSubscriptionToMurguiaJob implements ShouldQueue
         public string $status,
         public Carbon $startDate,
         public Carbon $endDate
-    ) {}
+    ) {
+        $this->onQueue(config('services.murguia.queue', 'default'));
+    }
 
     public function handle(SyncSubscriptionToMurguiaAction $syncAction): void
     {

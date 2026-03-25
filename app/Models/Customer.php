@@ -142,6 +142,43 @@ class Customer extends Model
         return $this->morphTo()->withTrashed();
     }
 
+    /**
+     * Licencia institucional Odessa (monitor admin): afiliado Odessa, ó certificado con empresa Odessa.
+     * {@see config('famedic.murguia_institutional_allow_non_odessa_morph')} para bypass en entornos controlados.
+     */
+    public function isEligibleForInstitutionalOdessaLicense(): bool
+    {
+        if (config('famedic.murguia_institutional_allow_non_odessa_morph', false) === true) {
+            return true;
+        }
+
+        if ($this->customerable_type === OdessaAfiliateAccount::class) {
+            return true;
+        }
+
+        if ($this->customerable_type === CertificateAccount::class) {
+            $this->loadMissing('customerable.companyable');
+            $cert = $this->customerable;
+            if ($cert && $cert->companyable_type === OdessaAfiliatedCompany::class) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Etiqueta corta para mensajes de error en monitor Murguía */
+    public function murguiaAdminAccountTypeLabel(): string
+    {
+        return match ($this->customerable_type) {
+            OdessaAfiliateAccount::class => 'Odessa (afiliado)',
+            CertificateAccount::class => 'Certificado / convenio',
+            FamilyAccount::class => 'Familiar',
+            RegularAccount::class => 'Regular',
+            default => $this->customerable_type ? class_basename($this->customerable_type) : 'sin clasificar',
+        };
+    }
+
     public function laboratoryPurchases(): HasMany
     {
         return $this->hasMany(LaboratoryPurchase::class);

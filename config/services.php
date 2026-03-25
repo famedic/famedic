@@ -73,6 +73,8 @@ return [
         'url' => env('MURGUIA_URL'),
         'username' => env('MURGUIA_USERNAME'),
         'password' => env('MURGUIA_PASSWORD'),
+        // Cola de jobs (database/redis). Por defecto "default". En local puede ser "murguia" y usar: php artisan queue:work --queue=murguia
+        'queue' => env('MURGUIA_QUEUE_NAME', 'default'),
     ],
 
     'gda' => [
@@ -130,6 +132,10 @@ return [
         'list_new_users' => env('ACTIVE_CAMPAIGN_LIST_NEW_USERS'),
         'tag_registro_web' => env('ACTIVE_CAMPAIGN_TAG_REGISTRO_WEB'),
         'cart_abandoned_minutes' => (int) env('ACTIVE_CAMPAIGN_CART_ABANDONED_MINUTES', 60),
+        'tag_abandoned_carts_enabled' => filter_var(
+            env('ACTIVECAMPAIGN_TAG_ABANDONED_CARTS_ENABLED', true),
+            FILTER_VALIDATE_BOOLEAN
+        ),
         'tag_pharmacy_purchase_completed' => (int) env('ACTIVE_CAMPAIGN_TAG_PHARMACY_PURCHASE_COMPLETED', 17),
         'tag_laboratory_purchase_completed' => (int) env('ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_COMPLETED', 18),
         // Tags específicos laboratorio
