@@ -4,13 +4,12 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Symfony\Component\HttpFoundation\Response;
-use App\Http\Controllers\TestApiController;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__ . '/../routes/web.php',
+        web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
-        commands: __DIR__ . '/../routes/console.php',
+        commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
@@ -31,10 +30,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'redirect-if-phone-verified' => \App\Http\Middleware\RedirectIfPhoneVerified::class,
             'medical-attention-subscription' => \App\Http\Middleware\RedirectIfMissingMedicalAttentionSubscription::class,
             'documentation' => \App\Http\Middleware\EnsureDocumentationIsAccepted::class,
-            //'password.confirm' => \App\Http\Middleware\BypassPasswordConfirm::class,
+            // 'password.confirm' => \App\Http\Middleware\BypassPasswordConfirm::class,
             'password.confirm' => \App\Http\Middleware\ExcludePasswordConfirm::class,
             'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
             'bypass.password.confirm' => \App\Http\Middleware\BypassPasswordConfirm::class,
+            'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

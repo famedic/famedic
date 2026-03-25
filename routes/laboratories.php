@@ -7,12 +7,11 @@ use App\Http\Controllers\LaboratoryAppointmentController;
 use App\Http\Controllers\LaboratoryCartItemController;
 use App\Http\Controllers\LaboratoryCheckoutController;
 use App\Http\Controllers\LaboratoryPurchaseController;
-use App\Http\Controllers\LaboratoryShoppingCartController;
-use App\Http\Controllers\LaboratoryStoreController;
 use App\Http\Controllers\LaboratoryQuoteController;
 use App\Http\Controllers\LaboratoryResultsController;
+use App\Http\Controllers\LaboratoryShoppingCartController;
+use App\Http\Controllers\LaboratoryStoreController;
 use App\Http\Controllers\LabResultsAccessController;
-
 use Illuminate\Support\Facades\Route;
 
 // Public browsing routes
@@ -20,9 +19,27 @@ Route::get('/laboratory-brand-selection', LaboratoryBrandSelectionController::cl
 Route::get('/laboratory/{laboratory_brand}/laboratory-tests', [LaboratoryTestsController::class, 'index'])->name('laboratory-tests');
 Route::get('/laboratory-tests/{laboratory_test}', [LaboratoryTestsController::class, 'show'])->name('laboratory-tests.test');
 Route::resource('laboratory-stores', LaboratoryStoreController::class)->only(['index']);
+$labResultsThrottle = 'throttle:'.config('laboratory-results.rate_limit_per_minute', 12).',1';
+
 Route::get('/lab-results/{token}', [LabResultsAccessController::class, 'show'])->name('lab-results.show');
-Route::post('/lab-results/verify', [LabResultsAccessController::class, 'verify'])->name('lab-results.verify');
-Route::post('/lab-results/resend', [LabResultsAccessController::class, 'resend'])->name('lab-results.resend');
+
+Route::get('/lab-results/shared/{token}', [LabResultsAccessController::class, 'showShared'])
+    ->middleware('signed')
+    ->name('lab-results.show-shared');
+
+Route::get('/lab-results/shared/{token}/pdf', [LabResultsAccessController::class, 'streamSharedPdf'])
+    ->middleware('signed')
+    ->name('lab-results.shared-pdf');
+
+Route::middleware([$labResultsThrottle])->group(function () {
+    Route::post('/lab-results/send-otp', [LabResultsAccessController::class, 'sendOtp'])->name('lab-results.send-otp');
+    Route::post('/lab-results/verify', [LabResultsAccessController::class, 'verify'])->name('lab-results.verify');
+    Route::post('/lab-results/resend', [LabResultsAccessController::class, 'resend'])->name('lab-results.resend');
+});
+
+Route::get('/lab-results/{token}/pdf', [LabResultsAccessController::class, 'streamPdf'])
+    ->middleware(['signed', 'throttle:60,1'])
+    ->name('lab-results.pdf');
 
 // Protected routes requiring authentication
 Route::middleware([
@@ -72,7 +89,7 @@ Route::middleware([
     Route::get('/laboratory/quote/{quote}', [LaboratoryQuoteController::class, 'success'])
         ->name('laboratory.quote.show');
     /*
-    // Laboratory Results    
+    // Laboratory Results
     Route::get('/mis-resultados', [LaboratoryResultController::class, 'index'])
         ->name('patient.results');
 
@@ -81,12 +98,10 @@ Route::middleware([
         ->name('patient.results.mark-downloaded');
     */
 
+    // Route::get('/laboratory-results', [LaboratoryResultController::class, 'index'])->name('laboratory-results.index');
 
-    //Route::get('/laboratory-results', [LaboratoryResultController::class, 'index'])->name('laboratory-results.index');
-
-    //Route::get('/laboratory-results/{type}/{id}/download', [LaboratoryResultController::class, 'download'])->name('laboratory-results.download');
-    //Route::get('/laboratory-results/{type}/{id}/view', [LaboratoryResultController::class, 'view'])->name('laboratory-results.view');
-
+    // Route::get('/laboratory-results/{type}/{id}/download', [LaboratoryResultController::class, 'download'])->name('laboratory-results.download');
+    // Route::get('/laboratory-results/{type}/{id}/view', [LaboratoryResultController::class, 'view'])->name('laboratory-results.view');
 
     Route::post('/laboratory-results/notification/{notification}/mark-read', [LaboratoryResultController::class, 'markAsRead']);
 
@@ -106,4 +121,3 @@ Route::middleware([
         [LaboratoryResultsController::class, 'fetch']
     )->name('laboratory-purchases.results.automatic-fetch');
 });
-

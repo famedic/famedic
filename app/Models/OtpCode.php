@@ -11,13 +11,21 @@ class OtpCode extends Model
     use HasFactory;
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_VERIFIED = 'verified';
+
     public const STATUS_EXPIRED = 'expired';
+
     public const STATUS_FAILED = 'failed';
+
+    public const CHANNEL_SMS = 'sms';
+
+    public const CHANNEL_EMAIL = 'email';
 
     protected $fillable = [
         'user_id',
         'laboratory_purchase_id',
+        'channel',
         'code',
         'expires_at',
         'attempts',
