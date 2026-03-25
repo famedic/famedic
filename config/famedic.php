@@ -63,6 +63,15 @@ return [
     'medical_attention_subscription_price_cents' => 30000,
     'free_medical_attention_subscription_days' => 30,
 
+    /** Licencia institucional Odessa (monitor admin / alta manual) */
+    'institutional_odessa_subscription_years' => (int) env('INSTITUTIONAL_ODESSA_SUBSCRIPTION_YEARS', 1),
+    'institutional_odessa_subscription_price_cents' => (int) env('INSTITUTIONAL_ODESSA_SUBSCRIPTION_PRICE_CENTS', 0),
+    /** Solo entornos controlados: permite activar licencia institucional aunque el morph no sea Odessa (p. ej. cuenta mal clasificada como Regular) */
+    'murguia_institutional_allow_non_odessa_morph' => filter_var(
+        env('MURGUIA_INSTITUTIONAL_ALLOW_NON_ODESSA', false),
+        FILTER_VALIDATE_BOOLEAN
+    ),
+
     'storage_paths' => [
         'laboratory_purchase_pdfs' => env('LABORATORY_PURCHASE_PDFS_PATH', 'pdfs/laboratory-purchases'),
     ],

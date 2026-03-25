@@ -33,6 +33,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TaxProfileController as AdminTaxProfileController;
 use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
 use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
+use App\Http\Controllers\Admin\MurguiaMonitorController;
 
 // === IMPORTACIONES NUEVAS ===
 use App\Http\Controllers\Admin\LaboratoryNotificationController;
@@ -132,6 +133,17 @@ Route::prefix('admin')->middleware([
             ->name('laboratory-notifications-monitor.index');
         Route::get('laboratory-notifications-monitor/{gdaOrderId}', [LaboratoryNotificationMonitorController::class, 'show'])
             ->name('laboratory-notifications-monitor.show');
+
+        Route::middleware('super.admin')->group(function () {
+            Route::get('murguia-monitor', [MurguiaMonitorController::class, 'index'])->name('murguia-monitor.index');
+            Route::get('murguia-monitor/{customer}', [MurguiaMonitorController::class, 'show'])->name('murguia-monitor.show');
+            Route::post('murguia-monitor/{customer}/check-status', [MurguiaMonitorController::class, 'checkStatus'])->name('murguia-monitor.check-status');
+            Route::post('murguia/activate/{customer}', [MurguiaMonitorController::class, 'activateCustomer'])->name('murguia.activate');
+            Route::post('murguia/deactivate/{customer}', [MurguiaMonitorController::class, 'deactivateCustomer'])->name('murguia.deactivate');
+            Route::get('murguia/upload', [MurguiaMonitorController::class, 'uploadPage'])->name('murguia.upload');
+            Route::post('murguia/upload-excel', [MurguiaMonitorController::class, 'uploadExcel'])->name('murguia.upload-excel');
+            Route::get('murguia/logs', [MurguiaMonitorController::class, 'logs'])->name('murguia.logs');
+        });
 
     });
 });

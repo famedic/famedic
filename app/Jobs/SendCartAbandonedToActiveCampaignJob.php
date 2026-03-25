@@ -28,6 +28,10 @@ class SendCartAbandonedToActiveCampaignJob implements ShouldQueue
 
     public function handle(ActiveCampaignService $activeCampaignService): void
     {
+        if (! config('services.activecampaign.tag_abandoned_carts_enabled', true)) {
+            return;
+        }
+
         Log::info('AC: Job SendCartAbandonedToActiveCampaignJob iniciado', [
             'email' => $this->email,
         ]);

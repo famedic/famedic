@@ -5,69 +5,94 @@ namespace App\Actions\MedicalAttention;
 use App\Models\CertificateAccount;
 use App\Models\Customer;
 use App\Models\FamilyAccount;
+use Carbon\Carbon;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
 
+/**
+ * PUT /asegurados/actualizacion
+ *
+ * Por defecto envía solo lo documentado por Murguía: noCredito + estatus (activo|inactivo).
+ * Las bajas y reactivaciones se reflejan así; no hay endpoint de borrado.
+ *
+ * {@see $extendedPayload} permite el cuerpo extendido (vigencia, producto, etc.) si algún flujo lo requiere.
+ */
 class UpdateStatusAction
 {
-    private AuthorizationAction $authorizationAction;
-
-    public function __construct(AuthorizationAction $authorizationAction)
-    {
-        $this->authorizationAction = $authorizationAction;
-    }
+    public function __construct(
+        private AuthorizationAction $authorizationAction
+    ) {}
 
     public function __invoke(
         Customer $customer,
-        Carbon $startDate,
-        Carbon $endDate,
-        string $estatus = 'activo',
+        string $estatus,
+        ?Carbon $startDate = null,
+        ?Carbon $endDate = null,
         ?string $producto = null,
-        ?string $subProducto = null
+        ?string $subProducto = null,
+        bool $extendedPayload = false,
     ): Response {
         $url = config('services.murguia.url') . 'asegurados/actualizacion';
 
-        // Get fresh token for each request
         $authResponse = ($this->authorizationAction)();
         $token = $authResponse->json()['token'];
 
-        $payload = [
-            'noCredito' => $customer->medical_attention_identifier,
-            'nombre' => $this->getCustomerName($customer),
-            'campaña' => 'Famedic',
-            'estatus' => $estatus,
-            'producto' => $producto,
-            'subProducto' => $subProducto,
-            'inicioVigencia' => $startDate->format('d-m-Y'),
-            'finVigencia' => $endDate->format('d-m-Y'),
-        ];
+        if ($extendedPayload) {
+            $start = $startDate ?? now();
+            $end = $endDate ?? $start->copy()->addYear();
+            $payload = [
+                'noCredito' => $customer->medical_attention_identifier,
+                'nombre' => $this->getCustomerName($customer),
+                'campaña' => 'Famedic',
+                'estatus' => $estatus,
+                'producto' => $producto,
+                'subProducto' => $subProducto !== null && $subProducto !== '' ? $subProducto : '-',
+                'inicioVigencia' => $start->format('d-m-Y'),
+                'finVigencia' => $end->format('d-m-Y'),
+            ];
+            Log::info('Murguia update payload (extended)', [
+                'customer_id' => $customer->id,
+                'payload' => $payload,
+            ]);
+        } else {
+            $payload = [
+                'noCredito' => (string) $customer->medical_attention_identifier,
+                'estatus' => $estatus,
+            ];
+            Log::info('Murguia update payload (minimal)', [
+                'customer_id' => $customer->id,
+                'payload' => $payload,
+            ]);
+        }
 
-        Log::info('Murguia update payload', [
-            'customer_id' => $customer->id,
-            'payload' => $payload,
-        ]);
-
-        return Http::withHeaders([
+        $response = Http::withHeaders([
             'Authorization' => 'Bearer ' . $token,
             'Accept' => 'application/json',
         ])->put($url, $payload);
+
+        if (! $response->successful()) {
+            Log::warning('Murguia actualizacion HTTP no exitosa', [
+                'customer_id' => $customer->id,
+                'minimal' => ! $extendedPayload,
+                'http_status' => $response->status(),
+                'body' => $response->json() ?? $response->body(),
+            ]);
+        }
+
+        return $response;
     }
 
     private function getCustomerName(Customer $customer): string
     {
-        // For family accounts, use the family member's name
         if ($customer->customerable_type === FamilyAccount::class && $customer->customerable) {
             return $customer->customerable->full_name;
         }
 
-        // For certificate accounts, use the certificate holder's name
         if ($customer->customerable_type === CertificateAccount::class && $customer->customerable) {
             return $customer->customerable->name;
         }
 
-        // For regular accounts, use the user's name
         return $customer->user ? $customer->user->full_name : 'Unknown';
     }
 }

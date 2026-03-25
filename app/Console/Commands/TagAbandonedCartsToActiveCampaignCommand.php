@@ -15,6 +15,12 @@ class TagAbandonedCartsToActiveCampaignCommand extends Command
 
     public function handle(): int
     {
+        if (! config('services.activecampaign.tag_abandoned_carts_enabled', true)) {
+            $this->info('Tag carritos abandonados desactivado (ACTIVECAMPAIGN_TAG_ABANDONED_CARTS_ENABLED=false).');
+
+            return self::SUCCESS;
+        }
+
         $minutes = (int) ($this->option('minutes') ?: config('services.activecampaign.cart_abandoned_minutes', 60));
         $minutes = max(10, $minutes);
 

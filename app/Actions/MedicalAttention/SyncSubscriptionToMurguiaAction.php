@@ -40,15 +40,13 @@ class SyncSubscriptionToMurguiaAction
             $responseData = $checkResponse->json();
             $customerExists = isset($responseData['success']) && $responseData['success'] === true;
 
-            $producto = $this->getProducto($subscription);
-            $subProducto = $this->getSubProducto($subscription);
-            
             if ($customerExists) {
-                $syncResponse = ($this->updateStatusAction)(
-                    $customer, $startDate, $endDate, $status, $producto, $subProducto
-                );
+                // API Murguía: actualización = noCredito + estatus (reflejo de estado; vigencia vive en Famedic)
+                $syncResponse = ($this->updateStatusAction)($customer, $status);
                 $action = 'update';
             } else {
+                $producto = $this->getProducto($subscription);
+                $subProducto = $this->getSubProducto($subscription);
                 $syncResponse = ($this->registerAction)(
                     $customer, $startDate, $endDate, $producto, $subProducto
                 );

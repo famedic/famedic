@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ])->alias([
             'admin' => \App\Http\Middleware\EnsureUserHasAdminAccount::class,
+            'super.admin' => \App\Http\Middleware\EnsureUserHasSuperAdminRole::class,
             'customer' => \App\Http\Middleware\EnsureUserHasCustomerAccount::class,
             'laboratory-appointment' => \App\Http\Middleware\EnsureValidLaboratoryAppointment::class,
             'no-duplicate-laboratory-appointment' => \App\Http\Middleware\EnsureNoDuplicateLaboratoryAppointment::class,
