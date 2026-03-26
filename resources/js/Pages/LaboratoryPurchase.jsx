@@ -1,6 +1,7 @@
 import SettingsLayout from "@/Layouts/SettingsLayout";
 import Purchase from "@/Components/Purchase";
 import { useEffect, useState } from "react";
+import { usePage } from "@inertiajs/react";
 import LaboratoryPurchaseTabs from "@/Components/Laboratory/LaboratoryPurchaseTabs";
 import Card from "@/Components/Card";
 import PatientTabContent from "@/Components/Laboratory/Tabs/PatientTabContent";
@@ -22,7 +23,20 @@ export default function LaboratoryPurchase({
     hasResultsAvailable
 }) {
     const [activeTab, setActiveTab] = useState("paciente");
-    
+    const { url } = usePage();
+
+    useEffect(() => {
+        try {
+            const query = url.includes("?") ? url.split("?")[1] : "";
+            const params = new URLSearchParams(query);
+            if (params.get("tab") === "facturas") {
+                setActiveTab("facturas");
+            }
+        } catch {
+            // ignore
+        }
+    }, [url]);
+
     // Determinar si hay resultados (automáticos o manuales)
     const hasAnyResults = hasResultsAvailable || !!laboratoryPurchase.results;
 
