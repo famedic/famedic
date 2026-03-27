@@ -13,6 +13,7 @@ use App\Http\Controllers\VendorPaymentController;
 use App\Http\Controllers\WelcomeController;
 use App\Http\Controllers\PaymentMethodController;
 use App\Services\EfevooPayService;
+use App\Http\Middleware\EnsureLabResultsOtpVerified;
 //use App\Http\Controllers\WebHook\GDAWebHookController;
 use Illuminate\Support\Facades\Route;
 
@@ -47,7 +48,9 @@ Route::middleware([
     Route::get('/invoice-requests/{invoice_request}/fiscal-certificate', FiscalCertificateController::class)->name('invoice-requests.fiscal-certificate');
     Route::get('/invoice/{invoice}', InvoiceController::class)->name('invoice');
     Route::get('/vendor-payments/{vendor_payment}', VendorPaymentController::class)->name('vendor-payment');
-    Route::get('/laboratory-purchases/{laboratory_purchase}/results', ResultsController::class)->name('laboratory-purchases.results');
+    Route::get('/laboratory-purchases/{laboratory_purchase}/results', ResultsController::class)
+        ->middleware(EnsureLabResultsOtpVerified::class)
+        ->name('laboratory-purchases.results');
     Route::get('/laboratory-purchases/{laboratory_purchase}/download-pdf', [LaboratoryPurchasePdfController::class, 'download'])->name('laboratory-purchases.download-pdf');
     Route::post('/laboratory-purchases/{laboratory_purchase}/email-pdf', [LaboratoryPurchasePdfController::class, 'email'])->name('laboratory-purchases.email-pdf');
 });

@@ -10,7 +10,8 @@ export default function ResultsTabContent({
     laboratoryPurchase, 
     latestResultsAt, 
     hasResultsAvailable,
-    hasManualResults 
+    hasManualResults,
+    requireOtpThen
 }) {
     const [loadingAutomatic, setLoadingAutomatic] = useState(false);
     const [loadingManual, setLoadingManual] = useState(false);
@@ -22,10 +23,9 @@ export default function ResultsTabContent({
     // Verificar si hay resultados manuales cargados por admin
     const hasManualResultsFlag = laboratoryPurchase.results || hasManualResults;
     
-    // Descargar resultados automáticos de GDA
-    const fetchAutomaticResults = async () => {
+    const doFetchAutomaticResults = async () => {
         if (loadingAutomatic) return;
-        
+
         setLoadingAutomatic(true);
         setError("");
 
@@ -68,13 +68,25 @@ export default function ResultsTabContent({
         setLoadingAutomatic(false);
     };
 
-    // Ver resultados manuales
-    const viewManualResults = () => {
+    // Descargar resultados automáticos de GDA (protegido por OTP)
+    const fetchAutomaticResults = async () => {
+        if (loadingAutomatic) return;
+        if (requireOtpThen && requireOtpThen(() => doFetchAutomaticResults()) === false) return;
+        return doFetchAutomaticResults();
+    };
+
+    const doViewManualResults = () => {
         setLoadingManual(true);
         window.open(route("laboratory-purchases.results", {
             laboratory_purchase: laboratoryPurchase
         }), "_blank");
         setLoadingManual(false);
+    };
+
+    // Ver resultados manuales (protegido por OTP)
+    const viewManualResults = () => {
+        if (requireOtpThen && requireOtpThen(() => doViewManualResults()) === false) return;
+        return doViewManualResults();
     };
 
     return (

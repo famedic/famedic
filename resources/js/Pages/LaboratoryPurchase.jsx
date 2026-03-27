@@ -1,6 +1,6 @@
 import SettingsLayout from "@/Layouts/SettingsLayout";
 import Purchase from "@/Components/Purchase";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePage } from "@inertiajs/react";
 import LaboratoryPurchaseTabs from "@/Components/Laboratory/LaboratoryPurchaseTabs";
 import Card from "@/Components/Card";
@@ -13,6 +13,7 @@ import DetailsTabContent from "@/Components/Laboratory/Tabs/DetailsTabContent";
 import ResultsTabContent from "@/Components/Laboratory/Tabs/ResultsTabContent";
 import InvoiceTabContent from "@/Components/Laboratory/Tabs/InvoiceTabContent";
 import StatusTabContent from "@/Components/Laboratory/Tabs/StatusTabContent";
+import OtpModal from "@/Components/OtpModal";
 
 export default function LaboratoryPurchase({
     laboratoryPurchase,
@@ -24,6 +25,9 @@ export default function LaboratoryPurchase({
 }) {
     const [activeTab, setActiveTab] = useState("paciente");
     const { url } = usePage();
+    const [showOtpModal, setShowOtpModal] = useState(false);
+    const [otpVerified, setOtpVerified] = useState(false);
+    const pendingAfterOtpRef = useRef(null);
 
     useEffect(() => {
         try {
@@ -37,8 +41,57 @@ export default function LaboratoryPurchase({
         }
     }, [url]);
 
+    useEffect(() => {
+        const check = async () => {
+            try {
+                const statusUrl = route("otp.status", { laboratory_purchase: laboratoryPurchase.id });
+                const res = await fetch(statusUrl, {
+                    method: "GET",
+                    credentials: "same-origin",
+                    headers: { Accept: "application/json" },
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data?.verified) {
+                    setOtpVerified(true);
+                } else {
+                    setOtpVerified(false);
+                }
+            } catch {
+                setOtpVerified(false);
+            }
+        };
+
+        check();
+    }, [laboratoryPurchase?.id]);
+
     // Determinar si hay resultados (automáticos o manuales)
     const hasAnyResults = hasResultsAvailable || !!laboratoryPurchase.results;
+
+    const handleOtpSuccess = () => {
+        setOtpVerified(true);
+        setShowOtpModal(false);
+        const next = pendingAfterOtpRef.current;
+        pendingAfterOtpRef.current = null;
+        if (typeof next === "function") next();
+    };
+
+    const requireOtpThen = (fn) => {
+        if (otpVerified) {
+            fn?.();
+            return true;
+        }
+        pendingAfterOtpRef.current = fn;
+        setShowOtpModal(true);
+        return false;
+    };
+
+    const handleTabChange = (tab) => {
+        if (tab === "resultados" && !otpVerified) {
+            requireOtpThen(() => setActiveTab("resultados"));
+            return;
+        }
+        setActiveTab(tab);
+    };
 
     useEffect(() => {
         if (laboratoryPurchase && !window.ga4PurchaseSent) {
@@ -84,7 +137,7 @@ export default function LaboratoryPurchase({
                 {/* Tabs Navigation */}
                 <LaboratoryPurchaseTabs 
                     activeTab={activeTab} 
-                    onTabChange={setActiveTab}
+                    onTabChange={handleTabChange}
                     hasResults={hasAnyResults}
                     hasInvoice={!!laboratoryPurchase.invoice}
                 />
@@ -121,6 +174,7 @@ export default function LaboratoryPurchase({
                             latestResultsAt={latestResultsAt}
                             hasResultsAvailable={hasResultsAvailable}
                             hasManualResults={!!laboratoryPurchase.results}
+                            requireOtpThen={requireOtpThen}
                         />
                     )}
                     
@@ -139,6 +193,18 @@ export default function LaboratoryPurchase({
                     )}
                 </div>
             </Card>
+
+            {showOtpModal && (
+                <OtpModal
+                    isOpen={showOtpModal}
+                    purchaseId={laboratoryPurchase.id}
+                    onSuccess={handleOtpSuccess}
+                    onClose={() => {
+                        pendingAfterOtpRef.current = null;
+                        setShowOtpModal(false);
+                    }}
+                />
+            )}
         </SettingsLayout>
     );
 }
