@@ -12,6 +12,7 @@ use App\Http\Requests\Admin\LaboratoryAppointments\UpdateLaboratoryAppointmentRe
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryStore;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class LaboratoryAppointmentController extends Controller
@@ -44,6 +45,12 @@ class LaboratoryAppointmentController extends Controller
 
     public function update(UpdateLaboratoryAppointmentRequest $request, LaboratoryAppointment $laboratoryAppointment, UpdateLaboratoryAppointmentAction $action)
     {
+        Log::info('Appointment Debug - Request Data', [
+            'appointment_date' => $request->appointment_date,
+            'appointment_time' => $request->appointment_time,
+            'full_request' => $request->all(),
+        ]);
+
         $action(
             appointment_date: $request->appointment_date,
             appointment_time: $request->appointment_time,

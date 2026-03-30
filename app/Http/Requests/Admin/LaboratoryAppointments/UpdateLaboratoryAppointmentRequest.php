@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin\LaboratoryAppointments;
 
 use App\Enums\Gender;
+use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,7 +18,7 @@ class UpdateLaboratoryAppointmentRequest extends FormRequest
     {
         return [
             'appointment_date' => ['required', 'date'],
-            'appointment_time' => ['required', 'date_format:H:i'],
+            'appointment_time' => ['required', 'string', $this->appointmentTimeRule()],
             'patient_name' => ['required', 'string', 'max:255'],
             'patient_paternal_lastname' => ['required', 'string', 'max:255'],
             'patient_maternal_lastname' => ['required', 'string', 'max:255'],
@@ -28,5 +29,29 @@ class UpdateLaboratoryAppointmentRequest extends FormRequest
             'laboratory_store' => ['required', 'exists:laboratory_stores,id'],
             'notes' => ['nullable', 'string', 'max:255'],
         ];
+    }
+
+    /**
+     * @return \Closure(string, mixed, \Closure): void
+     */
+    private function appointmentTimeRule(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            $v = (string) $value;
+
+            if (str_contains($v, 'T') || str_contains($v, 'Z')) {
+                try {
+                    Carbon::parse($v);
+                } catch (\Throwable) {
+                    $fail(__('validation.date'));
+                }
+
+                return;
+            }
+
+            if (! preg_match('/^\d{1,2}:\d{2}$/', $v)) {
+                $fail(__('validation.date_format', ['attribute' => $attribute, 'format' => 'H:i']));
+            }
+        };
     }
 }

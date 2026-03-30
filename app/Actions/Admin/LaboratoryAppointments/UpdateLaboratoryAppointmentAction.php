@@ -5,10 +5,33 @@ namespace App\Actions\Admin\LaboratoryAppointments;
 use App\Enums\Gender;
 use App\Models\LaboratoryAppointment;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 use Propaganistas\LaravelPhone\PhoneNumber;
 
 class UpdateLaboratoryAppointmentAction
 {
+    /**
+     * Fecha/hora de cita en zona de negocio (Monterrey).
+     *
+     * No usar ->utc() al persistir: con APP_TIMEZONE distinto de UTC, MySQL guarda
+     * datetime sin zona y Eloquent interpreta el valor en la zona de la app; si se
+     * convierte a UTC antes de guardar, el mismo número de reloj se lee como hora
+     * local y aparece un desfase (p. ej. +6 h en México).
+     */
+    private function resolveAppointmentAt(string $appointmentDate, string $appointmentTime): Carbon
+    {
+        $time = trim($appointmentTime);
+        $date = trim($appointmentDate);
+
+        if (str_contains($time, 'T') || str_contains($time, 'Z')) {
+            return Carbon::parse($time)->timezone('America/Monterrey');
+        }
+
+        $datePart = Carbon::parse($date)->format('Y-m-d');
+
+        return Carbon::createFromFormat('Y-m-d H:i', "{$datePart} {$time}", 'America/Monterrey');
+    }
+
     public function __invoke(
         string $appointment_date,
         string $appointment_time,
@@ -24,8 +47,15 @@ class UpdateLaboratoryAppointmentAction
         LaboratoryAppointment $laboratoryAppointment
     ): LaboratoryAppointment {
 
+        $finalDateTime = $this->resolveAppointmentAt($appointment_date, $appointment_time);
+
+        Log::info('Appointment Debug - Before Save', [
+            'final_datetime' => $finalDateTime->toIso8601String(),
+            'final_datetime_local' => $finalDateTime->format('Y-m-d H:i:s'),
+        ]);
+
         $laboratoryAppointment->update([
-            'appointment_date' => Carbon::createFromFormat('Y-m-d H:i', $appointment_date . $appointment_time, 'America/Monterrey')->utc(),
+            'appointment_date' => $finalDateTime,
             'confirmed_at' => now(),
             'patient_name' => $patient_name,
             'patient_paternal_lastname' => $patient_paternal_lastname,
@@ -37,7 +67,6 @@ class UpdateLaboratoryAppointmentAction
             'laboratory_store_id' => $laboratory_store,
             'notes' => $notes,
         ]);
-
 
         return $laboratoryAppointment->refresh();
     }
