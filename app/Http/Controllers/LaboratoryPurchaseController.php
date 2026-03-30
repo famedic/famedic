@@ -102,7 +102,7 @@ class LaboratoryPurchaseController extends Controller
         ]);
     }
 
-    public function show(Request $request, LaboratoryPurchase $laboratoryPurchase)
+    /*public function show(Request $request, LaboratoryPurchase $laboratoryPurchase)
     {
         $lastDayOfPurchaseMonth = localizedDate($laboratoryPurchase->created_at)->endOfMonth();
         $nowInMonterrey = localizedDate(now());
@@ -146,12 +146,64 @@ class LaboratoryPurchaseController extends Controller
                 ? localizedDate($latestResultsNotification->created_at)->isoFormat('D MMM Y h:mm a')
                 : null,
 
-            'taxProfiles' => auth()->user()->customer->taxProfiles,
+            'taxProfiles' => auth()->guard()->user()->customer->taxProfiles,
 
             'daysLeftToRequestInvoice' => $nowInMonterrey->lt($lastDayOfPurchaseMonth)
                 ? (int) ceil($nowInMonterrey->diffInDays($lastDayOfPurchaseMonth, false))
                 : 0,
 
+            ...session()->get('confetti') ? ['confetti' => true] : [],
+        ]);
+    }*/
+
+    public function show(Request $request, LaboratoryPurchase $laboratoryPurchase)
+    {
+        $lastDayOfPurchaseMonth = localizedDate($laboratoryPurchase->created_at)->endOfMonth();
+        $nowInMonterrey = localizedDate(now());
+        $laboratoryPurchase->load([
+            'transactions',
+            'laboratoryPurchaseItems',
+            'laboratoryAppointment.laboratoryStore',
+            'invoiceRequest',
+            'invoice'
+        ]);
+
+        $hasManualResults = !empty($laboratoryPurchase->results);
+        $hasSampleCollected = false;
+        $hasResultsAvailable = false;
+        $latestSampleCollectionAt = null;
+        $latestResultsAt = null;
+        $hasResultsPdfCached = false;
+
+        if (!$hasManualResults) {
+            $hasSampleCollected = $laboratoryPurchase->hasSampleCollected();
+            $hasResultsAvailable = $laboratoryPurchase->hasResultsAvailable();
+
+            $latestSampleCollection = $laboratoryPurchase->latestSampleCollection();
+            $latestResultsNotification = $laboratoryPurchase->latestResultsNotification();
+
+            $latestSampleCollectionAt = $latestSampleCollection?->created_at
+                ? localizedDate($latestSampleCollection->created_at)->isoFormat('D MMM Y h:mm a')
+                : null;
+
+            $latestResultsAt = $latestResultsNotification?->created_at
+                ? localizedDate($latestResultsNotification->created_at)->isoFormat('D MMM Y h:mm a')
+                : null;
+
+            $hasResultsPdfCached = (bool) $latestResultsNotification?->hasResults();
+        }
+
+        return Inertia::render('LaboratoryPurchase', [
+            'laboratoryPurchase' => $laboratoryPurchase,
+            'hasSampleCollected' => $hasSampleCollected,
+            'hasResultsAvailable' => $hasResultsAvailable,
+            'latestSampleCollectionAt' => $latestSampleCollectionAt,
+            'latestResultsAt' => $latestResultsAt,
+            'hasResultsPdfCached' => $hasResultsPdfCached,
+            'taxProfiles' => auth()->guard()->user()->customer->taxProfiles,
+            'daysLeftToRequestInvoice' => $nowInMonterrey->lt($lastDayOfPurchaseMonth)
+                ? (int)ceil($nowInMonterrey->diffInDays($lastDayOfPurchaseMonth, false))
+                : 0,
             ...session()->get('confetti') ? ['confetti' => true] : [],
         ]);
     }

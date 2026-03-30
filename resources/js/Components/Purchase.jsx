@@ -102,7 +102,7 @@ export default function Purchase({ purchase, isLabPurchase = false }) {
 				</div>
 			)}
 
-			{/* COMENTADO: Esta información ahora está en los tabs 
+
 			<PurchaseDetails
 				purchase={purchase}
 				isLabPurchase={isLabPurchase}
@@ -111,7 +111,7 @@ export default function Purchase({ purchase, isLabPurchase = false }) {
 			<Items purchase={purchase} isLabPurchase={isLabPurchase} />
 
 			<Totals purchase={purchase} isLabPurchase={isLabPurchase} />
-			*/}
+
 
 			<InvoiceModal
 				purchase={purchase}
@@ -191,12 +191,12 @@ function Header({ purchase, isLabPurchase }) {
 								? purchase.gda_order_id
 								: purchase.vitau_order_id}
 						</Badge>
-						
+
 						{/* Mostrar consecutivo si existe */}
 						{isLabPurchase && purchase.gda_consecutivo && (
 							<Badge color="slate" className="w-min !text-4xl">
 								<QrCodeIcon className="size-10" />
-								{purchase.gda_consecutivo}								
+								{purchase.gda_consecutivo}
 							</Badge>
 						)}
 					</div>
@@ -217,8 +217,7 @@ function Header({ purchase, isLabPurchase }) {
 	);
 }
 
-// COMENTADOS: Estos componentes ahora están en los tabs respectivos
-/*
+
 function PurchaseDetails({ purchase, isLabPurchase }) {
 	return (
 		<div className="xl:mr-40 xl:pr-6">
@@ -551,7 +550,7 @@ function Totals({ purchase, isLabPurchase }) {
 		</div>
 	);
 }
-*/
+
 
 function InvoiceModal({
 	purchase,
