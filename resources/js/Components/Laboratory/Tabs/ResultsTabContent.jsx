@@ -6,9 +6,9 @@ import Card from "@/Components/Card";
 import { useState } from "react";
 import axios from "axios";
 
-export default function ResultsTabContent({ 
-    laboratoryPurchase, 
-    latestResultsAt, 
+export default function ResultsTabContent({
+    laboratoryPurchase,
+    latestResultsAt,
     hasResultsAvailable,
     hasManualResults,
     requireOtpThen
@@ -16,13 +16,13 @@ export default function ResultsTabContent({
     const [loadingAutomatic, setLoadingAutomatic] = useState(false);
     const [loadingManual, setLoadingManual] = useState(false);
     const [error, setError] = useState("");
-    
+
     // Verificar si hay resultados automáticos de GDA
     const hasAutomaticResults = hasResultsAvailable;
-    
+
     // Verificar si hay resultados manuales cargados por admin
     const hasManualResultsFlag = laboratoryPurchase.results || hasManualResults;
-    
+
     const doFetchAutomaticResults = async () => {
         if (loadingAutomatic) return;
 
@@ -99,7 +99,7 @@ export default function ResultsTabContent({
                         <Text className="text-lg font-semibold">Resultados Automáticos (GDA)</Text>
                         <Badge color="emerald" className="ml-2">Sincronizado</Badge>
                     </div>
-                    
+
                     <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-lg p-4 mb-6">
                         <div className="flex items-center gap-2 mb-2">
                             <DocumentTextIcon className="size-5 text-emerald-600" />
@@ -116,7 +116,7 @@ export default function ResultsTabContent({
                             Estos resultados se sincronizan automáticamente con el laboratorio GDA
                         </Text>
                     </div>
-                    
+
                     <Button onClick={fetchAutomaticResults} disabled={loadingAutomatic} className="w-full sm:w-auto">
                         {loadingAutomatic ? (
                             <span className="flex items-center gap-2">
@@ -135,7 +135,7 @@ export default function ResultsTabContent({
                     </Button>
                 </Card>
             )}
-            
+
             {/* Resultados Manuales (cargados por administradores) */}
             {hasManualResultsFlag && (
                 <Card className="p-6">
@@ -144,7 +144,7 @@ export default function ResultsTabContent({
                         <Text className="text-lg font-semibold">Resultados Cargados Manualmente</Text>
                         <Badge color="sky" className="ml-2">Administrativo</Badge>
                     </div>
-                    
+
                     <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-4 mb-6">
                         <div className="flex items-center gap-2 mb-2">
                             <DocumentTextIcon className="size-5 text-blue-600" />
@@ -161,7 +161,7 @@ export default function ResultsTabContent({
                             </Text>
                         )}
                     </div>
-                    
+
                     <Button onClick={viewManualResults} disabled={loadingManual} outline className="w-full sm:w-auto">
                         {loadingManual ? (
                             <span className="flex items-center gap-2">
@@ -180,7 +180,7 @@ export default function ResultsTabContent({
                     </Button>
                 </Card>
             )}
-            
+
             {/* Mensaje cuando no hay ningún tipo de resultados */}
             {!hasAutomaticResults && !hasManualResultsFlag && (
                 <Card className="p-6">
@@ -200,7 +200,7 @@ export default function ResultsTabContent({
                     </div>
                 </Card>
             )}
-            
+
             {/* Mostrar error si existe */}
             {error && (
                 <Card className="p-4 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800">

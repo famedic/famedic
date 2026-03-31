@@ -120,7 +120,7 @@ function openExternal(url) {
 	window.open(url, "_blank", "noopener,noreferrer");
 }
 
-export default function LaboratoryPurchaseDashboardCard({ purchase }) {
+export default function LaboratoryPurchaseDashboardCard({ purchase, requireOtpThen }) {
 	const canViewResults = Boolean(purchase.result_view_url);
 	const canDownloadPdf =
 		typeof purchase.can_download_pdf === "boolean"
@@ -152,22 +152,36 @@ export default function LaboratoryPurchaseDashboardCard({ purchase }) {
 
 	const tags = buildTags(purchase);
 
-	const handleViewResults = () => {
+	const handleViewResults = async () => {
 		if (!purchase.result_view_url) return;
-		if (purchase.result_source === "manual") {
-			openExternal(purchase.result_view_url);
-		} else if (purchase.result_source === "api") {
-			openExternal(purchase.api_result_url || purchase.result_view_url);
+		const run = () => {
+			if (purchase.result_source === "manual") {
+				openExternal(purchase.result_view_url);
+			} else if (purchase.result_source === "api") {
+				openExternal(purchase.api_result_url || purchase.result_view_url);
+			} else {
+				openExternal(purchase.result_view_url);
+			}
+		};
+		if (typeof requireOtpThen === "function") {
+			await requireOtpThen(purchase.id, run);
 		} else {
-			openExternal(purchase.result_view_url);
+			run();
 		}
 	};
 
-	const handleDownload = () => {
-		if (purchase.result_source === "manual") {
-			openExternal(purchase.result_download_url || purchase.pdf_url);
+	const handleDownload = async () => {
+		const run = () => {
+			if (purchase.result_source === "manual") {
+				openExternal(purchase.result_download_url || purchase.pdf_url);
+			} else {
+				openExternal(purchase.result_download_url);
+			}
+		};
+		if (typeof requireOtpThen === "function") {
+			await requireOtpThen(purchase.id, run);
 		} else {
-			openExternal(purchase.result_download_url);
+			run();
 		}
 	};
 

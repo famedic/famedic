@@ -27,11 +27,33 @@ import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import PurchasePdfDialog from "@/Components/PurchasePdfDialog";
 import Card from "@/Components/Card";
 
-export default function Purchase({ purchase, isLabPurchase = false }) {
+export default function Purchase({
+	purchase,
+	isLabPurchase = false,
+	requireOtpThen = null,
+}) {
 	const [showRequestInvoiceModal, setShowRequestInvoiceModal] =
 		useState(false);
 
 	const { daysLeftToRequestInvoice } = usePage().props;
+	const handleViewResults = async () => {
+		const openResults = () => {
+			window.open(
+				route("laboratory-purchases.results", {
+					laboratory_purchase: purchase,
+				}),
+				"_blank",
+				"noopener,noreferrer",
+			);
+		};
+
+		if (isLabPurchase && typeof requireOtpThen === "function") {
+			await requireOtpThen(() => openResults());
+			return;
+		}
+
+		openResults();
+	};
 
 	return (
 		<>
@@ -85,24 +107,19 @@ export default function Purchase({ purchase, isLabPurchase = false }) {
 
 					{/* Results Button */}
 					{purchase.results && (
-						<Anchor
-							href={route("laboratory-purchases.results", {
-								laboratory_purchase: purchase,
-							})}
-							target="_blank"
-							rel="noopener noreferrer"
+						<Button
+							outline
+							onClick={handleViewResults}
 							className="w-full sm:w-auto"
 						>
-							<Button outline className="w-full">
-								<DocumentTextIcon />
-								Ver resultados
-							</Button>
-						</Anchor>
+							<DocumentTextIcon />
+							Ver resultados
+						</Button>
 					)}
 				</div>
 			)}
 
-			{/* COMENTADO: Esta información ahora está en los tabs 
+			{/* COMENTADO: Esta información ahora está en los tabs
 			<PurchaseDetails
 				purchase={purchase}
 				isLabPurchase={isLabPurchase}
@@ -165,7 +182,7 @@ function Header({ purchase, isLabPurchase }) {
 
 			<div className="gap-6 max-md:space-y-6 md:flex md:items-center">
 				<GradientHeading noDivider className="flex-1">
-					¡Gracias por tu pedido!
+					Orden de laboratorio
 				</GradientHeading>
 
 				{isLabPurchase && (
@@ -191,12 +208,12 @@ function Header({ purchase, isLabPurchase }) {
 								? purchase.gda_order_id
 								: purchase.vitau_order_id}
 						</Badge>
-						
+
 						{/* Mostrar consecutivo si existe */}
 						{isLabPurchase && purchase.gda_consecutivo && (
 							<Badge color="slate" className="w-min !text-4xl">
 								<QrCodeIcon className="size-10" />
-								{purchase.gda_consecutivo}								
+								{purchase.gda_consecutivo}
 							</Badge>
 						)}
 					</div>

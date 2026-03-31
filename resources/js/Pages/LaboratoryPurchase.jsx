@@ -132,11 +132,12 @@ export default function LaboratoryPurchase({
                 <Purchase
                     purchase={laboratoryPurchase}
                     isLabPurchase={true}
+                    requireOtpThen={requireOtpThen}
                 />
-                
+
                 {/* Tabs Navigation */}
-                <LaboratoryPurchaseTabs 
-                    activeTab={activeTab} 
+                <LaboratoryPurchaseTabs
+                    activeTab={activeTab}
                     onTabChange={handleTabChange}
                     hasResults={hasAnyResults}
                     hasInvoice={!!laboratoryPurchase.invoice}
@@ -147,29 +148,29 @@ export default function LaboratoryPurchase({
                     {activeTab === "paciente" && (
                         <PatientTabContent purchase={laboratoryPurchase} />
                     )}
-                    
+
                     {activeTab === "orden" && (
                         <OrderInfoTabContent purchase={laboratoryPurchase} />
                     )}
-                    
+
                     {activeTab === "sucursales" && (
                         <StoresTabContent purchase={laboratoryPurchase} />
                     )}
-                    
+
                     {activeTab === "pago" && (
                         <PaymentTabContent purchase={laboratoryPurchase} />
                     )}
-                    
+
                     {activeTab === "direccion" && (
                         <AddressTabContent purchase={laboratoryPurchase} />
                     )}
-                    
+
                     {activeTab === "detalles" && (
                         <DetailsTabContent purchase={laboratoryPurchase} />
                     )}
-                    
+
                     {activeTab === "resultados" && (
-                        <ResultsTabContent 
+                        <ResultsTabContent
                             laboratoryPurchase={laboratoryPurchase}
                             latestResultsAt={latestResultsAt}
                             hasResultsAvailable={hasResultsAvailable}
@@ -177,13 +178,13 @@ export default function LaboratoryPurchase({
                             requireOtpThen={requireOtpThen}
                         />
                     )}
-                    
+
                     {activeTab === "facturas" && (
                         <InvoiceTabContent purchase={laboratoryPurchase} />
                     )}
-                    
+
                     {activeTab === "estado" && (
-                        <StatusTabContent 
+                        <StatusTabContent
                             laboratoryPurchase={laboratoryPurchase}
                             latestSampleCollectionAt={latestSampleCollectionAt}
                             latestResultsAt={latestResultsAt}

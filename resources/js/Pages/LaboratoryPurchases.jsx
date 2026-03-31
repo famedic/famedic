@@ -18,7 +18,23 @@ import { useForm, Link, router } from "@inertiajs/react";
 import { Input, InputGroup } from "@/Components/Catalyst/input";
 import LaboratoryPurchaseDashboardCard from "@/Components/Laboratory/LaboratoryPurchaseDashboardCard";
 import { Button } from "@/Components/Catalyst/button";
-import { useEffect } from "react";
+import OtpModal from "@/Components/OtpModal";
+import { useEffect, useRef, useState } from "react";
+
+async function checkLabResultsOtpVerified(purchaseId) {
+	try {
+		const statusUrl = route("otp.status", { laboratory_purchase: purchaseId });
+		const res = await fetch(statusUrl, {
+			method: "GET",
+			credentials: "same-origin",
+			headers: { Accept: "application/json" },
+		});
+		const data = await res.json().catch(() => ({}));
+		return res.ok && Boolean(data?.verified);
+	} catch {
+		return false;
+	}
+}
 
 export default function LaboratoryPurchases({
 	purchaseCards = [],
@@ -28,6 +44,36 @@ export default function LaboratoryPurchases({
 	filterOptions = {},
 	laboratoryQuotes = [],
 }) {
+	const pendingAfterOtpRef = useRef(null);
+	const [showOtpModal, setShowOtpModal] = useState(false);
+	const [otpPurchaseId, setOtpPurchaseId] = useState(null);
+
+	const requireOtpThen = async (purchaseId, fn) => {
+		const verified = await checkLabResultsOtpVerified(purchaseId);
+		if (verified) {
+			fn?.();
+			return true;
+		}
+		pendingAfterOtpRef.current = fn;
+		setOtpPurchaseId(purchaseId);
+		setShowOtpModal(true);
+		return false;
+	};
+
+	const handleOtpSuccess = () => {
+		setShowOtpModal(false);
+		const next = pendingAfterOtpRef.current;
+		pendingAfterOtpRef.current = null;
+		setOtpPurchaseId(null);
+		if (typeof next === "function") next();
+	};
+
+	const handleOtpModalClose = () => {
+		pendingAfterOtpRef.current = null;
+		setShowOtpModal(false);
+		setOtpPurchaseId(null);
+	};
+
 	const { data, setData, get, processing } = useForm({
 		search: filtersProp.search ?? "",
 		patient: filtersProp.patient ?? "",
@@ -254,7 +300,11 @@ export default function LaboratoryPurchases({
 			{purchaseCards.length > 0 && (
 				<div className="space-y-6">
 					{purchaseCards.map((purchase) => (
-						<LaboratoryPurchaseDashboardCard key={purchase.id} purchase={purchase} />
+						<LaboratoryPurchaseDashboardCard
+							key={purchase.id}
+							purchase={purchase}
+							requireOtpThen={requireOtpThen}
+						/>
 					))}
 				</div>
 			)}
@@ -288,6 +338,15 @@ export default function LaboratoryPurchases({
 						)}
 					</div>
 				</div>
+			)}
+
+			{showOtpModal && otpPurchaseId != null && (
+				<OtpModal
+					isOpen={showOtpModal}
+					purchaseId={otpPurchaseId}
+					onSuccess={handleOtpSuccess}
+					onClose={handleOtpModalClose}
+				/>
 			)}
 		</SettingsLayout>
 	);
