@@ -67,7 +67,7 @@ export default function SubscribeModal({
                 </DialogTitle>
                 <DialogDescription as="div" className="space-y-4">
                     {!formattedMedicalAttentionSubscriptionExpiresAt && (
-                        <p>
+                        <p className="text-zinc-700 dark:text-slate-300">
                             No se necesita una tarjeta de crédito para el
                             período de prueba.
                         </p>
