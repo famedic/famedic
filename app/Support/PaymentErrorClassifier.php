@@ -18,6 +18,8 @@ class PaymentErrorClassifier
 
             '91' => 'El banco no está disponible temporalmente. Intenta nuevamente en unos minutos.',
 
+            '87' => 'Los datos de la tarjeta no pudieron ser leídos correctamente. Verifica el número y la vigencia o prueba con otra tarjeta.',
+
             default => 'No pudimos procesar el pago con tu banco. Intenta con otra tarjeta.'
         };
     }

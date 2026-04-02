@@ -14,6 +14,7 @@ import { router } from "@inertiajs/react";
 export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
 
     const iframeRef = useRef(null);
+    const pollingMountedRef = useRef(false);
 
     const isFrictionless = !url3ds || !token3ds;
 
@@ -117,6 +118,7 @@ export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
 
             clearTimeout(delay);
             if (interval) clearInterval(interval);
+            pollingMountedRef.current = false;
 
         };
 

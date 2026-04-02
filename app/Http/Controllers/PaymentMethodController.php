@@ -261,6 +261,7 @@ class PaymentMethodController extends Controller
             'status' => $session->status,
             'message' => $message,
             'error_detail' => $session->error_message,
+            'error_type' => $result['error_type'] ?? null,
         ]);
     }
 
