@@ -65,7 +65,7 @@ class EfevooPayService
             throw new \InvalidArgumentException('Expiración MMYY inválida');
         }
 
-        return substr($expirationMmyy, 0, 2).'/'.substr($expirationMmyy, 2, 2);
+        return substr($expirationMmyy, 0, 2) . '/' . substr($expirationMmyy, 2, 2);
     }
 
     /**
@@ -86,7 +86,7 @@ class EfevooPayService
         $mm = substr($expirationMmyy, 0, 2);
         $yy = substr($expirationMmyy, 2, 2);
 
-        return $panDigits.'='.$yy.$mm;
+        return $panDigits . '=' . $yy . $mm;
     }
 
     /**
@@ -101,7 +101,7 @@ class EfevooPayService
         $browserTz = (string) abs($tzMinutes);
 
         $acceptHeader = request()->header('Accept');
-        if (! $acceptHeader || str_contains($acceptHeader, 'application/json')) {
+        if (!$acceptHeader || str_contains($acceptHeader, 'application/json')) {
             $acceptHeader = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8';
         }
 
@@ -164,7 +164,7 @@ class EfevooPayService
         return [
             'track2' => $data['card_token'],
             'amount' => number_format((float) $data['amount'], 2, '.', ''),
-            'referencia' => $data['reference'] ?? 'REF-'.time(),
+            'referencia' => $data['reference'] ?? 'REF-' . time(),
         ];
     }
 
@@ -200,7 +200,7 @@ class EfevooPayService
 
         $s = (string) $codigo;
 
-        return strlen($s) === 1 ? '0'.$s : $s;
+        return strlen($s) === 1 ? '0' . $s : $s;
     }
 
     /* ==========================================================
@@ -233,7 +233,7 @@ class EfevooPayService
             if (
                 $response['success']
                 && ($response['data']['codigo'] ?? null) === '100'
-                && ! empty($response['data']['token'])
+                && !empty($response['data']['token'])
             ) {
                 return [
                     'success' => true,
@@ -275,7 +275,7 @@ class EfevooPayService
 
             $tokenResult = $this->getClientToken('3ds');
 
-            if (! $tokenResult['success']) {
+            if (!$tokenResult['success']) {
                 Log::warning('[Efevoo] Token failed 3DS', ['error_type' => $tokenResult['error_type'] ?? null]);
 
                 return $tokenResult;
@@ -309,7 +309,7 @@ class EfevooPayService
 
             $response = $this->request($payload, logRawBody: false);
 
-            if (! $response['success']) {
+            if (!$response['success']) {
                 return array_merge($response, [
                     'error_type' => self::ERROR_NETWORK,
                 ]);
@@ -334,7 +334,7 @@ class EfevooPayService
 
             $data = $response['data']['payload'] ?? null;
 
-            if (! $data || empty($data['order_id'])) {
+            if (!$data || empty($data['order_id'])) {
                 return [
                     'success' => false,
                     'message' => 'Respuesta inválida de 3DS',
@@ -426,7 +426,7 @@ class EfevooPayService
 
         $tokenResult = $this->getClientToken('tokenize');
 
-        if (! $tokenResult['success']) {
+        if (!$tokenResult['success']) {
             return $tokenResult;
         }
 
@@ -454,7 +454,7 @@ class EfevooPayService
 
         $tokenizeFailure = $this->interpretTokenizeResponse($response);
 
-        if (! $tokenizeFailure['success']) {
+        if (!$tokenizeFailure['success']) {
             return $tokenizeFailure;
         }
 
@@ -480,7 +480,7 @@ class EfevooPayService
      */
     protected function interpretTokenizeResponse(array $response): array
     {
-        if (! $response['success']) {
+        if (!$response['success']) {
             return [
                 'success' => false,
                 'message' => 'Error de red al tokenizar',
@@ -491,7 +491,7 @@ class EfevooPayService
 
         $data = $response['data'] ?? [];
 
-        if (! empty($data['token_usuario'])) {
+        if (!empty($data['token_usuario'])) {
             return ['success' => true];
         }
 
@@ -533,7 +533,7 @@ class EfevooPayService
     public function chargeCard(array $data): array
     {
         Log::info('[Efevoo] chargeCard', [
-            'has_token' => ! empty($data['card_token']),
+            'has_token' => !empty($data['card_token']),
         ]);
 
         if (empty($data['card_token'])) {
@@ -548,7 +548,7 @@ class EfevooPayService
 
         $tokenResult = $this->getClientToken('payment');
 
-        if (! $tokenResult['success']) {
+        if (!$tokenResult['success']) {
             return $tokenResult;
         }
 
@@ -564,7 +564,7 @@ class EfevooPayService
 
         $response = $this->request($payload, logRawBody: false);
 
-        if (! $response['success']) {
+        if (!$response['success']) {
             return [
                 'success' => false,
                 'message' => 'Error de red al procesar el pago',
@@ -606,7 +606,7 @@ class EfevooPayService
 
         $tokenResult = $this->getClientToken('refund');
 
-        if (! $tokenResult['success']) {
+        if (!$tokenResult['success']) {
             return $tokenResult;
         }
 
@@ -631,7 +631,7 @@ class EfevooPayService
 
         $tokenResult = $this->getClientToken('search');
 
-        if (! $tokenResult['success']) {
+        if (!$tokenResult['success']) {
             return $tokenResult;
         }
 
@@ -673,8 +673,8 @@ class EfevooPayService
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
                 'Accept: application/json',
-                'X-API-USER: '.$this->config['api_user'],
-                'X-API-KEY: '.$this->config['api_key'],
+                'X-API-USER: ' . $this->config['api_user'],
+                'X-API-KEY: ' . $this->config['api_key'],
                 'Origin: https://efevoopay.com',
                 'Referer: https://efevoopay.com/',
                 'User-Agent: Mozilla/5.0',
@@ -695,7 +695,10 @@ class EfevooPayService
         if (config('efevoopay.log_requests', true)) {
             Log::info('[Efevoo] HTTP', ['status' => $http, 'curl_error' => $error ?: null]);
             if ($logRawBody && $this->shouldLogVerbose() && is_string($response)) {
-                Log::debug('[Efevoo] RAW response', ['length' => strlen($response)]);
+                Log::debug('[Efevoo] RAW response FULL', [
+                    'http_status' => $http,
+                    'body' => json_decode($response, true) ?? $response
+                ]);
             }
         }
 
@@ -749,7 +752,7 @@ class EfevooPayService
 
         for ($i = 0; $i < strlen($secret); $i++) {
             $ch = $secret[$i];
-            if (! isset($base32Lookup[$ch])) {
+            if (!isset($base32Lookup[$ch])) {
                 continue;
             }
 
@@ -763,7 +766,7 @@ class EfevooPayService
         }
 
         $secretKey = $result;
-        $timestampBytes = pack('N*', 0).pack('N*', $timestamp);
+        $timestampBytes = pack('N*', 0) . pack('N*', $timestamp);
         $hash = hash_hmac('sha1', $timestampBytes, $secretKey, true);
         $offset = ord($hash[19]) & 0xf;
 
@@ -802,7 +805,7 @@ class EfevooPayService
             'card_last4' => $ctx['card_last4'],
         ]);
 
-        if (! $session->order_id) {
+        if (!$session->order_id) {
             return [
                 'success' => false,
                 'message' => 'Order ID no disponible',
@@ -825,7 +828,7 @@ class EfevooPayService
 
         $statusResponse = $this->payments3DSGetStatus($cardData, (string) $session->order_id);
 
-        if (! $statusResponse['success']) {
+        if (!$statusResponse['success']) {
             return [
                 'success' => false,
                 'message' => 'Error consultando estado 3DS',
@@ -891,7 +894,7 @@ class EfevooPayService
             ];
         }
 
-        if (! in_array($payloadStatus, ['authenticated', 'approved'], true)) {
+        if (!in_array($payloadStatus, ['authenticated', 'approved'], true)) {
             Log::warning('[Efevoo] Estado 3DS desconocido', [
                 'payload_status' => $payloadStatus,
                 'order_id' => $session->order_id,
@@ -904,7 +907,7 @@ class EfevooPayService
             ];
         }
 
-        $lockKey = 'efevoo_3ds_tokenize_'.$session->id;
+        $lockKey = 'efevoo_3ds_tokenize_' . $session->id;
 
         try {
             return Cache::lock($lockKey, 90)->block(20, function () use ($session, $cardData, $ctx) {
@@ -940,7 +943,7 @@ class EfevooPayService
 
                 $tokenResult = $this->tokenizeCard($cardData, $session->customer_id);
 
-                if (! $tokenResult['success']) {
+                if (!$tokenResult['success']) {
                     Log::error('[Efevoo] Error tokenizando después de 3DS', [
                         'message' => $tokenResult['message'] ?? null,
                         'error_type' => $tokenResult['error_type'] ?? null,
@@ -1007,7 +1010,7 @@ class EfevooPayService
 
         $tokenResult = $this->getClientToken('3ds');
 
-        if (! $tokenResult['success']) {
+        if (!$tokenResult['success']) {
             return $tokenResult;
         }
 
