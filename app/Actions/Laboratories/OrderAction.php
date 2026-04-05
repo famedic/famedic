@@ -12,10 +12,7 @@ use App\Models\Address;
 use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
-use App\Models\LaboratoryPurchaseItem;
 use App\Models\Transaction;
-use App\Notifications\LaboratoryPurchaseCreated;
-use App\Notifications\FewDaysLeftToRequestInvoice;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Propaganistas\LaravelPhone\PhoneNumber;
@@ -25,8 +22,8 @@ class OrderAction
     private CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction;
     private ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction;
     private ChargeOdessaAction $chargeOdessaAction;
-    private CreateGDAQuotationAction $createGDAQuotationAction;
     private RefundTransactionAction $refundTransactionAction;
+    private FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction;
 
     private Collection $laboratoryCartItems;
 
@@ -34,14 +31,14 @@ class OrderAction
         CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
         ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction,
         ChargeOdessaAction $chargeOdessaAction,
-        CreateGDAQuotationAction $createGDAQuotationAction,
-        RefundTransactionAction $refundTransactionAction
+        RefundTransactionAction $refundTransactionAction,
+        FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction
     ) {
         $this->calculateTotalsAndDiscountAction = $calculateTotalsAndDiscountAction;
         $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction;
         $this->chargeOdessaAction = $chargeOdessaAction;
-        $this->createGDAQuotationAction = $createGDAQuotationAction;
         $this->refundTransactionAction = $refundTransactionAction;
+        $this->fulfillLaboratoryCartOrderAction = $fulfillLaboratoryCartOrderAction;
     }
 
     public function __invoke(
@@ -101,55 +98,18 @@ class OrderAction
 
             DB::commit();
 
-            DB::beginTransaction();
+            $gdaBrandValue = request()->laboratory_brand->value ?? $laboratoryBrand->value;
 
-            $laboratoryPurchase = $this->createLaboratoryPurchase($customer, $laboratoryBrand, $patient, $patientAddress);
-
-            $laboratoryPurchase->transactions()->attach($transaction);
-
-            if ($customer->getHasLaboratoryCartItemRequiringAppointment($laboratoryBrand)) {
-                $laboratoryAppointment->laboratory_purchase_id = $laboratoryPurchase->id;
-                $laboratoryAppointment->save();
-            }
-
-            logger('=== GDA BRAND DEBUG ===');
-            logger('LaboratoryBrand Enum value: ' . $laboratoryBrand->value);
-            logger('Request laboratory_brand value: ' . request()->laboratory_brand->value ?? 'NULL');
-            logger('Request laboratory_brand type: ' . gettype(request()->laboratory_brand));
-            logger('Request laboratory_brand: ' . json_encode(request()->laboratory_brand));
-
-            if (app()->environment('local')) {
-                $gdaQuotation = ['id' => rand(100000, 999999)];
-            } else {
-                $gdaQuotation = ($this->createGDAQuotationAction)(
-                    $customer,
-                    $patientAddress,
-                    $patient,
-                    request()->laboratory_brand->value ?? $laboratoryBrand->value,
-                    $this->laboratoryCartItems,
-                    $laboratoryPurchase->id
-                );
-            }
-
-            // Actualizar la compra con los datos de GDA
-            $laboratoryPurchase->update([
-                'gda_order_id' => $gdaQuotation['id'],
-                'gda_consecutivo' => $gdaQuotation['infogda_consecutivo'] ?? null,
-                'gda_acuse' => $gdaQuotation['gda_acuse'] ?? null,
-                'gda_response' => $gdaQuotation['gda_response'] ?? null,
-                'gda_code_http' => $gdaQuotation['gda_code_http'] ?? null,
-                'gda_mensaje' => $gdaQuotation['gda_mensaje'] ?? null,
-                'gda_description' => $gdaQuotation['gda_description'] ?? null,
-                'pdf_base64' => $gdaQuotation['pdf_base64'] ?? null,
-            ]);
-
-            $this->clearCart($customer);
-
-            DB::commit();
-
-            $laboratoryPurchase->customer->user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));
-
-            $this->checkAndSendInvoiceDeadlineNotification($laboratoryPurchase);
+            $laboratoryPurchase = ($this->fulfillLaboratoryCartOrderAction)(
+                $customer,
+                $laboratoryBrand,
+                $patientAddress,
+                $patient,
+                $transaction,
+                $laboratoryAppointment,
+                $this->laboratoryCartItems,
+                $gdaBrandValue,
+            );
         } catch (\Throwable $th) {
             DB::rollBack();
 
@@ -164,11 +124,6 @@ class OrderAction
         return $laboratoryPurchase;
     }
 
-    public function clearCart(Customer $customer)
-    {
-        $customer->laboratoryCartItems()->delete();
-    }
-
     private function chargeAndCreateTransaction(int $amountCents, string $paymentMethod, Customer $customer): Transaction
     {
         if ($paymentMethod === 'odessa') {
@@ -181,63 +136,5 @@ class OrderAction
             $amountCents,
             $paymentMethod
         );
-    }
-
-    private function createLaboratoryPurchase(Customer $customer, LaboratoryBrand $laboratoryBrand, Contact $contact, Address $address): LaboratoryPurchase
-    {
-        $totalCents = $this->laboratoryCartItems->sum(function ($laboratoryCartItem) {
-            return $laboratoryCartItem->laboratoryTest->famedic_price_cents;
-        });
-
-        $laboratoryPurchase = $customer->laboratoryPurchases()->save(
-            new LaboratoryPurchase([
-                'gda_order_id' => 0,
-                'brand' => $laboratoryBrand->value,
-                'name' => $contact->name,
-                'paternal_lastname' => $contact->paternal_lastname,
-                'maternal_lastname' => $contact->maternal_lastname,
-                'phone' => str_replace(' ', '', (new PhoneNumber($contact->phone, $contact->phone_country))->formatNational()),
-                'phone_country' => $contact->phone_country,
-                'birth_date' => $contact->birth_date,
-                'gender' => $contact->gender,
-                'street' => $address->street,
-                'number' => $address->number,
-                'neighborhood' => $address->neighborhood,
-                'state' => $address->state,
-                'city' => $address->city,
-                'zipcode' => $address->zipcode,
-                'additional_references' => $address->additional_references,
-                'total_cents' => $totalCents,
-            ])
-        );
-
-        foreach ($this->laboratoryCartItems as $laboratoryCartItem) {
-            $laboratoryPurchase->laboratoryPurchaseItems()->save(
-                new LaboratoryPurchaseItem([
-                    'name' => $laboratoryCartItem->laboratoryTest->name,
-                    'gda_id' => $laboratoryCartItem->laboratoryTest->gda_id,
-                    'indications' => $laboratoryCartItem->laboratoryTest->indications,
-                    'price_cents' => $laboratoryCartItem->laboratoryTest->famedic_price_cents,
-                ])
-            );
-        }
-
-        return $laboratoryPurchase;
-    }
-
-    private function checkAndSendInvoiceDeadlineNotification(LaboratoryPurchase $laboratoryPurchase): void
-    {
-        if (!$laboratoryPurchase->customer->taxProfiles()->exists()) {
-            return;
-        }
-
-        $lastDayOfPurchaseMonth = $laboratoryPurchase->created_at->endOfMonth();
-        $daysLeft = now()->diffInDays($lastDayOfPurchaseMonth);
-
-        if ($daysLeft <= 7) {
-            $laboratoryPurchase->customer->user->notify(
-                new FewDaysLeftToRequestInvoice($laboratoryPurchase, $daysLeft)
-            );
-        }
     }
 }
