@@ -21,7 +21,8 @@ class ExportLaboratoryPurchasesRequest extends FormRequest
             'invoice_requested' => 'nullable|in:,true,false',
             'invoice_uploaded' => 'nullable|in:,true,false',
             'results_uploaded' => 'nullable|in:,true,false',
-            'payment_method' => 'nullable|in:,odessa,stripe',
+            'payment_method' => 'nullable|in:,odessa,stripe,efevoopay,paypal',
+            'payment_status' => 'nullable|string|max:64',
             'brand' => 'nullable|string',
         ];
     }
