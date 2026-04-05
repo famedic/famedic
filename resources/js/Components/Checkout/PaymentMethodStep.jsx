@@ -16,11 +16,15 @@ export default function PaymentMethodStep({
     description = "Selecciona el método de pago que deseas utilizar para tu pedido.",
     paymentMethods,
     hasOdessaPay,
+    hasPayPal = false,
     addCardReturnUrl,
     forceMobile = false,
     ...props
 }) {
     const selectedPaymentMethod = useMemo(() => {
+        if (data.payment_method === "paypal") {
+            return "paypal";
+        }
         if (data.payment_method === "odessa") {
             return "odessa";
         }
@@ -46,7 +50,12 @@ export default function PaymentMethodStep({
             heading={stepHeading}
             description={description}
             selectedContent={
-                selectedPaymentMethod === "odessa" ? (
+                selectedPaymentMethod === "paypal" ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Text className="font-medium">PayPal</Text>
+                        <Badge color="blue">Checkout</Badge>
+                    </div>
+                ) : selectedPaymentMethod === "odessa" ? (
                     <div>
                         <div className="flex gap-1 items-center">
                             <img
@@ -107,6 +116,7 @@ export default function PaymentMethodStep({
                     setData={setData}
                     paymentMethods={paymentMethods}
                     hasOdessaPay={hasOdessaPay}
+                    hasPayPal={hasPayPal}
                     clearErrors={clearErrors}
                 />
             }
@@ -120,6 +130,7 @@ function PaymentMethodSelection({
     addCardReturnUrl,
     paymentMethods,
     hasOdessaPay,
+    hasPayPal = false,
     clearErrors,
     forceMobile = false,
 }) {
@@ -148,6 +159,25 @@ function PaymentMethodSelection({
         <ul
             className={`mt-3 grid gap-4 ${!forceMobile ? "sm:grid-cols-2" : ""}`}
         >
+            {hasPayPal && (
+                <CheckoutSelectionCard
+                    onClick={() => selectPaymentMethod({ id: "paypal" })}
+                    className="min-h-[11rem]"
+                >
+                    <div className="flex h-full flex-col justify-between">
+                        <div className="flex justify-between items-center">
+                            <Text className="font-medium">PayPal</Text>
+                            <Badge color="blue">PayPal</Badge>
+                        </div>
+                        <div className="mt-4">
+                            <Text className="text-sm text-gray-600 dark:text-gray-400">
+                                Paga con tu cuenta PayPal de forma segura
+                            </Text>
+                        </div>
+                    </div>
+                </CheckoutSelectionCard>
+            )}
+
             {hasOdessaPay && (
                 <CheckoutSelectionCard
                     onClick={() => selectPaymentMethod({ id: "odessa" })}

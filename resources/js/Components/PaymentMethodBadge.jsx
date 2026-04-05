@@ -1,4 +1,5 @@
 import { Code } from "@/Components/Catalyst/text";
+import { Badge } from "@/Components/Catalyst/badge";
 import OdessaBadge from "@/Components/OdessaBadge";
 import CreditCardBrand from "@/Components/CreditCardBrand";
 import EfevooPayBadge from "@/Components/EfevooPayBadge";
@@ -22,6 +23,19 @@ export default function PaymentMethodBadge({
 	if (payment_method === "odessa") {
 		const reference = showReference ? reference_id : null;
 		return <OdessaBadge reference={reference} />;
+	}
+
+	if (payment_method === "paypal") {
+		return (
+			<div className="flex flex-col gap-1">
+				<Badge color="blue">PayPal</Badge>
+				{(transaction.provider_order_id || transaction.reference_id) && (
+					<div className="text-xs text-gray-500 truncate max-w-[14rem]" title={transaction.provider_order_id || transaction.reference_id}>
+						Orden: {(transaction.provider_order_id || transaction.reference_id || "").slice(0, 12)}…
+					</div>
+				)}
+			</div>
+		);
 	}
 
 	// EfevooPay payment display
