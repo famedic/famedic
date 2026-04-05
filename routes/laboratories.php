@@ -11,6 +11,7 @@ use App\Http\Controllers\LaboratoryShoppingCartController;
 use App\Http\Controllers\LaboratoryStoreController;
 use App\Http\Controllers\LaboratoryQuoteController;
 use App\Http\Controllers\LaboratoryResultsController;
+use App\Http\Controllers\PayPalController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -40,6 +41,9 @@ Route::middleware([
     Route::post('/laboratory/{laboratory_brand}/checkout', [LaboratoryPurchaseController::class, 'store'])
         ->name('laboratory.checkout.store')
         ->middleware('laboratory-appointment', 'redirect-if-empty-laboratory-cart-items');
+
+    Route::post('/paypal/create-order', [PayPalController::class, 'createOrder'])->name('paypal.create-order');
+    Route::post('/paypal/capture-order', [PayPalController::class, 'captureOrder'])->name('paypal.capture-order');
 
     // Appointments
     Route::get('/{laboratory_brand}/laboratory-appointments/create', [LaboratoryAppointmentController::class, 'create'])
