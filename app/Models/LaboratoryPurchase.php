@@ -89,6 +89,11 @@ class LaboratoryPurchase extends Model
                     $query->where('payment_method', $filters['payment_method']);
                 });
             })
+            ->when(isset($filters['payment_status']) && $filters['payment_status'] !== '', function ($query) use ($filters) {
+                $query->whereHas('transactions', function ($query) use ($filters) {
+                    $query->where('payment_status', $filters['payment_status']);
+                });
+            })
             ->when(isset($filters['brand']) && $filters['brand'] !== '', function ($query) use ($filters) {
                 $query->where('brand', $filters['brand']);
             })
