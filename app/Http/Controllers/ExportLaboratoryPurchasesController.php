@@ -18,6 +18,7 @@ class ExportLaboratoryPurchasesController extends Controller
             'invoice_uploaded',
             'results_uploaded',
             'payment_method',
+            'payment_status',
         ]))->filter()->all();
 
         dispatch(new ProcessLaboratoryPurchasesSpreadsheetExport($request->user(), $filters));
