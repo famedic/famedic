@@ -2,6 +2,7 @@ import { Code } from "@/Components/Catalyst/text";
 import OdessaBadge from "@/Components/OdessaBadge";
 import CreditCardBrand from "@/Components/CreditCardBrand";
 import EfevooPayBadge from "@/Components/EfevooPayBadge";
+import CouponBalanceBadge from "@/Components/CouponBalanceBadge";
 
 /**
  * Centralized component for displaying payment method information
@@ -44,6 +45,11 @@ export default function PaymentMethodBadge({
 				)}
 			</div>
 		);
+	}
+
+	// Coupon balance payment display
+	if (payment_method === "coupon_balance") {
+		return <CouponBalanceBadge />;
 	}
 
 	// Stripe payment with credit card details

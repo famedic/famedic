@@ -26,6 +26,7 @@ import CreditCardBrand from "@/Components/CreditCardBrand";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import PurchasePdfDialog from "@/Components/PurchasePdfDialog";
 import Card from "@/Components/Card";
+import PaymentMethodBadge from "@/Components/PaymentMethodBadge";
 
 export default function Purchase({ purchase, isLabPurchase = false }) {
 	const [showRequestInvoiceModal, setShowRequestInvoiceModal] =
@@ -367,46 +368,32 @@ function Patient({ purchase, isLabPurchase }) {
 }
 
 function PaymentMethod({ purchase }) {
-	let hasNoTransactions =
+	const hasNoTransactions =
 		!purchase.transactions || purchase.transactions.length === 0;
+	const primaryTransaction = hasNoTransactions ? null : purchase.transactions[0];
+	const hasCouponApplied =
+		Number(purchase.coupon_discount_cents ?? 0) > 0 ||
+		primaryTransaction?.payment_method === "coupon_balance";
 
 	return (
 		<div>
 			<PurchaseLabel icon={CreditCardIcon}>Método de pago</PurchaseLabel>
-			<div className="mt-4">
+			<div className="mt-4 space-y-2">
 				{hasNoTransactions && <Text>No registrado</Text>}
 
-				{!hasNoTransactions &&
-					(purchase.transactions[0].payment_method === "odessa" ? (
-						<div className="flex gap-1">
-							<img
-								src="/images/odessa.png"
-								alt="odessa"
-								className="h-6 w-6"
-							/>
-							<div>
-								<Text>ODESSA</Text>
+				{primaryTransaction && (
+					<PaymentMethodBadge transaction={primaryTransaction} />
+				)}
 
-								<p className="-mt-1 text-xs text-orange-600 dark:text-orange-400">
-									Cobro a caja de ahorro
-								</p>
-							</div>
-						</div>
-					) : (
-						<div className="flex items-center gap-2">
-							<CreditCardBrand
-								brand={
-									purchase.transactions[0].details.card_brand
-								}
-							/>
-							<Code>
-								{
-									purchase.transactions[0].details
-										.card_last_four
-								}
-							</Code>
-						</div>
-					))}
+				{hasCouponApplied && (
+					<Badge color="famedic-lime" className="w-fit">
+						Cupón / crédito a favor aplicado
+						{Number(purchase.coupon_discount_cents ?? 0) > 0 &&
+							purchase.formatted_coupon_discount && (
+								<Code>-{purchase.formatted_coupon_discount}</Code>
+							)}
+					</Badge>
+				)}
 			</div>
 		</div>
 	);

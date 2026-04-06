@@ -22,6 +22,16 @@ import {
 } from "@heroicons/react/16/solid";
 import { usePage } from "@inertiajs/react";
 
+function getInitialsFromName(name = "") {
+	return name
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean)
+		.slice(0, 2)
+		.map((part) => part.charAt(0).toUpperCase())
+		.join("");
+}
+
 export default function UserNavigationDropdown({
 	children,
 	dropdownMenuProps,
@@ -44,10 +54,18 @@ export default function UserNavigationDropdown({
 		BuildingLibraryIcon: BuildingLibraryIcon,
 	};
 
+	const userInitials = getInitialsFromName(auth.user.full_name);
+
 	return (
 		<Dropdown>
 			<DropdownButton {...dropdownButtonProps}>
-				{children || <Avatar src={auth.user.profile_photo_url} />}
+				{children || (
+					<Avatar
+						src={auth.user.profile_photo_url}
+						initials={userInitials}
+						alt={auth.user.full_name || "Usuario"}
+					/>
+				)}
 			</DropdownButton>
 			<DropdownMenu {...dropdownMenuProps}>
 				{userNavigation.map(({ label, url, icon }) => {

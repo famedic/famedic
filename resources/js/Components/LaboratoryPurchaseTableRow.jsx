@@ -9,6 +9,7 @@ import {
 	PhoneIcon,
 	XCircleIcon,
 	CommandLineIcon,
+	GiftIcon,
 } from "@heroicons/react/16/solid";
 import { QrCodeIcon } from "@heroicons/react/20/solid";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
@@ -184,6 +185,13 @@ export default function LaboratoryPurchaseTableRow({
 								}
 							</Badge>
 						)}
+					</div>
+				)}
+				{laboratoryPurchase.transactions?.[0]?.payment_method ===
+					"coupon_balance" && (
+					<div className="flex items-center justify-end gap-1">
+						Cupón
+						<GiftIcon className="size-4 fill-famedic-light" />
 					</div>
 				)}
 			</TableCell>
