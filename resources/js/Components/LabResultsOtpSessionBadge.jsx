@@ -1,4 +1,4 @@
-import formatMmSs from "@/utils/formatMmSs";
+import formatMmSs from "@/Utils/formatMmSs";
 
 /**
  * Indicador discreto de sesión de verificación activa (ventana de confianza).
