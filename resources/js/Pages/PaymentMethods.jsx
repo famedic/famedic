@@ -17,7 +17,8 @@ import {
     CheckCircleIcon
 } from "@heroicons/react/24/outline";
 import PaymentMethodDeleteConfirmation from "@/Pages/PaymentMethods/PaymentMethodDeleteConfirmation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { usePage } from "@inertiajs/react";
 import CreditCardBrand from "@/Components/CreditCardBrand";
 import SettingsCard from "@/Components/SettingsCard";
 
@@ -27,6 +28,7 @@ export default function PaymentMethods({
     efevooConfig = {},
     pending3dsSessions = []
 }) {
+    const { props } = usePage();
     const [paymentMethodToDelete, setPaymentMethodToDelete] = useState(null);
     const [showPendingInfo, setShowPendingInfo] = useState(true);
     const [showMigrationInfo, setShowMigrationInfo] = useState(true);
@@ -57,6 +59,32 @@ export default function PaymentMethods({
     });
 
     const showMigrationNotice = activeCards.length === 0;
+    const showPayPalReferenceCard = true;
+    const hasAnyPaymentMethodCard =
+        sortedCards.length > 0 ||
+        pending3dsSessions.length > 0 ||
+        hasOdessaPay ||
+        showPayPalReferenceCard;
+
+    const laboratoryCarts = props?.laboratoryCarts ?? {};
+    const pendingPurchase = useMemo(() => {
+        const laboratoryEntries = Object.entries(laboratoryCarts).filter(
+            ([, items]) => Array.isArray(items) && items.length > 0,
+        );
+
+        if (laboratoryEntries.length > 0) {
+            const [brand, items] = laboratoryEntries[0];
+            return {
+                kind: "laboratory",
+                itemsCount: items.length,
+                label: `Tienes ${items.length} estudio${items.length === 1 ? "" : "s"} pendiente${items.length === 1 ? "" : "s"} en tu carrito de laboratorio`,
+                href: route("laboratory.checkout", { laboratory_brand: brand }),
+                ctaLabel: "Continuar checkout de laboratorio",
+            };
+        }
+
+        return null;
+    }, [laboratoryCarts]);
 
     return (
         <SettingsLayout title="Mis métodos de pago">
@@ -197,7 +225,7 @@ export default function PaymentMethods({
             </div>
 
             {/* LISTA DE TARJETAS MEJORADA */}
-            {sortedCards.length > 0 || pending3dsSessions.length > 0 ? (
+            {hasAnyPaymentMethodCard ? (
                 <div className="space-y-6">
                     {/* Tarjetas activas */}
                     {sortedCards.length > 0 && (
@@ -213,13 +241,27 @@ export default function PaymentMethods({
                         </div>
                     )}
 
-                    {/* OdessaPay si existe */}
-                    {hasOdessaPay && (
+                    {sortedCards.length === 0 && (
+                        <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900/50">
+                            <Text className="text-sm font-medium text-zinc-900 dark:text-white">
+                                Aun no tienes tarjetas tokenizadas en EfevooPay
+                            </Text>
+                            <Text className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                Puedes agregar una tarjeta para pagos rapidos o usar los metodos disponibles.
+                            </Text>
+                        </div>
+                    )}
+
+                    {/* Metodos alternos */}
+                    {(hasOdessaPay || showPayPalReferenceCard) && (
                         <div>
                             <h3 className="mb-3 text-sm font-medium text-gray-500 dark:text-gray-400">
                                 Otros métodos
                             </h3>
-                            <OdessaPaymentMethod />
+                            <div className="space-y-4">
+                                {hasOdessaPay && <OdessaPaymentMethod />}
+                                {showPayPalReferenceCard && <PayPalReferencePaymentMethod />}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -252,7 +294,65 @@ export default function PaymentMethods({
                 close={() => setPaymentMethodToDelete(null)}
                 paymentMethod={paymentMethodToDelete}
             />
+
+            {pendingPurchase && (
+                <SettingsCard className="mt-6 border-blue-200 bg-blue-50/70 dark:border-blue-900/60 dark:bg-blue-900/20">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <Text className="font-medium text-blue-900 dark:text-blue-200">
+                                Compra pendiente por finalizar
+                            </Text>
+                            <Text className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                                {pendingPurchase.label}
+                            </Text>
+                        </div>
+                        <Button
+                            href={pendingPurchase.href}
+                            className="w-full sm:w-auto"
+                        >
+                            {pendingPurchase.ctaLabel}
+                        </Button>
+                    </div>
+                </SettingsCard>
+            )}
         </SettingsLayout>
+    );
+}
+
+function PayPalReferencePaymentMethod() {
+    return (
+        <SettingsCard className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20">
+            <div className="absolute right-0 top-0 h-20 w-20 opacity-10">
+                <div className="h-full w-full rounded-bl-full bg-blue-500" />
+            </div>
+
+            <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-blue-700 shadow-sm dark:bg-gray-800 dark:text-blue-300">
+                        PayPal
+                    </div>
+                    <div>
+                        <Text className="font-medium">Cuenta PayPal</Text>
+                        <Text className="text-xs text-gray-500 dark:text-gray-400">
+                            Metodo de pago disponible
+                        </Text>
+                    </div>
+                </div>
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                    Disponible
+                </span>
+            </div>
+
+            <div className="mt-4 flex items-center gap-2">
+                <Code className="text-sm">
+                    <span className="text-blue-700 dark:text-blue-300">paypal@cuenta</span>
+                </Code>
+            </div>
+
+            <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                <p>Tambien puedes pagar con PayPal.</p>
+            </div>
+        </SettingsCard>
     );
 }
 
