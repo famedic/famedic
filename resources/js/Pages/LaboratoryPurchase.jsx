@@ -15,7 +15,7 @@ import InvoiceTabContent from "@/Components/Laboratory/Tabs/InvoiceTabContent";
 import StatusTabContent from "@/Components/Laboratory/Tabs/StatusTabContent";
 import OtpModal from "@/Components/OtpModal";
 import LabResultsOtpSessionBadge from "@/Components/LabResultsOtpSessionBadge";
-import { useLabResultsOtpSession } from "../../hooks/useLabResultsOtpSession";
+import { useLabResultsOtpSession } from "../Hooks/useLabResultsOtpSession";
 export default function LaboratoryPurchase({
     laboratoryPurchase,
     confetti,
