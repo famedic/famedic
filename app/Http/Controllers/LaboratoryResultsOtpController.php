@@ -6,6 +6,7 @@ use App\Models\LaboratoryPurchase;
 use App\Models\OtpAccessLog;
 use App\Models\OtpCode;
 use App\Notifications\LaboratoryResultsOtpNotification;
+use App\Support\LabResultsOtpTrustSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,10 +15,6 @@ use Illuminate\Support\Facades\Log;
 
 class LaboratoryResultsOtpController extends Controller
 {
-    private const SESSION_MINUTES = 15;
-
-    private const RESEND_SECONDS = 30;
-
     private const MAX_ATTEMPTS = 5;
 
     public function status(Request $request, LaboratoryPurchase $laboratoryPurchase): JsonResponse
@@ -28,18 +25,7 @@ class LaboratoryResultsOtpController extends Controller
             abort(403);
         }
 
-        $verifiedAt = $request->session()->get($this->sessionKey($laboratoryPurchase->id));
-        if (! $verifiedAt) {
-            return response()->json(['verified' => false, 'expires_in' => 0]);
-        }
-
-        $verifiedAtTs = is_numeric($verifiedAt) ? (int) $verifiedAt : strtotime((string) $verifiedAt);
-        if (! $verifiedAtTs) {
-            return response()->json(['verified' => false, 'expires_in' => 0]);
-        }
-
-        $expiresAtTs = $verifiedAtTs + (self::SESSION_MINUTES * 60);
-        $expiresIn = max(0, $expiresAtTs - time());
+        $expiresIn = LabResultsOtpTrustSession::remainingSeconds($request, $laboratoryPurchase->id);
 
         return response()->json([
             'verified' => $expiresIn > 0,
@@ -86,8 +72,8 @@ class LaboratoryResultsOtpController extends Controller
         return response()->json([
             'sent' => true,
             'channel' => $validated['channel'],
-            'expires_in' => max(0, now()->diffInSeconds($otp['expires_at'], false)),
-            'resend_in' => self::RESEND_SECONDS,
+            'expires_in' => (int) max(0, now()->diffInSeconds($otp['expires_at'], false)),
+            'resend_in' => $this->resendCooldownSeconds(),
             'max_attempts' => self::MAX_ATTEMPTS,
         ]);
     }
@@ -111,8 +97,9 @@ class LaboratoryResultsOtpController extends Controller
             ->latest('id')
             ->first();
 
-        if ($latestOtp && now()->diffInSeconds($latestOtp->created_at) < self::RESEND_SECONDS) {
-            $remaining = self::RESEND_SECONDS - (int) now()->diffInSeconds($latestOtp->created_at);
+        $cooldown = $this->resendCooldownSeconds();
+        if ($latestOtp && now()->diffInSeconds($latestOtp->created_at) < $cooldown) {
+            $remaining = $cooldown - (int) now()->diffInSeconds($latestOtp->created_at);
 
             return response()->json([
                 'sent' => false,
@@ -194,7 +181,7 @@ class LaboratoryResultsOtpController extends Controller
             'verified_at' => now(),
         ]);
 
-        $request->session()->put($this->sessionKey($laboratoryPurchase->id), now()->timestamp);
+        $request->session()->put(LabResultsOtpTrustSession::sessionKey($laboratoryPurchase->id), now()->timestamp);
 
         $this->persistAccessLog('otp_verified_modal', $userId, $laboratoryPurchase->id, $otp->channel, [
             'otp_id' => $otp->id,
@@ -202,7 +189,7 @@ class LaboratoryResultsOtpController extends Controller
 
         return response()->json([
             'verified' => true,
-            'expires_in' => self::SESSION_MINUTES * 60,
+            'expires_in' => LabResultsOtpTrustSession::trustMinutes() * 60,
         ]);
     }
 
@@ -236,9 +223,9 @@ class LaboratoryResultsOtpController extends Controller
         });
     }
 
-    private function sessionKey(int $purchaseId): string
+    private function resendCooldownSeconds(): int
     {
-        return "otp_verified_at:lab_results:purchase:{$purchaseId}";
+        return max(1, (int) config('laboratory-results.resend_seconds', 60));
     }
 
     private function ownsPurchase(LaboratoryPurchase $purchase, int $userId): bool

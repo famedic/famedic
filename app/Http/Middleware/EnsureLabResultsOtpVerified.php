@@ -2,13 +2,12 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\LabResultsOtpTrustSession;
 use Closure;
 use Illuminate\Http\Request;
 
 class EnsureLabResultsOtpVerified
 {
-    private const SESSION_MINUTES = 15;
-
     public function handle(Request $request, Closure $next)
     {
         $type = (string) ($request->route('type') ?? '');
@@ -21,27 +20,11 @@ class EnsureLabResultsOtpVerified
             return abort(403);
         }
 
-        $verifiedAt = $request->session()->get($this->sessionKey((int) $purchaseId));
-        if (! $verifiedAt) {
-            return abort(403);
-        }
-
-        $verifiedAtTs = is_numeric($verifiedAt) ? (int) $verifiedAt : strtotime((string) $verifiedAt);
-        if (! $verifiedAtTs) {
-            return abort(403);
-        }
-
-        $expiresAtTs = $verifiedAtTs + (self::SESSION_MINUTES * 60);
-        if (time() >= $expiresAtTs) {
+        if (! LabResultsOtpTrustSession::isValid($request, (int) $purchaseId)) {
             return abort(403);
         }
 
         return $next($request);
-    }
-
-    private function sessionKey(int $purchaseId): string
-    {
-        return "otp_verified_at:lab_results:purchase:{$purchaseId}";
     }
 
     private function resolvePurchaseId(Request $request): ?int

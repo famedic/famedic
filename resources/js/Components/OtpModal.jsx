@@ -3,6 +3,8 @@ import { usePage } from "@inertiajs/react";
 import { Dialog, DialogTitle, DialogBody, DialogActions } from "@/Components/Catalyst/dialog";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
+import formatMmSs from "@/utils/formatMmSs";
+import { maskEmail, maskPhone } from "@/utils/sensitiveMask";
 
 function getCsrf() {
   return document.querySelector('meta[name="csrf-token"]')?.content ?? "";
@@ -10,13 +12,6 @@ function getCsrf() {
 
 function onlyDigits6(v) {
   return String(v ?? "").replace(/\D/g, "").slice(0, 6);
-}
-
-function formatCountdown(totalSeconds) {
-  const safe = Math.max(0, totalSeconds);
-  const mins = Math.floor(safe / 60);
-  const secs = safe % 60;
-  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
 async function jsonFetch(url, { method = "GET", body } = {}) {
@@ -52,6 +47,9 @@ export default function OtpModal({
   const { auth } = usePage().props;
   const userHasSms = Boolean(auth?.user?.phone);
   const userHasEmail = Boolean(auth?.user?.email);
+
+  const maskedPhone = auth?.user?.masked_phone || maskPhone(auth?.user?.phone ?? auth?.user?.full_phone);
+  const maskedEmail = auth?.user?.masked_email || maskEmail(auth?.user?.email);
 
   const [step, setStep] = useState("channel"); // channel | code
   const [channel, setChannel] = useState(userHasSms ? "sms" : "email");
@@ -99,8 +97,8 @@ export default function OtpModal({
   useEffect(() => {
     if (!isOpen) return;
     const timer = setInterval(() => {
-      setOtpSecondsLeft((p) => Math.max(0, p - 1));
-      setResendSecondsLeft((p) => Math.max(0, p - 1));
+      setOtpSecondsLeft((p) => Math.max(0, Math.floor(Number(p)) - 1));
+      setResendSecondsLeft((p) => Math.max(0, Math.floor(Number(p)) - 1));
     }, 1000);
     return () => clearInterval(timer);
   }, [isOpen]);
@@ -151,8 +149,8 @@ export default function OtpModal({
     try {
       const r = await jsonFetch(sendUrl, { method: "POST", body: { channel } });
       setStep("code");
-      setOtpSecondsLeft(Number(r.expires_in ?? 0));
-      setResendSecondsLeft(Number(r.resend_in ?? 0));
+      setOtpSecondsLeft(Math.floor(Number(r.expires_in ?? 0)));
+      setResendSecondsLeft(Math.floor(Number(r.resend_in ?? 0)));
       setRemainingAttempts(Number(r.max_attempts ?? 5));
       setDigits(["", "", "", "", "", ""]);
       autoSubmitLock.current = false;
@@ -169,13 +167,13 @@ export default function OtpModal({
     try {
       const r = await jsonFetch(resendUrl, { method: "POST", body: { channel } });
       setStep("code");
-      setOtpSecondsLeft(Number(r.expires_in ?? 0));
-      setResendSecondsLeft(Number(r.resend_in ?? 0));
+      setOtpSecondsLeft(Math.floor(Number(r.expires_in ?? 0)));
+      setResendSecondsLeft(Math.floor(Number(r.resend_in ?? 0)));
       setDigits(["", "", "", "", "", ""]);
       autoSubmitLock.current = false;
     } catch (e) {
       if (e.status === 429 && e.data?.resend_in) {
-        setResendSecondsLeft(Number(e.data.resend_in));
+        setResendSecondsLeft(Math.floor(Number(e.data.resend_in)));
       }
       setError(e.message || "No se pudo reenviar el código.");
     } finally {
@@ -240,7 +238,12 @@ export default function OtpModal({
                 className={`min-h-[48px] flex-1 justify-center ${channel === "sms" ? "ring-2 ring-famedic-300" : ""}`}
                 disabled={!userHasSms}
               >
-                SMS
+                <span className="flex flex-col items-center gap-0.5">
+                  <span>SMS</span>
+                  {userHasSms && maskedPhone && (
+                    <span className="text-xs font-normal text-zinc-500 dark:text-slate-400">{maskedPhone}</span>
+                  )}
+                </span>
               </Button>
               <Button
                 outline
@@ -248,9 +251,22 @@ export default function OtpModal({
                 className={`min-h-[48px] flex-1 justify-center ${channel === "email" ? "ring-2 ring-famedic-300" : ""}`}
                 disabled={!userHasEmail}
               >
-                Correo
+                <span className="flex flex-col items-center gap-0.5">
+                  <span>Correo</span>
+                  {userHasEmail && maskedEmail && (
+                    <span className="text-xs font-normal text-zinc-500 dark:text-slate-400 break-all px-1">{maskedEmail}</span>
+                  )}
+                </span>
               </Button>
             </div>
+            <Text className="text-xs text-zinc-500 dark:text-slate-500">
+              {channel === "sms" && userHasSms && maskedPhone && (
+                <>El código se enviará por SMS a <Strong>{maskedPhone}</Strong>.</>
+              )}
+              {channel === "email" && userHasEmail && maskedEmail && (
+                <>El código se enviará al correo <Strong>{maskedEmail}</Strong>.</>
+              )}
+            </Text>
             {!userHasSms && !userHasEmail && (
               <Text className="text-sm text-red-600 dark:text-red-300">
                 No tienes teléfono ni correo registrados. Actualiza tus datos para poder validar.
@@ -263,10 +279,13 @@ export default function OtpModal({
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <Text className="text-sm text-zinc-600 dark:text-slate-400">
-                Código enviado por <Strong>{channel === "sms" ? "SMS" : "correo"}</Strong>
+                Código enviado a{" "}
+                <Strong>
+                  {channel === "sms" ? maskedPhone || "SMS" : maskedEmail || "correo"}
+                </Strong>
               </Text>
               <Text className="text-sm text-zinc-600 dark:text-slate-400">
-                Expira en <Strong>{formatCountdown(otpSecondsLeft)}</Strong>
+                Expira en <Strong>{formatMmSs(otpSecondsLeft)}</Strong>
               </Text>
             </div>
 

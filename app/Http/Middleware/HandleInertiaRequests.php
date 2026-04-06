@@ -36,7 +36,13 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $request->user()
+                    ? [
+                        ...$request->user()->toArray(),
+                        'masked_phone' => mask_phone($request->user()->phone),
+                        'masked_email' => mask_email($request->user()->email),
+                    ]
+                    : null,
             ],
             ...($request->user() ? [
                 'medicalAttentionSubscriptionIsActive' => $request->user()->customer?->medical_attention_subscription_is_active,

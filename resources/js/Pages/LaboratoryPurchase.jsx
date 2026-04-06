@@ -14,6 +14,8 @@ import ResultsTabContent from "@/Components/Laboratory/Tabs/ResultsTabContent";
 import InvoiceTabContent from "@/Components/Laboratory/Tabs/InvoiceTabContent";
 import StatusTabContent from "@/Components/Laboratory/Tabs/StatusTabContent";
 import OtpModal from "@/Components/OtpModal";
+import LabResultsOtpSessionBadge from "@/Components/LabResultsOtpSessionBadge";
+import { useLabResultsOtpSession } from "@/hooks/useLabResultsOtpSession";
 
 export default function LaboratoryPurchase({
     laboratoryPurchase,
@@ -26,8 +28,9 @@ export default function LaboratoryPurchase({
     const [activeTab, setActiveTab] = useState("paciente");
     const { url } = usePage();
     const [showOtpModal, setShowOtpModal] = useState(false);
-    const [otpVerified, setOtpVerified] = useState(false);
     const pendingAfterOtpRef = useRef(null);
+
+    const otpSession = useLabResultsOtpSession(laboratoryPurchase?.id);
 
     useEffect(() => {
         try {
@@ -41,34 +44,15 @@ export default function LaboratoryPurchase({
         }
     }, [url]);
 
-    useEffect(() => {
-        const check = async () => {
-            try {
-                const statusUrl = route("otp.status", { laboratory_purchase: laboratoryPurchase.id });
-                const res = await fetch(statusUrl, {
-                    method: "GET",
-                    credentials: "same-origin",
-                    headers: { Accept: "application/json" },
-                });
-                const data = await res.json().catch(() => ({}));
-                if (res.ok && data?.verified) {
-                    setOtpVerified(true);
-                } else {
-                    setOtpVerified(false);
-                }
-            } catch {
-                setOtpVerified(false);
-            }
-        };
-
-        check();
-    }, [laboratoryPurchase?.id]);
-
     // Determinar si hay resultados (automáticos o manuales)
     const hasAnyResults = hasResultsAvailable || !!laboratoryPurchase.results;
 
-    const handleOtpSuccess = () => {
-        setOtpVerified(true);
+    const handleOtpSuccess = (payload) => {
+        if (payload?.expires_in != null) {
+            otpSession.armSession(payload.expires_in);
+        } else {
+            otpSession.refresh();
+        }
         setShowOtpModal(false);
         const next = pendingAfterOtpRef.current;
         pendingAfterOtpRef.current = null;
@@ -76,7 +60,7 @@ export default function LaboratoryPurchase({
     };
 
     const requireOtpThen = (fn) => {
-        if (otpVerified) {
+        if (otpSession.verified) {
             fn?.();
             return true;
         }
@@ -86,7 +70,7 @@ export default function LaboratoryPurchase({
     };
 
     const handleTabChange = (tab) => {
-        if (tab === "resultados" && !otpVerified) {
+        if (tab === "resultados" && !otpSession.verified) {
             requireOtpThen(() => setActiveTab("resultados"));
             return;
         }
@@ -206,6 +190,8 @@ export default function LaboratoryPurchase({
                     }}
                 />
             )}
+
+            <LabResultsOtpSessionBadge secondsLeft={otpSession.secondsLeft} />
         </SettingsLayout>
     );
 }
