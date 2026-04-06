@@ -58,6 +58,9 @@ return [
         'payment-attempts' => [
             ['manage' => 'Monitorear intentos de pago'],
         ],
+        'coupons' => [
+            ['manage' => 'Gestionar cupones saldo y asignaciones'],
+        ],
     ],
 
     'medical_attention_subscription_price_cents' => 30000,

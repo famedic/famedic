@@ -34,6 +34,7 @@ use App\Http\Controllers\Admin\TaxProfileController as AdminTaxProfileController
 use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
 use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
 use App\Http\Controllers\Admin\MurguiaMonitorController;
+use App\Http\Controllers\Admin\CouponController;
 
 // === IMPORTACIONES NUEVAS ===
 use App\Http\Controllers\Admin\LaboratoryNotificationController;
@@ -133,6 +134,12 @@ Route::prefix('admin')->middleware([
             ->name('laboratory-notifications-monitor.index');
         Route::get('laboratory-notifications-monitor/{gdaOrderId}', [LaboratoryNotificationMonitorController::class, 'show'])
             ->name('laboratory-notifications-monitor.show');
+
+        Route::get('coupons/assign', [CouponController::class, 'assignForm'])->name('coupons.assign');
+        Route::post('coupons/assign', [CouponController::class, 'assign'])->name('coupons.assign.store');
+        Route::get('coupons/import', [CouponController::class, 'importForm'])->name('coupons.import');
+        Route::post('coupons/import', [CouponController::class, 'import'])->name('coupons.import.store');
+        Route::resource('coupons', CouponController::class)->except(['show']);
 
         Route::middleware('super.admin')->group(function () {
             Route::get('murguia-monitor', [MurguiaMonitorController::class, 'index'])->name('murguia-monitor.index');

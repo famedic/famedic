@@ -2,7 +2,7 @@ import SettingsLayout from "@/Layouts/SettingsLayout";
 import { GradientHeading } from "@/Components/Catalyst/heading";
 import { Divider } from "@/Components/Catalyst/divider";
 import { Button } from "@/Components/Catalyst/button";
-import { Text, Code } from "@/Components/Catalyst/text";
+import { Text, Code, Strong } from "@/Components/Catalyst/text";
 import { PlusIcon } from "@heroicons/react/16/solid";
 import {
     TrashIcon,
@@ -25,7 +25,8 @@ export default function PaymentMethods({
     paymentMethods = [],
     hasOdessaPay,
     efevooConfig = {},
-    pending3dsSessions = []
+    pending3dsSessions = [],
+    formattedBalanceCoupons,
 }) {
     const [paymentMethodToDelete, setPaymentMethodToDelete] = useState(null);
     const [showPendingInfo, setShowPendingInfo] = useState(true);
@@ -89,6 +90,17 @@ export default function PaymentMethods({
                     Agregar tarjeta
                 </Button>
             </div>
+
+            {formattedBalanceCoupons && (
+                <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/80 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/30">
+                    <Text>
+                        Saldo disponible:{" "}
+                        <Strong className="text-emerald-800 dark:text-emerald-200">
+                            {formattedBalanceCoupons}
+                        </Strong>
+                    </Text>
+                </div>
+            )}
 
             <Divider className="my-6" />
 

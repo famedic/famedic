@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EfevooToken;
 use App\Models\Efevoo3dsSession;
+use App\Services\CouponService;
 use App\Services\EfevooPayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Session;
@@ -23,9 +24,11 @@ class PaymentMethodController extends Controller
      * INDEX
      * ========================================================== */
 
-    public function index(Request $request)
+    public function index(Request $request, CouponService $couponService)
     {
         $customer = $request->user()->customer;
+
+        $balanceCents = $couponService->getUserBalance($request->user()->id);
 
         $tokens = EfevooToken::where('customer_id', $customer->id)
             ->where('is_active', true)
@@ -40,6 +43,8 @@ class PaymentMethodController extends Controller
         return Inertia::render('PaymentMethods', [
             'paymentMethods' => $paymentMethods,
             'environment' => config('efevoopay.environment'),
+            'balanceCouponsCents' => $balanceCents,
+            'formattedBalanceCoupons' => $balanceCents > 0 ? formattedCentsPrice($balanceCents) : null,
         ]);
     }
 

@@ -4,16 +4,19 @@ namespace App\Actions\Laboratories;
 
 use App\Actions\Odessa\ChargeOdessaAction;
 use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction;
+use App\Actions\Transactions\CreateCouponBalanceTransactionAction;
 use App\Actions\Transactions\RefundTransactionAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\UnmatchingTotalPriceException;
 use App\Models\Address;
 use App\Models\Contact;
+use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryPurchaseItem;
 use App\Models\Transaction;
+use App\Services\CouponApplicationService;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Notifications\FewDaysLeftToRequestInvoice;
 use Illuminate\Database\Eloquent\Collection;
@@ -27,6 +30,8 @@ class OrderAction
     private ChargeOdessaAction $chargeOdessaAction;
     private CreateGDAQuotationAction $createGDAQuotationAction;
     private RefundTransactionAction $refundTransactionAction;
+    private CouponApplicationService $couponApplicationService;
+    private CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction;
 
     private Collection $laboratoryCartItems;
 
@@ -35,13 +40,17 @@ class OrderAction
         ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction,
         ChargeOdessaAction $chargeOdessaAction,
         CreateGDAQuotationAction $createGDAQuotationAction,
-        RefundTransactionAction $refundTransactionAction
+        RefundTransactionAction $refundTransactionAction,
+        CouponApplicationService $couponApplicationService,
+        CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction
     ) {
         $this->calculateTotalsAndDiscountAction = $calculateTotalsAndDiscountAction;
         $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction;
         $this->chargeOdessaAction = $chargeOdessaAction;
         $this->createGDAQuotationAction = $createGDAQuotationAction;
         $this->refundTransactionAction = $refundTransactionAction;
+        $this->couponApplicationService = $couponApplicationService;
+        $this->createCouponBalanceTransactionAction = $createCouponBalanceTransactionAction;
     }
 
     public function __invoke(
@@ -50,7 +59,8 @@ class OrderAction
         ?Contact $contact,
         string $paymentMethod,
         LaboratoryBrand $laboratoryBrand,
-        int $totalCents
+        int $totalCents,
+        ?int $couponId = null,
     ): LaboratoryPurchase {
 
         $this->laboratoryCartItems = $customer->laboratoryCartItems()
@@ -64,6 +74,18 @@ class OrderAction
         if ($totalCents != $calculatedTotalCents) {
             throw new UnmatchingTotalPriceException();
         }
+
+        $discountCents = 0;
+        if ($couponId !== null) {
+            $this->couponApplicationService->validateApplication(
+                $customer->user,
+                $couponId,
+                $calculatedTotalCents
+            );
+            $discountCents = (int) Coupon::query()->findOrFail($couponId)->remaining_cents;
+        }
+
+        $amountToChargeCents = $calculatedTotalCents - $discountCents;
 
         $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand);
 
@@ -97,7 +119,15 @@ class OrderAction
         try {
             DB::beginTransaction();
 
-            $transaction = $this->chargeAndCreateTransaction($totalCents, $paymentMethod, $customer);
+            if ($amountToChargeCents > 0) {
+                $transaction = $this->chargeAndCreateTransaction($amountToChargeCents, $paymentMethod, $customer);
+            } else {
+                $transaction = ($this->createCouponBalanceTransactionAction)(
+                    $customer,
+                    (int) $couponId,
+                    $discountCents
+                );
+            }
 
             DB::commit();
 
@@ -144,6 +174,14 @@ class OrderAction
             ]);
 
             $this->clearCart($customer);
+
+            if ($couponId !== null) {
+                $this->couponApplicationService->applyForLaboratoryPurchase(
+                    $customer->user,
+                    $laboratoryPurchase,
+                    $couponId
+                );
+            }
 
             DB::commit();
 

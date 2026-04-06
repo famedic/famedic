@@ -5,19 +5,24 @@ namespace App\Http\Controllers;
 use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
 use App\Enums\Gender;
 use App\Enums\LaboratoryBrand;
+use App\Services\CouponService;
 use Illuminate\Http\Request;
 use App\Services\Tracking\InitiateCheckout;
 use Inertia\Inertia;
 
 class LaboratoryCheckoutController extends Controller
 {
-    public function __invoke(Request $request, LaboratoryBrand $laboratoryBrand, CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction)
+    public function __invoke(Request $request, LaboratoryBrand $laboratoryBrand, CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction, CouponService $couponService)
     {
         $laboratoryCartItems = $request->user()->customer->laboratoryCartItems()->ofBrand($laboratoryBrand)->get();
 
         $totals = $calculateTotalsAndDiscountAction(
             $laboratoryCartItems
         );
+
+        $userId = $request->user()->id;
+        $balanceCents = $couponService->getUserBalance($userId);
+        $availableCoupons = $couponService->getAvailableCoupons($userId);
 
         InitiateCheckout::track(
             contents: [
@@ -41,6 +46,9 @@ class LaboratoryCheckoutController extends Controller
                 ['laboratoryAppointment' => $request->user()->customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand)] :
                 []),
             ...$totals,
+            'balanceCouponsCents' => $balanceCents,
+            'formattedBalanceCoupons' => $balanceCents > 0 ? formattedCentsPrice($balanceCents) : null,
+            'availableBalanceCoupons' => $availableCoupons,
             'contacts' => $request->user()->customer->contacts,
             'genders' => Gender::casesWithLabels(),
             'addresses' => $request->user()->customer->addresses,

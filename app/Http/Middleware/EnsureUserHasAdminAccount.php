@@ -111,6 +111,12 @@ class EnsureUserHasAdminAccount
                     'current' => Route::currentRouteName() === 'admin.customers.index' ||
                         Route::currentRouteName() === 'admin.customers.show',
                 ]] : [],
+                ...$request->user()->administrator->hasPermissionTo('coupons.manage') ? [[
+                    'label' => 'Cupones saldo',
+                    'url' => route('admin.coupons.index'),
+                    'icon' => 'BanknotesIcon',
+                    'current' => str_starts_with((string) Route::currentRouteName(), 'admin.coupons'),
+                ]] : [],
                 ...$request->user()->administrator->hasPermissionTo('documentation.manage') ? [[
                     'label' => 'Documentación legal',
                     'url' => route('admin.documentation'),

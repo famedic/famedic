@@ -74,6 +74,16 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
         return $this->hasMany(User::class, 'referred_by');
     }
 
+    public function couponUsers(): HasMany
+    {
+        return $this->hasMany(CouponUser::class);
+    }
+
+    public function inAppNotifications(): HasMany
+    {
+        return $this->hasMany(InAppNotification::class);
+    }
+
     protected function profilePhotoUrl(): Attribute
     {
         return Attribute::make(

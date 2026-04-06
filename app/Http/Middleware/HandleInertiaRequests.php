@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Enums\LaboratoryBrand;
+use App\Services\NotificationService;
 use App\Services\Tracking\Tracking;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -94,6 +95,28 @@ class HandleInertiaRequests extends Middleware
             ...($request->user() ? ['laboratoryCarts' => $this->getLaboratoryCarts()] : []),
             'laboratoryBrands' => LaboratoryBrand::brandsData(),
             ...($request->user() ? ['onlinePharmacyCart' => $this->getOnlinePharmacyCart()] : []),
+            'inAppNotificationFeed' => fn () => $this->getInAppNotificationFeed($request),
+        ];
+    }
+
+    protected function getInAppNotificationFeed(Request $request): ?array
+    {
+        if (! $request->user()) {
+            return null;
+        }
+
+        $service = app(NotificationService::class);
+        $user = $request->user();
+
+        return [
+            'unreadCount' => $service->unreadCount($user),
+            'items' => $service->recentForUser($user, 20)->map(fn ($n) => [
+                'id' => $n->id,
+                'title' => $n->title,
+                'message' => $n->message,
+                'is_read' => (bool) $n->is_read,
+                'created_at' => $n->created_at?->toIso8601String(),
+            ])->all(),
         ];
     }
 

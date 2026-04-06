@@ -21,6 +21,9 @@ export default function PaymentMethodStep({
     ...props
 }) {
     const selectedPaymentMethod = useMemo(() => {
+        if (data.payment_method === "coupon_balance") {
+            return "coupon_balance";
+        }
         if (data.payment_method === "odessa") {
             return "odessa";
         }
@@ -46,7 +49,14 @@ export default function PaymentMethodStep({
             heading={stepHeading}
             description={description}
             selectedContent={
-                selectedPaymentMethod === "odessa" ? (
+                selectedPaymentMethod === "coupon_balance" ? (
+                    <div>
+                        <Text className="font-medium">Saldo a favor (cupón)</Text>
+                        <Text className="text-sm text-gray-600 dark:text-gray-400">
+                            El total se cubre con tu saldo disponible.
+                        </Text>
+                    </div>
+                ) : selectedPaymentMethod === "odessa" ? (
                     <div>
                         <div className="flex gap-1 items-center">
                             <img

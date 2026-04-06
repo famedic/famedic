@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Laboratories\OrderAction;
 use App\Enums\LaboratoryBrand;
+use App\Exceptions\CouponApplicationException;
 use App\Exceptions\OdessaInsufficientFundsException;
 use App\Exceptions\EfevooPaymentException;
 use App\Http\Requests\Laboratories\LaboratoryPurchases\StoreLaboratoryPurchaseRequest;
@@ -28,11 +29,15 @@ class LaboratoryPurchaseController extends Controller
                 contact: Contact::find($request->contact),
                 paymentMethod: $request->payment_method,
                 laboratoryBrand: $laboratoryBrand,
-                totalCents: $request->total,
+                totalCents: (int) $request->total,
+                couponId: $request->filled('coupon_id') ? (int) $request->input('coupon_id') : null,
             );
         } catch (EfevooPaymentException $e) {
             return redirect()->back()
                 ->withErrors(['payment_method' => $e->getMessage()]);
+        } catch (CouponApplicationException $e) {
+            return redirect()->back()
+                ->withErrors(['coupon_id' => $e->getMessage()]);
         } catch (OdessaInsufficientFundsException $e) {
             return redirect()->back()
                 ->withErrors(['payment_method' => 'No cuentas con suficiente Saldo a la Vista en tu caja de ahorro para realizar el pago.']);

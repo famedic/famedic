@@ -93,6 +93,9 @@ class RefundTransactionAction
 
             // Ejecutar reembolso según el gateway
             switch ($gateway) {
+                case 'coupon_balance':
+                    return true;
+
                 case 'efevoopay':
                     return $this->refundEfevooPayTransaction($transaction, $customer);
 
@@ -128,6 +131,11 @@ class RefundTransactionAction
 
     private function determineGateway(Transaction $transaction): string
     {
+        if (strtolower((string) $transaction->gateway) === 'coupon_balance'
+            || strtolower((string) $transaction->payment_method) === 'coupon_balance') {
+            return 'coupon_balance';
+        }
+
         // Prioridad 1: Verificar gateway_transaction_id
         if ($transaction->gateway_transaction_id) {
             if (str_starts_with($transaction->gateway_transaction_id, 'sim_')) {

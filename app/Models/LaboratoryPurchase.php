@@ -33,6 +33,7 @@ class LaboratoryPurchase extends Model
         'has_results_available',
         'formatted_sample_collection_at',
         'formatted_results_at',
+        'formatted_coupon_discount',
     ];
 
     protected function casts(): array
@@ -183,6 +184,15 @@ class LaboratoryPurchase extends Model
     {
         return Attribute::make(
             get: fn() => formattedCentsPrice($this->total_cents),
+        );
+    }
+
+    protected function formattedCouponDiscount(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => $this->coupon_discount_cents
+                ? formattedCentsPrice($this->coupon_discount_cents)
+                : null,
         );
     }
 

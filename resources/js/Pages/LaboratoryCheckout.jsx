@@ -11,7 +11,7 @@ import {
 } from "@/Components/Catalyst/fieldset";
 import { Subheading } from "@/Components/Catalyst/heading";
 import { Switch, SwitchField } from "@/Components/Catalyst/switch";
-import { Text } from "@/Components/Catalyst/text";
+import { Text, Strong } from "@/Components/Catalyst/text";
 import { Divider } from "@/Components/Catalyst/divider";
 import CheckoutLayout from "@/Layouts/CheckoutLayout";
 import { useForm } from "@inertiajs/react";
@@ -33,6 +33,9 @@ export default function LaboratoryCheckout({
     formattedTotal,
     formattedSubtotal,
     formattedDiscount,
+    balanceCouponsCents = 0,
+    formattedBalanceCoupons,
+    availableBalanceCoupons = [],
     addresses,
     paymentMethods,
     hasOdessaPay,
@@ -53,6 +56,7 @@ export default function LaboratoryCheckout({
         payment_method:
             new URLSearchParams(window.location.search).get("payment_method") ||
             null,
+        coupon_id: null,
     };
 
     const {
@@ -91,6 +95,7 @@ export default function LaboratoryCheckout({
             payment_method: String(data.payment_method), // Convertir explícitamente a string
             laboratory_appointment: laboratoryAppointment?.id,
             total: total,
+            coupon_id: data.coupon_id || null,
         };
 
         console.log('DEBUG - Datos transformados:', {
@@ -227,15 +232,99 @@ export default function LaboratoryCheckout({
         return isComplete;
     }, [data.address]);
 
-    const paymentMethodStepIsComplete = useMemo(() => {
-        const isComplete = !!data.payment_method;
-        console.log('DEBUG - Payment method step complete:', { 
-            isComplete, 
-            payment_method: data.payment_method,
-            type: typeof data.payment_method 
+    const selectedCoupon = useMemo(() => {
+        if (!data.coupon_id) return null;
+        return availableBalanceCoupons.find((c) => c.id === data.coupon_id) ?? null;
+    }, [data.coupon_id, availableBalanceCoupons]);
+
+    const couponTooLarge = useMemo(() => {
+        if (!selectedCoupon) return false;
+        return selectedCoupon.remaining_cents > total;
+    }, [selectedCoupon, total]);
+
+    const amountAfterCoupon = useMemo(() => {
+        if (!selectedCoupon || couponTooLarge) return total;
+        return Math.max(0, total - selectedCoupon.remaining_cents);
+    }, [selectedCoupon, couponTooLarge, total]);
+
+    const summaryDetails = useMemo(() => {
+        const rows = [
+            { value: formattedSubtotal, label: "Subtotal" },
+            { value: "-" + formattedDiscount, label: "Descuento" },
+        ];
+        if (selectedCoupon && !couponTooLarge) {
+            rows.push({
+                value:
+                    "-" +
+                    (selectedCoupon.remaining_cents / 100).toLocaleString(
+                        "es-MX",
+                        { style: "currency", currency: "MXN" },
+                    ),
+                label: "Cupón saldo",
+            });
+        }
+        rows.push({
+            value:
+                !selectedCoupon || couponTooLarge
+                    ? formattedTotal
+                    : (amountAfterCoupon / 100).toLocaleString("es-MX", {
+                          style: "currency",
+                          currency: "MXN",
+                      }),
+            label: "Total a pagar",
         });
-        return isComplete;
-    }, [data.payment_method]);
+        return rows;
+    }, [
+        formattedSubtotal,
+        formattedDiscount,
+        formattedTotal,
+        selectedCoupon,
+        couponTooLarge,
+        amountAfterCoupon,
+    ]);
+
+    const paymentMethodStepIsComplete = useMemo(() => {
+        if (!data.coupon_id) {
+            return !!data.payment_method;
+        }
+        if (!selectedCoupon) return false;
+        if (couponTooLarge) return false;
+        if (amountAfterCoupon === 0) {
+            return data.payment_method === "coupon_balance";
+        }
+        return !!data.payment_method;
+    }, [
+        data.coupon_id,
+        data.payment_method,
+        selectedCoupon,
+        couponTooLarge,
+        amountAfterCoupon,
+    ]);
+
+    const applyBalanceCoupon = () => {
+        const applicable = availableBalanceCoupons.find(
+            (c) => c.remaining_cents <= total,
+        );
+        if (!applicable) return;
+        setData("coupon_id", applicable.id);
+        const after = total - applicable.remaining_cents;
+        if (after === 0) {
+            setData("payment_method", "coupon_balance");
+        }
+        clearErrors("payment_method");
+    };
+
+    const clearBalanceCoupon = () => {
+        setData("coupon_id", null);
+        if (data.payment_method === "coupon_balance") {
+            setData("payment_method", null);
+        }
+    };
+
+    const noCouponApplicable =
+        balanceCouponsCents > 0 &&
+        availableBalanceCoupons.length > 0 &&
+        !availableBalanceCoupons.some((c) => c.remaining_cents <= total);
 
     // Condiciones para habilitar/deshabilitar botones
     const onlinePaymentDisabled = checkoutProcessing ||
@@ -299,11 +388,7 @@ export default function LaboratoryCheckout({
                     </div>
                 }
                 laboratoryBrand={laboratoryBrand}
-                summaryDetails={[
-                    { value: formattedSubtotal, label: "Subtotal" },
-                    { value: "-" + formattedDiscount, label: "Descuento" },
-                    { value: formattedTotal, label: "Total" },
-                ]}
+                summaryDetails={summaryDetails}
                 items={laboratoryCarts[laboratoryBrand.value].map(
                     (laboratoryCartItem) => ({
                         heading: laboratoryCartItem.laboratory_test.name,
@@ -374,9 +459,56 @@ export default function LaboratoryCheckout({
                         toggleAddressForm={toggleAddressForm}
                         showAddressForm={showAddressForm}
                     />
+                    {balanceCouponsCents > 0 && (
+                        <Card className="bg-emerald-50/80 px-4 py-6 sm:p-6 dark:bg-emerald-950/30">
+                            <Subheading>Saldo a favor</Subheading>
+                            <Text className="mt-2">
+                                Tienes{" "}
+                                <Strong>{formattedBalanceCoupons}</Strong>{" "}
+                                disponibles.
+                            </Text>
+                            {noCouponApplicable && (
+                                <Text className="mt-2 text-amber-800 dark:text-amber-200">
+                                    Tu saldo es mayor al total de la compra, no
+                                    puede aplicarse en esta compra.
+                                </Text>
+                            )}
+                            {errors.coupon_id && (
+                                <ErrorMessage className="mt-2">
+                                    {errors.coupon_id}
+                                </ErrorMessage>
+                            )}
+                            <div className="mt-4 flex flex-wrap gap-3">
+                                {!data.coupon_id ? (
+                                    <Button
+                                        type="button"
+                                        color="emerald"
+                                        disabled={
+                                            noCouponApplicable ||
+                                            !addressStepIsComplete ||
+                                            !contactStepIsComplete
+                                        }
+                                        onClick={applyBalanceCoupon}
+                                    >
+                                        Usar saldo completo
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        type="button"
+                                        plain
+                                        onClick={clearBalanceCoupon}
+                                    >
+                                        Quitar cupón
+                                    </Button>
+                                )}
+                            </div>
+                        </Card>
+                    )}
                     <PaymentMethodStep
                         disabled={
-                            !addressStepIsComplete || !contactStepIsComplete
+                            !addressStepIsComplete ||
+                            !contactStepIsComplete ||
+                            (amountAfterCoupon === 0 && !!data.coupon_id)
                         }
                         data={data}
                         setData={setData}

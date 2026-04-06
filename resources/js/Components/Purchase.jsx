@@ -542,6 +542,13 @@ function Totals({ purchase, isLabPurchase }) {
 					)}
 				</>
 			)}
+			{isLabPurchase &&
+				Number(purchase.coupon_discount_cents) > 0 && (
+					<div className="flex justify-between">
+						<Text>Cupón aplicado</Text>
+						<Text>-{purchase.formatted_coupon_discount}</Text>
+					</div>
+				)}
 			<div className="flex justify-between">
 				<Subheading>Total</Subheading>
 

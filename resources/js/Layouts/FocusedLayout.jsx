@@ -3,7 +3,7 @@ export default function FocusedLayout({
 	hideHelpBubble = false,
 	children,
 }) {
-	const { auth, hasOdessaAfiliateAccount } = usePage().props;
+	const { auth, hasOdessaAfiliateAccount, inAppNotificationFeed } = usePage().props;
 
 	useTrackingEvents();
 
@@ -30,6 +30,7 @@ export default function FocusedLayout({
 						</NavbarItem>
 						{auth.user && (
 							<NavbarSection>
+								<NotificationBell feed={inAppNotificationFeed} />
 								<UserNavigationDropdown
 									dropdownButtonProps={{
 										as: NavbarItem,
@@ -57,6 +58,7 @@ export default function FocusedLayout({
 
 import ApplicationLogo from "@/Components/ApplicationLogo";
 import UserNavigationDropdown from "@/Components/UserNavigationDropdown";
+import NotificationBell from "@/Components/NotificationBell";
 import Notification from "@/Components/Notification";
 import { Head, usePage } from "@inertiajs/react";
 import { Text, Strong } from "@/Components/Catalyst/text";
