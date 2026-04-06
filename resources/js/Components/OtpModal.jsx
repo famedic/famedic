@@ -3,7 +3,7 @@ import { usePage } from "@inertiajs/react";
 import { Dialog, DialogTitle, DialogBody, DialogActions } from "@/Components/Catalyst/dialog";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
-import formatMmSs from "../js/Utils/formatMmSs";
+import formatMmSs from "@/Utils/formatMmSs";
 import { maskEmail, maskPhone } from "@/Utils/sensitiveMask";
 
 function getCsrf() {
