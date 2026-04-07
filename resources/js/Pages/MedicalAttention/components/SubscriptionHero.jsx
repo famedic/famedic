@@ -18,7 +18,7 @@ import {
     StarIcon as StarIconSolid,
 } from "@heroicons/react/24/solid";
 import { StarIcon as StarIconOutline } from "@heroicons/react/24/outline";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function SubscriptionHero({
     formattedMedicalAttentionSubscriptionExpiresAt,
@@ -29,6 +29,34 @@ export default function SubscriptionHero({
     phoneNumber,
     formattedPhone,
 }) {
+    const [isLoadingIframe, setIsLoadingIframe] = useState(false);
+    const [iframeUrl, setIframeUrl] = useState(null);
+    const [iframeError, setIframeError] = useState(null);
+
+    const requestIframe = async () => {
+        if (isLoadingIframe) return;
+
+        setIsLoadingIframe(true);
+        setIframeError(null);
+
+        try {
+            const response = await window.axios.get(route("murguia.iframe"));
+
+            if (!response?.data?.url) {
+                throw new Error("La respuesta no incluye URL.");
+            }
+
+            setIframeUrl(response.data.url);
+        } catch (error) {
+            setIframeError(
+                error?.response?.data?.message ||
+                    "No pudimos abrir el portal de asistencias. Intenta de nuevo."
+            );
+        } finally {
+            setIsLoadingIframe(false);
+        }
+    };
+
     // Logs de depuración
     useEffect(() => {
         if (true) {
@@ -178,20 +206,48 @@ export default function SubscriptionHero({
                         una conversación con un doctor y obtener la atención
                         médica que necesitas.
                     </Text>
+
+                    <div className="w-full space-y-3">
+                        <Button
+                            onClick={requestIframe}
+                            disabled={isLoadingIframe}
+                            className="w-full"
+                        >
+                            {isLoadingIframe
+                                ? "Cargando portal..."
+                                : "Solicitar asistencia"}
+                        </Button>
+
+                        {iframeError && (
+                            <Text className="text-sm text-red-500">
+                                {iframeError}
+                            </Text>
+                        )}
+                    </div>
                 </div>
 
                 <div className="mt-20 sm:mt-24 md:mx-auto md:max-w-2xl lg:mx-0 lg:mt-0 lg:w-screen">
-                    <video
-                        controls
-                        poster="https://images.pexels.com/photos/5998445/pexels-photo-5998445.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
-                        className="w-full rounded-2xl object-cover shadow-2xl"
-                    >
-                        <source
-                            src="/images/murguia.mp4"
-                            type="video/mp4"
+                    {iframeUrl ? (
+                        <iframe
+                            src={iframeUrl}
+                            title="Murguia asistencia"
+                            className="h-[640px] w-full rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700"
+                            loading="lazy"
+                            allow="camera; microphone; geolocation; fullscreen"
                         />
-                        Your browser does not support the video tag.
-                    </video>
+                    ) : (
+                        <video
+                            controls
+                            poster="https://images.pexels.com/photos/5998445/pexels-photo-5998445.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
+                            className="w-full rounded-2xl object-cover shadow-2xl"
+                        >
+                            <source
+                                src="/images/murguia.mp4"
+                                type="video/mp4"
+                            />
+                            Your browser does not support the video tag.
+                        </video>
+                    )}
                 </div>
             </div>
         </div>

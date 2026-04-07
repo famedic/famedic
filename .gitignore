@@ -35,3 +35,4 @@ desktop.ini
 start-dev.bat
 start-dev.ps1
 refund_logs.txt
+.env.example

@@ -77,6 +77,16 @@ return [
         'queue' => env('MURGUIA_QUEUE_NAME', 'default'),
     ],
 
+    'murguia_web_affiliate' => [
+        'token_url' => env('MURGUIA_WEB_AFFILIATE_TOKEN_URL', 'https://app.sistemaoperaciones.com/soaang-users/api/token/'),
+        'iframe_base_url' => env('MURGUIA_WEB_AFFILIATE_IFRAME_BASE_URL', 'https://afiliado.sistemaoperaciones.com/soaang-web-affiliate/external-validation/'),
+        'username' => env('MURGUIA_WEB_AFFILIATE_USERNAME', 'ODESSAMX'),
+        'password' => env('MURGUIA_WEB_AFFILIATE_PASSWORD', '123456App&'),
+        'ac_id' => (int) env('MURGUIA_WEB_AFFILIATE_AC_ID', 23),
+        'pl_id' => (int) env('MURGUIA_WEB_AFFILIATE_PL_ID', 60),
+        'client_id' => (int) env('MURGUIA_WEB_AFFILIATE_CLIENT_ID', 25),
+    ],
+
     'gda' => [
         'url' => env('GDA_URL'),
         'report_emails' => env('GDA_REPORT_EMAILS') ? explode(',', env('GDA_REPORT_EMAILS')) : [],
