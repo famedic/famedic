@@ -167,6 +167,28 @@ class LaboratoryPurchase extends Model
         return $this->hasMany(LaboratoryPurchaseItem::class)->withTrashed();
     }
 
+    /**
+     * Datos presentables del laboratorio (marca GDA) asociado a la compra.
+     * Útil en correos y vistas donde se requiera nombre y logo sin acoplar a una tabla `laboratories`.
+     */
+    protected function laboratory(): Attribute
+    {
+        return Attribute::make(
+            get: function (): ?object {
+                if (! $this->brand) {
+                    return null;
+                }
+
+                $brand = $this->brand;
+
+                return (object) [
+                    'name' => $brand->label(),
+                    'logo_url' => asset('images/gda/'.$brand->imageSrc()),
+                ];
+            }
+        );
+    }
+
     public function laboratoryAppointment()
     {
         return $this->hasOne(LaboratoryAppointment::class)->withTrashed();
