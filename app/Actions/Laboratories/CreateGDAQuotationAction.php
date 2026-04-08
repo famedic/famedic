@@ -83,7 +83,7 @@ class CreateGDAQuotationAction
         if (isset($logPayload['header']['token'])) {
             $logPayload['header']['token'] = '***OCULTO***';
         }
-        Log::info('CreateGDAQuotationAction: Payload enviado a API', $logPayload);
+        //Log::info('CreateGDAQuotationAction: Payload enviado a API', $logPayload);
 
         try {
             Log::info('CreateGDAQuotationAction: Enviando petición a API GDA');
@@ -129,10 +129,10 @@ class CreateGDAQuotationAction
 
     private function buildCoding(array $laboratoryTestsDetail)
     {
-        Log::info('CreateGDAQuotationAction: Construyendo coding', [
+        /*Log::info('CreateGDAQuotationAction: Construyendo coding', [
             'items_count' => count($laboratoryTestsDetail)
         ]);
-
+        */
         $coding = [];
 
         foreach ($laboratoryTestsDetail as $item) {
