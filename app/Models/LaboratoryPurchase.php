@@ -89,6 +89,11 @@ class LaboratoryPurchase extends Model
                     $query->where('payment_method', $filters['payment_method']);
                 });
             })
+            ->when(isset($filters['payment_status']) && $filters['payment_status'] !== '', function ($query) use ($filters) {
+                $query->whereHas('transactions', function ($query) use ($filters) {
+                    $query->where('payment_status', $filters['payment_status']);
+                });
+            })
             ->when(isset($filters['brand']) && $filters['brand'] !== '', function ($query) use ($filters) {
                 $query->where('brand', $filters['brand']);
             })
@@ -160,6 +165,28 @@ class LaboratoryPurchase extends Model
     public function laboratoryPurchaseItems()
     {
         return $this->hasMany(LaboratoryPurchaseItem::class)->withTrashed();
+    }
+
+    /**
+     * Datos presentables del laboratorio (marca GDA) asociado a la compra.
+     * Útil en correos y vistas donde se requiera nombre y logo sin acoplar a una tabla `laboratories`.
+     */
+    protected function laboratory(): Attribute
+    {
+        return Attribute::make(
+            get: function (): ?object {
+                if (! $this->brand) {
+                    return null;
+                }
+
+                $brand = $this->brand;
+
+                return (object) [
+                    'name' => $brand->label(),
+                    'logo_url' => asset('images/gda/'.$brand->imageSrc()),
+                ];
+            }
+        );
     }
 
     public function laboratoryAppointment()

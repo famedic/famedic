@@ -30,6 +30,7 @@ use App\Http\Controllers\ExportOnlinePharmacyPurchasesController;
 use App\Http\Controllers\Admin\LogsGeneralController;
 use App\Http\Controllers\Admin\EfevooTokenController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\CartController;
 use App\Http\Controllers\Admin\TaxProfileController as AdminTaxProfileController;
 use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
 use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
@@ -53,6 +54,7 @@ Route::prefix('admin')->middleware([
         Route::resource('customers', CustomerController::class)->only(['index', 'show', 'destroy']);
         Route::post('customers/export', ExportCustomersController::class)->name('customers.export');
         Route::resource('users', UserController::class)->only(['index', 'show']);
+        Route::resource('carts', CartController::class)->only(['index', 'show']);
         Route::resource('roles', RoleController::class)->except('show');
         Route::resource('laboratory-tests', LaboratoryTestController::class)->except(['destroy']);
         Route::post('laboratory-tests/export', ExportLaboratoryTestsController::class)->name('laboratory-tests.export');

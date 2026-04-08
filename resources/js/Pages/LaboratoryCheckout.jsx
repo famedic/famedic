@@ -20,6 +20,7 @@ import { useState, useMemo, useEffect } from "react";
 import ContactStep from "@/Components/Checkout/ContactStep";
 import AddressStep from "@/Components/Checkout/AddressStep";
 import PaymentMethodStep from "@/Components/Checkout/PaymentMethodStep";
+import LaboratoryPayPalButton from "@/Components/Checkout/LaboratoryPayPalButton";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import Card from "@/Components/Card";
 import { Button } from "@/Components/Catalyst/button";
@@ -36,6 +37,8 @@ export default function LaboratoryCheckout({
     addresses,
     paymentMethods,
     hasOdessaPay,
+    hasPayPal,
+    paypalClientId,
     contacts,
 }) {
     const {
@@ -342,6 +345,20 @@ export default function LaboratoryCheckout({
                 submit={submit}
                 showBranchPayment={true}
                 data={data}
+                alternateOnlinePayment={
+                    hasPayPal &&
+                    paypalClientId &&
+                    data.payment_method === "paypal" ? (
+                        <LaboratoryPayPalButton
+                            paypalClientId={paypalClientId}
+                            laboratoryBrand={laboratoryBrand.value}
+                            patientId={data.contact}
+                            addressId={data.address}
+                            totalCents={total}
+                            disabled={onlinePaymentDisabled}
+                        />
+                    ) : null
+                }
             >
                 <>
                     {laboratoryAppointment ? (
@@ -385,6 +402,7 @@ export default function LaboratoryCheckout({
                         clearErrors={clearErrors}
                         paymentMethods={paymentMethods}
                         hasOdessaPay={hasOdessaPay}
+                        hasPayPal={hasPayPal}
                         addCardReturnUrl={addCardReturnUrl}
                     />
                 </>

@@ -23,6 +23,7 @@ import {
 } from "@heroicons/react/24/outline";
 import RequestInvoiceModal from "@/Components/RequestInvoiceModal";
 import CreditCardBrand from "@/Components/CreditCardBrand";
+import EfevooPayBadge from "@/Components/EfevooPayBadge";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import PurchasePdfDialog from "@/Components/PurchasePdfDialog";
 import Card from "@/Components/Card";
@@ -367,46 +368,128 @@ function Patient({ purchase, isLabPurchase }) {
 }
 
 function PaymentMethod({ purchase }) {
-	let hasNoTransactions =
-		!purchase.transactions || purchase.transactions.length === 0;
+	const tx = purchase.transactions?.[0];
+	const hasNoTransactions = !tx;
+	const pm = tx?.payment_method;
+	const details = tx?.details && typeof tx.details === "object" ? tx.details : {};
+	const tokenInfo = details.token_info && typeof details.token_info === "object" ? details.token_info : {};
+	const paymentDetails =
+		details.payment_details && typeof details.payment_details === "object"
+			? details.payment_details
+			: {};
+	const cardBrand = details.card_brand || tokenInfo.card_brand;
+	const cardLastFour = details.card_last_four || tokenInfo.card_last_four;
 
 	return (
 		<div>
 			<PurchaseLabel icon={CreditCardIcon}>Método de pago</PurchaseLabel>
-			<div className="mt-4">
+			<div className="mt-4 space-y-2">
 				{hasNoTransactions && <Text>No registrado</Text>}
 
-				{!hasNoTransactions &&
-					(purchase.transactions[0].payment_method === "odessa" ? (
-						<div className="flex gap-1">
-							<img
-								src="/images/odessa.png"
-								alt="odessa"
-								className="h-6 w-6"
-							/>
-							<div>
-								<Text>ODESSA</Text>
+				{!hasNoTransactions && pm === "odessa" && (
+					<div className="flex gap-1">
+						<img
+							src="/images/odessa.png"
+							alt="odessa"
+							className="h-6 w-6"
+						/>
+						<div>
+							<Text>ODESSA</Text>
+							<p className="-mt-1 text-xs text-orange-600 dark:text-orange-400">
+								Cobro a caja de ahorro
+							</p>
+						</div>
+					</div>
+				)}
 
-								<p className="-mt-1 text-xs text-orange-600 dark:text-orange-400">
-									Cobro a caja de ahorro
-								</p>
+				{!hasNoTransactions && pm === "paypal" && (
+					<div className="space-y-1">
+						<div className="flex flex-wrap items-center gap-2">
+							<Badge color="blue">PayPal</Badge>
+							<Text>Pago con PayPal Checkout</Text>
+						</div>
+						{tx.payment_status && (
+							<Text className="text-xs text-slate-500 dark:text-slate-400">
+								Estado: {tx.payment_status}
+							</Text>
+						)}
+						{(tx.provider_order_id || tx.reference_id) && (
+							<Text className="break-all text-xs text-slate-500 dark:text-slate-400">
+								Referencia de orden:{" "}
+								<Code className="text-xs">
+									{tx.provider_order_id || tx.reference_id}
+								</Code>
+							</Text>
+						)}
+						{tx.provider_transaction_id && (
+							<Text className="break-all text-xs text-slate-500 dark:text-slate-400">
+								ID de captura:{" "}
+								<Code className="text-xs">{tx.provider_transaction_id}</Code>
+							</Text>
+						)}
+					</div>
+				)}
+
+				{!hasNoTransactions && pm === "efevoopay" && (
+					<div className="space-y-2">
+						<div className="flex flex-wrap items-center gap-2">
+							<EfevooPayBadge>Tarjeta (Efevoo Pay)</EfevooPayBadge>
+						</div>
+						{(cardBrand || cardLastFour) && (
+							<div className="flex items-center gap-2">
+								{cardBrand && (
+									<CreditCardBrand brand={cardBrand} className="size-7" />
+								)}
+								{cardLastFour && (
+									<Code>**** {cardLastFour}</Code>
+								)}
 							</div>
-						</div>
-					) : (
+						)}
+						{tokenInfo.alias && (
+							<Text className="text-sm text-slate-600 dark:text-slate-300">
+								{tokenInfo.alias}
+							</Text>
+						)}
+						{tokenInfo.environment === "sandbox" && (
+							<Badge color="yellow" className="w-fit text-xs">
+								Entorno de pruebas
+							</Badge>
+						)}
+						{paymentDetails.authorization_code && (
+							<Text className="text-xs text-slate-500 dark:text-slate-400">
+								Autorización:{" "}
+								<Code className="text-xs">{paymentDetails.authorization_code}</Code>
+							</Text>
+						)}
+						{tx.gateway_transaction_id && (
+							<Text className="break-all text-xs text-slate-500 dark:text-slate-400">
+								ID transacción:{" "}
+								<Code className="text-xs">{String(tx.gateway_transaction_id)}</Code>
+							</Text>
+						)}
+					</div>
+				)}
+
+				{!hasNoTransactions &&
+					pm === "stripe" && (
 						<div className="flex items-center gap-2">
-							<CreditCardBrand
-								brand={
-									purchase.transactions[0].details.card_brand
-								}
-							/>
-							<Code>
-								{
-									purchase.transactions[0].details
-										.card_last_four
-								}
-							</Code>
+							<CreditCardBrand brand={details.card_brand} />
+							<Code>{details.card_last_four}</Code>
 						</div>
-					))}
+					)}
+
+				{!hasNoTransactions &&
+					pm &&
+					pm !== "odessa" &&
+					pm !== "paypal" &&
+					pm !== "efevoopay" &&
+					pm !== "stripe" &&
+					(cardBrand || cardLastFour) && (
+						<div className="flex items-center gap-2">
+							{cardBrand && <CreditCardBrand brand={cardBrand} />}
+							{cardLastFour && <Code>**** {cardLastFour}</Code>}
+						</div>
+					)}
 			</div>
 		</div>
 	);

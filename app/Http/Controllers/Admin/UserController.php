@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Enums\MonitoringCartType;
+use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\EfevooToken;
 use App\Models\EfevooTransaction;
@@ -124,6 +126,27 @@ class UserController extends Controller
         $labNotifications = $labNotificationsQuery->limit(25)->get();
         $unreadLabNotificationsCount = (clone $labNotificationsQuery)->whereNull('read_at')->count();
 
+        $monitoringCarts = null;
+        $canViewCartDetails = request()->user()->administrator->hasPermissionTo('view cart details');
+        if (request()->user()->administrator->hasPermissionTo('view carts')) {
+            $monitoringCarts = Cart::query()
+                ->with('items')
+                ->where('user_id', $user->id)
+                ->orderByDesc('updated_at')
+                ->get()
+                ->map(function (Cart $cart) {
+                    return [
+                        'id' => $cart->id,
+                        'type_label' => $cart->type === MonitoringCartType::Pharmacy ? 'Farmacia' : 'Laboratorio',
+                        'display_status' => $cart->displayStatus(),
+                        'items_count' => $cart->items->count(),
+                        'total_formatted' => formattedPrice((float) $cart->total),
+                    ];
+                })
+                ->values()
+                ->all();
+        }
+
         return Inertia::render('Admin/User', [
             'user' => $user,
             'customer' => $customer,
@@ -131,6 +154,8 @@ class UserController extends Controller
             'efevooTransactions' => $efevooTransactions,
             'laboratoryNotifications' => $labNotifications,
             'unreadLabNotificationsCount' => $unreadLabNotificationsCount,
+            'monitoringCarts' => $monitoringCarts,
+            'canViewCartDetails' => $canViewCartDetails,
         ]);
     }
 }

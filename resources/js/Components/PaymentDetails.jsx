@@ -19,6 +19,33 @@ export default function PaymentDetails({ transaction }) {
 					<PaymentMethodBadge transaction={transaction} />
 				</DescriptionDetails>
 
+				{transaction.payment_status && (
+					<>
+						<DescriptionTerm>Estado del pago</DescriptionTerm>
+						<DescriptionDetails>
+							<Code>{transaction.payment_status}</Code>
+						</DescriptionDetails>
+					</>
+				)}
+
+				{transaction.payment_method === "paypal" && transaction.provider_order_id && (
+					<>
+						<DescriptionTerm>PayPal Order ID</DescriptionTerm>
+						<DescriptionDetails>
+							<Code>{transaction.provider_order_id}</Code>
+						</DescriptionDetails>
+					</>
+				)}
+
+				{transaction.payment_method === "paypal" && transaction.provider_transaction_id && (
+					<>
+						<DescriptionTerm>Transacción (captura)</DescriptionTerm>
+						<DescriptionDetails>
+							<Code>{transaction.provider_transaction_id}</Code>
+						</DescriptionDetails>
+					</>
+				)}
+
 				<DescriptionTerm>Referencia</DescriptionTerm>
 				<DescriptionDetails>
 					<Code>{transaction.reference_id}</Code>

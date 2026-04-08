@@ -17,14 +17,19 @@ class Transaction extends Model
 
     protected $fillable = [
         'transaction_amount_cents',
-        'payment_method', // 'stripe', 'efevoopay', 'odessa'
+        'payment_method', // 'stripe', 'efevoopay', 'odessa', 'paypal'
+        'payment_provider',
         'reference_id',
+        'provider_order_id',
+        'provider_transaction_id',
+        'payment_status',
         'details',
         'description',
-        'gateway', // 'stripe', 'efevoopay', 'odessa'
+        'gateway', // 'stripe', 'efevoopay', 'odessa', 'paypal'
         'gateway_transaction_id',
         'gateway_status',
         'gateway_response',
+        'raw_response',
         'gateway_token',
         'gateway_processed_at',
     ];
@@ -32,6 +37,7 @@ class Transaction extends Model
     protected $casts = [
         'details' => 'array',
         'gateway_response' => 'array',
+        'raw_response' => 'array',
         'gateway_processed_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
@@ -88,10 +94,10 @@ class Transaction extends Model
         return $this->morphedByMany(OnlinePharmacyPurchase::class, 'transactionable');
     }
 
-    /*public function laboratoryPurchases()
+    public function laboratoryPurchases()
     {
         return $this->morphedByMany(LaboratoryPurchase::class, 'transactionable');
-    }*/
+    }
 
     public function medicalAttentionSubscriptions()
     {
@@ -172,6 +178,11 @@ class Transaction extends Model
     public function isEfevooPay(): bool
     {
         return $this->payment_method === 'efevoopay' || $this->gateway === 'efevoopay';
+    }
+
+    public function isPayPal(): bool
+    {
+        return $this->payment_method === 'paypal' || $this->gateway === 'paypal';
     }
 
     /**

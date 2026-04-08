@@ -27,6 +27,7 @@ class LaboratoryPurchaseController extends Controller
             'invoice_uploaded',
             'results_uploaded',
             'payment_method',
+            'payment_status',
             'brand',
             'dev_assistance',
         ]))->filter()->all();

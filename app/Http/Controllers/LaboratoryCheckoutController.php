@@ -41,6 +41,8 @@ class LaboratoryCheckoutController extends Controller
                 ['laboratoryAppointment' => $request->user()->customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand)] :
                 []),
             ...$totals,
+            'hasPayPal' => (bool) config('services.paypal.client_id'),
+            'paypalClientId' => config('services.paypal.client_id'),
             'contacts' => $request->user()->customer->contacts,
             'genders' => Gender::casesWithLabels(),
             'addresses' => $request->user()->customer->addresses,

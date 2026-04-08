@@ -14,7 +14,10 @@ use App\Observers\OnlinePharmacyPurchaseObserver;
 use App\Models\MedicalAttentionSubscription;
 use App\Observers\MedicalAttentionSubscriptionObserver;
 use App\Models\LaboratoryCartItem;
+use App\Models\OnlinePharmacyCartItem;
 use App\Observers\LaboratoryCartItemObserver;
+use App\Observers\LaboratoryCartItemMonitoringObserver;
+use App\Observers\OnlinePharmacyCartItemMonitoringObserver;
 use App\Models\Invoice;
 use App\Observers\InvoiceObserver;
 use App\Models\LaboratoryNotification;
@@ -38,7 +41,11 @@ class ActiveCampaignServiceProvider extends ServiceProvider
         LaboratoryPurchase::observe(LaboratoryPurchaseObserver::class);
         OnlinePharmacyPurchase::observe(OnlinePharmacyPurchaseObserver::class);
         MedicalAttentionSubscription::observe(MedicalAttentionSubscriptionObserver::class);
-        LaboratoryCartItem::observe(LaboratoryCartItemObserver::class);
+        LaboratoryCartItem::observe([
+            LaboratoryCartItemObserver::class,
+            LaboratoryCartItemMonitoringObserver::class,
+        ]);
+        OnlinePharmacyCartItem::observe(OnlinePharmacyCartItemMonitoringObserver::class);
         Invoice::observe(InvoiceObserver::class);
         LaboratoryNotification::observe(LaboratoryNotificationObserver::class);
         LaboratoryAppointment::observe(LaboratoryAppointmentObserver::class);
