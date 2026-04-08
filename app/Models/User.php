@@ -74,6 +74,11 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
         return $this->hasMany(User::class, 'referred_by');
     }
 
+    public function monitoringCarts(): HasMany
+    {
+        return $this->hasMany(Cart::class);
+    }
+
     protected function profilePhotoUrl(): Attribute
     {
         return Attribute::make(

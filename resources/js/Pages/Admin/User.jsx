@@ -22,6 +22,7 @@ import {
 	CalendarIcon,
 	CreditCardIcon,
 	BellAlertIcon,
+	ShoppingCartIcon,
 } from "@heroicons/react/16/solid";
 import { router } from "@inertiajs/react";
 
@@ -32,6 +33,8 @@ export default function UserPage({
 	efevooTransactions,
 	laboratoryNotifications,
 	unreadLabNotificationsCount,
+	monitoringCarts = null,
+	canViewCartDetails = false,
 }) {
 	return (
 		<AdminLayout title={user.full_name || user.email || "Usuario"}>
@@ -49,6 +52,13 @@ export default function UserPage({
 				</div>
 
 				<PurchasesCard customer={customer} />
+
+				{monitoringCarts !== null && (
+					<UserCartsSection
+						carts={monitoringCarts}
+						canViewCartDetails={canViewCartDetails}
+					/>
+				)}
 
 				<div className="grid gap-4 md:grid-cols-2">
 					<EfevooTokensCard tokens={efevooTokens} />
@@ -361,6 +371,87 @@ function Subsection({ title, items, children }) {
 				</span>
 			</Text>
 			{children}
+		</div>
+	);
+}
+
+function UserCartsSection({ carts, canViewCartDetails }) {
+	const active = carts.filter((c) => c.display_status === "active");
+	const abandoned = carts.filter((c) => c.display_status === "abandoned");
+
+	const badgeFor = (status) => {
+		if (status === "completed") {
+			return { color: "blue", label: "Comprado" };
+		}
+		if (status === "abandoned") {
+			return { color: "red", label: "Abandonado" };
+		}
+		return { color: "green", label: "Activo" };
+	};
+
+	return (
+		<div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+			<div className="flex flex-wrap items-center gap-2">
+				<ShoppingCartIcon className="size-5 text-zinc-500" />
+				<Subheading>Carritos del usuario</Subheading>
+			</div>
+			<div className="flex flex-wrap gap-3 text-sm text-zinc-600 dark:text-zinc-300">
+				<span>
+					<Strong>Activos:</Strong> {active.length}
+				</span>
+				<span>
+					<Strong>Abandonados:</Strong> {abandoned.length}
+				</span>
+			</div>
+			{carts.length === 0 ? (
+				<Text className="text-sm">No hay carritos registrados en monitoreo.</Text>
+			) : (
+				<div className="overflow-x-auto">
+					<Table>
+						<TableHead>
+							<TableRow>
+								<TableHeader>Tipo</TableHeader>
+								<TableHeader>Productos</TableHeader>
+								<TableHeader>Total</TableHeader>
+								<TableHeader>Estatus</TableHeader>
+								<TableHeader></TableHeader>
+							</TableRow>
+						</TableHead>
+						<TableBody>
+							{carts.map((cart) => {
+								const b = badgeFor(cart.display_status);
+								return (
+									<TableRow key={cart.id}>
+										<TableCell>{cart.type_label}</TableCell>
+										<TableCell>{cart.items_count}</TableCell>
+										<TableCell>{cart.total_formatted}</TableCell>
+										<TableCell>
+											<Badge color={b.color}>{b.label}</Badge>
+										</TableCell>
+										<TableCell>
+											{canViewCartDetails ? (
+												<Button
+													href={route("admin.carts.show", {
+														cart: cart.id,
+													})}
+													outline
+													size="sm"
+												>
+													Ver detalle
+												</Button>
+											) : (
+												<Text className="text-xs text-zinc-500">
+													Sin permiso
+												</Text>
+											)}
+										</TableCell>
+									</TableRow>
+								);
+							})}
+						</TableBody>
+					</Table>
+				</div>
+			)}
 		</div>
 	);
 }

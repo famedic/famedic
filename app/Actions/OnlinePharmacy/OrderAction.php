@@ -12,6 +12,7 @@ use App\Models\Customer;
 use App\Models\OnlinePharmacyPurchase;
 use App\Models\OnlinePharmacyPurchaseItem;
 use App\Models\Transaction;
+use App\Services\Monitoring\SyncMonitoringCartService;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Database\Eloquent\Collection;
@@ -27,6 +28,8 @@ class OrderAction
     private ChargeOdessaAction $chargeOdessaAction;
     private RefundTransactionAction $refundTransactionAction;
 
+    private SyncMonitoringCartService $syncMonitoringCartService;
+
     private Collection $onlinePharmacyCartItems;
 
     public function __construct(
@@ -35,13 +38,15 @@ class OrderAction
         ChargeStripePaymentMethodAction $chargeStripePaymentMethodAction,
         ChargeOdessaAction $chargeOdessaAction,
 
-        RefundTransactionAction $refundTransactionAction
+        RefundTransactionAction $refundTransactionAction,
+        SyncMonitoringCartService $syncMonitoringCartService
     ) {
         $this->fetchAuthenticationTokenAction = $fetchAuthenticationTokenAction;
         $this->fetchCalculateAction = $fetchCalculateAction;
         $this->chargeStripePaymentMethodAction = $chargeStripePaymentMethodAction;
         $this->chargeOdessaAction = $chargeOdessaAction;
         $this->refundTransactionAction = $refundTransactionAction;
+        $this->syncMonitoringCartService = $syncMonitoringCartService;
     }
 
     public function __invoke(
@@ -85,6 +90,7 @@ class OrderAction
                 'vitau_order_id' => $vitauOrderId,
             ]);
 
+            $this->syncMonitoringCartService->markPharmacyCartCompleted($customer);
             $this->clearCart($customer);
 
             DB::commit();

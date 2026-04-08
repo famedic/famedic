@@ -12,6 +12,7 @@ use App\Models\LaboratoryPurchaseItem;
 use App\Models\Transaction;
 use App\Notifications\FewDaysLeftToRequestInvoice;
 use App\Notifications\LaboratoryPurchaseCreated;
+use App\Services\Monitoring\SyncMonitoringCartService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Propaganistas\LaravelPhone\PhoneNumber;
@@ -20,6 +21,7 @@ class FulfillLaboratoryCartOrderAction
 {
     public function __construct(
         private CreateGDAQuotationAction $createGDAQuotationAction,
+        private SyncMonitoringCartService $syncMonitoringCartService,
     ) {
     }
 
@@ -86,6 +88,7 @@ class FulfillLaboratoryCartOrderAction
                 'pdf_base64' => $gdaQuotation['pdf_base64'] ?? null,
             ]);
 
+            $this->syncMonitoringCartService->markLaboratoryCartCompleted($customer);
             $this->clearCart($customer);
 
             DB::commit();

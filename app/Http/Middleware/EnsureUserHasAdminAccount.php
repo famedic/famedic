@@ -133,6 +133,12 @@ class EnsureUserHasAdminAccount
                             'current' => Route::currentRouteName() === 'admin.users.index'
                                 || Route::currentRouteName() === 'admin.users.show',
                         ] : null,
+                        $request->user()->administrator->hasPermissionTo('view carts') ? [
+                            'label' => 'Carritos',
+                            'url' => route('admin.carts.index'),
+                            'current' => Route::currentRouteName() === 'admin.carts.index'
+                                || Route::currentRouteName() === 'admin.carts.show',
+                        ] : null,
                         $request->user()->administrator->hasPermissionTo('efevoo-tokens.manage') ? [
                             'label' => 'Tokens Efevoo',
                             'url' => route('admin.efevoo-tokens.index'),
