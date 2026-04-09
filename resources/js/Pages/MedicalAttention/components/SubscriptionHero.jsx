@@ -46,7 +46,6 @@ export default function SubscriptionHero({
     const [isLoadingIframe, setIsLoadingIframe] = useState(false);
     const [iframeUrl, setIframeUrl] = useState(null);
     const [iframeError, setIframeError] = useState(null);
-    const [loadedInIframe, setLoadedInIframe] = useState(false);
 
     const debugLog = (...args) => {
         if (DEBUG_MURGUIA_ASSISTANCE) {
@@ -57,34 +56,26 @@ export default function SubscriptionHero({
     const requestIframe = async () => {
         if (isLoadingIframe) return;
 
-        const isFirefox = navigator.userAgent.toLowerCase().includes("firefox");
-        let popupWindow = null;
-        debugLog("Click en solicitar asistencia", {
-            isFirefox,
+        let popupWindow = window.open("about:blank", "_blank");
+        if (popupWindow) {
+            popupWindow.opener = null;
+        }
+
+        debugLog("Click en solicitar asistencia web (nueva ventana)", {
+            popupOpened: Boolean(popupWindow),
             medicalAttentionIdentifier,
             hasOdessaAfiliateAccount,
         });
 
-        // En Firefox el proveedor bloquea la incrustacion en iframe.
-        // Abrimos una pestana sincronica para evitar bloqueo de popups.
-        if (isFirefox) {
-            popupWindow = window.open("about:blank", "_blank");
-            if (popupWindow) {
-                popupWindow.opener = null;
-            }
-            debugLog("Intento abrir nueva ventana para Firefox", {
-                popupOpened: Boolean(popupWindow),
-            });
-            if (!popupWindow) {
-                setIframeError(
-                    "Firefox bloqueo la nueva ventana. Permite popups para este sitio o usa el boton 'Abrir asistencia en nueva ventana'."
-                );
-            }
+        if (!popupWindow) {
+            setIframeError(
+                "Tu navegador bloqueo la nueva pestaña. Permite popups para este sitio e intenta de nuevo."
+            );
+            return;
         }
 
         setIsLoadingIframe(true);
         setIframeError(null);
-        setLoadedInIframe(false);
 
         try {
             debugLog("Solicitando URL de Murguia...");
@@ -100,7 +91,7 @@ export default function SubscriptionHero({
 
             setIframeUrl(response.data.url);
 
-            if (popupWindow && !popupWindow.closed) {
+            if (!popupWindow.closed) {
                 popupWindow.location.href = response.data.url;
                 debugLog("URL abierta en nueva ventana");
             }
@@ -114,7 +105,7 @@ export default function SubscriptionHero({
                 error?.response?.data?.message ||
                     "No pudimos abrir el portal de asistencias. Intenta de nuevo."
             );
-            if (popupWindow && !popupWindow.closed) {
+            if (!popupWindow.closed) {
                 popupWindow.close();
             }
         } finally {
@@ -340,36 +331,20 @@ export default function SubscriptionHero({
                 </div>
 
                 <div className="mt-20 sm:mt-24 md:mx-auto md:max-w-2xl lg:mx-0 lg:mt-0 lg:w-screen">
-                    {iframeUrl ? (
-                        <iframe
-                            src={iframeUrl}
-                            title="Murguia asistencia"
-                            className="h-[640px] w-full rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700"
-                            loading="lazy"
-                            allow="camera; microphone; geolocation; fullscreen"
-                            onLoad={() => {
-                                setLoadedInIframe(true);
-                                debugLog("Iframe cargo evento onLoad");
-                            }}
+                    <video
+                        controls
+                        poster="https://images.pexels.com/photos/5998445/pexels-photo-5998445.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
+                        className="w-full rounded-2xl object-cover shadow-2xl"
+                    >
+                        <source
+                            src="/images/murguia.mp4"
+                            type="video/mp4"
                         />
-                    ) : (
-                        <video
-                            controls
-                            poster="https://images.pexels.com/photos/5998445/pexels-photo-5998445.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
-                            className="w-full rounded-2xl object-cover shadow-2xl"
-                        >
-                            <source
-                                src="/images/murguia.mp4"
-                                type="video/mp4"
-                            />
-                            Your browser does not support the video tag.
-                        </video>
-                    )}
-                    {iframeUrl && !loadedInIframe && (
-                        <Text className="mt-2 text-xs text-zinc-500">
-                            Si el portal no se muestra en Firefox, usa "Abrir asistencia en nueva ventana".
-                        </Text>
-                    )}
+                        Your browser does not support the video tag.
+                    </video>
+                    <Text className="mt-2 text-xs text-zinc-500">
+                        El portal de asistencias se abre siempre en una pestaña nueva.
+                    </Text>
                 </div>
             </div>
         </div>
