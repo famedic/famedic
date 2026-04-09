@@ -6,6 +6,7 @@ use App\Models\User;
 use Exception;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class MurguiaService
 {
@@ -15,6 +16,10 @@ class MurguiaService
     {
         $customer = $user->customer;
         $affKey = $customer?->medical_attention_identifier;
+        Log::info('Murguia service: preparando URL para usuario.', [
+            'user_id' => $user->id,
+            'has_aff_key' => (bool) $affKey,
+        ]);
 
         if (!$affKey) {
             throw new Exception('No fue posible generar la llave de afiliado.');
@@ -31,6 +36,10 @@ class MurguiaService
         ];
 
         $baseUrl = rtrim(config('services.murguia_web_affiliate.iframe_base_url'), '/');
+        Log::info('Murguia service: URL base obtenida.', [
+            'user_id' => $user->id,
+            'base_url' => $baseUrl,
+        ]);
 
         return $baseUrl . '/?' . http_build_query($query);
     }
@@ -40,13 +49,18 @@ class MurguiaService
         $token = Cache::get(self::TOKEN_CACHE_KEY);
 
         if ($token) {
+            Log::info('Murguia service: token obtenido de cache.');
             return $token;
         }
 
         try {
+            Log::info('Murguia service: solicitando token nuevo.');
             return $this->requestAccessTokenAndCache();
         } catch (\Throwable $exception) {
             Cache::forget(self::TOKEN_CACHE_KEY);
+            Log::warning('Murguia service: primer intento de token fallo, reintentando.', [
+                'error' => $exception->getMessage(),
+            ]);
 
             return $this->requestAccessTokenAndCache();
         }
@@ -63,6 +77,9 @@ class MurguiaService
         );
 
         if ($response->failed()) {
+            Log::error('Murguia service: fallo autenticacion HTTP.', [
+                'status' => $response->status(),
+            ]);
             throw new Exception('No fue posible autenticar con Murguia.');
         }
 
@@ -73,6 +90,7 @@ class MurguiaService
         }
 
         Cache::put(self::TOKEN_CACHE_KEY, $token, now()->addMinutes(30));
+        Log::info('Murguia service: token recibido y guardado en cache.');
 
         return $token;
     }

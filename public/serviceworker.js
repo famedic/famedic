@@ -142,6 +142,15 @@ self.addEventListener("activate", (event) => {
 
 // Serve from Cache
 self.addEventListener("fetch", (fetchEvent) => {
+	if (fetchEvent.request.method !== "GET") {
+		return;
+	}
+
+	const requestUrl = new URL(fetchEvent.request.url);
+	if (requestUrl.origin !== self.location.origin) {
+		return;
+	}
+
 	fetchEvent.respondWith(
 		caches
 			.match(fetchEvent.request)
@@ -149,7 +158,7 @@ self.addEventListener("fetch", (fetchEvent) => {
 				return response || fetch(fetchEvent.request);
 			})
 			.catch(() => {
-				return caches.match("offline");
+				return caches.match("/offline");
 			}),
 	);
 });

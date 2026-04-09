@@ -12,7 +12,13 @@ class MurguiaIframeController extends Controller
     public function __invoke(Request $request, MurguiaService $murguiaService): JsonResponse
     {
         try {
+            Log::info('Murguia iframe: inicio de generacion de URL.', [
+                'user_id' => $request->user()?->id,
+            ]);
             $url = $murguiaService->getIframeUrlForUser($request->user());
+            Log::info('Murguia iframe: URL generada correctamente.', [
+                'user_id' => $request->user()?->id,
+            ]);
 
             return response()->json([
                 'url' => $url,
