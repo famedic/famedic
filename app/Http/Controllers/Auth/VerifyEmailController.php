@@ -11,12 +11,18 @@ class VerifyEmailController extends Controller
 {
     public function __invoke(EmailVerificationRequest $request): RedirectResponse
     {
-        if ($request->user()->hasVerifiedEmail()) {
+        $user = $request->user();
+
+        if ($user->hasVerifiedEmail()) {
             return redirect()->intended(route('home', absolute: false) . '?verified=1');
         }
 
-        if ($request->user()->markEmailAsVerified()) {
-            event(new Verified($request->user()));
+        if ($user->markEmailAsVerified()) {
+            event(new Verified($user));
+        }
+
+        if (config('auth.auto_verify_phone_after_email') && ! $user->has_verified_phone) {
+            $user->markPhoneAsVerified();
         }
 
         return redirect()->intended(route('home', absolute: false) . '?verified=1')->flashMessage('Tu dirección de correo electrónico ha sido verificada.');

@@ -31,6 +31,44 @@ test('email can be verified', function () {
     $response->assertRedirect(route('home', absolute: false).'?verified=1');
 });
 
+test('phone is auto verified after email when feature flag is enabled', function () {
+    config()->set('auth.auto_verify_phone_after_email', true);
+
+    $user = User::factory()->withUnverifiedEmail()->create([
+        'phone_verified_at' => null,
+    ]);
+
+    $verificationUrl = URL::temporarySignedRoute(
+        'verification.verify',
+        now()->addMinutes(60),
+        ['id' => $user->id, 'hash' => sha1($user->email)]
+    );
+
+    $this->actingAs($user)->get($verificationUrl);
+
+    expect($user->fresh()->hasVerifiedEmail())->toBeTrue()
+        ->and($user->fresh()->has_verified_phone)->toBeTrue();
+});
+
+test('phone remains unverified after email when feature flag is disabled', function () {
+    config()->set('auth.auto_verify_phone_after_email', false);
+
+    $user = User::factory()->withUnverifiedEmail()->create([
+        'phone_verified_at' => null,
+    ]);
+
+    $verificationUrl = URL::temporarySignedRoute(
+        'verification.verify',
+        now()->addMinutes(60),
+        ['id' => $user->id, 'hash' => sha1($user->email)]
+    );
+
+    $this->actingAs($user)->get($verificationUrl);
+
+    expect($user->fresh()->hasVerifiedEmail())->toBeTrue()
+        ->and($user->fresh()->has_verified_phone)->toBeFalse();
+});
+
 test('email is not verified with invalid hash', function () {
     $user = User::factory()->withUnverifiedEmail()->create();
 

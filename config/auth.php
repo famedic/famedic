@@ -112,4 +112,15 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Verification Flow Flags
+    |--------------------------------------------------------------------------
+    |
+    | Temporary feature flags to control account verification behavior.
+    | Set this to true to auto-verify phone right after email verification.
+    |
+    */
+    'auto_verify_phone_after_email' => env('AUTH_AUTO_VERIFY_PHONE_AFTER_EMAIL', false),
+
 ];
