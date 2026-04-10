@@ -8,7 +8,9 @@ use App\Enums\LaboratoryBrand;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LaboratoryPurchases\DestroyLaboratoryPurchaseRequest;
 use App\Http\Requests\Admin\LaboratoryPurchases\IndexLaboratoryPurchaseRequest;
+use App\Http\Requests\Admin\LaboratoryPurchases\ResendLaboratoryPurchaseConfirmationRequest;
 use App\Http\Requests\Admin\LaboratoryPurchases\ShowLaboratoryPurchaseRequest;
+use App\Notifications\LaboratoryPurchaseCreated;
 use Illuminate\Support\Facades\Log;
 use App\Models\LaboratoryPurchase;
 use Carbon\Carbon;
@@ -99,7 +101,8 @@ class LaboratoryPurchaseController extends Controller
         return Inertia::render('Admin/LaboratoryPurchase', [
             'laboratoryPurchase' => $laboratoryPurchase,
             'showDeleteButton' => $request->user()->can('delete', $laboratoryPurchase),
-            
+            'canResendConfirmationEmail' => $request->user()->administrator?->hasPermissionTo('laboratory-purchases.manage') ?? false,
+
             'hasSampleCollected' => $laboratoryPurchase->hasSampleCollected(),
             'hasResultsAvailable' => $laboratoryPurchase->hasResultsAvailable(),
             'latestSampleCollectionAt' => optional(
@@ -147,4 +150,24 @@ class LaboratoryPurchaseController extends Controller
         }
     }
 
+    public function resendConfirmationEmail(
+        ResendLaboratoryPurchaseConfirmationRequest $request,
+        LaboratoryPurchase $laboratoryPurchase
+    ) {
+        $user = $laboratoryPurchase->customer?->user;
+
+        if (! $user || ! $user->email) {
+            return back()->withErrors([
+                'resend_confirmation' => 'Esta orden no tiene un usuario con correo electrónico para enviar la confirmación.',
+            ]);
+        }
+
+        $user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));
+
+        return back()->flashMessage(
+            'Se reenvió el correo de confirmación de compra a '.$user->email.'.'
+        );
+    }
+
 }
+

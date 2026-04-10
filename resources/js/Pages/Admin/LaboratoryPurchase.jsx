@@ -11,6 +11,7 @@ import {
 import {
 	TrashIcon,
 	CalendarDaysIcon,
+	EnvelopeIcon,
 } from "@heroicons/react/24/outline";
 
 import AdminLayout from "@/Layouts/AdminLayout";
@@ -46,6 +47,7 @@ import PaymentDetails from "@/Components/PaymentDetails";
 export default function LaboratoryPurchase({
 	laboratoryPurchase,
 	showDeleteButton,
+	canResendConfirmationEmail,
 	hasSampleCollected,
 	hasResultsAvailable,
 	latestSampleCollectionAt,
@@ -58,6 +60,7 @@ export default function LaboratoryPurchase({
 			<Header
 				laboratoryPurchase={laboratoryPurchase}
 				showDeleteButton={showDeleteButton}
+				canResendConfirmationEmail={canResendConfirmationEmail}
 				hasSampleCollected={hasSampleCollected}
 				hasResultsAvailable={hasResultsAvailable}
 				latestSampleCollectionAt={latestSampleCollectionAt}
@@ -82,11 +85,14 @@ export default function LaboratoryPurchase({
 function Header({
 	laboratoryPurchase,
 	showDeleteButton,
+	canResendConfirmationEmail,
 	hasSampleCollected,
 	hasResultsAvailable,
 	latestSampleCollectionAt,
 	latestResultsAt,
 }) {
+
+	const resendForm = useForm({});
 
 	const [loadingResults, setLoadingResults] = useState(false);
 
@@ -234,6 +240,38 @@ function Header({
 				>
 					{laboratoryPurchase.customer.user.full_name}
 				</CustomerLink>
+
+				{canResendConfirmationEmail && (
+					<div className="flex flex-col gap-1">
+						<Button
+							outline
+							type="button"
+							onClick={() =>
+								resendForm.post(
+									route(
+										"admin.laboratory-purchases.resend-confirmation-email",
+										{
+											laboratory_purchase:
+												laboratoryPurchase.id,
+										}
+									),
+									{ preserveScroll: true }
+								)
+							}
+							disabled={resendForm.processing}
+						>
+							<EnvelopeIcon className="size-5" />
+							{resendForm.processing
+								? "Enviando correo…"
+								: "Reenviar correo de confirmación"}
+						</Button>
+						{resendForm.errors.resend_confirmation && (
+							<Text className="!text-sm text-red-600">
+								{resendForm.errors.resend_confirmation}
+							</Text>
+						)}
+					</div>
+				)}
 
 				<InvoiceDialog
 					storeRoute={route("admin.laboratory-purchases.invoice", {
