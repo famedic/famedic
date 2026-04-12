@@ -163,6 +163,11 @@ class EnsureUserHasAdminAccount
                             'current' => Route::currentRouteName() === 'admin.laboratory-notifications-monitor.index'
                                 || Route::currentRouteName() === 'admin.laboratory-notifications-monitor.show',
                         ] : null,
+                        $request->user()->administrator->hasPermissionTo('view_config_monitor') ? [
+                            'label' => 'Config Monitor',
+                            'url' => route('admin.config-monitor.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.config-monitor'),
+                        ] : null,
                         $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
                             'label' => 'Murguía — asegurados',
                             'url' => route('admin.murguia-monitor.index'),

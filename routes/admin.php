@@ -35,6 +35,8 @@ use App\Http\Controllers\Admin\TaxProfileController as AdminTaxProfileController
 use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
 use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
 use App\Http\Controllers\Admin\MurguiaMonitorController;
+use App\Http\Controllers\Admin\ConfigMonitorController;
+use App\Http\Controllers\Admin\ConfigMonitorMetadataController;
 
 // === IMPORTACIONES NUEVAS ===
 use App\Http\Controllers\Admin\LaboratoryNotificationController;
@@ -135,6 +137,19 @@ Route::prefix('admin')->middleware([
             ->name('laboratory-notifications-monitor.index');
         Route::get('laboratory-notifications-monitor/{gdaOrderId}', [LaboratoryNotificationMonitorController::class, 'show'])
             ->name('laboratory-notifications-monitor.show');
+
+        // Monitor de configuración (solo lectura; metadatos en BD)
+        Route::get('config-monitor', [ConfigMonitorController::class, 'index'])->name('config-monitor.index');
+        Route::post('config-monitor/refresh', [ConfigMonitorController::class, 'refresh'])->name('config-monitor.refresh');
+        Route::prefix('config-monitor/metadata')->name('config-monitor.metadata.')->group(function () {
+            Route::get('/', [ConfigMonitorMetadataController::class, 'index'])->name('index');
+            Route::post('/groups', [ConfigMonitorMetadataController::class, 'storeGroup'])->name('groups.store');
+            Route::patch('/groups/{group}', [ConfigMonitorMetadataController::class, 'updateGroup'])->name('groups.update');
+            Route::delete('/groups/{group}', [ConfigMonitorMetadataController::class, 'destroyGroup'])->name('groups.destroy');
+            Route::post('/settings', [ConfigMonitorMetadataController::class, 'storeSetting'])->name('settings.store');
+            Route::patch('/settings/{setting}', [ConfigMonitorMetadataController::class, 'updateSetting'])->name('settings.update');
+            Route::delete('/settings/{setting}', [ConfigMonitorMetadataController::class, 'destroySetting'])->name('settings.destroy');
+        });
 
         Route::middleware('super.admin')->group(function () {
             Route::get('murguia-monitor', [MurguiaMonitorController::class, 'index'])->name('murguia-monitor.index');

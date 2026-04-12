@@ -58,6 +58,9 @@ return [
         'payment-attempts' => [
             ['manage' => 'Monitorear intentos de pago'],
         ],
+        'config_monitor' => [
+            ['manage_metadata' => 'Administrar metadatos del monitor de configuración'],
+        ],
     ],
 
     'medical_attention_subscription_price_cents' => 30000,
