@@ -10,6 +10,7 @@ use App\Http\Requests\LaboratoryAppointments\UpdateLaboratoryAppointmentCallback
 use App\Models\LaboratoryAppointment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class LaboratoryAppointmentController extends Controller
@@ -72,13 +73,29 @@ class LaboratoryAppointmentController extends Controller
     ) {
         $data = $request->validated();
 
-        DB::transaction(function () use ($laboratoryAppointment, $data): void {
+        Log::info('laboratory.callback_availability.request_validated', [
+            'appointment_id' => $laboratoryAppointment->id,
+            'brand' => $laboratoryBrand->value,
+            'validated' => [
+                'callback_availability_starts_at' => $data['callback_availability_starts_at'] ?? null,
+                'callback_availability_ends_at' => $data['callback_availability_ends_at'] ?? null,
+                'patient_callback_comment_len' => isset($data['patient_callback_comment'])
+                    ? strlen((string) $data['patient_callback_comment'])
+                    : 0,
+            ],
+            'server_now' => now()->toIso8601String(),
+        ]);
+
+        $interactionId = null;
+
+        DB::transaction(function () use ($laboratoryAppointment, $data, &$interactionId): void {
             $laboratoryAppointment->update([
                 'callback_availability_starts_at' => $data['callback_availability_starts_at'] ?? null,
                 'callback_availability_ends_at' => $data['callback_availability_ends_at'] ?? null,
                 'patient_callback_comment' => $data['patient_callback_comment'] ?? null,
             ]);
-            $laboratoryAppointment->interactions()->create([
+
+            $interaction = $laboratoryAppointment->interactions()->create([
                 'type' => LaboratoryAppointmentInteractionType::PatientCallbackPreference,
                 'metadata' => [
                     'callback_availability_starts_at' => $data['callback_availability_starts_at'] ?? null,
@@ -86,7 +103,23 @@ class LaboratoryAppointmentController extends Controller
                     'patient_callback_comment' => $data['patient_callback_comment'] ?? null,
                 ],
             ]);
+
+            $interactionId = $interaction->id;
         });
+
+        $fresh = $laboratoryAppointment->fresh();
+
+        Log::info('laboratory.callback_availability.persisted', [
+            'appointment_id' => $laboratoryAppointment->id,
+            'interaction_id' => $interactionId,
+            'stored' => [
+                'callback_availability_starts_at' => $fresh?->callback_availability_starts_at?->toIso8601String(),
+                'callback_availability_ends_at' => $fresh?->callback_availability_ends_at?->toIso8601String(),
+                'patient_callback_comment' => $fresh?->patient_callback_comment !== null
+                    ? '(present, '.strlen((string) $fresh->patient_callback_comment).' chars)'
+                    : null,
+            ],
+        ]);
 
         return back()->flashMessage('Guardamos tu disponibilidad y comentarios.');
     }

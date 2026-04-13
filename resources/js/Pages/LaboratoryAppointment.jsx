@@ -9,21 +9,19 @@ import {
 } from "@heroicons/react/16/solid";
 import {
 	CalendarDaysIcon,
-	ClockIcon,
-	ChatBubbleLeftEllipsisIcon,
 } from "@heroicons/react/24/outline";
 import { Badge } from "@/Components/Catalyst/badge";
 import { motion } from "framer-motion";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { router, useForm, usePage } from "@inertiajs/react";
 import {
 	Field,
 	Label,
 	ErrorMessage,
-	Description,
 } from "@/Components/Catalyst/fieldset";
 import { Textarea } from "@/Components/Catalyst/textarea";
 import { Input } from "@/Components/Catalyst/input";
+import { Select } from "@/Components/Catalyst/select";
 import {
 	TabGroup,
 	TabList,
@@ -50,12 +48,32 @@ function minStartDatetimeLocal() {
 	return toDatetimeLocal(d);
 }
 
-function addMinutesLocal(datetimeLocalStr, minutes) {
-	if (!datetimeLocalStr) return "";
-	const d = new Date(datetimeLocalStr);
-	if (Number.isNaN(d.getTime())) return "";
-	d.setMinutes(d.getMinutes() + minutes);
-	return toDatetimeLocal(d);
+function pad2(n) {
+	return String(n).padStart(2, "0");
+}
+
+function getDefaultHourWindow(dayOffset = 0) {
+	const base = new Date();
+	base.setSeconds(0, 0);
+
+	const start = new Date(base);
+	start.setDate(start.getDate() + dayOffset);
+	start.setHours(base.getHours() + 1, 0, 0, 0);
+
+	const end = new Date(start);
+	end.setHours(end.getHours() + 1, 0, 0, 0);
+
+	return {
+		startAt: toDatetimeLocal(start),
+		endAt: toDatetimeLocal(end),
+		startTime: `${pad2(start.getHours())}:${pad2(start.getMinutes())}`,
+		endTime: `${pad2(end.getHours())}:${pad2(end.getMinutes())}`,
+	};
+}
+
+function toDayOffsetOption(value) {
+	const map = { today: 0, tomorrow: 1, day_after_tomorrow: 2 };
+	return map[value] ?? 0;
 }
 
 export default function LaboratoryAppointment({
@@ -66,6 +84,17 @@ export default function LaboratoryAppointment({
 	const [showCheck, setShowCheck] = useState(true);
 	const [tabIndex, setTabIndex] = useState(0);
 	const [minNowTick, setMinNowTick] = useState(() => minStartDatetimeLocal());
+	const [receiveCallMode, setReceiveCallMode] = useState("now");
+	const [dayOption, setDayOption] = useState("today");
+	const defaultWindow = useMemo(() => getDefaultHourWindow(0), []);
+	const [startTime, setStartTime] = useState(defaultWindow.startTime);
+	const [endTime, setEndTime] = useState(defaultWindow.endTime);
+
+	/**
+	 * Evita re-hidratar día/horas desde el servidor en cada `router.reload()` o
+	 * re-render con nueva referencia de props si los valores guardados no cambiaron.
+	 */
+	const hydratedFromServerKeyRef = useRef("");
 
 	const { data, setData, patch, processing, errors, recentlySuccessful } =
 		useForm({
@@ -116,6 +145,87 @@ export default function LaboratoryAppointment({
 		return () => clearInterval(intervalId);
 	}, []);
 
+	useEffect(() => {
+		const serverKey = [
+			laboratoryAppointment.id,
+			laboratoryAppointment.callback_availability_starts_at ?? "",
+			laboratoryAppointment.callback_availability_ends_at ?? "",
+		].join("\0");
+
+		if (hydratedFromServerKeyRef.current === serverKey) {
+			return;
+		}
+		hydratedFromServerKeyRef.current = serverKey;
+
+		const start = laboratoryAppointment.callback_availability_starts_at
+			? new Date(laboratoryAppointment.callback_availability_starts_at)
+			: null;
+		const end = laboratoryAppointment.callback_availability_ends_at
+			? new Date(laboratoryAppointment.callback_availability_ends_at)
+			: null;
+
+		if (!start || Number.isNaN(start.getTime())) {
+			return;
+		}
+
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		const startDay = new Date(start);
+		startDay.setHours(0, 0, 0, 0);
+		const dayDiff = Math.round(
+			(startDay.getTime() - today.getTime()) / (24 * 60 * 60 * 1000),
+		);
+
+		if (dayDiff >= 0 && dayDiff <= 2) {
+			setReceiveCallMode("later");
+			setDayOption(
+				dayDiff === 0
+					? "today"
+					: dayDiff === 1
+						? "tomorrow"
+						: "day_after_tomorrow",
+			);
+			setStartTime(`${pad2(start.getHours())}:${pad2(start.getMinutes())}`);
+			if (end && !Number.isNaN(end.getTime())) {
+				setEndTime(`${pad2(end.getHours())}:${pad2(end.getMinutes())}`);
+			}
+		}
+	}, [laboratoryAppointment]);
+
+	useEffect(() => {
+		if (receiveCallMode !== "now") return;
+		const window = getDefaultHourWindow(0);
+		setData({
+			callback_availability_starts_at: window.startAt,
+			callback_availability_ends_at: window.endAt,
+			patient_callback_comment: data.patient_callback_comment,
+		});
+	}, [receiveCallMode, minNowTick]);
+
+	useEffect(() => {
+		if (receiveCallMode !== "later") return;
+		const dayOffset = toDayOffsetOption(dayOption);
+		const base = getDefaultHourWindow(dayOffset);
+		const [startHour = "00", startMinute = "00"] = startTime.split(":");
+		const [endHour = "00", endMinute = "00"] = endTime.split(":");
+		const startDate = new Date(base.startAt);
+		const endDate = new Date(base.endAt);
+
+		startDate.setHours(Number(startHour), Number(startMinute), 0, 0);
+		endDate.setHours(Number(endHour), Number(endMinute), 0, 0);
+
+		if (endDate <= startDate) {
+			endDate.setTime(startDate.getTime() + 60 * 60 * 1000);
+			setEndTime(`${pad2(endDate.getHours())}:${pad2(endDate.getMinutes())}`);
+		}
+
+		setData({
+			callback_availability_starts_at: toDatetimeLocal(startDate),
+			callback_availability_ends_at: toDatetimeLocal(endDate),
+			patient_callback_comment: data.patient_callback_comment,
+		});
+	}, [receiveCallMode, dayOption, startTime, endTime]);
+
 	const telHref = "tel:5566515232";
 
 	const onCallClick = (e) => {
@@ -149,17 +259,6 @@ export default function LaboratoryAppointment({
 
 	const minForStart = minNowTick;
 
-	const minForEnd = useMemo(() => {
-		if (!data.callback_availability_starts_at) return minForStart;
-		const afterStart = addMinutesLocal(
-			data.callback_availability_starts_at,
-			1,
-		);
-		const tAfter = new Date(afterStart).getTime();
-		const tMin = new Date(minForStart).getTime();
-		return tAfter >= tMin ? afterStart : minForStart;
-	}, [data.callback_availability_starts_at, minForStart]);
-
 	const startChosen = Boolean(
 		data.callback_availability_starts_at &&
 			new Date(data.callback_availability_starts_at).getTime() >=
@@ -182,31 +281,9 @@ export default function LaboratoryAppointment({
 
 	const windowComplete = startChosen && endValid;
 
-	const canSave =
-		commentFilled ||
-		windowComplete;
+	const canSave = commentFilled || windowComplete;
 
 	const hasSavedCallbackPreference = Boolean(callbackPreferenceSavedAtFormatted);
-
-	const onChangeStart = useCallback(
-		(value) => {
-			let ends = data.callback_availability_ends_at;
-			if (!value) {
-				ends = "";
-			} else if (
-				ends &&
-				new Date(ends) <= new Date(value)
-			) {
-				ends = "";
-			}
-			setData({
-				callback_availability_starts_at: value,
-				callback_availability_ends_at: ends,
-				patient_callback_comment: data.patient_callback_comment,
-			});
-		},
-		[setData, data],
-	);
 
 	return (
 		<FocusedLayout title="Cita de laboratorio">
@@ -231,15 +308,8 @@ export default function LaboratoryAppointment({
 											: "text-zinc-500 dark:text-zinc-400",
 									)}
 								>
-									<CalendarDaysIcon
-										className={clsx(
-											"size-5 shrink-0",
-											selected
-												? "text-sky-600 dark:text-sky-400"
-												: "",
-										)}
-									/>
-									Recibir llamada
+									<PhoneIcon className="size-5 shrink-0" />
+									Llamar ahora
 								</span>
 							)}
 						</Tab>
@@ -257,204 +327,14 @@ export default function LaboratoryAppointment({
 											: "text-zinc-500 dark:text-zinc-400",
 									)}
 								>
-									<PhoneIcon className="size-5 shrink-0" />
-									Llamar ahora
+									<CalendarDaysIcon className="size-5 shrink-0" />
+									Recibir llamada
 								</span>
 							)}
 						</Tab>
 					</TabList>
 
 					<TabPanels className="mt-8">
-						<TabPanel className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm outline-none dark:border-zinc-700 dark:bg-zinc-900/40 sm:p-7">
-							<Subheading className="text-center text-base">
-								¿Cuándo podemos llamarte?
-							</Subheading>
-							<Text className="mt-2 text-center text-sm text-zinc-600 dark:text-zinc-400">
-								Elige un horario en el que puedas atender. También
-								puedes escribir un comentario si solo quieres dejar
-								indicaciones.
-							</Text>
-
-							{hasSavedCallbackPreference && (
-								<div
-									className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-left shadow-sm dark:border-emerald-900/60 dark:bg-emerald-950/40"
-									role="status"
-								>
-									<div className="flex gap-3">
-										<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
-											<CheckIcon className="size-6 text-emerald-700 dark:text-emerald-300" />
-										</div>
-										<div className="min-w-0 flex-1 space-y-1">
-											<Text className="font-semibold text-emerald-900 dark:text-emerald-100">
-												Tu información ya está en el laboratorio
-											</Text>
-											<Text className="text-sm text-emerald-800/95 dark:text-emerald-200/90">
-												Registramos tu disponibilidad y comentarios.
-												Puedes actualizarlos cuando quieras.
-											</Text>
-											<Text className="text-xs font-medium text-emerald-700/90 dark:text-emerald-300/90">
-												Enviado el{" "}
-												<span className="whitespace-normal">
-													{callbackPreferenceSavedAtFormatted}
-												</span>
-											</Text>
-										</div>
-									</div>
-								</div>
-							)}
-
-							<div className="mx-auto mt-6 flex max-w-sm justify-between gap-2 sm:max-w-md">
-								<StepIcon
-									label="Desde"
-									done={startChosen}
-									disabled={false}
-									active={!startChosen}
-								>
-									<CalendarDaysIcon className="size-6" />
-								</StepIcon>
-								<div
-									className={clsx(
-										"mt-5 hidden h-0.5 flex-1 sm:block",
-										startChosen
-											? "bg-emerald-400/80"
-											: "bg-zinc-200 dark:bg-zinc-600",
-									)}
-									aria-hidden
-								/>
-								<StepIcon
-									label="Hasta"
-									done={endValid}
-									disabled={!startChosen}
-									active={startChosen && !endValid}
-								>
-									<ClockIcon className="size-6" />
-								</StepIcon>
-								<div
-									className={clsx(
-										"mt-5 hidden h-0.5 flex-1 sm:block",
-										endValid || commentFilled
-											? "bg-emerald-400/80"
-											: "bg-zinc-200 dark:bg-zinc-600",
-									)}
-									aria-hidden
-								/>
-								<StepIcon
-									label="Nota"
-									done={commentFilled}
-									disabled={false}
-									active={false}
-								>
-									<ChatBubbleLeftEllipsisIcon className="size-6" />
-								</StepIcon>
-							</div>
-
-							<form
-								onSubmit={submitAvailability}
-								className="mt-8 space-y-6"
-							>
-								<Field>
-									<Label>Disponible desde</Label>
-									<Input
-										type="datetime-local"
-										min={minForStart}
-										value={data.callback_availability_starts_at}
-										onChange={(e) =>
-											onChangeStart(e.target.value)
-										}
-									/>
-									<Description>
-										Solo fechas y horas posteriores al momento
-										actual.
-									</Description>
-									{errors.callback_availability_starts_at && (
-										<ErrorMessage>
-											{errors.callback_availability_starts_at}
-										</ErrorMessage>
-									)}
-								</Field>
-								<Field>
-									<Label
-										className={clsx(
-											!startChosen &&
-												"text-zinc-400 dark:text-zinc-500",
-										)}
-									>
-										Disponible hasta
-									</Label>
-									<Input
-										type="datetime-local"
-										min={minForEnd}
-										value={data.callback_availability_ends_at}
-										disabled={!startChosen}
-										onChange={(e) =>
-											setData(
-												"callback_availability_ends_at",
-												e.target.value,
-											)
-										}
-										className={clsx(
-											!startChosen &&
-												"cursor-not-allowed opacity-50",
-										)}
-									/>
-									<Description>
-										{startChosen
-											? "Debe ser posterior a “desde” (al menos un minuto después)."
-											: "Primero elige “disponible desde”."}
-									</Description>
-									{errors.callback_availability_ends_at && (
-										<ErrorMessage>
-											{errors.callback_availability_ends_at}
-										</ErrorMessage>
-									)}
-								</Field>
-								<Field>
-									<Label>Comentarios adicionales</Label>
-									<Textarea
-										rows={4}
-										value={data.patient_callback_comment}
-										onChange={(e) =>
-											setData(
-												"patient_callback_comment",
-												e.target.value,
-											)
-										}
-										placeholder="Ej. solo contesto después de las 6 p.m. entre semana…"
-									/>
-									{errors.patient_callback_comment && (
-										<ErrorMessage>
-											{errors.patient_callback_comment}
-										</ErrorMessage>
-									)}
-								</Field>
-								<div className="flex flex-col items-center gap-2">
-									<Button
-										type="submit"
-										disabled={processing || !canSave}
-									>
-										{processing
-											? "Guardando…"
-											: hasSavedCallbackPreference
-												? "Actualizar disponibilidad"
-												: "Guardar disponibilidad"}
-									</Button>
-									{!canSave && (
-										<Text className="max-w-sm text-center text-xs text-zinc-500">
-											Completa ambos horarios o escribe un
-											comentario para habilitar el guardado.
-										</Text>
-									)}
-									{recentlySuccessful && (
-										<Text className="text-center text-sm font-medium text-emerald-600 dark:text-emerald-400">
-											{hasSavedCallbackPreference
-												? "Cambios guardados correctamente."
-												: "Listo: guardamos tu información para el equipo del laboratorio."}
-										</Text>
-									)}
-								</div>
-							</form>
-						</TabPanel>
-
 						<TabPanel className="outline-none">
 							<div className="flex justify-center">
 								<div className="relative mx-auto inline-flex">
@@ -490,7 +370,7 @@ export default function LaboratoryAppointment({
 										(55) 6651 5232
 									</Button>
 								</a>
-								<Text className="mt-6 flex flex-wrap items-center justify-center text-sm">
+								<Text className="mt-6 flex flex-wrap items-center justify-center text-sm text-zinc-700 dark:text-zinc-200">
 									<span>
 										Si no te es posible llamar en este momento,
 										nuestro equipo se pondrá en contacto contigo
@@ -509,7 +389,7 @@ export default function LaboratoryAppointment({
 									</TextLink>
 								</Text>
 
-								<Text className="mt-4 text-sm">
+								<Text className="mt-4 text-sm text-zinc-700 dark:text-zinc-200">
 									Una vez que hayas confirmado tu cita, podrás
 									continuar con tu compra.
 								</Text>
@@ -517,11 +397,170 @@ export default function LaboratoryAppointment({
 								<button
 									type="button"
 									className="mt-8 text-sm font-medium text-sky-600 underline decoration-sky-600/30 underline-offset-2 hover:text-sky-700 dark:text-sky-400"
-									onClick={() => setTabIndex(0)}
+									onClick={() => setTabIndex(1)}
 								>
 									← Prefiero indicar cuándo llamarme
 								</button>
 							</div>
+						</TabPanel>
+
+						<TabPanel className="rounded-2xl border border-zinc-200/80 bg-white p-5 text-zinc-900 shadow-sm outline-none dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-100 sm:p-7">
+							<Subheading className="text-center text-base">
+								¿Cuándo podemos llamarte?
+							</Subheading>
+							<Text className="mt-2 text-center text-sm text-zinc-600 dark:text-zinc-400">
+								Elige recibir llamada ahora o programa una ventana
+								para más tarde.
+							</Text>
+
+							<div className="mt-6 grid gap-3">
+								<button
+									type="button"
+									onClick={() => setReceiveCallMode("now")}
+									className={clsx(
+										"flex items-center justify-between rounded-xl border px-4 py-3 text-left text-zinc-900 dark:text-zinc-100",
+										receiveCallMode === "now"
+											? "border-sky-500 bg-sky-50 dark:border-sky-500 dark:bg-sky-900/20"
+											: "border-zinc-200 dark:border-zinc-700",
+									)}
+								>
+									<span className="font-medium">Recibir llamada ahora</span>
+									<span className="text-sky-700 dark:text-sky-300">
+										{receiveCallMode === "now" ? "✓" : ""}
+									</span>
+								</button>
+
+								<button
+									type="button"
+									onClick={() => setReceiveCallMode("later")}
+									className={clsx(
+										"flex items-center justify-between rounded-xl border px-4 py-3 text-left text-zinc-900 dark:text-zinc-100",
+										receiveCallMode === "later"
+											? "border-sky-500 bg-sky-50 dark:border-sky-500 dark:bg-sky-900/20"
+											: "border-zinc-200 dark:border-zinc-700",
+									)}
+								>
+									<span className="font-medium">Más tarde</span>
+									<span className="text-sky-700 dark:text-sky-300">
+										{receiveCallMode === "later" ? "✓" : ""}
+									</span>
+								</button>
+							</div>
+
+							{hasSavedCallbackPreference && (
+								<div
+									className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-left shadow-sm dark:border-emerald-900/60 dark:bg-emerald-950/40"
+									role="status"
+								>
+									<div className="flex gap-3">
+										<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
+											<CheckIcon className="size-6 text-emerald-700 dark:text-emerald-300" />
+										</div>
+										<div className="min-w-0 flex-1 space-y-1">
+											<Text className="font-semibold text-emerald-900 dark:text-emerald-100">
+												Tu información ya está en el laboratorio
+											</Text>
+											<Text className="text-sm text-emerald-800/95 dark:text-emerald-200/90">
+												Registramos tu disponibilidad y comentarios.
+												Puedes actualizarlos cuando quieras.
+											</Text>
+											<Text className="text-xs font-medium text-emerald-700/90 dark:text-emerald-300/90">
+												Enviado el{" "}
+												<span className="whitespace-normal">
+													{callbackPreferenceSavedAtFormatted}
+												</span>
+											</Text>
+										</div>
+									</div>
+								</div>
+							)}
+
+							<form onSubmit={submitAvailability} className="mt-8 space-y-6">
+								{receiveCallMode === "later" && (
+									<>
+										<Field>
+											<Label>Día para recibir llamada</Label>
+											<Select
+												value={dayOption}
+												onChange={(e) => setDayOption(e.target.value)}
+											>
+												<option value="today">Hoy</option>
+												<option value="tomorrow">Mañana</option>
+												<option value="day_after_tomorrow">
+													Pasado mañana
+												</option>
+											</Select>
+										</Field>
+
+										<div className="grid gap-4 sm:grid-cols-2">
+											<Field>
+												<Label>Hora desde</Label>
+												<Input
+													type="time"
+													value={startTime}
+													onChange={(e) =>
+														setStartTime(e.target.value)
+													}
+												/>
+											</Field>
+											<Field>
+												<Label>Hora hasta</Label>
+												<Input
+													type="time"
+													value={endTime}
+													onChange={(e) =>
+														setEndTime(e.target.value)
+													}
+												/>
+											</Field>
+										</div>
+									</>
+								)}
+								<Field>
+									<Label>Comentarios adicionales</Label>
+									<Textarea
+										rows={4}
+										value={data.patient_callback_comment}
+										onChange={(e) =>
+											setData(
+												"patient_callback_comment",
+												e.target.value,
+											)
+										}
+										placeholder="Ej. solo contesto después de las 6 p.m. entre semana…"
+									/>
+									{errors.patient_callback_comment && (
+										<ErrorMessage>
+											{errors.patient_callback_comment}
+										</ErrorMessage>
+									)}
+								</Field>
+								<div className="flex flex-col items-center gap-2">
+									<Button
+										type="submit"
+										disabled={processing || !canSave}
+									>
+										{processing
+											? "Guardando…"
+											: hasSavedCallbackPreference
+												? "Actualizar disponibilidad"
+												: "Guardar disponibilidad"}
+									</Button>
+									{!canSave && (
+										<Text className="max-w-sm text-center text-xs text-zinc-600 dark:text-zinc-300">
+											Completa ambos horarios o escribe un
+											comentario para habilitar el guardado.
+										</Text>
+									)}
+									{recentlySuccessful && (
+										<Text className="text-center text-sm font-medium text-emerald-600 dark:text-emerald-400">
+											{hasSavedCallbackPreference
+												? "Cambios guardados correctamente."
+												: "Listo: guardamos tu información para el equipo del laboratorio."}
+										</Text>
+									)}
+								</div>
+							</form>
 						</TabPanel>
 					</TabPanels>
 				</TabGroup>
@@ -539,52 +578,5 @@ export default function LaboratoryAppointment({
 				</div>
 			</div>
 		</FocusedLayout>
-	);
-}
-
-function StepIcon({ label, done, disabled, active, children }) {
-	return (
-		<div
-			className={clsx(
-				"flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center",
-				disabled && "pointer-events-none",
-			)}
-		>
-			<div
-				className={clsx(
-					"flex size-12 items-center justify-center rounded-full border-2 transition-all duration-200 sm:size-14",
-					disabled &&
-						"border-zinc-200 bg-zinc-100/80 text-zinc-300 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-600",
-					!disabled &&
-						done &&
-						"border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm dark:border-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300",
-					!disabled &&
-						!done &&
-						active &&
-						"border-sky-400 bg-sky-50 text-sky-700 dark:border-sky-600 dark:bg-sky-950/40 dark:text-sky-300",
-					!disabled &&
-						!done &&
-						!active &&
-						"border-zinc-200 bg-white text-zinc-400 dark:border-zinc-600 dark:bg-zinc-900",
-				)}
-				aria-hidden
-			>
-				{children}
-			</div>
-			<span
-				className={clsx(
-					"text-[10px] font-medium uppercase tracking-wide sm:text-xs",
-					disabled && "text-zinc-400 dark:text-zinc-600",
-					!disabled && done && "text-emerald-700 dark:text-emerald-400",
-					!disabled &&
-						!done &&
-						active &&
-						"text-sky-700 dark:text-sky-400",
-					!disabled && !done && !active && "text-zinc-500",
-				)}
-			>
-				{label}
-			</span>
-		</div>
 	);
 }

@@ -45,6 +45,7 @@ import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import CountryListbox from "@/Components/CountryListbox";
 import StatusBadge from "@/Components/StatusBadge";
 import Flag from "react-flagpack";
+import clsx from "clsx";
 
 const interactionTypeLabels = {
 	patient_phone_intent: "Intento de llamada (paciente)",
@@ -59,6 +60,8 @@ export default function LaboratoryAppointment({
 	laboratoryCartItems,
 	interactions,
 }) {
+	const [patientView, setPatientView] = useState("none");
+
 	return (
 		<AdminLayout title="Cita de laboratorio">
 			<div className="w-40">
@@ -74,6 +77,8 @@ export default function LaboratoryAppointment({
 			<Header
 				laboratoryAppointment={laboratoryAppointment}
 				laboratoryStores={laboratoryStores}
+				patientView={patientView}
+				setPatientView={setPatientView}
 			/>
 
 			<Patient
@@ -83,17 +88,87 @@ export default function LaboratoryAppointment({
 
 			<Contact laboratoryAppointment={laboratoryAppointment} />
 
-			<PatientFollowUp laboratoryAppointment={laboratoryAppointment} />
+			<PatientCommunicationTabs
+				laboratoryAppointment={laboratoryAppointment}
+				interactions={interactions}
+				patientView={patientView}
+			/>
 
 			<LaboratoryAppointmentConfirmation
 				laboratoryAppointment={laboratoryAppointment}
 			/>
-
-			<InteractionBitacora
-				interactions={interactions}
-				laboratoryAppointment={laboratoryAppointment}
-			/>
 		</AdminLayout>
+	);
+}
+
+function PatientCommunicationTabs({
+	laboratoryAppointment,
+	interactions,
+	patientView,
+}) {
+	if (patientView === "none") {
+		return null;
+	}
+
+	return (
+		<div className="mt-10">
+			{patientView === "followup" ? (
+				<>
+					<PatientFollowUp laboratoryAppointment={laboratoryAppointment} />
+					<RequestTimeline laboratoryAppointment={laboratoryAppointment} />
+				</>
+			) : (
+				<InteractionBitacora
+					interactions={interactions}
+					laboratoryAppointment={laboratoryAppointment}
+				/>
+			)}
+		</div>
+	);
+}
+
+function RequestTimeline({ laboratoryAppointment }) {
+	const timelineSteps = [
+		{
+			label: "Solicitud",
+			value: laboratoryAppointment.formatted_created_at,
+		},
+		{
+			label: "Intento de llamada",
+			value: laboratoryAppointment.formatted_phone_call_intent_at,
+		},
+		{
+			label: "Confirmación",
+			value: laboratoryAppointment.formatted_confirmed_at,
+		},
+		{
+			label: "Compra",
+			value:
+				laboratoryAppointment.formatted_purchase_at ??
+				laboratoryAppointment.formatted_purchased_at ??
+				laboratoryAppointment.purchase?.formatted_created_at,
+		},
+	];
+
+	return (
+		<div className="mt-10">
+			<Subheading>Línea de tiempo</Subheading>
+			<Text className="mt-1 text-sm text-zinc-500">
+				Simulación de hitos principales de la cita y su seguimiento.
+			</Text>
+
+			<ol className="mt-4 space-y-4 border-l-2 border-zinc-200 pl-5 dark:border-zinc-700">
+				{timelineSteps.map((step) => (
+					<li key={step.label} className="relative">
+						<span className="absolute -left-[1.75rem] mt-1 size-3 rounded-full bg-sky-500" />
+						<Text className="font-semibold">{step.label}</Text>
+						<Text className="text-sm text-zinc-600 dark:text-zinc-400">
+							{step.value ?? "Pendiente"}
+						</Text>
+					</li>
+				))}
+			</ol>
+		</div>
 	);
 }
 
@@ -112,7 +187,7 @@ function PatientFollowUp({ laboratoryAppointment }) {
 					{laboratoryAppointment.time_since_request_human}
 				</DescriptionDetails>
 
-				<DescriptionTerm>Intentó llamar al laboratorio</DescriptionTerm>
+				<DescriptionTerm>Intentó llamar al concierge</DescriptionTerm>
 				<DescriptionDetails>
 					{laboratoryAppointment.formatted_phone_call_intent_at ? (
 						<span className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
@@ -254,7 +329,12 @@ function InteractionBitacora({ interactions, laboratoryAppointment }) {
 	);
 }
 
-function Header({ laboratoryAppointment, laboratoryStores }) {
+function Header({
+	laboratoryAppointment,
+	laboratoryStores,
+	patientView,
+	setPatientView,
+}) {
 	const [openDeleteConfirmation, setOpenDeleteConfirmation] = useState(false);
 	const [openConfirmation, setOpenConfirmation] = useState(false);
 
@@ -287,7 +367,23 @@ function Header({ laboratoryAppointment, laboratoryStores }) {
 						</span>
 					</div>
 				)}
-				<div className="flex gap-4">
+				<div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+					<Button
+						type="button"
+						onClick={() => setPatientView("followup")}
+						outline={patientView !== "followup"}
+					>
+						<ClockIcon />
+						Seguimiento y línea de tiempo
+					</Button>
+					<Button
+						type="button"
+						onClick={() => setPatientView("bitacora")}
+						outline={patientView !== "bitacora"}
+					>
+						<ChatBubbleLeftRightIcon />
+						Bitácora de interacciones
+					</Button>
 					{!laboratoryAppointment.confirmed_at && (
 						<LaboratoryAppointmentDeleteForm
 							laboratoryAppointment={laboratoryAppointment}
