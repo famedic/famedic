@@ -41,6 +41,9 @@ Te compartimos tu comprobante e instrucciones para que puedas presentarte en suc
     💳Estatus de pago: {{ $estatus_pago }}
 </p>
 <p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
+    💳Método de pago: {{ $metodo_pago }}
+</p>
+<p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
     💰Total pagado: {{ $total }}
 </p>
 <p style="margin:0 0 16px;color:#3d4852;font-size:16px;line-height:1.5;">

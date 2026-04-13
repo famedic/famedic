@@ -103,6 +103,7 @@ class LaboratoryPurchaseCreated extends Notification
             'famedic_logo_url' => $famedicLogoUrl,
             'laboratorio_logo_url' => $laboratorioLogoUrl,
             'estatus_pago' => $this->paymentStatusLabel($transaction?->payment_status),
+            'metodo_pago' => $this->paymentMethodLabel($transaction?->payment_method ?? $transaction?->gateway),
             'total' => $purchase->formatted_total,
             'fecha_compra' => $purchase->formatted_created_at ?? '—',
             'studies' => $studies,
@@ -203,6 +204,17 @@ class LaboratoryPurchaseCreated extends Notification
             'refunded' => 'Reembolsado',
             'credit' => 'Acreditado',
             default => $status ? ucfirst(str_replace('_', ' ', $status)) : '—',
+        };
+    }
+
+    protected function paymentMethodLabel(?string $method): string
+    {
+        return match (strtolower((string) $method)) {
+            'paypal' => 'PayPal',
+            'efevoopay' => 'EfevooPay',
+            'odessa' => 'Caja de ahorro',
+            'stripe' => 'Tarjeta',
+            default => $method ? ucfirst(str_replace('_', ' ', $method)) : '—',
         };
     }
 

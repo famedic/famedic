@@ -53,6 +53,10 @@ Aquí tienes tu comprobante e instrucciones para presentarte sin contratiempos.
     💳 Estatus de pago: <b>{{ $estatus_pago }}</b>
 </p>
 <p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
+    💳 Método de pago: <b>{{ $metodo_pago }}</b>
+</p>
+
+<p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
     💰 Total pagado: <b>{{ $total }}</b>
 </p>
 <p style="margin:0 0 20px;color:#3d4852;font-size:16px;line-height:1.5;">
