@@ -91,18 +91,6 @@ Aquí tienes tu comprobante e instrucciones para presentarte sin contratiempos.
 2. Confirma tu cita: <b>{{ $appointment_date }} {{ $appointment_time }} en {{ $laboratorio_marca }} sucursal {{ $branch_name }}</b>
 </p>
 
-<p style="margin:0 0 8px;color:#3d4852;font-size:16px;line-height:1.5;">
-<strong>📍 3. UBICACIÓN / TELÉFONO DE SUCURSAL (POR SI LO NECESITAS)</strong>
-</p>
-
-<p style="margin:0 0 8px;color:#3d4852;font-size:16px;line-height:1.5;">
-Consulta dirección, horarios y teléfono de sucursal aquí:
-</p>
-
-<x-mail::button :url="$branches_url" color="primary">
-Consultar sucursales, horarios y teléfono
-</x-mail::button>
-
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 
 @include('emails.laboratory.components.preparation', ['studies' => $studies, 'showIntro' => false])

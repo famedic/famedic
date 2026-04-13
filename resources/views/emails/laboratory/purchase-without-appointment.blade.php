@@ -98,15 +98,11 @@ Consultar sucursales, horarios y teléfono
 </p>
 
 <p style="margin:0 0 12px;color:#3d4852;font-size:16px;line-height:1.5;">
-1. Indica que vienes por estudios adquiridos por FAMEDIC
-</p>
-
-<p style="margin:0 0 12px;color:#3d4852;font-size:16px;line-height:1.5;">
-2. Comparte tus identificadores (Consecutivo, Folio y Paciente + Fecha de nacimiento)
+    1. Comparte tus identificadores (Consecutivo, Folio y Paciente + Fecha de nacimiento)
 </p>
 
 <p style="margin:0 0 20px;color:#3d4852;font-size:16px;line-height:1.5;">
-3. Realiza tus estudios siguiendo las indicaciones de preparación
+    2. Atienda las indicaciones del personal de la sucursal para realizar tus estudios
 </p>
 
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
