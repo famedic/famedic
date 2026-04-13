@@ -190,6 +190,8 @@ function LaboratoryAppointmentsList({
 						<TableRow>
 							<TableHeader>Cliente</TableHeader>
 							<TableHeader>Cita</TableHeader>
+							<TableHeader>Intentó llamar</TableHeader>
+							<TableHeader>Pref. llamada</TableHeader>
 							<TableHeader>Laboratorio</TableHeader>
 						</TableRow>
 					</TableHead>
@@ -275,6 +277,30 @@ function LaboratoryAppointmentsList({
 													</span>
 												</Text>
 											</Badge>
+										)}
+									</TableCell>
+
+									<TableCell>
+										{laboratoryAppointment.formatted_phone_call_intent_at ? (
+											<Text className="text-sm">
+												{
+													laboratoryAppointment.formatted_phone_call_intent_at
+												}
+											</Text>
+										) : (
+											<Text className="text-sm text-zinc-400">
+												—
+											</Text>
+										)}
+									</TableCell>
+
+									<TableCell>
+										{laboratoryAppointment.has_left_callback_info ? (
+											<Badge color="emerald">Sí</Badge>
+										) : (
+											<Text className="text-sm text-zinc-400">
+												—
+											</Text>
 										)}
 									</TableCell>
 

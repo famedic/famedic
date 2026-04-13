@@ -7,6 +7,7 @@ import {
 	EnvelopeIcon,
 	PhoneIcon,
 	ClockIcon,
+	ChatBubbleLeftRightIcon,
 } from "@heroicons/react/16/solid";
 import {
 	CalendarDaysIcon,
@@ -15,7 +16,7 @@ import {
 } from "@heroicons/react/24/outline";
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
-import { Anchor } from "@/Components/Catalyst/text";
+import { Anchor, Text } from "@/Components/Catalyst/text";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Input } from "@/Components/Catalyst/input";
@@ -45,10 +46,18 @@ import CountryListbox from "@/Components/CountryListbox";
 import StatusBadge from "@/Components/StatusBadge";
 import Flag from "react-flagpack";
 
+const interactionTypeLabels = {
+	patient_phone_intent: "Intento de llamada (paciente)",
+	patient_callback_preference: "Preferencia de contacto (paciente)",
+	concierge_note: "Nota del concierge",
+	concierge_outbound_call: "Llamada saliente (concierge)",
+};
+
 export default function LaboratoryAppointment({
 	laboratoryAppointment,
 	laboratoryStores,
 	laboratoryCartItems,
+	interactions,
 }) {
 	return (
 		<AdminLayout title="Cita de laboratorio">
@@ -74,10 +83,174 @@ export default function LaboratoryAppointment({
 
 			<Contact laboratoryAppointment={laboratoryAppointment} />
 
+			<PatientFollowUp laboratoryAppointment={laboratoryAppointment} />
+
 			<LaboratoryAppointmentConfirmation
 				laboratoryAppointment={laboratoryAppointment}
 			/>
+
+			<InteractionBitacora
+				interactions={interactions}
+				laboratoryAppointment={laboratoryAppointment}
+			/>
 		</AdminLayout>
+	);
+}
+
+function PatientFollowUp({ laboratoryAppointment }) {
+	return (
+		<div className="mt-10">
+			<Subheading>Seguimiento con el paciente</Subheading>
+			<Text className="mt-1 text-sm text-zinc-500">
+				Tiempos relativos a la solicitud de cita y a la interacción con
+				el teléfono del laboratorio.
+			</Text>
+
+			<DescriptionList className="mt-4">
+				<DescriptionTerm>Tiempo desde la solicitud</DescriptionTerm>
+				<DescriptionDetails>
+					{laboratoryAppointment.time_since_request_human}
+				</DescriptionDetails>
+
+				<DescriptionTerm>Intentó llamar al laboratorio</DescriptionTerm>
+				<DescriptionDetails>
+					{laboratoryAppointment.formatted_phone_call_intent_at ? (
+						<span className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+							<span>
+								{laboratoryAppointment.formatted_phone_call_intent_at}
+							</span>
+							{laboratoryAppointment.time_since_phone_intent_human && (
+								<Badge color="slate">
+									{laboratoryAppointment.time_since_phone_intent_human}
+								</Badge>
+							)}
+						</span>
+					) : (
+						"…"
+					)}
+				</DescriptionDetails>
+
+				<DescriptionTerm>Disponibilidad para recibir llamada</DescriptionTerm>
+				<DescriptionDetails>
+					{laboratoryAppointment.formatted_callback_availability_range ??
+						"…"}
+				</DescriptionDetails>
+
+				<DescriptionTerm>Comentarios del paciente</DescriptionTerm>
+				<DescriptionDetails>
+					<span className="block max-w-xl whitespace-pre-wrap">
+						{laboratoryAppointment.patient_callback_comment ?? "…"}
+					</span>
+				</DescriptionDetails>
+			</DescriptionList>
+		</div>
+	);
+}
+
+function InteractionBitacora({ interactions, laboratoryAppointment }) {
+	const { data, setData, post, processing, errors, reset } = useForm({
+		type: "concierge_outbound_call",
+		body: "",
+	});
+
+	const submit = (e) => {
+		e.preventDefault();
+		if (!processing) {
+			post(
+				route("admin.laboratory-appointments.interactions.store", {
+					laboratory_appointment: laboratoryAppointment.id,
+				}),
+				{
+					preserveScroll: true,
+					onSuccess: () => reset("body"),
+				},
+			);
+		}
+	};
+
+	return (
+		<div className="mt-10">
+			<Subheading>Bitácora de interacciones</Subheading>
+			<Text className="mt-1 text-sm text-zinc-500">
+				Registro cronológico de intentos del paciente y notas del equipo
+				concierge.
+			</Text>
+
+			<ul className="mt-6 space-y-4">
+				{interactions.length === 0 ? (
+					<Text className="text-zinc-500">Sin registros aún.</Text>
+				) : (
+					interactions.map((row) => (
+						<li
+							key={row.id}
+							className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"
+						>
+							<div className="flex flex-wrap items-center gap-2">
+								<ChatBubbleLeftRightIcon className="size-4 text-zinc-400" />
+								<Badge color="sky">
+									{interactionTypeLabels[row.type] ?? row.type}
+								</Badge>
+								<Text className="text-xs text-zinc-500">
+									{new Date(row.created_at).toLocaleString("es-MX", {
+										dateStyle: "medium",
+										timeStyle: "short",
+									})}
+								</Text>
+								{row.admin_user && (
+									<Badge color="slate">
+										{row.admin_user.name}
+									</Badge>
+								)}
+							</div>
+							{row.body && (
+								<Text className="mt-2 whitespace-pre-wrap text-sm">
+									{row.body}
+								</Text>
+							)}
+						</li>
+					))
+				)}
+			</ul>
+
+			<form
+				onSubmit={submit}
+				className="mt-8 max-w-xl space-y-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
+			>
+				<Field>
+					<Label>Registrar seguimiento</Label>
+					<Select
+						value={data.type}
+						onChange={(e) => setData("type", e.target.value)}
+					>
+						<option value="concierge_outbound_call">
+							Llamada saliente al paciente
+						</option>
+						<option value="concierge_note">Nota interna</option>
+					</Select>
+					<Description>
+						Queda guardado con tu usuario y la fecha actual.
+					</Description>
+				</Field>
+				<Field>
+					<Label>Detalle</Label>
+					<Textarea
+						rows={4}
+						value={data.body}
+						onChange={(e) => setData("body", e.target.value)}
+						placeholder="Ej. Paciente no contestó; dejar mensaje en buzón…"
+						required
+					/>
+					{errors.body && (
+						<ErrorMessage>{errors.body}</ErrorMessage>
+					)}
+				</Field>
+				<div className="flex justify-end">
+					<Button type="submit" disabled={processing}>
+						{processing ? "Guardando…" : "Agregar a la bitácora"}
+					</Button>
+				</div>
+			</form>
+		</div>
 	);
 }
 

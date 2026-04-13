@@ -1,9 +1,16 @@
 <?php
 
 use App\Http\Controllers\Admin\AdministratorController;
+use App\Http\Controllers\Admin\CartController;
+use App\Http\Controllers\Admin\ConfigMonitorController;
+use App\Http\Controllers\Admin\ConfigMonitorMetadataController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DocumentationController;
+use App\Http\Controllers\Admin\EfevooTokenController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentController;
+use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
+use App\Http\Controllers\Admin\LaboratoryNotificationController;
+use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\DevAssistanceRequestController as LaboratoryDevAssistanceRequestController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\InvoiceController;
@@ -11,37 +18,30 @@ use App\Http\Controllers\Admin\LaboratoryPurchases\ResolvedDevAssistanceRequestC
 use App\Http\Controllers\Admin\LaboratoryPurchases\ResultsController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\UnresolvedDevAssistanceRequestController as LaboratoryUnresolvedDevAssistanceRequestController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\VendorPaymentsController as LaboratoryVendorPaymentsController;
+use App\Http\Controllers\Admin\LaboratoryResultController;
 use App\Http\Controllers\Admin\LaboratoryTestController;
+use App\Http\Controllers\Admin\LogsGeneralController;
 use App\Http\Controllers\Admin\MedicalAttentionSubscriptionController;
+use App\Http\Controllers\Admin\MurguiaMonitorController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\DevAssistanceRequestController as OnlinePharmacyDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\InvoiceController as OnlinePharmacyPurchasesInvoiceController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\ResolvedDevAssistanceRequestController as OnlinePharmacyResolvedDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\UnresolvedDevAssistanceRequestController as OnlinePharmacyUnresolvedDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\VendorPaymentsController as OnlinePharmacyVendorPaymentsController;
+use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\TaxProfileController as AdminTaxProfileController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ExportAdministratorsController;
 use App\Http\Controllers\ExportCustomersController;
 use App\Http\Controllers\ExportLaboratoryPurchasesController;
 use App\Http\Controllers\ExportLaboratoryTestsController;
-use App\Http\Controllers\ExportMedicalAttentionSubscriptionsController;
-use App\Http\Controllers\ExportOnlinePharmacyPurchasesController;
-use App\Http\Controllers\Admin\LogsGeneralController;
-use App\Http\Controllers\Admin\EfevooTokenController;
-use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Admin\CartController;
-use App\Http\Controllers\Admin\TaxProfileController as AdminTaxProfileController;
-use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
-use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
-use App\Http\Controllers\Admin\MurguiaMonitorController;
-use App\Http\Controllers\Admin\ConfigMonitorController;
-use App\Http\Controllers\Admin\ConfigMonitorMetadataController;
-
 // === IMPORTACIONES NUEVAS ===
-use App\Http\Controllers\Admin\LaboratoryNotificationController;
-//use App\Http\Controllers\Admin\LaboratoryQuoteController; // ← Aun existe
-use App\Http\Controllers\Admin\LaboratoryResultController;
+use App\Http\Controllers\ExportMedicalAttentionSubscriptionsController;
+// use App\Http\Controllers\Admin\LaboratoryQuoteController; // ← Aun existe
+use App\Http\Controllers\ExportOnlinePharmacyPurchasesController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')->middleware([
@@ -60,18 +60,21 @@ Route::prefix('admin')->middleware([
         Route::resource('roles', RoleController::class)->except('show');
         Route::resource('laboratory-tests', LaboratoryTestController::class)->except(['destroy']);
         Route::post('laboratory-tests/export', ExportLaboratoryTestsController::class)->name('laboratory-tests.export');
+        Route::get('laboratory-appointments/metrics', LaboratoryAppointmentMetricsController::class)->name('laboratory-appointments.metrics');
+        Route::post('laboratory-appointments/{laboratory_appointment}/interactions', [LaboratoryAppointmentController::class, 'storeInteraction'])
+            ->name('laboratory-appointments.interactions.store');
         Route::resource('laboratory-appointments', LaboratoryAppointmentController::class)->except(['create', 'store', 'edit']);
         Route::resource('laboratory-vendor-payments', LaboratoryVendorPaymentsController::class)->parameters([
             'laboratory-vendor-payments' => 'vendor_payment',
         ])->names([
-                    'index' => 'laboratory-purchases.vendor-payments.index',
-                    'create' => 'laboratory-purchases.vendor-payments.create',
-                    'store' => 'laboratory-purchases.vendor-payments.store',
-                    'show' => 'laboratory-purchases.vendor-payments.show',
-                    'edit' => 'laboratory-purchases.vendor-payments.edit',
-                    'update' => 'laboratory-purchases.vendor-payments.update',
-                    'destroy' => 'laboratory-purchases.vendor-payments.destroy',
-                ]);
+            'index' => 'laboratory-purchases.vendor-payments.index',
+            'create' => 'laboratory-purchases.vendor-payments.create',
+            'store' => 'laboratory-purchases.vendor-payments.store',
+            'show' => 'laboratory-purchases.vendor-payments.show',
+            'edit' => 'laboratory-purchases.vendor-payments.edit',
+            'update' => 'laboratory-purchases.vendor-payments.update',
+            'destroy' => 'laboratory-purchases.vendor-payments.destroy',
+        ]);
         Route::resource('laboratory-purchases', LaboratoryPurchaseController::class)->only(['index', 'show', 'destroy']);
         Route::post('laboratory-purchases/{laboratory_purchase}/invoice', InvoiceController::class)->name('laboratory-purchases.invoice');
         Route::post('laboratory-purchases/{laboratory_purchase}/results', ResultsController::class)->name('laboratory-purchases.results');
@@ -90,21 +93,20 @@ Route::prefix('admin')->middleware([
             ->name('laboratory-notifications.clean-error');
 
         // ===== RUTAS PARA OBTENER RESULTADOS DE LABORATORIO =====
-        Route::post('/laboratory-purchases/{laboratoryPurchase}/fetch-results',[LaboratoryResultController::class, 'fetch']
+        Route::post('/laboratory-purchases/{laboratoryPurchase}/fetch-results', [LaboratoryResultController::class, 'fetch']
         )->name('laboratory-purchases.fetch-results');
-
 
         Route::resource('online-pharmacy-vendor-payments', OnlinePharmacyVendorPaymentsController::class)->parameters([
             'online-pharmacy-vendor-payments' => 'vendor_payment',
         ])->names([
-                    'index' => 'online-pharmacy-purchases.vendor-payments.index',
-                    'create' => 'online-pharmacy-purchases.vendor-payments.create',
-                    'store' => 'online-pharmacy-purchases.vendor-payments.store',
-                    'show' => 'online-pharmacy-purchases.vendor-payments.show',
-                    'edit' => 'online-pharmacy-purchases.vendor-payments.edit',
-                    'update' => 'online-pharmacy-purchases.vendor-payments.update',
-                    'destroy' => 'online-pharmacy-purchases.vendor-payments.destroy',
-                ]);
+            'index' => 'online-pharmacy-purchases.vendor-payments.index',
+            'create' => 'online-pharmacy-purchases.vendor-payments.create',
+            'store' => 'online-pharmacy-purchases.vendor-payments.store',
+            'show' => 'online-pharmacy-purchases.vendor-payments.show',
+            'edit' => 'online-pharmacy-purchases.vendor-payments.edit',
+            'update' => 'online-pharmacy-purchases.vendor-payments.update',
+            'destroy' => 'online-pharmacy-purchases.vendor-payments.destroy',
+        ]);
         Route::resource('online-pharmacy-purchases', OnlinePharmacyPurchaseController::class)->only(['index', 'show']);
         Route::post('online-pharmacy-purchases/{online_pharmacy_purchase}/invoice', OnlinePharmacyPurchasesInvoiceController::class)->name('online-pharmacy-purchases.invoice');
         Route::post('online-pharmacy-purchases/{online_pharmacy_purchase}/dev-assistance-request', OnlinePharmacyDevAssistanceRequestController::class)->name('online-pharmacy-purchases.dev-assistance-request.store');
@@ -164,4 +166,3 @@ Route::prefix('admin')->middleware([
 
     });
 });
-
