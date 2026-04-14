@@ -73,6 +73,10 @@ Route::prefix('admin')->middleware([
                     'destroy' => 'laboratory-purchases.vendor-payments.destroy',
                 ]);
         Route::resource('laboratory-purchases', LaboratoryPurchaseController::class)->only(['index', 'show', 'destroy']);
+        Route::post(
+            'laboratory-purchases/{laboratory_purchase}/resend-confirmation-email',
+            [LaboratoryPurchaseController::class, 'resendConfirmationEmail']
+        )->name('laboratory-purchases.resend-confirmation-email');
         Route::post('laboratory-purchases/{laboratory_purchase}/invoice', InvoiceController::class)->name('laboratory-purchases.invoice');
         Route::post('laboratory-purchases/{laboratory_purchase}/results', ResultsController::class)->name('laboratory-purchases.results');
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request', LaboratoryDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.store');

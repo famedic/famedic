@@ -1,6 +1,6 @@
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
-import { Text, Strong, Code } from "@/Components/Catalyst/text";
+import { Text, Strong } from "@/Components/Catalyst/text";
 import { Avatar } from "@/Components/Catalyst/avatar";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
@@ -29,6 +29,7 @@ import { router } from "@inertiajs/react";
 export default function UserPage({
 	user,
 	customer,
+	canViewTaxProfilesAdmin = false,
 	efevooTokens,
 	efevooTransactions,
 	laboratoryNotifications,
@@ -50,6 +51,11 @@ export default function UserPage({
 					<AddressesCard customer={customer} />
 					<ContactsCard customer={customer} />
 				</div>
+
+				<TaxProfilesCard
+					customer={customer}
+					canViewTaxProfilesAdmin={canViewTaxProfilesAdmin}
+				/>
 
 				<PurchasesCard customer={customer} />
 
@@ -229,10 +235,27 @@ function AddressesCard({ customer }) {
 }
 
 function ContactsCard({ customer }) {
-	if (!customer || !customer.contacts || customer.contacts.length === 0) {
+	const contacts = customer?.contacts;
+
+	if (!customer) {
 		return (
 			<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
 				<Subheading>Contactos</Subheading>
+				<Text className="text-sm text-zinc-600 dark:text-zinc-400">
+					Este usuario no tiene un registro de cliente; los contactos se
+					guardan por cliente.
+				</Text>
+			</div>
+		);
+	}
+
+	if (!contacts || contacts.length === 0) {
+		return (
+			<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+				<Subheading>Contactos</Subheading>
+				<Text className="mb-2 text-sm text-zinc-600 dark:text-zinc-400">
+					Este cliente no tiene contactos registrados en la cuenta.
+				</Text>
 				<EmptyListCard />
 			</div>
 		);
@@ -241,18 +264,175 @@ function ContactsCard({ customer }) {
 	return (
 		<div className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
 			<Subheading>Contactos</Subheading>
-			<ul className="space-y-2 text-sm">
-				{customer.contacts.map((contact) => (
-					<li key={contact.id}>
-						<Text>
-							<Strong>
-								{contact.name} {contact.paternal_lastname}{" "}
-								{contact.maternal_lastname}
-							</Strong>
+			<Text className="text-xs text-zinc-500">
+				{contacts.length} contacto{contacts.length === 1 ? "" : "s"}
+				{contacts.some((c) => c.deleted_at) ? " (algunos eliminados)" : ""}
+			</Text>
+			<ul className="space-y-3 text-sm">
+				{contacts.map((contact) => (
+					<li key={contact.id} className="border-b border-zinc-100 pb-3 last:border-0 last:pb-0 dark:border-zinc-800">
+						<div className="flex flex-wrap items-center gap-2">
+							<Text>
+								<Strong>
+									{contact.full_name ||
+										[contact.name, contact.paternal_lastname, contact.maternal_lastname]
+											.filter(Boolean)
+											.join(" ")}
+								</Strong>
+							</Text>
+							{contact.deleted_at && (
+								<Badge color="red">Eliminado</Badge>
+							)}
+						</div>
+						<Text className="text-zinc-600 dark:text-zinc-400">
+							<Strong>Tel:</Strong>{" "}
+							{contact.phone_for_display ||
+								(typeof contact.phone === "string"
+									? contact.phone
+									: "—")}
 						</Text>
-						<Text>
-							{contact.email} · {contact.phone}
-						</Text>
+						{(contact.formatted_birth_date || contact.formatted_gender) && (
+							<Text className="text-xs text-zinc-500">
+								{contact.formatted_birth_date}
+								{contact.formatted_birth_date && contact.formatted_gender
+									? " · "
+									: ""}
+								{contact.formatted_gender}
+							</Text>
+						)}
+					</li>
+				))}
+			</ul>
+		</div>
+	);
+}
+
+function tipoPersonaLabel(tipo) {
+	if (tipo === "fisica") {
+		return "Persona física";
+	}
+	if (tipo === "moral") {
+		return "Persona moral";
+	}
+	return tipo || "—";
+}
+
+function formatAdminDateTime(value) {
+	if (!value) {
+		return "—";
+	}
+	try {
+		const d = new Date(value);
+		if (Number.isNaN(d.getTime())) {
+			return String(value);
+		}
+		return d.toLocaleString("es-MX", {
+			dateStyle: "medium",
+			timeStyle: "short",
+		});
+	} catch {
+		return String(value);
+	}
+}
+
+function TaxProfilesCard({ customer, canViewTaxProfilesAdmin }) {
+	const profiles =
+		customer?.tax_profiles ?? customer?.taxProfiles ?? [];
+
+	if (!customer) {
+		return (
+			<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+				<Subheading>Perfiles fiscales</Subheading>
+				<Text className="text-sm text-zinc-600 dark:text-zinc-400">
+					Requiere un cliente asociado al usuario.
+				</Text>
+			</div>
+		);
+	}
+
+	if (!profiles || profiles.length === 0) {
+		return (
+			<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+				<Subheading>Perfiles fiscales</Subheading>
+				<Text className="mb-2 text-sm text-zinc-600 dark:text-zinc-400">
+					No hay perfiles en la tabla <Strong>tax_profiles</Strong> para este
+					cliente.
+				</Text>
+				<EmptyListCard />
+			</div>
+		);
+	}
+
+	return (
+		<div className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+			<div className="flex flex-wrap items-center justify-between gap-2">
+				<Subheading>Perfiles fiscales</Subheading>
+				{canViewTaxProfilesAdmin && (
+					<Button
+						outline
+						size="sm"
+						href={route("admin.tax-profiles.show", {
+							customer: customer.id,
+						})}
+					>
+						Abrir vista de perfiles fiscales
+					</Button>
+				)}
+			</div>
+			<Text className="text-xs text-zinc-500">
+				{profiles.length} perfil{profiles.length === 1 ? "" : "es"} (tabla{" "}
+				<Strong>tax_profiles</Strong>, <Strong>customer_id</Strong> ={" "}
+				{customer.id})
+			</Text>
+			<ul className="space-y-4 text-sm">
+				{profiles.map((p) => (
+					<li
+						key={p.id}
+						className="border-b border-zinc-100 pb-4 last:border-0 last:pb-0 dark:border-zinc-800"
+					>
+						<div className="flex flex-wrap items-center gap-2">
+							<Text className="font-medium text-zinc-900 dark:text-zinc-100">
+								{p.razon_social || p.name || "Sin nombre"}
+							</Text>
+							{p.deleted_at && <Badge color="red">Eliminado</Badge>}
+							{p.verificado_automaticamente && (
+								<Badge color="emerald">Verificado automáticamente</Badge>
+							)}
+						</div>
+						<div className="mt-2 flex flex-wrap gap-2">
+							<Badge color="slate" className="font-normal">
+								<CalendarIcon className="size-3.5 shrink-0" />
+								Registrado: {formatAdminDateTime(p.created_at)}
+							</Badge>
+							<Badge color="zinc" className="font-normal">
+								<CalendarIcon className="size-3.5 shrink-0" />
+								Modificado: {formatAdminDateTime(p.updated_at)}
+							</Badge>
+						</div>
+						<div className="mt-2 grid gap-1 text-zinc-700 dark:text-zinc-300">
+							<Text>
+								<Strong>RFC:</Strong> {p.rfc || "—"}
+							</Text>
+							<Text>
+								<Strong>Código postal:</Strong> {p.zipcode || "—"}
+							</Text>
+							<Text>
+								<Strong>Tipo:</Strong> {tipoPersonaLabel(p.tipo_persona)}
+							</Text>
+							<Text>
+								<Strong>Régimen:</Strong>{" "}
+								{p.formatted_tax_regime || p.tax_regime || "—"}
+							</Text>
+							<Text>
+								<Strong>Uso CFDI:</Strong>{" "}
+								{p.formatted_cfdi_use || p.cfdi_use || "—"}
+							</Text>
+							{p.domicilio_fiscal && (
+								<Text className="whitespace-pre-line text-xs text-zinc-600 dark:text-zinc-400">
+									<Strong>Domicilio fiscal:</Strong> {p.domicilio_fiscal}
+								</Text>
+							)}
+						</div>
 					</li>
 				))}
 			</ul>

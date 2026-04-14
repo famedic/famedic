@@ -2,36 +2,44 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
+use App\Actions\BuildUserAdminChartDataAction;
 use App\Enums\MonitoringCartType;
+use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\EfevooToken;
 use App\Models\EfevooTransaction;
 use App\Models\LaboratoryNotification;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class UserController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, BuildUserAdminChartDataAction $buildUserAdminChartDataAction)
     {
         $request->user()->administrator->hasPermissionTo('users.manage') || abort(403);
+
+        $view = $request->get('view', 'list');
 
         $filters = collect($request->only([
             'search',
             'verified',
+            'start_date',
+            'end_date',
         ]))->filter()->all();
+
+        $filters['view'] = $view;
 
         $query = User::query()
             ->when($filters['search'] ?? null, function ($query, string $search) {
                 $query->where(function ($q) use ($search) {
-                    $q->where('name', 'like', '%' . $search . '%')
-                        ->orWhere('paternal_lastname', 'like', '%' . $search . '%')
-                        ->orWhere('maternal_lastname', 'like', '%' . $search . '%')
-                        ->orWhere('email', 'like', '%' . $search . '%')
-                        ->orWhere('phone', 'like', '%' . $search . '%');
+                    $q->where('name', 'like', '%'.$search.'%')
+                        ->orWhere('paternal_lastname', 'like', '%'.$search.'%')
+                        ->orWhere('maternal_lastname', 'like', '%'.$search.'%')
+                        ->orWhere('email', 'like', '%'.$search.'%')
+                        ->orWhere('phone', 'like', '%'.$search.'%');
                 });
             })
             ->when($filters['verified'] ?? null, function ($query, string $verified) {
@@ -52,9 +60,28 @@ class UserController extends Controller
             ->paginate(25)
             ->withQueryString();
 
+        $chart = null;
+        if ($view === 'chart') {
+            $start = $request->filled('start_date')
+                ? Carbon::parse($request->start_date, 'America/Monterrey')->startOfDay()
+                : null;
+            $end = $request->filled('end_date')
+                ? Carbon::parse($request->end_date, 'America/Monterrey')->endOfDay()
+                : null;
+            $chart = $buildUserAdminChartDataAction($start, $end);
+
+            if (! $request->filled('start_date')) {
+                $filters['start_date'] = $chart['startDate'];
+            }
+            if (! $request->filled('end_date')) {
+                $filters['end_date'] = $chart['endDate'];
+            }
+        }
+
         return Inertia::render('Admin/Users', [
             'users' => $users,
             'filters' => $filters,
+            'chart' => $chart,
         ]);
     }
 
@@ -70,12 +97,18 @@ class UserController extends Controller
 
         // Para admin: si el customer está soft-deleted, User::customer() no lo trae.
         // Usamos withTrashed para no perder direcciones / compras / etc.
+        // Orden: el registro más reciente (por si hubiera más de un customer con el mismo user_id).
         $customer = Customer::withTrashed()
             ->where('user_id', $user->id)
+            ->orderByDesc('id')
             ->with([
                 'addresses',
-                'contacts',
-                'taxProfiles',
+                'contacts' => function ($query) {
+                    $query->withTrashed();
+                },
+                'taxProfiles' => function ($query) {
+                    $query->withTrashed();
+                },
                 'laboratoryPurchases' => function ($query) {
                     $query->latest()->limit(10)->with(['transactions', 'vendorPayments']);
                 },
@@ -150,6 +183,7 @@ class UserController extends Controller
         return Inertia::render('Admin/User', [
             'user' => $user,
             'customer' => $customer,
+            'canViewTaxProfilesAdmin' => request()->user()->administrator->hasPermissionTo('tax-profiles.manage'),
             'efevooTokens' => $efevooTokens,
             'efevooTransactions' => $efevooTransactions,
             'laboratoryNotifications' => $labNotifications,
@@ -159,4 +193,3 @@ class UserController extends Controller
         ]);
     }
 }
-
