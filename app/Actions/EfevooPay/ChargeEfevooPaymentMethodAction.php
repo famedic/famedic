@@ -181,6 +181,7 @@ class ChargeEfevooPaymentMethodAction
         |--------------------------------------------------------------------------
         */
         try {
+            $commissionCents = $this->extractCommissionCentsFromGatewayResult($result);
 
             $transaction = Transaction::create([
                 'transaction_amount_cents' => $amountCents,
@@ -218,7 +219,10 @@ class ChargeEfevooPaymentMethodAction
                         'authorization_code' => $result['authorization_code'] ?? null,
                         'message' => $result['message'] ?? null,
                         'token_type_used' => 'dynamic',
+                        'commission_source' => 'efevoopay_response',
                     ],
+                    'commission_cents' => $commissionCents,
+                    'commission_fetched_at' => now()->toIso8601String(),
 
                     'processed_at' => now()->toISOString(),
                 ],
@@ -244,5 +248,76 @@ class ChargeEfevooPaymentMethodAction
                 'Error al guardar la transacción en la base de datos: ' . $e->getMessage()
             );
         }
+    }
+
+    private function extractCommissionCentsFromGatewayResult(array $result): int
+    {
+        $possiblePaths = [
+            'raw.data.commission',
+            'raw.data.commission_amount',
+            'raw.data.commission_mxn',
+            'raw.data.transaction_fee',
+            'raw.data.fee',
+            'raw.data.fee_amount',
+            'raw.data.comision',
+            'raw.data.comision_total',
+            'raw.data.payload.commission',
+            'raw.data.payload.fee',
+            'raw.commission',
+            'raw.fee',
+        ];
+
+        foreach ($possiblePaths as $path) {
+            $value = data_get($result, $path);
+            $cents = $this->parseAmountToCents($value);
+
+            if ($cents !== null) {
+                return $cents;
+            }
+        }
+
+        return 0;
+    }
+
+    private function parseAmountToCents(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_int($value)) {
+            return $value > 1000 ? $value : (int) round($value * 100);
+        }
+
+        if (is_float($value)) {
+            return (int) round($value * 100);
+        }
+
+        if (is_string($value)) {
+            $normalized = str_replace([',', '$', 'MXN', 'mxn', ' '], ['', '', '', '', ''], $value);
+
+            if (!is_numeric($normalized)) {
+                return null;
+            }
+
+            return (int) round(((float) $normalized) * 100);
+        }
+
+        if (is_array($value)) {
+            $nestedCandidates = [
+                $value['value'] ?? null,
+                $value['amount'] ?? null,
+                $value['total'] ?? null,
+            ];
+
+            foreach ($nestedCandidates as $candidate) {
+                $cents = $this->parseAmountToCents($candidate);
+                if ($cents !== null) {
+                    return $cents;
+                }
+            }
+        }
+
+        return null;
     }
 }

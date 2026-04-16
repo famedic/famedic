@@ -436,6 +436,18 @@ function Patient({ laboratoryPurchase }) {
 
 
 function Order({ laboratoryPurchase }) {
+	const transaction = laboratoryPurchase.transactions?.[0] ?? null;
+	const commissionCentsRaw = transaction?.details?.commission_cents;
+	const commissionCents = Number.isFinite(Number(commissionCentsRaw))
+		? Number(commissionCentsRaw)
+		: null;
+	const formattedCommission =
+		commissionCents === null
+			? null
+			: new Intl.NumberFormat("es-MX", {
+					style: "currency",
+					currency: "MXN",
+				}).format(commissionCents / 100);
 
 	return (
 
@@ -476,6 +488,13 @@ function Order({ laboratoryPurchase }) {
 				<DescriptionDetails>
 					{laboratoryPurchase.formatted_total}
 				</DescriptionDetails>
+
+				{formattedCommission !== null && (
+					<>
+						<DescriptionTerm>Comisión</DescriptionTerm>
+						<DescriptionDetails>{formattedCommission}</DescriptionDetails>
+					</>
+				)}
 
 			</DescriptionList>
 
