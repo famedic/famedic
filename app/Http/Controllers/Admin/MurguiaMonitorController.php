@@ -12,6 +12,7 @@ use App\Models\MurguiaSyncLog;
 use App\Models\OdessaAfiliateAccount;
 use App\Models\RegularAccount;
 use App\Enums\MedicalSubscriptionType;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -261,6 +262,46 @@ class MurguiaMonitorController extends Controller
         return redirect()
             ->back()
             ->with($result['ok'] ? 'success' : 'error', $result['message']);
+    }
+
+    public function checkStatusByCredit(Request $request, CheckStatusAction $checkStatusAction): JsonResponse
+    {
+        $validated = $request->validate([
+            'no_credito' => ['required', 'string', 'max:100'],
+        ]);
+
+        $noCredito = trim($validated['no_credito']);
+        $response = $checkStatusAction($noCredito);
+        $body = $response->json() ?? [];
+
+        $customer = Customer::query()
+            ->with('user')
+            ->where('medical_attention_identifier', $noCredito)
+            ->first();
+
+        MurguiaSyncLog::create([
+            'customer_id' => $customer?->id,
+            'triggered_by' => $request->user()?->id,
+            'email' => $customer?->user?->email,
+            'medical_attention_identifier' => $noCredito,
+            'action' => MurguiaSyncLog::ACTION_VALIDACION,
+            'request_payload' => ['noCredito' => $noCredito],
+            'response_payload' => array_merge($body, ['http_status' => $response->status()]),
+            'status' => $response->successful() ? MurguiaSyncLog::STATUS_SUCCESS : MurguiaSyncLog::STATUS_FAILED,
+            'message' => 'Consulta manual de estatus Murguía por noCredito',
+            'entry_type' => MurguiaSyncLog::ENTRY_TYPE_SINGLE,
+        ]);
+
+        return response()->json([
+            'http' => $response->status(),
+            'ok' => $response->successful(),
+            'body' => $body,
+            'matched_customer' => $customer ? [
+                'id' => $customer->id,
+                'name' => $customer->user?->full_name,
+                'email' => $customer->user?->email,
+            ] : null,
+        ], $response->status());
     }
 
     public function deactivateCustomer(Request $request, Customer $customer, MurguiaMonitorSingleCustomerAction $action): RedirectResponse
