@@ -8,6 +8,10 @@ import {
 	PhoneIcon,
 	ChatBubbleLeftRightIcon,
 	AdjustmentsHorizontalIcon,
+	QuestionMarkCircleIcon,
+	CurrencyDollarIcon,
+	ExclamationTriangleIcon,
+	UserIcon,
 } from "@heroicons/react/16/solid";
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
@@ -73,16 +77,23 @@ function formatAvgHoursOrMinutes(h) {
 	return formatHours(n);
 }
 
-function CardKpi({ title, children, hint }) {
+function CardKpi({ title, children, hint, icon: Icon }) {
 	return (
 		<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-			<Text className="text-xs text-zinc-500 dark:text-zinc-400">{title}</Text>
+			<div className="flex items-center gap-1.5">
+				{Icon ? (
+					<Icon className="size-4 text-zinc-400 dark:text-zinc-500" />
+				) : null}
+				<Text className="text-xs text-zinc-500 dark:text-zinc-400">{title}</Text>
+				{hint ? (
+					<span title={hint} className="inline-flex cursor-help">
+						<QuestionMarkCircleIcon className="size-4 text-zinc-400 dark:text-zinc-500" />
+					</span>
+				) : null}
+			</div>
 			<div className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
 				{children}
 			</div>
-			{hint ? (
-				<Text className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{hint}</Text>
-			) : null}
 		</div>
 	);
 }
@@ -132,7 +143,7 @@ function SolicitudesTooltip({ active, payload, label }) {
 			title={label}
 			rows={[
 				{ label: "Solicitudes", value: p.solicitudes ?? "—" },
-				{ label: "Agendadas (fecha + sucursal)", value: p.confirmadas ?? "—" },
+				{ label: "Agendadas", value: p.confirmadas ?? "—" },
 				{
 					label: "Pendientes de agendar",
 					value: pend != null ? pend : "—",
@@ -299,6 +310,92 @@ const tableCell = "border-t border-zinc-200 px-3 py-2 text-zinc-800 dark:border-
 
 const tableCellNum = `${tableCell} text-right tabular-nums`;
 
+function parseTableDate(value) {
+	if (!value) {
+		return null;
+	}
+	const parsed = new Date(value.replace(" ", "T"));
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function resolveDetailTags(row) {
+	const now = new Date();
+	const citaAt = parseTableDate(row.fecha_cita);
+	const confirmacionAt = parseTableDate(row.fecha_confirmacion);
+	const pagoAt = parseTableDate(row.fecha_pago);
+
+	const tags = [];
+
+	if (!pagoAt && citaAt && now <= citaAt) {
+		tags.push("a tiempo");
+	}
+
+	if (!pagoAt && citaAt && now > citaAt) {
+		tags.push("venta perdida");
+	}
+
+	if (pagoAt && citaAt && confirmacionAt && pagoAt >= confirmacionAt && pagoAt <= citaAt) {
+		tags.push("pago anticipado");
+	}
+
+	return tags;
+}
+
+function getPendingConfirmationDays(fechaSolicitud, fechaConfirmacion) {
+	if (fechaConfirmacion) {
+		return null;
+	}
+
+	const solicitudAt = parseTableDate(fechaSolicitud);
+	if (!solicitudAt) {
+		return null;
+	}
+
+	const now = new Date();
+	const diffMs = now.getTime() - solicitudAt.getTime();
+	if (diffMs < 0) {
+		return 0;
+	}
+
+	return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+function diffHoursBetween(startValue, endValue) {
+	const start = parseTableDate(startValue);
+	const end = parseTableDate(endValue);
+	if (!start || !end) {
+		return null;
+	}
+	return (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+}
+
+function formatDiffHoursTag(hours) {
+	if (hours == null || Number.isNaN(hours)) {
+		return null;
+	}
+	const rounded = Math.round(hours * 100) / 100;
+	return `${rounded.toLocaleString("es-MX", {
+		minimumFractionDigits: 0,
+		maximumFractionDigits: 2,
+	})} h`;
+}
+
+function formatDateTimeAmPm(value) {
+	const date = parseTableDate(value);
+	if (!date) {
+		return "—";
+	}
+	return new Intl.DateTimeFormat("es-MX", {
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hour12: true,
+	}).format(date);
+}
+
 export default function LaboratoryAppointmentMetrics({
 	filters,
 	brands,
@@ -309,6 +406,7 @@ export default function LaboratoryAppointmentMetrics({
 	byBrand,
 	byStudyName,
 	byCategory,
+	detailedAppointments,
 	desgloses,
 }) {
 	const { data, setData, get, processing } = useForm({
@@ -366,6 +464,14 @@ export default function LaboratoryAppointmentMetrics({
 			return;
 		}
 
+		if (value === "last_10_days") {
+			const start = new Date(today);
+			start.setDate(start.getDate() - 10);
+			setData("start_date", format(start));
+			setData("end_date", format(today));
+			return;
+		}
+
 		if (value === "last_6_months") {
 			const start = new Date(today);
 			start.setMonth(start.getMonth() - 6);
@@ -385,12 +491,18 @@ export default function LaboratoryAppointmentMetrics({
 	const pieSummaryData = useMemo(() => {
 		const total = Number(summary.total_solicitudes ?? 0);
 		const confirmadas = Number(summary.total_confirmadas ?? 0);
+		const pagadas = Number(summary.total_compras_concretadas ?? 0);
 		return [
-			{ name: "Agendadas (fecha + sucursal)", value: confirmadas, color: "#22c55e" },
+			{ name: "Agendadas", value: confirmadas, color: "#22c55e" },
 			{
 				name: "Sin agendar",
 				value: Math.max(total - confirmadas, 0),
 				color: "#0ea5e9",
+			},
+			{
+				name: "Pagadas",
+				value: pagadas,
+				color: "#f59e0b",
 			},
 		];
 	}, [summary]);
@@ -398,13 +510,15 @@ export default function LaboratoryAppointmentMetrics({
 	const pieRevenueData = useMemo(() => {
 		const conf = Number(summary.catalogo_cents_confirmadas ?? 0);
 		const pend = Number(summary.catalogo_cents_pendientes ?? 0);
+		const paid = Number(summary.compra_cents_total ?? 0);
 		return [
-			{ name: "Catálogo — agendadas", value: conf, color: "#22c55e" },
+			{ name: "Confirmadas $", value: conf, color: "#22c55e" },
 			{
-				name: "Catálogo — pendiente de agendar",
+				name: "Pendientes $",
 				value: Math.max(pend, 0),
 				color: "#0ea5e9",
 			},
+			{ name: "Pagadas $", value: paid, color: "#f59e0b" },
 		];
 	}, [summary]);
 
@@ -428,6 +542,13 @@ export default function LaboratoryAppointmentMetrics({
 				<Badge key="range-7" color="sky">
 					<CalendarDaysIcon className="size-4" />
 					Últimos 7 días
+				</Badge>,
+			);
+		} else if (data.date_range === "last_10_days") {
+			badges.push(
+				<Badge key="range-10" color="sky">
+					<CalendarDaysIcon className="size-4" />
+					Últimos 10 días
 				</Badge>,
 			);
 		} else if (data.date_range === "last_6_months") {
@@ -567,6 +688,10 @@ export default function LaboratoryAppointmentMetrics({
 								<ListboxOption value="last_7_days" className="group">
 									<CalendarDaysIcon />
 									<ListboxLabel>Últimos 7 días</ListboxLabel>
+								</ListboxOption>
+								<ListboxOption value="last_10_days" className="group">
+									<CalendarDaysIcon />
+									<ListboxLabel>Últimos 10 días</ListboxLabel>
 								</ListboxOption>
 								<ListboxOption value="last_6_months" className="group">
 									<CalendarDaysIcon />
@@ -734,50 +859,63 @@ export default function LaboratoryAppointmentMetrics({
 								</div>
 							)}
 						</Tab>
+						<Tab className="flex-1">
+							{(selected) => (
+								<div
+									className={`w-full rounded-md px-3 py-2 text-sm font-medium ${
+										selected
+											? "bg-famedic-dark text-white dark:bg-zinc-100 dark:text-zinc-900"
+											: "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+									}`}
+								>
+									Detalle citas
+								</div>
+							)}
+						</Tab>
 					</TabList>
 				</TabGroup>
 
 				{activeTab === 0 && (
 				<section className="space-y-3">
 					<Subheading>Resumen</Subheading>
-					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-						<CardKpi title="Solicitudes en el periodo">
+					<Text className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+						Citas
+					</Text>
+					<div className="grid gap-4 sm:grid-cols-2">
+						<CardKpi title="Solicitudes" icon={ArchiveBoxIcon}>
 							{summary.total_solicitudes}
 						</CardKpi>
 						<CardKpi
-							title="Citas agendadas"
+							title="$ Monto solicitado"
+							icon={CurrencyDollarIcon}
+							hint="Monto de catálogo asociado a solicitudes del periodo."
+						>
+							{formatMxnFromCents(summary.catalogo_cents_solicitadas)}
+						</CardKpi>
+					</div>
+
+					<Text className="pt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+						Citas confirmadas
+					</Text>
+					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+						<CardKpi
+							title="Citas agendadas (confirmadas)"
+							icon={CheckCircleIcon}
 							hint="Tienen fecha y hora de cita y sucursal asignada."
 						>
 							{summary.total_confirmadas}
 						</CardKpi>
 						<CardKpi
-							title="Compras concretadas"
-							hint="Pedido con al menos un cobro registrado (transacción no fallida)."
+							title="% agendadas / solicitadas"
+							icon={CheckCircleIcon}
 						>
-							{summary.total_compras_concretadas ?? "—"}
-						</CardKpi>
-						<CardKpi title="% agendadas / solicitudes">
 							{summary.tasa_confirmacion_sobre_solicitudes != null
 								? `${summary.tasa_confirmacion_sobre_solicitudes} %`
 								: "—"}
 						</CardKpi>
-						<CardKpi title="% compras concretadas / agendadas">
-							{summary.tasa_compra_sobre_confirmadas != null
-								? `${summary.tasa_compra_sobre_confirmadas} %`
-								: "—"}
-						</CardKpi>
 						<CardKpi
-							title="$ catálogo (solicitadas)"
-							hint={
-								summary.pct_catalogo_confirmadas_vs_solicitadas != null
-									? `Referencia 100 %. Las agendadas: ${summary.pct_catalogo_confirmadas_vs_solicitadas} % de este monto.`
-									: "Precio Famedic en ítems del carrito (estudios con cita, misma marca)."
-							}
-						>
-							{formatMxnFromCents(summary.catalogo_cents_solicitadas)}
-						</CardKpi>
-						<CardKpi
-							title="$ catálogo (solo agendadas)"
+							title="$ Monto agendadas"
+							icon={CurrencyDollarIcon}
 							hint={
 								summary.pct_catalogo_confirmadas_vs_solicitadas != null
 									? `${summary.pct_catalogo_confirmadas_vs_solicitadas} % del catálogo de solicitadas.`
@@ -787,47 +925,73 @@ export default function LaboratoryAppointmentMetrics({
 							{formatMxnFromCents(summary.catalogo_cents_confirmadas)}
 						</CardKpi>
 						<CardKpi
-							title="$ compra concretada (con pago)"
-							hint={
-								summary.pct_compra_vs_catalogo_solicitadas != null
-									? [
-											`${summary.pct_compra_vs_catalogo_solicitadas} % del catálogo solicitadas`,
-											summary.pct_compra_vs_catalogo_confirmadas != null
-												? `${summary.pct_compra_vs_catalogo_confirmadas} % del catálogo agendadas`
-												: null,
-									  ]
-											.filter(Boolean)
-											.join("; ")
-											.concat(".")
-									: "Suma de precios en ítems del pedido, solo citas con pago."
-							}
+							title="> 1 día sin confirmación"
+							icon={ExclamationTriangleIcon}
+							hint="Solicitudes con más de 24 horas transcurridas sin confirmed_at."
+						>
+							{summary.citas_sin_confirmacion_mas_de_un_dia ?? 0}
+						</CardKpi>
+					</div>
+
+					<Text className="pt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+						Citas pagadas
+					</Text>
+					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+						<CardKpi
+							title="Compras logradas"
+							icon={CheckCircleIcon}
+							hint="Citas con pago registrado."
+						>
+							{summary.total_compras_concretadas ?? "—"}
+						</CardKpi>
+						<CardKpi
+							title="% compras logradas / confirmadas"
+							icon={CheckCircleIcon}
+							hint="Proporción de compras logradas respecto a citas confirmadas."
+						>
+							{summary.tasa_compra_sobre_confirmadas != null
+								? `${summary.tasa_compra_sobre_confirmadas} %`
+								: "—"}
+						</CardKpi>
+						<CardKpi
+							title="$ Monto compras logradas"
+							icon={CurrencyDollarIcon}
+							hint="Suma cobrada en compras con pago registrado."
 						>
 							{formatMxnFromCents(summary.compra_cents_total)}
 						</CardKpi>
+					</div>
+
+					<Text className="pt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+						Tiempos
+					</Text>
+					<div className="grid gap-4 sm:grid-cols-2">
 						<CardKpi
-							title="Promedio (solicitud → cita agendada)"
-							hint="Desde la solicitud hasta fecha/hora de cita; solo citas ya agendadas."
+							title="Promedio (solicitud → confirmación)"
+							icon={ClockIcon}
+							hint="Desde la solicitud hasta la confirmación del concierge; solo citas con confirmed_at."
 						>
 							{formatHours(
 								summary.promedio_horas_solicitud_confirmacion_confirmadas,
 							)}
 						</CardKpi>
 						<CardKpi
-							title="Promedio (cita agendada → pago)"
-							hint="Desde fecha/hora de cita hasta primer cobro; solo con pago registrado."
+							title="Promedio (confirmación → pago)"
+							icon={ClockIcon}
+							hint="Desde confirmed_at (confirmación de concierge) hasta primer cobro; solo citas con pago registrado."
 						>
 							{formatAvgHoursOrMinutes(summary.promedio_horas_agenda_a_pago)}
 						</CardKpi>
-						<CardKpi
-							title="Promedio (solicitud → pago)"
-							hint="Solo compras concretadas; primer cobro registrado."
-						>
-							{formatHours(summary.promedio_horas_solicitud_a_pago)}
-						</CardKpi>
-						<CardKpi title="Pacientes con intento de llamada">
+					</div>
+
+					<Text className="pt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+						Interacciones
+					</Text>
+					<div className="grid gap-4 sm:grid-cols-2">
+						<CardKpi title="Pacientes intentaron llamar" icon={PhoneIcon}>
 							{summary.pacientes_con_intento_llamada}
 						</CardKpi>
-						<CardKpi title="Disponibilidad o comentario">
+						<CardKpi title="Pacientes dejaron disponibilidad" icon={UserIcon}>
 							{summary.pacientes_con_disponibilidad_o_comentario}
 						</CardKpi>
 					</div>
@@ -836,10 +1000,7 @@ export default function LaboratoryAppointmentMetrics({
 							Solicitudes vs citas agendadas (distribución)
 						</Text>
 						<Text className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-							Por citas: agendada = tiene fecha/hora de cita y sucursal. Por $: el
-							pastel parte el catálogo Famedic entre citas ya agendadas y el
-							restante (carrito sin cita completa agendada). El total de{" "}
-							<strong>compra concretada (con pago)</strong> va aparte, abajo.
+							Resumen visual por volumen y por ingresos.
 						</Text>
 						<div className="mt-4 grid gap-8 lg:grid-cols-2">
 							<div className="space-y-3">
@@ -906,11 +1067,11 @@ export default function LaboratoryAppointmentMetrics({
 								<Text className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
 									Por ingresos ($)
 								</Text>
-								{ingresosTotalPeriodoCents === 0 ? (
+								{ingresosTotalPeriodoCents === 0 &&
+								Number(summary.compra_cents_total ?? 0) === 0 ? (
 									<div className="flex min-h-[200px] items-center justify-center rounded-lg border border-dashed border-zinc-200 px-4 py-8 text-center dark:border-zinc-600">
 										<Text className="text-sm text-zinc-500 dark:text-zinc-400">
-											Sin montos de catálogo en el periodo: no hay líneas de
-											carrito sin estudios con cita o sin precio en catálogo.
+											Sin montos en el periodo.
 										</Text>
 									</div>
 								) : (
@@ -950,11 +1111,7 @@ export default function LaboratoryAppointmentMetrics({
 																		label: "Monto",
 																		value: formatMxnFromCents(v),
 																	},
-																	{
-																		label: "% del catálogo total",
-																		value:
-																			pct != null ? `${pct} %` : "—",
-																	},
+																	{ label: "% del total", value: pct != null ? `${pct} %` : "—" },
 																]}
 															/>
 														);
@@ -997,15 +1154,13 @@ export default function LaboratoryAppointmentMetrics({
 											})}
 											<div className="space-y-1 rounded-md border border-zinc-100 bg-zinc-50 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800/50">
 												<Text className="text-xs text-zinc-600 dark:text-zinc-400">
-													Total catálogo (solicitadas):{" "}
+													Total mostrado:{" "}
 													<span className="font-semibold text-zinc-800 dark:text-zinc-200">
-														{formatMxnFromCents(ingresosTotalPeriodoCents)}
-													</span>
-												</Text>
-												<Text className="text-xs text-zinc-600 dark:text-zinc-400">
-													Total compra concretada (con pago):{" "}
-													<span className="font-semibold text-zinc-800 dark:text-zinc-200">
-														{formatMxnFromCents(summary.compra_cents_total)}
+														{formatMxnFromCents(
+															Number(summary.catalogo_cents_confirmadas ?? 0) +
+																Number(summary.catalogo_cents_pendientes ?? 0) +
+																Number(summary.compra_cents_total ?? 0),
+														)}
 													</span>
 												</Text>
 											</div>
@@ -1357,6 +1512,104 @@ export default function LaboratoryAppointmentMetrics({
 								<Bar dataKey="intentos_llamada" name="Intentos de llamada" fill="#f59e0b" radius={[4, 4, 0, 0]} />
 							</BarChart>
 						</ResponsiveContainer>
+					</div>
+
+					<div className="space-y-2">
+						<Text className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+							Detalle de tiempos por cita
+						</Text>
+						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+							Tags de diferencia en horas entre etapas del proceso para ubicar
+							retrasos o anticipos.
+						</Text>
+						<div className="overflow-x-auto">
+							<table className={tableShell}>
+								<thead>
+									<tr>
+										<th className={`${tableHead} px-3 py-2`}>ID Cita</th>
+										<th className={`${tableHead} px-3 py-2`}>
+											Nombre de solicitante
+										</th>
+										<th className={`${tableHead} px-3 py-2`}>
+											Fecha Solicitud
+										</th>
+										<th className={`${tableHead} px-3 py-2`}>
+											Fecha de confirmación
+										</th>
+										<th className={`${tableHead} px-3 py-2`}>
+											Fecha de compra
+										</th>
+										<th className={`${tableHead} px-3 py-2`}>Tags tiempo</th>
+									</tr>
+								</thead>
+								<tbody>
+									{(detailedAppointments ?? []).map((row) => {
+										const sToC = diffHoursBetween(
+											row.fecha_solicitud,
+											row.fecha_confirmacion,
+										);
+										const cToP = diffHoursBetween(
+											row.fecha_confirmacion,
+											row.fecha_pago,
+										);
+										const sToP = diffHoursBetween(
+											row.fecha_solicitud,
+											row.fecha_pago,
+										);
+
+										return (
+											<tr key={`timeline-${row.id}`}>
+												<td className={tableCell}>{row.id}</td>
+												<td className={tableCell}>{row.nombre ?? "—"}</td>
+												<td className={tableCell}>
+													{formatDateTimeAmPm(row.fecha_solicitud)}
+												</td>
+												<td className={tableCell}>
+													{formatDateTimeAmPm(row.fecha_confirmacion)}
+												</td>
+												<td className={tableCell}>
+													{formatDateTimeAmPm(row.fecha_pago)}
+												</td>
+												<td className={tableCell}>
+													<div className="flex flex-wrap gap-1.5">
+														{sToC != null ? (
+															<Badge color="sky">
+																Solicitud→Confirmación:{" "}
+																{formatDiffHoursTag(sToC)}
+															</Badge>
+														) : (
+															<Badge color="slate">
+																Solicitud→Confirmación: pendiente
+															</Badge>
+														)}
+														{cToP != null ? (
+															<Badge color="emerald">
+																Confirmación→Compra:{" "}
+																{formatDiffHoursTag(cToP)}
+															</Badge>
+														) : (
+															<Badge color="slate">
+																Confirmación→Compra: pendiente
+															</Badge>
+														)}
+														{sToP != null ? (
+															<Badge color="amber">
+																Solicitud→Compra:{" "}
+																{formatDiffHoursTag(sToP)}
+															</Badge>
+														) : (
+															<Badge color="slate">
+																Solicitud→Compra: pendiente
+															</Badge>
+														)}
+													</div>
+												</td>
+											</tr>
+										);
+									})}
+								</tbody>
+							</table>
+						</div>
 					</div>
 				</section>
 				)}
@@ -1878,15 +2131,15 @@ export default function LaboratoryAppointmentMetrics({
 									<code>(citas con pago / agendadas) * 100</code>
 								</li>
 								<li>
-									<Strong>Promedio solicitud → cita agendada:</Strong> promedio
-									de <code>diff(created_at, appointment_date)</code> en horas,
-									solo citas agendadas.
+									<Strong>Promedio solicitud → confirmación:</Strong> promedio
+									de <code>diff(created_at, confirmed_at)</code> en horas, solo
+									citas confirmadas por concierge.
 								</li>
 								<li>
-									<Strong>Promedio cita agendada → pago:</Strong> desde{" "}
-									<code>appointment_date</code> hasta el primer cobro registrado;
-									solo citas con pago. Si el promedio es menor a 1 h, se muestra
-									en minutos.
+									<Strong>Promedio confirmación → pago:</Strong> desde{" "}
+									<code>confirmed_at</code> (cuando concierge confirma) hasta el
+									primer cobro registrado; solo citas con pago. Si el promedio es
+									menor a 1 h, se muestra en minutos.
 								</li>
 								<li>
 									<Strong>Promedio solicitud → pago:</Strong> promedio en horas
@@ -1938,6 +2191,123 @@ export default function LaboratoryAppointmentMetrics({
 								(si el mes anterior es mayor a 0).
 							</li>
 						</ul>
+					</div>
+				</section>
+				)}
+
+				{activeTab === 6 && (
+				<section className="space-y-4">
+					<Subheading>Detalle de citas</Subheading>
+					<Text className="text-sm text-zinc-600 dark:text-zinc-400">
+						Tabla por cita para validación operativa. El monto se toma de{" "}
+						<code>laboratory_purchase_items.price_cents</code> (suma por cita,
+						solo cuando existe pago registrado).
+					</Text>
+					<div className="overflow-x-auto">
+						<table className={tableShell}>
+							<thead>
+								<tr>
+									<th className={`${tableHead} px-3 py-2`}>ID</th>
+									<th className={`${tableHead} px-3 py-2`}>Nombre</th>
+									<th className={`${tableHead} px-3 py-2`}>Marca</th>
+									<th className={`${tableHead} px-3 py-2`}>Estudios</th>
+									<th className={`${tableHead} px-3 py-2`}>Precios</th>
+									<th className={`${tableHead} px-3 py-2`}>Fecha solicitud</th>
+									<th className={`${tableHead} px-3 py-2`}>Fecha de confirmación</th>
+									<th className={`${tableHead} px-3 py-2`}>Fecha de pago</th>
+									<th className={`${tableHead} px-3 py-2`}>Fecha de cita</th>
+									<th className={`${tableHead} px-3 py-2 text-right`}>$Monto</th>
+								</tr>
+							</thead>
+							<tbody>
+								{(detailedAppointments ?? []).map((row) => (
+									<tr key={row.id}>
+										{(() => {
+											const tags = resolveDetailTags(row);
+											const pendingConfirmationDays = getPendingConfirmationDays(
+												row.fecha_solicitud,
+												row.fecha_confirmacion,
+											);
+											return (
+												<>
+										<td className={tableCell}>{row.id}</td>
+										<td className={tableCell}>{row.nombre ?? "—"}</td>
+										<td className={tableCell}>{row.marca ?? "—"}</td>
+										<td className={tableCell}>
+											{(row.estudios ?? []).length > 0
+												? row.estudios.join(", ")
+												: "—"}
+										</td>
+										<td className={tableCell}>
+											<div className="space-y-1">
+												{(row.precios_estudios ?? []).length > 0 ? (
+													<>
+														{Array.from(
+															new Set(
+																row.precios_estudios.map((line) =>
+																	Number(line.price_cents),
+																),
+															),
+														).map((priceCents) => (
+															<div key={priceCents}>
+																{formatMxnFromCents(priceCents)}
+															</div>
+														))}
+													</>
+												) : (
+													"—"
+												)}
+											</div>
+										</td>
+										<td className={tableCell}>
+											{formatDateTimeAmPm(row.fecha_solicitud)}
+										</td>
+										<td className={tableCell}>
+											<div className="space-y-1">
+												<div>{formatDateTimeAmPm(row.fecha_confirmacion)}</div>
+												{pendingConfirmationDays != null && (
+													<Badge color="amber">
+														{pendingConfirmationDays}{" "}
+														{pendingConfirmationDays === 1 ? "día" : "días"} sin confirmar
+													</Badge>
+												)}
+												{tags.includes("pago anticipado") && (
+													<Badge color="emerald">pago anticipado</Badge>
+												)}
+											</div>
+										</td>
+										<td className={tableCell}>
+											<div className="space-y-1">
+												<div>{formatDateTimeAmPm(row.fecha_pago)}</div>
+												{tags.includes("pago anticipado") && (
+													<Badge color="emerald">pago anticipado</Badge>
+												)}
+											</div>
+										</td>
+										<td className={tableCell}>
+											<div className="space-y-1">
+												<div>{formatDateTimeAmPm(row.fecha_cita)}</div>
+												{tags.includes("a tiempo") && (
+													<Badge color="sky">a tiempo</Badge>
+												)}
+												{tags.includes("venta perdida") && (
+													<Badge color="rose">venta perdida</Badge>
+												)}
+												{tags.includes("pago anticipado") && (
+													<Badge color="emerald">pago anticipado</Badge>
+												)}
+											</div>
+										</td>
+										<td className={tableCellNum}>
+											{formatMxnFromCents(row.monto_cents)}
+										</td>
+												</>
+											);
+										})()}
+									</tr>
+								))}
+							</tbody>
+						</table>
 					</div>
 				</section>
 				)}

@@ -45,17 +45,43 @@ class LaboratoryAppointmentController extends Controller
 
     public function show(ShowLaboratoryAppointmentRequest $request, LaboratoryAppointment $laboratoryAppointment)
     {
-        $laboratoryAppointment->load(['customer.user', 'laboratoryStore']);
+        $laboratoryAppointment->load(['customer.user', 'laboratoryStore', 'laboratoryPurchase.laboratoryPurchaseItems']);
         $interactions = $laboratoryAppointment->interactions()
             ->with('adminUser:id,name,email')
             ->latest()
             ->limit(150)
             ->get();
+        $laboratoryCartItems = $laboratoryAppointment->customer
+            ->laboratoryCartItems()
+            ->with('laboratoryTest')
+            ->ofBrand($laboratoryAppointment->brand)
+            ->get();
+
+        $studyItems = $laboratoryCartItems->map(function ($cartItem) {
+            return [
+                'name' => $cartItem->laboratoryTest?->name,
+                'requires_appointment' => (bool) ($cartItem->laboratoryTest?->requires_appointment),
+            ];
+        })->filter(fn (array $item) => filled($item['name']))->values();
+
+        $studyItemsSource = 'cart';
+        if ($studyItems->isEmpty()) {
+            $studyItems = collect($laboratoryAppointment->laboratoryPurchase?->laboratoryPurchaseItems ?? [])
+                ->filter(fn ($item) => $item->deleted_at === null)
+                ->map(fn ($item) => [
+                    'name' => $item->name,
+                    'requires_appointment' => true,
+                ])
+                ->filter(fn (array $item) => filled($item['name']))
+                ->values();
+            $studyItemsSource = 'purchase';
+        }
 
         return Inertia::render('Admin/LaboratoryAppointment', [
             'laboratoryAppointment' => $laboratoryAppointment,
             'laboratoryStores' => LaboratoryStore::ofBrand($laboratoryAppointment->brand)->orderBy('name')->get(),
-            'laboratoryCartItems' => $laboratoryAppointment->customer->laboratoryCartItems()->with('laboratoryTest')->ofBrand($laboratoryAppointment->brand)->get(),
+            'studyItems' => $studyItems,
+            'studyItemsSource' => $studyItemsSource,
             'genders' => Gender::casesWithLabels(),
             'interactions' => $interactions,
         ]);

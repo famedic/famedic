@@ -17,7 +17,7 @@ class IndexLaboratoryAppointmentMetricsRequest extends FormRequest
         return [
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'date_range' => ['nullable', 'in:,today,last_7_days,last_6_months'],
+            'date_range' => ['nullable', 'in:,today,last_7_days,last_10_days,last_6_months'],
             'completed' => ['nullable', 'in:,true,false'],
             'brand' => ['nullable', 'in:,olab,swisslab,jenner,liacsa,azteca'],
             'phone_call_intent' => ['nullable', 'in:,true,false'],

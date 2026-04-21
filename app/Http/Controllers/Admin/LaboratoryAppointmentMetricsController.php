@@ -21,7 +21,7 @@ class LaboratoryAppointmentMetricsController extends Controller
 
         [$presetStart, $presetEnd] = $this->resolveDatePreset($dateRange);
 
-        $start = Carbon::parse($explicitStart ?? $presetStart ?? now()->subMonths(2)->format('Y-m-d'))->startOfDay();
+        $start = Carbon::parse($explicitStart ?? $presetStart ?? now()->subDays(10)->format('Y-m-d'))->startOfDay();
         $end = Carbon::parse($explicitEnd ?? $presetEnd ?? now()->format('Y-m-d'))->endOfDay();
 
         $filters = collect($request->only([
@@ -36,9 +36,11 @@ class LaboratoryAppointmentMetricsController extends Controller
             ->filter($filters)
             ->with([
                 'laboratoryPurchase' => fn ($q) => $q->select('id', 'brand'),
+                'customer.user:id,name,paternal_lastname,maternal_lastname',
             ])
             ->get([
                 'id',
+                'customer_id',
                 'created_at',
                 'confirmed_at',
                 'appointment_date',
@@ -62,6 +64,7 @@ class LaboratoryAppointmentMetricsController extends Controller
 
         $compraByAppointmentId = $this->purchasePriceCentsByAppointmentId($idsWithPurchase);
         $firstPaidAtByAppointmentId = $this->firstPaidAtByAppointmentId($appointmentIds);
+        $studyLinesByAppointmentId = $this->studyLinesByAppointmentId($appointmentIds);
         $paidAppointmentIds = array_fill_keys(array_keys($firstPaidAtByAppointmentId), true);
 
         $requestedVsConfirmed = $this->buildRequestedVsConfirmedSeries(
@@ -102,11 +105,16 @@ class LaboratoryAppointmentMetricsController extends Controller
         })->values();
 
         $agendadas = $appointments->filter(fn (LaboratoryAppointment $a) => $this->isCitaAgendada($a));
-        $avgSecondsSolicitudAAgenda = $agendadas->isEmpty()
+        $confirmadasPorConcierge = $appointments->whereNotNull('confirmed_at');
+        $avgSecondsSolicitudAConfirmacion = $confirmadasPorConcierge->isEmpty()
             ? null
-            : $agendadas->avg(fn (LaboratoryAppointment $a) => $a->created_at->diffInSeconds($a->appointment_date));
+            : $confirmadasPorConcierge->avg(
+                fn (LaboratoryAppointment $a) => $a->created_at->diffInSeconds($a->confirmed_at)
+            );
 
-        $promedioHorasConfirmadas = $avgSecondsSolicitudAAgenda !== null ? round($avgSecondsSolicitudAAgenda / 3600, 2) : null;
+        $promedioHorasConfirmadas = $avgSecondsSolicitudAConfirmacion !== null
+            ? round($avgSecondsSolicitudAConfirmacion / 3600, 2)
+            : null;
 
         $withIntent = $appointments->whereNotNull('phone_call_intent_at')->count();
 
@@ -118,6 +126,9 @@ class LaboratoryAppointmentMetricsController extends Controller
         $confirmadasCount = $agendadas->count();
         $comprasConcretadasCount = count($paidAppointmentIds);
         $totalSolicitudes = $appointments->count();
+        $sinConfirmacionMasDeUnDiaCount = $appointments
+            ->filter(fn (LaboratoryAppointment $a) => $a->confirmed_at === null && $a->created_at->lte(now()->subDay()))
+            ->count();
 
         $pctConfirmadasSobreProgramadas = $conCitaProgramada > 0
             ? round(($confirmadasCount / $conCitaProgramada) * 100, 1)
@@ -150,7 +161,7 @@ class LaboratoryAppointmentMetricsController extends Controller
             : null;
 
         $promedioHorasSolicitudAPago = $this->averageHoursRequestToPayment($appointments, $firstPaidAtByAppointmentId);
-        $promedioHorasAgendaAPago = $this->averageHoursAgendaToPayment($appointments, $firstPaidAtByAppointmentId);
+        $promedioHorasAgendaAPago = $this->averageHoursConfirmationToPayment($appointments, $firstPaidAtByAppointmentId);
 
         $byStudyName = $this->aggregateMetricsByStudyName($appointmentIds, $paidAppointmentIds);
         $byCategory = $this->aggregateMetricsByCategory($appointmentIds, $paidAppointmentIds);
@@ -160,6 +171,37 @@ class LaboratoryAppointmentMetricsController extends Controller
         )->count();
         $citasConCompra = $appointments->whereNotNull('laboratory_purchase_id')->count();
         $citasPagoRegistrado = $comprasConcretadasCount;
+        $detailedAppointments = $appointments
+            ->sortByDesc('created_at')
+            ->map(function (LaboratoryAppointment $a) use ($firstPaidAtByAppointmentId, $compraByAppointmentId, $studyLinesByAppointmentId, $catalogByAppointmentId) {
+                $paidAt = $firstPaidAtByAppointmentId[$a->id] ?? null;
+                $brandLabel = $a->brand instanceof LaboratoryBrand ? $a->brand->label() : (string) $a->brand;
+                $studyLines = $studyLinesByAppointmentId[$a->id] ?? [];
+
+                return [
+                    'id' => $a->id,
+                    'nombre' => $a->customer?->user?->full_name ?: ($a->patient_full_name ?: '—'),
+                    'marca' => $brandLabel,
+                    'estudios' => collect($studyLines)->pluck('name')->all(),
+                    'precios_estudios' => $studyLines,
+                    'precio_representa_cents' => (int) ($catalogByAppointmentId[$a->id] ?? 0),
+                    'fecha_solicitud' => $a->created_at
+                        ? localizedDate($a->created_at->copy())->format('Y-m-d H:i:s')
+                        : null,
+                    'fecha_confirmacion' => $a->confirmed_at
+                        ? localizedDate($a->confirmed_at->copy())->format('Y-m-d H:i:s')
+                        : null,
+                    'fecha_pago' => $paidAt
+                        ? localizedDate($paidAt->copy())->format('Y-m-d H:i:s')
+                        : null,
+                    'fecha_cita' => $a->appointment_date
+                        ? localizedDate($a->appointment_date->copy())->format('Y-m-d H:i:s')
+                        : null,
+                    'monto_cents' => (int) ($compraByAppointmentId[$a->id] ?? 0),
+                ];
+            })
+            ->values()
+            ->all();
 
         return Inertia::render('Admin/LaboratoryAppointmentMetrics', [
             'filters' => [
@@ -200,6 +242,7 @@ class LaboratoryAppointmentMetricsController extends Controller
                 'promedio_horas_solicitud_confirmacion_confirmadas' => $promedioHorasConfirmadas,
                 'promedio_horas_solicitud_a_pago' => $promedioHorasSolicitudAPago,
                 'promedio_horas_agenda_a_pago' => $promedioHorasAgendaAPago,
+                'citas_sin_confirmacion_mas_de_un_dia' => $sinConfirmacionMasDeUnDiaCount,
                 'pacientes_con_intento_llamada' => $withIntent,
                 'pacientes_con_disponibilidad_o_comentario' => $withCallbackPrefs,
             ],
@@ -209,6 +252,7 @@ class LaboratoryAppointmentMetricsController extends Controller
             'byBrand' => $byBrand,
             'byStudyName' => $byStudyName,
             'byCategory' => $byCategory,
+            'detailedAppointments' => $detailedAppointments,
             'desgloses' => [
                 'totales' => [
                     'citas_solicitadas' => $totalSolicitudes,
@@ -238,6 +282,7 @@ class LaboratoryAppointmentMetricsController extends Controller
         return match ($dateRange) {
             'today' => [now()->toDateString(), now()->toDateString()],
             'last_7_days' => [now()->subDays(7)->toDateString(), now()->toDateString()],
+            'last_10_days' => [now()->subDays(10)->toDateString(), now()->toDateString()],
             'last_6_months' => [now()->subMonths(6)->toDateString(), now()->toDateString()],
             default => [null, null],
         };
@@ -255,7 +300,7 @@ class LaboratoryAppointmentMetricsController extends Controller
             return [];
         }
 
-        $rows = DB::table('laboratory_appointments as la')
+        $cartRows = DB::table('laboratory_appointments as la')
             ->join('laboratory_cart_items as lci', 'lci.customer_id', '=', 'la.customer_id')
             ->join('laboratory_tests as lt', 'lt.id', '=', 'lci.laboratory_test_id')
             ->whereIn('la.id', $appointmentIds)
@@ -264,11 +309,33 @@ class LaboratoryAppointmentMetricsController extends Controller
             ->where('lt.requires_appointment', true)
             ->whereColumn('lt.brand', 'la.brand')
             ->groupBy('la.id')
-            ->select('la.id', DB::raw('SUM(COALESCE(lt.famedic_price_cents, 0)) as revenue_cents'));
+            ->select('la.id', DB::raw('SUM(COALESCE(lt.famedic_price_cents, 0)) as revenue_cents'))
+            ->get();
 
-        return $rows->pluck('revenue_cents', 'id')
+        $catalogByAppointment = $cartRows->pluck('revenue_cents', 'id')
             ->map(fn ($v) => (int) $v)
             ->all();
+
+        $idsWithCartLines = $cartRows->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $missingIds = array_values(array_diff($appointmentIds, $idsWithCartLines));
+        if ($missingIds !== []) {
+            $fallbackRows = DB::table('laboratory_appointments as la')
+                ->join('laboratory_purchases as lp', 'la.laboratory_purchase_id', '=', 'lp.id')
+                ->join('laboratory_purchase_items as lpi', 'lpi.laboratory_purchase_id', '=', 'lp.id')
+                ->whereIn('la.id', $missingIds)
+                ->whereNull('la.deleted_at')
+                ->whereNull('lp.deleted_at')
+                ->whereNull('lpi.deleted_at')
+                ->groupBy('la.id')
+                ->select('la.id', DB::raw('SUM(COALESCE(lpi.price_cents, 0)) as revenue_cents'))
+                ->get();
+
+            foreach ($fallbackRows as $row) {
+                $catalogByAppointment[(int) $row->id] = (int) $row->revenue_cents;
+            }
+        }
+
+        return $catalogByAppointment;
     }
 
     /**
@@ -507,12 +574,12 @@ class LaboratoryAppointmentMetricsController extends Controller
      * @param  \Illuminate\Support\Collection<int, LaboratoryAppointment>  $appointments
      * @param  array<int, Carbon>  $firstPaidAtByAppointmentId
      */
-    private function averageHoursAgendaToPayment($appointments, array $firstPaidAtByAppointmentId): ?float
+    private function averageHoursConfirmationToPayment($appointments, array $firstPaidAtByAppointmentId): ?float
     {
         $seconds = [];
 
         foreach ($appointments as $a) {
-            if (! $this->isCitaAgendada($a)) {
+            if ($a->confirmed_at === null) {
                 continue;
             }
 
@@ -521,7 +588,7 @@ class LaboratoryAppointmentMetricsController extends Controller
                 continue;
             }
 
-            $seconds[] = $a->appointment_date->diffInSeconds($paidAt);
+            $seconds[] = $a->confirmed_at->diffInSeconds($paidAt);
         }
 
         if ($seconds === []) {
@@ -588,12 +655,57 @@ class LaboratoryAppointmentMetricsController extends Controller
                 DB::raw('COALESCE(lt.famedic_price_cents, 0) as famedic_cents'),
             ])
             ->get();
+        $cartAppointmentIds = $cartLines->pluck('id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $missingFromCart = array_values(array_diff($appointmentIds, $cartAppointmentIds));
+
+        $purchaseFallbackLines = collect();
+        if ($missingFromCart !== []) {
+            $purchaseFallbackLines = DB::table('laboratory_purchase_items as lpi')
+                ->join('laboratory_purchases as lp', 'lpi.laboratory_purchase_id', '=', 'lp.id')
+                ->join('laboratory_appointments as la', 'la.laboratory_purchase_id', '=', 'lp.id')
+                ->whereIn('la.id', $missingFromCart)
+                ->whereNull('lpi.deleted_at')
+                ->whereNull('lp.deleted_at')
+                ->whereNull('la.deleted_at')
+                ->leftJoin('laboratory_tests as lt', function ($join) {
+                    $join->on('lt.gda_id', '=', 'lpi.gda_id')
+                        ->on('lt.brand', '=', 'lp.brand');
+                })
+                ->select([
+                    'la.id',
+                    'la.appointment_date',
+                    'la.laboratory_store_id',
+                    DB::raw('COALESCE(lt.name, lpi.name, \'Sin nombre\') as label'),
+                    DB::raw('COALESCE(lpi.price_cents, 0) as famedic_cents'),
+                ])
+                ->get();
+        }
 
         $compraLines = $this->purchaseCompraLinesForPaidAppointments($paidAppointmentIds);
 
         $byLabel = [];
 
         foreach ($cartLines as $row) {
+            $label = filled($row->label) ? $row->label : 'Sin nombre';
+            if (! isset($byLabel[$label])) {
+                $byLabel[$label] = [
+                    'label' => $label,
+                    'catalogo_solicitadas_cents' => 0,
+                    'catalogo_confirmadas_cents' => 0,
+                    'compra_cents' => 0,
+                    'cantidad_lineas' => 0,
+                ];
+            }
+
+            $f = (int) $row->famedic_cents;
+            $byLabel[$label]['catalogo_solicitadas_cents'] += $f;
+            if ($row->appointment_date !== null && $row->laboratory_store_id !== null) {
+                $byLabel[$label]['catalogo_confirmadas_cents'] += $f;
+            }
+            $byLabel[$label]['cantidad_lineas']++;
+        }
+
+        foreach ($purchaseFallbackLines as $row) {
             $label = filled($row->label) ? $row->label : 'Sin nombre';
             if (! isset($byLabel[$label])) {
                 $byLabel[$label] = [
@@ -662,6 +774,31 @@ class LaboratoryAppointmentMetricsController extends Controller
                 DB::raw('COALESCE(lt.famedic_price_cents, 0) as famedic_cents'),
             ])
             ->get();
+        $cartAppointmentIds = $cartCat->pluck('id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $missingFromCart = array_values(array_diff($appointmentIds, $cartAppointmentIds));
+
+        $purchaseCatFallback = collect();
+        if ($missingFromCart !== []) {
+            $purchaseCatFallback = DB::table('laboratory_purchase_items as lpi')
+                ->join('laboratory_purchases as lp', 'lpi.laboratory_purchase_id', '=', 'lp.id')
+                ->join('laboratory_appointments as la', 'la.laboratory_purchase_id', '=', 'lp.id')
+                ->whereIn('la.id', $missingFromCart)
+                ->whereNull('lpi.deleted_at')
+                ->whereNull('lp.deleted_at')
+                ->whereNull('la.deleted_at')
+                ->leftJoin('laboratory_tests as lt', function ($join) {
+                    $join->on('lt.gda_id', '=', 'lpi.gda_id')
+                        ->on('lt.brand', '=', 'lp.brand');
+                })
+                ->leftJoin('laboratory_test_categories as ltc', 'lt.laboratory_test_category_id', '=', 'ltc.id')
+                ->select([
+                    'la.appointment_date',
+                    'la.laboratory_store_id',
+                    'ltc.name as category_name',
+                    DB::raw('COALESCE(lpi.price_cents, 0) as famedic_cents'),
+                ])
+                ->get();
+        }
 
         $purchaseCat = collect();
         if ($paidAppointmentIds !== []) {
@@ -706,6 +843,26 @@ class LaboratoryAppointmentMetricsController extends Controller
             $byCat[$label]['cantidad_lineas']++;
         }
 
+        foreach ($purchaseCatFallback as $row) {
+            $label = filled($row->category_name) ? $row->category_name : 'Sin categoría en catálogo';
+            if (! isset($byCat[$label])) {
+                $byCat[$label] = [
+                    'label' => $label,
+                    'catalogo_solicitadas_cents' => 0,
+                    'catalogo_confirmadas_cents' => 0,
+                    'compra_cents' => 0,
+                    'cantidad_lineas' => 0,
+                ];
+            }
+
+            $f = (int) $row->famedic_cents;
+            $byCat[$label]['catalogo_solicitadas_cents'] += $f;
+            if ($row->appointment_date !== null && $row->laboratory_store_id !== null) {
+                $byCat[$label]['catalogo_confirmadas_cents'] += $f;
+            }
+            $byCat[$label]['cantidad_lineas']++;
+        }
+
         foreach ($purchaseCat as $row) {
             $label = filled($row->category_name) ? $row->category_name : 'Sin categoría en catálogo';
             if (! isset($byCat[$label])) {
@@ -725,6 +882,83 @@ class LaboratoryAppointmentMetricsController extends Controller
             ->sortByDesc(fn (array $r) => max($r['catalogo_solicitadas_cents'], $r['compra_cents']))
             ->values()
             ->map(fn (array $r) => $r + ['venta_cents' => $r['catalogo_solicitadas_cents']])
+            ->all();
+    }
+
+    /**
+     * @param  array<int>  $appointmentIds
+     * @return array<int, array<int, array{name: string, price_cents: int}>>
+     */
+    private function studyLinesByAppointmentId(array $appointmentIds): array
+    {
+        if ($appointmentIds === []) {
+            return [];
+        }
+
+        $rows = DB::table('laboratory_appointments as la')
+            ->join('laboratory_cart_items as lci', 'lci.customer_id', '=', 'la.customer_id')
+            ->join('laboratory_tests as lt', 'lt.id', '=', 'lci.laboratory_test_id')
+            ->whereIn('la.id', $appointmentIds)
+            ->whereNull('la.deleted_at')
+            ->whereNull('lci.deleted_at')
+            ->where('lt.requires_appointment', true)
+            ->whereColumn('lt.brand', 'la.brand')
+            ->select([
+                'la.id as appointment_id',
+                DB::raw('COALESCE(lt.name, \'Sin nombre\') as study_name'),
+                DB::raw('COALESCE(lt.famedic_price_cents, 0) as study_price_cents'),
+            ])
+            ->get();
+
+        $linesByAppointment = [];
+        foreach ($rows as $row) {
+            $id = (int) $row->appointment_id;
+            $label = (string) $row->study_name;
+            $priceCents = (int) $row->study_price_cents;
+            $uniqueKey = $label.'|'.$priceCents;
+            $linesByAppointment[$id] ??= [];
+            $linesByAppointment[$id][$uniqueKey] = [
+                'name' => $label,
+                'price_cents' => $priceCents,
+            ];
+        }
+
+        $idsWithCartLines = array_keys($linesByAppointment);
+        $missingIds = array_values(array_diff($appointmentIds, $idsWithCartLines));
+        if ($missingIds !== []) {
+            $fallbackRows = DB::table('laboratory_purchase_items as lpi')
+                ->join('laboratory_purchases as lp', 'lpi.laboratory_purchase_id', '=', 'lp.id')
+                ->join('laboratory_appointments as la', 'la.laboratory_purchase_id', '=', 'lp.id')
+                ->leftJoin('laboratory_tests as lt', function ($join) {
+                    $join->on('lt.gda_id', '=', 'lpi.gda_id')
+                        ->on('lt.brand', '=', 'lp.brand');
+                })
+                ->whereIn('la.id', $missingIds)
+                ->whereNull('la.deleted_at')
+                ->whereNull('lp.deleted_at')
+                ->whereNull('lpi.deleted_at')
+                ->select([
+                    'la.id as appointment_id',
+                    DB::raw('COALESCE(lt.name, lpi.name, \'Sin nombre\') as study_name'),
+                    DB::raw('COALESCE(lpi.price_cents, 0) as study_price_cents'),
+                ])
+                ->get();
+
+            foreach ($fallbackRows as $row) {
+                $id = (int) $row->appointment_id;
+                $label = (string) $row->study_name;
+                $priceCents = (int) $row->study_price_cents;
+                $uniqueKey = $label.'|'.$priceCents;
+                $linesByAppointment[$id] ??= [];
+                $linesByAppointment[$id][$uniqueKey] = [
+                    'name' => $label,
+                    'price_cents' => $priceCents,
+                ];
+            }
+        }
+
+        return collect($linesByAppointment)
+            ->map(fn (array $lines) => array_values($lines))
             ->all();
     }
 }

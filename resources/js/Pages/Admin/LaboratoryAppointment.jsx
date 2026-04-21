@@ -57,7 +57,8 @@ const interactionTypeLabels = {
 export default function LaboratoryAppointment({
 	laboratoryAppointment,
 	laboratoryStores,
-	laboratoryCartItems,
+	studyItems,
+	studyItemsSource,
 	interactions,
 }) {
 	const [patientView, setPatientView] = useState("none");
@@ -83,7 +84,8 @@ export default function LaboratoryAppointment({
 
 			<Patient
 				laboratoryAppointment={laboratoryAppointment}
-				laboratoryCartItems={laboratoryCartItems}
+				studyItems={studyItems}
+				studyItemsSource={studyItemsSource}
 			/>
 
 			<Contact laboratoryAppointment={laboratoryAppointment} />
@@ -778,7 +780,7 @@ function LaboratoryAppointmentConfirmationForm({
 	);
 }
 
-function Patient({ laboratoryAppointment, laboratoryCartItems }) {
+function Patient({ laboratoryAppointment, studyItems, studyItemsSource }) {
 	return (
 		<div>
 			<Subheading>Información del paciente</Subheading>
@@ -822,18 +824,22 @@ function Patient({ laboratoryAppointment, laboratoryCartItems }) {
 
 				<DescriptionTerm>Estudios </DescriptionTerm>
 				<DescriptionDetails>
-					{laboratoryCartItems.length > 0 ? (
+					{studyItems.length > 0 ? (
 						<div className="flex flex-col gap-1">
-							{laboratoryCartItems.map((cartItem) => (
-								<span key={cartItem.id}>
+							{studyItemsSource === "purchase" && (
+								<span>
+									<Badge color="amber">Mostrando estudios desde compra</Badge>
+								</span>
+							)}
+							{studyItems.map((study, index) => (
+								<span key={`${study.name}-${index}`}>
 									<Badge color="slate">
-										{cartItem.laboratory_test
-											.requires_appointment && (
+										{study.requires_appointment && (
 											<CalendarDaysIcon
 												className={`size-4 flex-shrink-0 ${laboratoryAppointment.confirmed_at ? "stroke-green-500" : "stroke-red-500"}`}
 											/>
 										)}
-										{cartItem.laboratory_test.name}
+										{study.name}
 									</Badge>
 								</span>
 							))}
