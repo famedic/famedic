@@ -17,6 +17,10 @@ class IndexLaboratoryAppointmentRequest extends FormRequest
         return [
             'search' => ['nullable', 'string', 'max:255'],
             'completed' => ['nullable', 'in:,true,false'],
+            'date_range' => ['nullable', 'in:,today,last_7_days,last_6_months'],
+            'brand' => ['nullable', 'in:,olab,swisslab,jenner,liacsa,azteca'],
+            'phone_call_intent' => ['nullable', 'in:,true,false'],
+            'callback_info' => ['nullable', 'in:,true,false'],
         ];
     }
 }

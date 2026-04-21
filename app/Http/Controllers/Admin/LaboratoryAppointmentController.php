@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Actions\Admin\LaboratoryAppointments\UpdateLaboratoryAppointmentAction;
 use App\Enums\Gender;
 use App\Enums\LaboratoryAppointmentInteractionType;
+use App\Enums\LaboratoryBrand;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LaboratoryAppointments\DestroyLaboratoryAppointmentRequest;
 use App\Http\Requests\Admin\LaboratoryAppointments\IndexLaboratoryAppointmentRequest;
@@ -24,12 +25,21 @@ class LaboratoryAppointmentController extends Controller
         $filters = collect($request->only([
             'search',
             'completed',
+            'date_range',
+            'brand',
+            'phone_call_intent',
+            'callback_info',
         ]))->filter()->all();
 
         return Inertia::render('Admin/LaboratoryAppointments', [
             'laboratoryAppointments' => LaboratoryAppointment::with(['customer.user', 'laboratoryStore', 'laboratoryPurchase.transactions'])
                 ->filter($filters)->latest()->paginate()->withQueryString(),
             'filters' => $filters,
+            'brands' => collect(LaboratoryBrand::cases())
+                ->map(fn (LaboratoryBrand $brand) => [
+                    'value' => $brand->value,
+                    'label' => $brand->label(),
+                ])->values(),
         ]);
     }
 

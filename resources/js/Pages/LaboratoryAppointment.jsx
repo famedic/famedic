@@ -462,6 +462,7 @@ export default function LaboratoryAppointment({
 											</Text>
 											<Text className="text-sm text-emerald-800/95 dark:text-emerald-200/90">
 												Registramos tu disponibilidad y comentarios.
+												<br />
 												Puedes actualizarlos cuando quieras.
 											</Text>
 											<Text className="text-xs font-medium text-emerald-700/90 dark:text-emerald-300/90">

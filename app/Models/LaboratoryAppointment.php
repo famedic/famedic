@@ -76,6 +76,10 @@ class LaboratoryAppointment extends Model
     {
         $search = $filters['search'] ?? null;
         $completed = $filters['completed'] ?? null;
+        $dateRange = $filters['date_range'] ?? null;
+        $brand = $filters['brand'] ?? null;
+        $phoneCallIntent = $filters['phone_call_intent'] ?? null;
+        $callbackInfo = $filters['callback_info'] ?? null;
 
         return $query
             ->when($search, function (Builder $query, string $search) {
@@ -107,6 +111,47 @@ class LaboratoryAppointment extends Model
             ->when(
                 $completed === 'false',
                 fn (Builder $query) => $query->whereNull('confirmed_at')
+            )
+            ->when(
+                $dateRange === 'today',
+                fn (Builder $query) => $query->whereDate('created_at', now()->toDateString())
+            )
+            ->when(
+                $dateRange === 'last_7_days',
+                fn (Builder $query) => $query->where('created_at', '>=', now()->subDays(7)->startOfDay())
+            )
+            ->when(
+                $dateRange === 'last_6_months',
+                fn (Builder $query) => $query->where('created_at', '>=', now()->subMonths(6)->startOfDay())
+            )
+            ->when(
+                filled($brand),
+                fn (Builder $query) => $query->where('brand', $brand)
+            )
+            ->when(
+                $phoneCallIntent === 'true',
+                fn (Builder $query) => $query->whereNotNull('phone_call_intent_at')
+            )
+            ->when(
+                $phoneCallIntent === 'false',
+                fn (Builder $query) => $query->whereNull('phone_call_intent_at')
+            )
+            ->when(
+                $callbackInfo === 'true',
+                fn (Builder $query) => $query->where(function (Builder $query) {
+                    $query->whereNotNull('callback_availability_starts_at')
+                        ->orWhereNotNull('callback_availability_ends_at')
+                        ->orWhereNotNull('patient_callback_comment');
+                })
+            )
+            ->when(
+                $callbackInfo === 'false',
+                fn (Builder $query) => $query->whereNull('callback_availability_starts_at')
+                    ->whereNull('callback_availability_ends_at')
+                    ->where(function (Builder $query) {
+                        $query->whereNull('patient_callback_comment')
+                            ->orWhere('patient_callback_comment', '');
+                    })
             );
     }
 

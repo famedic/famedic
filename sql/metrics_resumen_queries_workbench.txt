@@ -1,0 +1,1088 @@
+-- ============================================================
+-- METRICAS: TARJETAS DE "RESUMEN" (MySQL 8+)
+-- Rango solicitado:
+--   start_date = 2026-04-10
+--   end_date   = 2026-04-20
+-- Filtros URL:
+--   brand=&callback_info=&completed=&date_range=&phone_call_intent=
+--   => sin filtros adicionales
+-- ============================================================
+
+-- Ajusta zona horaria si aplica en tu BD:
+-- SET time_zone = '-06:00';
+
+SET @start_date = '2026-04-10';
+SET @end_date   = '2026-04-20';
+
+-- Filtros opcionales (en tu URL van vacios)
+SET @brand = '';
+SET @completed = '';
+SET @phone_call_intent = '';
+SET @callback_info = '';
+
+-- -------------------------------------------------------------------
+-- BASE COMUN:
+--   1) Citas en rango por created_at
+--   2) Catalogo por cita:
+--      - Si tiene compra: suma lt.famedic_price_cents desde purchase_items
+--      - Si NO tiene compra: suma lt.famedic_price_cents desde la cotizacion mas reciente
+--   3) Primer pago por cita (transaccion no failed)
+-- -------------------------------------------------------------------
+WITH
+base_appointments AS (
+    SELECT
+        la.id,
+        la.created_at,
+        la.confirmed_at,
+        la.appointment_date,
+        la.laboratory_store_id,
+        la.laboratory_purchase_id,
+        la.brand,
+        la.phone_call_intent_at,
+        la.callback_availability_starts_at,
+        la.callback_availability_ends_at,
+        la.patient_callback_comment
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+),
+catalog_from_purchase AS (
+    SELECT
+        ba.id AS appointment_id,
+        SUM(COALESCE(lt.famedic_price_cents, 0)) AS catalog_cents
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp
+        ON lp.id = ba.laboratory_purchase_id
+       AND lp.deleted_at IS NULL
+    JOIN laboratory_purchase_items lpi
+        ON lpi.laboratory_purchase_id = lp.id
+       AND lpi.deleted_at IS NULL
+    LEFT JOIN laboratory_tests lt
+        ON lt.gda_id = lpi.gda_id
+       AND lt.brand = lp.brand
+    GROUP BY ba.id
+),
+latest_quote_per_appointment AS (
+    SELECT
+        lq.appointment_id,
+        MAX(lq.id) AS latest_quote_id
+    FROM laboratory_quotes lq
+    JOIN base_appointments ba
+      ON ba.id = lq.appointment_id
+    WHERE lq.deleted_at IS NULL
+      AND ba.laboratory_purchase_id IS NULL
+    GROUP BY lq.appointment_id
+),
+catalog_from_latest_quote AS (
+    SELECT
+        lq.appointment_id,
+        SUM(COALESCE(lt.famedic_price_cents, 0)) AS catalog_cents
+    FROM latest_quote_per_appointment lqa
+    JOIN laboratory_quotes lq
+      ON lq.id = lqa.latest_quote_id
+     AND lq.deleted_at IS NULL
+    JOIN laboratory_quote_items lqi
+      ON lqi.laboratory_quote_id = lq.id
+     AND lqi.deleted_at IS NULL
+    LEFT JOIN laboratory_tests lt
+      ON lt.gda_id = lqi.gda_id
+     AND lt.brand = lq.laboratory_brand
+    GROUP BY lq.appointment_id
+),
+catalog_by_appointment AS (
+    SELECT
+        ba.id AS appointment_id,
+        COALESCE(cfp.catalog_cents, 0) + COALESCE(cfq.catalog_cents, 0) AS catalog_cents
+    FROM base_appointments ba
+    LEFT JOIN catalog_from_purchase cfp
+      ON cfp.appointment_id = ba.id
+    LEFT JOIN catalog_from_latest_quote cfq
+      ON cfq.appointment_id = ba.id
+),
+purchase_cents_by_appointment AS (
+    SELECT
+        ba.id AS appointment_id,
+        SUM(lpi.price_cents) AS purchase_cents
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp
+      ON lp.id = ba.laboratory_purchase_id
+     AND lp.deleted_at IS NULL
+    JOIN laboratory_purchase_items lpi
+      ON lpi.laboratory_purchase_id = lp.id
+     AND lpi.deleted_at IS NULL
+    GROUP BY ba.id
+),
+first_paid_at_by_appointment AS (
+    SELECT
+        ba.id AS appointment_id,
+        MIN(COALESCE(t.gateway_processed_at, t.created_at)) AS first_paid_at
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp
+      ON lp.id = ba.laboratory_purchase_id
+     AND lp.deleted_at IS NULL
+    JOIN transactions t
+      ON t.transactionable_id = lp.id
+     AND t.transactionable_type = 'App\\Models\\LaboratoryPurchase'
+    WHERE (t.payment_status IS NULL OR t.payment_status <> 'failed')
+      AND COALESCE(t.gateway_processed_at, t.created_at) IS NOT NULL
+    GROUP BY ba.id
+)
+SELECT 'BASE_READY' AS status;
+
+-- ============================================================
+-- QUERY 1) Solicitudes en el periodo
+-- ============================================================
+WITH base_appointments AS (
+    SELECT la.id
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+)
+SELECT COUNT(*) AS total_solicitudes
+FROM base_appointments;
+
+-- ============================================================
+-- QUERY 2) Citas agendadas (fecha/hora + sucursal)
+-- ============================================================
+WITH base_appointments AS (
+    SELECT la.id, la.appointment_date, la.laboratory_store_id
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+)
+SELECT COUNT(*) AS total_agendadas
+FROM base_appointments
+WHERE appointment_date IS NOT NULL
+  AND laboratory_store_id IS NOT NULL;
+
+-- ============================================================
+-- QUERY 3) Compras concretadas (cita con pago registrado)
+-- ============================================================
+WITH base_appointments AS (
+    SELECT la.id, la.laboratory_purchase_id
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+),
+paid_appointments AS (
+    SELECT DISTINCT ba.id
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp
+      ON lp.id = ba.laboratory_purchase_id
+     AND lp.deleted_at IS NULL
+    JOIN transactions t
+      ON t.transactionable_id = lp.id
+     AND t.transactionable_type = 'App\\Models\\LaboratoryPurchase'
+    WHERE (t.payment_status IS NULL OR t.payment_status <> 'failed')
+      AND COALESCE(t.gateway_processed_at, t.created_at) IS NOT NULL
+)
+SELECT COUNT(*) AS total_compras_concretadas
+FROM paid_appointments;
+
+-- ============================================================
+-- QUERY 4) % agendadas / solicitudes
+-- ============================================================
+WITH base_appointments AS (
+    SELECT la.id, la.appointment_date, la.laboratory_store_id
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+)
+SELECT
+    COUNT(*) AS total_solicitudes,
+    SUM(CASE WHEN appointment_date IS NOT NULL AND laboratory_store_id IS NOT NULL THEN 1 ELSE 0 END) AS total_agendadas,
+    ROUND(
+        100 * SUM(CASE WHEN appointment_date IS NOT NULL AND laboratory_store_id IS NOT NULL THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0),
+        1
+    ) AS pct_agendadas_sobre_solicitudes
+FROM base_appointments;
+
+-- ============================================================
+-- QUERY 5) % compras concretadas / agendadas
+-- ============================================================
+WITH base_appointments AS (
+    SELECT
+        la.id,
+        la.appointment_date,
+        la.laboratory_store_id,
+        la.laboratory_purchase_id
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+),
+agendadas AS (
+    SELECT id
+    FROM base_appointments
+    WHERE appointment_date IS NOT NULL
+      AND laboratory_store_id IS NOT NULL
+),
+pagadas AS (
+    SELECT DISTINCT ba.id
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp
+      ON lp.id = ba.laboratory_purchase_id
+     AND lp.deleted_at IS NULL
+    JOIN transactions t
+      ON t.transactionable_id = lp.id
+     AND t.transactionable_type = 'App\\Models\\LaboratoryPurchase'
+    WHERE (t.payment_status IS NULL OR t.payment_status <> 'failed')
+      AND COALESCE(t.gateway_processed_at, t.created_at) IS NOT NULL
+)
+SELECT
+    (SELECT COUNT(*) FROM agendadas) AS total_agendadas,
+    (SELECT COUNT(*) FROM pagadas)   AS total_compras_concretadas,
+    ROUND(
+        100 * (SELECT COUNT(*) FROM pagadas) / NULLIF((SELECT COUNT(*) FROM agendadas), 0),
+        1
+    ) AS pct_compras_sobre_agendadas;
+
+-- ============================================================
+-- QUERY 6) $ catalogo (solicitadas)
+-- ============================================================
+WITH
+base_appointments AS (
+    SELECT la.id, la.laboratory_purchase_id, la.brand
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+),
+catalog_from_purchase AS (
+    SELECT ba.id AS appointment_id, SUM(COALESCE(lt.famedic_price_cents, 0)) AS catalog_cents
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp ON lp.id = ba.laboratory_purchase_id AND lp.deleted_at IS NULL
+    JOIN laboratory_purchase_items lpi ON lpi.laboratory_purchase_id = lp.id AND lpi.deleted_at IS NULL
+    LEFT JOIN laboratory_tests lt ON lt.gda_id = lpi.gda_id AND lt.brand = lp.brand
+    GROUP BY ba.id
+),
+latest_quote_per_appointment AS (
+    SELECT lq.appointment_id, MAX(lq.id) AS latest_quote_id
+    FROM laboratory_quotes lq
+    JOIN base_appointments ba ON ba.id = lq.appointment_id
+    WHERE lq.deleted_at IS NULL
+      AND ba.laboratory_purchase_id IS NULL
+    GROUP BY lq.appointment_id
+),
+catalog_from_latest_quote AS (
+    SELECT lq.appointment_id, SUM(COALESCE(lt.famedic_price_cents, 0)) AS catalog_cents
+    FROM latest_quote_per_appointment lqa
+    JOIN laboratory_quotes lq ON lq.id = lqa.latest_quote_id AND lq.deleted_at IS NULL
+    JOIN laboratory_quote_items lqi ON lqi.laboratory_quote_id = lq.id AND lqi.deleted_at IS NULL
+    LEFT JOIN laboratory_tests lt ON lt.gda_id = lqi.gda_id AND lt.brand = lq.laboratory_brand
+    GROUP BY lq.appointment_id
+),
+catalog_by_appointment AS (
+    SELECT
+        ba.id AS appointment_id,
+        COALESCE(cfp.catalog_cents, 0) + COALESCE(cfq.catalog_cents, 0) AS catalog_cents
+    FROM base_appointments ba
+    LEFT JOIN catalog_from_purchase cfp ON cfp.appointment_id = ba.id
+    LEFT JOIN catalog_from_latest_quote cfq ON cfq.appointment_id = ba.id
+)
+SELECT
+    SUM(catalog_cents) AS catalogo_solicitadas_cents,
+    ROUND(SUM(catalog_cents) / 100, 2) AS catalogo_solicitadas_mxn
+FROM catalog_by_appointment;
+
+-- ============================================================
+-- QUERY 7) $ catalogo (solo agendadas)
+-- ============================================================
+WITH
+base_appointments AS (
+    SELECT
+        la.id,
+        la.laboratory_purchase_id,
+        la.appointment_date,
+        la.laboratory_store_id,
+        la.brand
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+),
+catalog_from_purchase AS (
+    SELECT ba.id AS appointment_id, SUM(COALESCE(lt.famedic_price_cents, 0)) AS catalog_cents
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp ON lp.id = ba.laboratory_purchase_id AND lp.deleted_at IS NULL
+    JOIN laboratory_purchase_items lpi ON lpi.laboratory_purchase_id = lp.id AND lpi.deleted_at IS NULL
+    LEFT JOIN laboratory_tests lt ON lt.gda_id = lpi.gda_id AND lt.brand = lp.brand
+    GROUP BY ba.id
+),
+latest_quote_per_appointment AS (
+    SELECT lq.appointment_id, MAX(lq.id) AS latest_quote_id
+    FROM laboratory_quotes lq
+    JOIN base_appointments ba ON ba.id = lq.appointment_id
+    WHERE lq.deleted_at IS NULL
+      AND ba.laboratory_purchase_id IS NULL
+    GROUP BY lq.appointment_id
+),
+catalog_from_latest_quote AS (
+    SELECT lq.appointment_id, SUM(COALESCE(lt.famedic_price_cents, 0)) AS catalog_cents
+    FROM latest_quote_per_appointment lqa
+    JOIN laboratory_quotes lq ON lq.id = lqa.latest_quote_id AND lq.deleted_at IS NULL
+    JOIN laboratory_quote_items lqi ON lqi.laboratory_quote_id = lq.id AND lqi.deleted_at IS NULL
+    LEFT JOIN laboratory_tests lt ON lt.gda_id = lqi.gda_id AND lt.brand = lq.laboratory_brand
+    GROUP BY lq.appointment_id
+),
+catalog_by_appointment AS (
+    SELECT
+        ba.id AS appointment_id,
+        ba.appointment_date,
+        ba.laboratory_store_id,
+        COALESCE(cfp.catalog_cents, 0) + COALESCE(cfq.catalog_cents, 0) AS catalog_cents
+    FROM base_appointments ba
+    LEFT JOIN catalog_from_purchase cfp ON cfp.appointment_id = ba.id
+    LEFT JOIN catalog_from_latest_quote cfq ON cfq.appointment_id = ba.id
+)
+SELECT
+    SUM(CASE WHEN appointment_date IS NOT NULL AND laboratory_store_id IS NOT NULL THEN catalog_cents ELSE 0 END) AS catalogo_agendadas_cents,
+    ROUND(SUM(CASE WHEN appointment_date IS NOT NULL AND laboratory_store_id IS NOT NULL THEN catalog_cents ELSE 0 END) / 100, 2) AS catalogo_agendadas_mxn
+FROM catalog_by_appointment;
+
+-- ============================================================
+-- QUERY 8) $ compra concretada (con pago)
+-- ============================================================
+WITH
+base_appointments AS (
+    SELECT
+        la.id,
+        la.laboratory_purchase_id,
+        la.brand
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+),
+purchase_cents_by_appointment AS (
+    SELECT
+        ba.id AS appointment_id,
+        SUM(lpi.price_cents) AS purchase_cents
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp
+      ON lp.id = ba.laboratory_purchase_id
+     AND lp.deleted_at IS NULL
+    JOIN laboratory_purchase_items lpi
+      ON lpi.laboratory_purchase_id = lp.id
+     AND lpi.deleted_at IS NULL
+    GROUP BY ba.id
+),
+paid_appointments AS (
+    SELECT DISTINCT ba.id AS appointment_id
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp
+      ON lp.id = ba.laboratory_purchase_id
+     AND lp.deleted_at IS NULL
+    JOIN transactions t
+      ON t.transactionable_id = lp.id
+     AND t.transactionable_type = 'App\\Models\\LaboratoryPurchase'
+    WHERE (t.payment_status IS NULL OR t.payment_status <> 'failed')
+      AND COALESCE(t.gateway_processed_at, t.created_at) IS NOT NULL
+)
+SELECT
+    SUM(COALESCE(pca.purchase_cents, 0)) AS compra_concretada_cents,
+    ROUND(SUM(COALESCE(pca.purchase_cents, 0)) / 100, 2) AS compra_concretada_mxn
+FROM paid_appointments pa
+LEFT JOIN purchase_cents_by_appointment pca
+  ON pca.appointment_id = pa.appointment_id;
+
+-- ============================================================
+-- QUERY 9) Promedio (solicitud -> cita agendada), en horas
+-- ============================================================
+WITH base_appointments AS (
+    SELECT la.id, la.created_at, la.appointment_date, la.laboratory_store_id
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+)
+SELECT
+    ROUND(AVG(TIMESTAMPDIFF(SECOND, created_at, appointment_date)) / 3600, 2) AS promedio_horas_solicitud_a_agenda
+FROM base_appointments
+WHERE appointment_date IS NOT NULL
+  AND laboratory_store_id IS NOT NULL;
+
+-- ============================================================
+-- QUERY 10) Promedio (cita agendada -> pago), horas y minutos
+-- NOTA: Puede salir negativo si el pago se registró antes de appointment_date.
+-- ============================================================
+WITH
+base_appointments AS (
+    SELECT
+        la.id,
+        la.created_at,
+        la.appointment_date,
+        la.laboratory_store_id,
+        la.laboratory_purchase_id,
+        la.brand
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+),
+first_paid_at_by_appointment AS (
+    SELECT
+        ba.id AS appointment_id,
+        MIN(COALESCE(t.gateway_processed_at, t.created_at)) AS first_paid_at
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp
+      ON lp.id = ba.laboratory_purchase_id
+     AND lp.deleted_at IS NULL
+    JOIN transactions t
+      ON t.transactionable_id = lp.id
+     AND t.transactionable_type = 'App\\Models\\LaboratoryPurchase'
+    WHERE (t.payment_status IS NULL OR t.payment_status <> 'failed')
+      AND COALESCE(t.gateway_processed_at, t.created_at) IS NOT NULL
+    GROUP BY ba.id
+)
+SELECT
+    ROUND(AVG(TIMESTAMPDIFF(SECOND, ba.appointment_date, fp.first_paid_at)) / 3600, 2) AS promedio_horas_agenda_a_pago,
+    ROUND(AVG(TIMESTAMPDIFF(SECOND, ba.appointment_date, fp.first_paid_at)) / 60, 2)   AS promedio_min_agenda_a_pago
+FROM base_appointments ba
+JOIN first_paid_at_by_appointment fp
+  ON fp.appointment_id = ba.id
+WHERE ba.appointment_date IS NOT NULL
+  AND ba.laboratory_store_id IS NOT NULL;
+
+-- ============================================================
+-- QUERY 11) Promedio (solicitud -> pago), horas
+-- ============================================================
+WITH
+base_appointments AS (
+    SELECT
+        la.id,
+        la.created_at,
+        la.laboratory_purchase_id,
+        la.brand
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+),
+first_paid_at_by_appointment AS (
+    SELECT
+        ba.id AS appointment_id,
+        MIN(COALESCE(t.gateway_processed_at, t.created_at)) AS first_paid_at
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp
+      ON lp.id = ba.laboratory_purchase_id
+     AND lp.deleted_at IS NULL
+    JOIN transactions t
+      ON t.transactionable_id = lp.id
+     AND t.transactionable_type = 'App\\Models\\LaboratoryPurchase'
+    WHERE (t.payment_status IS NULL OR t.payment_status <> 'failed')
+      AND COALESCE(t.gateway_processed_at, t.created_at) IS NOT NULL
+    GROUP BY ba.id
+)
+SELECT
+    ROUND(AVG(TIMESTAMPDIFF(SECOND, ba.created_at, fp.first_paid_at)) / 3600, 2) AS promedio_horas_solicitud_a_pago
+FROM base_appointments ba
+JOIN first_paid_at_by_appointment fp
+  ON fp.appointment_id = ba.id;
+
+-- ============================================================
+-- QUERY 12) Pacientes con intento de llamada
+-- ============================================================
+WITH base_appointments AS (
+    SELECT la.id, la.phone_call_intent_at
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+)
+SELECT COUNT(*) AS pacientes_con_intento_llamada
+FROM base_appointments
+WHERE phone_call_intent_at IS NOT NULL;
+
+-- ============================================================
+-- QUERY 13) Pacientes con disponibilidad o comentario
+-- ============================================================
+WITH base_appointments AS (
+    SELECT
+        la.id,
+        la.callback_availability_starts_at,
+        la.callback_availability_ends_at,
+        la.patient_callback_comment
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+)
+SELECT COUNT(*) AS pacientes_con_disponibilidad_o_comentario
+FROM base_appointments
+WHERE callback_availability_starts_at IS NOT NULL
+   OR callback_availability_ends_at IS NOT NULL
+   OR (patient_callback_comment IS NOT NULL AND patient_callback_comment <> '');
+
+-- ============================================================
+-- QUERY EXTRA: resumen en una sola salida
+-- (util para validar todo junto)
+-- ============================================================
+WITH
+base_appointments AS (
+    SELECT
+        la.id,
+        la.created_at,
+        la.confirmed_at,
+        la.appointment_date,
+        la.laboratory_store_id,
+        la.laboratory_purchase_id,
+        la.brand,
+        la.phone_call_intent_at,
+        la.callback_availability_starts_at,
+        la.callback_availability_ends_at,
+        la.patient_callback_comment
+    FROM laboratory_appointments la
+    WHERE la.deleted_at IS NULL
+      AND la.created_at BETWEEN CONCAT(@start_date, ' 00:00:00') AND CONCAT(@end_date, ' 23:59:59')
+      AND (@brand = '' OR la.brand = @brand)
+      AND (
+            @completed = ''
+            OR (@completed = 'true'  AND la.confirmed_at IS NOT NULL)
+            OR (@completed = 'false' AND la.confirmed_at IS NULL)
+          )
+      AND (
+            @phone_call_intent = ''
+            OR (@phone_call_intent = 'true'  AND la.phone_call_intent_at IS NOT NULL)
+            OR (@phone_call_intent = 'false' AND la.phone_call_intent_at IS NULL)
+          )
+      AND (
+            @callback_info = ''
+            OR (
+                @callback_info = 'true'
+                AND (
+                    la.callback_availability_starts_at IS NOT NULL
+                    OR la.callback_availability_ends_at IS NOT NULL
+                    OR (la.patient_callback_comment IS NOT NULL AND la.patient_callback_comment <> '')
+                )
+            )
+            OR (
+                @callback_info = 'false'
+                AND la.callback_availability_starts_at IS NULL
+                AND la.callback_availability_ends_at IS NULL
+                AND (la.patient_callback_comment IS NULL OR la.patient_callback_comment = '')
+            )
+          )
+),
+catalog_from_purchase AS (
+    SELECT
+        ba.id AS appointment_id,
+        SUM(COALESCE(lt.famedic_price_cents, 0)) AS catalog_cents
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp
+      ON lp.id = ba.laboratory_purchase_id
+     AND lp.deleted_at IS NULL
+    JOIN laboratory_purchase_items lpi
+      ON lpi.laboratory_purchase_id = lp.id
+     AND lpi.deleted_at IS NULL
+    LEFT JOIN laboratory_tests lt
+      ON lt.gda_id = lpi.gda_id
+     AND lt.brand = lp.brand
+    GROUP BY ba.id
+),
+latest_quote_per_appointment AS (
+    SELECT lq.appointment_id, MAX(lq.id) AS latest_quote_id
+    FROM laboratory_quotes lq
+    JOIN base_appointments ba ON ba.id = lq.appointment_id
+    WHERE lq.deleted_at IS NULL
+      AND ba.laboratory_purchase_id IS NULL
+    GROUP BY lq.appointment_id
+),
+catalog_from_latest_quote AS (
+    SELECT
+        lq.appointment_id,
+        SUM(COALESCE(lt.famedic_price_cents, 0)) AS catalog_cents
+    FROM latest_quote_per_appointment lqa
+    JOIN laboratory_quotes lq
+      ON lq.id = lqa.latest_quote_id
+     AND lq.deleted_at IS NULL
+    JOIN laboratory_quote_items lqi
+      ON lqi.laboratory_quote_id = lq.id
+     AND lqi.deleted_at IS NULL
+    LEFT JOIN laboratory_tests lt
+      ON lt.gda_id = lqi.gda_id
+     AND lt.brand = lq.laboratory_brand
+    GROUP BY lq.appointment_id
+),
+catalog_by_appointment AS (
+    SELECT
+        ba.id,
+        ba.created_at,
+        ba.appointment_date,
+        ba.laboratory_store_id,
+        ba.phone_call_intent_at,
+        ba.callback_availability_starts_at,
+        ba.callback_availability_ends_at,
+        ba.patient_callback_comment,
+        COALESCE(cfp.catalog_cents, 0) + COALESCE(cfq.catalog_cents, 0) AS catalog_cents
+    FROM base_appointments ba
+    LEFT JOIN catalog_from_purchase cfp ON cfp.appointment_id = ba.id
+    LEFT JOIN catalog_from_latest_quote cfq ON cfq.appointment_id = ba.id
+),
+purchase_cents_by_appointment AS (
+    SELECT
+        ba.id AS appointment_id,
+        SUM(lpi.price_cents) AS purchase_cents
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp
+      ON lp.id = ba.laboratory_purchase_id
+     AND lp.deleted_at IS NULL
+    JOIN laboratory_purchase_items lpi
+      ON lpi.laboratory_purchase_id = lp.id
+     AND lpi.deleted_at IS NULL
+    GROUP BY ba.id
+),
+first_paid_at_by_appointment AS (
+    SELECT
+        ba.id AS appointment_id,
+        MIN(COALESCE(t.gateway_processed_at, t.created_at)) AS first_paid_at
+    FROM base_appointments ba
+    JOIN laboratory_purchases lp
+      ON lp.id = ba.laboratory_purchase_id
+     AND lp.deleted_at IS NULL
+    JOIN transactions t
+      ON t.transactionable_id = lp.id
+     AND t.transactionable_type = 'App\\Models\\LaboratoryPurchase'
+    WHERE (t.payment_status IS NULL OR t.payment_status <> 'failed')
+      AND COALESCE(t.gateway_processed_at, t.created_at) IS NOT NULL
+    GROUP BY ba.id
+),
+paid_appointments AS (
+    SELECT appointment_id FROM first_paid_at_by_appointment
+)
+SELECT
+    -- Conteos
+    (SELECT COUNT(*) FROM base_appointments) AS total_solicitudes,
+    (SELECT COUNT(*) FROM base_appointments WHERE appointment_date IS NOT NULL AND laboratory_store_id IS NOT NULL) AS total_agendadas,
+    (SELECT COUNT(*) FROM paid_appointments) AS total_compras_concretadas,
+
+    -- Tasas
+    ROUND(
+        100 * (SELECT COUNT(*) FROM base_appointments WHERE appointment_date IS NOT NULL AND laboratory_store_id IS NOT NULL)
+        / NULLIF((SELECT COUNT(*) FROM base_appointments), 0),
+        1
+    ) AS pct_agendadas_sobre_solicitudes,
+    ROUND(
+        100 * (SELECT COUNT(*) FROM paid_appointments)
+        / NULLIF((SELECT COUNT(*) FROM base_appointments WHERE appointment_date IS NOT NULL AND laboratory_store_id IS NOT NULL), 0),
+        1
+    ) AS pct_compras_sobre_agendadas,
+
+    -- Montos
+    (SELECT SUM(catalog_cents) FROM catalog_by_appointment) AS catalogo_solicitadas_cents,
+    (SELECT SUM(CASE WHEN appointment_date IS NOT NULL AND laboratory_store_id IS NOT NULL THEN catalog_cents ELSE 0 END) FROM catalog_by_appointment) AS catalogo_agendadas_cents,
+    (
+      SELECT SUM(COALESCE(pca.purchase_cents, 0))
+      FROM paid_appointments pa
+      LEFT JOIN purchase_cents_by_appointment pca ON pca.appointment_id = pa.appointment_id
+    ) AS compra_concretada_cents,
+
+    -- Tiempos
+    (
+      SELECT ROUND(AVG(TIMESTAMPDIFF(SECOND, created_at, appointment_date)) / 3600, 2)
+      FROM base_appointments
+      WHERE appointment_date IS NOT NULL AND laboratory_store_id IS NOT NULL
+    ) AS promedio_horas_solicitud_a_agenda,
+    (
+      SELECT ROUND(AVG(TIMESTAMPDIFF(SECOND, ba.appointment_date, fp.first_paid_at)) / 60, 2)
+      FROM base_appointments ba
+      JOIN first_paid_at_by_appointment fp ON fp.appointment_id = ba.id
+      WHERE ba.appointment_date IS NOT NULL AND ba.laboratory_store_id IS NOT NULL
+    ) AS promedio_min_agenda_a_pago,
+    (
+      SELECT ROUND(AVG(TIMESTAMPDIFF(SECOND, ba.created_at, fp.first_paid_at)) / 3600, 2)
+      FROM base_appointments ba
+      JOIN first_paid_at_by_appointment fp ON fp.appointment_id = ba.id
+    ) AS promedio_horas_solicitud_a_pago,
+
+    -- Llamada/callback
+    (SELECT COUNT(*) FROM base_appointments WHERE phone_call_intent_at IS NOT NULL) AS pacientes_con_intento_llamada,
+    (
+      SELECT COUNT(*) FROM base_appointments
+      WHERE callback_availability_starts_at IS NOT NULL
+         OR callback_availability_ends_at IS NOT NULL
+         OR (patient_callback_comment IS NOT NULL AND patient_callback_comment <> '')
+    ) AS pacientes_con_disponibilidad_o_comentario;

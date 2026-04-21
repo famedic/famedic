@@ -92,6 +92,7 @@ export default function LaboratoryAppointment({
 				laboratoryAppointment={laboratoryAppointment}
 				interactions={interactions}
 				patientView={patientView}
+				setPatientView={setPatientView}
 			/>
 
 			<LaboratoryAppointmentConfirmation
@@ -105,25 +106,49 @@ function PatientCommunicationTabs({
 	laboratoryAppointment,
 	interactions,
 	patientView,
+	setPatientView,
 }) {
 	if (patientView === "none") {
 		return null;
 	}
 
+	const showingFollowup = patientView === "followup";
+
 	return (
-		<div className="mt-10">
-			{patientView === "followup" ? (
-				<>
-					<PatientFollowUp laboratoryAppointment={laboratoryAppointment} />
-					<RequestTimeline laboratoryAppointment={laboratoryAppointment} />
-				</>
-			) : (
-				<InteractionBitacora
-					interactions={interactions}
-					laboratoryAppointment={laboratoryAppointment}
-				/>
-			)}
-		</div>
+		<Dialog
+			open={patientView !== "none"}
+			onClose={() => setPatientView("none")}
+			size="3xl"
+		>
+			<DialogTitle>
+				{showingFollowup
+					? "Seguimiento y línea de tiempo"
+					: "Bitácora de interacciones"}
+			</DialogTitle>
+			<DialogDescription>
+				{showingFollowup
+					? "Consulta contexto de contacto y principales hitos de la cita."
+					: "Registro cronológico y captura de nuevas interacciones."}
+			</DialogDescription>
+			<DialogBody className="space-y-6">
+				{showingFollowup ? (
+					<>
+						<PatientFollowUp laboratoryAppointment={laboratoryAppointment} />
+						<RequestTimeline laboratoryAppointment={laboratoryAppointment} />
+					</>
+				) : (
+					<InteractionBitacora
+						interactions={interactions}
+						laboratoryAppointment={laboratoryAppointment}
+					/>
+				)}
+			</DialogBody>
+			<DialogActions>
+				<Button plain onClick={() => setPatientView("none")}>
+					Cerrar
+				</Button>
+			</DialogActions>
+		</Dialog>
 	);
 }
 
@@ -151,7 +176,7 @@ function RequestTimeline({ laboratoryAppointment }) {
 	];
 
 	return (
-		<div className="mt-10">
+		<div>
 			<Subheading>Línea de tiempo</Subheading>
 			<Text className="mt-1 text-sm text-zinc-500">
 				Simulación de hitos principales de la cita y su seguimiento.
@@ -174,7 +199,7 @@ function RequestTimeline({ laboratoryAppointment }) {
 
 function PatientFollowUp({ laboratoryAppointment }) {
 	return (
-		<div className="mt-10">
+		<div>
 			<Subheading>Seguimiento con el paciente</Subheading>
 			<Text className="mt-1 text-sm text-zinc-500">
 				Tiempos relativos a la solicitud de cita y a la interacción con
@@ -244,7 +269,7 @@ function InteractionBitacora({ interactions, laboratoryAppointment }) {
 	};
 
 	return (
-		<div className="mt-10">
+		<div>
 			<Subheading>Bitácora de interacciones</Subheading>
 			<Text className="mt-1 text-sm text-zinc-500">
 				Registro cronológico de intentos del paciente y notas del equipo
