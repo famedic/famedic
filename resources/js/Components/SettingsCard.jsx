@@ -11,8 +11,8 @@ export default function SettingsCard({
 		<Card
 			as={as}
 			className={clsx(
-				className,
 				"flex w-full max-w-xs flex-col justify-between p-4",
+				className,
 			)}
 		>
 			<div>{children}</div>

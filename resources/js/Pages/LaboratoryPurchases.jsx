@@ -6,8 +6,8 @@ import {
 	DocumentTextIcon,
 	ClockIcon,
 	ExclamationTriangleIcon,
-	MagnifyingGlassIcon,
 } from "@heroicons/react/16/solid";
+import { FunnelIcon } from "@heroicons/react/24/outline";
 import { TableCell, TableHeader, TableRow } from "@/Components/Catalyst/table";
 import { Navbar, NavbarItem } from "@/Components/Catalyst/navbar";
 import { QrCodeIcon } from "@heroicons/react/24/solid";
@@ -15,11 +15,16 @@ import EmptyListCard from "@/Components/EmptyListCard";
 import PurchaseCard from "@/Components/PurchaseCard";
 import { Badge } from "@/Components/Catalyst/badge";
 import { useForm, Link, router } from "@inertiajs/react";
-import { Input, InputGroup } from "@/Components/Catalyst/input";
+import { Input } from "@/Components/Catalyst/input";
 import LaboratoryPurchaseDashboardCard from "@/Components/Laboratory/LaboratoryPurchaseDashboardCard";
 import { Button } from "@/Components/Catalyst/button";
 import OtpModal from "@/Components/OtpModal";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import SearchInput from "@/Components/Admin/SearchInput";
+import FilterCountBadge from "@/Components/Admin/FilterCountBadge";
+import ListboxFilter from "@/Components/Filters/ListboxFilter";
+import DateFilter from "@/Components/Filters/DateFilter";
+import { ListboxLabel, ListboxOption } from "@/Components/Catalyst/listbox";
 
 async function checkLabResultsOtpVerified(purchaseId) {
 	try {
@@ -47,6 +52,7 @@ export default function LaboratoryPurchases({
 	const pendingAfterOtpRef = useRef(null);
 	const [showOtpModal, setShowOtpModal] = useState(false);
 	const [otpPurchaseId, setOtpPurchaseId] = useState(null);
+	const [showFilters, setShowFilters] = useState(false);
 
 	const requireOtpThen = async (purchaseId, fn) => {
 		const verified = await checkLabResultsOtpVerified(purchaseId);
@@ -107,8 +113,29 @@ export default function LaboratoryPurchases({
 		});
 	};
 
-	const selectClass =
-		"min-h-[48px] w-full rounded-lg border border-zinc-300 bg-white px-3 text-base text-zinc-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-white";
+	const showUpdateButton = useMemo(
+		() =>
+			(data.search || "") !== (filtersProp.search || "") ||
+			(data.patient || "") !== (filtersProp.patient || "") ||
+			(data.study_status || "all") !== (filtersProp.study_status || "all") ||
+			(data.payment_method || "") !== (filtersProp.payment_method || "") ||
+			(data.brand || "") !== (filtersProp.brand || "") ||
+			(data.start_date || "") !== (filtersProp.start_date || "") ||
+			(data.end_date || "") !== (filtersProp.end_date || ""),
+		[data, filtersProp],
+	);
+
+	const activeFiltersCount = useMemo(() => {
+		let count = 0;
+		if (filtersProp.search) count += 1;
+		if (filtersProp.patient) count += 1;
+		if (filtersProp.study_status && filtersProp.study_status !== "all") count += 1;
+		if (filtersProp.payment_method) count += 1;
+		if (filtersProp.brand) count += 1;
+		if (filtersProp.start_date) count += 1;
+		if (filtersProp.end_date) count += 1;
+		return count;
+	}, [filtersProp]);
 
 	return (
 		<SettingsLayout title="Mis pedidos">
@@ -132,145 +159,142 @@ export default function LaboratoryPurchases({
 				</NavbarItem>
 			</Navbar>
 
-			<form
-				className="mb-8 space-y-4 rounded-2xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/50 sm:p-6"
-				onSubmit={applyFilters}
-			>
-				<Subheading className="text-base sm:text-lg">Filtrar pedidos</Subheading>
-				<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-					<div>
-						<label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-slate-300">
-							Buscar
-						</label>
-						<InputGroup>
-							<MagnifyingGlassIcon />
-							<Input
-								placeholder="Nombre, folio o estudio"
-								value={data.search}
-								onChange={(e) => setData("search", e.target.value)}
-								className="min-h-[48px] text-base"
-							/>
-						</InputGroup>
-					</div>
-					<div>
-						<label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-slate-300">
-							Paciente
-						</label>
-						<select
-							className={selectClass}
-							value={data.patient}
-							onChange={(e) => setData("patient", e.target.value)}
+			<form className="mb-8 space-y-4" onSubmit={applyFilters}>
+				<div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+					<SearchInput
+						value={data.search}
+						onChange={(value) => setData("search", value)}
+						placeholder="Nombre, folio o estudio"
+					/>
+					<div className="flex items-center justify-end gap-2">
+						<Button
+							type="button"
+							outline
+							className="w-full"
+							onClick={() => setShowFilters((previous) => !previous)}
 						>
-							<option value="">Todos los pacientes</option>
-							{(filterOptions.patients || []).map((opt) => (
-								<option key={opt.value} value={opt.value}>
-									{opt.label}
-								</option>
-							))}
-						</select>
+							{activeFiltersCount ? (
+								<FilterCountBadge count={activeFiltersCount} />
+							) : (
+								<FunnelIcon />
+							)}
+							Filtros
+						</Button>
 					</div>
-					<div>
-						<label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-slate-300">
-							Estado del estudio
-						</label>
-						<select
-							className={selectClass}
-							value={data.study_status}
-							onChange={(e) => setData("study_status", e.target.value)}
-						>
-							{(filterOptions.study_statuses || []).map((opt) => (
-								<option key={opt.value} value={opt.value}>
-									{opt.label}
-								</option>
-							))}
-						</select>
-					</div>
-					<div>
-						<label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-slate-300">
-							Forma de pago
-						</label>
-						<select
-							className={selectClass}
-							value={data.payment_method}
-							onChange={(e) => setData("payment_method", e.target.value)}
-						>
-							{(filterOptions.payment_methods || []).map((opt) => (
-								<option key={opt.value === "" ? "any" : opt.value} value={opt.value}>
-									{opt.label}
-								</option>
-							))}
-						</select>
-					</div>
-					<div>
-						<label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-slate-300">
-							Laboratorio
-						</label>
-						<select
-							className={selectClass}
-							value={data.brand}
-							onChange={(e) => setData("brand", e.target.value)}
-						>
-							<option value="">Todos</option>
-							{(filterOptions.laboratory_brands || []).map((opt) => (
-								<option key={opt.value} value={opt.value}>
-									{opt.label}
-								</option>
-							))}
-						</select>
-					</div>
-					<div className="grid grid-cols-2 gap-2">
-						<div>
-							<label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-slate-300">
-								Desde
-							</label>
-							<Input
-								type="date"
+				</div>
+
+				{showFilters && (
+					<div className="space-y-4 rounded-2xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/50 sm:p-6">
+						<Subheading className="text-base sm:text-lg">Filtrar pedidos</Subheading>
+						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+							<ListboxFilter
+								label="Paciente"
+								placeholder="Paciente"
+								value={data.patient}
+								onChange={(value) => setData("patient", value)}
+							>
+								<ListboxOption value="">
+									<ListboxLabel>Todos los pacientes</ListboxLabel>
+								</ListboxOption>
+								{(filterOptions.patients || []).map((opt) => (
+									<ListboxOption key={opt.value} value={opt.value}>
+										<ListboxLabel>{opt.label}</ListboxLabel>
+									</ListboxOption>
+								))}
+							</ListboxFilter>
+
+							<ListboxFilter
+								label="Estado del estudio"
+								value={data.study_status}
+								onChange={(value) => setData("study_status", value)}
+							>
+								{(filterOptions.study_statuses || []).map((opt) => (
+									<ListboxOption key={opt.value} value={opt.value}>
+										<ListboxLabel>{opt.label}</ListboxLabel>
+									</ListboxOption>
+								))}
+							</ListboxFilter>
+
+							<ListboxFilter
+								label="Forma de pago"
+								value={data.payment_method}
+								onChange={(value) => setData("payment_method", value)}
+							>
+								{(filterOptions.payment_methods || []).map((opt) => (
+									<ListboxOption
+										key={opt.value === "" ? "any-payment-method" : opt.value}
+										value={opt.value}
+									>
+										<ListboxLabel>{opt.label}</ListboxLabel>
+									</ListboxOption>
+								))}
+							</ListboxFilter>
+
+							<ListboxFilter
+								label="Laboratorio"
+								value={data.brand}
+								onChange={(value) => setData("brand", value)}
+							>
+								<ListboxOption value="">
+									<ListboxLabel>Todos</ListboxLabel>
+								</ListboxOption>
+								{(filterOptions.laboratory_brands || []).map((opt) => (
+									<ListboxOption key={opt.value} value={opt.value}>
+										<ListboxLabel>{opt.label}</ListboxLabel>
+									</ListboxOption>
+								))}
+							</ListboxFilter>
+
+							<DateFilter
+								label="Desde"
 								value={data.start_date}
-								onChange={(e) => setData("start_date", e.target.value)}
-								className="min-h-[48px] text-base"
+								onChange={(value) => setData("start_date", value)}
+							/>
+							<DateFilter
+								label="Hasta"
+								value={data.end_date}
+								onChange={(value) => setData("end_date", value)}
 							/>
 						</div>
-						<div>
-							<label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-slate-300">
-								Hasta
-							</label>
-							<Input
-								type="date"
-								value={data.end_date}
-								onChange={(e) => setData("end_date", e.target.value)}
+						<div className="flex flex-wrap gap-3">
+							<Button
+								type="button"
+								outline
 								className="min-h-[48px] text-base"
-							/>
+								onClick={() => {
+									router.get(
+										route("laboratory-purchases.index"),
+										{
+											search: "",
+											patient: "",
+											study_status: "all",
+											payment_method: "",
+											brand: "",
+											start_date: "",
+											end_date: "",
+											deleted: "false",
+										},
+										{ preserveScroll: true, replace: true },
+									);
+								}}
+							>
+								Limpiar
+							</Button>
 						</div>
 					</div>
-				</div>
-				<div className="flex flex-wrap gap-3">
-					<Button type="submit" disabled={processing} className="min-h-[48px] min-w-[160px] text-base">
-						{processing ? "Buscando…" : "Aplicar filtros"}
-					</Button>
-					<Button
-						type="button"
-						outline
-						className="min-h-[48px] text-base"
-						onClick={() => {
-							router.get(
-								route("laboratory-purchases.index"),
-								{
-									search: "",
-									patient: "",
-									study_status: "all",
-									payment_method: "",
-									brand: "",
-									start_date: "",
-									end_date: "",
-									deleted: "false",
-								},
-								{ preserveScroll: true, replace: true },
-							);
-						}}
-					>
-						Limpiar
-					</Button>
-				</div>
+				)}
+
+				{showUpdateButton && (
+					<div className="flex flex-wrap gap-3">
+						<Button
+							type="submit"
+							disabled={processing}
+							className="min-h-[48px] min-w-[160px] text-base"
+						>
+							{processing ? "Buscando..." : "Aplicar filtros"}
+						</Button>
+					</div>
+				)}
 			</form>
 
 			{laboratoryQuotes.length > 0 && (
