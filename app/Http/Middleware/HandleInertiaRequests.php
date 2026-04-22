@@ -73,6 +73,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'userNavigation' => $request->user() ? $this->getUserNavigation((bool) $request->user()->administrator, (bool) $request->user()?->customer?->medical_attention_subscription_is_active) : [],
             'flashMessage' => session('flashMessage'),
+            'appEnv' => app()->environment(),
             'trackingEvents' => function () {
                 if (! app()->environment('production')) {
                     return [];

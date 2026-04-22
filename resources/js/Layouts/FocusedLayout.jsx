@@ -8,9 +8,10 @@ export default function FocusedLayout({
 	useTrackingEvents();
 
 	return (
-		<div className="min-h-screen bg-neutral-50 dark:bg-slate-950">
-			<div className="mx-auto max-w-[100rem]">
-				<Head title={title} />
+		<AppLayout>
+			<div className="min-h-screen bg-neutral-50 dark:bg-slate-950">
+				<div className="mx-auto max-w-[100rem]">
+					<Head title={title} />
 
 				{/* Navbar */}
 				<header className="px-4 pt-2">
@@ -45,13 +46,14 @@ export default function FocusedLayout({
 					</Navbar>
 				</header>
 
-				<div className="px-4">
-					<main className="pt-6">{children}</main>
+					<div className="px-4">
+						<main className="pt-6">{children}</main>
+					</div>
 				</div>
+				<Notification />
+				{!hideHelpBubble && <HelpBubble className="bottom-3 right-3" />}
 			</div>
-			<Notification />
-			{!hideHelpBubble && <HelpBubble className="bottom-3 right-3" />}
-		</div>
+		</AppLayout>
 	);
 }
 
@@ -68,3 +70,4 @@ import {
 import OdessaLogo from "@/Components/OdessaLogo";
 import HelpBubble from "@/Components/Catalyst/HelpBubble";
 import useTrackingEvents from "@/Hooks/useTrackingEvents";
+import AppLayout from "@/Layouts/AppLayout";
