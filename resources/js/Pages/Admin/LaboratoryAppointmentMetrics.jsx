@@ -10,7 +10,6 @@ import {
 	AdjustmentsHorizontalIcon,
 	QuestionMarkCircleIcon,
 	CurrencyDollarIcon,
-	ExclamationTriangleIcon,
 	UserIcon,
 } from "@heroicons/react/16/solid";
 import AdminLayout from "@/Layouts/AdminLayout";
@@ -396,6 +395,54 @@ function formatDateTimeAmPm(value) {
 	}).format(date);
 }
 
+/** `YYYY-MM-DD` como fecha local (evita desfase UTC). */
+function parseYmdLocal(ymd) {
+	if (!ymd || typeof ymd !== "string") {
+		return null;
+	}
+	const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	if (!m) {
+		return null;
+	}
+	return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+function inclusiveCalendarDays(startYmd, endYmd) {
+	const a = parseYmdLocal(startYmd);
+	const b = parseYmdLocal(endYmd);
+	if (!a || !b || b < a) {
+		return null;
+	}
+	return Math.floor((b.getTime() - a.getTime()) / 86400000) + 1;
+}
+
+function formatYmdLongEs(ymd) {
+	const d = parseYmdLocal(ymd);
+	if (!d) {
+		return "—";
+	}
+	return new Intl.DateTimeFormat("es-MX", {
+		day: "numeric",
+		month: "short",
+		year: "numeric",
+	}).format(d);
+}
+
+function dateRangePresetLabel(preset) {
+	switch (preset) {
+		case "today":
+			return "Citas de hoy";
+		case "last_7_days":
+			return "Últimos 7 días";
+		case "last_10_days":
+			return "Últimos 10 días";
+		case "last_6_months":
+			return "Últimos 6 meses";
+		default:
+			return null;
+	}
+}
+
 export default function LaboratoryAppointmentMetrics({
 	filters,
 	brands,
@@ -620,6 +667,51 @@ export default function LaboratoryAppointmentMetrics({
 		return badges;
 	}, [data, brands]);
 
+	const tabDateFilterBanner = useMemo(() => {
+		const appliedDays = inclusiveCalendarDays(
+			filters.start_date,
+			filters.end_date,
+		);
+		const appliedDayLabel =
+			appliedDays != null
+				? `${appliedDays} ${appliedDays === 1 ? "día" : "días"}`
+				: "—";
+		const appliedRangeLabel =
+			filters.start_date && filters.end_date
+				? filters.start_date === filters.end_date
+					? formatYmdLongEs(filters.start_date)
+					: `${formatYmdLongEs(filters.start_date)} — ${formatYmdLongEs(filters.end_date)}`
+				: "—";
+		const appliedPreset = dateRangePresetLabel(filters.date_range || "");
+
+		const datesPending =
+			data.start_date !== filters.start_date ||
+			data.end_date !== filters.end_date ||
+			(data.date_range || "") !== (filters.date_range || "");
+
+		let pending = null;
+		if (datesPending) {
+			const pDays = inclusiveCalendarDays(data.start_date, data.end_date);
+			const pDayLabel =
+				pDays != null ? `${pDays} ${pDays === 1 ? "día" : "días"}` : "—";
+			const pRange =
+				data.start_date && data.end_date
+					? data.start_date === data.end_date
+						? formatYmdLongEs(data.start_date)
+						: `${formatYmdLongEs(data.start_date)} — ${formatYmdLongEs(data.end_date)}`
+					: "—";
+			const pPreset = dateRangePresetLabel(data.date_range || "");
+			pending = { pDayLabel, pRange, pPreset };
+		}
+
+		return {
+			appliedDayLabel,
+			appliedRangeLabel,
+			appliedPreset,
+			pending,
+		};
+	}, [filters, data]);
+
 	return (
 		<AdminLayout title="Métricas de citas de laboratorio">
 			<div className="space-y-10">
@@ -779,8 +871,9 @@ export default function LaboratoryAppointmentMetrics({
 					) : null}
 				</form>
 
+				<div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
 				<TabGroup selectedIndex={activeTab} onChange={setActiveTab}>
-					<TabList className="gap-2 rounded-lg border border-zinc-200 p-1 dark:border-zinc-700">
+					<TabList className="gap-2 border-b border-zinc-200 bg-white p-1 dark:border-zinc-700 dark:bg-zinc-950/30">
 						<Tab className="flex-1">
 							{(selected) => (
 								<div
@@ -874,6 +967,48 @@ export default function LaboratoryAppointmentMetrics({
 						</Tab>
 					</TabList>
 				</TabGroup>
+					<div className="flex flex-col gap-1 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-400">
+						<div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+							<CalendarDaysIcon className="size-3.5 shrink-0 text-zinc-500 dark:text-zinc-500" />
+							<Strong className="font-medium text-zinc-700 dark:text-zinc-300">
+								Fechas en los datos:
+							</Strong>
+							<span className="tabular-nums font-medium text-zinc-800 dark:text-zinc-200">
+								{tabDateFilterBanner.appliedDayLabel}
+							</span>
+							<span className="text-zinc-400" aria-hidden>
+								·
+							</span>
+							<span>{tabDateFilterBanner.appliedRangeLabel}</span>
+							{tabDateFilterBanner.appliedPreset ? (
+								<>
+									<span className="text-zinc-400" aria-hidden>
+										·
+									</span>
+									<span className="text-zinc-500 dark:text-zinc-500">
+										{tabDateFilterBanner.appliedPreset}
+									</span>
+								</>
+							) : null}
+						</div>
+						{tabDateFilterBanner.pending ? (
+							<Text className="text-[11px] leading-snug text-amber-800 dark:text-amber-300/95">
+								Selección en filtros (sin aplicar):{" "}
+								<span className="tabular-nums font-medium">
+									{tabDateFilterBanner.pending.pDayLabel}
+								</span>
+								{" · "}
+								<span>{tabDateFilterBanner.pending.pRange}</span>
+								{tabDateFilterBanner.pending.pPreset ? (
+									<>
+										{" · "}
+										<span>{tabDateFilterBanner.pending.pPreset}</span>
+									</>
+								) : null}
+							</Text>
+						) : null}
+					</div>
+				</div>
 
 				{activeTab === 0 && (
 				<section className="space-y-3">
@@ -897,7 +1032,7 @@ export default function LaboratoryAppointmentMetrics({
 					<Text className="pt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
 						Citas confirmadas
 					</Text>
-					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 						<CardKpi
 							title="Citas agendadas (confirmadas)"
 							icon={CheckCircleIcon}
@@ -923,13 +1058,6 @@ export default function LaboratoryAppointmentMetrics({
 							}
 						>
 							{formatMxnFromCents(summary.catalogo_cents_confirmadas)}
-						</CardKpi>
-						<CardKpi
-							title="> 1 día sin confirmación"
-							icon={ExclamationTriangleIcon}
-							hint="Solicitudes con más de 24 horas transcurridas sin confirmed_at."
-						>
-							{summary.citas_sin_confirmacion_mas_de_un_dia ?? 0}
 						</CardKpi>
 					</div>
 
@@ -1177,19 +1305,10 @@ export default function LaboratoryAppointmentMetrics({
 				<>
 				<section className="space-y-4">
 					<Subheading>Volumen e ingresos por mes</Subheading>
-					<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-						Citas creadas en el periodo (eje X = mes de la solicitud).{" "}
-						<strong>$ Catálogo</strong> = precio Famedic del estudio (
-						<code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">
-							laboratory_tests.famedic_price_cents
-						</code>
-						) desde el <strong>carrito del paciente</strong> (
-						<code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">
-							laboratory_cart_items
-						</code>
-						, estudios con cita y misma marca). Las series
-						en verde/naranja usan <strong>agendadas</strong> (fecha/hora + sucursal)
-						y <strong>compra solo con pago</strong> (compra concretada).
+					<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+						Cada columna es un mes según la fecha de la solicitud. A la
+						izquierda: cantidad de citas; a la derecha: montos en pesos (leyenda
+						y tooltip).
 					</Text>
 					<div className="grid gap-6 xl:grid-cols-2">
 						<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
@@ -1277,20 +1396,11 @@ export default function LaboratoryAppointmentMetrics({
 									/>
 								</BarChart>
 							</ResponsiveContainer>
-							<Text className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-								Tres series en pesos (eje derecho). El tooltip detalla catálogo
-								vs compra.
-							</Text>
 						</div>
 
 						<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
 							<Text className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
 								Ingresos y variación vs mes anterior
-							</Text>
-							<Text className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-								Barras: venta real del mes (suma de precios en ítems de compra).
-								Línea: variación de esa venta frente al mes previo (primer mes
-								sin variación).
 							</Text>
 							<ResponsiveContainer height={340} className="mt-3">
 								<ComposedChart
@@ -1479,10 +1589,9 @@ export default function LaboratoryAppointmentMetrics({
 				{activeTab === 2 && (
 				<section className="space-y-4">
 					<Subheading>Actividad diaria</Subheading>
-					<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-						Conteos por día de creación de la solicitud. &quot;Compras
-						concretadas&quot; = pedido con pago registrado (transacción no fallida).
-						Los montos en $ están en el tooltip.
+					<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+						Cada barra agrupa por día de la solicitud. Compras concretadas = con
+						pago registrado. Montos en el tooltip.
 					</Text>
 					<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
 						<ResponsiveContainer height={380} className="mt-2">
@@ -1519,8 +1628,7 @@ export default function LaboratoryAppointmentMetrics({
 							Detalle de tiempos por cita
 						</Text>
 						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-							Tags de diferencia en horas entre etapas del proceso para ubicar
-							retrasos o anticipos.
+							Horas entre solicitud, confirmación y pago.
 						</Text>
 						<div className="overflow-x-auto">
 							<table className={tableShell}>
@@ -1618,11 +1726,9 @@ export default function LaboratoryAppointmentMetrics({
 				<section className="grid gap-6 xl:grid-cols-2">
 					<div className="space-y-2">
 						<Subheading>Montos por tipo de estudio</Subheading>
-						<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-							Por nombre de estudio en catálogo (match{" "}
-							<Strong>gda_id</Strong> + marca). Tres series: catálogo en
-							solicitudes y en citas agendadas, y precio en ítems solo si hubo
-							pago registrado.
+						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+							Una fila por estudio. Tres barras: catálogo en solicitudes, en
+							agendadas y monto pagado. Detalle en leyenda y tooltip.
 						</Text>
 						<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
 							<ResponsiveContainer
@@ -2234,9 +2340,20 @@ export default function LaboratoryAppointmentMetrics({
 										<td className={tableCell}>{row.nombre ?? "—"}</td>
 										<td className={tableCell}>{row.marca ?? "—"}</td>
 										<td className={tableCell}>
-											{(row.estudios ?? []).length > 0
-												? row.estudios.join(", ")
-												: "—"}
+											{(row.estudios ?? []).length > 0 ? (
+												row.estudios.join(", ")
+											) : Number(row.precio_representa_cents ?? 0) === 0 ? (
+												<div className="flex max-w-xs flex-col gap-1.5">
+													<Badge
+														color="zinc"
+														className="!inline-flex !items-start whitespace-normal text-left font-normal leading-snug"
+													>
+														Sin ítems en carrito (marca + cita) ni en compra vinculada
+													</Badge>
+												</div>
+											) : (
+												"—"
+											)}
 										</td>
 										<td className={tableCell}>
 											<div className="space-y-1">
