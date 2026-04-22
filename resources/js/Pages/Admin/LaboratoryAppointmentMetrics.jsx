@@ -76,6 +76,13 @@ function formatAvgHoursOrMinutes(h) {
 	return formatHours(n);
 }
 
+function formatPercent(value, total) {
+	if (total == null || Number(total) <= 0) {
+		return "0.0 %";
+	}
+	return `${((Number(value) / Number(total)) * 100).toFixed(1)} %`;
+}
+
 function CardKpi({ title, children, hint, icon: Icon }) {
 	return (
 		<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
@@ -535,10 +542,9 @@ export default function LaboratoryAppointmentMetrics({
 			})),
 		[requestedVsConfirmed],
 	);
-	const pieSummaryData = useMemo(() => {
+	const pieCountsOuterData = useMemo(() => {
 		const total = Number(summary.total_solicitudes ?? 0);
 		const confirmadas = Number(summary.total_confirmadas ?? 0);
-		const pagadas = Number(summary.total_compras_concretadas ?? 0);
 		return [
 			{ name: "Agendadas", value: confirmadas, color: "#22c55e" },
 			{
@@ -546,33 +552,75 @@ export default function LaboratoryAppointmentMetrics({
 				value: Math.max(total - confirmadas, 0),
 				color: "#0ea5e9",
 			},
+		];
+	}, [summary]);
+	const pieCountsInnerData = useMemo(() => {
+		const confirmadas = Number(summary.total_confirmadas ?? 0);
+		const pagadas = Number(summary.total_compras_concretadas ?? 0);
+		const pagadasAcotadas = Math.min(Math.max(pagadas, 0), Math.max(confirmadas, 0));
+		return [
 			{
-				name: "Pagadas",
-				value: pagadas,
+				name: "Pagadas (dentro de agendadas)",
+				value: pagadasAcotadas,
 				color: "#f59e0b",
 			},
+			{
+				name: "No pagadas (dentro de agendadas)",
+				value: Math.max(confirmadas - pagadasAcotadas, 0),
+				color: "#64748b",
+			},
 		];
 	}, [summary]);
-
-	const pieRevenueData = useMemo(() => {
-		const conf = Number(summary.catalogo_cents_confirmadas ?? 0);
-		const pend = Number(summary.catalogo_cents_pendientes ?? 0);
-		const paid = Number(summary.compra_cents_total ?? 0);
+	const pieAmountsOuterData = useMemo(() => {
+		const solicitadas = Number(summary.catalogo_cents_solicitadas ?? 0);
+		const agendadas = Number(summary.catalogo_cents_confirmadas ?? 0);
 		return [
-			{ name: "Confirmadas $", value: conf, color: "#22c55e" },
 			{
-				name: "Pendientes $",
-				value: Math.max(pend, 0),
+				name: "$ Agendadas",
+				value: Math.min(Math.max(agendadas, 0), Math.max(solicitadas, 0)),
+				color: "#10b981",
+			},
+			{
+				name: "$ Sin agendar",
+				value: Math.max(solicitadas - agendadas, 0),
 				color: "#0ea5e9",
 			},
-			{ name: "Pagadas $", value: paid, color: "#f59e0b" },
+		];
+	}, [summary]);
+	const pieAmountsInnerData = useMemo(() => {
+		const agendadas = Number(summary.catalogo_cents_confirmadas ?? 0);
+		const pagadas = Number(summary.compra_cents_total ?? 0);
+		const pagadasAcotadas = Math.min(Math.max(pagadas, 0), Math.max(agendadas, 0));
+		return [
+			{
+				name: "$ Pagadas (dentro de agendadas)",
+				value: pagadasAcotadas,
+				color: "#f59e0b",
+			},
+			{
+				name: "$ No pagadas (dentro de agendadas)",
+				value: Math.max(agendadas - pagadasAcotadas, 0),
+				color: "#64748b",
+			},
 		];
 	}, [summary]);
 
-	const ingresosTotalPeriodoCents = useMemo(
-		() => Number(summary.catalogo_cents_solicitadas ?? 0),
-		[summary],
-	);
+	const tasaComprasSobreSolicitudes = useMemo(() => {
+		const solicitudes = Number(summary.total_solicitudes ?? 0);
+		const compras = Number(summary.total_compras_concretadas ?? 0);
+		if (solicitudes <= 0) {
+			return null;
+		}
+		return ((compras / solicitudes) * 100).toFixed(1);
+	}, [summary]);
+	const tasaMontoPagadoSobreSolicitado = useMemo(() => {
+		const montoSolicitado = Number(summary.catalogo_cents_solicitadas ?? 0);
+		const montoPagado = Number(summary.compra_cents_total ?? 0);
+		if (montoSolicitado <= 0) {
+			return null;
+		}
+		return ((montoPagado / montoSolicitado) * 100).toFixed(1);
+	}, [summary]);
 
 	const filterBadges = useMemo(() => {
 		const badges = [];
@@ -1016,7 +1064,7 @@ export default function LaboratoryAppointmentMetrics({
 					<Text className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
 						Citas
 					</Text>
-					<div className="grid gap-4 sm:grid-cols-2">
+					<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 						<CardKpi title="Solicitudes" icon={ArchiveBoxIcon}>
 							{summary.total_solicitudes}
 						</CardKpi>
@@ -1026,6 +1074,15 @@ export default function LaboratoryAppointmentMetrics({
 							hint="Monto de catálogo asociado a solicitudes del periodo."
 						>
 							{formatMxnFromCents(summary.catalogo_cents_solicitadas)}
+						</CardKpi>
+						<CardKpi
+							title="% compras logradas / solicitudes"
+							icon={CheckCircleIcon}
+							hint="Conversión de compras logradas respecto al total de solicitudes del periodo."
+						>
+							{tasaComprasSobreSolicitudes != null
+								? `${tasaComprasSobreSolicitudes} %`
+								: "—"}
 						</CardKpi>
 					</div>
 
@@ -1130,132 +1187,66 @@ export default function LaboratoryAppointmentMetrics({
 						<Text className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
 							Resumen visual por volumen y por ingresos.
 						</Text>
-						<div className="mt-4 grid gap-8 lg:grid-cols-2">
+						<div className="mt-4">
 							<div className="space-y-3">
 								<Text className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
 									Por citas
 								</Text>
-								<div className="grid items-center gap-4 sm:grid-cols-2">
-									<ResponsiveContainer height={260}>
-										<PieChart>
-											<Pie
-												data={pieSummaryData}
-												cx="50%"
-												cy="50%"
-												innerRadius={58}
-												outerRadius={92}
-												paddingAngle={2}
-												dataKey="value"
-												nameKey="name"
-											>
-												{pieSummaryData.map((entry) => (
-													<Cell key={entry.name} fill={entry.color} />
-												))}
-											</Pie>
-											<Tooltip
-												content={({ active, payload }) =>
-													active && payload?.length ? (
-														<RechartsTooltipCard
-															title={payload[0]?.name}
-															rows={[
-																{
-																	label: "Citas",
-																	value: payload[0]?.value ?? "—",
-																},
-															]}
-														/>
-													) : null
-												}
-											/>
-											<Legend />
-										</PieChart>
-									</ResponsiveContainer>
-									<div className="space-y-2">
-										{pieSummaryData.map((item) => (
-											<div
-												key={item.name}
-												className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-700"
-											>
-												<div className="flex items-center gap-2">
-													<span
-														className="size-3 rounded-full"
-														style={{ backgroundColor: item.color }}
-													/>
-													<Text>{item.name}</Text>
-												</div>
-												<Text className="font-semibold text-zinc-900 dark:text-zinc-100">
-													{item.value}
-												</Text>
-											</div>
-										))}
-									</div>
-								</div>
-							</div>
-							<div className="space-y-3">
-								<Text className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-									Por ingresos ($)
-								</Text>
-								{ingresosTotalPeriodoCents === 0 &&
-								Number(summary.compra_cents_total ?? 0) === 0 ? (
-									<div className="flex min-h-[200px] items-center justify-center rounded-lg border border-dashed border-zinc-200 px-4 py-8 text-center dark:border-zinc-600">
-										<Text className="text-sm text-zinc-500 dark:text-zinc-400">
-											Sin montos en el periodo.
-										</Text>
-									</div>
-								) : (
-									<div className="grid items-center gap-4 sm:grid-cols-2">
-										<ResponsiveContainer height={260}>
-											<PieChart>
-												<Pie
-													data={pieRevenueData}
-													cx="50%"
-													cy="50%"
-													innerRadius={58}
-													outerRadius={92}
-													paddingAngle={2}
-													dataKey="value"
-													nameKey="name"
-												>
-													{pieRevenueData.map((entry) => (
-														<Cell key={entry.name} fill={entry.color} />
-													))}
-												</Pie>
-												<Tooltip
-													content={({ active, payload }) => {
-														if (!active || !payload?.length) {
-															return null;
+								<div className="grid gap-6 lg:grid-cols-2">
+									<div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+										<div className="space-y-3">
+											<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+												Universo de citas (anillo exterior) y agendadas (anillo interior)
+											</Text>
+											<ResponsiveContainer height={280}>
+												<PieChart>
+													<Pie
+														data={pieCountsOuterData}
+														cx="50%"
+														cy="50%"
+														innerRadius={88}
+														outerRadius={118}
+														paddingAngle={2}
+														dataKey="value"
+														nameKey="name"
+													>
+														{pieCountsOuterData.map((entry) => (
+															<Cell key={entry.name} fill={entry.color} />
+														))}
+													</Pie>
+													<Pie
+														data={pieCountsInnerData}
+														cx="50%"
+														cy="50%"
+														innerRadius={52}
+														outerRadius={82}
+														paddingAngle={2}
+														dataKey="value"
+														nameKey="name"
+													>
+														{pieCountsInnerData.map((entry) => (
+															<Cell key={entry.name} fill={entry.color} />
+														))}
+													</Pie>
+													<Tooltip
+														content={({ active, payload }) =>
+															active && payload?.length ? (
+																<RechartsTooltipCard
+																	title={payload[0]?.name}
+																	rows={[
+																		{
+																			label: "Citas",
+																			value: payload[0]?.value ?? "—",
+																		},
+																	]}
+																/>
+															) : null
 														}
-														const v = Number(payload[0]?.value ?? 0);
-														const total = ingresosTotalPeriodoCents;
-														const pct =
-															total > 0
-																? ((v / total) * 100).toFixed(1)
-																: null;
-														return (
-															<RechartsTooltipCard
-																title={payload[0]?.name}
-																rows={[
-																	{
-																		label: "Monto",
-																		value: formatMxnFromCents(v),
-																	},
-																	{ label: "% del total", value: pct != null ? `${pct} %` : "—" },
-																]}
-															/>
-														);
-													}}
-												/>
-												<Legend />
-											</PieChart>
-										</ResponsiveContainer>
-										<div className="space-y-2">
-											{pieRevenueData.map((item) => {
-												const total = ingresosTotalPeriodoCents;
-												const pct =
-													total > 0
-														? ((Number(item.value) / total) * 100).toFixed(1)
-														: null;
-												return (
+													/>
+												</PieChart>
+											</ResponsiveContainer>
+											<div className="space-y-2">
+												{pieCountsOuterData.map((item) => (
 													<div
 														key={item.name}
 														className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-700"
@@ -1265,36 +1256,185 @@ export default function LaboratoryAppointmentMetrics({
 																className="size-3 rounded-full"
 																style={{ backgroundColor: item.color }}
 															/>
-															<Text className="leading-snug">{item.name}</Text>
+															<Text>{item.name}</Text>
+														</div>
+														<div className="text-right">
+															<Text className="font-semibold text-zinc-900 dark:text-zinc-100">
+																{item.value}
+															</Text>
+															<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+																{formatPercent(
+																	item.value,
+																	Number(summary.total_solicitudes ?? 0),
+																)}
+															</Text>
+														</div>
+													</div>
+												))}
+												{pieCountsInnerData.map((item) => (
+												<div
+													key={item.name}
+													className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-700"
+												>
+													<div className="flex items-center gap-2">
+														<span
+															className="size-3 rounded-full"
+															style={{ backgroundColor: item.color }}
+														/>
+														<Text>{item.name}</Text>
+													</div>
+													<div className="text-right">
+														<Text className="font-semibold text-zinc-900 dark:text-zinc-100">
+															{item.value}
+														</Text>
+														<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+															{formatPercent(
+																item.value,
+																Number(summary.total_confirmadas ?? 0),
+															)}
+														</Text>
+													</div>
+												</div>
+											))}
+											</div>
+										</div>
+									</div>
+									<div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+										<div className="space-y-3">
+											<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+												Montos: solicitadas (anillo exterior) y pagadas dentro de agendadas (anillo interior)
+											</Text>
+											<ResponsiveContainer height={280}>
+												<PieChart>
+													<Pie
+														data={pieAmountsOuterData}
+														cx="50%"
+														cy="50%"
+														innerRadius={88}
+														outerRadius={118}
+														paddingAngle={2}
+														dataKey="value"
+														nameKey="name"
+													>
+														{pieAmountsOuterData.map((entry) => (
+															<Cell key={entry.name} fill={entry.color} />
+														))}
+													</Pie>
+													<Pie
+														data={pieAmountsInnerData}
+														cx="50%"
+														cy="50%"
+														innerRadius={52}
+														outerRadius={82}
+														paddingAngle={2}
+														dataKey="value"
+														nameKey="name"
+													>
+														{pieAmountsInnerData.map((entry) => (
+															<Cell key={entry.name} fill={entry.color} />
+														))}
+													</Pie>
+													<Tooltip
+														content={({ active, payload }) =>
+															active && payload?.length ? (
+																<RechartsTooltipCard
+																	title={payload[0]?.name}
+																	rows={[
+																		{
+																			label: "Monto",
+																			value: formatMxnFromCents(payload[0]?.value),
+																		},
+																	]}
+																/>
+															) : null
+														}
+													/>
+												</PieChart>
+											</ResponsiveContainer>
+											<div className="space-y-2">
+												{pieAmountsOuterData.map((item) => (
+													<div
+														key={item.name}
+														className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-700"
+													>
+														<div className="flex items-center gap-2">
+															<span
+																className="size-3 rounded-full"
+																style={{ backgroundColor: item.color }}
+															/>
+															<Text>{item.name}</Text>
 														</div>
 														<div className="text-right">
 															<Text className="font-semibold text-zinc-900 dark:text-zinc-100">
 																{formatMxnFromCents(item.value)}
 															</Text>
-															{pct != null && (
-																<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-																	{pct} % del total
-																</Text>
-															)}
+															<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+																{formatPercent(
+																	item.value,
+																	Number(summary.catalogo_cents_solicitadas ?? 0),
+																)}
+															</Text>
 														</div>
 													</div>
-												);
-											})}
-											<div className="space-y-1 rounded-md border border-zinc-100 bg-zinc-50 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800/50">
-												<Text className="text-xs text-zinc-600 dark:text-zinc-400">
-													Total mostrado:{" "}
-													<span className="font-semibold text-zinc-800 dark:text-zinc-200">
-														{formatMxnFromCents(
-															Number(summary.catalogo_cents_confirmadas ?? 0) +
-																Number(summary.catalogo_cents_pendientes ?? 0) +
-																Number(summary.compra_cents_total ?? 0),
-														)}
-													</span>
-												</Text>
+												))}
+												{pieAmountsInnerData.map((item) => (
+												<div
+													key={item.name}
+													className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-700"
+												>
+													<div className="flex items-center gap-2">
+														<span
+															className="size-3 rounded-full"
+															style={{ backgroundColor: item.color }}
+														/>
+														<Text>{item.name}</Text>
+													</div>
+													<div className="text-right">
+														<Text className="font-semibold text-zinc-900 dark:text-zinc-100">
+															{formatMxnFromCents(item.value)}
+														</Text>
+														<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+															{formatPercent(
+																item.value,
+																Number(summary.catalogo_cents_confirmadas ?? 0),
+															)}
+														</Text>
+													</div>
+												</div>
+											))}
 											</div>
 										</div>
 									</div>
-								)}
+								</div>
+								<div className="grid gap-3 md:grid-cols-2">
+									<div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 dark:border-emerald-700/40 dark:bg-emerald-900/20">
+										<Text className="text-xs text-emerald-700 dark:text-emerald-300">
+											Comparativo pagadas vs solicitadas (citas)
+										</Text>
+										<Text className="mt-0.5 text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+											{summary.total_compras_concretadas ?? 0} / {summary.total_solicitudes ?? 0}
+										</Text>
+										<Text className="text-xs text-emerald-700/90 dark:text-emerald-300/90">
+											{tasaComprasSobreSolicitudes != null
+												? `${tasaComprasSobreSolicitudes} % del total de solicitadas`
+												: "—"}
+										</Text>
+									</div>
+									<div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 dark:border-amber-700/40 dark:bg-amber-900/20">
+										<Text className="text-xs text-amber-700 dark:text-amber-300">
+											Comparativo pagadas vs solicitadas (monto)
+										</Text>
+										<Text className="mt-0.5 text-sm font-semibold text-amber-900 dark:text-amber-200">
+											{formatMxnFromCents(summary.compra_cents_total)} /{" "}
+											{formatMxnFromCents(summary.catalogo_cents_solicitadas)}
+										</Text>
+										<Text className="text-xs text-amber-700/90 dark:text-amber-300/90">
+											{tasaMontoPagadoSobreSolicitado != null
+												? `${tasaMontoPagadoSobreSolicitado} % del monto solicitado`
+												: "—"}
+										</Text>
+									</div>
+								</div>
 							</div>
 						</div>
 					</div>
