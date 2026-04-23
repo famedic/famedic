@@ -148,4 +148,18 @@ return [
         'tag_lab_sample_collected' => env('ACTIVE_CAMPAIGN_TAG_LAB_SAMPLE_COLLECTED', 32),
         'tag_lab_results_available' => env('ACTIVE_CAMPAIGN_TAG_LAB_RESULTS_AVAILABLE', 33),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Solicitud de factura (compras de laboratorio)
+    |--------------------------------------------------------------------------
+    | En producción se notifica a usuarios con rol ligado al permiso
+    | laboratory-purchases.manage.invoices. En local/staging/testing la lógica
+    | puede limitarse o desactivarse con las variables de entorno siguientes.
+    */
+    'laboratory_invoice_request' => [
+        'skip_admin_mail' => env('SKIP_LABORATORY_INVOICE_REQUEST_MAIL', false),
+        'test_notify_email' => env('LAB_INVOICE_REQUEST_TEST_EMAIL', 'emedina.externo@odessa.com.mx'),
+        'allow_fallback_to_invoice_admins' => env('LAB_INVOICE_REQUEST_FALLBACK_TO_ADMINS', false),
+    ],
 ];

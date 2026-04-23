@@ -8,6 +8,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
+import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
 
 const TAG_STYLES = {
 	cancelled:
@@ -255,7 +256,14 @@ export default function LaboratoryPurchaseDashboardCard({ purchase, requireOtpTh
 					<div className="flex flex-col gap-1 border-t border-zinc-100 pt-3 text-sm text-zinc-600 dark:border-slate-800 dark:text-slate-400">
 						<span>Pedido: {purchase.purchased_at_formatted}</span>
 						<span>Laboratorio: {purchase.laboratory_name}</span>
-						<span>Forma de pago: {purchase.payment_method_label}</span>
+						<span className="flex flex-wrap items-center gap-2">
+							Forma de pago:
+							<PaymentMethodDisplayIcon
+								method={purchase.payment_method}
+								label={purchase.payment_method_label}
+								size="sm"
+							/>
+						</span>
 						<span>Total: {purchase.formatted_total}</span>
 					</div>
 				</div>

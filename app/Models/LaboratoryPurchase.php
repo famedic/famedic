@@ -502,4 +502,39 @@ class LaboratoryPurchase extends Model
             default => $query,
         };
     }
+
+    /**
+     * Filtro por embudo del panel del paciente (Todos / En proceso / Completados / Facturados).
+     *
+     * - processing: sin resultados (incluye muestra tomada, etc.)
+     * - completed: con resultados disponibles
+     * - invoiced: factura emitida y solicitud de factura registrada
+     */
+    public function scopeWherePatientPipeline(Builder $query, ?string $pipeline): Builder
+    {
+        if (! $pipeline || $pipeline === 'all') {
+            return $query;
+        }
+
+        $resultsReceived = function ($n) {
+            $n->where(function ($q2) {
+                $q2->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
+            })->whereNotNull('results_received_at');
+        };
+
+        return match ($pipeline) {
+            'processing' => $query->whereNull('deleted_at')
+                ->whereNull('results')
+                ->whereDoesntHave('laboratoryNotifications', $resultsReceived),
+            'completed' => $query->whereNull('deleted_at')->where(function ($q) use ($resultsReceived) {
+                $q->whereNotNull('results')
+                    ->orWhereHas('laboratoryNotifications', $resultsReceived);
+            }),
+            'invoiced' => $query->whereNull('deleted_at')
+                ->whereHas('invoice')
+                ->whereHas('invoiceRequest'),
+            default => $query,
+        };
+    }
 }

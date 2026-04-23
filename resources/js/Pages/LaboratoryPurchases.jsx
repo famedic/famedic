@@ -1,5 +1,5 @@
 import SettingsLayout from "@/Layouts/SettingsLayout";
-import { GradientHeading, Subheading } from "@/Components/Catalyst/heading";
+import { GradientHeading } from "@/Components/Catalyst/heading";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { ArrowRightIcon } from "@heroicons/react/20/solid";
 import {
@@ -7,7 +7,6 @@ import {
 	ClockIcon,
 	ExclamationTriangleIcon,
 } from "@heroicons/react/16/solid";
-import { FunnelIcon } from "@heroicons/react/24/outline";
 import { TableCell, TableHeader, TableRow } from "@/Components/Catalyst/table";
 import { Navbar, NavbarItem } from "@/Components/Catalyst/navbar";
 import { QrCodeIcon } from "@heroicons/react/24/solid";
@@ -15,16 +14,14 @@ import EmptyListCard from "@/Components/EmptyListCard";
 import PurchaseCard from "@/Components/PurchaseCard";
 import { Badge } from "@/Components/Catalyst/badge";
 import { useForm, Link, router } from "@inertiajs/react";
-import { Input } from "@/Components/Catalyst/input";
-import LaboratoryPurchaseDashboardCard from "@/Components/Laboratory/LaboratoryPurchaseDashboardCard";
 import { Button } from "@/Components/Catalyst/button";
 import OtpModal from "@/Components/OtpModal";
 import { useEffect, useMemo, useRef, useState } from "react";
-import SearchInput from "@/Components/Admin/SearchInput";
-import FilterCountBadge from "@/Components/Admin/FilterCountBadge";
-import ListboxFilter from "@/Components/Filters/ListboxFilter";
-import DateFilter from "@/Components/Filters/DateFilter";
-import { ListboxLabel, ListboxOption } from "@/Components/Catalyst/listbox";
+import OrdersSummaryCards from "@/Components/LaboratoryPurchases/OrdersSummaryCards";
+import OrdersFilters from "@/Components/LaboratoryPurchases/OrdersFilters";
+import OrdersTable from "@/Components/LaboratoryPurchases/OrdersTable";
+import OrderCardMobile from "@/Components/LaboratoryPurchases/OrderCardMobile";
+import { exportLaboratoryPurchasesPageCsv } from "@/lib/laboratoryPurchaseOrderUi";
 
 async function checkLabResultsOtpVerified(purchaseId) {
 	try {
@@ -41,10 +38,43 @@ async function checkLabResultsOtpVerified(purchaseId) {
 	}
 }
 
+function buildEmptyCopy({ pipeline, hasFilterActivity, total }) {
+	if (total === 0 && !hasFilterActivity) {
+		return {
+			heading: "Aún no tienes pedidos de laboratorio",
+			message:
+				"Cuando compres estudios en línea aparecerán aquí con su estado, resultados y opciones de facturación.",
+		};
+	}
+	if (pipeline === "processing") {
+		return {
+			heading: "No hay pedidos en proceso",
+			message: "Todos tus pedidos tienen resultados o prueba limpiar filtros para ver el historial completo.",
+		};
+	}
+	if (pipeline === "completed") {
+		return {
+			heading: "No hay resultados en esta vista",
+			message: "Cuando el laboratorio publique resultados podrás abrirlos desde aquí. También revisa otros filtros.",
+		};
+	}
+	if (pipeline === "invoiced") {
+		return {
+			heading: "No hay facturas que coincidan",
+			message:
+				"Solo mostramos pedidos con factura generada y solicitud de factura registrada. Puedes solicitar factura en el detalle del pedido.",
+		};
+	}
+	return {
+		heading: "No hay pedidos con estos criterios",
+		message: "Ajusta la búsqueda, el embudo o los filtros avanzados e intenta de nuevo.",
+	};
+}
+
 export default function LaboratoryPurchases({
 	purchaseCards = [],
 	pagination = null,
-	summary = { pending_count: 0, ready_count: 0 },
+	summary = { pending_count: 0, ready_count: 0, processing_count: 0, completed_count: 0, invoiced_count: 0 },
 	filters: filtersProp = {},
 	filterOptions = {},
 	laboratoryQuotes = [],
@@ -88,6 +118,7 @@ export default function LaboratoryPurchases({
 		brand: filtersProp.brand ?? "",
 		start_date: filtersProp.start_date ?? "",
 		end_date: filtersProp.end_date ?? "",
+		pipeline: filtersProp.pipeline ?? "all",
 	});
 
 	const filtersKey = JSON.stringify(filtersProp ?? {});
@@ -100,9 +131,28 @@ export default function LaboratoryPurchases({
 			brand: filtersProp.brand ?? "",
 			start_date: filtersProp.start_date ?? "",
 			end_date: filtersProp.end_date ?? "",
+			pipeline: filtersProp.pipeline ?? "all",
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- sincronizar con respuesta Inertia
 	}, [filtersKey]);
+
+	const navigateWithFilters = (overrides = {}) => {
+		router.get(
+			route("laboratory-purchases.index"),
+			{
+				search: overrides.search ?? data.search,
+				patient: overrides.patient ?? data.patient,
+				study_status: overrides.study_status ?? data.study_status,
+				payment_method: overrides.payment_method ?? data.payment_method,
+				brand: overrides.brand ?? data.brand,
+				start_date: overrides.start_date ?? data.start_date,
+				end_date: overrides.end_date ?? data.end_date,
+				deleted: "false",
+				pipeline: Object.prototype.hasOwnProperty.call(overrides, "pipeline") ? overrides.pipeline : data.pipeline,
+			},
+			{ preserveState: true, preserveScroll: true, replace: true },
+		);
+	};
 
 	const applyFilters = (e) => {
 		e?.preventDefault?.();
@@ -121,7 +171,8 @@ export default function LaboratoryPurchases({
 			(data.payment_method || "") !== (filtersProp.payment_method || "") ||
 			(data.brand || "") !== (filtersProp.brand || "") ||
 			(data.start_date || "") !== (filtersProp.start_date || "") ||
-			(data.end_date || "") !== (filtersProp.end_date || ""),
+			(data.end_date || "") !== (filtersProp.end_date || "") ||
+			(data.pipeline || "all") !== (filtersProp.pipeline || "all"),
 		[data, filtersProp],
 	);
 
@@ -134,17 +185,57 @@ export default function LaboratoryPurchases({
 		if (filtersProp.brand) count += 1;
 		if (filtersProp.start_date) count += 1;
 		if (filtersProp.end_date) count += 1;
+		if (filtersProp.pipeline && filtersProp.pipeline !== "all") count += 1;
 		return count;
 	}, [filtersProp]);
 
+	const hasFilterActivity = useMemo(() => activeFiltersCount > 0, [activeFiltersCount]);
+
+	const emptyCopy = buildEmptyCopy({
+		pipeline: filtersProp.pipeline ?? "all",
+		hasFilterActivity,
+		total: pagination?.total ?? 0,
+	});
+
+	const onPipelineChange = (pipeline) => {
+		setData("pipeline", pipeline);
+		navigateWithFilters({ pipeline });
+	};
+
 	return (
 		<SettingsLayout title="Mis pedidos">
-			<GradientHeading>Mis pedidos de laboratorio</GradientHeading>
-			<Text className="mt-2 max-w-3xl text-base text-zinc-600 dark:text-slate-400">
-				Aquí ves el estado de cada estudio y puedes abrir resultados o facturas sin entrar al detalle.
-			</Text>
+			<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+				<div>
+					<GradientHeading>Mis pedidos de laboratorio</GradientHeading>
+					<Text className="mt-2 max-w-2xl text-base text-zinc-600 dark:text-slate-400">
+						Consulta el estado de tus estudios, resultados y facturación en un solo lugar.
+					</Text>
+				</div>
+				<div className="flex shrink-0 flex-col items-stretch gap-1 sm:items-end">
+					<Button
+						type="button"
+						outline
+						className="min-h-11 w-full sm:w-auto"
+						disabled={purchaseCards.length === 0}
+						onClick={() => exportLaboratoryPurchasesPageCsv(purchaseCards)}
+					>
+						Exportar historial
+					</Button>
+					<Text className="text-center text-xs text-zinc-500 dark:text-slate-500 sm:text-right">
+						CSV de la página actual
+					</Text>
+				</div>
+			</div>
 
-			<Navbar className="-mt-2 mb-6 sm:mb-8">
+			<div className="mt-8">
+				<OrdersSummaryCards
+					summary={summary}
+					activePipeline={filtersProp.pipeline ?? "all"}
+					onPipelineSelect={onPipelineChange}
+				/>
+			</div>
+
+			<Navbar className="mt-8 border-b border-zinc-200/80 dark:border-slate-800">
 				<NavbarItem
 					href={route("laboratory-purchases.index")}
 					current={route().current("laboratory-purchases.index")}
@@ -159,178 +250,79 @@ export default function LaboratoryPurchases({
 				</NavbarItem>
 			</Navbar>
 
-			<form className="mb-8 space-y-4" onSubmit={applyFilters}>
-				<div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-					<SearchInput
-						value={data.search}
-						onChange={(value) => setData("search", value)}
-						placeholder="Nombre, folio o estudio"
-					/>
-					<div className="flex items-center justify-end gap-2">
-						<Button
-							type="button"
-							outline
-							className="w-full"
-							onClick={() => setShowFilters((previous) => !previous)}
-						>
-							{activeFiltersCount ? (
-								<FilterCountBadge count={activeFiltersCount} />
-							) : (
-								<FunnelIcon />
-							)}
-							Filtros
-						</Button>
-					</div>
-				</div>
-
-				{showFilters && (
-					<div className="space-y-4 rounded-2xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/50 sm:p-6">
-						<Subheading className="text-base sm:text-lg">Filtrar pedidos</Subheading>
-						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-							<ListboxFilter
-								label="Paciente"
-								placeholder="Paciente"
-								value={data.patient}
-								onChange={(value) => setData("patient", value)}
-							>
-								<ListboxOption value="">
-									<ListboxLabel>Todos los pacientes</ListboxLabel>
-								</ListboxOption>
-								{(filterOptions.patients || []).map((opt) => (
-									<ListboxOption key={opt.value} value={opt.value}>
-										<ListboxLabel>{opt.label}</ListboxLabel>
-									</ListboxOption>
-								))}
-							</ListboxFilter>
-
-							<ListboxFilter
-								label="Estado del estudio"
-								value={data.study_status}
-								onChange={(value) => setData("study_status", value)}
-							>
-								{(filterOptions.study_statuses || []).map((opt) => (
-									<ListboxOption key={opt.value} value={opt.value}>
-										<ListboxLabel>{opt.label}</ListboxLabel>
-									</ListboxOption>
-								))}
-							</ListboxFilter>
-
-							<ListboxFilter
-								label="Forma de pago"
-								value={data.payment_method}
-								onChange={(value) => setData("payment_method", value)}
-							>
-								{(filterOptions.payment_methods || []).map((opt) => (
-									<ListboxOption
-										key={opt.value === "" ? "any-payment-method" : opt.value}
-										value={opt.value}
-									>
-										<ListboxLabel>{opt.label}</ListboxLabel>
-									</ListboxOption>
-								))}
-							</ListboxFilter>
-
-							<ListboxFilter
-								label="Laboratorio"
-								value={data.brand}
-								onChange={(value) => setData("brand", value)}
-							>
-								<ListboxOption value="">
-									<ListboxLabel>Todos</ListboxLabel>
-								</ListboxOption>
-								{(filterOptions.laboratory_brands || []).map((opt) => (
-									<ListboxOption key={opt.value} value={opt.value}>
-										<ListboxLabel>{opt.label}</ListboxLabel>
-									</ListboxOption>
-								))}
-							</ListboxFilter>
-
-							<DateFilter
-								label="Desde"
-								value={data.start_date}
-								onChange={(value) => setData("start_date", value)}
-							/>
-							<DateFilter
-								label="Hasta"
-								value={data.end_date}
-								onChange={(value) => setData("end_date", value)}
-							/>
-						</div>
-						<div className="flex flex-wrap gap-3">
-							<Button
-								type="button"
-								outline
-								className="min-h-[48px] text-base"
-								onClick={() => {
-									router.get(
-										route("laboratory-purchases.index"),
-										{
-											search: "",
-											patient: "",
-											study_status: "all",
-											payment_method: "",
-											brand: "",
-											start_date: "",
-											end_date: "",
-											deleted: "false",
-										},
-										{ preserveScroll: true, replace: true },
-									);
-								}}
-							>
-								Limpiar
-							</Button>
-						</div>
-					</div>
-				)}
+			<form className="mt-6 space-y-6" onSubmit={applyFilters}>
+				<OrdersFilters
+					data={data}
+					setData={setData}
+					showFilters={showFilters}
+					setShowFilters={setShowFilters}
+					activeFiltersCount={activeFiltersCount}
+					filterOptions={filterOptions}
+					onPipelineChange={onPipelineChange}
+				/>
 
 				{showUpdateButton && (
 					<div className="flex flex-wrap gap-3">
-						<Button
-							type="submit"
-							disabled={processing}
-							className="min-h-[48px] min-w-[160px] text-base"
-						>
-							{processing ? "Buscando..." : "Aplicar filtros"}
+						<Button type="submit" disabled={processing} className="min-h-11 min-w-[160px]">
+							{processing ? "Aplicando…" : "Aplicar cambios pendientes"}
 						</Button>
 					</div>
 				)}
+
+				<div className="flex flex-wrap gap-3 border-t border-zinc-100 pt-4 dark:border-slate-800">
+					<Button
+						type="button"
+						outline
+						className="min-h-11"
+						onClick={() => {
+							router.get(
+								route("laboratory-purchases.index"),
+								{
+									search: "",
+									patient: "",
+									study_status: "all",
+									payment_method: "",
+									brand: "",
+									start_date: "",
+									end_date: "",
+									deleted: "false",
+									pipeline: "all",
+								},
+								{ preserveScroll: true, replace: true },
+							);
+						}}
+					>
+						Restablecer vista
+					</Button>
+				</div>
 			</form>
 
 			{laboratoryQuotes.length > 0 && (
-				<div className="mb-10 sm:mb-12">
-					<Subheading className="mb-4 text-base font-semibold sm:text-lg">
-						Pedidos con pago en sucursal
-					</Subheading>
+				<div className="mb-10 mt-10 sm:mb-12">
+					<Text className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Pedidos con pago en sucursal</Text>
 					<LaboratoryQuotesList laboratoryQuotes={laboratoryQuotes} />
 				</div>
 			)}
 
-			<Subheading className="mb-4 text-base font-semibold sm:text-lg">
-				Pagos en línea
-			</Subheading>
+			<Text className="mb-4 mt-10 text-base font-semibold text-zinc-900 dark:text-white">Pagos en línea</Text>
 
 			{processing && (
 				<div className="mb-4 text-sm text-zinc-500 dark:text-slate-400">Actualizando lista…</div>
 			)}
 
 			{!processing && purchaseCards.length === 0 && (
-				<EmptyListCard
-					heading="No hay pedidos con estos filtros"
-					message="Prueba cambiar paciente, fechas o estado. También puedes hacer un nuevo pedido desde el menú principal."
-				/>
+				<EmptyListCard heading={emptyCopy.heading} message={emptyCopy.message} className="dark:border-slate-800" />
 			)}
 
 			{purchaseCards.length > 0 && (
-				<div className="space-y-6">
-					{purchaseCards.map((purchase) => (
-						<LaboratoryPurchaseDashboardCard
-							key={purchase.id}
-							purchase={purchase}
-							requireOtpThen={requireOtpThen}
-						/>
-					))}
-				</div>
+				<>
+					<OrdersTable purchases={purchaseCards} requireOtpThen={requireOtpThen} />
+					<div className="space-y-3 md:hidden" aria-label="Lista de pedidos">
+						{purchaseCards.map((purchase) => (
+							<OrderCardMobile key={purchase.id} purchase={purchase} requireOtpThen={requireOtpThen} />
+						))}
+					</div>
+				</>
 			)}
 
 			{pagination && pagination.last_page > 1 && (
@@ -342,7 +334,7 @@ export default function LaboratoryPurchases({
 						{pagination.prev_page_url && (
 							<Link
 								href={pagination.prev_page_url}
-								className="inline-flex min-h-[48px] min-w-[120px] items-center justify-center rounded-lg border border-zinc-300 px-4 text-base font-semibold hover:bg-zinc-50 dark:border-slate-600 dark:hover:bg-slate-800"
+								className="inline-flex min-h-11 min-w-[120px] items-center justify-center rounded-xl border border-zinc-300 px-4 text-base font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-slate-600 dark:text-white dark:hover:bg-slate-800"
 								preserveScroll
 							>
 								Anterior
@@ -354,7 +346,7 @@ export default function LaboratoryPurchases({
 						{pagination.next_page_url && (
 							<Link
 								href={pagination.next_page_url}
-								className="inline-flex min-h-[48px] min-w-[120px] items-center justify-center rounded-lg border border-zinc-300 px-4 text-base font-semibold hover:bg-zinc-50 dark:border-slate-600 dark:hover:bg-slate-800"
+								className="inline-flex min-h-11 min-w-[120px] items-center justify-center rounded-xl border border-zinc-300 px-4 text-base font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-slate-600 dark:text-white dark:hover:bg-slate-800"
 								preserveScroll
 							>
 								Siguiente
@@ -436,9 +428,7 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 								<div className="min-w-0 flex-1 space-y-3">
 									<div className="text-center sm:text-left">
 										<Text className="text-sm sm:text-base">
-											<Strong className="break-words">
-												Pedido #{quote.gda_order_id || quote.id}
-											</Strong>
+											<Strong className="break-words">Pedido #{quote.gda_order_id || quote.id}</Strong>
 										</Text>
 									</div>
 									<div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
@@ -494,10 +484,10 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 										className="order-1 h-24 w-auto max-w-[9rem] flex-shrink-0 rounded-lg object-contain sm:order-2 sm:h-36 sm:max-w-[10rem]"
 										alt=""
 									/>
-									<Subheading className="flex items-center text-sm sm:text-base group-hover:underline">
+									<Text className="flex items-center text-sm font-semibold text-zinc-900 group-hover:underline dark:text-white sm:text-base">
 										Ver pedido
 										<ArrowRightIcon className="ml-1 size-4 transform transition-transform group-hover:translate-x-1 sm:size-5" />
-									</Subheading>
+									</Text>
 								</div>
 							</div>
 						</>

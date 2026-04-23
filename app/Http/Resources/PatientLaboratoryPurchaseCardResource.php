@@ -97,6 +97,9 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
             'invoice_url' => $invoiceUrl,
             'has_invoice' => $invoice !== null,
             'invoice_requested' => $p->invoiceRequest !== null,
+            'has_results' => $hasResults,
+            'is_pipeline_invoiced' => $invoice !== null
+                && $p->invoiceRequest !== null,
             'has_sample_notification' => $hasSampleNotification,
             'is_new_result' => $isNewResult,
             'show_detail_url' => $showDetail,
@@ -155,11 +158,12 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
     private function paymentMethodLabel(?string $method): string
     {
         return match ($method) {
-            'stripe' => 'Tarjeta',
-            'odessa' => 'Saldo (Odessa)',
-            'efevoopay' => 'Pago en línea',
+            'stripe' => 'Tarjeta (Stripe)',
+            'odessa' => 'Caja de ahorro (Odessa)',
+            'efevoopay' => 'Efevoo',
+            'paypal' => 'PayPal',
             null => '—',
-            default => ucfirst($method),
+            default => ucfirst(str_replace('_', ' ', (string) $method)),
         };
     }
 }

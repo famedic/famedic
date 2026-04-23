@@ -80,10 +80,19 @@ class LaboratoryPurchaseController extends Controller
         );
 
         $studyStatus = $request->input('study_status', 'all');
+        $pipeline = $request->input('pipeline', 'all');
+        if (! in_array($pipeline, ['all', 'processing', 'completed', 'invoiced'], true)) {
+            $pipeline = 'all';
+        }
 
         $baseQuery = $customer->laboratoryPurchases()
-            ->filter($filters)
-            ->wherePatientStudyStatus($studyStatus === 'all' ? null : $studyStatus);
+            ->filter($filters);
+
+        if ($pipeline !== 'all') {
+            $baseQuery->wherePatientPipeline($pipeline);
+        } else {
+            $baseQuery->wherePatientStudyStatus($studyStatus === 'all' ? null : $studyStatus);
+        }
 
         $resultsReceived = function ($q) {
             $q->where(function ($q2) {
@@ -104,6 +113,12 @@ class LaboratoryPurchaseController extends Controller
                 $q->whereNotNull('results')
                     ->orWhereHas('laboratoryNotifications', $resultsReceived);
             })
+            ->count();
+
+        $invoicedCount = $customer->laboratoryPurchases()
+            ->whereNull('deleted_at')
+            ->whereHas('invoice')
+            ->whereHas('invoiceRequest')
             ->count();
 
         $patientOptions = $customer->laboratoryPurchases()
@@ -155,10 +170,16 @@ class LaboratoryPurchaseController extends Controller
                 'next_page_url' => $paginator->nextPageUrl(),
             ],
             'laboratoryQuotes' => $laboratoryQuotes,
-            'filters' => array_merge($filters, ['study_status' => $studyStatus]),
+            'filters' => array_merge($filters, [
+                'study_status' => $studyStatus,
+                'pipeline' => $pipeline,
+            ]),
             'summary' => [
                 'pending_count' => $pendingCount,
                 'ready_count' => $readyCount,
+                'processing_count' => $pendingCount,
+                'completed_count' => $readyCount,
+                'invoiced_count' => $invoicedCount,
             ],
             'filterOptions' => [
                 'study_statuses' => [
@@ -170,9 +191,10 @@ class LaboratoryPurchaseController extends Controller
                 ],
                 'payment_methods' => [
                     ['value' => '', 'label' => 'Cualquier forma de pago'],
-                    ['value' => 'stripe', 'label' => 'Tarjeta'],
-                    ['value' => 'odessa', 'label' => 'Saldo Odessa'],
-                    ['value' => 'efevoopay', 'label' => 'Pago en línea'],
+                    ['value' => 'stripe', 'label' => 'Tarjeta (Stripe)'],
+                    ['value' => 'odessa', 'label' => 'Caja de ahorro (Odessa)'],
+                    ['value' => 'efevoopay', 'label' => 'Efevoo'],
+                    ['value' => 'paypal', 'label' => 'PayPal'],
                 ],
                 'laboratory_brands' => collect(LaboratoryBrand::cases())->map(fn (LaboratoryBrand $b) => [
                     'value' => $b->value,
