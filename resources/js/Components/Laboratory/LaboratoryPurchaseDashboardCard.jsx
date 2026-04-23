@@ -134,7 +134,7 @@ export default function LaboratoryPurchaseDashboardCard({ purchase, requireOtpTh
 
 	const viewResultsLabel =
 		purchase.result_source === "manual"
-			? "Ver resultados cargados"
+			? "Ver resultados"
 			: purchase.result_source === "api"
 				? "Ver resultados del laboratorio"
 				: "Ver resultados";

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Laboratories\GetGDAResultsAction;
 use App\Models\LaboratoryNotification;
+use App\Models\LaboratoryPurchase;
 use App\Models\LabResultAccessToken;
 use App\Models\OtpAccessLog;
 use App\Models\OtpCode;
@@ -13,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -36,13 +38,13 @@ class LabResultsAccessController extends Controller
 
         $accessToken->update(['last_used_at' => now()]);
 
-        $sessionHours = (int) config('laboratory-results.pdf_session_hours', 24);
+        $sessionMinutes = (int) config('laboratory-results.public_session_minutes', 15);
 
         $verifiedOtp = OtpCode::query()
             ->where('user_id', $user->id)
             ->where('laboratory_purchase_id', $purchase->id)
             ->where('status', OtpCode::STATUS_VERIFIED)
-            ->where('verified_at', '>=', now()->subHours($sessionHours))
+            ->where('verified_at', '>=', now()->subMinutes($sessionMinutes))
             ->latest('id')
             ->first();
 
@@ -56,7 +58,8 @@ class LabResultsAccessController extends Controller
                 $user,
                 $purchase,
                 true,
-                null
+                null,
+                $verifiedOtp
             ));
         }
 
@@ -65,6 +68,7 @@ class LabResultsAccessController extends Controller
             $user,
             $purchase,
             false,
+            null,
             null
         ));
     }
@@ -312,12 +316,12 @@ class LabResultsAccessController extends Controller
 
         [, $purchase, $user] = $context;
 
-        $sessionHours = (int) config('laboratory-results.pdf_session_hours', 24);
+        $sessionMinutes = (int) config('laboratory-results.public_session_minutes', 15);
         $alreadyVerified = OtpCode::query()
             ->where('user_id', $user->id)
             ->where('laboratory_purchase_id', $purchase->id)
             ->where('status', OtpCode::STATUS_VERIFIED)
-            ->where('verified_at', '>=', now()->subHours($sessionHours))
+            ->where('verified_at', '>=', now()->subMinutes($sessionMinutes))
             ->exists();
 
         if ($alreadyVerified) {
@@ -325,19 +329,26 @@ class LabResultsAccessController extends Controller
                 ->withErrors(['otp' => 'Ya validaste el acceso.']);
         }
 
-        $latestOtp = OtpCode::query()
+        $latestPendingOtp = OtpCode::query()
             ->where('user_id', $user->id)
             ->where('laboratory_purchase_id', $purchase->id)
+            ->where('status', OtpCode::STATUS_PENDING)
             ->latest('id')
             ->first();
 
+        if ($latestPendingOtp && $latestPendingOtp->expires_at && $latestPendingOtp->expires_at->isPast()) {
+            $latestPendingOtp->update(['status' => OtpCode::STATUS_EXPIRED]);
+            $latestPendingOtp = null;
+        }
+
         $resendSeconds = (int) config('laboratory-results.resend_seconds', 30);
 
-        if ($latestOtp && now()->diffInSeconds($latestOtp->created_at) < $resendSeconds) {
-            $remaining = $resendSeconds - (int) now()->diffInSeconds($latestOtp->created_at);
+        if ($latestPendingOtp && now()->diffInSeconds($latestPendingOtp->created_at) < $resendSeconds) {
+            $remaining = $resendSeconds - (int) now()->diffInSeconds($latestPendingOtp->created_at);
+            $remainingFormatted = $this->formatSecondsAsMinutesCountdown($remaining);
 
             return redirect()->route('lab-results.show', ['token' => $validated['token']])
-                ->withErrors(['otp' => 'Espera '.$remaining.' segundos para pedir otro código.']);
+                ->withErrors(['otp' => 'Espera '.$remainingFormatted.' min para pedir otro código.']);
         }
 
         if ($validated['channel'] === OtpCode::CHANNEL_EMAIL && empty($user->email)) {
@@ -386,13 +397,13 @@ class LabResultsAccessController extends Controller
 
         [, $purchase, $user] = $context;
 
-        $sessionHours = (int) config('laboratory-results.pdf_session_hours', 24);
+        $sessionMinutes = (int) config('laboratory-results.public_session_minutes', 15);
 
         $verifiedOtp = OtpCode::query()
             ->where('user_id', $user->id)
             ->where('laboratory_purchase_id', $purchase->id)
             ->where('status', OtpCode::STATUS_VERIFIED)
-            ->where('verified_at', '>=', now()->subHours($sessionHours))
+            ->where('verified_at', '>=', now()->subMinutes($sessionMinutes))
             ->latest('id')
             ->first();
 
@@ -436,10 +447,10 @@ class LabResultsAccessController extends Controller
         $user,
         $purchase,
         bool $alreadyVerified,
-        ?string $otpChannelHint
+        ?string $otpChannelHint,
+        ?OtpCode $verifiedOtp = null
     ): array {
-        $sessionHours = (int) config('laboratory-results.pdf_session_hours', 24);
-        $availabilityHours = (int) config('laboratory-results.availability_hours', $sessionHours);
+        $sessionMinutes = (int) config('laboratory-results.public_session_minutes', 15);
         $resendSeconds = (int) config('laboratory-results.resend_seconds', 30);
 
         $phoneE164 = $user->phone?->formatE164();
@@ -453,6 +464,7 @@ class LabResultsAccessController extends Controller
                 ->where('user_id', $user->id)
                 ->where('laboratory_purchase_id', $purchase->id)
                 ->where('status', OtpCode::STATUS_PENDING)
+                ->where('expires_at', '>', now())
                 ->latest('id')
                 ->first();
         }
@@ -473,7 +485,8 @@ class LabResultsAccessController extends Controller
         $sharedByName = null;
 
         if ($alreadyVerified) {
-            $expiresAt = now()->addHours($sessionHours)->toIso8601String();
+            $verifiedAt = $verifiedOtp?->verified_at ?? now();
+            $expiresAt = $verifiedAt->copy()->addMinutes($sessionMinutes)->toIso8601String();
             $shareLinkExpires = now()->addHours((int) config('laboratory-results.share_link_hours', 12));
 
             $shareUrl = URL::temporarySignedRoute('lab-results.show-shared', $shareLinkExpires, [
@@ -482,7 +495,7 @@ class LabResultsAccessController extends Controller
                 'expiresAt' => $shareLinkExpires->toIso8601String(),
             ]);
 
-            $expiresSigned = now()->addHours($sessionHours);
+            $expiresSigned = $verifiedAt->copy()->addMinutes($sessionMinutes);
             $pdfUrl = URL::temporarySignedRoute(
                 'lab-results.pdf',
                 $expiresSigned,
@@ -520,7 +533,7 @@ class LabResultsAccessController extends Controller
             'maskedPhone' => $maskedPhone,
             'maskedEmail' => $maskedEmail,
             'phoneLast4' => $phoneLast4,
-            'availabilityHours' => $availabilityHours,
+            'availabilityMinutes' => $sessionMinutes,
             'resendSeconds' => $resendSeconds,
             'isSharedView' => $isSharedView,
             'sharedByName' => $sharedByName,
@@ -585,6 +598,11 @@ class LabResultsAccessController extends Controller
 
     private function orderHasResults(int $purchaseId): bool
     {
+        $purchase = LaboratoryPurchase::query()->find($purchaseId);
+        if ($purchase && ! empty($purchase->results)) {
+            return Storage::exists($purchase->results);
+        }
+
         return LaboratoryNotification::query()
             ->where('laboratory_purchase_id', $purchaseId)
             ->where(function ($query) {
@@ -597,6 +615,16 @@ class LabResultsAccessController extends Controller
 
     private function getResultsPdfBase64(int $purchaseId): ?string
     {
+        $purchase = LaboratoryPurchase::query()->find($purchaseId);
+        if ($purchase && ! empty($purchase->results) && Storage::exists($purchase->results)) {
+            $pdfBinary = Storage::get($purchase->results);
+            if ($pdfBinary === '' || $pdfBinary === null) {
+                return null;
+            }
+
+            return base64_encode($pdfBinary);
+        }
+
         $notification = LaboratoryNotification::query()
             ->where('laboratory_purchase_id', $purchaseId)
             ->where(function ($query) {
@@ -709,6 +737,17 @@ class LabResultsAccessController extends Controller
         }
     }
 
+    private function formatSecondsAsMinutesCountdown(int $seconds): string
+    {
+        $safe = max(0, $seconds);
+        $minutes = intdiv($safe, 60);
+        $remainingSeconds = $safe % 60;
+
+        return str_pad((string) $minutes, 2, '0', STR_PAD_LEFT)
+            .':'
+            .str_pad((string) $remainingSeconds, 2, '0', STR_PAD_LEFT);
+    }
+
     private function renderError(string $message): Response
     {
         return Inertia::render('LaboratoryResults/OtpAccess', [
@@ -727,7 +766,7 @@ class LabResultsAccessController extends Controller
             'maskedPhone' => null,
             'maskedEmail' => null,
             'phoneLast4' => null,
-            'availabilityHours' => (int) config('laboratory-results.availability_hours', 24),
+            'availabilityMinutes' => (int) config('laboratory-results.public_session_minutes', 15),
             'resendSeconds' => (int) config('laboratory-results.resend_seconds', 30),
             'shareUrl' => null,
             'canUseSms' => false,

@@ -140,6 +140,7 @@ class LaboratoryPurchaseController extends Controller
             ->with([
                 'transactions',
                 'laboratoryPurchaseItems',
+                'laboratoryAppointment',
                 'invoice',
                 'invoiceRequest',
             ])

@@ -56,6 +56,10 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
         }
 
         $items = $p->laboratoryPurchaseItems ?? collect();
+        $requiresAppointment = $items->contains(function ($item) {
+            return (bool) ($item->requires_appointment ?? false);
+        });
+        $hasAppointmentScheduled = $p->laboratoryAppointment !== null;
         $studyName = $this->formatStudyName($items);
 
         $showDetail = route('laboratory-purchases.show', ['laboratory_purchase' => $p->id]);
@@ -101,6 +105,8 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
             'is_pipeline_invoiced' => $invoice !== null
                 && $p->invoiceRequest !== null,
             'has_sample_notification' => $hasSampleNotification,
+            'requires_appointment' => $requiresAppointment,
+            'has_appointment_scheduled' => $hasAppointmentScheduled,
             'is_new_result' => $isNewResult,
             'show_detail_url' => $showDetail,
             'invoice_request_url' => $showDetail.'?tab=facturas',

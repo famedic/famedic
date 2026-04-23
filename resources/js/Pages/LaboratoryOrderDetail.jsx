@@ -16,6 +16,23 @@ import InstructionsContent from "@/Components/LaboratoryOrderDetail/Instructions
 import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
 import Card from "@/Components/Card";
 
+function onlyDateLabel(value = "") {
+	const raw = String(value || "").trim();
+	if (!raw) return null;
+
+	const parsed = new Date(raw);
+	if (!Number.isNaN(parsed.getTime())) {
+		return parsed.toLocaleDateString("es-MX", {
+			day: "2-digit",
+			month: "short",
+			year: "numeric",
+		});
+	}
+
+	const parts = raw.split(" ");
+	return parts.slice(0, 3).join(" ") || raw;
+}
+
 async function fetchLabResultsOtpStatus(purchaseId) {
 	try {
 		const statusUrl = route("otp.status", { laboratory_purchase: purchaseId });
@@ -46,6 +63,7 @@ export default function LaboratoryOrderDetail({
 	const [showOtpModal, setShowOtpModal] = useState(false);
 	const [otpPurchaseId, setOtpPurchaseId] = useState(null);
 	const [isProcessingResults, setIsProcessingResults] = useState(false);
+	const [otpStatus, setOtpStatus] = useState({ verified: false, expiresIn: 0 });
 	const pendingAfterOtpRef = useRef(null);
 	const { daysLeftToRequestInvoice = 0 } = usePage().props;
 
@@ -76,40 +94,39 @@ export default function LaboratoryOrderDetail({
 		setActiveTab("instructions");
 	};
 
-	const studies = useMemo(
-		() =>
-			(laboratoryPurchase?.laboratory_purchase_items || []).map((item) => {
-				const requiresAppointment = Boolean(
-					item?.requires_appointment ??
-						item?.requiresAppointment ??
-						item?.appointment_required ??
-						laboratoryPurchase?.laboratory_appointment,
-				);
+	const studies = useMemo(() => {
+		const priceFormatter = new Intl.NumberFormat("es-MX", {
+			style: "currency",
+			currency: "MXN",
+		});
+		return (laboratoryPurchase?.laboratory_purchase_items || []).map((item) => {
+			const requiresAppointment = Boolean(
+				item?.requires_appointment ??
+					item?.requiresAppointment ??
+					item?.appointment_required ??
+					laboratoryPurchase?.laboratory_appointment,
+			);
 
-				const hasAnyResults = hasResultsAvailable || Boolean(laboratoryPurchase?.results);
-				return {
-					id: item.id,
-					name: item.name,
-					requiresAppointment,
-					appointmentStatus: requiresAppointment
-						? laboratoryPurchase?.laboratory_appointment
-							? "scheduled"
-							: "pending"
-						: "not_applicable",
-					studyStatus: hasAnyResults
-						? "completed"
-						: hasSampleCollected
-							? "in_progress"
-							: "pending",
-					resultsUrl: laboratoryPurchase?.results
-						? route("laboratory-purchases.results", {
-								laboratory_purchase: laboratoryPurchase.id,
-							})
-						: null,
-				};
-			}),
-		[laboratoryPurchase, hasResultsAvailable, hasSampleCollected],
-	);
+			const formattedPrice =
+				item.formatted_price || priceFormatter.format(Number(item.price_cents || 0) / 100);
+			return {
+				id: item.id,
+				name: item.name,
+				formattedPrice,
+				requiresAppointment,
+				appointmentStatus: requiresAppointment
+					? laboratoryPurchase?.laboratory_appointment
+						? "scheduled"
+						: "pending"
+					: "not_applicable",
+				resultsUrl: laboratoryPurchase?.results
+					? route("laboratory-purchases.results", {
+							laboratory_purchase: laboratoryPurchase.id,
+						})
+					: null,
+			};
+		});
+	}, [laboratoryPurchase]);
 
 	const appointmentSummary = useMemo(() => {
 		const totalWithAppointment = studies.filter((study) => study.requiresAppointment).length;
@@ -141,12 +158,34 @@ export default function LaboratoryOrderDetail({
 
 	const timelineSteps = useMemo(() => {
 		const isSwisslab = (laboratoryPurchase?.provider || "").toLowerCase() === "swisslab";
+		const firstTransaction = laboratoryPurchase?.transactions?.[0];
+		const purchaseDate = onlyDateLabel(laboratoryPurchase?.formatted_created_at);
+		const paymentDate = onlyDateLabel(firstTransaction?.created_at) || purchaseDate;
+		const appointmentDate = onlyDateLabel(
+			laboratoryPurchase?.laboratory_appointment?.formatted_appointment_date,
+		);
+		const sampleDate =
+			onlyDateLabel(latestSampleCollectionAt) ||
+			onlyDateLabel(laboratoryPurchase?.formatted_sample_collection_at);
+		const resultsDate =
+			onlyDateLabel(latestResultsAt) ||
+			onlyDateLabel(laboratoryPurchase?.formatted_results_at) ||
+			onlyDateLabel(laboratoryPurchase?.formatted_results_uploaded_at);
+		const invoiceRequestDate = onlyDateLabel(laboratoryPurchase?.invoice_request?.created_at);
+		const invoiceDate = onlyDateLabel(laboratoryPurchase?.invoice?.created_at);
+
 		const base = [
-			{ key: "created", title: "Orden creada", status: "completed" },
+			{
+				key: "created",
+				title: "Orden creada",
+				status: "completed",
+				description: purchaseDate,
+			},
 			{
 				key: "paid",
 				title: "Pago confirmado",
 				status: laboratoryPurchase?.transactions?.length ? "completed" : "pending",
+				description: paymentDate,
 			},
 		];
 
@@ -155,6 +194,7 @@ export default function LaboratoryOrderDetail({
 				key: "appointment",
 				title: "Cita",
 				status: laboratoryPurchase?.laboratory_appointment ? "completed" : "pending",
+				description: appointmentDate,
 			});
 		}
 
@@ -165,15 +205,15 @@ export default function LaboratoryOrderDetail({
 				isSwisslab
 					? {
 							key: "sample",
-							title: "Toma de muestra",
+							title: "Muestras",
 							status: hasSampleCollected ? "completed" : "pending",
-							description: latestSampleCollectionAt || "Pendiente de toma de muestra",
+							description: sampleDate,
 						}
 					: {
 							key: "processing",
-							title: "Procesando",
+							title: "Muestras",
 							status: processingCompleted ? "completed" : "pending",
-							description: "...",
+							description: sampleDate,
 						},
 			);
 		}
@@ -182,30 +222,35 @@ export default function LaboratoryOrderDetail({
 			isSwisslab
 				? {
 						key: "results",
-						title: "Resultados disponibles",
+						title: "Resultados",
 						status: hasResultsAvailable ? "completed" : "pending",
-						description: latestResultsAt || "Aun sin resultados",
+						description: resultsDate,
 					}
 				: {
 						key: "manual_results",
-						title: "Resultados cargados",
+						title: "Resultados",
 						status: hasResultsAvailable || laboratoryPurchase?.results ? "completed" : "pending",
-						description: latestResultsAt || "Cargados",
+						description: resultsDate,
 					},
 		);
 
-		base.push(
-			{
+		if (laboratoryPurchase?.invoice_request) {
+			base.push({
 				key: "invoice_request",
 				title: "Solicitud de factura",
-				status: laboratoryPurchase?.invoice_request ? "completed" : "pending",
-			},
-			{
+				status: "completed",
+				description: invoiceRequestDate,
+			});
+		}
+
+		if (laboratoryPurchase?.invoice) {
+			base.push({
 				key: "invoice_available",
 				title: "Factura disponible",
-				status: laboratoryPurchase?.invoice ? "completed" : "pending",
-			},
-		);
+				status: "completed",
+				description: invoiceDate,
+			});
+		}
 
 		return base;
 	}, [
@@ -257,6 +302,28 @@ export default function LaboratoryOrderDetail({
 		!laboratoryPurchase?.invoice_request &&
 		daysLeftToRequestInvoice > 0;
 
+	useEffect(() => {
+		if (!laboratoryPurchase?.id || !(hasResultsAvailable || laboratoryPurchase?.results)) return;
+		let isMounted = true;
+		fetchLabResultsOtpStatus(laboratoryPurchase.id).then((status) => {
+			if (isMounted) setOtpStatus(status);
+		});
+		return () => {
+			isMounted = false;
+		};
+	}, [laboratoryPurchase?.id, hasResultsAvailable, laboratoryPurchase?.results]);
+
+	useEffect(() => {
+		if (!otpStatus.verified || otpStatus.expiresIn <= 0) return;
+		const timer = setInterval(() => {
+			setOtpStatus((prev) => {
+				const next = Math.max(0, Number(prev.expiresIn || 0) - 1);
+				return { ...prev, expiresIn: next, verified: next > 0 };
+			});
+		}, 1000);
+		return () => clearInterval(timer);
+	}, [otpStatus.verified, otpStatus.expiresIn]);
+
 	const header = (
 		<Header
 			breadcrumb={`Laboratorios / Órdenes / ${laboratoryPurchase?.gda_order_id || laboratoryPurchase?.id}`}
@@ -302,11 +369,15 @@ export default function LaboratoryOrderDetail({
 		return false;
 	};
 
-	const handleOtpSuccess = () => {
+	const handleOtpSuccess = async () => {
 		setShowOtpModal(false);
 		const next = pendingAfterOtpRef.current;
 		pendingAfterOtpRef.current = null;
 		setOtpPurchaseId(null);
+		if (laboratoryPurchase?.id) {
+			const status = await fetchLabResultsOtpStatus(laboratoryPurchase.id);
+			setOtpStatus(status);
+		}
 		if (typeof next === "function") next();
 	};
 
@@ -335,7 +406,11 @@ export default function LaboratoryOrderDetail({
 			);
 		};
 		try {
-			await requireOtpThen(laboratoryPurchase.id, openResults);
+			const allowed = await requireOtpThen(laboratoryPurchase.id, openResults);
+			if (allowed) {
+				const status = await fetchLabResultsOtpStatus(laboratoryPurchase.id);
+				setOtpStatus(status);
+			}
 		} finally {
 			setIsProcessingResults(false);
 		}
@@ -376,18 +451,20 @@ export default function LaboratoryOrderDetail({
 
 	const sidebar = (
 		<>
-			<Sidebar title="Timeline inteligente">
-				<OrderTimeline steps={timelineSteps} />
-			</Sidebar>
 			<Sidebar title="Resultados">
 				<ResultsSection
 					hasResults={Boolean(hasResultsAvailable || laboratoryPurchase?.results)}
 					resultsUploadedAt={latestResultsAt || laboratoryPurchase?.formatted_results_uploaded_at}
 					onViewResults={openResultsFromSidebar}
 					isProcessing={isProcessingResults}
+					otpVerified={otpStatus.verified}
+					otpExpiresIn={otpStatus.expiresIn}
 				/>
 			</Sidebar>
-			{activeTab !== "invoice" && <InvoiceSection purchase={laboratoryPurchase} />}
+			{activeTab !== "invoice" && <Sidebar title="Facturas"><InvoiceSection purchase={laboratoryPurchase} /></Sidebar>}
+			<Sidebar title="Timeline inteligente">
+				<OrderTimeline steps={timelineSteps} />
+			</Sidebar>
 		</>
 	);
 

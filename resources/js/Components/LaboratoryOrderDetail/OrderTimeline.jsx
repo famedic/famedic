@@ -1,4 +1,3 @@
-import { Badge } from "@/Components/Catalyst/badge";
 import {
 	CheckCircleIcon,
 	ClockIcon,
@@ -21,14 +20,9 @@ export default function OrderTimeline({ steps }) {
 								)}
 							</div>
 							<div className="min-w-0 flex-1">
-								<div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
-									<p className="min-w-0 flex-1 break-words text-sm font-medium text-zinc-900 dark:text-white">
-										{step.title}
-									</p>
-									<Badge color={completed ? "green" : "slate"} className="shrink-0">
-										{completed ? "Completado" : "Pendiente"}
-									</Badge>
-								</div>
+								<p className="min-w-0 flex-1 break-words text-sm font-medium text-zinc-900 dark:text-white">
+									{step.title}
+								</p>
 								{step.description && (
 									<p className="mt-1 break-words text-xs text-zinc-500 dark:text-slate-400">
 										{step.description}

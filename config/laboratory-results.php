@@ -12,6 +12,11 @@ return [
     'pdf_session_hours' => (int) env('LAB_RESULTS_PDF_SESSION_HOURS', 24),
 
     /**
+     * Minutos de sesion para el flujo publico de resultados (liga de correo + OTP).
+     */
+    'public_session_minutes' => (int) env('LAB_RESULTS_PUBLIC_SESSION_MINUTES', 15),
+
+    /**
      * Texto UX: "disponibles durante X horas" (mismo valor por defecto que la sesión firmada).
      */
     'availability_hours' => (int) env('LAB_RESULTS_AVAILABILITY_HOURS', 24),
