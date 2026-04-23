@@ -1,9 +1,9 @@
 import { Link } from "@inertiajs/react";
-import { QrCodeIcon } from "@heroicons/react/24/solid";
+import { QrCodeIcon, LockClosedIcon } from "@heroicons/react/24/solid";
 import { Table, TableHead, TableHeader, TableBody, TableRow, TableCell } from "@/Components/Catalyst/table";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import OrderRowActions from "@/Components/LaboratoryPurchases/OrderRowActions";
-import { getOrderBadgePresentation } from "@/lib/laboratoryPurchaseOrderUi";
+import { getOrderBadgePresentation, purchaseHasResults } from "@/lib/laboratoryPurchaseOrderUi";
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
 import clsx from "clsx";
 
@@ -53,6 +53,7 @@ export default function OrdersTable({ purchases, requireOtpThen }) {
 					<TableBody>
 						{purchases.map((purchase) => {
 							const badge = getOrderBadgePresentation(purchase);
+							const hasProtectedResults = purchaseHasResults(purchase);
 							const showFolio = !purchase.temporarly_hide_gda_order_id && Boolean(purchase.gda_order_id);
 							const extraStudies = studiesExtraCount(purchase);
 							const gdaConsecutivo =
@@ -70,6 +71,15 @@ export default function OrdersTable({ purchases, requireOtpThen }) {
 														{purchase.patient_name}
 													</Strong>
 												</Text>
+												{hasProtectedResults && (
+													<span
+														className="mt-1 inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-700 dark:bg-slate-800 dark:text-slate-200"
+														title="Tus resultados están protegidos. Te pediremos un código OTP."
+													>
+														<LockClosedIcon className="size-3" />
+														🔒 Protegido
+													</span>
+												)}
 											</div>
 											{extraStudies > 0 && (
 												<span

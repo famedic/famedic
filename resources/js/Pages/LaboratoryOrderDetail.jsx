@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { router, usePage } from "@inertiajs/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePage } from "@inertiajs/react";
 import SettingsLayout from "@/Layouts/SettingsLayout";
 import Layout from "@/Components/LaboratoryOrderDetail/Layout";
 import Sidebar from "@/Components/LaboratoryOrderDetail/Sidebar";
@@ -10,9 +10,29 @@ import OrderSummary from "@/Components/LaboratoryOrderDetail/OrderSummary";
 import StudiesTable from "@/Components/LaboratoryOrderDetail/StudiesTable";
 import AppointmentSummary from "@/Components/LaboratoryOrderDetail/AppointmentSummary";
 import InvoiceSection from "@/Components/LaboratoryOrderDetail/InvoiceSection";
+import ResultsSection from "@/Components/LaboratoryOrderDetail/ResultsSection";
 import OrderTimeline from "@/Components/LaboratoryOrderDetail/OrderTimeline";
 import InstructionsContent from "@/Components/LaboratoryOrderDetail/InstructionsContent";
+import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
 import Card from "@/Components/Card";
+
+async function fetchLabResultsOtpStatus(purchaseId) {
+	try {
+		const statusUrl = route("otp.status", { laboratory_purchase: purchaseId });
+		const res = await fetch(statusUrl, {
+			method: "GET",
+			credentials: "same-origin",
+			headers: { Accept: "application/json" },
+		});
+		const data = await res.json().catch(() => ({}));
+		return {
+			verified: res.ok && Boolean(data?.verified),
+			expiresIn: Number(data?.expires_in ?? 0),
+		};
+	} catch {
+		return { verified: false, expiresIn: 0 };
+	}
+}
 
 export default function LaboratoryOrderDetail({
 	laboratoryPurchase,
@@ -23,6 +43,10 @@ export default function LaboratoryOrderDetail({
 }) {
 	const [activeTab, setActiveTab] = useState("patient");
 	const [pendingScrollToPreparation, setPendingScrollToPreparation] = useState(false);
+	const [showOtpModal, setShowOtpModal] = useState(false);
+	const [otpPurchaseId, setOtpPurchaseId] = useState(null);
+	const [isProcessingResults, setIsProcessingResults] = useState(false);
+	const pendingAfterOtpRef = useRef(null);
 	const { daysLeftToRequestInvoice = 0 } = usePage().props;
 
 	useEffect(() => {
@@ -34,6 +58,18 @@ export default function LaboratoryOrderDetail({
 		});
 		setPendingScrollToPreparation(false);
 	}, [activeTab, pendingScrollToPreparation]);
+
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		const tab = params.get("tab");
+		if (!tab) return;
+		if (tab === "facturas" || tab === "invoice") {
+			setActiveTab("invoice");
+		}
+		if (tab === "instrucciones" || tab === "instructions") {
+			setActiveTab("instructions");
+		}
+	}, []);
 
 	const goToPreparationInstructions = () => {
 		setPendingScrollToPreparation(true);
@@ -50,6 +86,7 @@ export default function LaboratoryOrderDetail({
 						laboratoryPurchase?.laboratory_appointment,
 				);
 
+				const hasAnyResults = hasResultsAvailable || Boolean(laboratoryPurchase?.results);
 				return {
 					id: item.id,
 					name: item.name,
@@ -59,13 +96,13 @@ export default function LaboratoryOrderDetail({
 							? "scheduled"
 							: "pending"
 						: "not_applicable",
-					studyStatus: hasResultsAvailable
+					studyStatus: hasAnyResults
 						? "completed"
 						: hasSampleCollected
 							? "in_progress"
 							: "pending",
 					resultsUrl: laboratoryPurchase?.results
-						? route("laboratory.results.show", {
+						? route("laboratory-purchases.results", {
 								laboratory_purchase: laboratoryPurchase.id,
 							})
 						: null,
@@ -122,6 +159,8 @@ export default function LaboratoryOrderDetail({
 		}
 
 		if (orderType !== "mixed") {
+			const processingCompleted =
+				hasSampleCollected || hasResultsAvailable || Boolean(laboratoryPurchase?.results);
 			base.push(
 				isSwisslab
 					? {
@@ -133,8 +172,8 @@ export default function LaboratoryOrderDetail({
 					: {
 							key: "processing",
 							title: "Procesando",
-							status: hasSampleCollected ? "completed" : "pending",
-							description: "Seguimiento manual por administracion",
+							status: processingCompleted ? "completed" : "pending",
+							description: "...",
 						},
 			);
 		}
@@ -149,9 +188,9 @@ export default function LaboratoryOrderDetail({
 					}
 				: {
 						key: "manual_results",
-						title: "Resultados cargados por administrador",
+						title: "Resultados cargados",
 						status: hasResultsAvailable || laboratoryPurchase?.results ? "completed" : "pending",
-						description: latestResultsAt || "Carga pendiente",
+						description: latestResultsAt || "Cargados",
 					},
 		);
 
@@ -251,6 +290,57 @@ export default function LaboratoryOrderDetail({
 		);
 	}
 
+	const requireOtpThen = async (purchaseId, fn) => {
+		const status = await fetchLabResultsOtpStatus(purchaseId);
+		if (status.verified) {
+			fn?.();
+			return true;
+		}
+		pendingAfterOtpRef.current = fn;
+		setOtpPurchaseId(purchaseId);
+		setShowOtpModal(true);
+		return false;
+	};
+
+	const handleOtpSuccess = () => {
+		setShowOtpModal(false);
+		const next = pendingAfterOtpRef.current;
+		pendingAfterOtpRef.current = null;
+		setOtpPurchaseId(null);
+		if (typeof next === "function") next();
+	};
+
+	const handleOtpModalClose = () => {
+		pendingAfterOtpRef.current = null;
+		setShowOtpModal(false);
+		setOtpPurchaseId(null);
+	};
+
+	const openResultsFromSidebar = async () => {
+		if (isProcessingResults) return;
+		setIsProcessingResults(true);
+		const openResults = () => {
+			if (laboratoryPurchase?.results) {
+				window.open(
+					route("laboratory-purchases.results", { laboratory_purchase: laboratoryPurchase.id }),
+					"_blank",
+					"noopener,noreferrer",
+				);
+				return;
+			}
+			window.open(
+				route("laboratory-results.view", { type: "purchase", id: laboratoryPurchase.id }),
+				"_blank",
+				"noopener,noreferrer",
+			);
+		};
+		try {
+			await requireOtpThen(laboratoryPurchase.id, openResults);
+		} finally {
+			setIsProcessingResults(false);
+		}
+	};
+
 	const main = (
 		<>
 			{activeTab === "patient" && (
@@ -258,12 +348,6 @@ export default function LaboratoryOrderDetail({
 					<PatientCard purchase={laboratoryPurchase} />
 					<StudiesTable
 						studies={studies}
-						onOpenResults={() =>
-							router.visit(route("laboratory-purchases.show", {
-								laboratory_purchase: laboratoryPurchase.id,
-								tab: "resultados",
-							}))
-						}
 						onOpenPreparationInstructions={goToPreparationInstructions}
 					/>
 					{laboratoryPurchase?.laboratory_appointment && (
@@ -286,7 +370,7 @@ export default function LaboratoryOrderDetail({
 				/>
 			)}
 
-			{activeTab === "invoice" && <InvoiceSection purchase={laboratoryPurchase} />}
+			{activeTab === "invoice" && <InvoiceSection purchase={laboratoryPurchase} inlineForm />}
 		</>
 	);
 
@@ -294,6 +378,14 @@ export default function LaboratoryOrderDetail({
 		<>
 			<Sidebar title="Timeline inteligente">
 				<OrderTimeline steps={timelineSteps} />
+			</Sidebar>
+			<Sidebar title="Resultados">
+				<ResultsSection
+					hasResults={Boolean(hasResultsAvailable || laboratoryPurchase?.results)}
+					resultsUploadedAt={latestResultsAt || laboratoryPurchase?.formatted_results_uploaded_at}
+					onViewResults={openResultsFromSidebar}
+					isProcessing={isProcessingResults}
+				/>
 			</Sidebar>
 			{activeTab !== "invoice" && <InvoiceSection purchase={laboratoryPurchase} />}
 		</>
@@ -304,6 +396,14 @@ export default function LaboratoryOrderDetail({
 			<div className="min-w-0 max-w-full">
 				<Layout header={header} tabs={tabs} main={main} sidebar={sidebar} />
 			</div>
+			{showOtpModal && otpPurchaseId != null && (
+				<SecurityVerificationModal
+					isOpen={showOtpModal}
+					purchaseId={otpPurchaseId}
+					onSuccess={handleOtpSuccess}
+					onClose={handleOtpModalClose}
+				/>
+			)}
 		</SettingsLayout>
 	);
 }

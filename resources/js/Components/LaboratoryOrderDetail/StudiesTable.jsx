@@ -1,8 +1,7 @@
 import Card from "@/Components/Card";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
-import { Link } from "@inertiajs/react";
-import { BeakerIcon } from "@heroicons/react/24/outline";
+import { BeakerIcon, CheckCircleIcon, ClockIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 
 const appointmentStateConfig = {
 	pending: { label: "Pendiente", color: "amber" },
@@ -17,7 +16,7 @@ const studyStateConfig = {
 	completed: { label: "Completado", color: "green" },
 };
 
-export default function StudiesTable({ studies, onOpenResults, onOpenPreparationInstructions }) {
+export default function StudiesTable({ studies, onOpenPreparationInstructions }) {
 	return (
 		<Card className="min-w-0 max-w-full overflow-hidden rounded-2xl p-0 shadow-sm">
 			<div className="flex min-w-0 flex-col gap-3 border-b border-zinc-200 px-3 py-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
@@ -77,16 +76,21 @@ export default function StudiesTable({ studies, onOpenResults, onOpenPreparation
 										</td>
 										<td className="px-3 py-3 text-right sm:px-4">
 											{study.resultsUrl ? (
-												<Link
-													href={study.resultsUrl}
-													className="text-sm font-medium text-famedic-700 hover:underline dark:text-famedic-300"
-												>
-													Ver resultados
-												</Link>
+												<div className="inline-flex flex-col items-end gap-1">
+													<Badge color="green" className="inline-flex items-center gap-1">
+														<CheckCircleIcon className="size-3.5" />
+														Disponible
+													</Badge>
+													<span className="inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-slate-400">
+														<LockClosedIcon className="size-3" />
+														Protegido OTP
+													</span>
+												</div>
 											) : (
-												<Button outline type="button" onClick={onOpenResults}>
+												<Badge color="amber" className="inline-flex items-center gap-1">
+													<ClockIcon className="size-3.5" />
 													Pendiente
-												</Button>
+												</Badge>
 											)}
 										</td>
 									</tr>

@@ -15,15 +15,16 @@ import PurchaseCard from "@/Components/PurchaseCard";
 import { Badge } from "@/Components/Catalyst/badge";
 import { useForm, Link, router } from "@inertiajs/react";
 import { Button } from "@/Components/Catalyst/button";
-import OtpModal from "@/Components/OtpModal";
+import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
 import { useEffect, useMemo, useRef, useState } from "react";
 import OrdersSummaryCards from "@/Components/LaboratoryPurchases/OrdersSummaryCards";
 import OrdersFilters from "@/Components/LaboratoryPurchases/OrdersFilters";
 import OrdersTable from "@/Components/LaboratoryPurchases/OrdersTable";
 import OrderCardMobile from "@/Components/LaboratoryPurchases/OrderCardMobile";
 import { exportLaboratoryPurchasesPageCsv } from "@/lib/laboratoryPurchaseOrderUi";
+import formatMmSs from "@/Utils/formatMmSs";
 
-async function checkLabResultsOtpVerified(purchaseId) {
+async function fetchLabResultsOtpStatus(purchaseId) {
 	try {
 		const statusUrl = route("otp.status", { laboratory_purchase: purchaseId });
 		const res = await fetch(statusUrl, {
@@ -32,9 +33,12 @@ async function checkLabResultsOtpVerified(purchaseId) {
 			headers: { Accept: "application/json" },
 		});
 		const data = await res.json().catch(() => ({}));
-		return res.ok && Boolean(data?.verified);
+		return {
+			verified: res.ok && Boolean(data?.verified),
+			expiresIn: Number(data?.expires_in ?? 0),
+		};
 	} catch {
-		return false;
+		return { verified: false, expiresIn: 0 };
 	}
 }
 
@@ -83,10 +87,12 @@ export default function LaboratoryPurchases({
 	const [showOtpModal, setShowOtpModal] = useState(false);
 	const [otpPurchaseId, setOtpPurchaseId] = useState(null);
 	const [showFilters, setShowFilters] = useState(false);
+	const [otpTrustSecondsLeft, setOtpTrustSecondsLeft] = useState(0);
 
 	const requireOtpThen = async (purchaseId, fn) => {
-		const verified = await checkLabResultsOtpVerified(purchaseId);
-		if (verified) {
+		const status = await fetchLabResultsOtpStatus(purchaseId);
+		if (status.verified) {
+			setOtpTrustSecondsLeft(Math.max(0, Math.floor(status.expiresIn)));
 			fn?.();
 			return true;
 		}
@@ -96,11 +102,14 @@ export default function LaboratoryPurchases({
 		return false;
 	};
 
-	const handleOtpSuccess = () => {
+	const handleOtpSuccess = (payload = {}) => {
 		setShowOtpModal(false);
 		const next = pendingAfterOtpRef.current;
 		pendingAfterOtpRef.current = null;
 		setOtpPurchaseId(null);
+		if (typeof payload?.expires_in === "number") {
+			setOtpTrustSecondsLeft(Math.max(0, Math.floor(payload.expires_in)));
+		}
 		if (typeof next === "function") next();
 	};
 
@@ -135,6 +144,24 @@ export default function LaboratoryPurchases({
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- sincronizar con respuesta Inertia
 	}, [filtersKey]);
+
+	useEffect(() => {
+		const timer = setInterval(() => {
+			setOtpTrustSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+		}, 1000);
+		return () => clearInterval(timer);
+	}, []);
+
+	useEffect(() => {
+		const firstPurchaseId = purchaseCards?.[0]?.id;
+		if (!firstPurchaseId) {
+			setOtpTrustSecondsLeft(0);
+			return;
+		}
+		fetchLabResultsOtpStatus(firstPurchaseId).then((status) => {
+			setOtpTrustSecondsLeft(status.verified ? Math.max(0, Math.floor(status.expiresIn)) : 0);
+		});
+	}, [purchaseCards]);
 
 	const navigateWithFilters = (overrides = {}) => {
 		router.get(
@@ -305,6 +332,14 @@ export default function LaboratoryPurchases({
 			)}
 
 			<Text className="mb-4 mt-10 text-base font-semibold text-zinc-900 dark:text-white">Pagos en línea</Text>
+			{otpTrustSecondsLeft > 0 && (
+				<div className="mb-4">
+					<Badge color="green" className="inline-flex items-center gap-2 px-3 py-1.5">
+						<ClockIcon className="size-4" />
+						<span>Verificación activa · {formatMmSs(otpTrustSecondsLeft)} restantes</span>
+					</Badge>
+				</div>
+			)}
 
 			{processing && (
 				<div className="mb-4 text-sm text-zinc-500 dark:text-slate-400">Actualizando lista…</div>
@@ -357,7 +392,7 @@ export default function LaboratoryPurchases({
 			)}
 
 			{showOtpModal && otpPurchaseId != null && (
-				<OtpModal
+				<SecurityVerificationModal
 					isOpen={showOtpModal}
 					purchaseId={otpPurchaseId}
 					onSuccess={handleOtpSuccess}

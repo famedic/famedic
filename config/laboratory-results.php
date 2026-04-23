@@ -4,7 +4,7 @@ return [
     /**
      * Tras validar OTP en el área autenticada, tiempo en minutos sin volver a pedir código (ventana de confianza).
      */
-    'otp_trust_session_minutes' => (int) env('LAB_RESULTS_OTP_TRUST_MINUTES', 30),
+    'otp_trust_session_minutes' => (int) env('LAB_RESULTS_OTP_TRUST_MINUTES', 15),
 
     /**
      * Horas que el usuario puede volver a ver/descargar el PDF tras validar OTP (sesión de resultados).

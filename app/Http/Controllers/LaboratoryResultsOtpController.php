@@ -30,6 +30,7 @@ class LaboratoryResultsOtpController extends Controller
         return response()->json([
             'verified' => $expiresIn > 0,
             'expires_in' => $expiresIn,
+            'trust_minutes' => LabResultsOtpTrustSession::trustMinutes(),
         ]);
     }
 
@@ -75,6 +76,7 @@ class LaboratoryResultsOtpController extends Controller
             'expires_in' => (int) max(0, now()->diffInSeconds($otp['expires_at'], false)),
             'resend_in' => $this->resendCooldownSeconds(),
             'max_attempts' => self::MAX_ATTEMPTS,
+            'trust_minutes' => LabResultsOtpTrustSession::trustMinutes(),
         ]);
     }
 
@@ -182,6 +184,7 @@ class LaboratoryResultsOtpController extends Controller
         ]);
 
         $request->session()->put(LabResultsOtpTrustSession::sessionKey($laboratoryPurchase->id), now()->timestamp);
+        $request->session()->put(LabResultsOtpTrustSession::globalSessionKey(), now()->timestamp);
 
         $this->persistAccessLog('otp_verified_modal', $userId, $laboratoryPurchase->id, $otp->channel, [
             'otp_id' => $otp->id,
@@ -190,6 +193,7 @@ class LaboratoryResultsOtpController extends Controller
         return response()->json([
             'verified' => true,
             'expires_in' => LabResultsOtpTrustSession::trustMinutes() * 60,
+            'trust_minutes' => LabResultsOtpTrustSession::trustMinutes(),
         ]);
     }
 

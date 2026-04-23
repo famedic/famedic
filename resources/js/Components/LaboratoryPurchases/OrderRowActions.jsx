@@ -2,12 +2,15 @@ import {
 	EllipsisVerticalIcon,
 	ArrowTopRightOnSquareIcon,
 	ArrowDownTrayIcon,
+	ArrowPathIcon,
 	DocumentTextIcon,
 	EyeIcon,
+	LockClosedIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "@/Components/Catalyst/button";
 import { Dropdown, DropdownButton, DropdownMenu, DropdownItem, DropdownDivider } from "@/Components/Catalyst/dropdown";
 import { getPrimaryPurchaseAction, purchaseHasResults } from "@/lib/laboratoryPurchaseOrderUi";
+import { useState } from "react";
 
 function openExternal(url) {
 	if (!url) return;
@@ -16,6 +19,7 @@ function openExternal(url) {
 
 export default function OrderRowActions({ purchase, requireOtpThen, layout = "row" }) {
 	const isMobile = layout === "mobile";
+	const [isProcessingResults, setIsProcessingResults] = useState(false);
 	const primary = getPrimaryPurchaseAction(purchase);
 	const hasResults = purchaseHasResults(purchase);
 	const canDownloadPdf =
@@ -35,7 +39,9 @@ export default function OrderRowActions({ purchase, requireOtpThen, layout = "ro
 				: "Ver resultados";
 
 	const handleViewResults = async () => {
+		if (isProcessingResults) return;
 		if (!purchase.result_view_url) return;
+		setIsProcessingResults(true);
 		const run = () => {
 			if (purchase.result_source === "manual") {
 				openExternal(purchase.result_view_url);
@@ -45,10 +51,15 @@ export default function OrderRowActions({ purchase, requireOtpThen, layout = "ro
 				openExternal(purchase.result_view_url);
 			}
 		};
-		if (typeof requireOtpThen === "function") {
-			await requireOtpThen(purchase.id, run);
-		} else {
-			run();
+		try {
+			if (typeof requireOtpThen === "function") {
+				await requireOtpThen(purchase.id, run);
+			} else {
+				run();
+			}
+		} finally {
+			// Permite nuevo intento tras completar validación de estado/modal.
+			setIsProcessingResults(false);
 		}
 	};
 
@@ -73,9 +84,19 @@ export default function OrderRowActions({ purchase, requireOtpThen, layout = "ro
 
 	const primaryButton =
 		primary.key === "results" ? (
-			<Button outline className={btnBase} onClick={handleViewResults}>
-				<EyeIcon className="mr-1.5 size-4 shrink-0 sm:size-5" />
-				{primary.label}
+			<Button
+				outline
+				className={btnBase}
+				onClick={handleViewResults}
+				disabled={isProcessingResults}
+				title={isProcessingResults ? "Estamos validando tu identidad..." : undefined}
+			>
+				{isProcessingResults ? (
+					<ArrowPathIcon className="mr-1.5 size-4 shrink-0 animate-spin sm:size-5" />
+				) : (
+					<EyeIcon className="mr-1.5 size-4 shrink-0 sm:size-5" />
+				)}
+				{isProcessingResults ? "Validando..." : primary.label}
 			</Button>
 		) : primary.href ? (
 			<Button outline href={primary.href} className={btnBase}>
@@ -99,7 +120,33 @@ export default function OrderRowActions({ purchase, requireOtpThen, layout = "ro
 
 	return (
 		<div className={wrapClass}>
-			{isMobile ? <div className="min-w-0 flex-1">{primaryButton}</div> : primaryButton}
+			{isMobile ? (
+				<div className="min-w-0 flex-1">
+					{primaryButton}
+					{primary.key === "results" && (
+						<p
+							className="mt-1 flex items-center gap-1 text-xs text-zinc-500 dark:text-slate-400"
+							title="Tus resultados están protegidos. Te pediremos un código OTP."
+						>
+							<LockClosedIcon className="size-3.5" />
+							Requiere verificación OTP
+						</p>
+					)}
+				</div>
+			) : (
+				<div className="min-w-0">
+					{primaryButton}
+					{primary.key === "results" && (
+						<p
+							className="mt-1 flex items-center gap-1 text-xs text-zinc-500 dark:text-slate-400"
+							title="Tus resultados están protegidos. Te pediremos un código OTP."
+						>
+							<LockClosedIcon className="size-3.5" />
+							Requiere verificación OTP
+						</p>
+					)}
+				</div>
+			)}
 			<Dropdown>
 				<DropdownButton
 					outline
@@ -114,9 +161,9 @@ export default function OrderRowActions({ purchase, requireOtpThen, layout = "ro
 						Ver pedido completo
 					</DropdownItem>
 					{hasResults && primary.key !== "results" && (
-						<DropdownItem onClick={handleViewResults}>
+						<DropdownItem onClick={handleViewResults} disabled={isProcessingResults}>
 							<EyeIcon data-slot="icon" />
-							{viewResultsLabel}
+							{isProcessingResults ? "Validando..." : viewResultsLabel}
 						</DropdownItem>
 					)}
 					{canDownloadPdf && (

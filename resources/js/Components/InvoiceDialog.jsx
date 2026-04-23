@@ -87,12 +87,6 @@ export default function InvoiceDialog({
 								<Text className="mb-3">
 									CP {invoiceRequest.zipcode}
 								</Text>
-								<Badge color="slate" className="mb-1 max-w-60">
-									<span className="line-clamp-1">
-										{invoiceRequest.formatted_tax_regime}
-									</span>
-								</Badge>
-								<br />
 								<Badge color="slate" className="max-w-60">
 									{invoiceRequest.formatted_cfdi_use}
 								</Badge>

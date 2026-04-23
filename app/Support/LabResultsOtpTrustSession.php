@@ -9,6 +9,11 @@ use Illuminate\Http\Request;
  */
 final class LabResultsOtpTrustSession
 {
+    public static function globalSessionKey(): string
+    {
+        return 'otp_verified_at:lab_results:any';
+    }
+
     public static function sessionKey(int $purchaseId): string
     {
         return "otp_verified_at:lab_results:purchase:{$purchaseId}";
@@ -21,7 +26,25 @@ final class LabResultsOtpTrustSession
 
     public static function remainingSeconds(Request $request, int $purchaseId): int
     {
-        $verifiedAt = $request->session()->get(self::sessionKey($purchaseId));
+        $perPurchase = self::remainingFromKey($request, self::sessionKey($purchaseId));
+        $global = self::remainingSecondsGlobal($request);
+
+        return max($perPurchase, $global);
+    }
+
+    public static function remainingSecondsGlobal(Request $request): int
+    {
+        return self::remainingFromKey($request, self::globalSessionKey());
+    }
+
+    public static function isValid(Request $request, int $purchaseId): bool
+    {
+        return self::remainingSeconds($request, $purchaseId) > 0;
+    }
+
+    private static function remainingFromKey(Request $request, string $key): int
+    {
+        $verifiedAt = $request->session()->get($key);
         if (! $verifiedAt) {
             return 0;
         }
@@ -34,10 +57,5 @@ final class LabResultsOtpTrustSession
         $expiresAtTs = $verifiedAtTs + (self::trustMinutes() * 60);
 
         return max(0, $expiresAtTs - time());
-    }
-
-    public static function isValid(Request $request, int $purchaseId): bool
-    {
-        return self::remainingSeconds($request, $purchaseId) > 0;
     }
 }
