@@ -65,7 +65,7 @@ class LaboratoryPurchaseCreated extends Notification
 
         if ($isWithAppointment) {
             return (new MailMessage)
-                ->subject('Tu cita FAMEDIC está confirmada')
+                ->subject('Gracias por tu orden de Laboratorio en Famedic')
                 ->markdown('emails.laboratory.purchase-with-appointment', $data);
         }
 
@@ -172,7 +172,7 @@ class LaboratoryPurchaseCreated extends Notification
         if ($useWithAppointment) {
             return [
                 'view' => 'emails.laboratory.purchase-with-appointment',
-                'subject' => 'Tu cita FAMEDIC está confirmada',
+                'subject' => 'Gracias por tu orden de Laboratorio en Famedic',
                 'data' => $data,
             ];
         }

@@ -263,7 +263,7 @@ function Header({
 							<EnvelopeIcon className="size-5" />
 							{resendForm.processing
 								? "Enviando correo…"
-								: "Reenviar correo de confirmación"}
+								: "Reenviar correo de compra"}
 						</Button>
 						{resendForm.errors.resend_confirmation && (
 							<Text className="!text-sm text-red-600">
@@ -302,7 +302,7 @@ function Header({
 					hasResults={!!laboratoryPurchase.results}
 				/>
 
-				{/*}	
+				{/*}
 				{hasResultsAvailable && (
 					<Button
 						color="emerald"
@@ -315,7 +315,7 @@ function Header({
 							: "Consultar resultados GDA"}
 					</Button>
 				)}
-				*/}	
+				*/}
 				{laboratoryPurchase.dev_assistance_requests.length === 0 ? (
 					<DevAssistanceButton
 						storeRoute={route(

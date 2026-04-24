@@ -12,6 +12,7 @@ use App\Http\Requests\Admin\LaboratoryAppointments\ShowLaboratoryAppointmentRequ
 use App\Http\Requests\Admin\LaboratoryAppointments\UpdateLaboratoryAppointmentRequest;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryStore;
+use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Log;
@@ -78,7 +79,12 @@ class LaboratoryAppointmentController extends Controller
 
     public function show(ShowLaboratoryAppointmentRequest $request, LaboratoryAppointment $laboratoryAppointment)
     {
-        $laboratoryAppointment->load(['customer.user', 'laboratoryStore']);
+        $laboratoryAppointment->load([
+            'customer.user',
+            'laboratoryStore',
+            'laboratoryPurchase.laboratoryPurchaseItems',
+            'laboratoryPurchase.transactions',
+        ]);
 
         return Inertia::render('Admin/LaboratoryAppointment', [
             'laboratoryAppointment' => $laboratoryAppointment,
@@ -110,6 +116,20 @@ class LaboratoryAppointmentController extends Controller
             notes: $request->notes,
             laboratoryAppointment: $laboratoryAppointment
         );
+
+        if ($request->boolean('send_notification_email')) {
+            $laboratoryAppointment->loadMissing([
+                'customer.user',
+                'laboratoryStore',
+                'laboratoryPurchase.transactions',
+                'laboratoryPurchase.laboratoryPurchaseItems',
+                'customer.laboratoryCartItems.laboratoryTest',
+            ]);
+
+            $laboratoryAppointment->customer?->user?->notify(
+                new LaboratoryAppointmentUpdatedByConcierge($laboratoryAppointment)
+            );
+        }
 
         return redirect()->back()
             ->flashMessage('Cita actualizada exitosamente.');

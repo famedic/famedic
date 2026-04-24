@@ -1,23 +1,18 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm, usePage } from "@inertiajs/react";
-import {
-	ArrowPathIcon,
-	BuildingStorefrontIcon,
-	CalendarIcon,
-	EnvelopeIcon,
-	PhoneIcon,
-	ClockIcon,
-} from "@heroicons/react/16/solid";
+import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import {
 	CalendarDaysIcon,
 	TrashIcon,
-	PencilIcon,
+	BuildingOffice2Icon,
+	ClockIcon,
+	UserIcon,
+	PhoneIcon,
+	PencilSquareIcon,
 } from "@heroicons/react/24/outline";
 import AdminLayout from "@/Layouts/AdminLayout";
-import { Heading, Subheading } from "@/Components/Catalyst/heading";
-import { Anchor } from "@/Components/Catalyst/text";
-import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
+import { Checkbox, CheckboxField } from "@/Components/Catalyst/checkbox";
 import { Input } from "@/Components/Catalyst/input";
 import { Textarea } from "@/Components/Catalyst/textarea";
 import { Select } from "@/Components/Catalyst/select";
@@ -34,105 +29,160 @@ import {
 	DialogActions,
 	DialogDescription,
 } from "@/Components/Catalyst/dialog";
-import {
-	DescriptionList,
-	DescriptionTerm,
-	DescriptionDetails,
-} from "@/Components/Catalyst/description-list";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
-import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import CountryListbox from "@/Components/CountryListbox";
-import StatusBadge from "@/Components/StatusBadge";
-import Flag from "react-flagpack";
+import AppointmentHeader from "@/Pages/Admin/LaboratoryAppointment/AppointmentHeader";
+import PurchaseStatusCard from "@/Pages/Admin/LaboratoryAppointment/PurchaseStatusCard";
+import PatientInfoCard from "@/Pages/Admin/LaboratoryAppointment/PatientInfoCard";
+import ContactInfoCard from "@/Pages/Admin/LaboratoryAppointment/ContactInfoCard";
+import StudiesTable from "@/Pages/Admin/LaboratoryAppointment/StudiesTable";
+import AppointmentSidebar from "@/Pages/Admin/LaboratoryAppointment/AppointmentSidebar";
 
 export default function LaboratoryAppointment({
 	laboratoryAppointment,
 	laboratoryStores,
 	laboratoryCartItems,
 }) {
-	return (
-		<AdminLayout title="Cita de laboratorio">
-			<div className="w-40">
-				<LaboratoryBrandCard
-					src={
-						"/images/gda/GDA-" +
-						laboratoryAppointment.brand.toUpperCase() +
-						".png"
-					}
-				/>
-			</div>
-
-			<Header
-				laboratoryAppointment={laboratoryAppointment}
-				laboratoryStores={laboratoryStores}
-			/>
-
-			<Patient
-				laboratoryAppointment={laboratoryAppointment}
-				laboratoryCartItems={laboratoryCartItems}
-			/>
-
-			<Contact laboratoryAppointment={laboratoryAppointment} />
-
-			<LaboratoryAppointmentConfirmation
-				laboratoryAppointment={laboratoryAppointment}
-			/>
-		</AdminLayout>
-	);
-}
-
-function Header({ laboratoryAppointment, laboratoryStores }) {
 	const [openDeleteConfirmation, setOpenDeleteConfirmation] = useState(false);
 	const [openConfirmation, setOpenConfirmation] = useState(false);
 
+	const appointmentStatus = laboratoryAppointment.deleted_at
+		? "cancelled"
+		: laboratoryAppointment.confirmed_at
+			? "completed"
+			: "pending";
+
+	const purchase = laboratoryAppointment.laboratory_purchase ?? null;
+	const primaryTransaction = purchase?.transactions?.[0] ?? null;
+	const hasCapturedPayment = ["captured", "paid", "completed"].includes(
+		primaryTransaction?.payment_status,
+	);
+	const purchaseStatus = hasCapturedPayment || laboratoryAppointment.laboratory_purchase_id
+		? "paid"
+		: "pending";
+
+	const studies = useMemo(() => {
+		if (
+			laboratoryAppointment.laboratory_purchase?.laboratory_purchase_items?.length
+		) {
+			const purchase = laboratoryAppointment.laboratory_purchase;
+			const baseStatus = purchase.has_results_available ? "completed" : "pending";
+
+			return purchase.laboratory_purchase_items.map((item) => ({
+				id: item.id,
+				name: item.name,
+				status: baseStatus,
+				sampleType: "Muestra sanguinea",
+				performedAt: purchase.formatted_results_at ?? null,
+			}));
+		}
+
+		return laboratoryCartItems.map((cartItem) => ({
+			id: cartItem.id,
+			name: cartItem.laboratory_test.name,
+			status: laboratoryAppointment.confirmed_at ? "pending" : "pending",
+			sampleType: cartItem.laboratory_test.requires_appointment
+				? "En laboratorio"
+				: "A domicilio",
+			performedAt: null,
+		}));
+	}, [laboratoryAppointment, laboratoryCartItems]);
+
+	const patient = {
+		fullName: laboratoryAppointment.patient_full_name ?? "...",
+		gender: laboratoryAppointment.formatted_patient_gender ?? "...",
+		phone: laboratoryAppointment.patient_full_phone
+			? `${laboratoryAppointment.patient_phone_country} ${laboratoryAppointment.patient_phone}`
+			: "...",
+		birthDate: laboratoryAppointment.formatted_patient_birth_date ?? "...",
+	};
+
+	const contact = {
+		name: laboratoryAppointment.customer.user.full_name,
+		email: laboratoryAppointment.customer.user.email,
+		phone:
+			laboratoryAppointment.customer.user.full_phone ??
+			laboratoryAppointment.customer.user.phone ??
+			"...",
+	};
+
+	const summary = {
+		statusLabel:
+			appointmentStatus === "completed"
+				? "Completada"
+				: appointmentStatus === "cancelled"
+					? "Cancelada"
+					: "Pendiente",
+		statusColor:
+			appointmentStatus === "completed"
+				? "emerald"
+				: appointmentStatus === "cancelled"
+					? "red"
+					: "amber",
+		laboratory: laboratoryAppointment.brand?.toUpperCase() ?? "Laboratorio",
+		totalStudies: studies.length,
+		channel: "Plataforma",
+		totalTime: laboratoryAppointment.formatted_created_at ?? "...",
+	};
+
 	return (
-		<div>
-			<div className="flex flex-wrap items-center gap-4">
-				<Heading>
-					Cita de{" "}
-					{laboratoryAppointment.patient_name ||
-						laboratoryAppointment.customer.user.full_name}
-				</Heading>
-				<StatusBadge isActive={laboratoryAppointment.confirmed_at} />
-			</div>
-			<div className="isolate mt-2.5 flex flex-wrap justify-between gap-x-6 gap-y-4">
-				{laboratoryAppointment.confirmed_at && (
-					<div className="flex flex-wrap gap-x-10 gap-y-4 py-1.5">
-						<span className="flex items-center gap-3 text-base/6 text-zinc-950 sm:text-sm/6 dark:text-white">
-							<BuildingStorefrontIcon className="size-4 shrink-0 fill-zinc-400 dark:fill-zinc-500" />
-							<span>
-								{laboratoryAppointment.laboratory_store?.name}
-							</span>
-						</span>
-						<span className="flex items-center gap-3 text-base/6 text-zinc-950 sm:text-sm/6 dark:text-white">
-							<CalendarIcon className="size-4 shrink-0 fill-zinc-400 dark:fill-zinc-500" />
-							<span>
-								{
-									laboratoryAppointment.formatted_appointment_date
+		<AdminLayout title="Cita de laboratorio">
+			<div className="space-y-6">
+				<AppointmentHeader
+					appointment={laboratoryAppointment}
+					status={appointmentStatus}
+					showEditButton={false}
+					actions={
+						<>
+							{!laboratoryAppointment.confirmed_at && (
+								<LaboratoryAppointmentDeleteForm
+									laboratoryAppointment={laboratoryAppointment}
+									setOpenDeleteConfirmation={setOpenDeleteConfirmation}
+									openDeleteConfirmation={openDeleteConfirmation}
+								/>
+							)}
+							<LaboratoryAppointmentConfirmationForm
+								laboratoryAppointment={laboratoryAppointment}
+								laboratoryStores={laboratoryStores}
+								setOpenConfirmation={setOpenConfirmation}
+								openConfirmation={openConfirmation}
+								triggerButtonLabel={
+									laboratoryAppointment.confirmed_at
+										? "Editar cita"
+										: "Agendar"
 								}
-							</span>
-						</span>
+							/>
+						</>
+					}
+				/>
+
+				<PurchaseStatusCard
+					purchaseStatus={purchaseStatus}
+					orderNumber={purchase?.gda_order_id ?? primaryTransaction?.reference_id}
+					purchaseDate={
+						purchase?.formatted_created_at ??
+						primaryTransaction?.formatted_created_at ??
+						null
+					}
+					studies={studies}
+				/>
+
+				<div className="grid gap-6 lg:grid-cols-10">
+					<div className="space-y-4 lg:col-span-7">
+						<PatientInfoCard patient={patient} />
+						<ContactInfoCard contact={contact} />
+						<StudiesTable studies={studies} />
 					</div>
-				)}
-				<div className="flex gap-4">
-					{!laboratoryAppointment.confirmed_at && (
-						<LaboratoryAppointmentDeleteForm
-							laboratoryAppointment={laboratoryAppointment}
-							setOpenDeleteConfirmation={
-								setOpenDeleteConfirmation
-							}
-							openDeleteConfirmation={openDeleteConfirmation}
+					<div className="lg:col-span-3">
+						<AppointmentSidebar
+							appointment={laboratoryAppointment}
+							summary={summary}
 						/>
-					)}
-					<LaboratoryAppointmentConfirmationForm
-						laboratoryAppointment={laboratoryAppointment}
-						laboratoryStores={laboratoryStores}
-						setOpenConfirmation={setOpenConfirmation}
-						openConfirmation={openConfirmation}
-					/>
+					</div>
 				</div>
 			</div>
-		</div>
+
+		</AdminLayout>
 	);
 }
 
@@ -181,6 +231,7 @@ function LaboratoryAppointmentConfirmationForm({
 	laboratoryStores,
 	setOpenConfirmation,
 	openConfirmation,
+	triggerButtonLabel = null,
 }) {
 	const { genders } = usePage().props;
 
@@ -200,6 +251,7 @@ function LaboratoryAppointmentConfirmationForm({
 		patient_gender: laboratoryAppointment.patient_gender ?? "",
 		laboratory_store: laboratoryAppointment.laboratory_store?.id ?? "",
 		notes: laboratoryAppointment.notes ?? "",
+		send_notification_email: true,
 	});
 
 	const submit = (e) => {
@@ -225,238 +277,279 @@ function LaboratoryAppointmentConfirmationForm({
 				onClick={() => setOpenConfirmation(true)}
 				{...(laboratoryAppointment.confirmed_at && { outline: true })}
 			>
-				{laboratoryAppointment.confirmed_at ? (
-					<PencilIcon />
-				) : (
-					<CalendarDaysIcon />
-				)}
-				{laboratoryAppointment.confirmed_at ? "Editar cita" : "Agendar"}
+				<CalendarDaysIcon />
+				{triggerButtonLabel ??
+					(laboratoryAppointment.confirmed_at ? "Editar cita" : "Agendar")}
 			</Button>
 
-			<Dialog open={openConfirmation} onClose={setOpenConfirmation}>
+			<Dialog open={openConfirmation} onClose={setOpenConfirmation} size="5xl">
 				<form onSubmit={submit}>
 					<DialogTitle>Confirmar cita</DialogTitle>
 					<DialogDescription>
 						Ingresa la información de la cita.
 					</DialogDescription>
-					<DialogBody className="space-y-6">
-						<Field>
-							<Label>Sucursal</Label>
-							<Select
-								dusk="laboratoryStore"
-								required
-								value={data.laboratory_store}
-								onChange={(e) =>
-									setData("laboratory_store", e.target.value)
-								}
-							>
-								<option value="" disabled>
-									Selecciona una opción
-								</option>
-								{laboratoryStores.map((store) => (
-									<option key={store.id} value={store.id}>
-										{store.name}
-									</option>
-								))}
-							</Select>
-							{data.laboratory_store && (
-								<Description>
-									{
-										laboratoryStores.find(
-											(store) =>
-												store.id ==
-												data.laboratory_store,
-										)?.address
-									}
-								</Description>
-							)}
-							{errors.laboratory_store && (
-								<ErrorMessage>
-									{errors.laboratory_store}
-								</ErrorMessage>
-							)}
-						</Field>
-						<Field>
-							<Label>Fecha de cita</Label>
-							<Input
-								dusk="appointmentDate"
-								required
-								type="date"
-								value={data.appointment_date}
-								onChange={(e) =>
-									setData("appointment_date", e.target.value)
-								}
-							/>
-							{errors.appointment_date && (
-								<ErrorMessage>
-									{errors.appointment_date}
-								</ErrorMessage>
-							)}
-						</Field>
-						<Field>
-							<Label>Hora de cita</Label>
-							<Input
-								dusk="appointmentTime"
-								required
-								type="time"
-								value={data.appointment_time}
-								onChange={(e) =>
-									setData("appointment_time", e.target.value)
-								}
-							/>
-							{errors.appointment_time && (
-								<ErrorMessage>
-									{errors.appointment_time}
-								</ErrorMessage>
-							)}
-						</Field>
-						<Field>
-							<Label>Nombre(s) del paciente</Label>
-							<Input
-								dusk="patientName"
-								required
-								type="text"
-								value={data.patient_name}
-								onChange={(e) =>
-									setData("patient_name", e.target.value)
-								}
-							/>
-							{errors.patient_name && (
-								<ErrorMessage>
-									{errors.patient_name}
-								</ErrorMessage>
-							)}
-						</Field>
-						<Field>
-							<Label>Apellido paterno del paciente</Label>
-							<Input
-								dusk="patientPaternalLastname"
-								required
-								type="text"
-								value={data.patient_paternal_lastname}
-								onChange={(e) =>
-									setData(
-										"patient_paternal_lastname",
-										e.target.value,
-									)
-								}
-							/>
-							{errors.patient_paternal_lastname && (
-								<ErrorMessage>
-									{errors.patient_paternal_lastname}
-								</ErrorMessage>
-							)}
-						</Field>
-						<Field>
-							<Label>Apellido materno del paciente</Label>
-							<Input
-								dusk="patientMaternalLastname"
-								required
-								type="text"
-								value={data.patient_maternal_lastname}
-								onChange={(e) =>
-									setData(
-										"patient_maternal_lastname",
-										e.target.value,
-									)
-								}
-							/>
-							{errors.patient_maternal_lastname && (
-								<ErrorMessage>
-									{errors.patient_maternal_lastname}
-								</ErrorMessage>
-							)}
-						</Field>
-						<Field>
-							<Label>Teléfono de contacto</Label>
-							<div
-								data-slot="control"
-								className="flex flex-1 gap-2"
-							>
-								<CountryListbox
-									setCountry={(e) =>
-										setData("patient_phone_country", e)
-									}
-									country={data.patient_phone_country}
-									className="max-w-32"
-								/>
-								<Input
-									dusk="phone"
-									required
-									value={data.patient_phone}
-									onChange={(e) =>
-										setData("patient_phone", e.target.value)
-									}
-									type="text"
-									autoComplete="tel-national"
-								/>
-							</div>
-							{errors.patient_phone && (
-								<ErrorMessage>
-									{errors.patient_phone}
-								</ErrorMessage>
-							)}
-						</Field>
-						<Field>
-							<Label>Fecha de nacimiento</Label>
-							<Input
-								dusk="birthDate"
-								required
-								type="date"
-								value={data.patient_birth_date}
-								autoComplete="bday"
-								onChange={(e) =>
-									setData(
-										"patient_birth_date",
-										e.target.value,
-									)
-								}
-							/>
-							{errors.patient_birth_date && (
-								<ErrorMessage>
-									{errors.patient_birth_date}
-								</ErrorMessage>
-							)}
-						</Field>
-						<Field>
-							<Label>Sexo</Label>
-							<Select
-								dusk="gender"
-								required
-								value={data.patient_gender}
-								onChange={(e) =>
-									setData("patient_gender", e.target.value)
-								}
-							>
-								<option value="" disabled>
-									Selecciona una opción
-								</option>
-								{genders.map(({ label, value }) => (
-									<option key={value} value={value}>
-										{label}
-									</option>
-								))}
-							</Select>
-							{errors.patient_gender && (
-								<ErrorMessage>
-									{errors.patient_gender}
-								</ErrorMessage>
-							)}
-						</Field>
+					<DialogBody className="max-h-[70vh] overflow-y-auto">
+						<div className="grid gap-4 lg:grid-cols-2">
+							<section className="space-y-4 rounded-xl border border-zinc-200/70 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+								<p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+									<CalendarDaysIcon className="size-4" />
+									Datos de la cita
+								</p>
+								<Field>
+									<Label className="inline-flex items-center gap-2">
+										<BuildingOffice2Icon className="size-4 text-zinc-400" />
+										Sucursal
+									</Label>
+									<Select
+										dusk="laboratoryStore"
+										required
+										value={data.laboratory_store}
+										onChange={(e) =>
+											setData("laboratory_store", e.target.value)
+										}
+									>
+										<option value="" disabled>
+											Selecciona una opción
+										</option>
+										{laboratoryStores.map((store) => (
+											<option key={store.id} value={store.id}>
+												{store.name}
+											</option>
+										))}
+									</Select>
+									{data.laboratory_store && (
+										<Description>
+											{
+												laboratoryStores.find(
+													(store) =>
+														store.id == data.laboratory_store,
+												)?.address
+											}
+										</Description>
+									)}
+									{errors.laboratory_store && (
+										<ErrorMessage>{errors.laboratory_store}</ErrorMessage>
+									)}
+								</Field>
+								<div className="grid gap-4 sm:grid-cols-2">
+									<Field>
+										<Label className="inline-flex items-center gap-2">
+											<CalendarDaysIcon className="size-4 text-zinc-400" />
+											Fecha de cita
+										</Label>
+										<Input
+											dusk="appointmentDate"
+											required
+											type="date"
+											value={data.appointment_date}
+											onChange={(e) =>
+												setData("appointment_date", e.target.value)
+											}
+										/>
+										{errors.appointment_date && (
+											<ErrorMessage>{errors.appointment_date}</ErrorMessage>
+										)}
+									</Field>
+									<Field>
+										<Label className="inline-flex items-center gap-2">
+											<ClockIcon className="size-4 text-zinc-400" />
+											Hora de cita
+										</Label>
+										<Input
+											dusk="appointmentTime"
+											required
+											type="time"
+											value={data.appointment_time}
+											onChange={(e) =>
+												setData("appointment_time", e.target.value)
+											}
+										/>
+										{errors.appointment_time && (
+											<ErrorMessage>{errors.appointment_time}</ErrorMessage>
+										)}
+									</Field>
+								</div>
+							</section>
 
-						<Field>
-							<Label>Notas para el cliente</Label>
-							<Textarea
-								dusk="notes"
-								value={data.notes}
-								onChange={(e) =>
-									setData("notes", e.target.value)
-								}
-							/>
-							{errors.notes && (
-								<ErrorMessage>{errors.notes}</ErrorMessage>
-							)}
-						</Field>
+							<section className="space-y-4 rounded-xl border border-zinc-200/70 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+								<p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+									<UserIcon className="size-4" />
+									Datos del paciente
+								</p>
+								<Field>
+									<Label className="inline-flex items-center gap-2">
+										<UserIcon className="size-4 text-zinc-400" />
+										Nombre(s) del paciente
+									</Label>
+									<Input
+										dusk="patientName"
+										required
+										type="text"
+										value={data.patient_name}
+										onChange={(e) =>
+											setData("patient_name", e.target.value)
+										}
+									/>
+									{errors.patient_name && (
+										<ErrorMessage>{errors.patient_name}</ErrorMessage>
+									)}
+								</Field>
+								<div className="grid gap-4 sm:grid-cols-2">
+									<Field>
+										<Label>Apellido paterno</Label>
+										<Input
+											dusk="patientPaternalLastname"
+											required
+											type="text"
+											value={data.patient_paternal_lastname}
+											onChange={(e) =>
+												setData(
+													"patient_paternal_lastname",
+													e.target.value,
+												)
+											}
+										/>
+										{errors.patient_paternal_lastname && (
+											<ErrorMessage>
+												{errors.patient_paternal_lastname}
+											</ErrorMessage>
+										)}
+									</Field>
+									<Field>
+										<Label>Apellido materno</Label>
+										<Input
+											dusk="patientMaternalLastname"
+											required
+											type="text"
+											value={data.patient_maternal_lastname}
+											onChange={(e) =>
+												setData(
+													"patient_maternal_lastname",
+													e.target.value,
+												)
+											}
+										/>
+										{errors.patient_maternal_lastname && (
+											<ErrorMessage>
+												{errors.patient_maternal_lastname}
+											</ErrorMessage>
+										)}
+									</Field>
+								</div>
+								<div className="grid gap-4 sm:grid-cols-2">
+									<Field>
+										<Label>Fecha de nacimiento</Label>
+										<Input
+											dusk="birthDate"
+											required
+											type="date"
+											value={data.patient_birth_date}
+											autoComplete="bday"
+											onChange={(e) =>
+												setData("patient_birth_date", e.target.value)
+											}
+										/>
+										{errors.patient_birth_date && (
+											<ErrorMessage>
+												{errors.patient_birth_date}
+											</ErrorMessage>
+										)}
+									</Field>
+									<Field>
+										<Label>Sexo</Label>
+										<Select
+											dusk="gender"
+											required
+											value={data.patient_gender}
+											onChange={(e) =>
+												setData("patient_gender", e.target.value)
+											}
+										>
+											<option value="" disabled>
+												Selecciona una opción
+											</option>
+											{genders.map(({ label, value }) => (
+												<option key={value} value={value}>
+													{label}
+												</option>
+											))}
+										</Select>
+										{errors.patient_gender && (
+											<ErrorMessage>{errors.patient_gender}</ErrorMessage>
+										)}
+									</Field>
+								</div>
+							</section>
+
+							<section className="space-y-4 rounded-xl border border-zinc-200/70 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/50 lg:col-span-2">
+								<p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+									<PhoneIcon className="size-4" />
+									Contacto y notas
+								</p>
+								<Field>
+									<Label className="inline-flex items-center gap-2">
+										<PhoneIcon className="size-4 text-zinc-400" />
+										Teléfono de contacto
+									</Label>
+									<div data-slot="control" className="flex flex-1 gap-2">
+										<CountryListbox
+											setCountry={(e) =>
+												setData("patient_phone_country", e)
+											}
+											country={data.patient_phone_country}
+											className="max-w-32"
+										/>
+										<Input
+											dusk="phone"
+											required
+											value={data.patient_phone}
+											onChange={(e) =>
+												setData("patient_phone", e.target.value)
+											}
+											type="text"
+											autoComplete="tel-national"
+										/>
+									</div>
+									{errors.patient_phone && (
+										<ErrorMessage>{errors.patient_phone}</ErrorMessage>
+									)}
+								</Field>
+								<Field>
+									<Label className="inline-flex items-center gap-2">
+										<PencilSquareIcon className="size-4 text-zinc-400" />
+										Notas para el cliente
+									</Label>
+									<Textarea
+										dusk="notes"
+										value={data.notes}
+										onChange={(e) =>
+											setData("notes", e.target.value)
+										}
+									/>
+									{errors.notes && (
+										<ErrorMessage>{errors.notes}</ErrorMessage>
+									)}
+								</Field>
+								<div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3">
+									<CheckboxField>
+										<Checkbox
+											color="sky"
+											checked={data.send_notification_email}
+											onChange={(value) =>
+												setData("send_notification_email", value)
+											}
+										/>
+										<Label>
+											Enviar correo de notificación al paciente
+										</Label>
+										<Description>
+											Se enviará un correo con la confirmación o
+											actualización de su cita.
+										</Description>
+									</CheckboxField>
+								</div>
+							</section>
+						</div>
 					</DialogBody>
 					<DialogActions>
 						<Button
@@ -481,162 +574,5 @@ function LaboratoryAppointmentConfirmationForm({
 				</form>
 			</Dialog>
 		</>
-	);
-}
-
-function Patient({ laboratoryAppointment, laboratoryCartItems }) {
-	return (
-		<div>
-			<Subheading>Información del paciente</Subheading>
-
-			<DescriptionList>
-				<DescriptionTerm>Paciente</DescriptionTerm>
-				<DescriptionDetails>
-					{laboratoryAppointment.patient_full_name ?? "..."}
-				</DescriptionDetails>
-				<DescriptionTerm>Sexo</DescriptionTerm>
-				<DescriptionDetails>
-					{laboratoryAppointment.formatted_patient_gender}
-				</DescriptionDetails>
-				<DescriptionTerm>Teléfono</DescriptionTerm>
-				<DescriptionDetails>
-					{laboratoryAppointment.patient_full_phone ? (
-						<Anchor
-							href={`tel:${laboratoryAppointment.patient_full_phone}`}
-						>
-							<Button outline>
-								<PhoneIcon />
-								<Flag
-									className="shrink-0"
-									code={
-										laboratoryAppointment.patient_phone_country
-									}
-									size="s"
-								/>
-								{laboratoryAppointment.patient_phone}
-							</Button>
-						</Anchor>
-					) : (
-						"..."
-					)}
-				</DescriptionDetails>
-				<DescriptionTerm>Fecha de nacimiento</DescriptionTerm>
-				<DescriptionDetails>
-					{laboratoryAppointment.formatted_patient_birth_date ??
-						"..."}
-				</DescriptionDetails>
-
-				<DescriptionTerm>Estudios </DescriptionTerm>
-				<DescriptionDetails>
-					{laboratoryCartItems.length > 0 ? (
-						<div className="flex flex-col gap-1">
-							{laboratoryCartItems.map((cartItem) => (
-								<span key={cartItem.id}>
-									<Badge color="slate">
-										{cartItem.laboratory_test
-											.requires_appointment && (
-											<CalendarDaysIcon
-												className={`size-4 flex-shrink-0 ${laboratoryAppointment.confirmed_at ? "stroke-green-500" : "stroke-red-500"}`}
-											/>
-										)}
-										{cartItem.laboratory_test.name}
-									</Badge>
-								</span>
-							))}
-						</div>
-					) : (
-						"..."
-					)}
-				</DescriptionDetails>
-			</DescriptionList>
-		</div>
-	);
-}
-
-function Contact({ laboratoryAppointment }) {
-	return (
-		<div>
-			<Subheading>Información de contacto</Subheading>
-
-			<DescriptionList>
-				<DescriptionTerm>Nombre</DescriptionTerm>
-				<DescriptionDetails>
-					{laboratoryAppointment.customer.user.full_name}
-				</DescriptionDetails>
-				<DescriptionTerm>
-					Correo electrónico de la cuenta
-				</DescriptionTerm>
-				<DescriptionDetails>
-					<Anchor
-						href={`mailto:${laboratoryAppointment.customer.user.email}`}
-					>
-						<Button outline>
-							<EnvelopeIcon />
-							{laboratoryAppointment.customer.user.email}
-						</Button>
-					</Anchor>
-				</DescriptionDetails>
-				<DescriptionTerm>Teléfono</DescriptionTerm>
-				<DescriptionDetails>
-					<Anchor
-						href={`tel:${laboratoryAppointment.customer.user.full_phone}`}
-					>
-						<Button outline>
-							<PhoneIcon />
-							<Flag
-								className="shrink-0"
-								code={
-									laboratoryAppointment.customer.user
-										.phone_country
-								}
-								size="s"
-							/>
-							{laboratoryAppointment.customer.user.phone}
-						</Button>
-					</Anchor>
-				</DescriptionDetails>
-			</DescriptionList>
-		</div>
-	);
-}
-
-function LaboratoryAppointmentConfirmation({ laboratoryAppointment }) {
-	return (
-		<div>
-			<Subheading>Confirmación de cita</Subheading>
-
-			<DescriptionList>
-				<DescriptionTerm>Solicitada</DescriptionTerm>
-				<DescriptionDetails className="flex items-center gap-2">
-					<ClockIcon className="size-5 fill-zinc-500 sm:size-4" />
-					{laboratoryAppointment.formatted_created_at}
-				</DescriptionDetails>
-				<DescriptionTerm>Fecha de cita</DescriptionTerm>
-				<DescriptionDetails>
-					{laboratoryAppointment.formatted_appointment_date ?? "..."}
-				</DescriptionDetails>
-				<DescriptionTerm>Sucursal</DescriptionTerm>
-				<DescriptionDetails>
-					{laboratoryAppointment.laboratory_store?.name ?? "..."}
-				</DescriptionDetails>
-				<DescriptionTerm>Dirección</DescriptionTerm>
-				<DescriptionDetails>
-					<span className="block max-w-48">
-						{laboratoryAppointment.laboratory_store?.address ??
-							"..."}
-					</span>
-				</DescriptionDetails>
-				<DescriptionTerm>
-					Notas compartidas con el cliente
-				</DescriptionTerm>
-				<DescriptionDetails>
-					<span className="block max-w-80">
-						{laboratoryAppointment.notes
-							? laboratoryAppointment.notes
-							: "..."}
-					</span>
-				</DescriptionDetails>
-			</DescriptionList>
-		</div>
 	);
 }
