@@ -17,13 +17,7 @@ export default function PrivacyPolicy({ name }) {
                         <h1 className="font-poppins text-3xl font-bold tracking-tight text-famedic-darker sm:text-4xl">
                             GRUPO FAMEDIC, S.A. DE C.V.
                         </h1>
-                        <h2 className="mt-4 text-2xl font-semibold text-famedic-light">{name}</h2>
-                        <p className="mt-2 text-sm text-gray-600">
-                            Última actualización: 10 / febrero / 2026
-                        </p>
-                        <p className="mt-2 text-sm text-gray-600">
-                            Última revisión: 10 / febrero / 2026
-                        </p>
+                        <h2 className="mt-4 text-2xl font-semibold text-famedic-light">{name}</h2>                        
                     </div>
 
                     <div className="prose prose-lg mx-auto mt-8 max-w-4xl prose-headings:font-poppins prose-headings:text-famedic-darker prose-strong:text-famedic-darker prose-a:text-famedic-light hover:prose-a:text-famedic-darker">
@@ -232,6 +226,9 @@ export default function PrivacyPolicy({ name }) {
                                 
                                 <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                                     <h3 className="text-lg font-semibold text-yellow-800">Consentimiento para otras transferencias</h3>
+                                    <p className="text-justify mt-2">
+                                        En caso que FAMEDIC solicite algún dato considerado como sensible a fin de cumplir con su objeto, deberá para su tratamiento obtener su consentimiento expreso.
+                                    </p>
                                     <p className="text-justify mt-2">
                                         Asimismo, hacemos de su conocimiento que para cualquier transferencia a
                                         terceros distintos a los referidos en el presente Aviso de Privacidad,
@@ -475,11 +472,11 @@ export default function PrivacyPolicy({ name }) {
                                 <div className="mt-6 p-4 bg-gray-100 rounded-lg">
                                     <p className="text-center font-semibold">
                                         La fecha de la última actualización al presente aviso de privacidad:{" "}
-                                        <span className="text-famedic-light">10 / feberero / 2026</span>
+                                        <span className="text-famedic-light">10 / febrero / 2026</span>
                                     </p>
                                     <p className="text-center font-semibold mt-2">
                                         La fecha de la última revisión al presente aviso de privacidad:{" "}
-                                        <span className="text-famedic-light">10 / feberero / 2026</span>
+                                        <span className="text-famedic-light">10 / febrero / 2026</span>
                                     </p>
                                 </div>
                             </section>
