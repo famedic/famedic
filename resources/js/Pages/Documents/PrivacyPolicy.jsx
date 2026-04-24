@@ -475,11 +475,11 @@ export default function PrivacyPolicy({ name }) {
                                 <div className="mt-6 p-4 bg-gray-100 rounded-lg">
                                     <p className="text-center font-semibold">
                                         La fecha de la última actualización al presente aviso de privacidad:{" "}
-                                        <span className="text-famedic-light">10 / octubre / 2024</span>
+                                        <span className="text-famedic-light">10 / octubre / 2026</span>
                                     </p>
                                     <p className="text-center font-semibold mt-2">
                                         La fecha de la última revisión al presente aviso de privacidad:{" "}
-                                        <span className="text-famedic-light">10 / octubre / 2024</span>
+                                        <span className="text-famedic-light">10 / octubre / 2026</span>
                                     </p>
                                 </div>
                             </section>
