@@ -67,6 +67,11 @@ class LaboratoryAppointment extends Model
         return $this->belongsTo(LaboratoryPurchase::class);
     }
 
+    public function interactions(): HasMany
+    {
+        return $this->hasMany(LaboratoryAppointmentInteraction::class);
+    }
+
     /**
      * Compra de laboratorio vinculada con cobro en estado completado (misma lógica que "Pagado" en correos).
      */

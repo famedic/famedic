@@ -44,6 +44,7 @@ export default function LaboratoryAppointment({
 	studyItems,
 	studyItemsSource,
 	interactions,
+	hasPaidLaboratoryPurchase,
 }) {
 	const [openDeleteConfirmation, setOpenDeleteConfirmation] = useState(false);
 	const [openConfirmation, setOpenConfirmation] = useState(false);
@@ -79,16 +80,17 @@ export default function LaboratoryAppointment({
 			}));
 		}
 
-		return laboratoryCartItems.map((cartItem) => ({
-			id: cartItem.id,
-			name: cartItem.laboratory_test.name,
-			status: laboratoryAppointment.confirmed_at ? "pending" : "pending",
-			sampleType: cartItem.laboratory_test.requires_appointment
-				? "En laboratorio"
-				: "A domicilio",
+		return (studyItems ?? []).map((item) => ({
+			id: item.id,
+			name: item.name,
+			status: "pending",
+			sampleType:
+				item.requires_appointment === true
+					? "En laboratorio"
+					: "A domicilio",
 			performedAt: null,
 		}));
-	}, [laboratoryAppointment, laboratoryCartItems]);
+	}, [laboratoryAppointment, studyItems]);
 
 	const patient = {
 		fullName: laboratoryAppointment.patient_full_name ?? "...",
@@ -146,6 +148,7 @@ export default function LaboratoryAppointment({
 							<LaboratoryAppointmentConfirmationForm
 								laboratoryAppointment={laboratoryAppointment}
 								laboratoryStores={laboratoryStores}
+								hasPaidLaboratoryPurchase={hasPaidLaboratoryPurchase}
 								setOpenConfirmation={setOpenConfirmation}
 								openConfirmation={openConfirmation}
 								triggerButtonLabel={
@@ -231,6 +234,7 @@ function LaboratoryAppointmentDeleteForm({
 function LaboratoryAppointmentConfirmationForm({
 	laboratoryAppointment,
 	laboratoryStores,
+	hasPaidLaboratoryPurchase,
 	setOpenConfirmation,
 	openConfirmation,
 	triggerButtonLabel = null,
@@ -253,7 +257,7 @@ function LaboratoryAppointmentConfirmationForm({
 		patient_gender: laboratoryAppointment.patient_gender ?? "",
 		laboratory_store: laboratoryAppointment.laboratory_store?.id ?? "",
 		notes: laboratoryAppointment.notes ?? "",
-		send_notification_email: true,
+		send_notification_email: Boolean(hasPaidLaboratoryPurchase),
 	});
 
 	const submit = (e) => {
@@ -532,24 +536,26 @@ function LaboratoryAppointmentConfirmationForm({
 										<ErrorMessage>{errors.notes}</ErrorMessage>
 									)}
 								</Field>
-								<div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3">
-									<CheckboxField>
-										<Checkbox
-											color="sky"
-											checked={data.send_notification_email}
-											onChange={(value) =>
-												setData("send_notification_email", value)
-											}
-										/>
-										<Label>
-											Enviar correo de notificación al paciente
-										</Label>
-										<Description>
-											Se enviará un correo con la confirmación o
-											actualización de su cita.
-										</Description>
-									</CheckboxField>
-								</div>
+								{hasPaidLaboratoryPurchase ? (
+									<div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3">
+										<CheckboxField>
+											<Checkbox
+												color="sky"
+												checked={data.send_notification_email}
+												onChange={(value) =>
+													setData("send_notification_email", value)
+												}
+											/>
+											<Label>
+												Enviar correo de notificación al paciente
+											</Label>
+											<Description>
+												Se enviará un correo con la confirmación o
+												actualización de su cita.
+											</Description>
+										</CheckboxField>
+									</div>
+								) : null}
 							</section>
 						</div>
 					</DialogBody>
