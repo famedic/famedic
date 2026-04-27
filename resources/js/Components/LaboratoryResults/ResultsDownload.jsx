@@ -11,6 +11,7 @@ function formatCountdown(totalSeconds) {
 export default function ResultsDownload({
   secondsLeft,
   onDownload,
+  previewUrl = null,
   downloading = false,
 }) {
   return (
@@ -43,6 +44,19 @@ export default function ResultsDownload({
             {downloading ? "Iniciando descarga..." : "Descargar resultados (PDF)"}
           </button>
         </div>
+
+        {previewUrl ? (
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold text-white">Vista previa de resultados</h2>
+            <div className="overflow-hidden rounded-xl border border-slate-600 bg-slate-900">
+              <iframe
+                title="Vista previa de resultados PDF"
+                src={previewUrl}
+                className="h-[70vh] min-h-[480px] w-full bg-white"
+              />
+            </div>
+          </div>
+        ) : null}
 
         <p className="text-sm text-slate-400">
           Una vez descargados, los resultados quedan bajo tu responsabilidad. Famedic no se hace

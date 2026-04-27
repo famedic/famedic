@@ -1,6 +1,7 @@
 import ApplicationLogo from "@/Components/ApplicationLogo";
 import DownloadStarted from "@/Components/LaboratoryResults/DownloadStarted";
 import OtpVerification from "@/Components/LaboratoryResults/OtpVerification";
+import OtpVerificationPage from "@/Components/LaboratoryResults/OtpVerificationPage";
 import ResultsDownload from "@/Components/LaboratoryResults/ResultsDownload";
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -23,6 +24,12 @@ export default function OtpAccess({
   resendSeconds = 30,
   canUseSms = true,
   canUseEmail = true,
+  maskedPhone = null,
+  maskedEmail = null,
+  patientDisplayName = "",
+  orderNumber = "",
+  studyDateLabel = null,
+  otpExpiryMinutes = 10,
   errorMessage = null,
 }) {
   const { errors } = usePage().props;
@@ -129,6 +136,18 @@ export default function OtpAccess({
     resendForm.post(route("lab-results.resend"));
   };
 
+  const submitSwitchChannel = (newChannel) => {
+    if (!token || !otpChannel || newChannel === otpChannel) return;
+    if (newChannel !== "sms" && newChannel !== "email") return;
+    if (newChannel === "sms" && !canPickSms) return;
+    if (newChannel === "email" && !canPickEmail) return;
+    if (resendForm.processing) return;
+
+    resendForm.setData("token", token);
+    resendForm.setData("channel", newChannel);
+    resendForm.post(route("lab-results.resend"), { preserveScroll: true });
+  };
+
   const handleDownload = () => {
     if (!downloadUrl) return;
     setDownloading(true);
@@ -148,7 +167,7 @@ export default function OtpAccess({
       <Head title="Resultados de laboratorio | Famedic" />
 
       <div className="border-b bg-white dark:bg-slate-900 dark:border-slate-800">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <a href="/" className="flex items-center gap-2" aria-label="Famedic — inicio">
             <ApplicationLogo className="h-9 w-auto sm:h-10" />
             <span className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Famedic</span>
@@ -163,8 +182,8 @@ export default function OtpAccess({
         </div>
       </div>
 
-      <div className="min-h-screen bg-slate-900 px-4 py-8 sm:py-10">
-        <div className="mx-auto max-w-5xl space-y-6">
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-blue-950/80 px-4 py-8 sm:py-10">
+        <div className="mx-auto max-w-6xl space-y-6">
           {errorMessage && (
             <div
               className="rounded-xl border border-red-700 bg-red-900/30 p-5 text-base text-red-100"
@@ -180,87 +199,34 @@ export default function OtpAccess({
             </div>
           )}
 
-          {pageErrors.otp && (
+          {pageErrors.otp && !showOtpStep ? (
             <div className="rounded-xl border border-red-700 bg-red-900/30 p-4 text-base text-red-100">
               {pageErrors.otp}
             </div>
-          )}
+          ) : null}
 
           {showChannelStep && (
-            <div className="rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-sm sm:p-8">
-              <h2 className="text-xl font-semibold text-white sm:text-2xl">
-                Recibe tu codigo de seguridad
-              </h2>
-              <p className="mt-3 text-base text-slate-300 sm:text-lg">
-                Elige en que canal deseas recibir tu codigo OTP.
-              </p>
-
-              <form className="mt-6 space-y-6" onSubmit={submitSendOtp}>
-                <input type="hidden" name="token" value={sendForm.data.token} />
-                <fieldset>
-                  <legend className="sr-only">Canal de envio del codigo</legend>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label
-                      className={`flex min-h-[56px] cursor-pointer flex-col rounded-xl border p-5 text-left transition ${
-                        sendForm.data.channel === "sms"
-                          ? "border-blue-500 bg-blue-500/10"
-                          : "border-slate-600 hover:border-slate-500"
-                      } ${!canPickSms ? "cursor-not-allowed opacity-50" : ""}`}
-                    >
-                      <input
-                        type="radio"
-                        name="channel"
-                        value="sms"
-                        className="sr-only"
-                        disabled={!canPickSms}
-                        checked={sendForm.data.channel === "sms"}
-                        onChange={() => sendForm.setData("channel", "sms")}
-                      />
-                      <span className="text-base font-semibold text-white">Mensaje de texto (SMS)</span>
-                      <span className="mt-1 text-sm text-slate-300">
-                        Te enviaremos el codigo a tu telefono registrado.
-                      </span>
-                    </label>
-
-                    <label
-                      className={`flex min-h-[56px] cursor-pointer flex-col rounded-xl border p-5 text-left transition ${
-                        sendForm.data.channel === "email"
-                          ? "border-blue-500 bg-blue-500/10"
-                          : "border-slate-600 hover:border-slate-500"
-                      } ${!canPickEmail ? "cursor-not-allowed opacity-50" : ""}`}
-                    >
-                      <input
-                        type="radio"
-                        name="channel"
-                        value="email"
-                        className="sr-only"
-                        disabled={!canPickEmail}
-                        checked={sendForm.data.channel === "email"}
-                        onChange={() => sendForm.setData("channel", "email")}
-                      />
-                      <span className="text-base font-semibold text-white">Correo electronico</span>
-                      <span className="mt-1 text-sm text-slate-300">
-                        Te enviaremos el codigo a tu correo registrado.
-                      </span>
-                    </label>
-                  </div>
-                </fieldset>
-
-                <button
-                  type="submit"
-                  disabled={sendForm.processing || !channelSelected}
-                  className="w-full min-h-[56px] rounded-xl bg-blue-600 py-4 text-lg font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-600"
-                >
-                  {sendForm.processing ? "Enviando..." : "Enviar codigo"}
-                </button>
-              </form>
-            </div>
+            <OtpVerificationPage
+              patientDisplayName={patientDisplayName}
+              orderNumber={orderNumber}
+              studyDateLabel={studyDateLabel}
+              maskedPhone={maskedPhone}
+              maskedEmail={maskedEmail}
+              canUseSms={canPickSms}
+              canUseEmail={canPickEmail}
+              selectedChannel={sendForm.data.channel}
+              onChannelChange={(ch) => sendForm.setData("channel", ch)}
+              onSubmit={submitSendOtp}
+              submitting={sendForm.processing}
+              channelSelected={channelSelected}
+              otpExpiryMinutes={otpExpiryMinutes}
+            />
           )}
 
           {showOtpStep && (
             <OtpVerification
-              title="Resultados de laboratorio"
-              subtitle="Accede de forma segura a tus resultados medicos"
+              title="Verificación"
+              subtitle="Introduce el código de 6 dígitos que recibiste para descargar tu PDF de resultados."
               otpSecondsLeft={otpSecondsLeft}
               resendSecondsLeft={resendSecondsLeft}
               remainingAttempts={remainingAttempts}
@@ -273,6 +239,16 @@ export default function OtpAccess({
               otpResetKey={otpResetKey}
               onCodeComplete={submitVerifyOtp}
               onResend={submitResend}
+              otpChannel={otpChannel}
+              maskedPhone={maskedPhone}
+              maskedEmail={maskedEmail}
+              canUseSms={canPickSms}
+              canUseEmail={canPickEmail}
+              onSwitchChannel={submitSwitchChannel}
+              patientDisplayName={patientDisplayName}
+              orderNumber={orderNumber}
+              studyDateLabel={studyDateLabel}
+              otpExpiryMinutes={otpExpiryMinutes}
             />
           )}
 
@@ -282,6 +258,7 @@ export default function OtpAccess({
                 secondsLeft={otpSecondsLeft}
                 downloading={downloading}
                 onDownload={handleDownload}
+                previewUrl={pdfUrl || downloadUrl}
               />
 
               {downloadStarted ? <DownloadStarted secondsLeft={otpSecondsLeft} /> : null}

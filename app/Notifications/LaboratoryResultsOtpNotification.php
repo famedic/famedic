@@ -23,15 +23,57 @@ class LaboratoryResultsOtpNotification extends Notification
             return ['mail'];
         }
 
-        if (app()->environment('local')) {
-            Log::info('Laboratory results OTP: SMS canal solicitado en local; se usa correo como respaldo.', [
+        $vonageDestination = $this->resolveVonageDestination($notifiable);
+        if ($vonageDestination === null || $vonageDestination === '') {
+            Log::warning('Laboratory results OTP: SMS solicitado pero no hay número válido para Vonage; se usa correo.', [
                 'user_id' => $notifiable->id ?? null,
+                'app_env' => config('app.env'),
+            ]);
+
+            return ['mail'];
+        }
+
+        if (app()->environment(['local', 'testing'])) {
+            Log::info('Laboratory results OTP: SMS solicitado en entorno local/testing; se usa correo como respaldo.', [
+                'user_id' => $notifiable->id ?? null,
+                'app_env' => config('app.env'),
+            ]);
+
+            return ['mail'];
+        }
+
+        if (! $this->vonageIsConfigured()) {
+            Log::warning('Laboratory results OTP: SMS solicitado pero Vonage no está configurado (VONAGE_KEY / VONAGE_SECRET); se usa correo.', [
+                'user_id' => $notifiable->id ?? null,
+                'app_env' => config('app.env'),
             ]);
 
             return ['mail'];
         }
 
         return ['vonage'];
+    }
+
+    private function resolveVonageDestination(object $notifiable): ?string
+    {
+        if (method_exists($notifiable, 'routeNotificationForVonage')) {
+            $to = $notifiable->routeNotificationForVonage($this);
+            if (is_string($to) && $to !== '') {
+                return $to;
+            }
+        }
+
+        $fallback = $notifiable->routeNotificationFor('vonage', $this);
+
+        return is_string($fallback) && $fallback !== '' ? $fallback : null;
+    }
+
+    private function vonageIsConfigured(): bool
+    {
+        $key = config('vonage.api_key');
+        $secret = config('vonage.api_secret');
+
+        return filled($key) && filled($secret);
     }
 
     public function toVonage(object $notifiable): VonageMessage

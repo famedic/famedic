@@ -344,11 +344,15 @@ class LabResultsAccessController extends Controller
         $resendSeconds = (int) config('laboratory-results.resend_seconds', 30);
 
         if ($latestPendingOtp && now()->diffInSeconds($latestPendingOtp->created_at) < $resendSeconds) {
-            $remaining = $resendSeconds - (int) now()->diffInSeconds($latestPendingOtp->created_at);
-            $remainingFormatted = $this->formatSecondsAsMinutesCountdown($remaining);
+            $isChannelChange = $latestPendingOtp->channel !== $validated['channel'];
 
-            return redirect()->route('lab-results.show', ['token' => $validated['token']])
-                ->withErrors(['otp' => 'Espera '.$remainingFormatted.' min para pedir otro código.']);
+            if (! $isChannelChange) {
+                $remaining = $resendSeconds - (int) now()->diffInSeconds($latestPendingOtp->created_at);
+                $remainingFormatted = $this->formatSecondsAsMinutesCountdown($remaining);
+
+                return redirect()->route('lab-results.show', ['token' => $validated['token']])
+                    ->withErrors(['otp' => 'Espera '.$remainingFormatted.' min para pedir otro código.']);
+            }
         }
 
         if ($validated['channel'] === OtpCode::CHANNEL_EMAIL && empty($user->email)) {
@@ -364,13 +368,17 @@ class LabResultsAccessController extends Controller
         $otp = $this->issueOtp($user->id, $purchase->id, $validated['channel']);
         $user->notify(new LaboratoryResultsOtpNotification($otp['plain_code'], $validated['channel']));
 
-        $this->persistAccessLog('otp_resent', $user->id, $purchase->id, $validated['channel'], ['otp_id' => $otp['otp_id']]);
+        $this->persistAccessLog('otp_resent', $user->id, $purchase->id, $validated['channel'], [
+            'otp_id' => $otp['otp_id'],
+            'from_channel' => $latestPendingOtp?->channel,
+        ]);
 
         Log::info('lab_results_otp_resent', [
             'user_id' => $user->id,
             'purchase_id' => $purchase->id,
             'channel' => $validated['channel'],
             'otp_id' => $otp['otp_id'],
+            'from_channel' => $latestPendingOtp?->channel,
             'ip' => $request->ip(),
         ]);
 
@@ -517,6 +525,9 @@ class LabResultsAccessController extends Controller
             $currentStep = 2;
         }
 
+        $patientLine = trim(preg_replace('/\s+/', ' ', (string) $purchase->full_name));
+        $patientDisplayName = $patientLine !== '' ? $patientLine : (string) ($user->name ?? '');
+
         return [
             'token' => $plainToken,
             'currentStep' => $currentStep,
@@ -541,7 +552,28 @@ class LabResultsAccessController extends Controller
             'canUseSms' => ! empty($user->phone),
             'canUseEmail' => ! empty($user->email),
             'errorMessage' => null,
+            'patientDisplayName' => $patientDisplayName,
+            'orderNumber' => (string) ($purchase->gda_order_id ?: $purchase->id),
+            'studyDateLabel' => $this->formatStudyDateLabel($purchase),
+            'otpExpiryMinutes' => (int) config('otp.expiry', 10),
         ];
+    }
+
+    private function formatStudyDateLabel(LaboratoryPurchase $purchase): ?string
+    {
+        if (! $purchase->created_at) {
+            return null;
+        }
+
+        $dt = $purchase->created_at->copy()->timezone(config('app.timezone'))->locale('es');
+
+        return sprintf(
+            '%s %s de %s de %s',
+            ucfirst($dt->isoFormat('dddd')),
+            $dt->isoFormat('D'),
+            ucfirst($dt->isoFormat('MMMM')),
+            $dt->isoFormat('YYYY')
+        );
     }
 
     private function resolveTokenContext(string $plainToken): ?array
@@ -772,6 +804,10 @@ class LabResultsAccessController extends Controller
             'canUseSms' => false,
             'canUseEmail' => false,
             'errorMessage' => $message,
+            'patientDisplayName' => null,
+            'orderNumber' => null,
+            'studyDateLabel' => null,
+            'otpExpiryMinutes' => (int) config('otp.expiry', 10),
         ]);
     }
 }
