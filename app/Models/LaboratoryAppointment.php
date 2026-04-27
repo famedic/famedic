@@ -58,6 +58,38 @@ class LaboratoryAppointment extends Model
         return $this->belongsTo(LaboratoryPurchase::class);
     }
 
+    /**
+     * Compra de laboratorio vinculada con cobro en estado completado (misma lógica que "Pagado" en correos).
+     */
+    public function hasPaidLaboratoryPurchase(): bool
+    {
+        if ($this->laboratory_purchase_id === null) {
+            return false;
+        }
+
+        $this->loadMissing('laboratoryPurchase.transactions');
+        $purchase = $this->laboratoryPurchase;
+        if ($purchase === null) {
+            return false;
+        }
+
+        $transaction = $purchase->transactions->first();
+        if ($transaction === null) {
+            return false;
+        }
+
+        $status = strtolower((string) $transaction->payment_status);
+
+        return in_array($status, [
+            'captured',
+            'completed',
+            'paid',
+            'success',
+            'succeeded',
+            'credit',
+        ], true);
+    }
+
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         $search = $filters['search'] ?? null;

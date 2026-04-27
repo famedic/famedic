@@ -117,7 +117,7 @@ class LaboratoryAppointmentController extends Controller
             laboratoryAppointment: $laboratoryAppointment
         );
 
-        if ($request->boolean('send_notification_email')) {
+        if ($request->boolean('send_notification_email') && $laboratoryAppointment->hasPaidLaboratoryPurchase()) {
             $laboratoryAppointment->loadMissing([
                 'customer.user',
                 'laboratoryStore',
