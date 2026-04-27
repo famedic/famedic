@@ -12,43 +12,20 @@ Hola <b>{{ $nombre_usuario }}</b> 👋,
 </p>
 
 <p style="margin:0 0 12px;color:#3d4852;font-size:16px;line-height:1.5;">
-Gracias por confiar en FAMEDIC.<br> <b>Tu cita quedó confirmada en {{ $laboratorio_marca }} sucursal  {{ $branch_name }}</b>✅
+Gracias por confiar en FAMEDIC.<br> 
+<b>Tu pago fue exitoso</b> ✅
 </p>
-
-<p style="margin:0 0 20px;color:#3d4852;font-size:16px;line-height:1.5;">
-Aquí tienes tu comprobante e instrucciones para presentarte sin contratiempos.
-</p>
-
-<p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
-
-@include('emails.laboratory.components.identification', [
-    'consecutivo' => $consecutivo,
-    'folio_orden' => $folio_orden,
-    'nombre_paciente' => $nombre_paciente,
-    'fecha_nacimiento' => $fecha_nacimiento,
-])
 
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 
 <p style="margin:0 0 12px;color:#3d4852;font-size:16px;line-height:1.5;">
-<strong>📅 DATOS DE TU CITA</strong>
+<strong>💰 DATOS DE TU COMPRA</strong>
 </p>
 
 <p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
     🏥 Laboratorio / Marca: <b>{{ $laboratorio_marca }}</b>
 </p>
-<p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
-    📆 Fecha de la cita: <b>{{ $appointment_date }}</b>
-</p>
-<p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
-    ⏰ Hora de la cita: <b>{{ $appointment_time }}</b>
-</p>
-<p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
-    📍 Sucursal de la cita: <b>{{ $branch_name }}</b>
-</p>
-<p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
-    📌 Dirección (si aplica): {{ $branch_address }}
-</p>
+
 <p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
     💳 Estatus de pago: <b>{{ $estatus_pago }}</b>
 </p>
@@ -63,54 +40,37 @@ Aquí tienes tu comprobante e instrucciones para presentarte sin contratiempos.
     🛒 Fecha de compra: <b>{{ $fecha_compra }}</b>
 </p>
 
-<p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
-
-<p style="margin:0 0 8px;color:#3d4852;font-size:16px;line-height:1.5;">
-<strong>🧠 1. ANTES DE IR</strong>
-</p>
-
-<p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
-• Llega 10 minutos antes
-</p>
-<p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
-• Lleva identificación oficial del paciente
-</p>
-<p style="margin:0 0 20px;color:#3d4852;font-size:16px;line-height:1.5;">
-• Ten a la mano tu folio y los datos del paciente (arriba)
-</p>
-
-<p style="margin:0 0 8px;color:#3d4852;font-size:16px;line-height:1.5;">
-<strong>🚶‍♂️ 2. AL LLEGAR (PASO A PASO)</strong>
-</p>
-
-<p style="margin:0 0 12px;color:#3d4852;font-size:16px;line-height:1.5;">
-1. Comparte tus identificadores (Consecutivo, Folio y Paciente + Fecha de nacimiento)
-</p>
-
-<p style="margin:0 0 20px;color:#3d4852;font-size:16px;line-height:1.5;">
-2. Confirma tu cita: <b>{{ $appointment_date }} {{ $appointment_time }} en {{ $laboratorio_marca }} sucursal {{ $branch_name }}</b>
-</p>
 
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 
-@include('emails.laboratory.components.preparation', ['studies' => $studies, 'showIntro' => false])
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border-collapse:separate;">
+<tr>
+<td style="padding:14px 16px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;">
+<p style="margin:0 0 8px;color:#1e3a8a;font-size:16px;line-height:1.5;">
+<strong>🏥 1. Información de tu cita</strong>
+</p>
+
+<p style="margin:0 0 4px;color:#1e3a8a;font-size:16px;line-height:1.5;">
+    📩 En  breve recibirás un correo con los detalles de tu cita y las instrucciones de preparación para tus estudios
+</p>
+
+</td>
+</tr>
+</table>
+
 
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 
 <p style="margin:0 0 8px;color:#3d4852;font-size:16px;line-height:1.5;">
-<strong>🤝 6. ¿NECESITAS AYUDA? ESTAMOS CONTIGO</strong>
+<strong>🤝 6. ¿NECESITAS AYUDA? </strong>
 </p>
 
 <p style="margin:0 0 12px;color:#3d4852;font-size:16px;line-height:1.5;">
-Si necesitas reprogramar, si no pudiste asistir o si requieres cambios/cancelación, contáctanos y lo resolvemos contigo.
-</p>
-
-<p style="margin:0 0 12px;color:#3d4852;font-size:16px;line-height:1.5;">
-&nbsp;&nbsp;&nbsp;  Atención a clientes FAMEDIC: 📞 <b>812 860 1893</b>
+Atención a clientes FAMEDIC: 📞 <b>812 860 1893</b>
 </p>
 
 <p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
-Con gusto te acompañamos,
+Con gusto te apoyamos,
 </p>
 
 <p style="margin:0;color:#3d4852;font-size:16px;line-height:1.5;">
