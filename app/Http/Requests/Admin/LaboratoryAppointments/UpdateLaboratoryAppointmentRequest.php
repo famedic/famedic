@@ -28,6 +28,7 @@ class UpdateLaboratoryAppointmentRequest extends FormRequest
             'patient_gender' => ['required', Rule::enum(Gender::class)],
             'laboratory_store' => ['required', 'exists:laboratory_stores,id'],
             'notes' => ['nullable', 'string', 'max:255'],
+            'send_notification_email' => ['nullable', 'boolean'],
         ];
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Admin\LaboratoryAppointments\BuildLaboratoryAppointmentDashboardDataAction;
 use App\Actions\Admin\LaboratoryAppointments\UpdateLaboratoryAppointmentAction;
 use App\Enums\Gender;
 use App\Enums\LaboratoryAppointmentInteractionType;
@@ -14,68 +15,79 @@ use App\Http\Requests\Admin\LaboratoryAppointments\StoreLaboratoryAppointmentCon
 use App\Http\Requests\Admin\LaboratoryAppointments\UpdateLaboratoryAppointmentRequest;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryStore;
+use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
 use Carbon\Carbon;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class LaboratoryAppointmentController extends Controller
 {
-    public function index(IndexLaboratoryAppointmentRequest $request)
-    {
+    public function index(
+        IndexLaboratoryAppointmentRequest $request,
+        BuildLaboratoryAppointmentDashboardDataAction $buildLaboratoryAppointmentDashboardDataAction
+    ) {
+        $view = $request->get('view', 'list');
+
         $filters = collect($request->only([
             'search',
             'completed',
-            'date_range',
-            'brand',
-            'phone_call_intent',
-            'callback_info',
+            'start_date',
+            'end_date',
         ]))->filter()->all();
 
+        $filters['view'] = $view;
+
+        $queryFilters = collect($request->only([
+            'search',
+            'completed',
+        ]))->filter()->all();
+
+        $dashboard = null;
+
+        if ($view === 'dashboard') {
+            $start = $request->filled('start_date')
+                ? Carbon::parse($request->start_date, 'America/Monterrey')->startOfDay()
+                : null;
+            $end = $request->filled('end_date')
+                ? Carbon::parse($request->end_date, 'America/Monterrey')->endOfDay()
+                : null;
+            $dashboard = $buildLaboratoryAppointmentDashboardDataAction($start, $end);
+
+            if (! $request->filled('start_date')) {
+                $filters['start_date'] = $dashboard['startDate'];
+            }
+            if (! $request->filled('end_date')) {
+                $filters['end_date'] = $dashboard['endDate'];
+            }
+
+            $laboratoryAppointments = new LengthAwarePaginator(
+                [],
+                0,
+                25,
+                1,
+                ['path' => $request->url(), 'query' => $request->query()]
+            );
+        } else {
+            $laboratoryAppointments = LaboratoryAppointment::with(['customer.user', 'laboratoryStore', 'laboratoryPurchase.transactions'])
+                ->filter($queryFilters)->latest()->paginate()->withQueryString();
+        }
+
         return Inertia::render('Admin/LaboratoryAppointments', [
-            'laboratoryAppointments' => LaboratoryAppointment::with(['customer.user', 'laboratoryStore', 'laboratoryPurchase.transactions'])
-                ->filter($filters)->latest()->paginate()->withQueryString(),
+            'laboratoryAppointments' => $laboratoryAppointments,
             'filters' => $filters,
-            'brands' => collect(LaboratoryBrand::cases())
-                ->map(fn (LaboratoryBrand $brand) => [
-                    'value' => $brand->value,
-                    'label' => $brand->label(),
-                ])->values(),
+            'dashboard' => $dashboard,
         ]);
     }
 
     public function show(ShowLaboratoryAppointmentRequest $request, LaboratoryAppointment $laboratoryAppointment)
     {
-        $laboratoryAppointment->load(['customer.user', 'laboratoryStore', 'laboratoryPurchase.laboratoryPurchaseItems']);
-        $interactions = $laboratoryAppointment->interactions()
-            ->with('adminUser:id,name,email')
-            ->latest()
-            ->limit(150)
-            ->get();
-        $laboratoryCartItems = $laboratoryAppointment->customer
-            ->laboratoryCartItems()
-            ->with('laboratoryTest')
-            ->ofBrand($laboratoryAppointment->brand)
-            ->get();
-
-        $studyItems = $laboratoryCartItems->map(function ($cartItem) {
-            return [
-                'name' => $cartItem->laboratoryTest?->name,
-                'requires_appointment' => (bool) ($cartItem->laboratoryTest?->requires_appointment),
-            ];
-        })->filter(fn (array $item) => filled($item['name']))->values();
-
-        $studyItemsSource = 'cart';
-        if ($studyItems->isEmpty()) {
-            $studyItems = collect($laboratoryAppointment->laboratoryPurchase?->laboratoryPurchaseItems ?? [])
-                ->filter(fn ($item) => $item->deleted_at === null)
-                ->map(fn ($item) => [
-                    'name' => $item->name,
-                    'requires_appointment' => true,
-                ])
-                ->filter(fn (array $item) => filled($item['name']))
-                ->values();
-            $studyItemsSource = 'purchase';
-        }
+        $laboratoryAppointment->load([
+            'customer.user',
+            'laboratoryStore',
+            'laboratoryPurchase.laboratoryPurchaseItems',
+            'laboratoryPurchase.transactions',
+        ]);
 
         return Inertia::render('Admin/LaboratoryAppointment', [
             'laboratoryAppointment' => $laboratoryAppointment,
@@ -124,6 +136,20 @@ class LaboratoryAppointmentController extends Controller
             notes: $request->notes,
             laboratoryAppointment: $laboratoryAppointment
         );
+
+        if ($request->boolean('send_notification_email') && $laboratoryAppointment->hasPaidLaboratoryPurchase()) {
+            $laboratoryAppointment->loadMissing([
+                'customer.user',
+                'laboratoryStore',
+                'laboratoryPurchase.transactions',
+                'laboratoryPurchase.laboratoryPurchaseItems',
+                'customer.laboratoryCartItems.laboratoryTest',
+            ]);
+
+            $laboratoryAppointment->customer?->user?->notify(
+                new LaboratoryAppointmentUpdatedByConcierge($laboratoryAppointment)
+            );
+        }
 
         return redirect()->back()
             ->flashMessage('Cita actualizada exitosamente.');

@@ -384,24 +384,20 @@ class RefundTransactionAction
                 }
             }
 
-            // Método 4: Buscar en laboratory_purchases relacionadas
-            if ($transaction->transactionable) {
-                // Obtener el modelo relacionado
-                $transactionable = $transaction->transactionable()->first();
+            // Método 4: buscar por las relaciones morph many reales.
+            $relatedPurchase = $transaction->laboratoryPurchases()->withTrashed()->with('customer')->first();
+            if ($relatedPurchase?->customer) {
+                return $relatedPurchase->customer;
+            }
 
-                if ($transactionable) {
-                    // Verificar el tipo de modelo y obtener el customer
-                    switch (get_class($transactionable)) {
-                        case \App\Models\LaboratoryPurchase::class:
-                            return $transactionable->customer;
+            $relatedPurchase = $transaction->onlinePharmacyPurchases()->withTrashed()->with('customer')->first();
+            if ($relatedPurchase?->customer) {
+                return $relatedPurchase->customer;
+            }
 
-                        case \App\Models\OnlinePharmacyPurchase::class:
-                            return $transactionable->customer;
-
-                        case \App\Models\MedicalAttentionSubscription::class:
-                            return $transactionable->customer;
-                    }
-                }
+            $relatedSubscription = $transaction->medicalAttentionSubscriptions()->withTrashed()->with('customer')->first();
+            if ($relatedSubscription?->customer) {
+                return $relatedSubscription->customer;
             }
 
             throw new \Exception("No se pudo encontrar el cliente para la transacción {$transaction->id}");

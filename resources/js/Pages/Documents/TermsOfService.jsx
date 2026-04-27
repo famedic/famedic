@@ -394,12 +394,10 @@ export default function TermsOfService({ name }) {
                                     pone a disposición del Usuario el Aviso de Privacidad que podrá
                                     encontrarse en la Plataforma y en el siguiente sitio web{" "}
                                     <Link 
-                                        href="https://www.ods.com.mx/extranet2/avisodeprivacidad.php" 
-                                        className="font-semibold break-all"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                        href="privacy-policy" 
+                                        className="font-semibold"
                                     >
-                                        https://www.ods.com.mx/extranet2/avisodeprivacidad.php
+                                        Política de Privacidad
                                     </Link>
                                 </p>
                             </section>

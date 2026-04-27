@@ -47,6 +47,8 @@ class FinalizeLaboratoryPayPalPaymentAction
 
         DB::transaction(function () use ($transaction, $capturePayload, $info, &$existingPurchase) {
             $tx = Transaction::lockForUpdate()->findOrFail($transaction->id);
+            $commissionCents = $this->extractCommissionCentsFromCapture($capturePayload);
+            $details = is_array($tx->details) ? $tx->details : [];
 
             if ($tx->laboratoryPurchases()->exists()) {
                 $existingPurchase = $tx->laboratoryPurchases()->first();
@@ -62,6 +64,11 @@ class FinalizeLaboratoryPayPalPaymentAction
                 'raw_response' => $capturePayload,
                 'gateway_response' => $capturePayload,
                 'gateway_processed_at' => now(),
+                'details' => array_merge($details, [
+                    'commission_cents' => $commissionCents,
+                    'commission_fetched_at' => now()->toIso8601String(),
+                    'commission_source' => 'paypal_capture',
+                ]),
             ]);
         });
 
@@ -181,5 +188,69 @@ class FinalizeLaboratoryPayPalPaymentAction
         }
 
         return $contact;
+    }
+
+    private function extractCommissionCentsFromCapture(array $capturePayload): int
+    {
+        $possiblePaths = [
+            'purchase_units.0.payments.captures.0.seller_receivable_breakdown.paypal_fee.value',
+            'purchase_units.0.payments.captures.0.seller_receivable_breakdown.paypal_fee.amount',
+            'seller_receivable_breakdown.paypal_fee.value',
+            'seller_receivable_breakdown.paypal_fee.amount',
+            'paypal_fee.value',
+            'paypal_fee.amount',
+        ];
+
+        foreach ($possiblePaths as $path) {
+            $value = data_get($capturePayload, $path);
+            $cents = $this->parseMoneyToCents($value);
+
+            if ($cents !== null) {
+                return $cents;
+            }
+        }
+
+        return 0;
+    }
+
+    private function parseMoneyToCents(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_int($value)) {
+            return $value > 1000 ? $value : (int) round($value * 100);
+        }
+
+        if (is_float($value)) {
+            return (int) round($value * 100);
+        }
+
+        if (is_string($value)) {
+            $normalized = str_replace([',', '$', 'MXN', 'mxn', ' '], ['', '', '', '', ''], $value);
+            if (!is_numeric($normalized)) {
+                return null;
+            }
+
+            return (int) round(((float) $normalized) * 100);
+        }
+
+        if (is_array($value)) {
+            $nestedCandidates = [
+                $value['value'] ?? null,
+                $value['amount'] ?? null,
+                $value['total'] ?? null,
+            ];
+
+            foreach ($nestedCandidates as $candidate) {
+                $cents = $this->parseMoneyToCents($candidate);
+                if ($cents !== null) {
+                    return $cents;
+                }
+            }
+        }
+
+        return null;
     }
 }

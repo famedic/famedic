@@ -76,6 +76,10 @@ Route::prefix('admin')->middleware([
             'destroy' => 'laboratory-purchases.vendor-payments.destroy',
         ]);
         Route::resource('laboratory-purchases', LaboratoryPurchaseController::class)->only(['index', 'show', 'destroy']);
+        Route::post(
+            'laboratory-purchases/{laboratory_purchase}/resend-confirmation-email',
+            [LaboratoryPurchaseController::class, 'resendConfirmationEmail']
+        )->name('laboratory-purchases.resend-confirmation-email');
         Route::post('laboratory-purchases/{laboratory_purchase}/invoice', InvoiceController::class)->name('laboratory-purchases.invoice');
         Route::post('laboratory-purchases/{laboratory_purchase}/results', ResultsController::class)->name('laboratory-purchases.results');
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request', LaboratoryDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.store');
@@ -157,6 +161,7 @@ Route::prefix('admin')->middleware([
             Route::get('murguia-monitor', [MurguiaMonitorController::class, 'index'])->name('murguia-monitor.index');
             Route::get('murguia-monitor/{customer}', [MurguiaMonitorController::class, 'show'])->name('murguia-monitor.show');
             Route::post('murguia-monitor/{customer}/check-status', [MurguiaMonitorController::class, 'checkStatus'])->name('murguia-monitor.check-status');
+            Route::post('murguia-monitor/check-status-by-credit', [MurguiaMonitorController::class, 'checkStatusByCredit'])->name('murguia-monitor.check-status-by-credit');
             Route::post('murguia/activate/{customer}', [MurguiaMonitorController::class, 'activateCustomer'])->name('murguia.activate');
             Route::post('murguia/deactivate/{customer}', [MurguiaMonitorController::class, 'deactivateCustomer'])->name('murguia.deactivate');
             Route::get('murguia/upload', [MurguiaMonitorController::class, 'uploadPage'])->name('murguia.upload');

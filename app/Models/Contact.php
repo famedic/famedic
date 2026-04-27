@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Enums\Gender;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,6 +22,7 @@ class Contact extends Model
         'formatted_birth_date',
         'formatted_gender',
         'full_name',
+        'phone_for_display',
     ];
 
     protected function casts(): array
@@ -30,7 +30,7 @@ class Contact extends Model
         return [
             'birth_date' => 'date',
             'gender' => Gender::class,
-            'phone' => RawPhoneNumberCast::class . ':country_field',
+            'phone' => RawPhoneNumberCast::class.':country_field',
         ];
     }
 
@@ -42,28 +42,48 @@ class Contact extends Model
     protected function birthDateString(): Attribute
     {
         return Attribute::make(
-            get: fn() => Carbon::parse($this->birth_date)->format('Y-m-d'),
+            get: fn () => $this->birth_date?->format('Y-m-d'),
         );
     }
 
     protected function fullName(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->name . ' ' . $this->paternal_lastname . ' ' . $this->maternal_lastname
+            get: fn () => $this->name.' '.$this->paternal_lastname.' '.$this->maternal_lastname
         );
     }
 
     protected function formattedBirthDate(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->birth_date->isoFormat('D [de] MMM [de] YYYY'),
+            get: fn () => $this->birth_date?->isoFormat('D [de] MMM [de] YYYY'),
         );
     }
 
     protected function formattedGender(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->gender->label()
+            get: fn () => $this->gender?->label() ?? '—',
+        );
+    }
+
+    /**
+     * Teléfono listo para JSON / admin (evita objetos sin serializar).
+     */
+    protected function phoneForDisplay(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                $p = $this->phone;
+                if ($p === null || $p === '') {
+                    return '';
+                }
+                if (is_object($p) && method_exists($p, 'formatE164')) {
+                    return $p->formatE164();
+                }
+
+                return is_scalar($p) ? (string) $p : '';
+            },
         );
     }
 
@@ -84,7 +104,7 @@ class Contact extends Model
             'maternal_lastname' => $this->maternal_lastname,
             'full_name' => $this->getFullNameAttribute(),
             'birth_date' => $this->birth_date,
-            'formatted_birth_date' => $this->birth_date 
+            'formatted_birth_date' => $this->birth_date
                 ? \Carbon\Carbon::parse($this->birth_date)->format('d/m/Y')
                 : null,
             'gender' => $this->gender,
@@ -107,7 +127,7 @@ class Contact extends Model
         ];
 
         return implode(' ', array_filter($parts, function ($part) {
-            return !empty($part) && trim($part) !== '';
+            return ! empty($part) && trim($part) !== '';
         }));
     }
 
@@ -116,7 +136,7 @@ class Contact extends Model
      */
     public function getFormattedGenderAttribute(): string
     {
-        return match($this->gender) {
+        return match ($this->gender) {
             'M' => 'Masculino',
             'F' => 'Femenino',
             default => 'No especificado',
@@ -134,11 +154,11 @@ class Contact extends Model
 
         // Formato básico: +52 55 1234 5678
         $phone = preg_replace('/\D/', '', $this->phone);
-        
+
         if (strlen($phone) === 10) {
-            return '+52 ' . substr($phone, 0, 2) . ' ' . substr($phone, 2, 4) . ' ' . substr($phone, 6, 4);
+            return '+52 '.substr($phone, 0, 2).' '.substr($phone, 2, 4).' '.substr($phone, 6, 4);
         }
-        
+
         return $this->phone;
     }
 }
