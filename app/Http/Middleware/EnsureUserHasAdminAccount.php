@@ -67,6 +67,11 @@ class EnsureUserHasAdminAccount
                             'current' => Route::currentRouteName() === 'admin.laboratory-appointments.index' ||
                                 Route::currentRouteName() === 'admin.laboratory-appointments.show',
                         ] : null,
+                        $request->user()->administrator->laboratoryConcierge ? [
+                            'label' => 'Métricas de citas',
+                            'url' => route('admin.laboratory-appointments.metrics'),
+                            'current' => Route::currentRouteName() === 'admin.laboratory-appointments.metrics',
+                        ] : null,
                         $request->user()->administrator->hasPermissionTo('laboratory-purchases.manage.vendor-payments') ? [
                             'label' => 'Pagos a GDA',
                             'url' => route('admin.laboratory-purchases.vendor-payments.index'),

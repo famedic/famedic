@@ -7,12 +7,11 @@ use App\Http\Controllers\LaboratoryAppointmentController;
 use App\Http\Controllers\LaboratoryCartItemController;
 use App\Http\Controllers\LaboratoryCheckoutController;
 use App\Http\Controllers\LaboratoryPurchaseController;
-use App\Http\Controllers\LaboratoryShoppingCartController;
-use App\Http\Controllers\LaboratoryStoreController;
 use App\Http\Controllers\LaboratoryQuoteController;
 use App\Http\Controllers\LaboratoryResultsController;
+use App\Http\Controllers\LaboratoryShoppingCartController;
+use App\Http\Controllers\LaboratoryStoreController;
 use App\Http\Controllers\PayPalController;
-
 use Illuminate\Support\Facades\Route;
 
 // Public browsing routes
@@ -58,6 +57,14 @@ Route::middleware([
         ->name('laboratory-appointments.show')
         ->middleware('redirect-if-appointment-confirmed');
 
+    Route::post('/{laboratory_brand}/laboratory-appointments/{laboratory_appointment}/phone-intent', [LaboratoryAppointmentController::class, 'recordPhoneIntent'])
+        ->name('laboratory-appointments.phone-intent')
+        ->middleware('redirect-if-appointment-confirmed');
+
+    Route::patch('/{laboratory_brand}/laboratory-appointments/{laboratory_appointment}/callback-availability', [LaboratoryAppointmentController::class, 'updateCallbackAvailability'])
+        ->name('laboratory-appointments.callback-availability')
+        ->middleware('redirect-if-appointment-confirmed');
+
     Route::delete('/laboratory-appointments/{laboratoryAppointment}', [LaboratoryAppointmentController::class, 'destroy'])
         ->name('laboratory-appointments.destroy');
 
@@ -72,7 +79,7 @@ Route::middleware([
     Route::get('/laboratory/quote/{quote}', [LaboratoryQuoteController::class, 'success'])
         ->name('laboratory.quote.show');
     /*
-    // Laboratory Results    
+    // Laboratory Results
     Route::get('/mis-resultados', [LaboratoryResultController::class, 'index'])
         ->name('patient.results');
 
@@ -81,12 +88,10 @@ Route::middleware([
         ->name('patient.results.mark-downloaded');
     */
 
+    // Route::get('/laboratory-results', [LaboratoryResultController::class, 'index'])->name('laboratory-results.index');
 
-    //Route::get('/laboratory-results', [LaboratoryResultController::class, 'index'])->name('laboratory-results.index');
-
-    //Route::get('/laboratory-results/{type}/{id}/download', [LaboratoryResultController::class, 'download'])->name('laboratory-results.download');
-    //Route::get('/laboratory-results/{type}/{id}/view', [LaboratoryResultController::class, 'view'])->name('laboratory-results.view');
-
+    // Route::get('/laboratory-results/{type}/{id}/download', [LaboratoryResultController::class, 'download'])->name('laboratory-results.download');
+    // Route::get('/laboratory-results/{type}/{id}/view', [LaboratoryResultController::class, 'view'])->name('laboratory-results.view');
 
     Route::post('/laboratory-results/notification/{notification}/mark-read', [LaboratoryResultController::class, 'markAsRead']);
 
@@ -106,4 +111,3 @@ Route::middleware([
         [LaboratoryResultsController::class, 'fetch']
     )->name('laboratory-purchases.results.automatic-fetch');
 });
-

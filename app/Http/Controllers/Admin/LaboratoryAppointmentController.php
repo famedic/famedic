@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Admin;
 use App\Actions\Admin\LaboratoryAppointments\BuildLaboratoryAppointmentDashboardDataAction;
 use App\Actions\Admin\LaboratoryAppointments\UpdateLaboratoryAppointmentAction;
 use App\Enums\Gender;
+use App\Enums\LaboratoryAppointmentInteractionType;
+use App\Enums\LaboratoryBrand;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LaboratoryAppointments\DestroyLaboratoryAppointmentRequest;
 use App\Http\Requests\Admin\LaboratoryAppointments\IndexLaboratoryAppointmentRequest;
 use App\Http\Requests\Admin\LaboratoryAppointments\ShowLaboratoryAppointmentRequest;
+use App\Http\Requests\Admin\LaboratoryAppointments\StoreLaboratoryAppointmentConciergeInteractionRequest;
 use App\Http\Requests\Admin\LaboratoryAppointments\UpdateLaboratoryAppointmentRequest;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryStore;
@@ -89,9 +92,26 @@ class LaboratoryAppointmentController extends Controller
         return Inertia::render('Admin/LaboratoryAppointment', [
             'laboratoryAppointment' => $laboratoryAppointment,
             'laboratoryStores' => LaboratoryStore::ofBrand($laboratoryAppointment->brand)->orderBy('name')->get(),
-            'laboratoryCartItems' => $laboratoryAppointment->customer->laboratoryCartItems()->with('laboratoryTest')->ofBrand($laboratoryAppointment->brand)->get(),
+            'studyItems' => $studyItems,
+            'studyItemsSource' => $studyItemsSource,
             'genders' => Gender::casesWithLabels(),
+            'interactions' => $interactions,
         ]);
+    }
+
+    public function storeInteraction(
+        StoreLaboratoryAppointmentConciergeInteractionRequest $request,
+        LaboratoryAppointment $laboratoryAppointment
+    ) {
+        $validated = $request->validated();
+        $laboratoryAppointment->interactions()->create([
+            'type' => LaboratoryAppointmentInteractionType::from($validated['type']),
+            'body' => $validated['body'],
+            'admin_user_id' => $request->user()->id,
+        ]);
+
+        return redirect()->back()
+            ->flashMessage('Interacción registrada en la bitácora.');
     }
 
     public function update(UpdateLaboratoryAppointmentRequest $request, LaboratoryAppointment $laboratoryAppointment, UpdateLaboratoryAppointmentAction $action)

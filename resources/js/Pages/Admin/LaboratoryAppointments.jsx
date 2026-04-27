@@ -99,7 +99,7 @@ export default function LaboratoryAppointments({
 
 		if (filters.search) {
 			badges.push(
-				<Badge color="sky">
+				<Badge color="sky" key={`search-${filters.search}`}>
 					<MagnifyingGlassIcon className="size-4" />
 					{filters.search}
 				</Badge>,
@@ -108,7 +108,7 @@ export default function LaboratoryAppointments({
 
 		if (filters.completed === "false") {
 			badges.push(
-				<Badge color="slate">
+				<Badge color="slate" key="completed-false">
 					<ClockIcon className="size-4" />
 					solicitadas
 				</Badge>,
@@ -133,6 +133,73 @@ export default function LaboratoryAppointments({
 				<Badge color="slate">
 					<CalendarDateRangeIcon className="size-4" />
 					hasta {filters.end_date}
+				</Badge>,
+			);
+		}
+
+		if (filters.date_range === "today") {
+			badges.push(
+				<Badge color="sky" key="range-today">
+					<CalendarDaysIcon className="size-4" />
+					Citas de hoy
+				</Badge>,
+			);
+		} else if (filters.date_range === "last_7_days") {
+			badges.push(
+				<Badge color="sky" key="range-last-7-days">
+					<CalendarDaysIcon className="size-4" />
+					Últimos 7 días
+				</Badge>,
+			);
+		} else if (filters.date_range === "last_6_months") {
+			badges.push(
+				<Badge color="sky" key="range-last-6-months">
+					<CalendarDaysIcon className="size-4" />
+					Últimos 6 meses
+				</Badge>,
+			);
+		}
+
+		if (filters.brand) {
+			const brandLabel =
+				brands?.find((brand) => brand.value === filters.brand)?.label ||
+				filters.brand;
+
+			badges.push(
+				<Badge color="famedic-lime" key={`brand-${filters.brand}`}>
+					{brandLabel}
+				</Badge>,
+			);
+		}
+
+		if (filters.phone_call_intent === "true") {
+			badges.push(
+				<Badge color="emerald" key="phone-intent-true">
+					<PhoneIcon className="size-4" />
+					Intentó llamar
+				</Badge>,
+			);
+		} else if (filters.phone_call_intent === "false") {
+			badges.push(
+				<Badge color="slate" key="phone-intent-false">
+					<PhoneIcon className="size-4" />
+					No intentó llamar
+				</Badge>,
+			);
+		}
+
+		if (filters.callback_info === "true") {
+			badges.push(
+				<Badge color="emerald" key="callback-info-true">
+					<ChatBubbleLeftRightIcon className="size-4" />
+					Dejó info de llamada
+				</Badge>,
+			);
+		} else if (filters.callback_info === "false") {
+			badges.push(
+				<Badge color="slate" key="callback-info-false">
+					<ChatBubbleLeftRightIcon className="size-4" />
+					Sin info de llamada
 				</Badge>,
 			);
 		}
@@ -196,7 +263,7 @@ export default function LaboratoryAppointments({
 						<SearchInput
 							value={data.search}
 							onChange={(value) => setData("search", value)}
-							placeholder="Buscar citas..."
+							placeholder="Buscar por nombre, apellidos, correo o teléfono del paciente/usuario..."
 						/>
 						<div className="flex items-center justify-end gap-2">
 							{view === "list" && (
@@ -285,9 +352,32 @@ export default function LaboratoryAppointments({
 	);
 }
 
-function Filters({ data, setData }) {
+function Filters({ data, setData, brands }) {
 	return (
-		<div className="grid gap-4 md:grid-cols-3">
+		<div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
+			<ListboxFilter
+				label="Rango de fechas"
+				value={data.date_range}
+				onChange={(value) => setData("date_range", value)}
+			>
+				<ListboxOption value="" className="group">
+					<ArchiveBoxIcon />
+					<ListboxLabel>Todos</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="today" className="group">
+					<CalendarDaysIcon />
+					<ListboxLabel>Citas de hoy</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="last_7_days" className="group">
+					<CalendarDaysIcon />
+					<ListboxLabel>Últimos 7 días</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="last_6_months" className="group">
+					<CalendarDaysIcon />
+					<ListboxLabel>Últimos 6 meses</ListboxLabel>
+				</ListboxOption>
+			</ListboxFilter>
+
 			<ListboxFilter
 				label="Estado"
 				value={data.completed}
@@ -304,6 +394,65 @@ function Filters({ data, setData }) {
 				<ListboxOption value="true" className="group">
 					<CheckCircleIcon />
 					<ListboxLabel>Confirmadas</ListboxLabel>
+				</ListboxOption>
+			</ListboxFilter>
+
+			<ListboxFilter
+				label="Marca de laboratorio"
+				value={data.brand}
+				onChange={(value) => setData("brand", value)}
+			>
+				<ListboxOption value="" className="group">
+					<ArchiveBoxIcon />
+					<ListboxLabel>Todas</ListboxLabel>
+				</ListboxOption>
+				{(brands || []).map((brand) => (
+					<ListboxOption
+						key={brand.value}
+						value={brand.value}
+						className="group"
+					>
+						<BuildingStorefrontIcon />
+						<ListboxLabel>{brand.label}</ListboxLabel>
+					</ListboxOption>
+				))}
+			</ListboxFilter>
+
+			<ListboxFilter
+				label="Intento de llamada"
+				value={data.phone_call_intent}
+				onChange={(value) => setData("phone_call_intent", value)}
+			>
+				<ListboxOption value="" className="group">
+					<ArchiveBoxIcon />
+					<ListboxLabel>Todos</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="true" className="group">
+					<PhoneIcon />
+					<ListboxLabel>Sí intentó llamar</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="false" className="group">
+					<PhoneIcon />
+					<ListboxLabel>No intentó llamar</ListboxLabel>
+				</ListboxOption>
+			</ListboxFilter>
+
+			<ListboxFilter
+				label="Información para devolución de llamada"
+				value={data.callback_info}
+				onChange={(value) => setData("callback_info", value)}
+			>
+				<ListboxOption value="" className="group">
+					<ArchiveBoxIcon />
+					<ListboxLabel>Todos</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="true" className="group">
+					<ChatBubbleLeftRightIcon />
+					<ListboxLabel>Dejó información</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="false" className="group">
+					<ChatBubbleLeftRightIcon />
+					<ListboxLabel>No dejó información</ListboxLabel>
 				</ListboxOption>
 			</ListboxFilter>
 		</div>
@@ -330,6 +479,8 @@ function LaboratoryAppointmentsList({
 						<TableRow>
 							<TableHeader>Cliente</TableHeader>
 							<TableHeader>Cita</TableHeader>
+							<TableHeader>Intentó llamar</TableHeader>
+							<TableHeader>Pref. llamada</TableHeader>
 							<TableHeader>Laboratorio</TableHeader>
 						</TableRow>
 					</TableHead>
@@ -415,6 +566,30 @@ function LaboratoryAppointmentsList({
 													</span>
 												</Text>
 											</Badge>
+										)}
+									</TableCell>
+
+									<TableCell>
+										{laboratoryAppointment.formatted_phone_call_intent_at ? (
+											<Text className="text-sm">
+												{
+													laboratoryAppointment.formatted_phone_call_intent_at
+												}
+											</Text>
+										) : (
+											<Text className="text-sm text-zinc-400">
+												—
+											</Text>
+										)}
+									</TableCell>
+
+									<TableCell>
+										{laboratoryAppointment.has_left_callback_info ? (
+											<Badge color="emerald">Sí</Badge>
+										) : (
+											<Text className="text-sm text-zinc-400">
+												—
+											</Text>
 										)}
 									</TableCell>
 

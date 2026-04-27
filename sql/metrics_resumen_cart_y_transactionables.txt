@@ -1,0 +1,77 @@
+-- ============================================================
+-- Alineado con LaboratoryAppointmentMetricsController (2026)
+-- - $ Catálogo: laboratory_cart_items + laboratory_tests (requires_appointment, brand = cita)
+-- - Pago / venta concretada: transactionables + transactions + laboratory_purchase_items
+-- Rango ejemplo (ajusta @start / @end):
+-- ============================================================
+
+SET @start := '2026-04-10 00:00:00';
+SET @end   := '2026-04-20 23:59:59';
+
+-- 1) Solicitudes en periodo
+SELECT COUNT(*) AS total_solicitudes
+FROM laboratory_appointments la
+WHERE la.deleted_at IS NULL
+  AND la.created_at BETWEEN @start AND @end;
+
+-- 2) Citas agendadas (fecha + sucursal)
+SELECT COUNT(*) AS total_agendadas
+FROM laboratory_appointments la
+WHERE la.deleted_at IS NULL
+  AND la.created_at BETWEEN @start AND @end
+  AND la.appointment_date IS NOT NULL
+  AND la.laboratory_store_id IS NOT NULL;
+
+-- 3) $ Catálogo Famedic (carrito) — total periodo
+SELECT
+    SUM(lt.famedic_price_cents) AS catalogo_cents,
+    ROUND(SUM(lt.famedic_price_cents) / 100, 2) AS catalogo_mxn
+FROM laboratory_appointments la
+JOIN laboratory_cart_items lci ON lci.customer_id = la.customer_id AND lci.deleted_at IS NULL
+JOIN laboratory_tests lt ON lt.id = lci.laboratory_test_id
+    AND lt.requires_appointment = 1
+    AND lt.brand = la.brand
+WHERE la.deleted_at IS NULL
+  AND la.created_at BETWEEN @start AND @end;
+
+-- 4) $ Catálogo por cita (carrito)
+SELECT
+    la.id AS appointment_id,
+    SUM(lt.famedic_price_cents) AS catalogo_cents
+FROM laboratory_appointments la
+JOIN laboratory_cart_items lci ON lci.customer_id = la.customer_id AND lci.deleted_at IS NULL
+JOIN laboratory_tests lt ON lt.id = lci.laboratory_test_id
+    AND lt.requires_appointment = 1
+    AND lt.brand = la.brand
+WHERE la.deleted_at IS NULL
+  AND la.created_at BETWEEN @start AND @end
+GROUP BY la.id;
+
+-- 5) Citas con pago (vía transactionables)
+SELECT COUNT(DISTINCT la.id) AS citas_con_pago
+FROM laboratory_appointments la
+JOIN laboratory_purchases lp ON lp.id = la.laboratory_purchase_id AND lp.deleted_at IS NULL
+JOIN transactionables ta
+    ON ta.transactionable_id = lp.id
+   AND ta.transactionable_type = 'App\\Models\\LaboratoryPurchase'
+JOIN transactions t ON t.id = ta.transaction_id
+WHERE la.deleted_at IS NULL
+  AND la.created_at BETWEEN @start AND @end
+  AND (t.payment_status IS NULL OR t.payment_status <> 'failed')
+  AND COALESCE(t.gateway_processed_at, t.created_at) IS NOT NULL;
+
+-- 6) Ventas concretadas (suma ítems pedido solo citas con pago) — mismo criterio que métricas
+SELECT
+    SUM(lpi.price_cents) AS ventas_concretadas_cents,
+    ROUND(SUM(lpi.price_cents) / 100, 2) AS ventas_mxn
+FROM laboratory_appointments la
+JOIN laboratory_purchases lp ON lp.id = la.laboratory_purchase_id AND lp.deleted_at IS NULL
+JOIN transactionables ta
+    ON ta.transactionable_id = lp.id
+   AND ta.transactionable_type = 'App\\Models\\LaboratoryPurchase'
+JOIN transactions t ON t.id = ta.transaction_id
+JOIN laboratory_purchase_items lpi ON lpi.laboratory_purchase_id = lp.id AND lpi.deleted_at IS NULL
+WHERE la.deleted_at IS NULL
+  AND la.created_at BETWEEN @start AND @end
+  AND (t.payment_status IS NULL OR t.payment_status <> 'failed')
+  AND COALESCE(t.gateway_processed_at, t.created_at) IS NOT NULL;

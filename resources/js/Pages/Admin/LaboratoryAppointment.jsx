@@ -41,7 +41,9 @@ import AppointmentSidebar from "@/Pages/Admin/LaboratoryAppointment/AppointmentS
 export default function LaboratoryAppointment({
 	laboratoryAppointment,
 	laboratoryStores,
-	laboratoryCartItems,
+	studyItems,
+	studyItemsSource,
+	interactions,
 }) {
 	const [openDeleteConfirmation, setOpenDeleteConfirmation] = useState(false);
 	const [openConfirmation, setOpenConfirmation] = useState(false);

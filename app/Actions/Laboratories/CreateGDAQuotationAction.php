@@ -32,10 +32,15 @@ class CreateGDAQuotationAction
             'environment' => app()->environment()
         ]);
 
-        if (app()->environment('local')) {
-            Log::warning('CreateGDAQuotationAction: Ejecutando en entorno local, retornando ID simulado', [
-                'generated_id' => uniqid()
+        $nonProductionEnvs = ['local', 'staging', 'testing'];
+        $currentEnv = strtolower((string) config('app.env'));
+        if (in_array($currentEnv, $nonProductionEnvs, true)) {
+            Log::warning('CreateGDAQuotationAction: Entorno no productivo, retornando ID simulado', [
+                'app_env' => config('app.env'),
+                'normalized_env' => $currentEnv,
+                'generated_id' => uniqid(),
             ]);
+
             return ['id' => uniqid()];
         }
 

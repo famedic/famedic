@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Propaganistas\LaravelPhone\Casts\RawPhoneNumberCast;
 
@@ -29,6 +30,11 @@ class LaboratoryAppointment extends Model
         'appointment_date_string',
         'appointment_date_time',
         'patient_birth_date_string',
+        'formatted_phone_call_intent_at',
+        'formatted_callback_availability_range',
+        'has_left_callback_info',
+        'time_since_request_human',
+        'time_since_phone_intent_human',
     ];
 
     protected function casts(): array
@@ -36,6 +42,9 @@ class LaboratoryAppointment extends Model
         return [
             'appointment_date' => 'datetime',
             'confirmed_at' => 'datetime',
+            'phone_call_intent_at' => 'datetime',
+            'callback_availability_starts_at' => 'datetime',
+            'callback_availability_ends_at' => 'datetime',
             'patient_birth_date' => 'date',
             'patient_gender' => Gender::class,
             'brand' => LaboratoryBrand::class,
@@ -94,6 +103,10 @@ class LaboratoryAppointment extends Model
     {
         $search = $filters['search'] ?? null;
         $completed = $filters['completed'] ?? null;
+        $dateRange = $filters['date_range'] ?? null;
+        $brand = $filters['brand'] ?? null;
+        $phoneCallIntent = $filters['phone_call_intent'] ?? null;
+        $callbackInfo = $filters['callback_info'] ?? null;
 
         return $query
             ->when($search, function (Builder $query, string $search) {
@@ -125,6 +138,47 @@ class LaboratoryAppointment extends Model
             ->when(
                 $completed === 'false',
                 fn (Builder $query) => $query->whereNull('confirmed_at')
+            )
+            ->when(
+                $dateRange === 'today',
+                fn (Builder $query) => $query->whereDate('created_at', now()->toDateString())
+            )
+            ->when(
+                $dateRange === 'last_7_days',
+                fn (Builder $query) => $query->where('created_at', '>=', now()->subDays(7)->startOfDay())
+            )
+            ->when(
+                $dateRange === 'last_6_months',
+                fn (Builder $query) => $query->where('created_at', '>=', now()->subMonths(6)->startOfDay())
+            )
+            ->when(
+                filled($brand),
+                fn (Builder $query) => $query->where('brand', $brand)
+            )
+            ->when(
+                $phoneCallIntent === 'true',
+                fn (Builder $query) => $query->whereNotNull('phone_call_intent_at')
+            )
+            ->when(
+                $phoneCallIntent === 'false',
+                fn (Builder $query) => $query->whereNull('phone_call_intent_at')
+            )
+            ->when(
+                $callbackInfo === 'true',
+                fn (Builder $query) => $query->where(function (Builder $query) {
+                    $query->whereNotNull('callback_availability_starts_at')
+                        ->orWhereNotNull('callback_availability_ends_at')
+                        ->orWhereNotNull('patient_callback_comment');
+                })
+            )
+            ->when(
+                $callbackInfo === 'false',
+                fn (Builder $query) => $query->whereNull('callback_availability_starts_at')
+                    ->whereNull('callback_availability_ends_at')
+                    ->where(function (Builder $query) {
+                        $query->whereNull('patient_callback_comment')
+                            ->orWhere('patient_callback_comment', '');
+                    })
             );
     }
 
@@ -222,6 +276,57 @@ class LaboratoryAppointment extends Model
     {
         return Attribute::make(
             get: fn () => localizedDate($this->appointment_date)?->format('H:i'),
+        );
+    }
+
+    protected function formattedPhoneCallIntentAt(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => localizedDate($this->phone_call_intent_at)?->isoFormat('ddd D MMM YYYY, h:mm a'),
+        );
+    }
+
+    protected function formattedCallbackAvailabilityRange(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                $start = localizedDate($this->callback_availability_starts_at);
+                $end = localizedDate($this->callback_availability_ends_at);
+                if (! $start && ! $end) {
+                    return null;
+                }
+                if ($start && $end) {
+                    return $start->isoFormat('ddd D MMM YYYY, h:mm a')
+                        .' — '
+                        .$end->isoFormat('ddd D MMM YYYY, h:mm a');
+                }
+
+                return $start?->isoFormat('ddd D MMM YYYY, h:mm a')
+                    ?? $end?->isoFormat('ddd D MMM YYYY, h:mm a');
+            }
+        );
+    }
+
+    protected function hasLeftCallbackInfo(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): bool => $this->callback_availability_starts_at !== null
+                || $this->callback_availability_ends_at !== null
+                || filled($this->patient_callback_comment),
+        );
+    }
+
+    protected function timeSinceRequestHuman(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): string => $this->created_at->locale('es')->diffForHumans(),
+        );
+    }
+
+    protected function timeSincePhoneIntentHuman(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): ?string => $this->phone_call_intent_at?->locale('es')->diffForHumans(),
         );
     }
 }
