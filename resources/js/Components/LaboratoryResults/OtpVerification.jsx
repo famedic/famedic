@@ -65,9 +65,9 @@ export default function OtpVerification({
         <div className="absolute inset-0 z-10 rounded-xl bg-slate-950/50 backdrop-blur-[2px]" />
       ) : null}
 
-      <p className="text-xs font-semibold uppercase tracking-wide text-blue-300/90">{title}</p>
-      <h2 className="mt-1 text-xl font-bold text-white sm:text-2xl">Código de verificación</h2>
-      <p className="mt-2 text-sm leading-relaxed text-slate-400">{subtitle}</p>
+      <p className="text-center text-xs font-semibold uppercase tracking-wide text-blue-300/90">{title}</p>
+      <h2 className="mt-1 text-center text-xl font-bold text-white sm:text-2xl">Código de verificación</h2>
+      <p className="mt-2 text-center text-sm leading-relaxed text-slate-400">{subtitle}</p>
 
       {deliveryHint ? (
         <p className="mt-4 rounded-xl border border-slate-600/80 bg-slate-950/40 px-3 py-2.5 text-sm text-slate-200">
@@ -125,8 +125,8 @@ export default function OtpVerification({
 
       {alternateChannel && typeof onSwitchChannel === "function" ? (
         <div className="mt-6 border-t border-slate-600/60 pt-6">
-          <p className="text-sm font-medium text-slate-200">¿No tienes acceso a este canal?</p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="text-center text-sm font-medium text-slate-200">¿No tienes acceso a este canal?</p>
+          <p className="mt-1 text-center text-xs text-slate-500">
             Pide un código nuevo por el otro medio. El código anterior dejará de ser válido.
           </p>
           <button
@@ -148,11 +148,6 @@ export default function OtpVerification({
   if (useStudyLayout) {
     return (
       <div className="space-y-6">
-        <header className="px-1 sm:px-0">
-          <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Resultados de laboratorio</h1>
-          <p className="mt-2 max-w-2xl text-slate-400">Accede de forma segura a tus resultados médicos.</p>
-        </header>
-
         <LabResultsVerificationLayout
           patientDisplayName={patientDisplayName}
           orderNumber={orderNumber}

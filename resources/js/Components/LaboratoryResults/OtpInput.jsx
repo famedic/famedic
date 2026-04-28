@@ -56,7 +56,7 @@ export default function OtpInput({
   );
 
   return (
-    <div className="flex flex-wrap justify-center gap-2 sm:gap-3" role="group" aria-label="Codigo OTP">
+    <div className="flex flex-nowrap justify-center gap-1.5 sm:gap-3" role="group" aria-label="Codigo OTP">
       {digits.map((digit, index) => (
         <input
           key={index}
@@ -86,7 +86,7 @@ export default function OtpInput({
 
             refs.current[Math.min(pasted.length, length - 1)]?.focus();
           }}
-          className="h-14 w-11 rounded-lg border-2 border-slate-600 bg-slate-900 text-center text-2xl font-semibold text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-400/60 disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-12 w-9 rounded-lg border-2 border-slate-600 bg-slate-900 text-center text-xl font-semibold text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-400/60 disabled:cursor-not-allowed disabled:opacity-50 sm:h-14 sm:w-11 sm:text-2xl"
           aria-label={`Digito ${index + 1}`}
         />
       ))}

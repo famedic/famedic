@@ -25,8 +25,8 @@ export default function OtpVerificationPage({
     >
       <div className="flex min-h-0 flex-col">
         <header className="mb-6">
-          <h3 className="text-xl font-bold text-white sm:text-2xl">Recibe tu código de seguridad</h3>
-          <p className="mt-2 text-sm leading-relaxed text-slate-400 sm:text-base">
+          <h3 className="text-center text-xl font-bold text-white sm:text-left sm:text-2xl">Recibe tu código de seguridad</h3>
+          <p className="mt-2 text-center text-sm leading-relaxed text-slate-400 sm:text-left sm:text-base">
             Selecciona el canal donde deseas recibir tu código OTP.
           </p>
         </header>
@@ -42,10 +42,10 @@ export default function OtpVerificationPage({
             <div className="grid gap-4 sm:grid-cols-1">
               <OtpChannelCard
                 channel="sms"
-                title="Mensaje de texto (SMS)"
-                description="Enviaremos el código a tu teléfono registrado."
+                title="Mensaje (SMS)"
+                description={null}
                 maskedContact={maskedPhone}
-                footnote="Asegúrate de tener señal en tu teléfono."
+                footnote={null}
                 selected={selectedChannel === "sms"}
                 disabled={!canUseSms}
                 onSelect={onChannelChange}
@@ -54,9 +54,9 @@ export default function OtpVerificationPage({
               <OtpChannelCard
                 channel="email"
                 title="Correo electrónico"
-                description="Enviaremos el código a tu correo registrado."
+                description={null}
                 maskedContact={maskedEmail}
-                footnote="Revisa tu bandeja de entrada o spam."
+                footnote={null}
                 selected={selectedChannel === "email"}
                 disabled={!canUseEmail}
                 onSelect={onChannelChange}
