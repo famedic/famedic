@@ -18,6 +18,7 @@ class ExportCustomersRequest extends FormRequest
             'type' => ['nullable', 'string', 'in:regular,odessa,familiar'],
             'medical_attention_status' => ['nullable', 'string', 'in:active,inactive'],
             'referral_status' => ['nullable', 'string', 'in:referred,not_referred'],
+            'verification_status' => ['nullable', 'string', 'in:verified,unverified'],
             'start_date' => ['nullable', 'date', 'before_or_equal:today'],
             'end_date' => ['nullable', 'date', 'before_or_equal:today', 'after_or_equal:start_date'],
         ];

@@ -14,6 +14,7 @@ class ExportCustomersController extends Controller
             'type',
             'medical_attention_status',
             'referral_status',
+            'verification_status',
             'start_date',
             'end_date'
         ))->filter()->all();
