@@ -3,7 +3,7 @@
 
 <head>
     <link rel="manifest" href="/manifest.json">
-    
+
     <!-- ios support -->
     <link rel="apple-touch-icon" href="images/icons/ios/16.png" />
     <link rel="apple-touch-icon" href="images/icons/ios/20.png" />
@@ -108,16 +108,18 @@
         t.src=v;s=b.getElementsByTagName(e)[0];
         s.parentNode.insertBefore(t,s)}(window,document,'script',
         'https://connect.facebook.net/en_US/fbevents.js');
-         fbq('init', '1818127705804364'); 
+         fbq('init', '375616874344147');
+         //375616874344147 <--pixel id in environment variables
+         //1818127705804364<-- old pixel id
         fbq('track', 'PageView');
         </script>
         <noscript>
-         <img height="1" width="1" 
+         <img height="1" width="1"
         src="https://www.facebook.com/tr?id=1818127705804364&ev=PageView
         &noscript=1"/>
         </noscript>
         <!-- End Facebook Pixel Code -->
-        
+
         <!-- Google tag (gtag.js) -->
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-F5VNYJNMBP"></script>
         <script>
