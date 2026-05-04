@@ -57,6 +57,8 @@ class LaboratoryPurchasesSheet implements FromQuery, ShouldAutoSize, WithColumnF
             'Carga de resultados',
             'Cita en sucursal',
             'Pago a proveedor',
+            'Estado',
+            'Fecha de cancelación',
         ];
     }
 
@@ -93,6 +95,10 @@ class LaboratoryPurchasesSheet implements FromQuery, ShouldAutoSize, WithColumnF
             $this->getResultsUploadedDate($laboratoryPurchase) ? Date::dateTimeToExcel(localizedDate($this->getResultsUploadedDate($laboratoryPurchase))) : null,
             $laboratoryPurchase->laboratoryAppointment?->appointment_date ? Date::dateTimeToExcel(localizedDate($laboratoryPurchase->laboratoryAppointment->appointment_date)) : null,
             $laboratoryPurchase->vendorPayments->first()?->paid_at ? Date::dateTimeToExcel(localizedDate($laboratoryPurchase->vendorPayments->first()->paid_at)) : null,
+            $laboratoryPurchase->trashed() ? 'Cancelada' : 'Activa',
+            $laboratoryPurchase->deleted_at
+                ? Date::dateTimeToExcel(localizedDate($laboratoryPurchase->deleted_at))
+                : null,
         ];
     }
 
@@ -113,6 +119,7 @@ class LaboratoryPurchasesSheet implements FromQuery, ShouldAutoSize, WithColumnF
             'O' => NumberFormat::FORMAT_DATE_XLSX15,
             'P' => NumberFormat::FORMAT_DATE_XLSX15,
             'Q' => NumberFormat::FORMAT_DATE_XLSX14,
+            'S' => NumberFormat::FORMAT_DATE_XLSX15,
         ];
     }
 
