@@ -6,6 +6,7 @@ use App\Enums\CouponApprovalStatus;
 use App\Http\Controllers\Controller;
 use App\Imports\CouponsExcelImport;
 use App\Mail\CouponAuthorizationRequestedMail;
+use App\Models\Administrator;
 use App\Models\Coupon;
 use App\Models\CouponAdminSettings;
 use App\Models\CouponUser;
@@ -98,8 +99,19 @@ class CouponController extends Controller
     {
         $this->authorize('viewAny', Coupon::class);
 
+        $authorizers = Administrator::role('autorizador')
+            ->with('user:id,name,paternal_lastname,maternal_lastname,email')
+            ->orderByUserName()
+            ->get()
+            ->map(fn (Administrator $administrator) => [
+                'id' => $administrator->id,
+                'name' => $administrator->user?->full_name ?: 'Sin nombre',
+                'email' => $administrator->user?->email,
+            ]);
+
         return Inertia::render('Admin/Coupons/Settings', [
             'settings' => CouponAdminSettings::singleton(),
+            'authorizers' => $authorizers,
         ]);
     }
 
