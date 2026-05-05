@@ -13,6 +13,7 @@ use App\Http\Requests\Admin\Administrators\IndexAdministratorRequest;
 use App\Http\Requests\Admin\Administrators\StoreAdministratorRequest;
 use App\Http\Requests\Admin\Administrators\UpdateAdministratorRequest;
 use App\Models\Administrator;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
 
@@ -42,6 +43,10 @@ class AdministratorController extends Controller
 
     public function store(StoreAdministratorRequest $request, CreateAdministratorAction $action)
     {
+        if (in_array('autorizador', $request->roles ?? [], true)) {
+            $this->authorize('assign-autorizador-role');
+        }
+
         $administrator = $action(
             name: $request->name,
             paternal_lastname: $request->paternal_lastname,
@@ -58,7 +63,7 @@ class AdministratorController extends Controller
     public function edit(EditAdministratorRequest $request, Administrator $administrator)
     {
         $showDeleteButton = ! $administrator->is_only_administrator_with_user_and_role_permission &&
-            $administrator->user_id != auth()->user()->id;
+            $administrator->user_id != Auth::id();
 
         return Inertia::render('Admin/Administrator', [
             'administrator' => $administrator->load(['roles', 'user', 'laboratoryConcierge']),
@@ -69,6 +74,10 @@ class AdministratorController extends Controller
 
     public function update(UpdateAdministratorRequest $request, Administrator $administrator, UpdateAdministratorAction $action)
     {
+        if (in_array('autorizador', $request->roles ?? [], true)) {
+            $this->authorize('assign-autorizador-role');
+        }
+
         $action(
             administrator: $administrator,
             name: $request->name,

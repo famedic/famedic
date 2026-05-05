@@ -5,6 +5,7 @@ namespace App\Http\Requests\Admin\Administrators;
 use App\Models\Administrator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreAdministratorRequest extends FormRequest
 {
@@ -24,5 +25,16 @@ class StoreAdministratorRequest extends FormRequest
             'roles.*' => ['string', Rule::exists('roles', 'name')],
             'has_laboratory_concierge_account' => ['nullable', 'boolean'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            $roles = $this->input('roles', []);
+
+            if (in_array('autorizador', $roles, true) && ! $this->user()->can('assign-autorizador-role')) {
+                $validator->errors()->add('roles', 'Solo un superadmin puede asignar el rol autorizador.');
+            }
+        });
     }
 }

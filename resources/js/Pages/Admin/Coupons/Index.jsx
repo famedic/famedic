@@ -17,6 +17,7 @@ import { Badge } from "@/Components/Catalyst/badge";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
+import { Select } from "@/Components/Catalyst/select";
 function formatShortDateTime(iso) {
 	if (!iso) return "—";
 	return new Date(iso).toLocaleString("es-MX", {
@@ -133,8 +134,8 @@ export default function CouponsIndex({ coupons, filters }) {
 				</Field>
 				<Field className="min-w-[12rem]">
 					<Label>Uso</Label>
-					<select
-						className="mt-1 block w-full rounded-lg border border-zinc-950/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-900"
+					<Select
+						className="mt-1"
 						value={data.usage}
 						onChange={(e) => setData("usage", e.target.value)}
 					>
@@ -143,7 +144,7 @@ export default function CouponsIndex({ coupons, filters }) {
 						<option value="unassigned">Sin asignar</option>
 						<option value="unused">Con saldo sin usar</option>
 						<option value="used">Ya usado</option>
-					</select>
+					</Select>
 				</Field>
 				<Field className="min-w-[11rem]">
 					<Label>Correo beneficiario</Label>

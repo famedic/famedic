@@ -61,6 +61,13 @@ return [
         'coupons' => [
             ['manage' => 'Gestionar cupones saldo y asignaciones'],
         ],
+        'cupones' => [
+            ['view' => 'Ver cupones'],
+            ['create' => 'Crear cupones'],
+            ['edit' => 'Editar cupones'],
+            ['delete' => 'Eliminar cupones'],
+            ['config' => 'Configurar cupones'],
+        ],
     ],
 
     'medical_attention_subscription_price_cents' => 30000,
