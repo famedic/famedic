@@ -1,15 +1,21 @@
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading } from "@/Components/Catalyst/heading";
 import { Button } from "@/Components/Catalyst/button";
+import { Text } from "@/Components/Catalyst/text";
 import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
+import { Textarea } from "@/Components/Catalyst/textarea";
 import { Switch, SwitchField } from "@/Components/Catalyst/switch";
 import { useForm } from "@inertiajs/react";
 
-export default function CouponsCreate() {
+export default function CouponsCreate({ settings }) {
+	const requireAuth = !!settings?.require_authorization;
+
 	const { data, setData, post, processing, errors, transform } = useForm({
 		amount_mxn: "",
 		code: "",
+		description: "",
+		max_beneficiaries: "",
 		is_active: true,
 	});
 
@@ -17,9 +23,12 @@ export default function CouponsCreate() {
 		const cents = Math.round(
 			parseFloat(String(d.amount_mxn).replace(",", "")) * 100,
 		);
+		const maxB = String(d.max_beneficiaries ?? "").trim();
 		return {
 			amount_cents: cents,
 			code: d.code || null,
+			description: d.description || null,
+			max_beneficiaries: maxB === "" ? null : parseInt(maxB, 10),
 			is_active: d.is_active,
 		};
 	});
@@ -30,11 +39,18 @@ export default function CouponsCreate() {
 	};
 
 	return (
-		<AdminLayout title="Nuevo cupón">
-			<Heading>Nuevo cupón (sin asignar)</Heading>
+		<AdminLayout title="Nuevo cupón maestro">
+			<Heading>Nuevo cupón maestro</Heading>
+			<Text className="mt-2 text-zinc-600">
+				Define el monto por beneficiario y cuántas personas pueden recibirlo. Luego
+				asigna usuarios desde &quot;Asignar beneficiario&quot;.{" "}
+				{requireAuth
+					? "Con la política actual, este cupón quedará pendiente hasta autorizarlo con el código enviado al correo del autorizador."
+					: ""}
+			</Text>
 			<form onSubmit={submit} className="mt-6 max-w-md space-y-6">
 				<Field>
-					<Label>Monto (MXN)</Label>
+					<Label>Monto por beneficiario (MXN)</Label>
 					<Input
 						type="number"
 						step="0.01"
@@ -47,19 +63,43 @@ export default function CouponsCreate() {
 					)}
 				</Field>
 				<Field>
-					<Label>Código (opcional)</Label>
+					<Label>Descripción (visible al asignar)</Label>
+					<Textarea
+						rows={3}
+						value={data.description}
+						onChange={(e) => setData("description", e.target.value)}
+						placeholder="Ej. Campaña empleados Q2 — vigencia sujeta a políticas internas"
+					/>
+				</Field>
+				<Field>
+					<Label>Máximo de beneficiarios</Label>
+					<Input
+						type="number"
+						min="1"
+						placeholder="Sin límite"
+						value={data.max_beneficiaries}
+						onChange={(e) => setData("max_beneficiaries", e.target.value)}
+					/>
+					{errors.max_beneficiaries && (
+						<p className="text-sm text-red-600">{errors.max_beneficiaries}</p>
+					)}
+				</Field>
+				<Field>
+					<Label>Código (opcional, se copia a cada asignación)</Label>
 					<Input
 						value={data.code}
 						onChange={(e) => setData("code", e.target.value)}
 					/>
 				</Field>
-				<SwitchField>
-					<Label>Activo</Label>
-					<Switch
-						checked={data.is_active}
-						onChange={(v) => setData("is_active", v)}
-					/>
-				</SwitchField>
+				{!requireAuth && (
+					<SwitchField>
+						<Label>Activo al crear</Label>
+						<Switch
+							checked={data.is_active}
+							onChange={(v) => setData("is_active", v)}
+						/>
+					</SwitchField>
+				)}
 				<div className="flex gap-2">
 					<Button type="submit" disabled={processing} color="emerald">
 						Guardar

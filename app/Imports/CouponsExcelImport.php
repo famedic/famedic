@@ -11,7 +11,8 @@ class CouponsExcelImport implements ToCollection, WithHeadingRow
 {
     public function __construct(
         private CouponService $couponService,
-        private bool $sendNotifications
+        private bool $sendNotifications,
+        private ?int $createdByUserId = null
     ) {}
 
     public function collection(\Illuminate\Support\Collection $rows): void
@@ -39,7 +40,8 @@ class CouponsExcelImport implements ToCollection, WithHeadingRow
                 $user,
                 $amountCents,
                 $this->sendNotifications,
-                $code ? trim((string) $code) : null
+                $code ? trim((string) $code) : null,
+                $this->createdByUserId
             );
         }
     }

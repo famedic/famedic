@@ -2,12 +2,15 @@
 
 namespace App\Services;
 
+use App\Enums\CouponApprovalStatus;
 use App\Enums\CouponType;
 use App\Mail\CouponAssignedMail;
 use App\Models\Coupon;
+use App\Models\CouponAdminSettings;
 use App\Models\CouponUser;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 
 class CouponService
@@ -38,6 +41,7 @@ class CouponService
             ->where('coupons.is_active', true)
             ->where('coupons.remaining_cents', '>', 0)
             ->where('coupons.type', CouponType::Balance)
+            ->where('coupons.approval_status', CouponApprovalStatus::Active)
             ->join('coupon_user', 'coupon_user.coupon_id', '=', 'coupons.id')
             ->where('coupon_user.user_id', $userId)
             ->whereNull('coupon_user.used_at')
@@ -45,19 +49,45 @@ class CouponService
             ->get();
     }
 
-    public function assignCouponToUser(User $user, int $amountCents, bool $sendNotification = true, ?string $code = null): Coupon
+    public function assertAssignmentRules(int $amountCents): void
+    {
+        $settings = CouponAdminSettings::singleton();
+
+        if ($settings->max_assignment_amount_cents !== null
+            && $amountCents > $settings->max_assignment_amount_cents) {
+            throw new \DomainException('El monto supera el máximo permitido por la política de cupones.');
+        }
+
+        if ($settings->max_assignments_per_day !== null) {
+            $start = now()->startOfDay();
+            $count = CouponUser::query()->where('assigned_at', '>=', $start)->count();
+            if ($count >= $settings->max_assignments_per_day) {
+                throw new \DomainException('Se alcanzó el límite de asignaciones diarias permitidas.');
+            }
+        }
+    }
+
+    /**
+     * Crea un cupón independiente con un usuario asignado (importación / flujo legado).
+     */
+    public function assignCouponToUser(User $user, int $amountCents, bool $sendNotification = true, ?string $code = null, ?int $createdByUserId = null): Coupon
     {
         if ($amountCents <= 0) {
             throw new \InvalidArgumentException('El monto del cupón debe ser mayor a cero.');
         }
 
-        return DB::transaction(function () use ($user, $amountCents, $sendNotification, $code) {
+        $this->assertAssignmentRules($amountCents);
+
+        return DB::transaction(function () use ($user, $amountCents, $sendNotification, $code, $createdByUserId) {
             $coupon = Coupon::create([
                 'code' => $code,
                 'amount_cents' => $amountCents,
                 'remaining_cents' => $amountCents,
                 'type' => CouponType::Balance,
                 'is_active' => true,
+                'approval_status' => CouponApprovalStatus::Active,
+                'created_by_user_id' => $createdByUserId,
+                'updated_by_user_id' => $createdByUserId,
             ]);
 
             CouponUser::create([
@@ -67,18 +97,142 @@ class CouponService
             ]);
 
             if ($sendNotification) {
-                $formatted = formattedCentsPrice($amountCents);
-                $this->notificationService->createNotification(
-                    $user,
-                    'coupon_assigned',
-                    'Saldo a favor disponible',
-                    "Tienes {$formatted} disponibles en tu cuenta."
-                );
-
-                Mail::to($user->email)->send(new CouponAssignedMail($user, $amountCents));
+                $this->notifyUserAssigned($user, $amountCents);
             }
 
             return $coupon;
+        });
+    }
+
+    /**
+     * Asigna un beneficiario a un cupón maestro (campaña): crea un cupón hijo con saldo propio.
+     */
+    public function assignUserToCampaignCoupon(
+        User $user,
+        Coupon $parent,
+        bool $sendNotification = true,
+        ?int $createdByUserId = null
+    ): Coupon {
+        if ($parent->parent_coupon_id !== null) {
+            throw new \DomainException('Debes elegir un cupón maestro (sin padre).');
+        }
+
+        if ($parent->approval_status !== CouponApprovalStatus::Active) {
+            throw new \DomainException('El cupón no está autorizado para asignaciones.');
+        }
+
+        if (! $parent->is_active) {
+            throw new \DomainException('El cupón no está activo.');
+        }
+
+        $assignedCount = Coupon::query()->where('parent_coupon_id', $parent->id)->count();
+        if ($parent->max_beneficiaries !== null && $assignedCount >= $parent->max_beneficiaries) {
+            throw new \DomainException('Se alcanzó el máximo de beneficiarios para este cupón.');
+        }
+
+        $exists = CouponUser::query()
+            ->where('user_id', $user->id)
+            ->whereHas('coupon', function ($q) use ($parent) {
+                $q->where('parent_coupon_id', $parent->id);
+            })
+            ->exists();
+
+        if ($exists) {
+            throw new \DomainException('Este usuario ya tiene una asignación de este cupón.');
+        }
+
+        $this->assertAssignmentRules($parent->amount_cents);
+
+        return DB::transaction(function () use ($user, $parent, $sendNotification, $createdByUserId) {
+            $child = Coupon::create([
+                'parent_coupon_id' => $parent->id,
+                'code' => $parent->code,
+                'description' => $parent->description,
+                'amount_cents' => $parent->amount_cents,
+                'remaining_cents' => $parent->amount_cents,
+                'type' => CouponType::Balance,
+                'is_active' => true,
+                'approval_status' => CouponApprovalStatus::Active,
+                'created_by_user_id' => $createdByUserId,
+                'updated_by_user_id' => $createdByUserId,
+            ]);
+
+            CouponUser::create([
+                'coupon_id' => $child->id,
+                'user_id' => $user->id,
+                'assigned_at' => now(),
+            ]);
+
+            if ($sendNotification) {
+                $this->notifyUserAssigned($user, $parent->amount_cents);
+            }
+
+            return $child;
+        });
+    }
+
+    private function notifyUserAssigned(User $user, int $amountCents): void
+    {
+        $formatted = formattedCentsPrice($amountCents);
+        $this->notificationService->createNotification(
+            $user,
+            'coupon_assigned',
+            'Saldo a favor disponible',
+            "Tienes {$formatted} disponibles en tu cuenta."
+        );
+
+        Mail::to($user->email)->send(new CouponAssignedMail($user, $amountCents));
+    }
+
+    /**
+     * Quita la asignación de un cupón a un usuario (solo si aún no fue utilizado).
+     * Si el cupón queda sin asignaciones, se desactiva y el saldo restante pasa a cero.
+     */
+    public function revokeAssignment(CouponUser $assignment): void
+    {
+        if ($assignment->used_at !== null) {
+            throw new \DomainException('No se puede quitar una asignación que ya fue utilizada.');
+        }
+
+        DB::transaction(function () use ($assignment) {
+            $coupon = Coupon::query()->whereKey($assignment->coupon_id)->lockForUpdate()->firstOrFail();
+
+            $assignment->delete();
+
+            if ($coupon->couponUsers()->count() === 0) {
+                $coupon->remaining_cents = 0;
+                $coupon->is_active = false;
+                $coupon->save();
+            }
+        });
+    }
+
+    public function authorizePendingCoupon(Coupon $coupon, string $code, int $authorizedByUserId): void
+    {
+        if ($coupon->parent_coupon_id !== null) {
+            throw new \DomainException('Solo se autorizan cupones maestros.');
+        }
+
+        if ($coupon->approval_status !== CouponApprovalStatus::PendingAuthorization) {
+            throw new \DomainException('Este cupón no está pendiente de autorización.');
+        }
+
+        if ($coupon->authorization_code_expires_at && $coupon->authorization_code_expires_at->isPast()) {
+            throw new \DomainException('El código de autorización expiró.');
+        }
+
+        if (! $coupon->authorization_code_hash || ! Hash::check($code, $coupon->authorization_code_hash)) {
+            throw new \DomainException('Código incorrecto.');
+        }
+
+        DB::transaction(function () use ($coupon, $authorizedByUserId) {
+            $coupon->authorization_code_hash = null;
+            $coupon->authorization_code_expires_at = null;
+            $coupon->approval_status = CouponApprovalStatus::Active;
+            $coupon->is_active = true;
+            $coupon->authorized_at = now();
+            $coupon->authorized_by_user_id = $authorizedByUserId;
+            $coupon->save();
         });
     }
 }

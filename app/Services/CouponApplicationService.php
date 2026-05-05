@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\CouponApprovalStatus;
 use App\Enums\CouponPurchaseType;
 use App\Enums\CouponType;
 use App\Exceptions\CouponApplicationException;
@@ -116,6 +117,10 @@ class CouponApplicationService
     {
         if (! $coupon->is_active) {
             throw new CouponApplicationException('El cupón no está activo.');
+        }
+
+        if ($coupon->approval_status !== CouponApprovalStatus::Active) {
+            throw new CouponApplicationException('El cupón no está autorizado.');
         }
 
         if ($coupon->type !== CouponType::Balance) {

@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\CouponApprovalStatus;
 use App\Enums\CouponType;
 use App\Models\Coupon;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -23,6 +24,7 @@ class CouponFactory extends Factory
             'remaining_cents' => $cents,
             'type' => CouponType::Balance,
             'is_active' => true,
+            'approval_status' => CouponApprovalStatus::Active,
         ];
     }
 }
