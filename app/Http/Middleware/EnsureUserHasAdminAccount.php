@@ -113,9 +113,29 @@ class EnsureUserHasAdminAccount
                 ]] : [],
                 ...$request->user()->administrator->hasPermissionTo('coupons.manage') ? [[
                     'label' => 'Cupones saldo',
-                    'url' => route('admin.coupons.index'),
                     'icon' => 'BanknotesIcon',
-                    'current' => str_starts_with((string) Route::currentRouteName(), 'admin.coupons'),
+                    'items' => [
+                        [
+                            'label' => 'Listado',
+                            'url' => route('admin.coupons.index'),
+                            'current' => Route::currentRouteName() === 'admin.coupons.index'
+                                || Route::currentRouteName() === 'admin.coupons.create'
+                                || Route::currentRouteName() === 'admin.coupons.edit'
+                                || Route::currentRouteName() === 'admin.coupons.show'
+                                || Route::currentRouteName() === 'admin.coupons.assign'
+                                || Route::currentRouteName() === 'admin.coupons.import',
+                        ],
+                        [
+                            'label' => 'Reglas',
+                            'url' => route('admin.coupons.settings'),
+                            'current' => Route::currentRouteName() === 'admin.coupons.settings',
+                        ],
+                        [
+                            'label' => 'Auditoría',
+                            'url' => route('admin.coupons.logs'),
+                            'current' => Route::currentRouteName() === 'admin.coupons.logs',
+                        ],
+                    ],
                 ]] : [],
                 ...$request->user()->administrator->hasPermissionTo('documentation.manage') ? [[
                     'label' => 'Documentación legal',

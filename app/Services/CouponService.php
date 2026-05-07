@@ -5,6 +5,10 @@ namespace App\Services;
 use App\Enums\CouponApprovalStatus;
 use App\Enums\CouponType;
 use App\Mail\CouponAssignedMail;
+use App\Models\CouponApprovalRequest;
+use App\Models\CouponApprovalRequestAuthorizer;
+use App\Models\CouponAuditLog;
+use App\Models\CouponBeneficiaryApprovalRule;
 use App\Models\Coupon;
 use App\Models\CouponAdminSettings;
 use App\Models\CouponUser;
@@ -49,11 +53,134 @@ class CouponService
             ->get();
     }
 
-    public function assertAssignmentRules(int $amountCents): void
+    public function resolveRequiredApprovals(int $amountCents, int $beneficiariesCount): int
     {
         $settings = CouponAdminSettings::singleton();
 
-        if ($settings->max_assignment_amount_cents !== null
+        $approvalsByAmount = 0;
+        if (
+            $settings->amount_threshold_cents !== null &&
+            $settings->required_approvals_by_amount > 0 &&
+            $amountCents >= $settings->amount_threshold_cents
+        ) {
+            $approvalsByAmount = (int) $settings->required_approvals_by_amount;
+        }
+
+        $rule = CouponBeneficiaryApprovalRule::query()
+            ->where('min_beneficiaries', '<=', $beneficiariesCount)
+            ->where(function ($q) use ($beneficiariesCount) {
+                $q->whereNull('max_beneficiaries')
+                    ->orWhere('max_beneficiaries', '>=', $beneficiariesCount);
+            })
+            ->orderByDesc('required_approvals')
+            ->first();
+
+        $approvalsByBeneficiaries = (int) ($rule?->required_approvals ?? 0);
+
+        return max($approvalsByAmount, $approvalsByBeneficiaries);
+    }
+
+    public function createApprovalRequest(
+        string $type,
+        int $requestedByUserId,
+        int $requiredApprovals,
+        array $authorizerAdministratorIds,
+        ?array $beforeState = null,
+        ?array $afterState = null,
+        ?array $payload = null,
+        ?int $couponId = null
+    ): CouponApprovalRequest {
+        return DB::transaction(function () use (
+            $type,
+            $requestedByUserId,
+            $requiredApprovals,
+            $authorizerAdministratorIds,
+            $beforeState,
+            $afterState,
+            $payload,
+            $couponId
+        ) {
+            $request = CouponApprovalRequest::create([
+                'type' => $type,
+                'status' => 'pending',
+                'requested_by_user_id' => $requestedByUserId,
+                'coupon_id' => $couponId,
+                'required_approvals' => $requiredApprovals,
+                'current_approvals' => 0,
+                'before_state' => $beforeState,
+                'after_state' => $afterState,
+                'payload' => $payload,
+            ]);
+
+            foreach (array_unique($authorizerAdministratorIds) as $administratorId) {
+                CouponApprovalRequestAuthorizer::create([
+                    'coupon_approval_request_id' => $request->id,
+                    'administrator_id' => (int) $administratorId,
+                    'status' => 'pending',
+                ]);
+            }
+
+            CouponAuditLog::create([
+                'type' => $type === 'settings' ? 'configuration' : 'assignment',
+                'action' => 'approval_request_created',
+                'status' => 'pending',
+                'actor_user_id' => $requestedByUserId,
+                'coupon_id' => $couponId,
+                'coupon_approval_request_id' => $request->id,
+                'context' => [
+                    'required_approvals' => $requiredApprovals,
+                    'authorizer_administrator_ids' => array_values(array_unique($authorizerAdministratorIds)),
+                ],
+            ]);
+
+            return $request;
+        });
+    }
+
+    public function logAssignment(
+        ?int $actorUserId,
+        ?int $couponId,
+        array $context,
+        string $status = 'completed',
+        ?int $approvalRequestId = null
+    ): void {
+        CouponAuditLog::create([
+            'type' => 'assignment',
+            'action' => 'assign_coupon',
+            'status' => $status,
+            'actor_user_id' => $actorUserId,
+            'coupon_id' => $couponId,
+            'coupon_approval_request_id' => $approvalRequestId,
+            'context' => $context,
+        ]);
+    }
+
+    public function logConfiguration(
+        ?int $actorUserId,
+        array $before,
+        array $after,
+        string $status = 'completed',
+        ?int $approvalRequestId = null
+    ): void {
+        CouponAuditLog::create([
+            'type' => 'configuration',
+            'action' => 'update_coupon_settings',
+            'status' => $status,
+            'actor_user_id' => $actorUserId,
+            'coupon_approval_request_id' => $approvalRequestId,
+            'context' => [
+                'before' => $before,
+                'after' => $after,
+            ],
+        ]);
+    }
+
+    public function assertAssignmentRules(int $amountCents, bool $enforceMaxAssignmentAmount = true): void
+    {
+        $settings = CouponAdminSettings::singleton();
+
+        if ($enforceMaxAssignmentAmount
+            && $settings->max_assignment_amount_cents !== null
             && $amountCents > $settings->max_assignment_amount_cents) {
             throw new \DomainException('El monto supera el máximo permitido por la política de cupones.');
         }
@@ -100,18 +227,32 @@ class CouponService
                 $this->notifyUserAssigned($user, $amountCents);
             }
 
+            $this->logAssignment(
+                actorUserId: $createdByUserId,
+                couponId: $coupon->id,
+                context: [
+                    'mode' => 'individual',
+                    'assigned_user_id' => $user->id,
+                    'assigned_user_email' => $user->email,
+                    'amount_cents' => $amountCents,
+                ]
+            );
+
             return $coupon;
         });
     }
 
     /**
      * Asigna un beneficiario a un cupón maestro (campaña): crea un cupón hijo con saldo propio.
+     *
+     * @param  bool  $enforceMaxAssignmentAmount  Si es false, no aplica el tope de monto por política (p. ej. tras pre-aprobación o solicitud multi-firma ejecutada).
      */
     public function assignUserToCampaignCoupon(
         User $user,
         Coupon $parent,
         bool $sendNotification = true,
-        ?int $createdByUserId = null
+        ?int $createdByUserId = null,
+        bool $enforceMaxAssignmentAmount = true
     ): Coupon {
         if ($parent->parent_coupon_id !== null) {
             throw new \DomainException('Debes elegir un cupón maestro (sin padre).');
@@ -141,7 +282,7 @@ class CouponService
             throw new \DomainException('Este usuario ya tiene una asignación de este cupón.');
         }
 
-        $this->assertAssignmentRules($parent->amount_cents);
+        $this->assertAssignmentRules($parent->amount_cents, $enforceMaxAssignmentAmount);
 
         return DB::transaction(function () use ($user, $parent, $sendNotification, $createdByUserId) {
             $child = Coupon::create([
@@ -166,6 +307,19 @@ class CouponService
             if ($sendNotification) {
                 $this->notifyUserAssigned($user, $parent->amount_cents);
             }
+
+            $this->logAssignment(
+                actorUserId: $createdByUserId,
+                couponId: $parent->id,
+                context: [
+                    'mode' => 'campaign',
+                    'parent_coupon_id' => $parent->id,
+                    'child_coupon_id' => $child->id,
+                    'assigned_user_id' => $user->id,
+                    'assigned_user_email' => $user->email,
+                    'amount_cents' => $parent->amount_cents,
+                ]
+            );
 
             return $child;
         });

@@ -14,6 +14,7 @@ import {
 } from "@/Components/Catalyst/table";
 import PaginatedTable from "@/Components/Admin/PaginatedTable";
 import { Badge } from "@/Components/Catalyst/badge";
+import { PlusIcon } from "@heroicons/react/16/solid";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
@@ -49,7 +50,23 @@ function couponUsageSummary(c) {
 	return { label: "Mixto", color: "orange" };
 }
 
-export default function CouponsIndex({ coupons, filters }) {
+function creatorDisplayName(user) {
+	if (!user) return "Sistema";
+	if (user.full_name) return user.full_name;
+	const parts = [user.name, user.paternal_lastname, user.maternal_lastname].filter(
+		Boolean,
+	);
+	return parts.join(" ").trim() || user.email || "Sistema";
+}
+
+export default function CouponsIndex({
+	coupons,
+	filters,
+	authorizerContext = {},
+	approvalsOverview = { pending_assignment_requests: 0 },
+}) {
+	const pendingCouponIds = new Set(authorizerContext.pending_my_action_coupon_ids ?? []);
+	const pendingMultisigTotal = approvalsOverview.pending_assignment_requests ?? 0;
 
 	const { data, setData, get, processing } = useForm({
 		search: filters?.search ?? "",
@@ -93,32 +110,84 @@ export default function CouponsIndex({ coupons, filters }) {
 
 	return (
 		<AdminLayout title="Cupones saldo">
-			<div className="flex flex-wrap items-center justify-between gap-4">
+			<div className="space-y-8">
+			<div className="flex flex-wrap items-end justify-between gap-8">
 				<Heading>Cupones saldo</Heading>
-				<div className="flex flex-wrap gap-2">
+				<div className="flex flex-wrap items-center justify-end gap-2">
 					<Button href={route("admin.coupons.settings")} outline>
 						Reglas y seguridad
 					</Button>
 					<Button href={exportUrl} outline>
 						Exportar CSV
 					</Button>
-					<Button href={route("admin.coupons.assign")} outline>
-						Asignar beneficiario
-					</Button>
-					<Button href={route("admin.coupons.import")} outline>
-						Importar Excel
-					</Button>
-					<Button href={route("admin.coupons.create")} color="emerald">
-						Nuevo cupón maestro
+					<Button href={route("admin.coupons.assign")}>
+						<PlusIcon />
+						Crear y asignar cupones
 					</Button>
 				</div>
 			</div>
-			<Text className="mt-2 text-zinc-600">
-				Los cupones maestros definen monto por persona y cupo de beneficiarios. Cada
-				asignación crea un cupón hijo con saldo propio. Si activas autorización por
-				correo en Reglas, el cupón queda pendiente hasta que el autorizador ingrese el
-				código recibido.
+			<Text className="text-zinc-600 dark:text-zinc-400">
+				Desde &quot;Crear y asignar cupones&quot; defines el cupón maestro, asignas por
+				correo o por archivo, y ves las reglas vigentes. Cada asignación crea un cupón hijo
+				con saldo propio. Si activas autorización por correo en Reglas, el cupón queda
+				pendiente hasta que el autorizador ingrese el código recibido.
 			</Text>
+
+			{pendingMultisigTotal > 0 && (
+				<div
+					className="mt-6 rounded-xl border border-sky-200/90 bg-sky-50 px-4 py-3 text-sm text-sky-950 shadow-sm dark:border-sky-500/35 dark:bg-sky-950/35 dark:text-sky-50"
+					role="status"
+				>
+					<p className="font-medium">Aprobaciones multi-firma (asignaciones)</p>
+					<p className="mt-1 text-sky-900/90 dark:text-sky-100/85">
+						Hay{" "}
+						<strong>{pendingMultisigTotal}</strong> solicitud(es) pendientes en el sistema
+						que requieren firmas de autorizadores. En la columna{" "}
+						<strong>Multi-firma</strong> ves el avance (firmas registradas / requeridas) por
+						cupón; el detalle y la lista de firmantes están en la ficha del cupón.
+					</p>
+					<div className="mt-2">
+						<Button href={route("admin.coupons.logs")} plain className="text-sm">
+							Registro de actividad
+						</Button>
+					</div>
+				</div>
+			)}
+
+			{authorizerContext.is_authorizer &&
+				(authorizerContext.pending_assignment_approvals_count > 0 ||
+					authorizerContext.pending_settings_approvals_count > 0) && (
+					<div
+						className="mt-6 flex flex-col gap-3 rounded-xl border border-amber-300/80 bg-amber-50 px-4 py-4 text-sm text-amber-950 shadow-sm dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-50"
+						role="status"
+					>
+						<div className="flex flex-wrap items-center gap-2">
+							<Badge color="amber">Autorizador</Badge>
+							<span className="font-medium">Tienes solicitudes pendientes de tu aprobación</span>
+						</div>
+						<ul className="list-inside list-disc space-y-1 text-amber-900/90 dark:text-amber-100/90">
+							{authorizerContext.pending_assignment_approvals_count > 0 && (
+								<li>
+									<strong>{authorizerContext.pending_assignment_approvals_count}</strong>{" "}
+									solicitud(es) de asignación o pre-aprobación de cupones. En la tabla,
+									busca la etiqueta &quot;Tu aprobación&quot; y abre el cupón para firmar.
+								</li>
+							)}
+							{authorizerContext.pending_settings_approvals_count > 0 && (
+								<li>
+									<strong>{authorizerContext.pending_settings_approvals_count}</strong>{" "}
+									solicitud(es) de cambio en Reglas de cupones (revísalas en el registro de
+									actividad).
+								</li>
+							)}
+						</ul>
+						<div className="flex flex-wrap gap-2">
+							<Button href={route("admin.coupons.logs")} outline>
+								Ver registro y detalle
+							</Button>
+						</div>
+					</div>
+				)}
 
 			<form
 				onSubmit={applyFilters}
@@ -171,7 +240,7 @@ export default function CouponsIndex({ coupons, filters }) {
 						onChange={(e) => setData("date_to", e.target.value)}
 					/>
 				</Field>
-				<Button type="submit" disabled={processing} color="emerald">
+				<Button type="submit" disabled={processing}>
 					Filtrar
 				</Button>
 			</form>
@@ -189,6 +258,7 @@ export default function CouponsIndex({ coupons, filters }) {
 								<TableHeader>Uso</TableHeader>
 								<TableHeader>Asignado a</TableHeader>
 								<TableHeader>Fechas</TableHeader>
+								<TableHeader>Multi-firma</TableHeader>
 								<TableHeader>Estado</TableHeader>
 								<TableHeader />
 							</TableRow>
@@ -203,7 +273,13 @@ export default function CouponsIndex({ coupons, filters }) {
 									<TableRow key={c.id}>
 										<TableCell className="whitespace-nowrap">{c.id}</TableCell>
 										<TableCell>
-											<div>{c.code || "—"}</div>
+											<Button
+												href={route("admin.coupons.show", c.id)}
+												plain
+												className="font-medium text-zinc-900 hover:text-famedic-darker dark:text-zinc-100 dark:hover:text-famedic-lime"
+											>
+												{c.code || "—"}
+											</Button>
 											{c.description && (
 												<div className="mt-0.5 line-clamp-2 text-xs text-zinc-500">
 													{c.description}
@@ -211,7 +287,10 @@ export default function CouponsIndex({ coupons, filters }) {
 											)}
 										</TableCell>
 										<TableCell className="whitespace-nowrap text-zinc-600">
-											{formatShortDateTime(c.created_at)}
+											<div>{formatShortDateTime(c.created_at)}</div>
+											<div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+												{creatorDisplayName(c.created_by_user ?? c.createdByUser)}
+											</div>
 										</TableCell>
 										<TableCell className="whitespace-nowrap">
 											{(c.amount_cents / 100).toLocaleString("es-MX", {
@@ -295,6 +374,41 @@ export default function CouponsIndex({ coupons, filters }) {
 												</ul>
 											)}
 										</TableCell>
+										<TableCell className="max-w-[11rem] align-top">
+											{c.assignment_approval_summary ? (
+												<div className="flex flex-col gap-1">
+													<Badge color="amber">
+														{c.assignment_approval_summary.current}/
+														{c.assignment_approval_summary.required} firmas
+													</Badge>
+													{c.assignment_approval_summary.remaining > 0 ? (
+														<span className="text-xs text-zinc-600 dark:text-zinc-400">
+															Faltan {c.assignment_approval_summary.remaining}
+														</span>
+													) : (
+														<span className="text-xs text-zinc-600 dark:text-zinc-400">
+															Sin faltantes (cierre de solicitud)
+														</span>
+													)}
+													{c.assignment_approval_summary.pre_approval_only && (
+														<span className="text-xs text-zinc-500 dark:text-zinc-400">
+															Pre-aprobación
+														</span>
+													)}
+													<Button
+														href={route("admin.coupons.show", c.id)}
+														plain
+														className="self-start text-xs"
+													>
+														Detalle
+													</Button>
+												</div>
+											) : (
+												<span className="text-xs text-zinc-500 dark:text-zinc-400">
+													Sin solicitud pendiente
+												</span>
+											)}
+										</TableCell>
 										<TableCell>
 											<div className="flex flex-col gap-1">
 												{c.is_active ? (
@@ -304,6 +418,9 @@ export default function CouponsIndex({ coupons, filters }) {
 												)}
 												{c.approval_status === "pending_authorization" && (
 													<Badge color="purple">Sin autorizar</Badge>
+												)}
+												{authorizerContext.is_authorizer && pendingCouponIds.has(c.id) && (
+													<Badge color="amber">Tu aprobación</Badge>
 												)}
 											</div>
 										</TableCell>
@@ -347,6 +464,7 @@ export default function CouponsIndex({ coupons, filters }) {
 						</TableBody>
 					</Table>
 				</PaginatedTable>
+			</div>
 			</div>
 
 			<DeleteConfirmationModal
