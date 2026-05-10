@@ -1,0 +1,80 @@
+================================================================================
+  Famedic — Referencia rápida Docker (Windows / PowerShell)
+  Ejecuta estos comandos desde la carpeta raíz del proyecto (donde está docker-compose.yml).
+================================================================================
+
+--- ENTORNO ---
+cd D:\Backups\Space-Work-Dev\Odessa\famedic
+
+--- LEVANTAR / DETENER ---
+docker compose up -d              Levanta todos los servicios en segundo plano
+docker compose down               Para contenedores y elimina la red (NO borra el volumen de MySQL)
+docker compose down -v          Igual + borra volúmenes (¡pierdes datos de MySQL!)
+docker compose ps                 Lista contenedores del proyecto y estado
+docker compose logs -f            Logs de todos los servicios (Ctrl+C para salir)
+docker compose logs -f app        Solo PHP/Laravel
+docker compose logs -f mysql      Solo MySQL
+docker compose logs -f node       Solo Vite/npm
+
+--- ENTRAR A UN CONTENEDOR (bash / shell) ---
+docker compose exec app bash      Shell en PHP-FPM (si bash no existe, usa sh)
+docker compose exec app sh        Alternativa más liviana
+
+docker compose exec mysql bash    Shell dentro del servidor MySQL
+docker compose exec node sh       Shell donde corre npm/vite
+
+Tips:
+  - "exec" solo funciona si el contenedor ya está corriendo (docker compose ps).
+  - Si bash falla, prueba: docker compose exec app sh
+
+--- ARTISAN / COMPOSER / NPM (sin entrar al shell) ---
+docker compose exec app php artisan migrate
+docker compose exec app php artisan migrate:fresh
+docker compose exec app php artisan db:seed
+docker compose exec app php artisan queue:work
+docker compose exec app composer install
+docker compose exec app composer update
+
+docker compose exec node npm install
+docker compose exec node npm run dev
+
+--- MYSQL DESDE TERMINAL (CLI dentro del contenedor) ---
+docker compose exec mysql mysql -ufamedic -pfamedic famedic
+  (Cambia usuario/clave/base si los definiste distinto en .env)
+
+Importar un .sql (ejemplo):
+  Get-Content D:\ruta\backup.sql | docker compose exec -T mysql mysql -ufamedic -pfamedic famedic
+
+--- RECONSTRUIR DESPUÉS DE CAMBIAR Dockerfile ---
+docker compose build --no-cache app
+docker compose up -d
+
+--- LIMPIAR IMÁGENES / CONTENEDORES HUÉRFANOS (opcional, con cuidado) ---
+docker system prune               Elimina contenedores parados, redes no usadas, etc.
+docker volume ls                  Ver volúmenes (ej. datos persistentes de MySQL)
+
+--- URLs TÍPICAS ---
+http://localhost:8080             App (nginx; puerto según APP_PORT en .env)
+http://localhost:5173             Vite (desarrollo)
+
+--- MYSQL WORKBENCH (fuera de Docker) ---
+Host: 127.0.0.1
+Puerto: 3306 (o MYSQL_PORT si lo cambiaste)
+Usuario/clave: los de MYSQL_USER / MYSQL_PASSWORD o root / MYSQL_ROOT_PASSWORD
+
+--- PROBLEMAS FRECUENTES ---
+- 504 Gateway Time-out (nginx) con proyecto en disco Windows (D:\...):
+    Laravel lee miles de archivos de vendor por petición; el bind mount es muy lento y puede pasar el límite de nginx.
+    Ya está subido fastcgi_*_timeout en docker/nginx/default.conf; tras cambiarlo: docker compose restart nginx
+    Solución recomendada: clonar/copiar el repo dentro del sistema de archivos de WSL (p. ej. \\wsl$\Ubuntu\home\tuusuario\famedic) y trabajar desde ahí.
+- Permisos storage Laravel:
+    docker compose exec app sh -c "chown -R www-data:www-data storage bootstrap/cache"
+- Ver si MySQL está sano:
+    docker compose ps
+    docker compose logs mysql --tail 50
+- Reiniciar un solo servicio:
+    docker compose restart app
+
+================================================================================
+Fin de referencia
+================================================================================
