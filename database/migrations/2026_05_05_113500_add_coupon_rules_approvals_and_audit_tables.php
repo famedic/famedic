@@ -73,7 +73,9 @@ return new class extends Migration
         if (! Schema::hasTable('coupon_approval_request_authorizers')) {
             Schema::create('coupon_approval_request_authorizers', function (Blueprint $table) {
                 $table->id();
-                $table->foreignId('coupon_approval_request_id')->constrained('coupon_approval_requests')->cascadeOnDelete();
+                $table->foreignId('coupon_approval_request_id')
+                    ->constrained('coupon_approval_requests', 'id', 'fk_car_authorizers_car_id')
+                    ->cascadeOnDelete();
                 $table->foreignIdFor(Administrator::class)->constrained('administrators')->cascadeOnDelete();
                 $table->foreignIdFor(User::class)->nullable()->constrained('users')->nullOnDelete();
                 $table->string('status', 32)->default('pending'); // pending|approved|rejected

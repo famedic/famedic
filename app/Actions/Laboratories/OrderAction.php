@@ -27,6 +27,7 @@ class OrderAction
     private CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction;
     private ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction;
     private ChargeOdessaAction $chargeOdessaAction;
+    private CreateGDAQuotationAction $createGDAQuotationAction;
     private RefundTransactionAction $refundTransactionAction;
     private CouponApplicationService $couponApplicationService;
     private CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction;
@@ -42,12 +43,12 @@ class OrderAction
         RefundTransactionAction $refundTransactionAction,
         CouponApplicationService $couponApplicationService,
         CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction,
-        RefundTransactionAction $refundTransactionAction,
         FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction
     ) {
         $this->calculateTotalsAndDiscountAction = $calculateTotalsAndDiscountAction;
         $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction;
         $this->chargeOdessaAction = $chargeOdessaAction;
+        $this->createGDAQuotationAction = $createGDAQuotationAction;
         $this->refundTransactionAction = $refundTransactionAction;
         $this->couponApplicationService = $couponApplicationService;
         $this->createCouponBalanceTransactionAction = $createCouponBalanceTransactionAction;
