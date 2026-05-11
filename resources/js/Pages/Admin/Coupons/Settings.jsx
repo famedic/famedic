@@ -7,14 +7,23 @@ import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Checkbox, CheckboxField } from "@/Components/Catalyst/checkbox";
 import { Badge } from "@/Components/Catalyst/badge";
-import { useForm } from "@inertiajs/react";
+import { useForm, usePage } from "@inertiajs/react";
 import { AnimatePresence, motion } from "framer-motion";
+import { PlusIcon, TrashIcon } from "@heroicons/react/16/solid";
 
+// Temporal: pestaña "Límites de créditos" oculta; los valores siguen yendo en el PUT con los actuales.
 const TABS = [
-	{ id: "limits", label: "Límites de créditos" },
 	{ id: "approval", label: "Reglas de aprobación" },
+	{ id: "history", label: "Historial de cambios" },
 	{ id: "authorizers", label: "Autorizadores" },
 ];
+
+function centsToMxnString(cents) {
+	if (cents === null || cents === undefined) return "";
+	const n = Number(cents);
+	if (Number.isNaN(n)) return "";
+	return String(n / 100);
+}
 
 /** @param {Record<string, string|string[]>} errs */
 function errorsForTab(errs, tabId) {
@@ -24,36 +33,89 @@ function errorsForTab(errs, tabId) {
 		keys.some((k) => k === prefix || k.startsWith(`${prefix}.`));
 
 	switch (tabId) {
-		case "limits":
-			return (
-				match("base_amount_mxn") ||
-				match("max_assignment_amount_mxn") ||
-				match("max_assignments_per_day")
-			);
 		case "approval":
 			return (
-				match("amount_threshold_mxn") ||
-				match("required_approvals_by_amount") ||
+				match("amount_rules") ||
+				match("beneficiary_rules") ||
 				match("superadmin_bypass_approvals") ||
 				match("mass_campaign_threshold") ||
-				match("beneficiary_rules")
+				match("base_amount_mxn") ||
+				match("max_assignment_amount_mxn") ||
+				match("max_assignments_per_day") ||
+				match("authorization_email") ||
+				match("require_authorization")
 			);
 		case "authorizers":
-			return match("authorizer_ids");
+			return false;
+		case "history":
+			return false;
 		default:
 			return false;
 	}
 }
 
-export default function CouponsSettings({
-	settings,
-	authorizers = [],
-	initialTab = "limits",
-}) {
+function formatShortDateTime(iso) {
+	if (!iso) return "—";
+	return new Date(iso).toLocaleString("es-MX", {
+		dateStyle: "short",
+		timeStyle: "short",
+	});
+}
+
+function settingsRequestStatusLabel(status) {
+	switch (status) {
+		case "pending":
+			return "Pendiente";
+		case "executed":
+			return "Aplicada";
+		case "rejected":
+			return "Rechazada";
+		default:
+			return status ?? "—";
+	}
+}
+
+export default function Settings() {
+	const {
+		settings,
+		authorizers = [],
+		initialTab = "approval",
+		amountRules = [],
+		beneficiaryRules = [],
+		settingsApprovalHistory = [],
+	} = usePage().props;
+
 	const allowed = new Set(TABS.map((t) => t.id));
-	const normalizedInitial = allowed.has(initialTab) ? initialTab : "limits";
+	const rawTab = initialTab === "limits" ? "approval" : initialTab;
+	const normalizedInitial = allowed.has(rawTab) ? rawTab : "approval";
 
 	const [activeTab, setActiveTabState] = useState(normalizedInitial);
+
+	const initialAmountRules = useMemo(
+		() =>
+			(Array.isArray(amountRules) ? amountRules : []).map((r) => ({
+				min_amount_mxn: centsToMxnString(r.min_amount_cents) || "0",
+				max_amount_mxn:
+					r.max_amount_cents != null
+						? centsToMxnString(r.max_amount_cents)
+						: "",
+				required_approvals: r.required_approvals ?? 0,
+			})),
+		[amountRules],
+	);
+
+	const initialBeneficiaryRules = useMemo(
+		() =>
+			(Array.isArray(beneficiaryRules) ? beneficiaryRules : []).map((r) => ({
+				min: r.min_beneficiaries ?? 1,
+				max:
+					r.max_beneficiaries != null && r.max_beneficiaries !== ""
+						? String(r.max_beneficiaries)
+						: "",
+				required_approvals: r.required_approvals ?? 0,
+			})),
+		[beneficiaryRules],
+	);
 
 	const { data, setData, put, processing, errors } = useForm({
 		base_amount_mxn:
@@ -67,19 +129,13 @@ export default function CouponsSettings({
 		max_assignments_per_day: settings.max_assignments_per_day ?? "",
 		authorization_email: settings.authorization_email ?? "",
 		require_authorization: !!settings.require_authorization,
-		amount_threshold_mxn:
-			settings.amount_threshold_cents != null
-				? String(settings.amount_threshold_cents / 100)
-				: "",
-		required_approvals_by_amount:
-			settings.required_approvals_by_amount ?? 0,
 		mass_campaign_threshold:
 			settings.mass_campaign_threshold != null
 				? String(settings.mass_campaign_threshold)
 				: "",
 		superadmin_bypass_approvals: !!settings.superadmin_bypass_approvals,
-		beneficiary_rules: [],
-		authorizer_ids: [],
+		amount_rules: initialAmountRules,
+		beneficiary_rules: initialBeneficiaryRules,
 	});
 
 	const setActiveTab = useCallback((id) => {
@@ -93,6 +149,15 @@ export default function CouponsSettings({
 	useEffect(() => {
 		setActiveTabState(normalizedInitial);
 	}, [normalizedInitial]);
+
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		const url = new URL(window.location.href);
+		if (url.searchParams.get("tab") === "limits") {
+			url.searchParams.set("tab", "approval");
+			window.history.replaceState({}, "", url.toString());
+		}
+	}, []);
 
 	useEffect(() => {
 		for (const t of TABS) {
@@ -121,6 +186,46 @@ export default function CouponsSettings({
 		put(route("admin.coupons.settings.update"));
 	};
 
+	const addAmountRule = () => {
+		setData("amount_rules", [
+			...(data.amount_rules ?? []),
+			{ min_amount_mxn: "0", max_amount_mxn: "", required_approvals: 0 },
+		]);
+	};
+
+	const removeAmountRule = (idx) => {
+		setData(
+			"amount_rules",
+			(data.amount_rules ?? []).filter((_, i) => i !== idx),
+		);
+	};
+
+	const updateAmountRule = (idx, key, value) => {
+		const next = [...(data.amount_rules ?? [])];
+		next[idx] = { ...next[idx], [key]: value };
+		setData("amount_rules", next);
+	};
+
+	const addBeneficiaryRule = () => {
+		setData("beneficiary_rules", [
+			...(data.beneficiary_rules ?? []),
+			{ min: 1, max: "", required_approvals: 0 },
+		]);
+	};
+
+	const removeBeneficiaryRule = (idx) => {
+		setData(
+			"beneficiary_rules",
+			(data.beneficiary_rules ?? []).filter((_, i) => i !== idx),
+		);
+	};
+
+	const updateBeneficiaryRule = (idx, key, value) => {
+		const next = [...(data.beneficiary_rules ?? [])];
+		next[idx] = { ...next[idx], [key]: value };
+		setData("beneficiary_rules", next);
+	};
+
 	const tabBtnClass = (id) =>
 		[
 			"relative inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
@@ -137,8 +242,8 @@ export default function CouponsSettings({
 				<div>
 					<Heading>Reglas y seguridad - créditos a favor</Heading>
 					<Text className="mt-2 max-w-2xl text-zinc-600 dark:text-zinc-400">
-						Configura límites, reglas de aprobación y autorización de créditos a favor.
-						Los cambios pueden requerir validación según tu rol.
+						Configura límites, reglas de aprobación por rangos y autorización de
+						créditos a favor. Los cambios pueden requerir validación según tu rol.
 					</Text>
 				</div>
 				<Button href={route("admin.coupons.index")} outline>
@@ -194,123 +299,224 @@ export default function CouponsSettings({
 								transition={{ duration: 0.18 }}
 								className="space-y-6"
 							>
-								{activeTab === "limits" && (
-									<>
-										<div className={highlightedCardClass}>
-											<Text className="text-sm text-zinc-700 dark:text-zinc-300">
-												Valores que limitan montos y volumen de asignaciones en el sistema.
-											</Text>
-										</div>
-										<div className={highlightedCardClass}>
-											<Field>
-												<Label>Monto base por usuario (MXN)</Label>
-												<Input
-													type="number"
-													step="0.01"
-													min="0"
-													value={data.base_amount_mxn}
-													onChange={(e) =>
-														setData("base_amount_mxn", e.target.value)
-													}
-												/>
-												{errors.base_amount_mxn && (
-													<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-														{errors.base_amount_mxn}
-													</p>
-												)}
-											</Field>
-											<Field>
-												<Label>Monto máximo por cupón / asignación (MXN)</Label>
-												<Input
-													type="number"
-													step="0.01"
-													min="0"
-													placeholder="Sin límite"
-													value={data.max_assignment_amount_mxn}
-													onChange={(e) =>
-														setData(
-															"max_assignment_amount_mxn",
-															e.target.value,
-														)
-													}
-												/>
-												{errors.max_assignment_amount_mxn && (
-													<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-														{errors.max_assignment_amount_mxn}
-													</p>
-												)}
-											</Field>
-											<Field>
-												<Label>Máximo de asignaciones por día (total sistema)</Label>
-												<Input
-													type="number"
-													min="1"
-													placeholder="Sin límite"
-													value={data.max_assignments_per_day}
-													onChange={(e) =>
-														setData(
-															"max_assignments_per_day",
-															e.target.value,
-														)
-													}
-												/>
-												{errors.max_assignments_per_day && (
-													<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-														{errors.max_assignments_per_day}
-													</p>
-												)}
-											</Field>
-										</div>
-									</>
-								)}
-
 								{activeTab === "approval" && (
 									<>
 										<div className={highlightedCardClass}>
 											<Text className="text-sm text-zinc-700 dark:text-zinc-300">
-												Aprobaciones adicionales según monto; el motor usa el máximo
-												entre estas reglas y las de beneficiarios (configuradas en backend
-												si aplica).
+												Define rangos por monto (MXN) y por número de beneficiarios.
+												El motor usa el máximo entre ambas reglas. Si no eres
+												superadmin, al guardar se notifica a todos los autorizadores y
+												se requieren al menos 2 aprobaciones para aplicar cambios.
 											</Text>
 										</div>
+
 										<div className={highlightedCardClass}>
-											<Field>
-												<Label>Monto umbral (MXN)</Label>
-												<Input
-													type="number"
-													step="0.01"
-													min="0"
-													placeholder="Ej. 500"
-													value={data.amount_threshold_mxn}
-													onChange={(e) =>
-														setData("amount_threshold_mxn", e.target.value)
-													}
-												/>
-												{errors.amount_threshold_mxn && (
-													<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-														{errors.amount_threshold_mxn}
-													</p>
-												)}
-											</Field>
-											<Field>
-												<Label>Aprobaciones requeridas por monto</Label>
-												<Input
-													type="number"
-													min="0"
-													value={data.required_approvals_by_amount}
-													onChange={(e) =>
-														setData(
-															"required_approvals_by_amount",
-															e.target.value,
-														)
-													}
-												/>
-												{errors.required_approvals_by_amount && (
-													<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-														{errors.required_approvals_by_amount}
-													</p>
-												)}
-											</Field>
+											<div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+												<Subheading level={3}>Rangos por monto (MXN)</Subheading>
+												<Button type="button" outline onClick={addAmountRule}>
+													Agregar rango
+													<PlusIcon />
+												</Button>
+											</div>
+											{(data.amount_rules ?? []).length === 0 ? (
+												<p className="text-sm text-zinc-600 dark:text-zinc-400">
+													No hay rangos. Agrega al menos uno (p. ej. 0–199 con 0
+													autorizadores).
+												</p>
+											) : (
+												<div className="space-y-4">
+													{(data.amount_rules ?? []).map((r, idx) => (
+														<div
+															key={idx}
+															className="grid gap-3 border-b border-zinc-200 pb-4 last:border-0 last:pb-0 dark:border-zinc-700 sm:grid-cols-12 sm:items-end"
+														>
+															<Field className="sm:col-span-3">
+																<Label>Inicio</Label>
+																<Input
+																	type="number"
+																	step="0.01"
+																	min="0"
+																	value={r.min_amount_mxn}
+																	onChange={(e) =>
+																		updateAmountRule(
+																			idx,
+																			"min_amount_mxn",
+																			e.target.value,
+																		)
+																	}
+																/>
+															</Field>
+															<Field className="sm:col-span-3">
+																<Label>Hasta</Label>
+																<Input
+																	type="number"
+																	step="0.01"
+																	min="0"
+																	placeholder="Sin límite"
+																	value={r.max_amount_mxn}
+																	onChange={(e) =>
+																		updateAmountRule(
+																			idx,
+																			"max_amount_mxn",
+																			e.target.value,
+																		)
+																	}
+																/>
+															</Field>
+															<Field className="sm:col-span-3">
+																<Label># autorizadores</Label>
+																<Input
+																	type="number"
+																	min="0"
+																	value={r.required_approvals}
+																	onChange={(e) =>
+																		updateAmountRule(
+																			idx,
+																			"required_approvals",
+																			e.target.value,
+																		)
+																	}
+																/>
+															</Field>
+															<div className="flex justify-end sm:col-span-3">
+																<Button
+																	type="button"
+																	outline
+																	onClick={() => removeAmountRule(idx)}
+																>
+																	Quitar
+																	<TrashIcon />
+																</Button>
+															</div>
+															{errors[`amount_rules.${idx}.min_amount_mxn`] && (
+																<p className="text-sm text-red-600 sm:col-span-12 dark:text-red-400">
+																	{errors[`amount_rules.${idx}.min_amount_mxn`]}
+																</p>
+															)}
+															{errors[`amount_rules.${idx}.max_amount_mxn`] && (
+																<p className="text-sm text-red-600 sm:col-span-12 dark:text-red-400">
+																	{errors[`amount_rules.${idx}.max_amount_mxn`]}
+																</p>
+															)}
+															{errors[`amount_rules.${idx}.required_approvals`] && (
+																<p className="text-sm text-red-600 sm:col-span-12 dark:text-red-400">
+																	{
+																		errors[
+																			`amount_rules.${idx}.required_approvals`
+																		]
+																	}
+																</p>
+															)}
+														</div>
+													))}
+												</div>
+											)}
+										</div>
+
+										<div className={highlightedCardClass}>
+											<div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+												<Subheading level={3}>
+													Umbrales por beneficiarios
+												</Subheading>
+												<Button type="button" outline onClick={addBeneficiaryRule}>
+													Agregar umbral
+													<PlusIcon />
+												</Button>
+											</div>
+											{(data.beneficiary_rules ?? []).length === 0 ? (
+												<p className="text-sm text-zinc-600 dark:text-zinc-400">
+													No hay umbrales. Agrega rangos (p. ej. 1–9 con 0
+													autorizadores).
+												</p>
+											) : (
+												<div className="space-y-4">
+													{(data.beneficiary_rules ?? []).map((r, idx) => (
+														<div
+															key={idx}
+															className="grid gap-3 border-b border-zinc-200 pb-4 last:border-0 last:pb-0 dark:border-zinc-700 sm:grid-cols-12 sm:items-end"
+														>
+															<Field className="sm:col-span-3">
+																<Label>Inicio</Label>
+																<Input
+																	type="number"
+																	min="1"
+																	value={r.min}
+																	onChange={(e) =>
+																		updateBeneficiaryRule(
+																			idx,
+																			"min",
+																			e.target.value,
+																		)
+																	}
+																/>
+															</Field>
+															<Field className="sm:col-span-3">
+																<Label>Hasta</Label>
+																<Input
+																	type="number"
+																	min="1"
+																	placeholder="Sin límite"
+																	value={r.max}
+																	onChange={(e) =>
+																		updateBeneficiaryRule(
+																			idx,
+																			"max",
+																			e.target.value,
+																		)
+																	}
+																/>
+															</Field>
+															<Field className="sm:col-span-3">
+																<Label># autorizadores</Label>
+																<Input
+																	type="number"
+																	min="0"
+																	value={r.required_approvals}
+																	onChange={(e) =>
+																		updateBeneficiaryRule(
+																			idx,
+																			"required_approvals",
+																			e.target.value,
+																		)
+																	}
+																/>
+															</Field>
+															<div className="flex justify-end sm:col-span-3">
+																<Button
+																	type="button"
+																	outline
+																	onClick={() => removeBeneficiaryRule(idx)}
+																>
+																	Quitar
+																	<TrashIcon />
+																</Button>
+															</div>
+															{errors[`beneficiary_rules.${idx}.min`] && (
+																<p className="text-sm text-red-600 sm:col-span-12 dark:text-red-400">
+																	{errors[`beneficiary_rules.${idx}.min`]}
+																</p>
+															)}
+															{errors[`beneficiary_rules.${idx}.max`] && (
+																<p className="text-sm text-red-600 sm:col-span-12 dark:text-red-400">
+																	{errors[`beneficiary_rules.${idx}.max`]}
+																</p>
+															)}
+															{errors[`beneficiary_rules.${idx}.required_approvals`] && (
+																<p className="text-sm text-red-600 sm:col-span-12 dark:text-red-400">
+																	{
+																		errors[
+																			`beneficiary_rules.${idx}.required_approvals`
+																		]
+																	}
+																</p>
+															)}
+														</div>
+													))}
+												</div>
+											)}
+										</div>
+
+										<div className={highlightedCardClass}>
 											<Field>
 												<Label>
 													Umbral de campaña masiva (beneficiarios, opcional)
@@ -346,61 +552,158 @@ export default function CouponsSettings({
 									</>
 								)}
 
+								{activeTab === "history" && (
+									<>
+										<div className={highlightedCardClass}>
+											<Text className="text-sm text-zinc-700 dark:text-zinc-300">
+												Solicitudes de cambio en <strong>reglas de cupones</strong>{" "}
+												(quien las pidió, firmas registradas y resultado). Se muestran
+												las últimas 100.
+											</Text>
+										</div>
+										<div className={highlightedCardClass}>
+											{(settingsApprovalHistory ?? []).length === 0 ? (
+												<p className="text-sm text-zinc-600 dark:text-zinc-400">
+													No hay solicitudes de este tipo registradas aún.
+												</p>
+											) : (
+												<div className="overflow-x-auto">
+													<table className="min-w-full text-left text-sm">
+														<thead>
+															<tr className="border-b border-zinc-200 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+																<th className="whitespace-nowrap py-2 pr-3">#</th>
+																<th className="whitespace-nowrap py-2 pr-3">Estado</th>
+																<th className="whitespace-nowrap py-2 pr-3">
+																	Solicitó
+																</th>
+																<th className="whitespace-nowrap py-2 pr-3">Fecha</th>
+																<th className="min-w-[14rem] py-2 pr-3">
+																	Aprobaciones (firmas)
+																</th>
+																<th className="min-w-[10rem] py-2">Cierre</th>
+															</tr>
+														</thead>
+														<tbody>
+															{(settingsApprovalHistory ?? []).map((row) => (
+																<tr
+																	key={row.id}
+																	className="border-b border-zinc-100 align-top dark:border-zinc-800"
+																>
+																	<td className="whitespace-nowrap py-3 pr-3 font-medium text-zinc-900 dark:text-zinc-100">
+																		{row.id}
+																	</td>
+																	<td className="whitespace-nowrap py-3 pr-3">
+																		<Badge
+																			color={
+																				row.status === "executed"
+																					? "emerald"
+																					: row.status === "rejected"
+																						? "red"
+																						: "amber"
+																			}
+																		>
+																			{settingsRequestStatusLabel(row.status)}
+																		</Badge>
+																	</td>
+																	<td className="py-3 pr-3">
+																		<div className="font-medium text-zinc-900 dark:text-zinc-100">
+																			{row.requested_by?.name ?? "—"}
+																		</div>
+																		{row.requested_by?.email ? (
+																			<div className="mt-0.5 break-all text-xs text-zinc-500 dark:text-zinc-400">
+																				{row.requested_by.email}
+																			</div>
+																		) : null}
+																	</td>
+																	<td className="whitespace-nowrap py-3 pr-3 text-zinc-600 dark:text-zinc-300">
+																		{formatShortDateTime(row.created_at)}
+																	</td>
+																	<td className="py-3 pr-3 text-zinc-700 dark:text-zinc-300">
+																		{row.approvers?.length ? (
+																			<ul className="list-inside list-disc space-y-1 text-xs">
+																				{row.approvers.map((a, i) => (
+																					<li key={i}>
+																						<strong>{a.name}</strong>
+																						{a.email ? ` · ${a.email}` : ""}
+																						{a.acted_at
+																							? ` · ${formatShortDateTime(a.acted_at)}`
+																							: ""}
+																					</li>
+																				))}
+																			</ul>
+																		) : (
+																			<span className="text-xs text-zinc-500">
+																				Sin firmas aún
+																			</span>
+																		)}
+																		<div className="mt-1 text-xs text-zinc-500">
+																			Requeridas: {row.required_approvals ?? "—"} ·
+																			Registradas: {row.current_approvals ?? 0}
+																		</div>
+																	</td>
+																	<td className="py-3 text-xs text-zinc-600 dark:text-zinc-300">
+																		{row.status === "executed" && row.executed_at ? (
+																			<>
+																				<span className="font-medium text-zinc-800 dark:text-zinc-200">
+																					Aplicada
+																				</span>
+																				<br />
+																				{formatShortDateTime(row.executed_at)}
+																			</>
+																		) : null}
+																		{row.status === "rejected" ? (
+																			<>
+																				<span className="font-medium text-red-700 dark:text-red-300">
+																					Rechazada
+																				</span>
+																				{row.rejected_at ? (
+																					<>
+																						<br />
+																						{formatShortDateTime(row.rejected_at)}
+																					</>
+																				) : null}
+																				{row.rejected_by?.name ? (
+																					<>
+																						<br />
+																						<span className="mt-1 inline-block text-zinc-600 dark:text-zinc-400">
+																							Por: {row.rejected_by.name}
+																							{row.rejected_by.email
+																								? ` (${row.rejected_by.email})`
+																								: ""}
+																						</span>
+																					</>
+																				) : null}
+																			</>
+																		) : null}
+																		{row.status === "pending" ? (
+																			<span className="text-zinc-500">En curso</span>
+																		) : null}
+																	</td>
+																</tr>
+															))}
+														</tbody>
+													</table>
+												</div>
+											)}
+											<div className="mt-4">
+												<Button href={route("admin.coupons.logs")} plain className="text-sm">
+													Ver registro completo de actividad (todos los tipos)
+												</Button>
+											</div>
+										</div>
+									</>
+								)}
+
 								{activeTab === "authorizers" && (
 									<>
 										<div className={highlightedCardClass}>
 											<Text className="text-sm text-zinc-700 dark:text-zinc-300">
-												Quienes pueden aprobar cambios de configuración cuando no aplicas
-												como superadmin. Selecciona uno o más autorizadores.
+												Los cambios de configuración que requieran aprobación se envían
+												por correo a todos los usuarios con rol autorizador. Se
+												necesitan al menos dos aprobaciones para aplicar los cambios.
+												No es necesario seleccionar destinatarios aquí.
 											</Text>
 										</div>
-										<div className={highlightedCardClass}>
-											<div className="max-h-[min(22rem,50vh)] space-y-2 overflow-y-auto rounded-lg border border-famedic-dark/20 bg-white/60 p-3 dark:border-famedic-lime/20 dark:bg-famedic-darker/30">
-												{authorizers.length === 0 ? (
-													<p className="text-sm text-zinc-600 dark:text-zinc-300">
-														No hay administradores con rol autorizador.
-													</p>
-												) : (
-													authorizers.map((authorizer) => {
-														const checked = data.authorizer_ids.includes(
-															authorizer.id,
-														);
-														return (
-															<CheckboxField key={authorizer.id}>
-																<Checkbox
-																	checked={checked}
-																	onChange={(v) => {
-																		if (v) {
-																			setData("authorizer_ids", [
-																				...data.authorizer_ids,
-																				authorizer.id,
-																			]);
-																		} else {
-																			setData(
-																				"authorizer_ids",
-																				data.authorizer_ids.filter(
-																					(id) =>
-																						id !== authorizer.id,
-																				),
-																			);
-																		}
-																	}}
-																/>
-																<Label>
-																	{authorizer.name} (
-																	{authorizer.email || "sin correo"})
-																</Label>
-															</CheckboxField>
-														);
-													})
-												)}
-											</div>
-										</div>
-										{errors.authorizer_ids && (
-											<p className="text-sm text-red-600 dark:text-red-400">
-												{errors.authorizer_ids}
-											</p>
-										)}
 									</>
 								)}
 							</motion.div>
@@ -408,17 +711,26 @@ export default function CouponsSettings({
 					</div>
 
 					<div className="shrink-0 border-t border-zinc-200 px-4 py-4 dark:border-zinc-700 sm:px-6">
-						<Button
-							type="submit"
-							disabled={processing}
-							className="max-md:w-full"
-						>
-							Guardar cambios
-						</Button>
-						<Text className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-							Guarda todos los valores del formulario; los campos de otras pestañas no se
-							pierden al cambiar de tab.
-						</Text>
+						{activeTab !== "history" ? (
+							<>
+								<Button
+									type="submit"
+									disabled={processing}
+									className="max-md:w-full"
+								>
+									Guardar cambios
+								</Button>
+								<Text className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+									Guarda todos los valores del formulario; los campos de otras pestañas no
+									se pierden al cambiar de tab.
+								</Text>
+							</>
+						) : (
+							<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+								El historial es solo lectura. Cambia a &quot;Reglas de aprobación&quot; para
+								editar y guardar.
+							</Text>
+						)}
 					</div>
 				</form>
 
@@ -466,23 +778,23 @@ export default function CouponsSettings({
 						</Subheading>
 						<ul className="mt-3 list-inside list-disc space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
 							<li>
-								Si no eres superadmin, los cambios pueden generar una solicitud de
-								aprobación y no aplicarán hasta que los autorizadores la completen.
+								Si no eres superadmin, los cambios generan una solicitud de aprobación y
+								no aplican hasta completar las firmas requeridas.
 							</li>
 							<li>
-								El correo del autorizador se usa para el código de nuevos cupones
-								cuando está activada la autorización por correo.
+								El correo de autorización se usa para el código de nuevos cupones cuando
+								está activada la autorización por correo.
 							</li>
 							<li>
-								El umbral de monto y las aprobaciones por beneficiarios suman criterios:
-								el sistema aplica el máximo requerido.
+								Las reglas por monto y por beneficiarios se combinan: se aplica el máximo
+								de autorizaciones requeridas entre ambas.
 							</li>
 							<li>
-								Puedes compartir un enlace con pestaña abierta usando el parámetro{" "}
+								Enlace con pestaña:{" "}
 								<code className="rounded bg-zinc-200 px-1 text-xs dark:bg-zinc-700">
 									?tab=
-								</code>
-								: limits, approval, authorizers.
+								</code>{" "}
+								approval, history, authorizers (la pestaña de límites está oculta por ahora).
 							</li>
 						</ul>
 					</div>

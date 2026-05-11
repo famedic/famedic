@@ -47,14 +47,27 @@ function formatMxFromCents(cents) {
 	});
 }
 
+/**
+ * Alineado con CouponService::resolveRequiredApprovals: rangos por monto (amount_rules),
+ * reglas por beneficiarios y umbral legado si no hay rangos.
+ */
 function resolveApprovalsPreview(amountCents, beneficiaryCount, rules) {
 	if (!rules) return 0;
 	let byAmount = 0;
+	const amountRules = rules.amount_rules ?? [];
+	for (const r of amountRules) {
+		const min = r.min_amount_cents ?? 0;
+		const max = r.max_amount_cents;
+		if (amountCents >= min && (max == null || amountCents <= max)) {
+			byAmount = Math.max(byAmount, r.required_approvals ?? 0);
+		}
+	}
 	if (
+		amountRules.length === 0 &&
 		rules.amount_threshold_cents != null &&
 		amountCents >= rules.amount_threshold_cents
 	) {
-		byAmount = rules.required_approvals_by_amount ?? 0;
+		byAmount = Math.max(byAmount, rules.required_approvals_by_amount ?? 0);
 	}
 	let byBen = 0;
 	for (const r of rules.beneficiary_rules ?? []) {
@@ -92,6 +105,7 @@ function errorsForTab(errs, tabId) {
 			return (
 				match("assignment_mode") ||
 				match("email") ||
+				match("bulk_emails") ||
 				match("file") ||
 				match("send_notification") ||
 				match("send_notifications") ||
@@ -104,9 +118,26 @@ function errorsForTab(errs, tabId) {
 
 const ASSIGNMENT_LABELS = {
 	none: "Solo guardar cupón",
-	individual: "Un correo",
+	individual: "Lista manual",
 	bulk: "Archivo masivo",
 };
+
+function createMatrixRow() {
+	const id =
+		typeof crypto !== "undefined" && crypto.randomUUID
+			? crypto.randomUUID()
+			: `r_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+	return {
+		id,
+		email: "",
+		lookup: {
+			status: "idle",
+			exists: null,
+			user: null,
+			message: "",
+		},
+	};
+}
 
 export default function CouponsAssign({
 	assignableCoupons,
@@ -120,12 +151,6 @@ export default function CouponsAssign({
 	const requireAuth = !!settings?.require_authorization;
 
 	const [search, setSearch] = useState("");
-	const [userLookup, setUserLookup] = useState({
-		status: "idle",
-		exists: null,
-		user: null,
-		message: "",
-	});
 
 	const allowedTabs = new Set(TABS.map((t) => t.id));
 	const normalizedInitialTab = useMemo(() => {
@@ -169,7 +194,11 @@ export default function CouponsAssign({
 	const [bulkRows, setBulkRows] = useState([]);
 	const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
 	const [bulkPreviewError, setBulkPreviewError] = useState("");
+	const [rulesSidebarExpanded, setRulesSidebarExpanded] = useState(false);
 	const bulkRowsRef = useRef([]);
+	const [matrixRows, setMatrixRows] = useState(() => [createMatrixRow()]);
+	const matrixRowsRef = useRef(matrixRows);
+	const matrixLookupTimersRef = useRef({});
 
 	const { data, setData, post, processing, errors, transform } = useForm({
 		coupon_mode: "new",
@@ -181,7 +210,6 @@ export default function CouponsAssign({
 		description: "",
 		max_beneficiaries: "",
 		is_active: true,
-		email: "",
 		file: null,
 		send_notification: true,
 		send_notifications: true,
@@ -189,6 +217,7 @@ export default function CouponsAssign({
 	});
 
 	bulkRowsRef.current = bulkRows;
+	matrixRowsRef.current = matrixRows;
 
 	transform((d) => {
 		const out = {
@@ -213,7 +242,25 @@ export default function CouponsAssign({
 			out.is_active = d.is_active;
 		}
 		if (d.assignment_mode === "individual") {
-			out.email = d.email;
+			const emails = [];
+			const seen = new Set();
+			const counts = {};
+			for (const r of matrixRowsRef.current) {
+				const k = r.email.trim().toLowerCase();
+				if (!k) continue;
+				counts[k] = (counts[k] || 0) + 1;
+			}
+			for (const r of matrixRowsRef.current) {
+				const k = r.email.trim().toLowerCase();
+				if (!k || r.lookup.status !== "found") continue;
+				if ((counts[k] ?? 0) > 1) continue;
+				if (seen.has(k)) continue;
+				seen.add(k);
+				emails.push(r.email.trim());
+			}
+			if (emails.length > 0) {
+				out.bulk_emails = emails;
+			}
 		}
 		if (d.assignment_mode === "bulk") {
 			const confirmed = bulkRowsRef.current
@@ -254,47 +301,40 @@ export default function CouponsAssign({
 		}
 	}, [errors]);
 
-	useEffect(() => {
-		if (data.assignment_mode !== "individual") {
-			setUserLookup({
-				status: "idle",
+	const applyMatrixLookup = useCallback((rowId, nextLookup) => {
+		setMatrixRows((rows) =>
+			rows.map((r) => (r.id === rowId ? { ...r, lookup: nextLookup } : r)),
+		);
+	}, []);
+
+	const validateMatrixRowEmail = useCallback(
+		async (rowId, rawEmail) => {
+			const email = rawEmail.trim();
+			const snap = email.toLowerCase();
+			if (!email) {
+				applyMatrixLookup(rowId, {
+					status: "idle",
+					exists: null,
+					user: null,
+					message: "",
+				});
+				return;
+			}
+			if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+				applyMatrixLookup(rowId, {
+					status: "invalid",
+					exists: false,
+					user: null,
+					message: "Formato de correo inválido.",
+				});
+				return;
+			}
+			applyMatrixLookup(rowId, {
+				status: "checking",
 				exists: null,
 				user: null,
-				message: "",
+				message: "Validando usuario...",
 			});
-			return;
-		}
-
-		const email = data.email.trim();
-		if (!email) {
-			setUserLookup({
-				status: "idle",
-				exists: null,
-				user: null,
-				message: "Escribe un correo para validar si el usuario existe.",
-			});
-			return;
-		}
-
-		const basicEmailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-		if (!basicEmailOk) {
-			setUserLookup({
-				status: "invalid",
-				exists: null,
-				user: null,
-				message: "Formato de correo inválido.",
-			});
-			return;
-		}
-
-		let cancelled = false;
-		setUserLookup((prev) => ({
-			...prev,
-			status: "checking",
-			message: "Validando usuario...",
-		}));
-
-		const timer = setTimeout(async () => {
 			try {
 				const response = await fetch(
 					`${route("admin.coupons.users.lookup")}?email=${encodeURIComponent(email)}`,
@@ -309,40 +349,67 @@ export default function CouponsAssign({
 					throw new Error("lookup_failed");
 				}
 				const payload = await response.json();
-				if (cancelled) return;
-
+				const row = matrixRowsRef.current.find((r) => r.id === rowId);
+				if (!row || row.email.trim().toLowerCase() !== snap) {
+					return;
+				}
 				if (payload.exists) {
-					setUserLookup({
+					applyMatrixLookup(rowId, {
 						status: "found",
 						exists: true,
 						user: payload.user,
-						message: `Usuario encontrado: ${payload.user?.name || payload.user?.email}`,
+						message:
+							payload.user?.name || payload.user?.email
+								? `Registrado: ${payload.user?.name || payload.user?.email}`
+								: "Usuario registrado.",
 					});
 					return;
 				}
-
-				setUserLookup({
+				applyMatrixLookup(rowId, {
 					status: "missing",
 					exists: false,
 					user: null,
-					message: "No existe un usuario registrado con ese correo.",
+					message: "No existe un usuario con ese correo.",
 				});
-			} catch (_) {
-				if (cancelled) return;
-				setUserLookup({
+			} catch {
+				const row = matrixRowsRef.current.find((r) => r.id === rowId);
+				if (!row || row.email.trim().toLowerCase() !== snap) {
+					return;
+				}
+				applyMatrixLookup(rowId, {
 					status: "error",
 					exists: null,
 					user: null,
 					message: "No se pudo validar el correo en este momento.",
 				});
 			}
-		}, 350);
+		},
+		[applyMatrixLookup],
+	);
 
-		return () => {
-			cancelled = true;
-			clearTimeout(timer);
-		};
-	}, [data.assignment_mode, data.email]);
+	const scheduleMatrixRowLookup = useCallback(
+		(rowId, rawEmail) => {
+			const prev = matrixLookupTimersRef.current[rowId];
+			if (prev) {
+				clearTimeout(prev);
+			}
+			matrixLookupTimersRef.current[rowId] = setTimeout(() => {
+				void validateMatrixRowEmail(rowId, rawEmail);
+				delete matrixLookupTimersRef.current[rowId];
+			}, 400);
+		},
+		[validateMatrixRowEmail],
+	);
+
+	useEffect(() => {
+		if (data.assignment_mode === "individual") {
+			return;
+		}
+		for (const k of Object.keys(matrixLookupTimersRef.current)) {
+			clearTimeout(matrixLookupTimersRef.current[k]);
+			delete matrixLookupTimersRef.current[k];
+		}
+	}, [data.assignment_mode]);
 
 	const amountCentsPreview = useMemo(() => {
 		if (data.coupon_mode === "new") {
@@ -354,15 +421,40 @@ export default function CouponsAssign({
 		return sel?.amount_cents ?? 0;
 	}, [data.coupon_mode, data.amount_mxn, data.coupon_id, assignableCoupons]);
 
+	const emailLowerCounts = useMemo(() => {
+		const m = {};
+		for (const r of matrixRows) {
+			const k = r.email.trim().toLowerCase();
+			if (!k) continue;
+			m[k] = (m[k] || 0) + 1;
+		}
+		return m;
+	}, [matrixRows]);
+
+	const individualReadyEmails = useMemo(() => {
+		if (data.assignment_mode !== "individual") return [];
+		const out = [];
+		const seen = new Set();
+		for (const r of matrixRows) {
+			const k = r.email.trim().toLowerCase();
+			if (!k || r.lookup.status !== "found") continue;
+			if ((emailLowerCounts[k] ?? 0) > 1) continue;
+			if (seen.has(k)) continue;
+			seen.add(k);
+			out.push(k);
+		}
+		return out;
+	}, [data.assignment_mode, matrixRows, emailLowerCounts]);
+
 	const beneficiaryCountPreview = useMemo(() => {
-		if (data.assignment_mode === "individual") return 1;
+		if (data.assignment_mode === "individual") return individualReadyEmails.length;
 		if (data.assignment_mode === "none") return 0;
 		if (data.assignment_mode === "bulk") {
 			const n = bulkRows.filter((r) => r.include).length;
 			return n > 0 ? n : 0;
 		}
 		return 0;
-	}, [data.assignment_mode, bulkRows]);
+	}, [data.assignment_mode, bulkRows, individualReadyEmails.length]);
 
 	const beneficiariesForPreApprovalDraft = useMemo(() => {
 		if (data.coupon_mode !== "new") return 1;
@@ -398,12 +490,6 @@ export default function CouponsAssign({
 		data.coupon_mode === "new" &&
 		preApprovalRequiredForNewCoupon > 0 &&
 		!(isSuperadmin && rulesForUi?.superadmin_bypass_approvals);
-
-	useEffect(() => {
-		if (mustPreApproveCouponBeforeAssignment && data.assignment_mode !== "none") {
-			setData("assignment_mode", "none");
-		}
-	}, [mustPreApproveCouponBeforeAssignment, data.assignment_mode, setData]);
 
 	useEffect(() => {
 		if (data.assignment_mode !== "bulk") {
@@ -457,7 +543,25 @@ export default function CouponsAssign({
 	const preApprovalReasons = useMemo(() => {
 		if (!mustPreApproveCouponBeforeAssignment) return [];
 		const reasons = [];
-		if (
+		const amountRules = rulesForUi?.amount_rules ?? [];
+		const matchedAmount = amountRules.filter((r) => {
+			const min = r.min_amount_cents ?? 0;
+			const max = r.max_amount_cents;
+			return (
+				amountCentsPreview >= min &&
+				(max == null || amountCentsPreview <= max)
+			);
+		});
+		const bestAmount = matchedAmount.reduce(
+			(acc, r) => Math.max(acc, r.required_approvals ?? 0),
+			0,
+		);
+		if (bestAmount > 0) {
+			reasons.push(
+				`Monto del cupón (${formatMxFromCents(amountCentsPreview)}) cae en un rango configurado que exige hasta ${bestAmount} aprobación(es) por monto.`,
+			);
+		} else if (
+			amountRules.length === 0 &&
 			rulesForUi?.amount_threshold_cents != null &&
 			amountCentsPreview >= rulesForUi.amount_threshold_cents
 		) {
@@ -491,10 +595,21 @@ export default function CouponsAssign({
 		[assignableCoupons, data.coupon_id],
 	);
 
-	const selectedAuthorizerNames = useMemo(() => {
-		const ids = new Set(data.authorizer_ids);
-		return (authorizers ?? []).filter((a) => ids.has(a.id));
-	}, [authorizers, data.authorizer_ids]);
+	const beneficiarySlotsLimit = useMemo(() => {
+		if (data.coupon_mode === "new") {
+			const maxB = String(data.max_beneficiaries ?? "").trim();
+			if (maxB === "") return null;
+			const n = parseInt(maxB, 10);
+			return Number.isNaN(n) || n < 1 ? null : n;
+		}
+		const m = selectedCoupon?.max_beneficiaries;
+		if (m == null) return 5000;
+		const used = selectedCoupon?.child_coupons_count ?? 0;
+		const left = Math.max(0, m - used);
+		return Math.min(5000, Math.max(1, left));
+	}, [data.coupon_mode, data.max_beneficiaries, selectedCoupon]);
+
+	const matrixCapacity = beneficiarySlotsLimit ?? 5000;
 
 	const amountOk = useMemo(() => {
 		if (data.coupon_mode !== "new") return true;
@@ -509,42 +624,108 @@ export default function CouponsAssign({
 
 	const assignmentFieldsOk = useMemo(() => {
 		if (data.assignment_mode === "individual") {
-			return data.email.trim().length > 0 && userLookup.exists === true;
+			const filled = matrixRows.filter((r) => r.email.trim() !== "");
+			if (filled.length === 0) return false;
+			for (const r of filled) {
+				const k = r.email.trim().toLowerCase();
+				if ((emailLowerCounts[k] ?? 0) > 1) return false;
+				if (r.lookup.status !== "found") return false;
+			}
+			return individualReadyEmails.length >= 1;
 		}
 		if (data.assignment_mode === "bulk") {
 			const selected = bulkRows.filter((r) => r.include).length;
 			return bulkRows.length > 0 && selected > 0;
 		}
 		return true;
-	}, [data.assignment_mode, data.email, bulkRows, userLookup.exists]);
+	}, [
+		data.assignment_mode,
+		matrixRows,
+		emailLowerCounts,
+		individualReadyEmails.length,
+		bulkRows,
+	]);
 
 	const authorizersSelectionOk = useMemo(() => {
 		if (data.assignment_mode === "none") {
 			return true;
 		}
+		const beneficiariesForRule =
+			data.assignment_mode === "individual"
+				? beneficiaryCountPreview
+				: data.assignment_mode === "bulk"
+					? Math.max(beneficiaryCountPreview, 1)
+					: beneficiariesForPreApprovalDraft;
 		const required = resolveApprovalsPreview(
 			amountCentsPreview,
-			data.assignment_mode === "individual"
-				? 1
-				: data.assignment_mode === "none"
-					? beneficiariesForPreApprovalDraft
-					: 0,
+			beneficiariesForRule,
 			rulesForUi,
 		);
 		if (required === 0) return true;
 		if (isSuperadmin && rulesForUi?.superadmin_bypass_approvals) return true;
-		return data.authorizer_ids.length > 0;
+		return (authorizers ?? []).length > 0;
 	}, [
 		data.assignment_mode,
-		data.authorizer_ids.length,
 		amountCentsPreview,
 		rulesForUi,
 		isSuperadmin,
-		mustPreApproveCouponBeforeAssignment,
 		beneficiariesForPreApprovalDraft,
+		beneficiaryCountPreview,
+		authorizers,
 	]);
 
+	const couponStepComplete = useMemo(() => {
+		if (data.coupon_mode === "existing") {
+			return (
+				existingCouponOk &&
+				filtered.some((c) => String(c.id) === String(data.coupon_id))
+			);
+		}
+		if (!amountOk) return false;
+		if (data.assignment_mode === "none") {
+			return true;
+		}
+		const maxB = String(data.max_beneficiaries ?? "").trim();
+		if (maxB === "") return false;
+		const n = parseInt(maxB, 10);
+		return !Number.isNaN(n) && n >= 1;
+	}, [
+		data.coupon_mode,
+		data.coupon_id,
+		data.max_beneficiaries,
+		data.assignment_mode,
+		amountOk,
+		existingCouponOk,
+		filtered,
+	]);
+
+	const assignmentStepComplete = useMemo(() => {
+		if (data.assignment_mode === "none") return true;
+		return assignmentFieldsOk;
+	}, [data.assignment_mode, assignmentFieldsOk]);
+
+	const summaryUnlocked = useMemo(
+		() => couponStepComplete && assignmentStepComplete,
+		[couponStepComplete, assignmentStepComplete],
+	);
+
+	const trySetTab = useCallback(
+		(id) => {
+			if (id === "assignment" && !couponStepComplete) return;
+			if (
+				id === "summary" &&
+				!(couponStepComplete && assignmentStepComplete)
+			) {
+				return;
+			}
+			setActiveTab(id);
+		},
+		[couponStepComplete, assignmentStepComplete, setActiveTab],
+	);
+
 	const canSubmit =
+		activeTab === "summary" &&
+		summaryUnlocked &&
 		amountOk &&
 		existingCouponOk &&
 		assignmentFieldsOk &&
@@ -583,27 +764,27 @@ export default function CouponsAssign({
 			};
 		}
 
-		if (data.authorizer_ids.length === 0) {
+		const authorizerPool = (authorizers ?? []).length;
+		if (authorizerPool === 0) {
 			return {
 				variant: "warn",
 				title: `Se requieren ${requiredByRules} aprobación(es)`,
 				detail:
-					"Selecciona uno o más autorizadores para poder enviar la solicitud de aprobación.",
+					"No hay usuarios con rol autorizador en el sistema. Configura autorizadores para poder enviar solicitudes.",
 			};
 		}
 
-		const effectiveApprovals = Math.min(requiredByRules, data.authorizer_ids.length);
 		return {
 			variant: "warn",
-			title: `Se solicitarán ${effectiveApprovals} aprobación(es)`,
-			detail: `Las reglas actuales requieren ${requiredByRules}. Con ${data.authorizer_ids.length} autorizador(es) seleccionado(s), la solicitud se enviará con ${effectiveApprovals} aprobación(es).`,
+			title: `Se requerirán hasta ${requiredByRules} aprobación(es)`,
+			detail: `Se notificará a todos los autorizadores (${authorizerPool}). No necesitas elegirlos en una lista: al confirmar en el resumen, quedará la solicitud registrada y las asignaciones se activarán solas cuando se alcance el número de firmas exigido. Tú no tendrás que dar un paso adicional después de enviar.`,
 		};
 	}, [
 		data.assignment_mode,
-		data.authorizer_ids.length,
 		approvalsPreview,
 		isSuperadmin,
 		rulesForUi?.superadmin_bypass_approvals,
+		authorizers,
 	]);
 
 	const tabErrorFlags = useMemo(() => {
@@ -638,8 +819,28 @@ export default function CouponsAssign({
 				: "text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:text-zinc-300 dark:ring-zinc-600 dark:hover:bg-zinc-800",
 		].join(" ");
 
-	const submit = (e) => {
+	const summaryBulkEmails = useMemo(
+		() => bulkRows.filter((r) => r.include).map((r) => r.email),
+		[bulkRows],
+	);
+
+	const summaryApprovalsRequired = useMemo(() => {
+		if (data.assignment_mode === "none") return 0;
+		return resolveApprovalsPreview(
+			amountCentsPreview,
+			beneficiaryCountPreview,
+			rulesForUi,
+		);
+	}, [
+		data.assignment_mode,
+		amountCentsPreview,
+		beneficiaryCountPreview,
+		rulesForUi,
+	]);
+
+	const handleFormSubmit = (e) => {
 		e.preventDefault();
+		if (activeTab !== "summary") return;
 		post(route("admin.coupons.assign.store"), {
 			forceFormData: data.assignment_mode === "bulk",
 		});
@@ -663,7 +864,7 @@ export default function CouponsAssign({
 
 				<div className="space-y-6">
 					<form
-						onSubmit={submit}
+						onSubmit={handleFormSubmit}
 						className="flex min-h-[min(72vh,44rem)] flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
 					>
 						<div className="border-b border-zinc-200 px-4 pt-4 dark:border-zinc-700 sm:px-6">
@@ -672,16 +873,30 @@ export default function CouponsAssign({
 								role="tablist"
 								aria-label="Pasos del flujo"
 							>
-								{TABS.map((t) => (
+								{TABS.map((t) => {
+									const lockedToAssignment =
+										t.id === "assignment" && !couponStepComplete;
+									const lockedToSummary =
+										t.id === "summary" && !summaryUnlocked;
+									const tabLocked = lockedToAssignment || lockedToSummary;
+									return (
 									<button
 										key={t.id}
 										type="button"
 										role="tab"
+										disabled={tabLocked}
 										id={`assign-tab-${t.id}`}
 										aria-selected={activeTab === t.id}
 										aria-controls={`assign-panel-${t.id}`}
-										className={tabBtnClass(t.id)}
-										onClick={() => setActiveTab(t.id)}
+										className={[
+											tabBtnClass(t.id),
+											tabLocked
+												? "cursor-not-allowed opacity-45"
+												: "",
+										].join(" ")}
+										onClick={() =>
+											tabLocked ? undefined : trySetTab(t.id)
+										}
 									>
 										{t.label}
 										{tabErrorFlags[t.id] && (
@@ -692,7 +907,8 @@ export default function CouponsAssign({
 											/>
 										)}
 									</button>
-								))}
+									);
+								})}
 							</nav>
 						</div>
 
@@ -872,8 +1088,8 @@ export default function CouponsAssign({
 									{activeTab === "assignment" && (
 										<>
 											<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-												Define cómo quieres aplicar el cupón: solo guardarlo, un beneficiario
-												o un archivo.
+												Define cómo quieres aplicar el cupón: solo guardarlo, varios correos
+												en tabla (validados uno a uno) o un archivo masivo.
 											</Text>
 											<div>
 												<p className="mb-2 font-poppins text-base/6 font-medium text-zinc-950 sm:text-sm/6 dark:text-white">
@@ -891,15 +1107,13 @@ export default function CouponsAssign({
 														type="button"
 														className={pillClass(data.assignment_mode === "individual")}
 														onClick={() => setData("assignment_mode", "individual")}
-														disabled={mustPreApproveCouponBeforeAssignment}
 													>
-														Un correo
+														{ASSIGNMENT_LABELS.individual}
 													</button>
 													<button
 														type="button"
 														className={pillClass(data.assignment_mode === "bulk")}
 														onClick={() => setData("assignment_mode", "bulk")}
-														disabled={mustPreApproveCouponBeforeAssignment}
 													>
 														Archivo masivo
 													</button>
@@ -909,12 +1123,15 @@ export default function CouponsAssign({
 											{mustPreApproveCouponBeforeAssignment && (
 												<div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-900 dark:bg-amber-950/40">
 													<p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-														Este cupón requiere aprobación previa antes de asignar beneficiarios.
+														Aprobaciones multi-firma según las reglas
 													</p>
 													<p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
-														Se requieren al menos {preApprovalRequiredForNewCoupon} aprobación(es).
-														Por ahora solo puedes usar &quot;Solo guardar cupón&quot; para enviar la
-														solicitud a autorizadores.
+														Puedes definir la lista manual o masiva en este mismo envío. Se
+														registrará una solicitud para los autorizadores; cuando se alcancen
+														al menos {preApprovalRequiredForNewCoupon} firma(s), el{" "}
+														<strong>último autorizador en aceptar</strong> activará el cupón
+														maestro (si aún estaba pendiente) y se crearán las asignaciones y
+														créditos previstos. No necesitas volver a cargar los correos.
 													</p>
 													{preApprovalReasons.length > 0 && (
 														<ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-900 dark:text-amber-100">
@@ -927,33 +1144,177 @@ export default function CouponsAssign({
 											)}
 
 											{data.assignment_mode === "individual" && (
-												<Field>
-													<Label>Correo del usuario (registrado en Famedic)</Label>
-													<Input
-														type="email"
-														value={data.email}
-														onChange={(e) => setData("email", e.target.value)}
-													/>
-													<p
-														className={[
-															"mt-1 text-sm",
-															userLookup.status === "found"
-																? "text-emerald-700 dark:text-emerald-300"
-																: userLookup.status === "missing" ||
-																	  userLookup.status === "invalid" ||
-																	  userLookup.status === "error"
-																	? "text-red-600 dark:text-red-400"
-																	: "text-zinc-500 dark:text-zinc-400",
-														].join(" ")}
-													>
-														{userLookup.message}
+												<div className="space-y-3">
+													<div className="flex flex-wrap items-end justify-between gap-3">
+														<div>
+															<p className="font-poppins text-base/6 font-medium text-zinc-950 sm:text-sm/6 dark:text-white">
+																Beneficiarios (uno por fila)
+															</p>
+															<p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+																Cada correo se valida contra usuarios registrados. No se
+																pueden repetir correos en la lista. Máximo{" "}
+																<strong>{matrixCapacity}</strong> filas según el cupón
+																{data.coupon_mode === "existing" &&
+																selectedCoupon?.max_beneficiaries == null
+																	? " (sin tope en cupón; límite técnico 5000)"
+																	: ""}
+																.
+															</p>
+														</div>
+														<Button
+															type="button"
+															outline
+															disabled={matrixRows.length >= matrixCapacity}
+															onClick={() => {
+																if (matrixRows.length >= matrixCapacity) return;
+																setMatrixRows((rows) => [...rows, createMatrixRow()]);
+															}}
+														>
+															Agregar fila
+														</Button>
+													</div>
+													<div className="max-h-[min(28rem,55vh)] overflow-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
+														<Table dense>
+															<TableHead>
+																<TableRow>
+																	<TableHeader>Correo</TableHeader>
+																	<TableHeader>Usuario</TableHeader>
+																	<TableHeader>Estado</TableHeader>
+																	<TableHeader />
+																</TableRow>
+															</TableHead>
+															<TableBody>
+																{matrixRows.map((row) => {
+																	const k = row.email.trim().toLowerCase();
+																	const isDup =
+																		k !== "" && (emailLowerCounts[k] ?? 0) > 1;
+																	const lk = row.lookup;
+																	return (
+																		<TableRow key={row.id}>
+																			<TableCell className="max-w-[16rem] align-top">
+																				<Input
+																					type="email"
+																					autoComplete="off"
+																					value={row.email}
+																					placeholder="correo@ejemplo.com"
+																					onChange={(e) => {
+																						const v = e.target.value;
+																						setMatrixRows((rows) =>
+																							rows.map((r) =>
+																								r.id === row.id
+																									? {
+																											...r,
+																											email: v,
+																											lookup: {
+																												status:
+																													"idle",
+																												exists: null,
+																												user: null,
+																												message: "",
+																											},
+																										}
+																									: r,
+																							),
+																						);
+																						scheduleMatrixRowLookup(
+																							row.id,
+																							v,
+																						);
+																					}}
+																					onBlur={(e) => {
+																						const v = e.target.value;
+																						const prevT =
+																							matrixLookupTimersRef
+																								.current[row.id];
+																						if (prevT) {
+																							clearTimeout(prevT);
+																							delete matrixLookupTimersRef
+																								.current[row.id];
+																						}
+																						void validateMatrixRowEmail(
+																							row.id,
+																							v,
+																						);
+																					}}
+																				/>
+																				{isDup && (
+																					<p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+																						Correo duplicado en la tabla;
+																						deja una sola fila.
+																					</p>
+																				)}
+																			</TableCell>
+																			<TableCell className="align-top text-sm text-zinc-700 dark:text-zinc-300">
+																				{lk.user?.name ||
+																					lk.user?.email ||
+																					"—"}
+																			</TableCell>
+																			<TableCell className="align-top">
+																				{lk.status === "found" && !isDup ? (
+																					<Badge color="emerald">
+																						Registrado
+																					</Badge>
+																				) : lk.status === "checking" ? (
+																					<Badge color="zinc">
+																						Validando…
+																					</Badge>
+																				) : lk.status === "missing" ||
+																					  lk.status === "invalid" ||
+																					  lk.status === "error" ||
+																					  (lk.status === "found" && isDup) ? (
+																					<Badge color="red">
+																						{isDup ? "Duplicado" : "No válido"}
+																					</Badge>
+																				) : (
+																					<Badge color="zinc">—</Badge>
+																				)}
+																			</TableCell>
+																			<TableCell className="align-top text-right">
+																				<Button
+																					type="button"
+																					plain
+																					className="text-red-600 dark:text-red-400"
+																					onClick={() => {
+																						const prevT =
+																							matrixLookupTimersRef
+																								.current[row.id];
+																						if (prevT) {
+																							clearTimeout(prevT);
+																							delete matrixLookupTimersRef
+																								.current[row.id];
+																						}
+																						setMatrixRows((rows) => {
+																							if (rows.length <= 1) {
+																								return [createMatrixRow()];
+																							}
+																							return rows.filter(
+																								(r) => r.id !== row.id,
+																							);
+																						});
+																					}}
+																				>
+																					Quitar
+																				</Button>
+																			</TableCell>
+																		</TableRow>
+																	);
+																})}
+															</TableBody>
+														</Table>
+													</div>
+													<p className="text-sm text-zinc-600 dark:text-zinc-400">
+														Listos para enviar:{" "}
+														<strong>{individualReadyEmails.length}</strong> correo(s)
+														único(s) validado(s).
 													</p>
-													{errors.email && (
-														<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-															{errors.email}
+													{errors.bulk_emails && (
+														<p className="text-sm text-red-600 dark:text-red-400">
+															{Array.isArray(errors.bulk_emails)
+																? errors.bulk_emails[0]
+																: errors.bulk_emails}
 														</p>
 													)}
-												</Field>
+												</div>
 											)}
 
 											{data.assignment_mode === "bulk" && (
@@ -1145,49 +1506,22 @@ export default function CouponsAssign({
 														</CheckboxField>
 													)}
 
-													<Field>
-														<Label>Autorizadores (si las reglas exigen aprobación)</Label>
-														<div className="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-															{authorizers.length === 0 ? (
-																<p className="text-sm text-zinc-500 dark:text-zinc-400">
-																	No hay usuarios con rol autorizador. Configura roles en
-																	administración.
-																</p>
-															) : (
-																authorizers.map((authorizer) => {
-																	const checked = data.authorizer_ids.includes(
-																		authorizer.id,
-																	);
-																	return (
-																		<CheckboxField key={authorizer.id}>
-																			<Checkbox
-																				checked={checked}
-																				onChange={(v) => {
-																					if (v) {
-																						setData("authorizer_ids", [
-																							...data.authorizer_ids,
-																							authorizer.id,
-																						]);
-																					} else {
-																						setData(
-																							"authorizer_ids",
-																							data.authorizer_ids.filter(
-																								(id) => id !== authorizer.id,
-																							),
-																						);
-																					}
-																				}}
-																			/>
-																			<Label>
-																				{authorizer.name} (
-																				{authorizer.email || "sin correo"})
-																			</Label>
-																		</CheckboxField>
-																	);
-																})
-															)}
-														</div>
-													</Field>
+													<div className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-3 text-sm text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-200">
+														<p className="font-medium text-zinc-900 dark:text-white">
+															Aprobaciones
+														</p>
+														<p className="mt-1">
+															Si las reglas exigen firmas, el sistema notifica a{" "}
+															<strong>todos</strong> los usuarios con rol autorizador. No
+															hace falta marcar una lista manualmente en esta pantalla.
+														</p>
+														{authorizers.length === 0 && (
+															<p className="mt-2 text-amber-800 dark:text-amber-200">
+																Aún no hay autorizadores configurados: no se podrán
+																completar solicitudes que requieran aprobación.
+															</p>
+														)}
+													</div>
 												</>
 											)}
 
@@ -1266,14 +1600,47 @@ export default function CouponsAssign({
 													</dt>
 													<dd>{ASSIGNMENT_LABELS[data.assignment_mode]}</dd>
 												</div>
-												{data.assignment_mode === "individual" && (
-													<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-														<dt className="font-medium text-zinc-500 dark:text-zinc-400">
-															Correo
-														</dt>
-														<dd className="break-all">{data.email || "—"}</dd>
-													</div>
-												)}
+												{data.assignment_mode === "individual" &&
+													individualReadyEmails.length > 0 && (
+														<div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-start">
+															<dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">
+																Beneficiarios ({individualReadyEmails.length})
+															</dt>
+															<dd className="max-w-full text-right">
+																<ul className="ml-auto max-h-40 max-w-md list-inside list-disc overflow-y-auto break-all text-left font-mono text-xs text-zinc-800 dark:text-zinc-200">
+																	{individualReadyEmails.slice(0, 40).map((em) => (
+																		<li key={em}>{em}</li>
+																	))}
+																</ul>
+																{individualReadyEmails.length > 40 && (
+																	<p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+																		Y {individualReadyEmails.length - 40} correo(s)
+																		más.
+																	</p>
+																)}
+															</dd>
+														</div>
+													)}
+												{data.assignment_mode === "bulk" &&
+													summaryBulkEmails.length > 0 && (
+														<div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-start">
+															<dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">
+																Beneficiarios ({summaryBulkEmails.length})
+															</dt>
+															<dd className="max-w-full text-right">
+																<ul className="ml-auto max-h-40 max-w-md list-inside list-disc overflow-y-auto break-all text-left font-mono text-xs text-zinc-800 dark:text-zinc-200">
+																	{summaryBulkEmails.slice(0, 40).map((em) => (
+																		<li key={em}>{em}</li>
+																	))}
+																</ul>
+																{summaryBulkEmails.length > 40 && (
+																	<p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+																		Y {summaryBulkEmails.length - 40} correo(s) más.
+																	</p>
+																)}
+															</dd>
+														</div>
+													)}
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Notificaciones
@@ -1287,19 +1654,44 @@ export default function CouponsAssign({
 													</dd>
 												</div>
 												{data.assignment_mode !== "none" && (
-													<div className="flex flex-col gap-1 sm:flex-row sm:justify-between">
-														<dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">
-															Autorizadores seleccionados
+													<div className="flex flex-col gap-1 rounded-lg border border-zinc-200 bg-zinc-50/90 p-3 dark:border-zinc-600 dark:bg-zinc-900/50">
+														<dt className="font-semibold text-zinc-900 dark:text-white">
+															Aprobaciones según reglas
 														</dt>
-														<dd className="text-right">
-															{selectedAuthorizerNames.length === 0
-																? "Ninguno"
-																: selectedAuthorizerNames
-																		.map(
-																			(a) =>
-																				`${a.name} (${a.email || "sin correo"})`,
-																		)
-																		.join(" · ")}
+														<dd className="text-sm text-zinc-800 dark:text-zinc-200">
+															{summaryApprovalsRequired === 0 ? (
+																<>
+																	Con el monto y la cantidad de beneficiarios de esta
+																	operación,{" "}
+																	<strong>
+																		no se requieren aprobaciones adicionales
+																	</strong>
+																	: los créditos pueden confirmarse al enviar.
+																</>
+															) : isSuperadmin &&
+																rulesForUi?.superadmin_bypass_approvals ? (
+																<>
+																	Las reglas pedirían{" "}
+																	<strong>{summaryApprovalsRequired}</strong>{" "}
+																	aprobación(es), pero con tu rol de superadmin y la
+																	omisión activa la operación puede ejecutarse sin
+																	esperar firmas.
+																</>
+															) : (
+																<>
+																	Esta operación requiere hasta{" "}
+																	<strong>{summaryApprovalsRequired}</strong>{" "}
+																	aprobación(es). Al confirmar, quedará registrada la
+																	solicitud; los beneficiarios{" "}
+																	<strong>no estarán activos</strong> hasta que los
+																	autorizadores completen las firmas necesarias.{" "}
+																	<strong>
+																		No tendrás que hacer ningún paso adicional
+																	</strong>
+																	después de enviar: el sistema activará las
+																	asignaciones cuando corresponda.
+																</>
+															)}
 														</dd>
 													</div>
 												)}
@@ -1315,12 +1707,13 @@ export default function CouponsAssign({
 														podrás asignar beneficiarios hasta activarlo.
 													</li>
 													<li>
-														En archivo masivo, la cantidad de filas puede aumentar las
-														aprobaciones requeridas según las reglas por beneficiarios.
+														En archivo masivo, la cantidad de beneficiarios incluidos puede
+														subir el número de aprobaciones requeridas según las reglas
+														configuradas.
 													</li>
 													<li>
-														Si las reglas exigen aprobación y no eres superadmin con omisión,
-														debes elegir autorizadores en la pestaña Asignación.
+														Cuando haya aprobaciones pendientes, se notifica al conjunto de
+														autorizadores; no hace falta elegirlos uno a uno en esta pantalla.
 													</li>
 												</ul>
 											</div>
@@ -1330,107 +1723,205 @@ export default function CouponsAssign({
 							</AnimatePresence>
 						</div>
 
-						<div className="mt-auto border-t border-zinc-200 px-4 py-4 dark:border-zinc-700 sm:px-6">
-							<Button
-								type="submit"
-								className="w-full sm:w-auto"
-								disabled={processing || !canSubmit}
-							>
-								{data.assignment_mode === "none" &&
-								mustPreApproveCouponBeforeAssignment
-									? "Guardar y solicitar aprobación"
-									: data.assignment_mode === "none"
-									? "Guardar cupón"
-									: "Ejecutar asignación"}
-							</Button>
-							{!canSubmit && !processing && (
-								<p className="mt-2 text-sm text-amber-800 dark:text-amber-200">
-									Completa los datos requeridos en las pestañas Cupón y Asignación (incluye
-									autorizadores si las reglas lo indican).
+						<div className="mt-auto flex flex-col gap-3 border-t border-zinc-200 px-4 py-4 dark:border-zinc-700 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
+							{activeTab === "coupon" && (
+								<Button
+									type="button"
+									className="w-full sm:w-auto"
+									disabled={!couponStepComplete}
+									onClick={() => trySetTab("assignment")}
+								>
+									Siguiente: asignación de beneficiarios
+								</Button>
+							)}
+							{activeTab === "assignment" && (
+								<>
+									<Button
+										type="button"
+										outline
+										className="w-full sm:w-auto"
+										onClick={() => setActiveTab("coupon")}
+									>
+										Anterior: cupón
+									</Button>
+									<Button
+										type="button"
+										className="w-full sm:w-auto"
+										disabled={!summaryUnlocked}
+										onClick={() => trySetTab("summary")}
+									>
+										Siguiente: resumen
+									</Button>
+								</>
+							)}
+							{activeTab === "summary" && (
+								<>
+									<Button
+										type="button"
+										outline
+										className="w-full sm:w-auto"
+										onClick={() => setActiveTab("assignment")}
+									>
+										Anterior: asignación
+									</Button>
+									<Button
+										type="submit"
+										className="w-full sm:w-auto"
+										disabled={processing || !canSubmit}
+									>
+										{data.assignment_mode === "none" &&
+										mustPreApproveCouponBeforeAssignment
+											? "Guardar y solicitar aprobación"
+											: data.assignment_mode === "none"
+												? "Guardar cupón"
+												: mustPreApproveCouponBeforeAssignment
+													? "Confirmar: solicitud con asignaciones"
+													: "Confirmar y enviar"}
+									</Button>
+								</>
+							)}
+							{activeTab === "summary" && !canSubmit && !processing && (
+								<p className="w-full text-sm text-amber-800 dark:text-amber-200">
+									Revisa el resumen: faltan datos o no se cumplen las reglas (por ejemplo,
+									beneficiarios no registrados o sin autorizadores en el sistema si hiciera
+									falta aprobación).
 								</p>
 							)}
 						</div>
 					</form>
 
-					<aside className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-700 dark:bg-zinc-950 lg:min-w-0">
-						<Subheading level={3}>Reglas y validaciones</Subheading>
-						<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-							Resumen de &quot;Reglas y seguridad&quot;. El sistema toma el máximo entre
-							aprobaciones por monto y por número de beneficiarios.
-						</Text>
-						<ul className="space-y-2 text-sm text-zinc-800 dark:text-zinc-200">
-							<li>
-								<strong>Monto base referencia:</strong>{" "}
-								{formatMxFromCents(rulesForUi?.base_amount_cents)}
-							</li>
-							<li>
-								<strong>Monto máximo por asignación:</strong>{" "}
-								{rulesForUi?.max_assignment_amount_cents != null
-									? formatMxFromCents(rulesForUi.max_assignment_amount_cents)
-									: "Sin límite"}
-							</li>
-							<li>
-								<strong>Máx. asignaciones al día:</strong>{" "}
-								{rulesForUi?.max_assignments_per_day ?? "Sin límite"}
-							</li>
-							<li>
-								<strong>Umbral de aprobación (monto):</strong>{" "}
-								{rulesForUi?.amount_threshold_cents != null
-									? formatMxFromCents(rulesForUi.amount_threshold_cents)
-									: "No definido"}
-								{rulesForUi?.amount_threshold_cents != null && (
-									<>
-										{" "}
-										→{" "}
-										<strong>
-											{rulesForUi.required_approvals_by_amount ?? 0} aprobación(es)
-										</strong>
-									</>
-								)}
-							</li>
-							<li>
-								<strong>Requiere autorización por código al crear:</strong>{" "}
-								{requireAuth ? "Sí" : "No"}
-							</li>
-							<li>
-								<strong>Superadmin omite aprobaciones multi-firma:</strong>{" "}
-								{rulesForUi?.superadmin_bypass_approvals ? "Sí" : "No"}
-							</li>
-						</ul>
-						{(rulesForUi?.beneficiary_rules?.length ?? 0) > 0 && (
-							<div>
-								<p className="text-sm font-medium text-zinc-900 dark:text-white">
-									Aprobaciones por cantidad de beneficiarios
+					<aside className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-700 dark:bg-zinc-950 lg:min-w-0">
+						<div className="flex flex-wrap items-start justify-between gap-2">
+							<Subheading level={3} className="mb-0">
+								Reglas y validaciones
+							</Subheading>
+							<Button
+								type="button"
+								plain
+								className="shrink-0 text-sm font-semibold text-famedic-dark underline decoration-famedic-lime/60 underline-offset-2 hover:text-famedic-dark dark:text-famedic-lime dark:hover:text-famedic-lime"
+								onClick={() => setRulesSidebarExpanded((v) => !v)}
+							>
+								{rulesSidebarExpanded ? "Mostrar menos" : "Mostrar más"}
+							</Button>
+						</div>
+						{!rulesSidebarExpanded && (
+							<div className="rounded-lg border border-zinc-200 bg-white/80 p-3 text-sm text-zinc-700 dark:border-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-300">
+								<p>
+									Aprobaciones estimadas para esta operación:{" "}
+									<strong>{approvalsPreview}</strong>
+									{data.assignment_mode === "bulk" && bulkRows.length > 0 && (
+										<>
+											{" "}
+											(
+											{bulkRows.filter((r) => r.include).length} beneficiario(s) en
+											masivo)
+										</>
+									)}
 								</p>
-								<ul className="mt-2 list-inside list-disc text-sm text-zinc-700 dark:text-zinc-300">
-									{rulesForUi.beneficiary_rules.map((r, i) => (
-										<li key={i}>
-											De {r.min_beneficiaries} a {r.max_beneficiaries ?? "∞"} personas →{" "}
-											<strong>{r.required_approvals}</strong> aprobación(es)
-										</li>
-									))}
-								</ul>
+								<p className="mt-1 line-clamp-2 text-zinc-600 dark:text-zinc-400">
+									{approvalRealtime.title}
+								</p>
 							</div>
 						)}
-						<div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 dark:border-emerald-900 dark:bg-emerald-950/40">
-							<p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
-								Vista previa
-							</p>
-							<p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">
-								Aprobaciones estimadas: <strong>{approvalsPreview}</strong>
-								{data.assignment_mode === "bulk" && (
-									<>
-										{" "}
-										{bulkRows.length > 0
-											? `(masivo: ${bulkRows.filter((r) => r.include).length} beneficiario(s) seleccionado(s))`
-											: "(masivo: usa «Analizar archivo» para estimar por cantidad)"}
-									</>
+						{rulesSidebarExpanded && (
+							<>
+								<Text className="text-sm text-zinc-600 dark:text-zinc-400">
+									Resumen de &quot;Reglas y seguridad&quot;. El sistema toma el máximo entre
+									aprobaciones por monto y por número de beneficiarios.
+								</Text>
+								<ul className="space-y-2 text-sm text-zinc-800 dark:text-zinc-200">
+									<li>
+										<strong>Monto base referencia:</strong>{" "}
+										{formatMxFromCents(rulesForUi?.base_amount_cents)}
+									</li>
+									<li>
+										<strong>Monto máximo por asignación:</strong>{" "}
+										{rulesForUi?.max_assignment_amount_cents != null
+											? formatMxFromCents(rulesForUi.max_assignment_amount_cents)
+											: "Sin límite"}
+									</li>
+									<li>
+										<strong>Máx. asignaciones al día:</strong>{" "}
+										{rulesForUi?.max_assignments_per_day ?? "Sin límite"}
+									</li>
+									<li>
+										<strong>Umbral de aprobación (monto, legado):</strong>{" "}
+										{rulesForUi?.amount_threshold_cents != null
+											? formatMxFromCents(rulesForUi.amount_threshold_cents)
+											: "No definido"}
+										{rulesForUi?.amount_threshold_cents != null && (
+											<>
+												{" "}
+												→{" "}
+												<strong>
+													{rulesForUi.required_approvals_by_amount ?? 0} aprobación(es)
+												</strong>
+											</>
+										)}
+									</li>
+									{(rulesForUi?.amount_rules?.length ?? 0) > 0 && (
+										<li className="list-none">
+											<p className="font-medium text-zinc-900 dark:text-white">
+												Aprobaciones por rango de monto
+											</p>
+											<ul className="mt-1 list-inside list-disc text-zinc-700 dark:text-zinc-300">
+												{rulesForUi.amount_rules.map((r, i) => (
+													<li key={i}>
+														{formatMxFromCents(r.min_amount_cents ?? 0)} —{" "}
+														{r.max_amount_cents != null
+															? formatMxFromCents(r.max_amount_cents)
+															: "∞"}{" "}
+														→ <strong>{r.required_approvals ?? 0}</strong> aprobación(es)
+													</li>
+												))}
+											</ul>
+										</li>
+									)}
+									<li>
+										<strong>Requiere autorización por código al crear:</strong>{" "}
+										{requireAuth ? "Sí" : "No"}
+									</li>
+									<li>
+										<strong>Superadmin omite aprobaciones multi-firma:</strong>{" "}
+										{rulesForUi?.superadmin_bypass_approvals ? "Sí" : "No"}
+									</li>
+								</ul>
+								{(rulesForUi?.beneficiary_rules?.length ?? 0) > 0 && (
+									<div>
+										<p className="text-sm font-medium text-zinc-900 dark:text-white">
+											Aprobaciones por cantidad de beneficiarios
+										</p>
+										<ul className="mt-2 list-inside list-disc text-sm text-zinc-700 dark:text-zinc-300">
+											{rulesForUi.beneficiary_rules.map((r, i) => (
+												<li key={i}>
+													De {r.min_beneficiaries} a {r.max_beneficiaries ?? "∞"} personas →{" "}
+													<strong>{r.required_approvals}</strong> aprobación(es)
+												</li>
+											))}
+										</ul>
+									</div>
 								)}
-							</p>
-							<p className="mt-2 text-sm text-emerald-800 dark:text-emerald-200">
-								<strong>{approvalRealtime.title}.</strong> {approvalRealtime.detail}
-							</p>
-						</div>
+								<div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 dark:border-emerald-900 dark:bg-emerald-950/40">
+									<p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
+										Vista previa
+									</p>
+									<p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">
+										Aprobaciones estimadas: <strong>{approvalsPreview}</strong>
+										{data.assignment_mode === "bulk" && (
+											<>
+												{" "}
+												{bulkRows.length > 0
+													? `(masivo: ${bulkRows.filter((r) => r.include).length} beneficiario(s) seleccionado(s))`
+													: "(masivo: usa «Analizar archivo» para estimar por cantidad)"}
+											</>
+										)}
+									</p>
+									<p className="mt-2 text-sm text-emerald-800 dark:text-emerald-200">
+										<strong>{approvalRealtime.title}.</strong> {approvalRealtime.detail}
+									</p>
+								</div>
+							</>
+						)}
 					</aside>
 				</div>
 			</div>

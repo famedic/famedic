@@ -44,6 +44,11 @@ class CouponApprovalRequest extends Model
         return $this->belongsTo(User::class, 'requested_by_user_id');
     }
 
+    public function rejectedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by_user_id');
+    }
+
     public function authorizers(): HasMany
     {
         return $this->hasMany(CouponApprovalRequestAuthorizer::class);

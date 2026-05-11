@@ -11,6 +11,7 @@ use App\Mail\CouponApprovalRequestMail;
 use App\Models\CouponApprovalRequest;
 use App\Models\CouponApprovalRequestAuthorizer;
 use App\Models\CouponAuditLog;
+use App\Models\CouponAmountApprovalRule;
 use App\Models\CouponBeneficiaryApprovalRule;
 use App\Models\Administrator;
 use App\Models\Coupon;
@@ -138,16 +139,96 @@ class CouponController extends Controller
             ]);
 
         $tab = (string) $request->query('tab', 'limits');
-        $allowedTabs = ['limits', 'approval', 'authorizers'];
+        $allowedTabs = ['limits', 'approval', 'authorizers', 'history'];
         if (! in_array($tab, $allowedTabs, true)) {
             $tab = 'limits';
         }
 
         return Inertia::render('Admin/Coupons/Settings', [
             'settings' => CouponAdminSettings::singleton(),
+            'amountRules' => CouponAmountApprovalRule::query()
+                ->orderBy('min_amount_cents')
+                ->get()
+                ->map(fn (CouponAmountApprovalRule $r) => [
+                    'min_amount_cents' => (int) $r->min_amount_cents,
+                    'max_amount_cents' => $r->max_amount_cents !== null ? (int) $r->max_amount_cents : null,
+                    'required_approvals' => (int) $r->required_approvals,
+                ])
+                ->values()
+                ->all(),
+            'beneficiaryRules' => CouponBeneficiaryApprovalRule::query()
+                ->orderBy('min_beneficiaries')
+                ->get()
+                ->map(fn (CouponBeneficiaryApprovalRule $r) => [
+                    'min_beneficiaries' => (int) $r->min_beneficiaries,
+                    'max_beneficiaries' => $r->max_beneficiaries !== null ? (int) $r->max_beneficiaries : null,
+                    'required_approvals' => (int) $r->required_approvals,
+                ])
+                ->values()
+                ->all(),
             'authorizers' => $authorizers,
             'initialTab' => $tab,
+            'settingsApprovalHistory' => $this->settingsApprovalHistoryForUi(),
         ]);
+    }
+
+    /**
+     * Historial de solicitudes de cambio en reglas (tipo settings): solicitante, firmas y estado.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function settingsApprovalHistoryForUi(): array
+    {
+        return CouponApprovalRequest::query()
+            ->where('type', 'settings')
+            ->with([
+                'requestedByUser:id,name,paternal_lastname,maternal_lastname,email',
+                'rejectedByUser:id,name,paternal_lastname,maternal_lastname,email',
+                'authorizers' => fn ($q) => $q->orderBy('id')->with([
+                    'administrator.user:id,name,paternal_lastname,maternal_lastname,email',
+                    'actedByUser:id,name,paternal_lastname,maternal_lastname,email',
+                ]),
+            ])
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->map(function (CouponApprovalRequest $r) {
+                $approvers = $r->authorizers
+                    ->filter(fn (CouponApprovalRequestAuthorizer $row) => $row->status === 'approved')
+                    ->map(function (CouponApprovalRequestAuthorizer $row) {
+                        $actor = $row->actedByUser;
+                        $fallback = $row->administrator?->user;
+
+                        return [
+                            'name' => $actor?->full_name ?: ($fallback?->full_name ?: '—'),
+                            'email' => $actor?->email ?? $fallback?->email,
+                            'acted_at' => $row->acted_at?->toIso8601String(),
+                        ];
+                    })
+                    ->values()
+                    ->all();
+
+                return [
+                    'id' => $r->id,
+                    'status' => $r->status,
+                    'required_approvals' => (int) $r->required_approvals,
+                    'current_approvals' => (int) $r->current_approvals,
+                    'created_at' => $r->created_at?->toIso8601String(),
+                    'executed_at' => $r->executed_at?->toIso8601String(),
+                    'rejected_at' => $r->rejected_at?->toIso8601String(),
+                    'requested_by' => [
+                        'name' => $r->requestedByUser?->full_name ?: '—',
+                        'email' => $r->requestedByUser?->email,
+                    ],
+                    'rejected_by' => $r->rejectedByUser ? [
+                        'name' => $r->rejectedByUser->full_name ?: '—',
+                        'email' => $r->rejectedByUser->email,
+                    ] : null,
+                    'approvers' => $approvers,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     public function updateSettings(Request $request): RedirectResponse
@@ -160,19 +241,16 @@ class CouponController extends Controller
             'max_assignments_per_day' => ['nullable', 'integer', 'min:1'],
             'authorization_email' => ['nullable', 'email'],
             'require_authorization' => ['boolean'],
-            'amount_threshold_mxn' => ['nullable', 'numeric', 'min:0'],
-            'required_approvals_by_amount' => ['nullable', 'integer', 'min:0'],
+            'amount_rules' => ['nullable', 'array'],
+            'amount_rules.*.min_amount_mxn' => ['required_with:amount_rules', 'numeric', 'min:0'],
+            'amount_rules.*.max_amount_mxn' => ['nullable', 'numeric', 'min:0'],
+            'amount_rules.*.required_approvals' => ['required_with:amount_rules', 'integer', 'min:0'],
             'mass_campaign_threshold' => ['nullable', 'integer', 'min:1'],
             'superadmin_bypass_approvals' => ['boolean'],
             'beneficiary_rules' => ['nullable', 'array'],
             'beneficiary_rules.*.min' => ['required_with:beneficiary_rules', 'integer', 'min:1'],
             'beneficiary_rules.*.max' => ['nullable', 'integer', 'min:1'],
             'beneficiary_rules.*.required_approvals' => ['required_with:beneficiary_rules', 'integer', 'min:0'],
-            'authorizer_ids' => ['nullable', 'array'],
-            'authorizer_ids.*' => [
-                'integer',
-                Rule::exists('administrators', 'id'),
-            ],
         ]);
 
         $settings = CouponAdminSettings::singleton();
@@ -184,6 +262,7 @@ class CouponController extends Controller
             'require_authorization' => $settings->require_authorization,
             'amount_threshold_cents' => $settings->amount_threshold_cents,
             'required_approvals_by_amount' => $settings->required_approvals_by_amount,
+            'amount_rules' => CouponAmountApprovalRule::query()->orderBy('min_amount_cents')->get()->toArray(),
             'mass_campaign_threshold' => $settings->mass_campaign_threshold,
             'superadmin_bypass_approvals' => $settings->superadmin_bypass_approvals,
             'beneficiary_rules' => CouponBeneficiaryApprovalRule::query()->orderBy('min_beneficiaries')->get()->toArray(),
@@ -204,12 +283,27 @@ class CouponController extends Controller
             $after['authorization_email'] = null;
         }
         $after['require_authorization'] = $data['require_authorization'] ?? false;
-        $after['amount_threshold_cents'] = isset($data['amount_threshold_mxn']) && $data['amount_threshold_mxn'] !== null && $data['amount_threshold_mxn'] !== ''
-            ? (int) round((float) $data['amount_threshold_mxn'] * 100)
-            : null;
-        $after['required_approvals_by_amount'] = (int) ($data['required_approvals_by_amount'] ?? 0);
+        $after['amount_threshold_cents'] = null;
+        $after['required_approvals_by_amount'] = 0;
         $after['mass_campaign_threshold'] = $data['mass_campaign_threshold'] ?? null;
         $after['superadmin_bypass_approvals'] = $data['superadmin_bypass_approvals'] ?? true;
+        $after['amount_rules'] = collect($data['amount_rules'] ?? [])
+            ->map(function ($rule) {
+                $min = isset($rule['min_amount_mxn']) && $rule['min_amount_mxn'] !== null && $rule['min_amount_mxn'] !== ''
+                    ? (int) round((float) $rule['min_amount_mxn'] * 100)
+                    : 0;
+                $max = isset($rule['max_amount_mxn']) && $rule['max_amount_mxn'] !== null && $rule['max_amount_mxn'] !== ''
+                    ? (int) round((float) $rule['max_amount_mxn'] * 100)
+                    : null;
+
+                return [
+                    'min_amount_cents' => $min,
+                    'max_amount_cents' => $max,
+                    'required_approvals' => (int) $rule['required_approvals'],
+                ];
+            })
+            ->values()
+            ->all();
         $after['beneficiary_rules'] = collect($data['beneficiary_rules'] ?? [])
             ->map(fn ($rule) => [
                 'min_beneficiaries' => (int) $rule['min'],
@@ -219,10 +313,11 @@ class CouponController extends Controller
 
         $isSuperadmin = (bool) $request->user()->administrator?->hasRole('superadmin');
         if (! $isSuperadmin) {
-            $authorizerIds = collect($data['authorizer_ids'] ?? [])->map(fn ($v) => (int) $v)->filter()->values()->all();
-            if (count($authorizerIds) === 0) {
+            // Envío a TODOS los autorizadores y mínimo 2 aprobaciones.
+            $authorizerIds = $this->defaultAuthorizerAdministratorIds();
+            if (count($authorizerIds) < 2) {
                 return redirect()->back()->flashMessage(
-                    'Selecciona al menos un autorizador para enviar la solicitud de cambio.',
+                    'No hay suficientes autorizadores configurados (se requieren al menos 2).',
                     'error'
                 );
             }
@@ -230,7 +325,7 @@ class CouponController extends Controller
             $approvalRequest = $this->couponService->createApprovalRequest(
                 type: 'settings',
                 requestedByUserId: (int) $request->user()->id,
-                requiredApprovals: max(1, min(count($authorizerIds), (int) $after['required_approvals_by_amount'] ?: 1)),
+                requiredApprovals: 2,
                 authorizerAdministratorIds: $authorizerIds,
                 beforeState: $before,
                 afterState: $after
@@ -245,6 +340,11 @@ class CouponController extends Controller
 
         $settings->fill($after);
         $settings->save();
+
+        CouponAmountApprovalRule::query()->delete();
+        foreach ($after['amount_rules'] as $rule) {
+            CouponAmountApprovalRule::create($rule);
+        }
 
         CouponBeneficiaryApprovalRule::query()->delete();
         foreach ($after['beneficiary_rules'] as $rule) {
@@ -708,11 +808,12 @@ class CouponController extends Controller
     {
         $this->authorize('create', Coupon::class);
 
+        $assignmentMode = (string) $request->input('assignment_mode');
+
         $data = $request->validate([
             'coupon_mode' => ['required', Rule::in(['existing', 'new'])],
             'assignment_mode' => ['required', Rule::in(['none', 'individual', 'bulk'])],
             'coupon_id' => ['required_if:coupon_mode,existing', 'nullable', 'integer', Rule::exists('coupons', 'id')],
-            'email' => ['required_if:assignment_mode,individual', 'nullable', 'email', 'exists:users,email'],
             'file' => [
                 'nullable',
                 'file',
@@ -720,8 +821,18 @@ class CouponController extends Controller
                 Rule::requiredIf(fn () => $request->input('assignment_mode') === 'bulk'
                     && empty($request->input('bulk_emails'))),
             ],
-            'bulk_emails' => ['nullable', 'array', 'max:5000'],
-            'bulk_emails.*' => ['email', 'max:255'],
+            'bulk_emails' => [
+                Rule::requiredIf(fn () => $assignmentMode === 'individual'),
+                'nullable',
+                'array',
+                Rule::when($assignmentMode === 'individual', ['min:1']),
+                'max:5000',
+            ],
+            'bulk_emails.*' => array_values(array_filter([
+                'email',
+                'max:255',
+                $assignmentMode === 'individual' ? Rule::exists('users', 'email') : null,
+            ])),
             'send_notification' => ['boolean'],
             'send_notifications' => ['boolean'],
             'amount_cents' => ['required_if:coupon_mode,new', 'nullable', 'integer', 'min:1'],
@@ -748,21 +859,14 @@ class CouponController extends Controller
             );
             $isSuperadminDraft = (bool) $request->user()->administrator?->hasRole('superadmin');
             $settingsDraft = CouponAdminSettings::singleton();
-            $relaxMaxForPreApproval = $data['assignment_mode'] === 'none'
-                && $requiredPreApprovalsDraft > 0
+            $relaxMaxForPreApproval = $requiredPreApprovalsDraft > 0
                 && ! ($isSuperadminDraft && $settingsDraft->superadmin_bypass_approvals);
 
             $parent = $this->persistMasterCouponForAssign($request, $data, $relaxMaxForPreApproval);
-            if ($parent->approval_status === CouponApprovalStatus::PendingAuthorization) {
-                if ($data['assignment_mode'] !== 'none') {
-                    return redirect()->route('admin.coupons.assign')->flashMessage(
-                        'El cupón quedó pendiente de autorización. Cuando esté activo, vuelve aquí para asignar beneficiarios o usa el listado de cupones.',
-                        'error'
-                    );
-                }
-
+            if ($parent->approval_status === CouponApprovalStatus::PendingAuthorization
+                && $data['assignment_mode'] === 'none') {
                 return redirect()->route('admin.coupons.show', $parent)->flashMessage(
-                    'Cupón creado. Completa la autorización para poder asignar beneficiarios.'
+                    'Cupón creado. Completa la autorización por correo (código) o espera las firmas si definiste asignaciones en el mismo envío.'
                 );
             }
         } else {
@@ -832,14 +936,35 @@ class CouponController extends Controller
         }
 
         if ($data['assignment_mode'] === 'individual') {
-            $user = User::where('email', $data['email'])->firstOrFail();
+            $emails = collect($data['bulk_emails'] ?? [])
+                ->map(fn ($e) => strtolower(trim((string) $e)))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
 
-            return $this->finishCampaignAssignment(
+            if ($emails === []) {
+                return redirect()->back()->flashMessage(
+                    'Indica al menos un correo de usuario registrado en la lista manual.',
+                    'error'
+                );
+            }
+
+            $assigned = (int) $parent->childCoupons()->count();
+            if ($parent->max_beneficiaries !== null && $assigned + count($emails) > (int) $parent->max_beneficiaries) {
+                $remaining = max(0, (int) $parent->max_beneficiaries - $assigned);
+
+                return redirect()->back()->flashMessage(
+                    'Con este cupón solo puedes asignar hasta '.$remaining.' beneficiario(s) más (ya hay '.$assigned.' de un máximo de '.(int) $parent->max_beneficiaries.'). En la lista hay '.count($emails).' correo(s) distinto(s).',
+                    'error'
+                );
+            }
+
+            return $this->finishBulkCampaignAssignment(
                 $request,
                 $parent,
-                $user,
-                $sendForIndividual,
-                1
+                $emails,
+                $sendForIndividual
             );
         }
 
@@ -962,10 +1087,23 @@ class CouponController extends Controller
             if ($approvalRequest->type === 'settings') {
                 $settings = CouponAdminSettings::singleton();
                 $after = $approvalRequest->after_state ?? [];
+                    $amountRules = $after['amount_rules'] ?? [];
                 $rules = $after['beneficiary_rules'] ?? [];
-                unset($after['beneficiary_rules']);
+                    unset($after['beneficiary_rules'], $after['amount_rules']);
                 $settings->fill($after);
                 $settings->save();
+
+                    CouponAmountApprovalRule::query()->delete();
+                    foreach ($amountRules as $r) {
+                        if (! is_array($r)) {
+                            continue;
+                        }
+                        CouponAmountApprovalRule::create([
+                            'min_amount_cents' => (int) ($r['min_amount_cents'] ?? 0),
+                            'max_amount_cents' => isset($r['max_amount_cents']) ? (is_null($r['max_amount_cents']) ? null : (int) $r['max_amount_cents']) : null,
+                            'required_approvals' => (int) ($r['required_approvals'] ?? 0),
+                        ]);
+                    }
 
                 CouponBeneficiaryApprovalRule::query()->delete();
                 foreach ($rules as $rule) {
@@ -977,12 +1115,17 @@ class CouponController extends Controller
                 $sendNotification = (bool) ($payload['send_notification'] ?? true);
                 $requestedBy = (int) $approvalRequest->requested_by_user_id;
 
-                if (! empty($payload['pre_approval_only'])) {
+                if (! empty($payload['pre_approval_only']) && empty($payload['emails'])) {
                     $approvalRequest->status = 'executed';
                     $approvalRequest->executed_at = now();
                     $approvalRequest->save();
 
                     return redirect()->back()->flashMessage('Solicitud aprobada.');
+                }
+
+                if (($payload['activate_parent_on_execute'] ?? false) === true) {
+                    $this->activateMasterCouponAsApprover($coupon, (int) $request->user()->id);
+                    $coupon = $coupon->fresh();
                 }
 
                 if (! empty($payload['emails']) && is_array($payload['emails'])) {
@@ -1075,14 +1218,13 @@ class CouponController extends Controller
     }
 
     /**
-     * @return array<string, mixed>
-     */
-    /**
      * @return array{
      *     is_authorizer: bool,
      *     pending_assignment_approvals_count: int,
      *     pending_my_action_coupon_ids: list<int>,
-     *     pending_settings_approvals_count: int
+     *     pending_settings_approvals_count: int,
+     *     pending_settings_requests: list<array<string, mixed>>,
+     *     pending_assignment_cards: list<array<string, mixed>>
      * }
      */
     private function authorizerCouponsListContext(Request $request): array
@@ -1094,6 +1236,8 @@ class CouponController extends Controller
                 'pending_assignment_approvals_count' => 0,
                 'pending_my_action_coupon_ids' => [],
                 'pending_settings_approvals_count' => 0,
+                'pending_settings_requests' => [],
+                'pending_assignment_cards' => [],
             ];
         }
 
@@ -1115,18 +1259,196 @@ class CouponController extends Controller
             ->map(fn ($id) => (int) $id)
             ->all();
 
-        $pending_settings_approvals_count = CouponApprovalRequest::query()
-            ->where('status', 'pending')
-            ->where('type', 'settings')
-            ->whereHas('authorizers', fn ($q) => $q->where('administrator_id', $adminId)->where('status', 'pending'))
-            ->count();
+        $pending_settings_requests = $this->pendingSettingsApprovalRequestsSummaryForAuthorizer($adminId);
+        $pending_settings_approvals_count = count($pending_settings_requests);
+
+        $pending_assignment_cards = $pending_assignment_approvals_count > 0
+            ? $this->pendingAssignmentApprovalCardsForAuthorizer($pendingAssignmentIds)
+            : [];
 
         return [
             'is_authorizer' => true,
             'pending_assignment_approvals_count' => $pending_assignment_approvals_count,
             'pending_my_action_coupon_ids' => $pending_my_action_coupon_ids,
             'pending_settings_approvals_count' => $pending_settings_approvals_count,
+            'pending_settings_requests' => $pending_settings_requests,
+            'pending_assignment_cards' => $pending_assignment_cards,
         ];
+    }
+
+    /**
+     * Resumen legible para autorizadores: cupón, solicitante y beneficiarios previstos.
+     *
+     * @param  \Illuminate\Support\Collection<int, int>  $pendingAssignmentRequestIds
+     * @return list<array<string, mixed>>
+     */
+    private function pendingAssignmentApprovalCardsForAuthorizer($pendingAssignmentRequestIds): array
+    {
+        if ($pendingAssignmentRequestIds->isEmpty()) {
+            return [];
+        }
+
+        return CouponApprovalRequest::query()
+            ->whereIn('id', $pendingAssignmentRequestIds)
+            ->with([
+                'coupon:id,code,description,amount_cents,max_beneficiaries,approval_status,is_active',
+                'requestedByUser:id,name,paternal_lastname,maternal_lastname,email',
+            ])
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (CouponApprovalRequest $req) {
+                $payload = is_array($req->payload) ? $req->payload : [];
+                $emails = [];
+                if (! empty($payload['emails']) && is_array($payload['emails'])) {
+                    $emails = array_values(array_unique(array_filter(array_map(
+                        fn ($e) => strtolower(trim((string) $e)),
+                        $payload['emails']
+                    ))));
+                } elseif (! empty($payload['email'])) {
+                    $one = strtolower(trim((string) $payload['email']));
+                    if ($one !== '') {
+                        $emails = [$one];
+                    }
+                }
+
+                $beneficiaries = [];
+                if ($emails !== []) {
+                    $slice = array_slice($emails, 0, 50);
+                    $users = User::query()
+                        ->whereIn('email', $slice)
+                        ->get(['id', 'name', 'paternal_lastname', 'maternal_lastname', 'email']);
+                    $byEmail = $users->keyBy(fn (User $u) => strtolower((string) $u->email));
+                    foreach ($slice as $mail) {
+                        $u = $byEmail->get($mail);
+                        $beneficiaries[] = [
+                            'email' => $mail,
+                            'name' => $u ? ($u->full_name ?: trim(implode(' ', array_filter([
+                                $u->name,
+                                $u->paternal_lastname,
+                                $u->maternal_lastname,
+                            ])))) : null,
+                        ];
+                    }
+                }
+
+                $coupon = $req->coupon;
+                $approvalStatus = $coupon?->approval_status;
+                $approvalStatusValue = $approvalStatus instanceof \BackedEnum
+                    ? $approvalStatus->value
+                    : (string) ($approvalStatus ?? '');
+
+                return [
+                    'id' => (int) $req->id,
+                    'coupon_id' => (int) $req->coupon_id,
+                    'required_approvals' => (int) $req->required_approvals,
+                    'current_approvals' => (int) $req->current_approvals,
+                    'pre_approval_only' => (bool) ($payload['pre_approval_only'] ?? false),
+                    'activate_parent_on_execute' => (bool) ($payload['activate_parent_on_execute'] ?? false),
+                    'send_notification' => (bool) ($payload['send_notification'] ?? true),
+                    'requested_by' => [
+                        'name' => $req->requestedByUser?->full_name ?: '—',
+                        'email' => $req->requestedByUser?->email,
+                    ],
+                    'coupon' => $coupon ? [
+                        'code' => $coupon->code,
+                        'description' => $coupon->description,
+                        'amount_cents' => (int) $coupon->amount_cents,
+                        'max_beneficiaries' => $coupon->max_beneficiaries,
+                        'approval_status' => $approvalStatusValue,
+                        'is_active' => (bool) $coupon->is_active,
+                    ] : null,
+                    'beneficiary_emails_total' => count($emails),
+                    'beneficiaries_preview' => array_slice($beneficiaries, 0, 25),
+                    'beneficiaries_truncated' => max(0, count($emails) - 25),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Solicitudes de cambio en reglas (settings) donde este autorizador aún no ha firmado.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function pendingSettingsApprovalRequestsSummaryForAuthorizer(int $administratorId): array
+    {
+        return CouponApprovalRequest::query()
+            ->where('status', 'pending')
+            ->where('type', 'settings')
+            ->whereHas('authorizers', fn ($q) => $q->where('administrator_id', $administratorId)->where('status', 'pending'))
+            ->with(['requestedByUser:id,name,paternal_lastname,maternal_lastname,email'])
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (CouponApprovalRequest $req) {
+                $after = is_array($req->after_state) ? $req->after_state : [];
+
+                return [
+                    'id' => $req->id,
+                    'required_approvals' => (int) $req->required_approvals,
+                    'current_approvals' => (int) $req->current_approvals,
+                    'created_at' => $req->created_at?->toIso8601String(),
+                    'requested_by' => [
+                        'name' => $req->requestedByUser?->full_name ?: '—',
+                        'email' => $req->requestedByUser?->email,
+                    ],
+                    'amount_rules' => $this->mapAmountApprovalRulesPreviewForAuthorizer($after['amount_rules'] ?? null),
+                    'beneficiary_rules' => $this->mapBeneficiaryApprovalRulesPreviewForAuthorizer($after['beneficiary_rules'] ?? null),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  mixed  $rules
+     * @return list<array{min_mxn: float, max_mxn: ?float, required_approvals: int}>
+     */
+    private function mapAmountApprovalRulesPreviewForAuthorizer(mixed $rules): array
+    {
+        if (! is_array($rules)) {
+            return [];
+        }
+        $out = [];
+        foreach ($rules as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $min = (int) ($row['min_amount_cents'] ?? 0);
+            $max = $row['max_amount_cents'] ?? null;
+            $out[] = [
+                'min_mxn' => round($min / 100, 2),
+                'max_mxn' => $max === null || $max === '' ? null : round((int) $max / 100, 2),
+                'required_approvals' => (int) ($row['required_approvals'] ?? 0),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  mixed  $rules
+     * @return list<array{min: int, max: ?int, required_approvals: int}>
+     */
+    private function mapBeneficiaryApprovalRulesPreviewForAuthorizer(mixed $rules): array
+    {
+        if (! is_array($rules)) {
+            return [];
+        }
+        $out = [];
+        foreach ($rules as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $max = $row['max_beneficiaries'] ?? null;
+            $out[] = [
+                'min' => (int) ($row['min_beneficiaries'] ?? 0),
+                'max' => $max === null || $max === '' ? null : (int) $max,
+                'required_approvals' => (int) ($row['required_approvals'] ?? 0),
+            ];
+        }
+
+        return $out;
     }
 
     /**
@@ -1259,6 +1581,17 @@ class CouponController extends Controller
 
     private function couponRulesForAssignUi(CouponAdminSettings $settings): array
     {
+        $amountRules = CouponAmountApprovalRule::query()
+            ->orderBy('min_amount_cents')
+            ->get()
+            ->map(fn (CouponAmountApprovalRule $r) => [
+                'min_amount_cents' => (int) $r->min_amount_cents,
+                'max_amount_cents' => $r->max_amount_cents !== null ? (int) $r->max_amount_cents : null,
+                'required_approvals' => (int) $r->required_approvals,
+            ])
+            ->values()
+            ->all();
+
         $beneficiaryRules = CouponBeneficiaryApprovalRule::query()
             ->orderBy('min_beneficiaries')
             ->get()
@@ -1276,6 +1609,7 @@ class CouponController extends Controller
             'max_assignments_per_day' => $settings->max_assignments_per_day,
             'amount_threshold_cents' => $settings->amount_threshold_cents,
             'required_approvals_by_amount' => $settings->required_approvals_by_amount,
+            'amount_rules' => $amountRules,
             'mass_campaign_threshold' => $settings->mass_campaign_threshold,
             'require_authorization' => $settings->require_authorization,
             'superadmin_bypass_approvals' => $settings->superadmin_bypass_approvals,
@@ -1376,61 +1710,27 @@ class CouponController extends Controller
         return $coupon->fresh();
     }
 
-    private function finishCampaignAssignment(
-        Request $request,
-        Coupon $parent,
-        User $user,
-        bool $sendNotification,
-        int $beneficiaryCountForRules
-    ): RedirectResponse {
-        $bypassAssignmentApprovals = $this->couponIsLockedAfterApproval($parent);
-
-        $requiredApprovals = $this->couponService->resolveRequiredApprovals((int) $parent->amount_cents, $beneficiaryCountForRules);
-        $isSuperadmin = (bool) $request->user()->administrator?->hasRole('superadmin');
-        $settings = CouponAdminSettings::singleton();
-
-        if (! $bypassAssignmentApprovals && $requiredApprovals > 0 && ! ($isSuperadmin && $settings->superadmin_bypass_approvals)) {
-            $authorizerIds = collect($request->input('authorizer_ids', []))->map(fn ($v) => (int) $v)->filter()->values()->all();
-            if (count($authorizerIds) === 0) {
-                return redirect()->back()->flashMessage(
-                    'Esta operación requiere aprobación según las reglas. Selecciona autorizadores.',
-                    'error'
-                );
-            }
-
-            $approvalRequest = $this->couponService->createApprovalRequest(
-                type: 'assignment',
-                requestedByUserId: (int) $request->user()->id,
-                requiredApprovals: min($requiredApprovals, count($authorizerIds)),
-                authorizerAdministratorIds: $authorizerIds,
-                payload: [
-                    'email' => $user->email,
-                    'coupon_id' => $parent->id,
-                    'send_notification' => $sendNotification,
-                ],
-                couponId: (int) $parent->id
-            );
-
-            $this->sendApprovalRequestMails($approvalRequest);
-
-            return redirect()->route('admin.coupons.assign')->flashMessage(
-                "Se creó la solicitud de asignación #{$approvalRequest->id}. Se ejecutará al alcanzar las aprobaciones requeridas."
-            );
+    /**
+     * Activa un cupón maestro pendiente (p. ej. autorización por correo) sin código,
+     * cuando las reglas delegan la puesta en marcha al último autorizador multi-firma.
+     */
+    private function activateMasterCouponAsApprover(Coupon $coupon, int $actorUserId): void
+    {
+        if ($coupon->parent_coupon_id !== null) {
+            return;
         }
 
-        try {
-            $this->couponService->assignUserToCampaignCoupon(
-                $user,
-                $parent,
-                $sendNotification,
-                (int) $request->user()->id,
-                enforceMaxAssignmentAmount: ! $bypassAssignmentApprovals
-            );
-        } catch (\DomainException $e) {
-            return redirect()->back()->flashMessage($e->getMessage(), 'error');
+        $coupon->approval_status = CouponApprovalStatus::Active;
+        $coupon->is_active = true;
+        $coupon->authorization_code_hash = null;
+        $coupon->authorization_code_expires_at = null;
+        $coupon->authorized_at = now();
+        $coupon->authorized_by_user_id = $actorUserId;
+        if ((int) $coupon->remaining_cents === 0 && (int) $coupon->amount_cents > 0) {
+            $coupon->remaining_cents = (int) $coupon->amount_cents;
         }
-
-        return redirect()->route('admin.coupons.show', $parent)->flashMessage('Beneficiario asignado al cupón.');
+        $coupon->updated_by_user_id = $actorUserId;
+        $coupon->save();
     }
 
     /**
@@ -1444,15 +1744,27 @@ class CouponController extends Controller
     ): RedirectResponse {
         $bypassAssignmentApprovals = $this->couponIsLockedAfterApproval($parent);
 
-        $requiredApprovals = $this->couponService->resolveRequiredApprovals((int) $parent->amount_cents, count($emails));
+        $rulesApprovals = $this->couponService->resolveRequiredApprovals((int) $parent->amount_cents, count($emails));
         $isSuperadmin = (bool) $request->user()->administrator?->hasRole('superadmin');
         $settings = CouponAdminSettings::singleton();
 
-        if (! $bypassAssignmentApprovals && $requiredApprovals > 0 && ! ($isSuperadmin && $settings->superadmin_bypass_approvals)) {
+        $needsDeferredParentActivation = $parent->approval_status !== CouponApprovalStatus::Active
+            || ! $parent->is_active;
+
+        $requiredForRequest = $needsDeferredParentActivation
+            ? max($rulesApprovals, 1)
+            : $rulesApprovals;
+
+        if (! $bypassAssignmentApprovals
+            && $requiredForRequest > 0
+            && ! ($isSuperadmin && $settings->superadmin_bypass_approvals)) {
             $authorizerIds = collect($request->input('authorizer_ids', []))->map(fn ($v) => (int) $v)->filter()->values()->all();
             if (count($authorizerIds) === 0) {
+                $authorizerIds = $this->defaultAuthorizerAdministratorIds();
+            }
+            if (count($authorizerIds) === 0) {
                 return redirect()->back()->flashMessage(
-                    'Esta carga masiva requiere aprobación según las reglas. Selecciona autorizadores.',
+                    'Esta operación requiere aprobación según las reglas, pero no hay autorizadores configurados.',
                     'error'
                 );
             }
@@ -1460,12 +1772,13 @@ class CouponController extends Controller
             $approvalRequest = $this->couponService->createApprovalRequest(
                 type: 'assignment',
                 requestedByUserId: (int) $request->user()->id,
-                requiredApprovals: min($requiredApprovals, count($authorizerIds)),
+                requiredApprovals: min($requiredForRequest, count($authorizerIds)),
                 authorizerAdministratorIds: $authorizerIds,
                 payload: [
                     'emails' => $emails,
                     'coupon_id' => $parent->id,
                     'send_notification' => $sendNotifications,
+                    'activate_parent_on_execute' => $needsDeferredParentActivation,
                 ],
                 couponId: (int) $parent->id
             );
@@ -1473,8 +1786,15 @@ class CouponController extends Controller
             $this->sendApprovalRequestMails($approvalRequest);
 
             return redirect()->route('admin.coupons.assign')->flashMessage(
-                "Se creó la solicitud de asignación masiva #{$approvalRequest->id} (".count($emails).' correos).'
+                "Se creó la solicitud #{$approvalRequest->id} (".count($emails).' correo(s)). Al completarse las aprobaciones, el último autorizador activará el cupón y las asignaciones.'
             );
+        }
+
+        if ($needsDeferredParentActivation
+            && $isSuperadmin
+            && $settings->superadmin_bypass_approvals) {
+            $this->activateMasterCouponAsApprover($parent, (int) $request->user()->id);
+            $parent = $parent->fresh();
         }
 
         $ok = 0;

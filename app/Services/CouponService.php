@@ -8,6 +8,7 @@ use App\Mail\CouponAssignedMail;
 use App\Models\CouponApprovalRequest;
 use App\Models\CouponApprovalRequestAuthorizer;
 use App\Models\CouponAuditLog;
+use App\Models\CouponAmountApprovalRule;
 use App\Models\CouponBeneficiaryApprovalRule;
 use App\Models\Coupon;
 use App\Models\CouponAdminSettings;
@@ -19,9 +20,13 @@ use Illuminate\Support\Facades\Mail;
 
 class CouponService
 {
+    private NotificationService $notificationService;
+
     public function __construct(
-        private NotificationService $notificationService
-    ) {}
+        NotificationService $notificationService
+    ) {
+        $this->notificationService = $notificationService;
+    }
 
     public function getUserBalance(int $userId): int
     {
@@ -58,11 +63,22 @@ class CouponService
         $settings = CouponAdminSettings::singleton();
 
         $approvalsByAmount = 0;
-        if (
+        $amountRule = CouponAmountApprovalRule::query()
+            ->where('min_amount_cents', '<=', $amountCents)
+            ->where(function ($q) use ($amountCents) {
+                $q->whereNull('max_amount_cents')
+                    ->orWhere('max_amount_cents', '>=', $amountCents);
+            })
+            ->orderByDesc('required_approvals')
+            ->first();
+        if ($amountRule) {
+            $approvalsByAmount = (int) $amountRule->required_approvals;
+        } elseif (
             $settings->amount_threshold_cents !== null &&
             $settings->required_approvals_by_amount > 0 &&
             $amountCents >= $settings->amount_threshold_cents
         ) {
+            // Compatibilidad: umbral único legado.
             $approvalsByAmount = (int) $settings->required_approvals_by_amount;
         }
 
