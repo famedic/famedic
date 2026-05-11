@@ -2,10 +2,14 @@
 
 use App\Http\Controllers\Admin\AdministratorController;
 use App\Http\Controllers\Admin\CouponController;
+use App\Http\Controllers\Admin\CartController;
+use App\Http\Controllers\Admin\ConfigMonitorController;
+use App\Http\Controllers\Admin\ConfigMonitorMetadataController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DocumentationController;
 use App\Http\Controllers\Admin\EfevooTokenController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentController;
+use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
 use App\Http\Controllers\Admin\LaboratoryNotificationController;
 use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseController;
@@ -53,9 +57,13 @@ Route::prefix('admin')->middleware([
         Route::resource('customers', CustomerController::class)->only(['index', 'show', 'destroy']);
         Route::post('customers/export', ExportCustomersController::class)->name('customers.export');
         Route::resource('users', UserController::class)->only(['index', 'show']);
+        Route::resource('carts', CartController::class)->only(['index', 'show']);
         Route::resource('roles', RoleController::class)->except('show');
         Route::resource('laboratory-tests', LaboratoryTestController::class)->except(['destroy']);
         Route::post('laboratory-tests/export', ExportLaboratoryTestsController::class)->name('laboratory-tests.export');
+        Route::get('laboratory-appointments/metrics', LaboratoryAppointmentMetricsController::class)->name('laboratory-appointments.metrics');
+        Route::post('laboratory-appointments/{laboratory_appointment}/interactions', [LaboratoryAppointmentController::class, 'storeInteraction'])
+            ->name('laboratory-appointments.interactions.store');
         Route::resource('laboratory-appointments', LaboratoryAppointmentController::class)->except(['create', 'store', 'edit']);
         Route::resource('laboratory-vendor-payments', LaboratoryVendorPaymentsController::class)->parameters([
             'laboratory-vendor-payments' => 'vendor_payment',
@@ -69,6 +77,10 @@ Route::prefix('admin')->middleware([
             'destroy' => 'laboratory-purchases.vendor-payments.destroy',
         ]);
         Route::resource('laboratory-purchases', LaboratoryPurchaseController::class)->only(['index', 'show', 'destroy']);
+        Route::post(
+            'laboratory-purchases/{laboratory_purchase}/resend-confirmation-email',
+            [LaboratoryPurchaseController::class, 'resendConfirmationEmail']
+        )->name('laboratory-purchases.resend-confirmation-email');
         Route::post('laboratory-purchases/{laboratory_purchase}/invoice', InvoiceController::class)->name('laboratory-purchases.invoice');
         Route::post('laboratory-purchases/{laboratory_purchase}/results', ResultsController::class)->name('laboratory-purchases.results');
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request', LaboratoryDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.store');
@@ -150,11 +162,24 @@ Route::prefix('admin')->middleware([
         Route::post('coupons/{coupon}/resend-authorization', [CouponController::class, 'resendAuthorization'])->name('coupons.resend-authorization');
         Route::delete('coupons/{coupon}/assignments/{couponUser}', [CouponController::class, 'destroyAssignment'])->name('coupons.assignments.destroy');
         Route::resource('coupons', CouponController::class);
+        // Monitor de configuración (solo lectura; metadatos en BD)
+        Route::get('config-monitor', [ConfigMonitorController::class, 'index'])->name('config-monitor.index');
+        Route::post('config-monitor/refresh', [ConfigMonitorController::class, 'refresh'])->name('config-monitor.refresh');
+        Route::prefix('config-monitor/metadata')->name('config-monitor.metadata.')->group(function () {
+            Route::get('/', [ConfigMonitorMetadataController::class, 'index'])->name('index');
+            Route::post('/groups', [ConfigMonitorMetadataController::class, 'storeGroup'])->name('groups.store');
+            Route::patch('/groups/{group}', [ConfigMonitorMetadataController::class, 'updateGroup'])->name('groups.update');
+            Route::delete('/groups/{group}', [ConfigMonitorMetadataController::class, 'destroyGroup'])->name('groups.destroy');
+            Route::post('/settings', [ConfigMonitorMetadataController::class, 'storeSetting'])->name('settings.store');
+            Route::patch('/settings/{setting}', [ConfigMonitorMetadataController::class, 'updateSetting'])->name('settings.update');
+            Route::delete('/settings/{setting}', [ConfigMonitorMetadataController::class, 'destroySetting'])->name('settings.destroy');
+        });
 
         Route::middleware('super.admin')->group(function () {
             Route::get('murguia-monitor', [MurguiaMonitorController::class, 'index'])->name('murguia-monitor.index');
             Route::get('murguia-monitor/{customer}', [MurguiaMonitorController::class, 'show'])->name('murguia-monitor.show');
             Route::post('murguia-monitor/{customer}/check-status', [MurguiaMonitorController::class, 'checkStatus'])->name('murguia-monitor.check-status');
+            Route::post('murguia-monitor/check-status-by-credit', [MurguiaMonitorController::class, 'checkStatusByCredit'])->name('murguia-monitor.check-status-by-credit');
             Route::post('murguia/activate/{customer}', [MurguiaMonitorController::class, 'activateCustomer'])->name('murguia.activate');
             Route::post('murguia/deactivate/{customer}', [MurguiaMonitorController::class, 'deactivateCustomer'])->name('murguia.deactivate');
             Route::get('murguia/upload', [MurguiaMonitorController::class, 'uploadPage'])->name('murguia.upload');

@@ -67,6 +67,11 @@ class EnsureUserHasAdminAccount
                             'current' => Route::currentRouteName() === 'admin.laboratory-appointments.index' ||
                                 Route::currentRouteName() === 'admin.laboratory-appointments.show',
                         ] : null,
+                        $request->user()->administrator->laboratoryConcierge ? [
+                            'label' => 'Métricas de citas',
+                            'url' => route('admin.laboratory-appointments.metrics'),
+                            'current' => Route::currentRouteName() === 'admin.laboratory-appointments.metrics',
+                        ] : null,
                         $request->user()->administrator->hasPermissionTo('laboratory-purchases.manage.vendor-payments') ? [
                             'label' => 'Pagos a GDA',
                             'url' => route('admin.laboratory-purchases.vendor-payments.index'),
@@ -159,6 +164,12 @@ class EnsureUserHasAdminAccount
                             'current' => Route::currentRouteName() === 'admin.users.index'
                                 || Route::currentRouteName() === 'admin.users.show',
                         ] : null,
+                        $request->user()->administrator->hasPermissionTo('view carts') ? [
+                            'label' => 'Carritos',
+                            'url' => route('admin.carts.index'),
+                            'current' => Route::currentRouteName() === 'admin.carts.index'
+                                || Route::currentRouteName() === 'admin.carts.show',
+                        ] : null,
                         $request->user()->administrator->hasPermissionTo('efevoo-tokens.manage') ? [
                             'label' => 'Tokens Efevoo',
                             'url' => route('admin.efevoo-tokens.index'),
@@ -182,6 +193,11 @@ class EnsureUserHasAdminAccount
                             'url' => route('admin.laboratory-notifications-monitor.index'),
                             'current' => Route::currentRouteName() === 'admin.laboratory-notifications-monitor.index'
                                 || Route::currentRouteName() === 'admin.laboratory-notifications-monitor.show',
+                        ] : null,
+                        $request->user()->administrator->hasPermissionTo('view_config_monitor') ? [
+                            'label' => 'Config Monitor',
+                            'url' => route('admin.config-monitor.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.config-monitor'),
                         ] : null,
                         $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
                             'label' => 'Murguía — asegurados',

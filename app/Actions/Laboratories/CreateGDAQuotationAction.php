@@ -32,10 +32,15 @@ class CreateGDAQuotationAction
             'environment' => app()->environment()
         ]);
 
-        if (app()->environment('local')) {
-            Log::warning('CreateGDAQuotationAction: Ejecutando en entorno local, retornando ID simulado', [
-                'generated_id' => uniqid()
+        $nonProductionEnvs = ['local', 'staging', 'testing'];
+        $currentEnv = strtolower((string) config('app.env'));
+        if (in_array($currentEnv, $nonProductionEnvs, true)) {
+            Log::warning('CreateGDAQuotationAction: Entorno no productivo, retornando ID simulado', [
+                'app_env' => config('app.env'),
+                'normalized_env' => $currentEnv,
+                'generated_id' => uniqid(),
             ]);
+
             return ['id' => uniqid()];
         }
 
@@ -83,7 +88,7 @@ class CreateGDAQuotationAction
         if (isset($logPayload['header']['token'])) {
             $logPayload['header']['token'] = '***OCULTO***';
         }
-        Log::info('CreateGDAQuotationAction: Payload enviado a API', $logPayload);
+        //Log::info('CreateGDAQuotationAction: Payload enviado a API', $logPayload);
 
         try {
             Log::info('CreateGDAQuotationAction: Enviando petición a API GDA');
@@ -129,10 +134,10 @@ class CreateGDAQuotationAction
 
     private function buildCoding(array $laboratoryTestsDetail)
     {
-        Log::info('CreateGDAQuotationAction: Construyendo coding', [
+        /*Log::info('CreateGDAQuotationAction: Construyendo coding', [
             'items_count' => count($laboratoryTestsDetail)
         ]);
-
+        */
         $coding = [];
 
         foreach ($laboratoryTestsDetail as $item) {

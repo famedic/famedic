@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str; 
 
 class TaxProfile extends Model
 {
@@ -59,21 +58,35 @@ class TaxProfile extends Model
     protected function formattedTaxRegime(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->tax_regime . ' - ' . config('taxregimes.regimes.' . $this->tax_regime)['name']
+            get: function () {
+                if (! $this->tax_regime) {
+                    return '—';
+                }
+                $label = config('taxregimes.regimes.'.$this->tax_regime)['name'] ?? '';
+
+                return $label ? $this->tax_regime.' - '.$label : (string) $this->tax_regime;
+            }
         );
     }
 
     protected function formattedCfdiUse(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->cfdi_use . ' - ' . config('taxregimes.uses.' . $this->cfdi_use)
+            get: function () {
+                if (! $this->cfdi_use) {
+                    return '—';
+                }
+                $label = config('taxregimes.uses.'.$this->cfdi_use);
+
+                return $label ? $this->cfdi_use.' - '.$label : (string) $this->cfdi_use;
+            }
         );
     }
 
     // Método para obtener el tipo de persona formateado
     public function getTipoPersonaFormattedAttribute()
     {
-        return match($this->tipo_persona) {
+        return match ($this->tipo_persona) {
             'fisica' => 'Persona Física',
             'moral' => 'Persona Moral',
             default => 'Desconocido',
@@ -89,7 +102,7 @@ class TaxProfile extends Model
     // Método para obtener la ruta del certificado
     public function getCertificateUrlAttribute()
     {
-        if (!$this->fiscal_certificate) {
+        if (! $this->fiscal_certificate) {
             return null;
         }
 

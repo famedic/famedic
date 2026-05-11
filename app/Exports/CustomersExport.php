@@ -5,6 +5,7 @@ namespace App\Exports;
 use App\Models\Customer;
 use App\Models\FamilyAccount;
 use App\Models\OdessaAfiliateAccount;
+use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
@@ -25,10 +26,24 @@ class CustomersExport implements FromQuery, ShouldAutoSize, WithChunkReading, Wi
 
     public function query()
     {
-        return Customer::with([
-            'user',
-            'customerable',
-        ])
+        return Customer::query()
+            ->select('customers.*')
+            ->with([
+                'user',
+                'customerable',
+            ])
+            ->selectSub(function ($query) {
+                $query->from('laboratory_purchases')
+                    ->whereColumn('laboratory_purchases.customer_id', 'customers.id')
+                    ->whereNull('laboratory_purchases.deleted_at')
+                    ->selectRaw('MIN(laboratory_purchases.created_at)');
+            }, 'first_laboratory_purchase_at')
+            ->selectSub(function ($query) {
+                $query->from('online_pharmacy_purchases')
+                    ->whereColumn('online_pharmacy_purchases.customer_id', 'customers.id')
+                    ->whereNull('online_pharmacy_purchases.deleted_at')
+                    ->selectRaw('MIN(online_pharmacy_purchases.created_at)');
+            }, 'first_online_pharmacy_purchase_at')
             ->withCount(['laboratoryPurchases', 'onlinePharmacyPurchases'])
             ->withSum('laboratoryPurchases', 'total_cents')
             ->withSum('onlinePharmacyPurchases', 'total_cents')
@@ -60,6 +75,7 @@ class CustomersExport implements FromQuery, ShouldAutoSize, WithChunkReading, Wi
             'Compras de farmacia',
             'Acumulado compras de farmacia',
             'Fecha de creación',
+            'Fecha de primera compra',
             'Odessa ID',
             'Socio ID',
             'Empresa ID',
@@ -85,6 +101,9 @@ class CustomersExport implements FromQuery, ShouldAutoSize, WithChunkReading, Wi
             $customer->online_pharmacy_purchases_count,
             numberCents($customer->online_pharmacy_purchases_sum_total_cents),
             $customer->created_at ? Date::dateTimeToExcel(localizedDate($customer->created_at)) : null,
+            ($firstPurchase = $this->resolveFirstPurchaseAt($customer))
+                ? Date::dateTimeToExcel(localizedDate($firstPurchase))
+                : null,
             $customer->customerable_type === OdessaAfiliateAccount::class ? $customer->customerable?->odessa_identifier : null,
             $customer->customerable_type === OdessaAfiliateAccount::class ? $customer->customerable?->partner_identifier : null,
             $customer->customerable_type === OdessaAfiliateAccount::class ? $customer->customerable?->odessa_afiliated_company_id : null,
@@ -99,6 +118,26 @@ class CustomersExport implements FromQuery, ShouldAutoSize, WithChunkReading, Wi
             'M' => NumberFormat::FORMAT_CURRENCY_USD,
             'O' => NumberFormat::FORMAT_CURRENCY_USD,
             'P' => NumberFormat::FORMAT_DATE_XLSX15,
+            'Q' => NumberFormat::FORMAT_DATE_XLSX15,
         ];
+    }
+
+    private function resolveFirstPurchaseAt(Customer $customer): ?Carbon
+    {
+        $candidates = [];
+
+        if ($customer->first_laboratory_purchase_at) {
+            $candidates[] = Carbon::parse($customer->first_laboratory_purchase_at);
+        }
+
+        if ($customer->first_online_pharmacy_purchase_at) {
+            $candidates[] = Carbon::parse($customer->first_online_pharmacy_purchase_at);
+        }
+
+        if ($candidates === []) {
+            return null;
+        }
+
+        return collect($candidates)->sortBy(fn (Carbon $c) => $c->getTimestamp())->first();
     }
 }

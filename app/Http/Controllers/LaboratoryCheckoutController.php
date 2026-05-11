@@ -49,6 +49,8 @@ class LaboratoryCheckoutController extends Controller
             'balanceCouponsCents' => $balanceCents,
             'formattedBalanceCoupons' => $balanceCents > 0 ? formattedCentsPrice($balanceCents) : null,
             'availableBalanceCoupons' => $availableCoupons,
+            'hasPayPal' => (bool) config('services.paypal.client_id'),
+            'paypalClientId' => config('services.paypal.client_id'),
             'contacts' => $request->user()->customer->contacts,
             'genders' => Gender::casesWithLabels(),
             'addresses' => $request->user()->customer->addresses,

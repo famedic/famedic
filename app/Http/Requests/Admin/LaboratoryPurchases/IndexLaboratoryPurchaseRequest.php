@@ -22,7 +22,8 @@ class IndexLaboratoryPurchaseRequest extends FormRequest
             'invoice_requested' => ['nullable', 'string'],
             'invoice_uploaded' => ['nullable', 'string'],
             'results_uploaded' => ['nullable', 'string'],
-            'payment_method' => ['nullable', 'in:,odessa,stripe'],
+            'payment_method' => ['nullable', 'in:,odessa,stripe,efevoopay,paypal'],
+            'payment_status' => ['nullable', 'string', 'max:64'],
             'brand' => ['nullable', 'string'],
         ];
 

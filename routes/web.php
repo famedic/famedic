@@ -56,6 +56,12 @@ Route::get('/offline', function () {
     return 'offline';
 })->name('offline');
 
+if (app()->environment('local')) {
+    Route::get(
+        '/debug/laboratory-purchase-email/{laboratory_purchase}',
+        \App\Http\Controllers\Debug\LaboratoryPurchaseEmailPreviewController::class
+    )->name('debug.laboratory-purchase-email');
+}
 
 require __DIR__ . '/odessa.php';
 require __DIR__ . '/admin.php';

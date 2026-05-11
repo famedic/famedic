@@ -1,0 +1,92 @@
+# Famedic — Laravel 11 + Inertia/React + Vite
+#
+# Uso rápido:
+#   1. Copia .env.example a .env y ajusta (ver bloque "Variables" abajo).
+#   2. docker compose build
+#   3. docker compose up -d
+#   4. docker compose exec app php artisan key:generate
+#   5. docker compose exec app php artisan migrate
+#
+# URLs:
+#   - Aplicación: http://localhost:8080
+#   - Vite (HMR): http://localhost:5173
+#
+# MySQL arranca con el stack. En .env usa DB_HOST=mysql (desde el contenedor app).
+# Desde MySQL Workbench en tu PC: Host 127.0.0.1, Puerto 3306 (o MYSQL_PORT).
+# SQLite: comenta el servicio mysql y pon DB_CONNECTION=sqlite si no quieres MySQL.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/var/www/html
+    networks:
+      - famedic
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      APP_ENV: "${APP_ENV:-local}"
+      APP_DEBUG: "${APP_DEBUG:-true}"
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 180s
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - .:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - famedic
+    depends_on:
+      app:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      # Variables solo para el contenedor MySQL (no usar DB_USERNAME=root aquí).
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-famedic}"
+      MYSQL_USER: "${MYSQL_USER:-famedic}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-famedic}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - famedic
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  node:
+    image: node:20-bookworm
+    working_dir: /var/www/html
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
+    volumes:
+      - .:/var/www/html
+    ports:
+      - "${VITE_PORT:-5173}:5173"
+    networks:
+      - famedic
+    tty: true
+    stdin_open: true
+
+volumes:
+  mysql_data:
+
+networks:
+  famedic:
+    driver: bridge

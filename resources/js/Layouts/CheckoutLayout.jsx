@@ -38,6 +38,8 @@ export default function CheckoutLayout({
   submit,
   showBranchPayment = false,
   data = {},
+  /** Si se pasa, sustituye el botón "Pagar ahora" (p. ej. PayPal). */
+  alternateOnlinePayment = null,
 }) {
   const [isOnlineProcessing, setIsOnlineProcessing] = useState(false);
   const [isBranchProcessing, setIsBranchProcessing] = useState(false);
@@ -86,6 +88,15 @@ export default function CheckoutLayout({
           {children}          
           
           {/* PAGO ONLINE */}
+          {alternateOnlinePayment ? (
+            <div
+              className={clsx(
+                (onlineDisabled || isOnlineProcessing || paymentProcessing) && "opacity-50 pointer-events-none"
+              )}
+            >
+              {alternateOnlinePayment}
+            </div>
+          ) : (
           <Button
             disabled={onlineDisabled || isOnlineProcessing || paymentProcessing}
             type="submit"
@@ -99,6 +110,7 @@ export default function CheckoutLayout({
             {paymentButtonText}
             {(isOnlineProcessing || paymentProcessing) && <ArrowPathIcon className="animate-spin ml-2 w-5 h-5" />}
           </Button>
+          )}
           
           {showBranchPayment && !data?.payment_method && (
             <Text className="mt-2 text-sm text-zinc-600 dark:text-slate-400 text-center">

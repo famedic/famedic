@@ -14,6 +14,7 @@ import {
 	TableRow,
 } from "@/Components/Catalyst/table";
 import PaginatedTable from "@/Components/Admin/PaginatedTable";
+import Modal from "@/Components/Catalyst/modal";
 
 const accountLabel = {
 	odessa: "Odessa",
@@ -47,6 +48,11 @@ export default function MurguiaMonitor({
 
 	const [confirmState, setConfirmState] = useState(null);
 	const [rowBusy, setRowBusy] = useState(null);
+	const [creditModalOpen, setCreditModalOpen] = useState(false);
+	const [creditNumber, setCreditNumber] = useState("");
+	const [creditResult, setCreditResult] = useState(null);
+	const [creditError, setCreditError] = useState("");
+	const [creditBusy, setCreditBusy] = useState(false);
 
 	const showUpdate = useMemo(
 		() =>
@@ -93,6 +99,51 @@ export default function MurguiaMonitor({
 		});
 	};
 
+	const openCreditModal = () => {
+		setCreditModalOpen(true);
+		setCreditError("");
+		setCreditResult(null);
+	};
+
+	const closeCreditModal = () => {
+		if (creditBusy) return;
+		setCreditModalOpen(false);
+	};
+
+	const checkByCreditNumber = async () => {
+		if (creditBusy) return;
+
+		const noCredito = creditNumber.trim();
+		if (!noCredito) {
+			setCreditError("Captura un número de crédito para consultar.");
+			return;
+		}
+
+		setCreditBusy(true);
+		setCreditError("");
+		setCreditResult(null);
+
+		try {
+			const response = await axios.post(
+				route("admin.murguia-monitor.check-status-by-credit"),
+				{ no_credito: noCredito },
+			);
+			setCreditResult(response.data);
+		} catch (error) {
+			const apiData = error?.response?.data || null;
+			const message =
+				apiData?.message ||
+				apiData?.error ||
+				"No fue posible consultar Murguía. Revisa la conexión e intenta de nuevo.";
+			setCreditError(message);
+			if (apiData) {
+				setCreditResult(apiData);
+			}
+		} finally {
+			setCreditBusy(false);
+		}
+	};
+
 	return (
 		<AdminLayout title="Murguía — asegurados">
 			<div className="space-y-6 text-zinc-900 dark:text-zinc-100">
@@ -122,6 +173,9 @@ export default function MurguiaMonitor({
 				<div className="flex flex-wrap items-center justify-between gap-4">
 					<Heading>Monitor de asegurados (Murguía)</Heading>
 					<div className="flex flex-wrap gap-2">
+						<Button outline onClick={openCreditModal}>
+							Consultar por no. crédito
+						</Button>
 						<Button href={route("admin.murguia.upload")} outline>
 							Carga Excel
 						</Button>
@@ -376,6 +430,60 @@ export default function MurguiaMonitor({
 						</div>
 					</div>
 				)}
+
+				<Modal open={creditModalOpen} onClose={closeCreditModal} size="2xl">
+					<div className="space-y-4">
+						<Heading level={3} className="text-lg text-famedic-darker">
+							Consulta directa en Murguía
+						</Heading>
+						<Text className="text-sm text-zinc-600">
+							Escribe el número de crédito (asegurado) para consultar el estatus en Murguía.
+						</Text>
+
+						<div>
+							<Text className="mb-1 text-xs text-zinc-500">Número de crédito</Text>
+							<input
+								type="text"
+								value={creditNumber}
+								onChange={(e) => setCreditNumber(e.target.value)}
+								placeholder="Ej. 123456789"
+								className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+							/>
+						</div>
+
+						{creditError && (
+							<div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+								{creditError}
+							</div>
+						)}
+
+						{creditResult && (
+							<div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm">
+								<p className="font-medium text-blue-900">
+									Respuesta Murguía — HTTP {creditResult.http ?? "—"}
+								</p>
+								{creditResult.matched_customer && (
+									<p className="text-blue-800">
+										Cliente local: {creditResult.matched_customer.name || "—"} (
+										{creditResult.matched_customer.email || "sin email"})
+									</p>
+								)}
+								<pre className="max-h-64 overflow-auto rounded bg-white/90 p-2 text-xs text-zinc-800">
+									{JSON.stringify(creditResult.body ?? creditResult, null, 2)}
+								</pre>
+							</div>
+						)}
+
+						<div className="flex justify-end gap-2">
+							<Button outline onClick={closeCreditModal} disabled={creditBusy}>
+								Cerrar
+							</Button>
+							<Button onClick={checkByCreditNumber} disabled={creditBusy}>
+								{creditBusy ? "Consultando..." : "Consultar"}
+							</Button>
+						</div>
+					</div>
+				</Modal>
 
 				<Text className="text-sm text-zinc-600 dark:text-zinc-400">
 					Activar / Desactivar se ejecutan al momento en el servidor. La carga masiva por Excel sigue

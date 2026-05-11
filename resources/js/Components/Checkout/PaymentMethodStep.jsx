@@ -16,6 +16,7 @@ export default function PaymentMethodStep({
     description = "Selecciona el método de pago que deseas utilizar para tu pedido.",
     paymentMethods,
     hasOdessaPay,
+    hasPayPal = false,
     addCardReturnUrl,
     forceMobile = false,
     ...props
@@ -23,14 +24,16 @@ export default function PaymentMethodStep({
     const selectedPaymentMethod = useMemo(() => {
         if (data.payment_method === "coupon_balance") {
             return "coupon_balance";
+        if (data.payment_method === "paypal") {
+            return "paypal";
         }
         if (data.payment_method === "odessa") {
             return "odessa";
         }
-        
+
         // Asegurar que data.payment_method sea string para comparar
         const paymentMethodId = String(data.payment_method);
-        
+
         return paymentMethods.find(
             (paymentMethod) => String(paymentMethod.id) === paymentMethodId
         );
@@ -55,6 +58,11 @@ export default function PaymentMethodStep({
                         <Text className="text-sm text-gray-600 dark:text-gray-400">
                             El total se cubre con tu saldo disponible.
                         </Text>
+                    </div>
+                ) : selectedPaymentMethod === "paypal" ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Text className="font-medium">PayPal</Text>
+                        <Badge color="blue">Checkout</Badge>
                     </div>
                 ) : selectedPaymentMethod === "odessa" ? (
                     <div>
@@ -117,6 +125,7 @@ export default function PaymentMethodStep({
                     setData={setData}
                     paymentMethods={paymentMethods}
                     hasOdessaPay={hasOdessaPay}
+                    hasPayPal={hasPayPal}
                     clearErrors={clearErrors}
                 />
             }
@@ -130,6 +139,7 @@ function PaymentMethodSelection({
     addCardReturnUrl,
     paymentMethods,
     hasOdessaPay,
+    hasPayPal = false,
     clearErrors,
     forceMobile = false,
 }) {
@@ -141,7 +151,7 @@ function PaymentMethodSelection({
             type: typeof paymentMethod.id,
             will_be_set_as: String(paymentMethod.id),
         });
-        
+
         // Siempre guardar como string
         setData("payment_method", String(paymentMethod.id));
         clearErrors("payment_method");
@@ -158,6 +168,25 @@ function PaymentMethodSelection({
         <ul
             className={`mt-3 grid gap-4 ${!forceMobile ? "sm:grid-cols-2" : ""}`}
         >
+            {hasPayPal && (
+                <CheckoutSelectionCard
+                    onClick={() => selectPaymentMethod({ id: "paypal" })}
+                    className="min-h-[11rem]"
+                >
+                    <div className="flex h-full flex-col justify-between">
+                        <div className="flex justify-between items-center">
+                            <Text className="font-medium">PayPal</Text>
+                            <Badge color="blue">PayPal</Badge>
+                        </div>
+                        <div className="mt-4">
+                            <Text className="text-sm text-gray-600 dark:text-gray-400">
+                                Paga con tu cuenta PayPal de forma segura
+                            </Text>
+                        </div>
+                    </div>
+                </CheckoutSelectionCard>
+            )}
+
             {hasOdessaPay && (
                 <CheckoutSelectionCard
                     onClick={() => selectPaymentMethod({ id: "odessa" })}
@@ -183,10 +212,10 @@ function PaymentMethodSelection({
                     </div>
                 </CheckoutSelectionCard>
             )}
-            
+
             {paymentMethods.map((paymentMethod) => {
                 const isSandbox = paymentMethod.metadata?.environment === 'sandbox';
-                
+
                 return (
                     <CheckoutSelectionCard
                         onClick={() => selectPaymentMethod(paymentMethod)}
@@ -196,7 +225,7 @@ function PaymentMethodSelection({
                         <div className="flex h-full flex-col justify-between">
                             <div className="flex justify-between items-start">
                                 <div className="flex items-center gap-2">
-                                    <CreditCardBrand 
+                                    <CreditCardBrand
                                         brand={paymentMethod.card?.brand}
                                         className="size-7"
                                     />
@@ -232,7 +261,7 @@ function PaymentMethodSelection({
                     </CheckoutSelectionCard>
                 );
             })}
-            
+
             <CheckoutSelectionCard
                 href={addCardUrl}
                 heading="Nueva tarjeta"
@@ -246,7 +275,7 @@ function PaymentMethodSelection({
                     </Text>
                     <Text className="text-xs text-gray-600 dark:text-gray-400">
                         Tu información está protegida con cifrado de seguridad
-                    </Text>                    
+                    </Text>
                 </div>
             </CheckoutSelectionCard>
         </ul>

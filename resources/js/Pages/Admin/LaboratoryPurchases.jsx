@@ -59,6 +59,7 @@ export default function LaboratoryPurchases({
 		results_uploaded: filters.results_uploaded || "",
 		invoice_uploaded: filters.invoice_uploaded || "",
 		payment_method: filters.payment_method || "",
+		payment_status: filters.payment_status || "",
 		brand: filters.brand || "",
 		dev_assistance: filters.dev_assistance || "",
 	});
@@ -88,6 +89,7 @@ export default function LaboratoryPurchases({
 			(data.invoice_uploaded || "") !==
 			(filters.invoice_uploaded || "") ||
 			(data.payment_method || "") !== (filters.payment_method || "") ||
+			(data.payment_status || "") !== (filters.payment_status || "") ||
 			(data.brand || "") !== (filters.brand || "") ||
 			(data.dev_assistance || "") !== (filters.dev_assistance || ""),
 		[data, filters],
@@ -195,6 +197,18 @@ export default function LaboratoryPurchases({
 		} else if (filters.payment_method === "efevoopay") {
 			badges.push(
 				<EfevooPayBadge>Efevoo Pay</EfevooPayBadge>
+			);
+		} else if (filters.payment_method === "paypal") {
+			badges.push(
+				<Badge color="blue">PayPal</Badge>
+			);
+		}
+
+		if (filters.payment_status) {
+			badges.push(
+				<Badge color="zinc">
+					estado pago: {filters.payment_status}
+				</Badge>,
 			);
 		}
 
@@ -411,6 +425,35 @@ function Filters({ data, setData, errors, brands }) {
 				<ListboxOption value="efevoopay" className="group">
 					<EfevooPayLogo className="size-4" />
 					<ListboxLabel>Efevoo Pay</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="paypal" className="group">
+					<ListboxLabel>PayPal</ListboxLabel>
+				</ListboxOption>
+			</ListboxFilter>
+			<ListboxFilter
+				label="Estado de pago"
+				value={data.payment_status}
+				onChange={(value) => setData("payment_status", value)}
+			>
+				<ListboxOption value="" className="group">
+					<ArchiveBoxIcon />
+					<ListboxLabel>Todos</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="pending" className="group">
+					<ClockIcon />
+					<ListboxLabel>Pendiente</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="captured" className="group">
+					<CheckCircleIcon />
+					<ListboxLabel>Capturado</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="failed" className="group">
+					<XCircleIcon />
+					<ListboxLabel>Fallido</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="refunded" className="group">
+					<XCircleIcon />
+					<ListboxLabel>Reembolsado</ListboxLabel>
 				</ListboxOption>
 			</ListboxFilter>
 			<ListboxFilter

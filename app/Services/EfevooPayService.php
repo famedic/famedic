@@ -627,7 +627,7 @@ class EfevooPayService
 
     public function searchTransactions(array $filters = []): array
     {
-        Log::info('[Efevoo] searchTransactions');
+        Log::info('[Efevoo] searchTransactions', ['filters' => $filters]);
 
         $tokenResult = $this->getClientToken('search');
 
@@ -635,8 +635,38 @@ class EfevooPayService
             return $tokenResult;
         }
 
+        $payload = ['token' => $tokenResult['token']];
+
+        if (!empty($filters['transaction_id'])) {
+            $payload['id'] = (int) $filters['transaction_id'];
+        }
+
+        if (!empty($filters['start_date'])) {
+            $payload['range1'] = $filters['start_date'];
+        }
+
+        if (!empty($filters['end_date'])) {
+            $payload['range2'] = $filters['end_date'];
+        }
+
+        $primaryResult = $this->request([
+            'payload' => $payload,
+            'method' => 'getTransactions',
+        ], logRawBody: false);
+
+        $primaryCode = data_get($primaryResult, 'data.codigo');
+
+        if ($primaryResult['success'] && (string) $primaryCode !== '102') {
+            return $primaryResult;
+        }
+
+        Log::warning('[Efevoo] getTransactions fallback to getTranSearch', [
+            'primary_code' => $primaryCode,
+            'primary_status' => $primaryResult['status'] ?? null,
+        ]);
+
         return $this->request([
-            'payload' => ['token' => $tokenResult['token']] + $filters,
+            'payload' => $payload,
             'method' => 'getTranSearch',
         ], logRawBody: false);
     }

@@ -10,6 +10,7 @@ use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
 class LaboratoryPurchaseItemsSheet implements FromQuery, ShouldAutoSize, WithColumnFormatting, WithHeadings, WithMapping, WithTitle
@@ -44,17 +45,25 @@ class LaboratoryPurchaseItemsSheet implements FromQuery, ShouldAutoSize, WithCol
             'Nombre del estudio',
             'Precio',
             'Indicaciones',
+            'Estado del pedido',
+            'Fecha de cancelación del pedido',
         ];
     }
 
     public function map($item): array
     {
+        $purchase = $item->laboratoryPurchase;
+
         return [
-            $item->laboratoryPurchase->gda_order_id,
+            $purchase->gda_order_id,
             $item->gda_id,
             $item->name,
             numberCents($item->price_cents),
             $item->indications,
+            $purchase->trashed() ? 'Cancelada' : 'Activa',
+            $purchase->deleted_at
+                ? Date::dateTimeToExcel(localizedDate($purchase->deleted_at))
+                : null,
         ];
     }
 
@@ -67,6 +76,7 @@ class LaboratoryPurchaseItemsSheet implements FromQuery, ShouldAutoSize, WithCol
     {
         return [
             'D' => NumberFormat::FORMAT_CURRENCY_USD,
+            'G' => NumberFormat::FORMAT_DATE_XLSX15,
         ];
     }
 }

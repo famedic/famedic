@@ -1,9 +1,12 @@
 <?php
 // routes/webhooks.php
 
+use App\Http\Controllers\PayPalController;
 use App\Http\Controllers\WebHook\GDAController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
+
+Route::post('/paypal/webhook', [PayPalController::class, 'webhook'])->name('paypal.webhook');
 
 // ==================================================
 // RUTAS GDA - SOLO EN ESTE ARCHIVO

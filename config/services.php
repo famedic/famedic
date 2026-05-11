@@ -60,6 +60,14 @@ return [
         'secret' => env('STRIPE_SECRET')
     ],
 
+    'paypal' => [
+        // trim: espacios al copiar/pegar desde el panel de PayPal provocan invalid_client
+        'client_id' => trim((string) env('PAYPAL_CLIENT_ID', '')),
+        'secret' => trim((string) env('PAYPAL_SECRET', '')),
+        'mode' => strtolower(trim((string) env('PAYPAL_MODE', 'sandbox'))),
+        'webhook_id' => trim((string) env('PAYPAL_WEBHOOK_ID', '')),
+    ],
+
     'vitau' => [
         'url' => env('VITAU_URL'),
         'key' => env('VITAU_API_KEY'),

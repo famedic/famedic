@@ -8,6 +8,9 @@
 /vendor
 /database/test_db.sqlite
 .env
+# Claves SSH deben vivir en ~/.ssh del sistema, no en el repo.
+id_ed25519_famedic
+id_ed25519_famedic.pub
 .env.backup
 .env.production
 .phpactor.json

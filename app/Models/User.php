@@ -36,10 +36,10 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
         'full_phone',
         'formatted_birth_date',
         'formatted_gender',
-        'profile_is_complete',        
-        'pending_results_count',      
-        'unread_lab_notifications_count', 
-        'has_pending_lab_results',    
+        'profile_is_complete',
+        'pending_results_count',
+        'unread_lab_notifications_count',
+        'has_pending_lab_results',
     ];
 
     protected function casts(): array
@@ -82,6 +82,11 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
     public function inAppNotifications(): HasMany
     {
         return $this->hasMany(InAppNotification::class);
+    }
+
+    public function monitoringCarts(): HasMany
+    {
+        return $this->hasMany(Cart::class);
     }
 
     protected function profilePhotoUrl(): Attribute
@@ -281,12 +286,12 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
     {
         return StatesMexico::obtenerNombre($this->estado);
     }
-    
+
     public function scopePorEstado($query, $estado)
     {
         return $query->where('estado', $estado);
     }
-    
+
     public static function reglasEstado(): array
     {
         return [

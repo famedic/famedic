@@ -58,15 +58,16 @@ return [
         'payment-attempts' => [
             ['manage' => 'Monitorear intentos de pago'],
         ],
-        'coupons' => [
-            ['manage' => 'Gestionar créditos y asignaciones'],
-        ],
         'cupones' => [
+            ['manage' => 'Gestionar créditos y asignaciones'],
             ['view' => 'Ver cupones'],
             ['create' => 'Crear cupones'],
             ['edit' => 'Editar cupones'],
             ['delete' => 'Eliminar cupones'],
             ['config' => 'Configurar cupones'],
+        ],
+        'config_monitor' => [
+            ['manage_metadata' => 'Administrar metadatos del monitor de configuración'],
         ],
     ],
 
@@ -85,4 +86,11 @@ return [
     'storage_paths' => [
         'laboratory_purchase_pdfs' => env('LABORATORY_PURCHASE_PDFS_PATH', 'pdfs/laboratory-purchases'),
     ],
+
+    /**
+     * URL base (sin barra final) para imágenes públicas en correos, p. ej. /images/logo.png.
+     * Por defecto https://famedic.com.mx para que los logos carguen desde producción aunque el envío
+     * sea desde otro entorno. Sobrescribe con FAMEDIC_EMAIL_PUBLIC_URL si necesitas otro host.
+     */
+    'email_public_url' => rtrim((string) env('FAMEDIC_EMAIL_PUBLIC_URL', 'https://famedic.com.mx'), '/'),
 ];

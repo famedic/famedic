@@ -105,6 +105,9 @@ class RefundTransactionAction
                 case 'odessa':
                     return $this->refundOdessaTransactionNew($transaction, $customer);
 
+                case 'paypal':
+                    return $this->refundPayPalTransaction($transaction, $customer);
+
                 default:
                     Log::error('Gateway no soportado para reembolso', [
                         'transaction_id' => $transaction->id,
@@ -152,7 +155,7 @@ class RefundTransactionAction
         // Prioridad 2: Verificar campo gateway
         if ($transaction->gateway) {
             $gateway = strtolower($transaction->gateway);
-            if (in_array($gateway, ['efevoopay', 'stripe', 'odessa'])) {
+            if (in_array($gateway, ['efevoopay', 'stripe', 'odessa', 'paypal'])) {
                 return $gateway;
             }
         }
@@ -160,7 +163,7 @@ class RefundTransactionAction
         // Prioridad 3: Verificar campo payment_method
         if ($transaction->payment_method) {
             $method = strtolower($transaction->payment_method);
-            if (in_array($method, ['efevoopay', 'stripe', 'odessa'])) {
+            if (in_array($method, ['efevoopay', 'stripe', 'odessa', 'paypal'])) {
                 return $method;
             }
         }
@@ -277,6 +280,37 @@ class RefundTransactionAction
         }
     }
 
+    private function refundPayPalTransaction(Transaction $transaction, Customer $customer): bool
+    {
+        try {
+            $captureId = $transaction->gateway_transaction_id ?? $transaction->provider_transaction_id;
+            if (!$captureId) {
+                Log::error('PayPal refund: sin capture id', ['transaction_id' => $transaction->id]);
+
+                return false;
+            }
+
+            /** @var \App\Services\PayPalService $paypal */
+            $paypal = app(\App\Services\PayPalService::class);
+            $paypal->refund($captureId);
+
+            $transaction->update([
+                'refunded_at' => now(),
+                'gateway_status' => 'refunded',
+                'payment_status' => 'refunded',
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Error reembolso PayPal', [
+                'transaction_id' => $transaction->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
     /**
      * Reembolso para transacciones Odessa (nuevo método con Customer param)
      */
@@ -318,6 +352,13 @@ class RefundTransactionAction
                 $details = json_decode($details, true) ?? [];
             }
 
+            if (isset($details['customer_id'])) {
+                $customer = Customer::find($details['customer_id']);
+                if ($customer) {
+                    return $customer;
+                }
+            }
+
             if (isset($details['customer_info']['customer_id'])) {
                 $customer = Customer::find($details['customer_info']['customer_id']);
                 if ($customer) {
@@ -351,24 +392,20 @@ class RefundTransactionAction
                 }
             }
 
-            // Método 4: Buscar en laboratory_purchases relacionadas
-            if ($transaction->transactionable) {
-                // Obtener el modelo relacionado
-                $transactionable = $transaction->transactionable()->first();
+            // Método 4: buscar por las relaciones morph many reales.
+            $relatedPurchase = $transaction->laboratoryPurchases()->withTrashed()->with('customer')->first();
+            if ($relatedPurchase?->customer) {
+                return $relatedPurchase->customer;
+            }
 
-                if ($transactionable) {
-                    // Verificar el tipo de modelo y obtener el customer
-                    switch (get_class($transactionable)) {
-                        case \App\Models\LaboratoryPurchase::class:
-                            return $transactionable->customer;
+            $relatedPurchase = $transaction->onlinePharmacyPurchases()->withTrashed()->with('customer')->first();
+            if ($relatedPurchase?->customer) {
+                return $relatedPurchase->customer;
+            }
 
-                        case \App\Models\OnlinePharmacyPurchase::class:
-                            return $transactionable->customer;
-
-                        case \App\Models\MedicalAttentionSubscription::class:
-                            return $transactionable->customer;
-                    }
-                }
+            $relatedSubscription = $transaction->medicalAttentionSubscriptions()->withTrashed()->with('customer')->first();
+            if ($relatedSubscription?->customer) {
+                return $relatedSubscription->customer;
             }
 
             throw new \Exception("No se pudo encontrar el cliente para la transacción {$transaction->id}");
