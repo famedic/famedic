@@ -1,0 +1,23 @@
+parameters:
+    phpVersion: 80300
+    level: 9
+    paths:
+        - app
+        - routes
+        - config
+    excludePaths:
+        - tests
+        - vendor
+        - storage
+        - bootstrap/cache
+        - public
+    ignoreErrors:
+        - '#Nullsafe operator cannot#'
+        - '#Access to an undefined property#'
+        - '#Call to an undefined method#'
+    reportUnmatchedIgnoredErrors: false
+    treatPhpDocTypesAsCertain: false
+    checkMissingIterableValueType: false
+
+includes:
+    - phpstan-baseline.neon
