@@ -24,6 +24,7 @@ export default function PaymentMethodStep({
     const selectedPaymentMethod = useMemo(() => {
         if (data.payment_method === "coupon_balance") {
             return "coupon_balance";
+        }
         if (data.payment_method === "paypal") {
             return "paypal";
         }
