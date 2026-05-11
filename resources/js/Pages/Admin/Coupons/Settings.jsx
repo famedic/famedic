@@ -11,7 +11,7 @@ import { useForm } from "@inertiajs/react";
 import { AnimatePresence, motion } from "framer-motion";
 
 const TABS = [
-	{ id: "limits", label: "Límites de cupones" },
+	{ id: "limits", label: "Límites de créditos" },
 	{ id: "approval", label: "Reglas de aprobación" },
 	{ id: "authorizers", label: "Autorizadores" },
 ];
@@ -128,14 +128,16 @@ export default function CouponsSettings({
 				? "bg-famedic-lime/15 text-famedic-dark ring-1 ring-famedic-lime/60 dark:bg-famedic-lime/10 dark:text-famedic-lime dark:ring-famedic-lime/50"
 				: "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white",
 		].join(" ");
+	const highlightedCardClass =
+		"rounded-lg border border-famedic-dark/20 bg-famedic-dark/5 p-6 shadow-sm dark:border-famedic-lime/20 dark:bg-famedic-darker/40";
 
 	return (
 		<AdminLayout title="Reglas de cupones">
 			<div className="flex flex-wrap items-end justify-between gap-8">
 				<div>
-					<Heading>Reglas y seguridad - cupones saldo</Heading>
+					<Heading>Reglas y seguridad - créditos a favor</Heading>
 					<Text className="mt-2 max-w-2xl text-zinc-600 dark:text-zinc-400">
-						Configura límites, reglas de aprobación y autorización de cupones maestros.
+						Configura límites, reglas de aprobación y autorización de créditos a favor.
 						Los cambios pueden requerir validación según tu rol.
 					</Text>
 				</div>
@@ -194,192 +196,205 @@ export default function CouponsSettings({
 							>
 								{activeTab === "limits" && (
 									<>
-										<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-											Valores que limitan montos y volumen de asignaciones en el sistema.
-										</Text>
-										<Field>
-											<Label>Monto base por usuario (MXN)</Label>
-											<Input
-												type="number"
-												step="0.01"
-												min="0"
-												value={data.base_amount_mxn}
-												onChange={(e) =>
-													setData("base_amount_mxn", e.target.value)
-												}
-											/>
-											{errors.base_amount_mxn && (
-												<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-													{errors.base_amount_mxn}
-												</p>
-											)}
-										</Field>
-										<Field>
-											<Label>Monto máximo por cupón / asignación (MXN)</Label>
-											<Input
-												type="number"
-												step="0.01"
-												min="0"
-												placeholder="Sin límite"
-												value={data.max_assignment_amount_mxn}
-												onChange={(e) =>
-													setData(
-														"max_assignment_amount_mxn",
-														e.target.value,
-													)
-												}
-											/>
-											{errors.max_assignment_amount_mxn && (
-												<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-													{errors.max_assignment_amount_mxn}
-												</p>
-											)}
-										</Field>
-										<Field>
-											<Label>Máximo de asignaciones por día (total sistema)</Label>
-											<Input
-												type="number"
-												min="1"
-												placeholder="Sin límite"
-												value={data.max_assignments_per_day}
-												onChange={(e) =>
-													setData(
-														"max_assignments_per_day",
-														e.target.value,
-													)
-												}
-											/>
-											{errors.max_assignments_per_day && (
-												<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-													{errors.max_assignments_per_day}
-												</p>
-											)}
-										</Field>
+										<div className={highlightedCardClass}>
+											<Text className="text-sm text-zinc-700 dark:text-zinc-300">
+												Valores que limitan montos y volumen de asignaciones en el sistema.
+											</Text>
+										</div>
+										<div className={highlightedCardClass}>
+											<Field>
+												<Label>Monto base por usuario (MXN)</Label>
+												<Input
+													type="number"
+													step="0.01"
+													min="0"
+													value={data.base_amount_mxn}
+													onChange={(e) =>
+														setData("base_amount_mxn", e.target.value)
+													}
+												/>
+												{errors.base_amount_mxn && (
+													<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+														{errors.base_amount_mxn}
+													</p>
+												)}
+											</Field>
+											<Field>
+												<Label>Monto máximo por cupón / asignación (MXN)</Label>
+												<Input
+													type="number"
+													step="0.01"
+													min="0"
+													placeholder="Sin límite"
+													value={data.max_assignment_amount_mxn}
+													onChange={(e) =>
+														setData(
+															"max_assignment_amount_mxn",
+															e.target.value,
+														)
+													}
+												/>
+												{errors.max_assignment_amount_mxn && (
+													<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+														{errors.max_assignment_amount_mxn}
+													</p>
+												)}
+											</Field>
+											<Field>
+												<Label>Máximo de asignaciones por día (total sistema)</Label>
+												<Input
+													type="number"
+													min="1"
+													placeholder="Sin límite"
+													value={data.max_assignments_per_day}
+													onChange={(e) =>
+														setData(
+															"max_assignments_per_day",
+															e.target.value,
+														)
+													}
+												/>
+												{errors.max_assignments_per_day && (
+													<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+														{errors.max_assignments_per_day}
+													</p>
+												)}
+											</Field>
+										</div>
 									</>
 								)}
 
 								{activeTab === "approval" && (
 									<>
-										<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-											Aprobaciones adicionales según monto; el motor usa el máximo entre
-											estas reglas y las de beneficiarios (configuradas en backend si aplica).
-										</Text>
-										<Field>
-											<Label>Monto umbral (MXN)</Label>
-											<Input
-												type="number"
-												step="0.01"
-												min="0"
-												placeholder="Ej. 500"
-												value={data.amount_threshold_mxn}
-												onChange={(e) =>
-													setData("amount_threshold_mxn", e.target.value)
-												}
-											/>
-											{errors.amount_threshold_mxn && (
-												<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-													{errors.amount_threshold_mxn}
-												</p>
-											)}
-										</Field>
-										<Field>
-											<Label>Aprobaciones requeridas por monto</Label>
-											<Input
-												type="number"
-												min="0"
-												value={data.required_approvals_by_amount}
-												onChange={(e) =>
-													setData(
-														"required_approvals_by_amount",
-														e.target.value,
-													)
-												}
-											/>
-											{errors.required_approvals_by_amount && (
-												<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-													{errors.required_approvals_by_amount}
-												</p>
-											)}
-										</Field>
-										<Field>
-											<Label>
-												Umbral de campaña masiva (beneficiarios, opcional)
-											</Label>
-											<Input
-												type="number"
-												min="1"
-												placeholder="Sin umbral"
-												value={data.mass_campaign_threshold}
-												onChange={(e) =>
-													setData(
-														"mass_campaign_threshold",
-														e.target.value,
-													)
-												}
-											/>
-											{errors.mass_campaign_threshold && (
-												<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-													{errors.mass_campaign_threshold}
-												</p>
-											)}
-										</Field>
-										<CheckboxField>
-											<Checkbox
-												checked={data.superadmin_bypass_approvals}
-												onChange={(v) =>
-													setData("superadmin_bypass_approvals", v)
-												}
-											/>
-											<Label>Superadmin omite aprobaciones</Label>
-										</CheckboxField>
+										<div className={highlightedCardClass}>
+											<Text className="text-sm text-zinc-700 dark:text-zinc-300">
+												Aprobaciones adicionales según monto; el motor usa el máximo
+												entre estas reglas y las de beneficiarios (configuradas en backend
+												si aplica).
+											</Text>
+										</div>
+										<div className={highlightedCardClass}>
+											<Field>
+												<Label>Monto umbral (MXN)</Label>
+												<Input
+													type="number"
+													step="0.01"
+													min="0"
+													placeholder="Ej. 500"
+													value={data.amount_threshold_mxn}
+													onChange={(e) =>
+														setData("amount_threshold_mxn", e.target.value)
+													}
+												/>
+												{errors.amount_threshold_mxn && (
+													<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+														{errors.amount_threshold_mxn}
+													</p>
+												)}
+											</Field>
+											<Field>
+												<Label>Aprobaciones requeridas por monto</Label>
+												<Input
+													type="number"
+													min="0"
+													value={data.required_approvals_by_amount}
+													onChange={(e) =>
+														setData(
+															"required_approvals_by_amount",
+															e.target.value,
+														)
+													}
+												/>
+												{errors.required_approvals_by_amount && (
+													<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+														{errors.required_approvals_by_amount}
+													</p>
+												)}
+											</Field>
+											<Field>
+												<Label>
+													Umbral de campaña masiva (beneficiarios, opcional)
+												</Label>
+												<Input
+													type="number"
+													min="1"
+													placeholder="Sin umbral"
+													value={data.mass_campaign_threshold}
+													onChange={(e) =>
+														setData(
+															"mass_campaign_threshold",
+															e.target.value,
+														)
+													}
+												/>
+												{errors.mass_campaign_threshold && (
+													<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+														{errors.mass_campaign_threshold}
+													</p>
+												)}
+											</Field>
+											<CheckboxField>
+												<Checkbox
+													checked={data.superadmin_bypass_approvals}
+													onChange={(v) =>
+														setData("superadmin_bypass_approvals", v)
+													}
+												/>
+												<Label>Superadmin omite aprobaciones</Label>
+											</CheckboxField>
+										</div>
 									</>
 								)}
 
 								{activeTab === "authorizers" && (
 									<>
-										<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-											Quienes pueden aprobar cambios de configuración cuando no aplicas como
-											superadmin. Selecciona uno o más autorizadores.
-										</Text>
-										<div className="max-h-[min(22rem,50vh)] space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-											{authorizers.length === 0 ? (
-												<p className="text-sm text-zinc-500 dark:text-zinc-400">
-													No hay administradores con rol autorizador.
-												</p>
-											) : (
-												authorizers.map((authorizer) => {
-													const checked = data.authorizer_ids.includes(
-														authorizer.id,
-													);
-													return (
-														<CheckboxField key={authorizer.id}>
-															<Checkbox
-																checked={checked}
-																onChange={(v) => {
-																	if (v) {
-																		setData("authorizer_ids", [
-																			...data.authorizer_ids,
-																			authorizer.id,
-																		]);
-																	} else {
-																		setData(
-																			"authorizer_ids",
-																			data.authorizer_ids.filter(
-																				(id) =>
-																					id !== authorizer.id,
-																			),
-																		);
-																	}
-																}}
-															/>
-															<Label>
-																{authorizer.name} (
-																{authorizer.email || "sin correo"})
-															</Label>
-														</CheckboxField>
-													);
-												})
-											)}
+										<div className={highlightedCardClass}>
+											<Text className="text-sm text-zinc-700 dark:text-zinc-300">
+												Quienes pueden aprobar cambios de configuración cuando no aplicas
+												como superadmin. Selecciona uno o más autorizadores.
+											</Text>
+										</div>
+										<div className={highlightedCardClass}>
+											<div className="max-h-[min(22rem,50vh)] space-y-2 overflow-y-auto rounded-lg border border-famedic-dark/20 bg-white/60 p-3 dark:border-famedic-lime/20 dark:bg-famedic-darker/30">
+												{authorizers.length === 0 ? (
+													<p className="text-sm text-zinc-600 dark:text-zinc-300">
+														No hay administradores con rol autorizador.
+													</p>
+												) : (
+													authorizers.map((authorizer) => {
+														const checked = data.authorizer_ids.includes(
+															authorizer.id,
+														);
+														return (
+															<CheckboxField key={authorizer.id}>
+																<Checkbox
+																	checked={checked}
+																	onChange={(v) => {
+																		if (v) {
+																			setData("authorizer_ids", [
+																				...data.authorizer_ids,
+																				authorizer.id,
+																			]);
+																		} else {
+																			setData(
+																				"authorizer_ids",
+																				data.authorizer_ids.filter(
+																					(id) =>
+																						id !== authorizer.id,
+																				),
+																			);
+																		}
+																	}}
+																/>
+																<Label>
+																	{authorizer.name} (
+																	{authorizer.email || "sin correo"})
+																</Label>
+															</CheckboxField>
+														);
+													})
+												)}
+											</div>
 										</div>
 										{errors.authorizer_ids && (
 											<p className="text-sm text-red-600 dark:text-red-400">
@@ -408,7 +423,7 @@ export default function CouponsSettings({
 				</form>
 
 				<div className="space-y-6">
-					<div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+					<div className={highlightedCardClass}>
 						<div className="flex items-start justify-between gap-3">
 							<div>
 								<Subheading>Autorizadores</Subheading>

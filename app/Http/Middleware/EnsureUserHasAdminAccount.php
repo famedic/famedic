@@ -112,7 +112,7 @@ class EnsureUserHasAdminAccount
                         Route::currentRouteName() === 'admin.customers.show',
                 ]] : [],
                 ...$request->user()->administrator->hasPermissionTo('coupons.manage') ? [[
-                    'label' => 'Cupones saldo',
+                    'label' => 'Créditos a favor',
                     'icon' => 'BanknotesIcon',
                     'items' => [
                         [

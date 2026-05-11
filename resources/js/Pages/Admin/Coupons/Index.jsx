@@ -109,10 +109,10 @@ export default function CouponsIndex({
 	};
 
 	return (
-		<AdminLayout title="Cupones saldo">
+		<AdminLayout title="Créditos a favor">
 			<div className="space-y-8">
 			<div className="flex flex-wrap items-end justify-between gap-8">
-				<Heading>Cupones saldo</Heading>
+				<Heading>Créditos a favor</Heading>
 				<div className="flex flex-wrap items-center justify-end gap-2">
 					<Button href={route("admin.coupons.settings")} outline>
 						Reglas y seguridad

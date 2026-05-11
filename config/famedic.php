@@ -59,7 +59,7 @@ return [
             ['manage' => 'Monitorear intentos de pago'],
         ],
         'coupons' => [
-            ['manage' => 'Gestionar cupones saldo y asignaciones'],
+            ['manage' => 'Gestionar créditos y asignaciones'],
         ],
         'cupones' => [
             ['view' => 'Ver cupones'],
