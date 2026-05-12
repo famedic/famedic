@@ -5,11 +5,14 @@ namespace App\Actions\PayPal;
 use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\MissingLaboratoryAppointmentException;
+use App\Exceptions\PayPalPaymentException;
 use App\Exceptions\UnmatchingTotalPriceException;
 use App\Models\Address;
 use App\Models\Contact;
+use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\Transaction;
+use App\Services\CouponApplicationService;
 use App\Services\PayPalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -20,6 +23,7 @@ class CreatePayPalOrderAction
     public function __construct(
         private CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
         private PayPalService $payPalService,
+        private CouponApplicationService $couponApplicationService,
     ) {
     }
 
@@ -32,6 +36,7 @@ class CreatePayPalOrderAction
         ?Contact $contact,
         LaboratoryBrand|string $laboratoryBrand,
         int $totalCents,
+        ?int $couponId = null,
     ): array {
         if (!$laboratoryBrand instanceof LaboratoryBrand) {
             $laboratoryBrand = LaboratoryBrand::from($laboratoryBrand);
@@ -47,6 +52,21 @@ class CreatePayPalOrderAction
             throw new UnmatchingTotalPriceException();
         }
 
+        $discountCents = 0;
+        if ($couponId !== null) {
+            $this->couponApplicationService->validateApplication(
+                $customer->user,
+                $couponId,
+                $totalCents
+            );
+            $discountCents = (int) Coupon::query()->findOrFail($couponId)->remaining_cents;
+        }
+
+        $amountToChargeCents = $totalCents - $discountCents;
+        if ($amountToChargeCents <= 0) {
+            throw new PayPalPaymentException('El saldo a favor cubre el total; no se requiere PayPal.');
+        }
+
         $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand);
 
         if ($customer->getHasLaboratoryCartItemRequiringAppointment($laboratoryBrand)) {
@@ -55,7 +75,7 @@ class CreatePayPalOrderAction
             }
         }
 
-        $amount = round($totalCents / 100, 2);
+        $amount = round($amountToChargeCents / 100, 2);
 
         return DB::transaction(function () use (
             $customer,
@@ -64,12 +84,15 @@ class CreatePayPalOrderAction
             $laboratoryBrand,
             $laboratoryAppointment,
             $totalCents,
+            $couponId,
+            $discountCents,
+            $amountToChargeCents,
             $amount,
         ) {
             $tempReference = 'PAYPAL-PENDING-' . Str::uuid()->toString();
 
             $transaction = Transaction::create([
-                'transaction_amount_cents' => $totalCents,
+                'transaction_amount_cents' => $amountToChargeCents,
                 'payment_method' => 'paypal',
                 'payment_provider' => 'paypal',
                 'gateway' => 'paypal',
@@ -82,6 +105,10 @@ class CreatePayPalOrderAction
                     'laboratory_brand' => $laboratoryBrand->value,
                     'laboratory_appointment_id' => $laboratoryAppointment?->id,
                     'total_cents' => $totalCents,
+                    'coupon_id' => $couponId,
+                    'coupon_amount_cents' => $discountCents,
+                    'original_total_cents' => $totalCents,
+                    'amount_charged_cents' => $amountToChargeCents,
                 ],
             ]);
 

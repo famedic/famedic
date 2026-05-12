@@ -440,6 +440,7 @@ export default function LaboratoryCheckout({
                             patientId={data.contact}
                             addressId={data.address}
                             totalCents={total}
+                            couponId={data.coupon_id}
                             disabled={onlinePaymentDisabled}
                         />
                     ) : null

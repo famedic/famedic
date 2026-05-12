@@ -119,8 +119,6 @@ class OrderAction
         $transaction = null;
 
         try {
-            DB::beginTransaction();
-
             if ($amountToChargeCents > 0) {
                 $transaction = $this->chargeAndCreateTransaction($amountToChargeCents, $paymentMethod, $customer);
             } else {
@@ -131,65 +129,12 @@ class OrderAction
                 );
             }
 
-            DB::commit();
+            if ($couponId !== null) {
+                $this->addCouponDetailsToTransaction($transaction, (int) $couponId, $discountCents, $calculatedTotalCents);
+            }
 
             $gdaBrandValue = request()->laboratory_brand->value ?? $laboratoryBrand->value;
 
-            $laboratoryPurchase = $this->createLaboratoryPurchase($customer, $laboratoryBrand, $patient, $patientAddress);
-
-            $laboratoryPurchase->transactions()->attach($transaction);
-
-            if ($customer->getHasLaboratoryCartItemRequiringAppointment($laboratoryBrand)) {
-                $laboratoryAppointment->laboratory_purchase_id = $laboratoryPurchase->id;
-                $laboratoryAppointment->save();
-            }
-
-            logger('=== GDA BRAND DEBUG ===');
-            logger('LaboratoryBrand Enum value: ' . $laboratoryBrand->value);
-            logger('Request laboratory_brand value: ' . request()->laboratory_brand->value ?? 'NULL');
-            logger('Request laboratory_brand type: ' . gettype(request()->laboratory_brand));
-            logger('Request laboratory_brand: ' . json_encode(request()->laboratory_brand));
-
-            if (app()->environment('local')) {
-                $gdaQuotation = ['id' => rand(100000, 999999)];
-            } else {
-                $gdaQuotation = ($this->createGDAQuotationAction)(
-                    $customer,
-                    $patientAddress,
-                    $patient,
-                    request()->laboratory_brand->value ?? $laboratoryBrand->value,
-                    $this->laboratoryCartItems,
-                    $laboratoryPurchase->id
-                );
-            }
-
-            // Actualizar la compra con los datos de GDA
-            $laboratoryPurchase->update([
-                'gda_order_id' => $gdaQuotation['id'],
-                'gda_consecutivo' => $gdaQuotation['infogda_consecutivo'] ?? null,
-                'gda_acuse' => $gdaQuotation['gda_acuse'] ?? null,
-                'gda_response' => $gdaQuotation['gda_response'] ?? null,
-                'gda_code_http' => $gdaQuotation['gda_code_http'] ?? null,
-                'gda_mensaje' => $gdaQuotation['gda_mensaje'] ?? null,
-                'gda_description' => $gdaQuotation['gda_description'] ?? null,
-                'pdf_base64' => $gdaQuotation['pdf_base64'] ?? null,
-            ]);
-
-            $this->clearCart($customer);
-
-            if ($couponId !== null) {
-                $this->couponApplicationService->applyForLaboratoryPurchase(
-                    $customer->user,
-                    $laboratoryPurchase,
-                    $couponId
-                );
-            }
-
-            DB::commit();
-
-            $laboratoryPurchase->customer->user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));
-
-            $this->checkAndSendInvoiceDeadlineNotification($laboratoryPurchase);
             $laboratoryPurchase = ($this->fulfillLaboratoryCartOrderAction)(
                 $customer,
                 $laboratoryBrand,
@@ -199,9 +144,12 @@ class OrderAction
                 $laboratoryAppointment,
                 $this->laboratoryCartItems,
                 $gdaBrandValue,
+                $couponId,
             );
         } catch (\Throwable $th) {
-            DB::rollBack();
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
 
             if ($transaction) {
                 //($this->refundTransactionAction)->refund($transaction);
@@ -212,6 +160,24 @@ class OrderAction
         }
 
         return $laboratoryPurchase;
+    }
+
+    private function addCouponDetailsToTransaction(
+        Transaction $transaction,
+        int $couponId,
+        int $discountCents,
+        int $originalTotalCents
+    ): void {
+        $details = is_array($transaction->details) ? $transaction->details : [];
+
+        $transaction->update([
+            'details' => array_merge($details, [
+                'coupon_id' => $couponId,
+                'coupon_amount_cents' => $discountCents,
+                'original_total_cents' => $originalTotalCents,
+                'amount_charged_cents' => max(0, $originalTotalCents - $discountCents),
+            ]),
+        ]);
     }
 
     private function chargeAndCreateTransaction(int $amountCents, string $paymentMethod, Customer $customer): Transaction

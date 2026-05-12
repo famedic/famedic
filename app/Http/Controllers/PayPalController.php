@@ -6,11 +6,13 @@ use App\Actions\PayPal\CapturePayPalOrderAction;
 use App\Actions\PayPal\CreatePayPalOrderAction;
 use App\Actions\PayPal\HandlePayPalWebhookAction;
 use App\Enums\LaboratoryBrand;
+use App\Exceptions\CouponApplicationException;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\UnmatchingTotalPriceException;
 use App\Exceptions\PayPalPaymentException;
 use App\Models\Address;
 use App\Models\Contact;
+use App\Services\CouponApplicationService;
 use App\Services\PayPalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +22,7 @@ use Illuminate\Validation\ValidationException;
 
 class PayPalController extends Controller
 {
-    public function createOrder(Request $request, CreatePayPalOrderAction $action): JsonResponse
+    public function createOrder(Request $request, CreatePayPalOrderAction $action, CouponApplicationService $couponApplicationService): JsonResponse
     {
         $customer = $request->user()->customer;
 
@@ -29,6 +31,7 @@ class PayPalController extends Controller
             'address_id' => ['required', 'exists:addresses,id'],
             'laboratory_brand' => ['required', Rule::enum(LaboratoryBrand::class)],
             'total' => ['required', 'integer', 'min:1'],
+            'coupon_id' => ['nullable', 'integer', 'exists:coupons,id'],
         ]);
 
         $brandRaw = $validated['laboratory_brand'];
@@ -54,17 +57,29 @@ class PayPalController extends Controller
         }
 
         try {
+            $couponId = !empty($validated['coupon_id']) ? (int) $validated['coupon_id'] : null;
+            if ($couponId !== null) {
+                $couponApplicationService->validateApplication(
+                    $request->user(),
+                    $couponId,
+                    (int) $validated['total']
+                );
+            }
+
             $result = $action(
                 $customer,
                 $address,
                 $contact,
                 $brand,
                 (int) $validated['total'],
+                $couponId,
             );
         } catch (MissingLaboratoryAppointmentException $e) {
             throw ValidationException::withMessages(['patient_id' => 'Debes completar la cita en laboratorio para este pedido.']);
         } catch (UnmatchingTotalPriceException $e) {
             throw ValidationException::withMessages(['total' => 'El total no coincide con el carrito. Actualiza la página.']);
+        } catch (CouponApplicationException $e) {
+            throw ValidationException::withMessages(['coupon_id' => $e->getMessage()]);
         } catch (PayPalPaymentException $e) {
             Log::warning('[PayPal] create-order rechazado por API', ['message' => $e->getMessage()]);
 
