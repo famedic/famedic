@@ -403,7 +403,7 @@ function PaymentMethod({ purchase }) {
 
 				{hasCouponApplied && (
 					<Badge color="famedic-lime" className="w-fit">
-						Cupón / crédito a favor aplicado
+						Crédito a favor aplicado
 						{Number(purchase.coupon_discount_cents ?? 0) > 0 &&
 							purchase.formatted_coupon_discount && (
 								<Code>-{purchase.formatted_coupon_discount}</Code>
