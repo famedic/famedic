@@ -76,10 +76,10 @@ function CollapsiblePanel({
 		tone === "emerald"
 			? "border-emerald-200/70 dark:border-emerald-500/20"
 			: "border-zinc-100 dark:border-zinc-700";
-	const summaryMuted =
+	const summaryBox =
 		tone === "emerald"
-			? "text-emerald-900/85 dark:text-emerald-100/80"
-			: "text-zinc-600 dark:text-zinc-400";
+			? "bg-emerald-100/70 text-emerald-950 ring-1 ring-emerald-200/80 dark:bg-emerald-900/45 dark:text-emerald-100 dark:ring-emerald-500/20"
+			: "bg-zinc-50 text-zinc-700 ring-1 ring-zinc-100 dark:bg-zinc-800/70 dark:text-zinc-300 dark:ring-zinc-700";
 
 	return (
 		<div className={`rounded-xl border shadow-sm ${shell}`}>
@@ -87,7 +87,9 @@ function CollapsiblePanel({
 				<div className="min-w-0 flex-1">
 					<div className="flex flex-wrap items-center gap-2">{title}</div>
 					{!open && summaryCollapsed ? (
-						<p className={`mt-1.5 text-sm ${summaryMuted}`}>{summaryCollapsed}</p>
+						<div className={`mt-3 rounded-lg px-3 py-2 text-sm leading-relaxed ${summaryBox}`}>
+							{summaryCollapsed}
+						</div>
 					) : null}
 				</div>
 				<Button
@@ -140,9 +142,9 @@ export default function CouponsShow({
 	const bulkRowsRef = useRef([]);
 
 	const [showPreApprovalDoneDetail, setShowPreApprovalDoneDetail] = useState(false);
-	const [showCouponDataCard, setShowCouponDataCard] = useState(false);
-	const [showAuditCard, setShowAuditCard] = useState(false);
-	const [showStatusCard, setShowStatusCard] = useState(false);
+	const [showCouponDataCard, setShowCouponDataCard] = useState(true);
+	const [showAuditCard, setShowAuditCard] = useState(true);
+	const [showStatusCard, setShowStatusCard] = useState(true);
 
 	const {
 		data: assignData,
@@ -498,7 +500,7 @@ export default function CouponsShow({
 					</div>
 				</div>
 
-				{assignmentMultiSig && (
+				{false && assignmentMultiSig && (
 					<div
 						className="rounded-xl border border-amber-300/90 bg-amber-50 p-5 shadow-sm dark:border-amber-500/45 dark:bg-amber-950/35"
 						role="region"
@@ -742,12 +744,20 @@ export default function CouponsShow({
 								Datos del cupón
 							</p>
 						}
-						summaryCollapsed={`${(coupon.amount_cents / 100).toLocaleString("es-MX", {
-							style: "currency",
-							currency: "MXN",
-						})} · Código: ${coupon.code || "—"} · Máx. benef.: ${
-							coupon.max_beneficiaries != null ? coupon.max_beneficiaries : "sin límite"
-						}`}
+						summaryCollapsed={
+							<div className="space-y-1">
+								<p>
+									<span className="font-semibold">Código:</span> {coupon.code || "—"}
+								</p>
+								<p>
+									<span className="font-semibold">Crédito:</span>{" "}
+									{(coupon.amount_cents / 100).toLocaleString("es-MX", {
+										style: "currency",
+										currency: "MXN",
+									})}
+								</p>
+							</div>
+						}
 					>
 						<dl className="space-y-2 text-sm">
 							<div>
@@ -788,7 +798,14 @@ export default function CouponsShow({
 								Auditoría
 							</p>
 						}
-						summaryCollapsed={`Creado ${formatShortDateTime(coupon.created_at)} · ${userLabel(coupon.created_by_user)}`}
+						summaryCollapsed={
+							<div className="space-y-1">
+								<p className="font-semibold">Creado Por:</p>
+								<p className="break-all">
+									{coupon.created_by_user?.email || userLabel(coupon.created_by_user)}
+								</p>
+							</div>
+						}
 					>
 						<dl className="space-y-3 text-sm">
 							<div>
@@ -824,12 +841,15 @@ export default function CouponsShow({
 						onToggle={setShowStatusCard}
 						title={
 							<p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-								Estado y disponibilidad
+								Disponibilidad
 							</p>
 						}
-						summaryCollapsed={`${pending ? "Pendiente código" : "Autorizado"} · ${coupon.is_active ? "Activo" : "Inactivo"} · ${assignedCount} benef.${
-							coupon.max_beneficiaries != null ? ` / ${coupon.max_beneficiaries}` : ""
-						}${assignmentMultiSig ? ` · Multi-firma ${assignmentMultiSig.current_approvals}/${assignmentMultiSig.required_approvals}` : ""}`}
+						summaryCollapsed={
+							<div className="space-y-1">
+								<p className="font-semibold">Max Beneficiarios:</p>
+								<p>{coupon.max_beneficiaries != null ? coupon.max_beneficiaries : "Sin límite"}</p>
+							</div>
+						}
 					>
 						<div className="flex flex-wrap gap-2">
 							{pending ? (
@@ -867,6 +887,75 @@ export default function CouponsShow({
 						)}
 					</CollapsiblePanel>
 				</div>
+
+				{assignmentMultiSig && (
+					<div
+						className="rounded-xl border border-amber-300/90 bg-amber-50 p-5 shadow-sm dark:border-amber-500/45 dark:bg-amber-950/35"
+						role="region"
+						aria-label="Autorizaciones requeridas"
+					>
+						<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+							<div className="min-w-0 space-y-2">
+								<div className="flex flex-wrap items-center gap-2">
+									<Subheading className="text-amber-950 dark:text-amber-50">
+										Autorizaciones requeridas
+									</Subheading>
+									<Badge color="amber">Solicitud #{assignmentMultiSig.id}</Badge>
+									{assignmentMultiSig.i_can_approve && (
+										<Badge color="lime">Tu firma pendiente</Badge>
+									)}
+								</div>
+								<p className="text-sm text-amber-900/90 dark:text-amber-100/85">
+									<strong>
+										{assignmentMultiSig.current_approvals} de{" "}
+										{assignmentMultiSig.required_approvals}
+									</strong>{" "}
+									aprobación(es) registrada(s).
+									{assignmentMultiSig.remaining_approvals > 0 && (
+										<>
+											{" "}
+											Faltan{" "}
+											<strong>{assignmentMultiSig.remaining_approvals}</strong> para
+											completar la solicitud y poder asignar beneficiarios a este cupón.
+										</>
+									)}
+								</p>
+							</div>
+							<div className="flex shrink-0 flex-wrap items-center gap-2">
+								{assignmentMultiSig.i_can_approve ? (
+									<>
+										<Button
+											type="button"
+											color="emerald"
+											disabled={approvalDecisionProcessing}
+											onClick={approveMyPending}
+										>
+											{approvalDecisionProcessing ? "Procesando..." : "Aprobar crédito"}
+										</Button>
+										<Button
+											type="button"
+											outline
+											className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-500/50 dark:text-red-300 dark:hover:bg-red-950/40"
+											disabled={approvalDecisionProcessing}
+											onClick={rejectMyPending}
+										>
+											Rechazar
+										</Button>
+									</>
+								) : (
+									<Text className="text-sm text-amber-900/85 dark:text-amber-100/75">
+										{assignmentMultiSig.participants.some((p) => p.is_me && p.status === "approved")
+											? "Tu aprobación ya fue registrada."
+											: "Pendiente de firmas de los autorizadores."}
+									</Text>
+								)}
+								<Button href={route("admin.coupons.logs")} plain>
+									Ver registro
+								</Button>
+							</div>
+						</div>
+					</div>
+				)}
 
 				{pending && mailSetupHint && (
 					<div

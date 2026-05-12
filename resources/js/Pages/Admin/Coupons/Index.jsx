@@ -15,6 +15,12 @@ import {
 import PaginatedTable from "@/Components/Admin/PaginatedTable";
 import { Badge } from "@/Components/Catalyst/badge";
 import { PlusIcon } from "@heroicons/react/16/solid";
+import {
+	ClipboardDocumentCheckIcon,
+	FunnelIcon,
+	InformationCircleIcon,
+} from "@heroicons/react/24/outline";
+import Card from "@/Components/Card";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
@@ -90,6 +96,8 @@ export default function CouponsIndex({
 	const pendingMultisigTotal = approvalsOverview.pending_assignment_requests ?? 0;
 	const pendingSettingsRequests = authorizerContext.pending_settings_requests ?? [];
 	const pendingAssignmentCards = authorizerContext.pending_assignment_cards ?? [];
+	const [showHelp, setShowHelp] = useState(false);
+	const [showFilters, setShowFilters] = useState(false);
 	const isAuthorizer = !!authorizerContext.is_authorizer;
 	const [actingOnRequestId, setActingOnRequestId] = useState(null);
 	const [expandedSettingsRequestIds, setExpandedSettingsRequestIds] = useState(
@@ -140,6 +148,14 @@ export default function CouponsIndex({
 		date_to: filters?.date_to ?? "",
 	});
 
+	const activeFiltersCount = [
+		filters?.search,
+		filters?.usage && filters.usage !== "all",
+		filters?.user_email,
+		filters?.date_from,
+		filters?.date_to,
+	].filter(Boolean).length;
+
 	const applyFilters = (e) => {
 		e.preventDefault();
 		get(route("admin.coupons.index"), { preserveState: true, replace: true });
@@ -174,35 +190,58 @@ export default function CouponsIndex({
 					</Button>
 				</div>
 			</div>
-			{isAuthorizer ? (
-				<Text className="text-zinc-600 dark:text-zinc-400">
-					Aquí ves los cupones y las solicitudes que requieren tu visto bueno. Revisa el monto, la
-					descripción y la lista de personas beneficiarias antes de aprobar o rechazar.
-				</Text>
-			) : (
-				<Text className="text-zinc-600 dark:text-zinc-400">
-					Desde &quot;Crear y asignar cupones&quot; defines el cupón maestro, asignas por correo o
-					por archivo, y ves las reglas vigentes. Cada asignación crea un cupón hijo con saldo
-					propio. Si activas autorización por correo en Reglas, el cupón queda pendiente hasta que
-					el autorizador ingrese el código recibido.
-				</Text>
-			)}
+			<div className="space-y-4">
+				{isAuthorizer ? (
+					<Text className="text-zinc-600 dark:text-zinc-400">
+						Aquí ves los cupones y las solicitudes que requieren tu visto bueno. Revisa el monto, la
+						descripción y la lista de personas beneficiarias antes de aprobar o rechazar.
+					</Text>
+				) : (
+					<>
+						<Button
+							outline
+							onClick={() => setShowHelp(!showHelp)}
+							title="Más información sobre cupones"
+						>
+							<InformationCircleIcon className="size-5" />
+							{showHelp ? "Ocultar ayuda" : "Ver ayuda"}
+						</Button>
+						{showHelp && (
+							<Card className="p-4 bg-blue-50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900">
+								<Text className="!text-sm">
+									Desde &quot;Crear y asignar cupones&quot; defines el cupón maestro, asignas por correo o
+									por archivo, y ves las reglas vigentes. Cada asignación crea un cupón hijo con saldo
+									propio. Si activas autorización por correo en Reglas, el cupón queda pendiente hasta que
+									el autorizador ingrese el código recibido.
+								</Text>
+							</Card>
+						)}
+					</>
+				)}
+			</div>
 
 			{pendingMultisigTotal > 0 && !isAuthorizer && (
 				<div
-					className="mt-6 rounded-xl border border-sky-200/90 bg-sky-50 px-4 py-3 text-sm text-sky-950 shadow-sm dark:border-sky-500/35 dark:bg-sky-950/35 dark:text-sky-50"
+					className="mt-6 flex flex-col gap-3 rounded-xl border border-sky-200/90 bg-sky-50 px-4 py-4 text-sm text-sky-950 shadow-sm dark:border-sky-500/35 dark:bg-sky-950/35 dark:text-sky-50 sm:flex-row sm:items-center"
 					role="status"
 				>
-					<p className="font-medium">Solicitudes de aprobación en curso</p>
-					<p className="mt-1 text-sky-900/90 dark:text-sky-100/85">
-						Hay <strong>{pendingMultisigTotal}</strong> solicitud(es) de asignación o activación de
-						cupón esperando firmas. Abre cada cupón en la tabla para ver el detalle y el avance de
-						aprobaciones.
-					</p>
+					<div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-200">
+						<ClipboardDocumentCheckIcon className="size-5" />
+					</div>
+					<div className="min-w-0 flex-1">
+						<p className="font-medium">Créditos pendientes de aprobación</p>
+						<p className="mt-1 text-sky-900/90 dark:text-sky-100/85">
+							Revisa las fichas de créditos a favor para validar y aprobar.
+						</p>
+					</div>
+					<Badge color="sky" className="w-fit">
+						{pendingMultisigTotal} pendiente{pendingMultisigTotal === 1 ? "" : "s"}
+					</Badge>
 				</div>
 			)}
 
-			{authorizerContext.is_authorizer &&
+			{false &&
+				authorizerContext.is_authorizer &&
 				(authorizerContext.pending_assignment_approvals_count > 0 ||
 					authorizerContext.pending_settings_approvals_count > 0) && (
 					<div
@@ -545,9 +584,25 @@ export default function CouponsIndex({
 					</div>
 				)}
 
+			<div className="mt-6 flex justify-end">
+				<Button
+					type="button"
+					outline
+					onClick={() => setShowFilters((value) => !value)}
+				>
+					{activeFiltersCount > 0 ? (
+						<Badge color="sky">{activeFiltersCount}</Badge>
+					) : (
+						<FunnelIcon className="size-5" />
+					)}
+					Filtros
+				</Button>
+			</div>
+
+			{showFilters && (
 			<form
 				onSubmit={applyFilters}
-				className="mt-6 flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-700 dark:bg-zinc-900/40"
+				className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-700 dark:bg-zinc-900/40"
 			>
 				<Field className="min-w-[10rem]">
 					<Label>Buscar</Label>
@@ -600,6 +655,7 @@ export default function CouponsIndex({
 					Filtrar
 				</Button>
 			</form>
+			)}
 
 			<div className="mt-6">
 				<PaginatedTable paginatedData={coupons}>
@@ -755,7 +811,7 @@ export default function CouponsIndex({
 															: ""}
 														{c.assignment_approval_summary.pre_approval_only && (
 															<span className="block text-[0.7rem] text-amber-800/90 dark:text-amber-200/80">
-																Pre-aprobación de cupón
+																Pre-aprobación de crédito
 															</span>
 														)}
 														<Button
@@ -777,12 +833,12 @@ export default function CouponsIndex({
 												>
 													Ver
 												</Button>
-												<Button
+												{/* <Button
 													href={route("admin.coupons.edit", c.id)}
 													plain
 												>
 													Editar
-												</Button>
+												</Button> */}
 												{assignments.map((a) =>
 													!a.used_at ? (
 														<Button
