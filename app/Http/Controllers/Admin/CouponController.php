@@ -144,6 +144,10 @@ class CouponController extends Controller
             $tab = 'limits';
         }
 
+        $currentAdministratorId = $request->user()->administrator?->hasRole('autorizador')
+            ? (int) $request->user()->administrator->id
+            : null;
+
         return Inertia::render('Admin/Coupons/Settings', [
             'settings' => CouponAdminSettings::singleton(),
             'amountRules' => CouponAmountApprovalRule::query()
@@ -168,7 +172,7 @@ class CouponController extends Controller
                 ->all(),
             'authorizers' => $authorizers,
             'initialTab' => $tab,
-            'settingsApprovalHistory' => $this->settingsApprovalHistoryForUi(),
+            'settingsApprovalHistory' => $this->settingsApprovalHistoryForUi($currentAdministratorId),
         ]);
     }
 
@@ -177,7 +181,7 @@ class CouponController extends Controller
      *
      * @return list<array<string, mixed>>
      */
-    private function settingsApprovalHistoryForUi(): array
+    private function settingsApprovalHistoryForUi(?int $currentAdministratorId = null): array
     {
         return CouponApprovalRequest::query()
             ->where('type', 'settings')
@@ -192,7 +196,7 @@ class CouponController extends Controller
             ->orderByDesc('id')
             ->limit(100)
             ->get()
-            ->map(function (CouponApprovalRequest $r) {
+            ->map(function (CouponApprovalRequest $r) use ($currentAdministratorId) {
                 $approvers = $r->authorizers
                     ->filter(fn (CouponApprovalRequestAuthorizer $row) => $row->status === 'approved')
                     ->map(function (CouponApprovalRequestAuthorizer $row) {
@@ -207,6 +211,11 @@ class CouponController extends Controller
                     })
                     ->values()
                     ->all();
+
+                $canApprove = $currentAdministratorId !== null
+                    && $r->status === 'pending'
+                    && $r->authorizers->contains(fn (CouponApprovalRequestAuthorizer $row) => (int) $row->administrator_id === $currentAdministratorId
+                        && $row->status === 'pending');
 
                 return [
                     'id' => $r->id,
@@ -225,6 +234,9 @@ class CouponController extends Controller
                         'email' => $r->rejectedByUser->email,
                     ] : null,
                     'approvers' => $approvers,
+                    'can_approve' => $canApprove,
+                    'before_state' => $r->before_state,
+                    'after_state' => $r->after_state,
                 ];
             })
             ->values()
@@ -330,6 +342,13 @@ class CouponController extends Controller
                 beforeState: $before,
                 afterState: $after
             );
+
+            Log::info('Solicitud de aprobación de configuración de cupones creada', [
+                'approval_request_id' => $approvalRequest->id,
+                'requested_by_user_id' => $request->user()->id,
+                'required_approvals' => 2,
+                'authorizer_administrator_ids' => $authorizerIds,
+            ]);
 
             $this->sendApprovalRequestMails($approvalRequest);
 
@@ -1983,17 +2002,67 @@ class CouponController extends Controller
     private function sendApprovalRequestMails(CouponApprovalRequest $approvalRequest): void
     {
         $approvalRequest->loadMissing('authorizers.administrator.user');
+        $approvalUrl = $approvalRequest->type === 'settings'
+            ? route('admin.coupons.settings', ['tab' => 'history'], absolute: true)
+            : ($approvalRequest->coupon_id
+                ? route('admin.coupons.show', ['coupon' => $approvalRequest->coupon_id], absolute: true)
+                : route('admin.coupons.logs', absolute: true));
+
+        Log::info('Preparando envío de correos para solicitud de aprobación de cupones', [
+            'approval_request_id' => $approvalRequest->id,
+            'type' => $approvalRequest->type,
+            'status' => $approvalRequest->status,
+            'approval_url' => $approvalUrl,
+            'mail_mailer' => config('mail.default'),
+            'authorizers_count' => $approvalRequest->authorizers->count(),
+        ]);
 
         foreach ($approvalRequest->authorizers as $authorizer) {
             $email = $authorizer->administrator?->user?->email;
             if (! $email) {
+                Log::warning('Autorizador sin correo para solicitud de aprobación de cupones', [
+                    'approval_request_id' => $approvalRequest->id,
+                    'approval_authorizer_id' => $authorizer->id,
+                    'administrator_id' => $authorizer->administrator_id,
+                ]);
+
                 continue;
             }
 
-            Mail::to($email)->send(new CouponApprovalRequestMail(
-                $approvalRequest,
-                route('admin.coupons.logs', absolute: true)
-            ));
+            try {
+                Log::info('Enviando correo de solicitud de aprobación de cupones', [
+                    'approval_request_id' => $approvalRequest->id,
+                    'approval_authorizer_id' => $authorizer->id,
+                    'administrator_id' => $authorizer->administrator_id,
+                    'to' => $email,
+                    'approval_url' => $approvalUrl,
+                    'mail_mailer' => config('mail.default'),
+                ]);
+
+                Mail::to($email)->send(new CouponApprovalRequestMail(
+                    $approvalRequest,
+                    $approvalUrl
+                ));
+
+                Log::info('Correo de solicitud de aprobación de cupones enviado', [
+                    'approval_request_id' => $approvalRequest->id,
+                    'approval_authorizer_id' => $authorizer->id,
+                    'administrator_id' => $authorizer->administrator_id,
+                    'to' => $email,
+                    'approval_url' => $approvalUrl,
+                    'mail_mailer' => config('mail.default'),
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('Error al enviar correo de solicitud de aprobación de cupones', [
+                    'approval_request_id' => $approvalRequest->id,
+                    'approval_authorizer_id' => $authorizer->id,
+                    'administrator_id' => $authorizer->administrator_id,
+                    'to' => $email,
+                    'approval_url' => $approvalUrl,
+                    'mail_mailer' => config('mail.default'),
+                    'exception' => $e->getMessage(),
+                ]);
+            }
         }
     }
 }

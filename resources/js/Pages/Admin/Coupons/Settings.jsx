@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
 import { Button } from "@/Components/Catalyst/button";
@@ -7,7 +7,7 @@ import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Checkbox, CheckboxField } from "@/Components/Catalyst/checkbox";
 import { Badge } from "@/Components/Catalyst/badge";
-import { useForm, usePage } from "@inertiajs/react";
+import { router, useForm, usePage } from "@inertiajs/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { PlusIcon, TrashIcon } from "@heroicons/react/16/solid";
 
@@ -184,6 +184,18 @@ export default function Settings() {
 	const submit = (e) => {
 		e.preventDefault();
 		put(route("admin.coupons.settings.update"));
+	};
+
+	const decideApproval = (requestId, approve) => {
+		const routeName = approve
+			? "admin.coupons.approval-requests.approve"
+			: "admin.coupons.approval-requests.reject";
+
+		router.post(
+			route(routeName, { approvalRequest: requestId }),
+			{},
+			{ preserveScroll: true },
+		);
 	};
 
 	const addAmountRule = () => {
@@ -581,12 +593,13 @@ export default function Settings() {
 																	Aprobaciones (firmas)
 																</th>
 																<th className="min-w-[10rem] py-2">Cierre</th>
+																<th className="min-w-[12rem] py-2">Acciones</th>
 															</tr>
 														</thead>
 														<tbody>
 															{(settingsApprovalHistory ?? []).map((row) => (
-																<tr
-																	key={row.id}
+																<Fragment key={row.id}>
+																	<tr
 																	className="border-b border-zinc-100 align-top dark:border-zinc-800"
 																>
 																	<td className="whitespace-nowrap py-3 pr-3 font-medium text-zinc-900 dark:text-zinc-100">
@@ -679,7 +692,43 @@ export default function Settings() {
 																			<span className="text-zinc-500">En curso</span>
 																		) : null}
 																	</td>
+																	<td className="py-3">
+																		{row.can_approve ? (
+																			<div className="flex flex-wrap gap-2">
+																				<Button
+																					type="button"
+																					color="emerald"
+																					onClick={() => decideApproval(row.id, true)}
+																				>
+																					Aprobar
+																				</Button>
+																				<Button
+																					type="button"
+																					outline
+																					className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-500/50 dark:text-red-300 dark:hover:bg-red-950/40"
+																					onClick={() => decideApproval(row.id, false)}
+																				>
+																					Rechazar
+																				</Button>
+																			</div>
+																		) : (
+																			<span className="text-xs text-zinc-500">—</span>
+																		)}
+																	</td>
 																</tr>
+																<tr className="border-b border-zinc-100 dark:border-zinc-800">
+																	<td colSpan={7} className="pb-4 pr-3">
+																		<details className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-300">
+																			<summary className="cursor-pointer font-semibold">
+																				Ver parámetros propuestos
+																			</summary>
+																			<pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-white p-3 font-mono text-[11px] text-zinc-700 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-200 dark:ring-zinc-700">
+																				{JSON.stringify(row.after_state ?? {}, null, 2)}
+																			</pre>
+																		</details>
+																	</td>
+																</tr>
+															</Fragment>
 															))}
 														</tbody>
 													</table>
