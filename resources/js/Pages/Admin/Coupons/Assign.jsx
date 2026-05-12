@@ -11,12 +11,6 @@ import { Switch, SwitchField } from "@/Components/Catalyst/switch";
 import { useForm } from "@inertiajs/react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-	Listbox,
-	ListboxDescription,
-	ListboxLabel,
-	ListboxOption,
-} from "@/Components/Catalyst/listbox";
-import {
 	Table,
 	TableBody,
 	TableCell,
@@ -25,6 +19,7 @@ import {
 	TableRow,
 } from "@/Components/Catalyst/table";
 import { Badge } from "@/Components/Catalyst/badge";
+import { InformationCircleIcon } from "@heroicons/react/24/outline";
 
 function csrfTokenFromMeta() {
 	if (typeof document === "undefined") return "";
@@ -122,6 +117,9 @@ const ASSIGNMENT_LABELS = {
 	bulk: "Archivo masivo",
 };
 
+/** Oculto temporalmente en la UI; el flujo masivo permanece en el código por si se reactiva. */
+const SHOW_BULK_ASSIGNMENT_UI = false;
+
 function createMatrixRow() {
 	const id =
 		typeof crypto !== "undefined" && crypto.randomUUID
@@ -150,15 +148,18 @@ export default function CouponsAssign({
 }) {
 	const requireAuth = !!settings?.require_authorization;
 
-	const [search, setSearch] = useState("");
-
 	const allowedTabs = new Set(TABS.map((t) => t.id));
 	const normalizedInitialTab = useMemo(() => {
 		if (focus === "bulk") return "assignment";
 		return allowedTabs.has(initialTab) ? initialTab : "coupon";
 	}, [focus, initialTab]);
 
+	const firstId = assignableCoupons?.[0]?.id ?? "";
+
 	const [activeTab, setActiveTabState] = useState(normalizedInitialTab);
+	const assignmentHelpRef = useRef(null);
+	const [assignmentApprovalsHelpOpen, setAssignmentApprovalsHelpOpen] =
+		useState(false);
 
 	const setActiveTab = useCallback((id) => {
 		setActiveTabState(id);
@@ -172,19 +173,23 @@ export default function CouponsAssign({
 		setActiveTabState(normalizedInitialTab);
 	}, [normalizedInitialTab]);
 
-	const filtered = useMemo(() => {
-		const list = assignableCoupons ?? [];
-		const s = search.trim().toLowerCase();
-		if (!s) {
-			return list;
+	useEffect(() => {
+		if (activeTab !== "assignment") {
+			setAssignmentApprovalsHelpOpen(false);
 		}
-		return list.filter((c) => {
-			const hay = `${c.id} ${c.code ?? ""} ${c.description ?? ""}`.toLowerCase();
-			return hay.includes(s);
-		});
-	}, [assignableCoupons, search]);
+	}, [activeTab]);
 
-	const firstId = filtered[0]?.id ?? assignableCoupons?.[0]?.id ?? "";
+	useEffect(() => {
+		if (!assignmentApprovalsHelpOpen) return undefined;
+		const onMouseDown = (e) => {
+			const el = assignmentHelpRef.current;
+			if (el && !el.contains(e.target)) {
+				setAssignmentApprovalsHelpOpen(false);
+			}
+		};
+		document.addEventListener("mousedown", onMouseDown);
+		return () => document.removeEventListener("mousedown", onMouseDown);
+	}, [assignmentApprovalsHelpOpen]);
 
 	const defaultAmount =
 		settings?.base_amount_cents != null
@@ -203,7 +208,11 @@ export default function CouponsAssign({
 	const { data, setData, post, processing, errors, transform } = useForm({
 		coupon_mode: "new",
 		assignment_mode:
-			focus === "bulk" ? "bulk" : focus === "new" ? "none" : "individual",
+			focus === "bulk" && SHOW_BULK_ASSIGNMENT_UI
+				? "bulk"
+				: focus === "new"
+					? "none"
+					: "individual",
 		coupon_id: firstId,
 		amount_mxn: defaultAmount,
 		code: "",
@@ -218,6 +227,12 @@ export default function CouponsAssign({
 
 	bulkRowsRef.current = bulkRows;
 	matrixRowsRef.current = matrixRows;
+
+	useEffect(() => {
+		if (!SHOW_BULK_ASSIGNMENT_UI && data.assignment_mode === "bulk") {
+			setData("assignment_mode", "individual");
+		}
+	}, [data.assignment_mode, setData]);
 
 	transform((d) => {
 		const out = {
@@ -274,18 +289,6 @@ export default function CouponsAssign({
 		}
 		return out;
 	});
-
-	useEffect(() => {
-		if (!filtered.length) {
-			return;
-		}
-		if (
-			data.coupon_mode === "existing" &&
-			!filtered.some((c) => c.id === data.coupon_id)
-		) {
-			setData("coupon_id", filtered[0].id);
-		}
-	}, [filtered, data.coupon_id, data.coupon_mode, setData]);
 
 	useEffect(() => {
 		for (const t of TABS) {
@@ -412,14 +415,10 @@ export default function CouponsAssign({
 	}, [data.assignment_mode]);
 
 	const amountCentsPreview = useMemo(() => {
-		if (data.coupon_mode === "new") {
-			const v = parseFloat(String(data.amount_mxn).replace(",", ""));
-			if (Number.isNaN(v)) return 0;
-			return Math.round(v * 100);
-		}
-		const sel = (assignableCoupons ?? []).find((c) => c.id === data.coupon_id);
-		return sel?.amount_cents ?? 0;
-	}, [data.coupon_mode, data.amount_mxn, data.coupon_id, assignableCoupons]);
+		const v = parseFloat(String(data.amount_mxn).replace(",", ""));
+		if (Number.isNaN(v)) return 0;
+		return Math.round(v * 100);
+	}, [data.amount_mxn]);
 
 	const emailLowerCounts = useMemo(() => {
 		const m = {};
@@ -457,10 +456,9 @@ export default function CouponsAssign({
 	}, [data.assignment_mode, bulkRows, individualReadyEmails.length]);
 
 	const beneficiariesForPreApprovalDraft = useMemo(() => {
-		if (data.coupon_mode !== "new") return 1;
 		const parsed = parseInt(String(data.max_beneficiaries ?? "").trim(), 10);
 		return Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
-	}, [data.coupon_mode, data.max_beneficiaries]);
+	}, [data.max_beneficiaries]);
 
 	const approvalsPreview = useMemo(
 		() =>
@@ -472,22 +470,17 @@ export default function CouponsAssign({
 		[amountCentsPreview, beneficiaryCountPreview, rulesForUi],
 	);
 
-	const preApprovalRequiredForNewCoupon = useMemo(() => {
-		if (data.coupon_mode !== "new") return 0;
-		return resolveApprovalsPreview(
-			amountCentsPreview,
-			beneficiariesForPreApprovalDraft,
-			rulesForUi,
-		);
-	}, [
-		data.coupon_mode,
-		amountCentsPreview,
-		beneficiariesForPreApprovalDraft,
-		rulesForUi,
-	]);
+	const preApprovalRequiredForNewCoupon = useMemo(
+		() =>
+			resolveApprovalsPreview(
+				amountCentsPreview,
+				beneficiariesForPreApprovalDraft,
+				rulesForUi,
+			),
+		[amountCentsPreview, beneficiariesForPreApprovalDraft, rulesForUi],
+	);
 
 	const mustPreApproveCouponBeforeAssignment =
-		data.coupon_mode === "new" &&
 		preApprovalRequiredForNewCoupon > 0 &&
 		!(isSuperadmin && rulesForUi?.superadmin_bypass_approvals);
 
@@ -540,87 +533,19 @@ export default function CouponsAssign({
 		}
 	}, [data.file]);
 
-	const preApprovalReasons = useMemo(() => {
-		if (!mustPreApproveCouponBeforeAssignment) return [];
-		const reasons = [];
-		const amountRules = rulesForUi?.amount_rules ?? [];
-		const matchedAmount = amountRules.filter((r) => {
-			const min = r.min_amount_cents ?? 0;
-			const max = r.max_amount_cents;
-			return (
-				amountCentsPreview >= min &&
-				(max == null || amountCentsPreview <= max)
-			);
-		});
-		const bestAmount = matchedAmount.reduce(
-			(acc, r) => Math.max(acc, r.required_approvals ?? 0),
-			0,
-		);
-		if (bestAmount > 0) {
-			reasons.push(
-				`Monto del cupón (${formatMxFromCents(amountCentsPreview)}) cae en un rango configurado que exige hasta ${bestAmount} aprobación(es) por monto.`,
-			);
-		} else if (
-			amountRules.length === 0 &&
-			rulesForUi?.amount_threshold_cents != null &&
-			amountCentsPreview >= rulesForUi.amount_threshold_cents
-		) {
-			reasons.push(
-				`Monto del cupón (${formatMxFromCents(amountCentsPreview)}) supera el umbral (${formatMxFromCents(rulesForUi.amount_threshold_cents)}).`,
-			);
-		}
-		const matchedRule = (rulesForUi?.beneficiary_rules ?? []).find((r) => {
-			const min = r.min_beneficiaries;
-			const max = r.max_beneficiaries;
-			return (
-				beneficiariesForPreApprovalDraft >= min &&
-				(max == null || beneficiariesForPreApprovalDraft <= max)
-			);
-		});
-		if (matchedRule && (matchedRule.required_approvals ?? 0) > 0) {
-			reasons.push(
-				`Rango de beneficiarios (${beneficiariesForPreApprovalDraft}) coincide con regla ${matchedRule.min_beneficiaries}-${matchedRule.max_beneficiaries ?? "∞"} que exige ${matchedRule.required_approvals} aprobación(es).`,
-			);
-		}
-		return reasons;
-	}, [
-		mustPreApproveCouponBeforeAssignment,
-		rulesForUi,
-		amountCentsPreview,
-		beneficiariesForPreApprovalDraft,
-	]);
-
-	const selectedCoupon = useMemo(
-		() => (assignableCoupons ?? []).find((c) => c.id === data.coupon_id),
-		[assignableCoupons, data.coupon_id],
-	);
-
 	const beneficiarySlotsLimit = useMemo(() => {
-		if (data.coupon_mode === "new") {
-			const maxB = String(data.max_beneficiaries ?? "").trim();
-			if (maxB === "") return null;
-			const n = parseInt(maxB, 10);
-			return Number.isNaN(n) || n < 1 ? null : n;
-		}
-		const m = selectedCoupon?.max_beneficiaries;
-		if (m == null) return 5000;
-		const used = selectedCoupon?.child_coupons_count ?? 0;
-		const left = Math.max(0, m - used);
-		return Math.min(5000, Math.max(1, left));
-	}, [data.coupon_mode, data.max_beneficiaries, selectedCoupon]);
+		const maxB = String(data.max_beneficiaries ?? "").trim();
+		if (maxB === "") return null;
+		const n = parseInt(maxB, 10);
+		return Number.isNaN(n) || n < 1 ? null : n;
+	}, [data.max_beneficiaries]);
 
 	const matrixCapacity = beneficiarySlotsLimit ?? 5000;
 
 	const amountOk = useMemo(() => {
-		if (data.coupon_mode !== "new") return true;
 		const v = parseFloat(String(data.amount_mxn).replace(",", ""));
 		return !Number.isNaN(v) && v > 0;
-	}, [data.coupon_mode, data.amount_mxn]);
-
-	const existingCouponOk = useMemo(() => {
-		if (data.coupon_mode !== "existing") return true;
-		return filtered.length > 0;
-	}, [data.coupon_mode, filtered.length]);
+	}, [data.amount_mxn]);
 
 	const assignmentFieldsOk = useMemo(() => {
 		if (data.assignment_mode === "individual") {
@@ -675,12 +600,6 @@ export default function CouponsAssign({
 	]);
 
 	const couponStepComplete = useMemo(() => {
-		if (data.coupon_mode === "existing") {
-			return (
-				existingCouponOk &&
-				filtered.some((c) => String(c.id) === String(data.coupon_id))
-			);
-		}
 		if (!amountOk) return false;
 		if (data.assignment_mode === "none") {
 			return true;
@@ -689,15 +608,7 @@ export default function CouponsAssign({
 		if (maxB === "") return false;
 		const n = parseInt(maxB, 10);
 		return !Number.isNaN(n) && n >= 1;
-	}, [
-		data.coupon_mode,
-		data.coupon_id,
-		data.max_beneficiaries,
-		data.assignment_mode,
-		amountOk,
-		existingCouponOk,
-		filtered,
-	]);
+	}, [data.max_beneficiaries, data.assignment_mode, amountOk]);
 
 	const assignmentStepComplete = useMemo(() => {
 		if (data.assignment_mode === "none") return true;
@@ -727,14 +638,8 @@ export default function CouponsAssign({
 		activeTab === "summary" &&
 		summaryUnlocked &&
 		amountOk &&
-		existingCouponOk &&
 		assignmentFieldsOk &&
-		authorizersSelectionOk &&
-		!(
-			data.coupon_mode === "existing" &&
-			data.assignment_mode !== "none" &&
-			filtered.length === 0
-		);
+		authorizersSelectionOk;
 
 	const approvalRealtime = useMemo(() => {
 		if (data.assignment_mode === "none") {
@@ -809,14 +714,6 @@ export default function CouponsAssign({
 			active
 				? "bg-famedic-lime/15 text-famedic-dark ring-1 ring-famedic-lime/60 dark:bg-famedic-lime/10 dark:text-famedic-lime dark:ring-famedic-lime/50"
 				: "text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:text-zinc-400 dark:ring-zinc-600 dark:hover:bg-zinc-800",
-		].join(" ");
-
-	const couponModeBtnClass = (active) =>
-		[
-			"inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
-			active
-				? "border-famedic-lime/70 bg-famedic-lime/10 text-famedic-dark ring-1 ring-famedic-lime/50 hover:bg-famedic-lime/20 dark:text-famedic-lime"
-				: "text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:text-zinc-300 dark:ring-zinc-600 dark:hover:bg-zinc-800",
 		].join(" ");
 
 	const summaryBulkEmails = useMemo(
@@ -927,169 +824,83 @@ export default function CouponsAssign({
 								>
 									{activeTab === "coupon" && (
 										<>
-											<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-												Elige si usas un cupón maestro ya activo o creas uno nuevo.
-											</Text>
-											<div className="flex flex-wrap gap-2">
-												<Button
-													type="button"
-													onClick={() => setData("coupon_mode", "existing")}
-													outline
-													className={couponModeBtnClass(
-														data.coupon_mode === "existing",
-													)}
-												>
-													Ya tengo un cupón activo
-												</Button>
-												<Button
-													type="button"
-													onClick={() => setData("coupon_mode", "new")}
-													outline
-													className={couponModeBtnClass(
-														data.coupon_mode === "new",
-													)}
-												>
-													Crear cupón maestro nuevo
-												</Button>
-											</div>
 
-											{data.coupon_mode === "existing" ? (
-												<>
+											<div className="space-y-4">
+												<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 													<Field>
-														<Label>Buscar cupón</Label>
+														<Label>Monto por beneficiario (MXN)</Label>
 														<Input
-															placeholder="ID, código o descripción…"
-															value={search}
-															onChange={(e) => setSearch(e.target.value)}
+															type="number"
+															step="0.01"
+															min="0.01"
+															value={data.amount_mxn}
+															onChange={(e) => setData("amount_mxn", e.target.value)}
 														/>
-													</Field>
-													<Field>
-														<Label>Cupón maestro</Label>
-														{filtered.length === 0 ? (
-															<p className="text-sm text-amber-700 dark:text-amber-300">
-																No hay cupones disponibles. Crea uno nuevo o autoriza un
-																cupón pendiente.
-															</p>
-														) : (
-															<Listbox
-																value={data.coupon_id}
-																onChange={(v) => setData("coupon_id", v)}
-																placeholder="Selecciona…"
-															>
-																{filtered.map((c) => (
-																	<ListboxOption key={c.id} value={c.id}>
-																		<ListboxLabel>
-																			#{c.id}
-																			{c.code ? ` · ${c.code}` : ""} —{" "}
-																			{(c.amount_cents / 100).toLocaleString("es-MX", {
-																				style: "currency",
-																				currency: "MXN",
-																			})}
-																		</ListboxLabel>
-																		<ListboxDescription>
-																			{c.child_coupons_count ?? 0}
-																			{c.max_beneficiaries != null
-																				? ` / ${c.max_beneficiaries}`
-																				: ""}{" "}
-																			beneficiarios
-																		</ListboxDescription>
-																	</ListboxOption>
-																))}
-															</Listbox>
-														)}
-														{errors.coupon_id && (
+														{errors.amount_cents && (
 															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																{errors.coupon_id}
+																{errors.amount_cents}
 															</p>
 														)}
 													</Field>
-												</>
-											) : (
-												<div className="space-y-4">
-													<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-														<Field>
-															<Label>Monto por beneficiario (MXN)</Label>
-															<Input
-																type="number"
-																step="0.01"
-																min="0.01"
-																value={data.amount_mxn}
-																onChange={(e) => setData("amount_mxn", e.target.value)}
-															/>
-															{errors.amount_cents && (
-																<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																	{errors.amount_cents}
-																</p>
-															)}
-														</Field>
-														<Field>
-															<Label>Número de beneficiarios (opcional)</Label>
-															<Input
-																type="number"
-																min="1"
-																placeholder="Sin límite"
-																value={data.max_beneficiaries}
-																onChange={(e) =>
-																	setData("max_beneficiaries", e.target.value)
-																}
-															/>
-															{errors.max_beneficiaries && (
-																<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																	{errors.max_beneficiaries}
-																</p>
-															)}
-														</Field>
-														<Field>
-															<Label>Código (opcional)</Label>
-															<Input
-																value={data.code}
-																onChange={(e) => setData("code", e.target.value)}
-															/>
-														</Field>
-													</div>
 													<Field>
-														<Label>Descripción del crédito a otorgar (opcional)</Label>
-														<Textarea
-															rows={2}
-															value={data.description}
-															onChange={(e) => setData("description", e.target.value)}
+														<Label>Número de beneficiarios</Label>
+														<Input
+															type="number"
+															min="1"
+															placeholder="Sin límite"
+															value={data.max_beneficiaries}
+															onChange={(e) =>
+																setData("max_beneficiaries", e.target.value)
+															}
+														/>
+														{errors.max_beneficiaries && (
+															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+																{errors.max_beneficiaries}
+															</p>
+														)}
+													</Field>
+													<Field>
+														<Label>Código (opcional)</Label>
+														<Input
+															value={data.code}
+															onChange={(e) => setData("code", e.target.value)}
 														/>
 													</Field>
-													{!requireAuth && (
-														<SwitchField>
-															<Label>Activo al crear</Label>
-															<Switch
-																checked={data.is_active}
-																onChange={(v) => setData("is_active", v)}
-															/>
-														</SwitchField>
-													)}
-													{requireAuth && (
-														<p className="text-sm text-amber-800 dark:text-amber-200">
-															Con la política actual, el cupón nuevo quedará pendiente hasta
-															que el autorizador ingrese el código por correo. Las
-															asignaciones se podrán hacer cuando el cupón esté activo.
-														</p>
-													)}
-													<div className="pt-2">
-														<Button
-															type="button"
-															outline
-															onClick={() => setActiveTab("assignment")}
-														>
-															Paso 2
-														</Button>
-													</div>
 												</div>
-											)}
+												<Field>
+													<Label>Descripción del crédito a otorgar (opcional)</Label>
+													<Textarea
+														rows={2}
+														value={data.description}
+														onChange={(e) => setData("description", e.target.value)}
+													/>
+												</Field>
+												{!requireAuth && (
+													<SwitchField>
+														<Label>Activo al crear</Label>
+														<Switch
+															checked={data.is_active}
+															onChange={(v) => setData("is_active", v)}
+														/>
+													</SwitchField>
+												)}
+												{requireAuth && (
+													<p className="text-sm text-amber-800 dark:text-amber-200">
+														Con la política actual, el cupón nuevo quedará pendiente hasta que
+														el autorizador ingrese el código por correo. Las asignaciones se
+														podrán hacer cuando el cupón esté activo.
+													</p>
+												)}
+											</div>
 										</>
 									)}
 
 									{activeTab === "assignment" && (
 										<>
 											<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-												Define cómo quieres aplicar el cupón: solo guardarlo, varios correos
-												en tabla (validados uno a uno) o un archivo masivo.
+												Define cómo quieres aplicar el cupón: solo guardarlo o varios correos
+												en tabla (validados uno a uno)
+												{SHOW_BULK_ASSIGNMENT_UI ? " o un archivo masivo" : ""}.
 											</Text>
 											<div>
 												<p className="mb-2 font-poppins text-base/6 font-medium text-zinc-950 sm:text-sm/6 dark:text-white">
@@ -1110,68 +921,42 @@ export default function CouponsAssign({
 													>
 														{ASSIGNMENT_LABELS.individual}
 													</button>
-													<button
-														type="button"
-														className={pillClass(data.assignment_mode === "bulk")}
-														onClick={() => setData("assignment_mode", "bulk")}
-													>
-														Archivo masivo
-													</button>
-												</div>
-											</div>
-
-											{mustPreApproveCouponBeforeAssignment && (
-												<div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-900 dark:bg-amber-950/40">
-													<p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-														Aprobaciones multi-firma según las reglas
-													</p>
-													<p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
-														Puedes definir la lista manual o masiva en este mismo envío. Se
-														registrará una solicitud para los autorizadores; cuando se alcancen
-														al menos {preApprovalRequiredForNewCoupon} firma(s), el{" "}
-														<strong>último autorizador en aceptar</strong> activará el cupón
-														maestro (si aún estaba pendiente) y se crearán las asignaciones y
-														créditos previstos. No necesitas volver a cargar los correos.
-													</p>
-													{preApprovalReasons.length > 0 && (
-														<ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-900 dark:text-amber-100">
-															{preApprovalReasons.map((reason) => (
-																<li key={reason}>{reason}</li>
-															))}
-														</ul>
+													{SHOW_BULK_ASSIGNMENT_UI && (
+														<button
+															type="button"
+															className={pillClass(data.assignment_mode === "bulk")}
+															onClick={() => setData("assignment_mode", "bulk")}
+														>
+															Archivo masivo
+														</button>
 													)}
 												</div>
-											)}
+												{data.assignment_mode === "none" && (
+													<p className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50/90 px-3 py-2.5 text-sm leading-relaxed text-zinc-600 dark:border-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-300">
+														<strong className="font-medium text-zinc-800 dark:text-zinc-100">
+															Guardar cupón y asignar más tarde:
+														</strong>{" "}
+														se crea el cupón maestro sin beneficiarios en este envío; podrás
+														añadir correos cuando lo necesites.
+													</p>
+												)}
+											</div>
 
 											{data.assignment_mode === "individual" && (
 												<div className="space-y-3">
-													<div className="flex flex-wrap items-end justify-between gap-3">
-														<div>
-															<p className="font-poppins text-base/6 font-medium text-zinc-950 sm:text-sm/6 dark:text-white">
-																Beneficiarios (uno por fila)
-															</p>
-															<p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-																Cada correo se valida contra usuarios registrados. No se
-																pueden repetir correos en la lista. Máximo{" "}
-																<strong>{matrixCapacity}</strong> filas según el cupón
-																{data.coupon_mode === "existing" &&
-																selectedCoupon?.max_beneficiaries == null
-																	? " (sin tope en cupón; límite técnico 5000)"
-																	: ""}
-																.
-															</p>
-														</div>
-														<Button
-															type="button"
-															outline
-															disabled={matrixRows.length >= matrixCapacity}
-															onClick={() => {
-																if (matrixRows.length >= matrixCapacity) return;
-																setMatrixRows((rows) => [...rows, createMatrixRow()]);
-															}}
-														>
-															Agregar fila
-														</Button>
+													<div>
+														<p className="font-poppins text-base/6 font-medium text-zinc-950 sm:text-sm/6 dark:text-white">
+															Beneficiarios (uno por fila)
+														</p>
+														<p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+															Cada correo se valida contra usuarios registrados. No se
+															pueden repetir correos en la lista. Máximo{" "}
+															<strong>{matrixCapacity}</strong> filas según el cupón
+															{String(data.max_beneficiaries ?? "").trim() === ""
+																? " (sin tope definido; límite técnico 5000)"
+																: ""}
+															.
+														</p>
 													</div>
 													<div className="max-h-[min(28rem,55vh)] overflow-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
 														<Table dense>
@@ -1299,6 +1084,25 @@ export default function CouponsAssign({
 																		</TableRow>
 																	);
 																})}
+																<TableRow className="border-t border-zinc-200 bg-zinc-50/60 dark:border-zinc-700 dark:bg-zinc-900/40">
+																	<TableCell className="align-top py-3" colSpan={1}>
+																		<Button
+																			type="button"
+																			outline
+																			disabled={matrixRows.length >= matrixCapacity}
+																			onClick={() => {
+																				if (matrixRows.length >= matrixCapacity) return;
+																				setMatrixRows((rows) => [
+																					...rows,
+																					createMatrixRow(),
+																				]);
+																			}}
+																		>
+																			Agregar fila
+																		</Button>
+																	</TableCell>
+																	<TableCell colSpan={3} className="py-3" />
+																</TableRow>
 															</TableBody>
 														</Table>
 													</div>
@@ -1317,7 +1121,7 @@ export default function CouponsAssign({
 												</div>
 											)}
 
-											{data.assignment_mode === "bulk" && (
+											{SHOW_BULK_ASSIGNMENT_UI && data.assignment_mode === "bulk" && (
 												<div className="space-y-4">
 													<Field>
 														<Label>Archivo (.xlsx, .xls, .csv)</Label>
@@ -1505,45 +1309,81 @@ export default function CouponsAssign({
 															</Label>
 														</CheckboxField>
 													)}
-
-													<div className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-3 text-sm text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-200">
-														<p className="font-medium text-zinc-900 dark:text-white">
-															Aprobaciones
-														</p>
-														<p className="mt-1">
-															Si las reglas exigen firmas, el sistema notifica a{" "}
-															<strong>todos</strong> los usuarios con rol autorizador. No
-															hace falta marcar una lista manualmente en esta pantalla.
-														</p>
-														{authorizers.length === 0 && (
-															<p className="mt-2 text-amber-800 dark:text-amber-200">
-																Aún no hay autorizadores configurados: no se podrán
-																completar solicitudes que requieran aprobación.
-															</p>
-														)}
-													</div>
 												</>
 											)}
 
-											<div
-												className={[
-													"rounded-lg border p-3",
-													approvalRealtime.variant === "ok"
-														? "border-emerald-200 bg-emerald-50/80 dark:border-emerald-900 dark:bg-emerald-950/40"
-														: approvalRealtime.variant === "warn"
-															? "border-amber-200 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/40"
-															: "border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/40",
-												].join(" ")}
-											>
-												<p className="text-sm font-semibold text-zinc-900 dark:text-white">
-													Validación en tiempo real
-												</p>
-												<p className="mt-1 text-sm text-zinc-800 dark:text-zinc-200">
-													{approvalRealtime.title}
-												</p>
-												<p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-													{approvalRealtime.detail}
-												</p>
+											<div ref={assignmentHelpRef} className="relative flex justify-end">
+												<button
+													type="button"
+													className="inline-flex shrink-0 items-center justify-center rounded-full p-1.5 text-zinc-500 transition hover:bg-zinc-200/80 hover:text-zinc-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-famedic-lime dark:text-zinc-400 dark:hover:bg-zinc-700/80 dark:hover:text-zinc-100"
+													aria-expanded={assignmentApprovalsHelpOpen}
+													aria-controls="assignment-approvals-help-panel"
+													aria-label="Información sobre aprobaciones y validación"
+													onClick={() =>
+														setAssignmentApprovalsHelpOpen((o) => !o)
+													}
+												>
+													<InformationCircleIcon className="size-5" aria-hidden />
+												</button>
+												{assignmentApprovalsHelpOpen && (
+													<div
+														id="assignment-approvals-help-panel"
+														role="region"
+														aria-label="Ayuda de aprobaciones y validación"
+														className="absolute right-0 top-full z-30 mt-2 w-[min(100vw-2.5rem,24rem)] max-h-[min(70vh,28rem)] overflow-y-auto rounded-lg border border-zinc-200 bg-white p-4 text-sm shadow-lg ring-1 ring-black/5 dark:border-zinc-600 dark:bg-zinc-900 dark:ring-white/10"
+													>
+														{(data.assignment_mode !== "none" ||
+															mustPreApproveCouponBeforeAssignment) && (
+															<div className="border-b border-zinc-200 pb-4 dark:border-zinc-700">
+																<p className="font-medium text-zinc-900 dark:text-white">
+																	Aprobaciones
+																</p>
+																<p className="mt-1 text-zinc-700 dark:text-zinc-300">
+																	Si las reglas exigen firmas, el sistema notifica a{" "}
+																	<strong>todos</strong> los usuarios con rol
+																	autorizador. No hace falta marcar una lista
+																	manualmente en esta pantalla.
+																</p>
+																{authorizers.length === 0 && (
+																	<p className="mt-2 text-amber-800 dark:text-amber-200">
+																		Aún no hay autorizadores configurados: no se
+																		podrán completar solicitudes que requieran
+																		aprobación.
+																	</p>
+																)}
+															</div>
+														)}
+														<div
+															className={
+																data.assignment_mode !== "none" ||
+																mustPreApproveCouponBeforeAssignment
+																	? "pt-4"
+																	: ""
+															}
+														>
+															<p className="font-semibold text-zinc-900 dark:text-white">
+																Validación en tiempo real
+															</p>
+															<div
+																className={[
+																	"mt-2 rounded-md border p-3",
+																	approvalRealtime.variant === "ok"
+																		? "border-emerald-200 bg-emerald-50/80 dark:border-emerald-900 dark:bg-emerald-950/40"
+																		: approvalRealtime.variant === "warn"
+																			? "border-amber-200 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/40"
+																			: "border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/40",
+																].join(" ")}
+															>
+																<p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+																	{approvalRealtime.title}
+																</p>
+																<p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+																	{approvalRealtime.detail}
+																</p>
+															</div>
+														</div>
+													</div>
+												)}
 											</div>
 										</>
 									)}
@@ -1558,41 +1398,27 @@ export default function CouponsAssign({
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Tipo de cupón
 													</dt>
-													<dd>
-														{data.coupon_mode === "new"
-															? "Nuevo (maestro)"
-															: "Existente"}
-													</dd>
+													<dd>Nuevo (maestro)</dd>
 												</div>
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Monto por beneficiario
 													</dt>
-													<dd>
-														{data.coupon_mode === "new"
-															? formatMxFromCents(amountCentsPreview)
-															: formatMxFromCents(selectedCoupon?.amount_cents)}
-													</dd>
+													<dd>{formatMxFromCents(amountCentsPreview)}</dd>
 												</div>
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Máximo de beneficiarios
 													</dt>
 													<dd>
-														{data.coupon_mode === "new"
-															? String(data.max_beneficiaries || "").trim() || "Sin límite"
-															: selectedCoupon?.max_beneficiaries ?? "Sin límite"}
+														{String(data.max_beneficiaries || "").trim() || "Sin límite"}
 													</dd>
 												</div>
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Código
 													</dt>
-													<dd>
-														{data.coupon_mode === "new"
-															? data.code?.trim() || "—"
-															: selectedCoupon?.code || "—"}
-													</dd>
+													<dd>{data.code?.trim() || "—"}</dd>
 												</div>
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">

@@ -121,7 +121,7 @@ class EnsureUserHasAdminAccount
                     'icon' => 'BanknotesIcon',
                     'items' => [
                         [
-                            'label' => 'Listado',
+                            'label' => 'Listado - Crear',
                             'url' => route('admin.coupons.index'),
                             'current' => Route::currentRouteName() === 'admin.coupons.index'
                                 || Route::currentRouteName() === 'admin.coupons.create'
