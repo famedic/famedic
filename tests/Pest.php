@@ -23,6 +23,8 @@ uses(
 
 uses(TestCase::class, RefreshDatabase::class)->in('Feature');
 
+uses(TestCase::class)->in('Unit');
+
 /*
 |--------------------------------------------------------------------------
 | Expectations

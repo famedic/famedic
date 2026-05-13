@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Admin\AdministratorController;
+use App\Http\Controllers\Admin\CouponConceptController;
+use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CartController;
 use App\Http\Controllers\Admin\ConfigMonitorController;
 use App\Http\Controllers\Admin\ConfigMonitorMetadataController;
@@ -144,6 +146,26 @@ Route::prefix('admin')->middleware([
         Route::get('laboratory-notifications-monitor/{gdaOrderId}', [LaboratoryNotificationMonitorController::class, 'show'])
             ->name('laboratory-notifications-monitor.show');
 
+        Route::get('coupons/export', [CouponController::class, 'export'])->name('coupons.export');
+        Route::get('coupons/settings', [CouponController::class, 'settings'])->name('coupons.settings');
+        Route::put('coupons/settings', [CouponController::class, 'updateSettings'])->name('coupons.settings.update');
+        Route::get('coupons/logs', [CouponController::class, 'logs'])->name('coupons.logs');
+        Route::get('coupons/assign', [CouponController::class, 'assignForm'])->name('coupons.assign');
+        Route::get('coupons/assign/bulk-template', [CouponController::class, 'downloadBulkAssignTemplate'])->name('coupons.assign.bulk-template');
+        Route::get('coupons/users/lookup', [CouponController::class, 'lookupAssignableUser'])->name('coupons.users.lookup');
+        Route::post('coupons/assign/preview-bulk', [CouponController::class, 'previewBulkAssignEmails'])->name('coupons.assign.preview-bulk');
+        Route::post('coupons/assign', [CouponController::class, 'assign'])->name('coupons.assign.store');
+        Route::get('coupons/import', [CouponController::class, 'importForm'])->name('coupons.import');
+        Route::post('coupons/import', [CouponController::class, 'import'])->name('coupons.import.store');
+        Route::post('coupons/approval-requests/{approvalRequest}/approve', [CouponController::class, 'approveRequest'])->name('coupons.approval-requests.approve');
+        Route::post('coupons/approval-requests/{approvalRequest}/reject', [CouponController::class, 'rejectRequest'])->name('coupons.approval-requests.reject');
+        Route::post('coupons/concepts', [CouponConceptController::class, 'store'])->name('coupons.concepts.store');
+        Route::put('coupons/concepts/{couponConcept}', [CouponConceptController::class, 'update'])->name('coupons.concepts.update');
+        Route::delete('coupons/concepts/{couponConcept}', [CouponConceptController::class, 'destroy'])->name('coupons.concepts.destroy');
+        Route::post('coupons/{coupon}/authorize', [CouponController::class, 'authorizeCoupon'])->name('coupons.authorize');
+        Route::post('coupons/{coupon}/resend-authorization', [CouponController::class, 'resendAuthorization'])->name('coupons.resend-authorization');
+        Route::delete('coupons/{coupon}/assignments/{couponUser}', [CouponController::class, 'destroyAssignment'])->name('coupons.assignments.destroy');
+        Route::resource('coupons', CouponController::class);
         // Monitor de configuración (solo lectura; metadatos en BD)
         Route::get('config-monitor', [ConfigMonitorController::class, 'index'])->name('config-monitor.index');
         Route::post('config-monitor/refresh', [ConfigMonitorController::class, 'refresh'])->name('config-monitor.refresh');

@@ -13,6 +13,7 @@ use App\Http\Controllers\EfevooWebhookController;
 //use App\Http\Controllers\TestEfevooController;
 //use App\Http\Controllers\TestEfevooFinalController;
 use App\Http\Controllers\OnlinePharmacyPurchaseController;
+use App\Http\Controllers\InAppNotificationController;
 use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\TaxProfileController;
 use App\Http\Controllers\TaxProfiles\FiscalCertificateController;
@@ -47,6 +48,11 @@ Route::middleware([
         'store',
         'destroy'
     ]);
+
+    Route::post('in-app-notifications/{in_app_notification}/read', [InAppNotificationController::class, 'markRead'])
+        ->name('in-app-notifications.read');
+    Route::post('in-app-notifications/read-all', [InAppNotificationController::class, 'markAllRead'])
+        ->name('in-app-notifications.read-all');
 
     // Nueva ruta para actualizar alias
     Route::patch('/payment-methods/{token}/alias', [PaymentMethodController::class, 'updateAlias'])->name('payment-methods.update-alias');

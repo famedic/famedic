@@ -27,6 +27,13 @@ import EfevooPayBadge from "@/Components/EfevooPayBadge";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import PurchasePdfDialog from "@/Components/PurchasePdfDialog";
 import Card from "@/Components/Card";
+import PaymentMethodBadge from "@/Components/PaymentMethodBadge";
+
+const formatCents = (cents) =>
+	new Intl.NumberFormat("es-MX", {
+		style: "currency",
+		currency: "MXN",
+	}).format(Number(cents || 0) / 100);
 
 export default function Purchase({ purchase, isLabPurchase = false }) {
 	const [showRequestInvoiceModal, setShowRequestInvoiceModal] =
@@ -370,6 +377,10 @@ function Patient({ purchase, isLabPurchase }) {
 function PaymentMethod({ purchase }) {
 	const tx = purchase.transactions?.[0];
 	const hasNoTransactions = !tx;
+	const primaryTransaction = hasNoTransactions ? null : tx;
+	const hasCouponApplied =
+		Number(purchase.coupon_discount_cents ?? 0) > 0 ||
+		primaryTransaction?.payment_method === "coupon_balance";
 	const pm = tx?.payment_method;
 	const details = tx?.details && typeof tx.details === "object" ? tx.details : {};
 	const tokenInfo = details.token_info && typeof details.token_info === "object" ? details.token_info : {};
@@ -386,6 +397,19 @@ function PaymentMethod({ purchase }) {
 			<div className="mt-4 space-y-2">
 				{hasNoTransactions && <Text>No registrado</Text>}
 
+				{primaryTransaction && (
+					<PaymentMethodBadge transaction={primaryTransaction} />
+				)}
+
+				{hasCouponApplied && (
+					<Badge color="famedic-lime" className="w-fit">
+						Crédito a favor aplicado
+						{Number(purchase.coupon_discount_cents ?? 0) > 0 &&
+							purchase.formatted_coupon_discount && (
+								<Code>-{purchase.formatted_coupon_discount}</Code>
+							)}
+					</Badge>
+				)}
 				{!hasNoTransactions && pm === "odessa" && (
 					<div className="flex gap-1">
 						<img
@@ -595,6 +619,10 @@ function PharmacyDelivery({ purchase }) {
 }
 
 function Totals({ purchase, isLabPurchase }) {
+	const couponDiscountCents = Number(purchase.coupon_discount_cents || 0);
+	const totalCents = Number(purchase.total_cents || 0);
+	const paidCents = Math.max(0, totalCents - couponDiscountCents);
+
 	return (
 		<div className="space-y-6 text-sm">
 			{!isLabPurchase && (
@@ -625,10 +653,25 @@ function Totals({ purchase, isLabPurchase }) {
 					)}
 				</>
 			)}
+			{isLabPurchase && (
+				<div className="flex justify-between">
+					<Text>Total de estudios</Text>
+					<Text>{purchase.formatted_total}</Text>
+				</div>
+			)}
+			{isLabPurchase &&
+				couponDiscountCents > 0 && (
+					<div className="flex justify-between">
+						<Text>Saldo a favor aplicado</Text>
+						<Text>-{purchase.formatted_coupon_discount}</Text>
+					</div>
+				)}
 			<div className="flex justify-between">
-				<Subheading>Total</Subheading>
+				<Subheading>{isLabPurchase ? "Total pagado" : "Total"}</Subheading>
 
-				<Subheading>{purchase.formatted_total}</Subheading>
+				<Subheading>
+					{isLabPurchase ? formatCents(paidCents) : purchase.formatted_total}
+				</Subheading>
 			</div>
 		</div>
 	);

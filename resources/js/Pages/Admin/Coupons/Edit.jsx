@@ -1,0 +1,109 @@
+import AdminLayout from "@/Layouts/AdminLayout";
+import { Heading } from "@/Components/Catalyst/heading";
+import { Button } from "@/Components/Catalyst/button";
+import { Field, Label } from "@/Components/Catalyst/fieldset";
+import { Input } from "@/Components/Catalyst/input";
+import { Textarea } from "@/Components/Catalyst/textarea";
+import { Switch, SwitchField } from "@/Components/Catalyst/switch";
+import { useForm } from "@inertiajs/react";
+import { Badge } from "@/Components/Catalyst/badge";
+
+export default function CouponsEdit({ coupon }) {
+	const { data, setData, put, processing, errors, transform } = useForm({
+		code: coupon.code || "",
+		description: coupon.description || "",
+		max_beneficiaries:
+			coupon.max_beneficiaries != null ? String(coupon.max_beneficiaries) : "",
+		is_active: coupon.is_active,
+	});
+
+	transform((d) => ({
+		code: d.code || null,
+		description: d.description || null,
+		max_beneficiaries:
+			String(d.max_beneficiaries ?? "").trim() === ""
+				? null
+				: parseInt(String(d.max_beneficiaries), 10),
+		is_active: d.is_active,
+	}));
+
+	const submit = (e) => {
+		e.preventDefault();
+		put(route("admin.coupons.update", coupon.id));
+	};
+
+	const statusLabel = {
+		pending_authorization: "Pendiente de autorización",
+		active: "Autorizado",
+		rejected: "Rechazado",
+	};
+
+	return (
+		<AdminLayout title="Editar cupón">
+			<Heading>Editar cupón #{coupon.id}</Heading>
+			<div className="mt-2 flex flex-wrap gap-2">
+				<Badge
+					color={
+						coupon.approval_status === "pending_authorization"
+							? "purple"
+							: "emerald"
+					}
+				>
+					{statusLabel[coupon.approval_status] ?? coupon.approval_status}
+				</Badge>
+			</div>
+			<p className="mt-2 text-sm text-zinc-600">
+				Monto por beneficiario:{" "}
+				{(coupon.amount_cents / 100).toLocaleString("es-MX", {
+					style: "currency",
+					currency: "MXN",
+				})}
+			</p>
+			<form onSubmit={submit} className="mt-6 max-w-md space-y-6">
+				<Field>
+					<Label>Descripción</Label>
+					<Textarea
+						rows={3}
+						value={data.description}
+						onChange={(e) => setData("description", e.target.value)}
+					/>
+				</Field>
+				<Field>
+					<Label>Máximo de beneficiarios</Label>
+					<Input
+						type="number"
+						min="1"
+						placeholder="Sin límite"
+						value={data.max_beneficiaries}
+						onChange={(e) => setData("max_beneficiaries", e.target.value)}
+					/>
+					{errors.max_beneficiaries && (
+						<p className="text-sm text-red-600">{errors.max_beneficiaries}</p>
+					)}
+				</Field>
+				<Field>
+					<Label>Código (opcional)</Label>
+					<Input
+						value={data.code}
+						onChange={(e) => setData("code", e.target.value)}
+					/>
+				</Field>
+				<SwitchField>
+					<Label>Activo</Label>
+					<Switch
+						checked={data.is_active}
+						onChange={(v) => setData("is_active", v)}
+					/>
+				</SwitchField>
+				<div className="flex gap-2">
+					<Button type="submit" disabled={processing} color="emerald">
+						Guardar
+					</Button>
+					<Button href={route("admin.coupons.index")} plain>
+						Volver
+					</Button>
+				</div>
+			</form>
+		</AdminLayout>
+	);
+}

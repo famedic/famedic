@@ -116,6 +116,44 @@ class EnsureUserHasAdminAccount
                     'current' => Route::currentRouteName() === 'admin.customers.index' ||
                         Route::currentRouteName() === 'admin.customers.show',
                 ]] : [],
+                ...$request->user()->administrator->hasPermissionTo('coupons.manage') ? [[
+                    'label' => 'Créditos a favor',
+                    'icon' => 'BanknotesIcon',
+                    'items' => [
+                        [
+                            'label' => 'Créditos',
+                            'url' => route('admin.coupons.index'),
+                            'current' => Route::currentRouteName() === 'admin.coupons.index'
+                                || Route::currentRouteName() === 'admin.coupons.create'
+                                || Route::currentRouteName() === 'admin.coupons.edit'
+                                || Route::currentRouteName() === 'admin.coupons.show'
+                                || Route::currentRouteName() === 'admin.coupons.assign'
+                                || Route::currentRouteName() === 'admin.coupons.import',
+                        ],
+                        [
+                            'label' => 'Crear crédito',
+                            'url' => route('admin.coupons.create'),
+                            'current' => Route::currentRouteName() === 'admin.coupons.create',
+                        ],
+                        [
+                            'label' => 'Configuración',
+                            'url' => route('admin.coupons.settings'),
+                            'current' => Route::currentRouteName() === 'admin.coupons.settings'
+                                && $request->query('tab') !== 'concepts',
+                        ],
+                        [
+                            'label' => 'Conceptos',
+                            'url' => route('admin.coupons.settings', ['tab' => 'concepts']),
+                            'current' => Route::currentRouteName() === 'admin.coupons.settings'
+                                && $request->query('tab') === 'concepts',
+                        ],
+                        [
+                            'label' => 'Historial',
+                            'url' => route('admin.coupons.logs'),
+                            'current' => Route::currentRouteName() === 'admin.coupons.logs',
+                        ],
+                    ],
+                ]] : [],
                 ...$request->user()->administrator->hasPermissionTo('documentation.manage') ? [[
                     'label' => 'Documentación legal',
                     'url' => route('admin.documentation'),

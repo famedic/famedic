@@ -74,7 +74,10 @@ export default function LaboratoryPurchase({
 			<LaboratoryAppointment laboratoryPurchase={laboratoryPurchase} />
 
 			{laboratoryPurchase.transactions.length > 0 && (
-				<PaymentDetails transaction={laboratoryPurchase.transactions[0]} />
+				<PaymentDetails
+					transaction={laboratoryPurchase.transactions[0]}
+					purchase={laboratoryPurchase}
+				/>
 			)}
 
 		</AdminLayout>

@@ -8,6 +8,7 @@ use App\Models\OnlinePharmacyPurchase;
 use App\Services\Tracking\Tracking;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Redirector;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Cashier\Cashier;
@@ -74,6 +75,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Gate::define('assign-autorizador-role', function ($user): bool {
+            return (bool) $user->administrator?->hasRole('superadmin');
+        });
+
         Route::bind('laboratory_purchase', function ($value) {
             return LaboratoryPurchase::withTrashed()->findOrFail($value);
         });

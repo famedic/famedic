@@ -2,7 +2,9 @@
 
 namespace App\Exports\Sheets;
 
+use App\Models\Coupon;
 use App\Models\LaboratoryPurchase;
+use App\Models\Transaction;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Storage;
@@ -17,6 +19,9 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
 class LaboratoryPurchasesSheet implements FromQuery, ShouldAutoSize, WithColumnFormatting, WithHeadings, WithMapping, WithTitle
 {
+    /** @var array<int, string|null> */
+    private array $couponCodeById = [];
+
     public function __construct(
         private array $filters = []
     ) {}
@@ -51,6 +56,8 @@ class LaboratoryPurchasesSheet implements FromQuery, ShouldAutoSize, WithColumnF
             'Total',
             'Método de pago',
             'Referencia de pago',
+            'Crédito a favor aplicado',
+            'Código cupón (referencia)',
             'Fecha de compra',
             'Solicitud de factura',
             'Carga de factura',
@@ -64,7 +71,7 @@ class LaboratoryPurchasesSheet implements FromQuery, ShouldAutoSize, WithColumnF
 
     public function map($laboratoryPurchase): array
     {
-        $transaction = $laboratoryPurchase->transactions()->first();
+        $transaction = $laboratoryPurchase->transactions->first();
         $feeCents = 0;
         $totalCents = $laboratoryPurchase->total_cents;
 
@@ -72,6 +79,13 @@ class LaboratoryPurchasesSheet implements FromQuery, ShouldAutoSize, WithColumnF
             $feeCents = $transaction->commission_cents;
             $totalCents = $laboratoryPurchase->total_cents - $feeCents;
         }
+
+        $creditAppliedCents = (int) ($laboratoryPurchase->coupon_discount_cents ?? 0);
+        if ($creditAppliedCents === 0) {
+            $creditAppliedCents = (int) data_get($transaction?->details, 'coupon_amount_cents', 0);
+        }
+
+        $couponReference = $this->couponReferenceForTransaction($transaction);
 
         return [
             $laboratoryPurchase->gda_order_id,
@@ -86,9 +100,14 @@ class LaboratoryPurchasesSheet implements FromQuery, ShouldAutoSize, WithColumnF
             $transaction ? match ($transaction->payment_method) {
                 'stripe' => 'Pago con tarjeta',
                 'odessa' => 'Caja de ahorro',
+                'paypal' => 'PayPal',
+                'efevoopay' => 'EfevooPay',
+                'coupon_balance' => 'Crédito a favor (cupón)',
                 default => $transaction->payment_method,
             } : '',
             $transaction?->reference_id ?? '',
+            $creditAppliedCents > 0 ? numberCents($creditAppliedCents) : '',
+            $couponReference,
             $laboratoryPurchase->created_at ? Date::dateTimeToExcel(localizedDate($laboratoryPurchase->created_at)) : null,
             $laboratoryPurchase->invoiceRequest?->created_at ? Date::dateTimeToExcel(localizedDate($laboratoryPurchase->invoiceRequest->created_at)) : null,
             $laboratoryPurchase->invoice?->created_at ? Date::dateTimeToExcel(localizedDate($laboratoryPurchase->invoice->created_at)) : null,
@@ -113,14 +132,43 @@ class LaboratoryPurchasesSheet implements FromQuery, ShouldAutoSize, WithColumnF
             'G' => NumberFormat::FORMAT_CURRENCY_USD,
             'H' => NumberFormat::FORMAT_CURRENCY_USD,
             'I' => NumberFormat::FORMAT_CURRENCY_USD,
-            'L' => NumberFormat::FORMAT_DATE_XLSX15,
-            'M' => NumberFormat::FORMAT_DATE_XLSX15,
+            'L' => NumberFormat::FORMAT_CURRENCY_USD,
             'N' => NumberFormat::FORMAT_DATE_XLSX15,
             'O' => NumberFormat::FORMAT_DATE_XLSX15,
             'P' => NumberFormat::FORMAT_DATE_XLSX15,
-            'Q' => NumberFormat::FORMAT_DATE_XLSX14,
-            'S' => NumberFormat::FORMAT_DATE_XLSX15,
+            'Q' => NumberFormat::FORMAT_DATE_XLSX15,
+            'R' => NumberFormat::FORMAT_DATE_XLSX15,
+            'S' => NumberFormat::FORMAT_DATE_XLSX14,
+            'U' => NumberFormat::FORMAT_DATE_XLSX15,
         ];
+    }
+
+    private function couponReferenceForTransaction(?Transaction $transaction): string
+    {
+        if (! $transaction) {
+            return '';
+        }
+
+        $couponId = data_get($transaction->details, 'coupon_id');
+        if (! $couponId) {
+            return '';
+        }
+
+        $couponId = (int) $couponId;
+
+        if (! array_key_exists($couponId, $this->couponCodeById)) {
+            $this->couponCodeById[$couponId] = Coupon::query()
+                ->whereKey($couponId)
+                ->value('code');
+        }
+
+        $code = $this->couponCodeById[$couponId];
+
+        if ($code !== null && $code !== '') {
+            return (string) $code;
+        }
+
+        return 'ID:' . $couponId;
     }
 
     private function getResultsUploadedDate(LaboratoryPurchase $laboratoryPurchase): ?Carbon

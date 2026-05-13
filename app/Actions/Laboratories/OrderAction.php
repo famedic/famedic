@@ -4,15 +4,20 @@ namespace App\Actions\Laboratories;
 
 use App\Actions\Odessa\ChargeOdessaAction;
 use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction;
+use App\Actions\Transactions\CreateCouponBalanceTransactionAction;
 use App\Actions\Transactions\RefundTransactionAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\UnmatchingTotalPriceException;
 use App\Models\Address;
 use App\Models\Contact;
+use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\Transaction;
+use App\Services\CouponApplicationService;
+use App\Notifications\LaboratoryPurchaseCreated;
+use App\Notifications\FewDaysLeftToRequestInvoice;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Propaganistas\LaravelPhone\PhoneNumber;
@@ -22,7 +27,10 @@ class OrderAction
     private CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction;
     private ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction;
     private ChargeOdessaAction $chargeOdessaAction;
+    private CreateGDAQuotationAction $createGDAQuotationAction;
     private RefundTransactionAction $refundTransactionAction;
+    private CouponApplicationService $couponApplicationService;
+    private CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction;
     private FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction;
 
     private Collection $laboratoryCartItems;
@@ -31,13 +39,19 @@ class OrderAction
         CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
         ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction,
         ChargeOdessaAction $chargeOdessaAction,
+        CreateGDAQuotationAction $createGDAQuotationAction,
         RefundTransactionAction $refundTransactionAction,
+        CouponApplicationService $couponApplicationService,
+        CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction,
         FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction
     ) {
         $this->calculateTotalsAndDiscountAction = $calculateTotalsAndDiscountAction;
         $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction;
         $this->chargeOdessaAction = $chargeOdessaAction;
+        $this->createGDAQuotationAction = $createGDAQuotationAction;
         $this->refundTransactionAction = $refundTransactionAction;
+        $this->couponApplicationService = $couponApplicationService;
+        $this->createCouponBalanceTransactionAction = $createCouponBalanceTransactionAction;
         $this->fulfillLaboratoryCartOrderAction = $fulfillLaboratoryCartOrderAction;
     }
 
@@ -47,7 +61,8 @@ class OrderAction
         ?Contact $contact,
         string $paymentMethod,
         LaboratoryBrand $laboratoryBrand,
-        int $totalCents
+        int $totalCents,
+        ?int $couponId = null,
     ): LaboratoryPurchase {
 
         $this->laboratoryCartItems = $customer->laboratoryCartItems()
@@ -61,6 +76,18 @@ class OrderAction
         if ($totalCents != $calculatedTotalCents) {
             throw new UnmatchingTotalPriceException();
         }
+
+        $discountCents = 0;
+        if ($couponId !== null) {
+            $this->couponApplicationService->validateApplication(
+                $customer->user,
+                $couponId,
+                $calculatedTotalCents
+            );
+            $discountCents = (int) Coupon::query()->findOrFail($couponId)->remaining_cents;
+        }
+
+        $amountToChargeCents = $calculatedTotalCents - $discountCents;
 
         $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand);
 
@@ -92,11 +119,19 @@ class OrderAction
         $transaction = null;
 
         try {
-            DB::beginTransaction();
+            if ($amountToChargeCents > 0) {
+                $transaction = $this->chargeAndCreateTransaction($amountToChargeCents, $paymentMethod, $customer);
+            } else {
+                $transaction = ($this->createCouponBalanceTransactionAction)(
+                    $customer,
+                    (int) $couponId,
+                    $discountCents
+                );
+            }
 
-            $transaction = $this->chargeAndCreateTransaction($totalCents, $paymentMethod, $customer);
-
-            DB::commit();
+            if ($couponId !== null) {
+                $this->addCouponDetailsToTransaction($transaction, (int) $couponId, $discountCents, $calculatedTotalCents);
+            }
 
             $gdaBrandValue = request()->laboratory_brand->value ?? $laboratoryBrand->value;
 
@@ -109,9 +144,12 @@ class OrderAction
                 $laboratoryAppointment,
                 $this->laboratoryCartItems,
                 $gdaBrandValue,
+                $couponId,
             );
         } catch (\Throwable $th) {
-            DB::rollBack();
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
 
             if ($transaction) {
                 //($this->refundTransactionAction)->refund($transaction);
@@ -122,6 +160,24 @@ class OrderAction
         }
 
         return $laboratoryPurchase;
+    }
+
+    private function addCouponDetailsToTransaction(
+        Transaction $transaction,
+        int $couponId,
+        int $discountCents,
+        int $originalTotalCents
+    ): void {
+        $details = is_array($transaction->details) ? $transaction->details : [];
+
+        $transaction->update([
+            'details' => array_merge($details, [
+                'coupon_id' => $couponId,
+                'coupon_amount_cents' => $discountCents,
+                'original_total_cents' => $originalTotalCents,
+                'amount_charged_cents' => max(0, $originalTotalCents - $discountCents),
+            ]),
+        ]);
     }
 
     private function chargeAndCreateTransaction(int $amountCents, string $paymentMethod, Customer $customer): Transaction

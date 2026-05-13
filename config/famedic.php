@@ -58,6 +58,14 @@ return [
         'payment-attempts' => [
             ['manage' => 'Monitorear intentos de pago'],
         ],
+        'cupones' => [
+            ['manage' => 'Gestionar créditos y asignaciones'],
+            ['view' => 'Ver cupones'],
+            ['create' => 'Crear cupones'],
+            ['edit' => 'Editar cupones'],
+            ['delete' => 'Eliminar cupones'],
+            ['config' => 'Configurar cupones'],
+        ],
         'config_monitor' => [
             ['manage_metadata' => 'Administrar metadatos del monitor de configuración'],
         ],

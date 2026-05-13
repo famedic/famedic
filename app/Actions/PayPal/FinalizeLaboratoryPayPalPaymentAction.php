@@ -154,6 +154,7 @@ class FinalizeLaboratoryPayPalPaymentAction
             $laboratoryAppointment,
             $cartItems,
             $gdaBrandValue,
+            isset($details['coupon_id']) ? (int) $details['coupon_id'] : null,
         );
     }
 

@@ -2,8 +2,12 @@
 
 namespace App\Http\Requests\Laboratories\LaboratoryPurchases;
 
+use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
+use App\Exceptions\CouponApplicationException;
+use App\Models\Coupon;
+use App\Services\CouponApplicationService;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreLaboratoryPurchaseRequest extends FormRequest
 {
@@ -12,35 +16,23 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
         return true;
     }
 
-    /**
-     * Prepara los datos antes de la validación
-     */
     protected function prepareForValidation(): void
     {
-        // Convertir payment_method a string si viene como integer
         $this->normalizePaymentMethod();
     }
 
     public function rules(): array
     {
-        $allowedMethods = $this->getAllowedPaymentMethods();
-        
-        \Log::info('Validando compra de laboratorio', [
-            'customer_id' => auth()->id(),
-            'allowed_methods' => $allowedMethods,
-            'payment_method_received' => $this->input('payment_method'),
-            'payment_method_type' => gettype($this->input('payment_method')),
-        ]);
-
         return [
             'total' => 'required|numeric|min:0',
+            'coupon_id' => ['nullable', 'integer', 'exists:coupons,id'],
             'address' => [
                 'required',
                 'exists:addresses,id',
                 function ($attribute, $value, $fail) {
                     if ($value) {
                         $address = auth()->user()->customer->addresses()->find($value);
-                        if (!$address) {
+                        if (! $address) {
                             $fail('La dirección seleccionada no es válida.');
                         }
                     }
@@ -52,97 +44,111 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
                 function ($attribute, $value, $fail) {
                     if ($value) {
                         $contact = auth()->user()->customer->contacts()->find($value);
-                        if (!$contact) {
+                        if (! $contact) {
                             $fail('El contacto seleccionado no es válido.');
                         }
                     }
                 },
             ],
             'laboratory_appointment' => [
-                'nullable', 
-                'exists:laboratory_appointments,id,customer_id,' . auth()->user()->customer->id
+                'nullable',
+                'exists:laboratory_appointments,id,customer_id,'.auth()->user()->customer->id,
             ],
-            'payment_method' => [
-                'required', 
-                Rule::in($allowedMethods) // QUITAR 'string' de aquí
-            ],
+            'payment_method' => ['required', 'string'],
         ];
     }
 
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            $brand = $this->route('laboratory_brand');
+            $cartItems = auth()->user()->customer->laboratoryCartItems()
+                ->ofBrand($brand)
+                ->with('laboratoryTest')
+                ->get();
+
+            $totals = app(CalculateTotalsAndDiscountAction::class)($cartItems);
+            $calculatedTotal = (int) $totals['total'];
+
+            if ((int) $this->input('total') !== $calculatedTotal) {
+                $validator->errors()->add('total', 'El total de la compra no coincide con el carrito.');
+
+                return;
+            }
+
+            $couponId = $this->filled('coupon_id') ? (int) $this->input('coupon_id') : null;
+
+            $amountToCharge = $calculatedTotal;
+            if ($couponId !== null) {
+                try {
+                    app(CouponApplicationService::class)->validateApplication(
+                        auth()->user(),
+                        $couponId,
+                        $calculatedTotal
+                    );
+                } catch (CouponApplicationException $e) {
+                    $validator->errors()->add('coupon_id', $e->getMessage());
+
+                    return;
+                }
+
+                $coupon = Coupon::query()->findOrFail($couponId);
+                $amountToCharge = $calculatedTotal - $coupon->remaining_cents;
+            }
+
+            $allowed = $this->paymentMethodsForAmount($amountToCharge, $couponId !== null);
+
+            if (! in_array((string) $this->input('payment_method'), $allowed, true)) {
+                $validator->errors()->add('payment_method', 'El método de pago seleccionado no es válido o ha expirado.');
+            }
+        });
+    }
+
     /**
-     * Normaliza el campo payment_method a string
+     * @return list<string>
      */
+    private function paymentMethodsForAmount(int $amountToChargeCents, bool $hasCoupon): array
+    {
+        $allowed = [];
+
+        $customer = auth()->user()->customer;
+
+        foreach ($customer->efevooTokens()->active()->get() as $token) {
+            $allowed[] = (string) $token->id;
+        }
+
+        if ($customer->has_odessa_afiliate_account) {
+            $allowed[] = 'odessa';
+        }
+
+        if ($hasCoupon && $amountToChargeCents === 0) {
+            $allowed[] = 'coupon_balance';
+        }
+
+        return $allowed;
+    }
+
     private function normalizePaymentMethod(): void
     {
         if ($this->has('payment_method')) {
             $value = $this->input('payment_method');
-            
-            // Si es numérico, convertirlo a string
+
             if (is_numeric($value)) {
                 $this->merge([
                     'payment_method' => (string) $value,
-                ]);
-                
-                \Log::debug('Payment method normalizado', [
-                    'original' => $value,
-                    'normalized' => (string) $value,
-                    'customer_id' => auth()->id(),
                 ]);
             }
         }
     }
 
-    private function getAllowedPaymentMethods(): array
-    {
-        $customer = auth()->user()->customer;
-        $allowedPaymentMethods = [];
-
-        // Obtener tokens activos de EfevooPay
-        $tokens = $customer->efevooTokens()
-            ->active()
-            ->get();
-        
-        foreach ($tokens as $token) {
-            $allowedPaymentMethods[] = (string) $token->id;
-            
-            \Log::debug('Token permitido', [
-                'token_id' => $token->id,
-                'token_id_string' => (string) $token->id,
-                'card_last_four' => $token->card_last_four,
-                'alias' => $token->alias,
-            ]);
-        }
-
-        // Agregar Odessa si está disponible
-        if ($customer->has_odessa_afiliate_account) {
-            $allowedPaymentMethods[] = 'odessa';
-            
-            \Log::debug('Odessa permitido', [
-                'customer_id' => $customer->id,
-                'has_odessa_account' => true,
-            ]);
-        }
-
-        // Log final
-        \Log::info('Métodos de pago permitidos generados', [
-            'customer_id' => $customer->id,
-            'total_methods' => count($allowedPaymentMethods),
-            'methods' => $allowedPaymentMethods,
-            'has_tokens' => $tokens->count(),
-            'has_odessa' => $customer->has_odessa_afiliate_account,
-        ]);
-
-        return $allowedPaymentMethods;
-    }
-    
-    /**
-     * Mensajes de error personalizados
-     */
     public function messages(): array
     {
         return [
             'payment_method.required' => 'Debes seleccionar un método de pago.',
-            'payment_method.in' => 'El método de pago seleccionado no es válido o ha expirado.',
             'address.required' => 'Debes seleccionar una dirección de envío.',
             'address.exists' => 'La dirección seleccionada no existe.',
             'total.required' => 'El total es requerido.',

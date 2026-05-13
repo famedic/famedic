@@ -15,6 +15,7 @@ import { DocumentCheckIcon } from "@heroicons/react/20/solid";
 import ApplicationLogo from "@/Components/ApplicationLogo";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import UserNavigationDropdown from "@/Components/UserNavigationDropdown";
+import NotificationBell from "@/Components/NotificationBell";
 import ShoppingCartDropdown from "@/Layouts/FamedicLayout/ShoppingCartDropdown";
 import OdessaLogo from "@/Components/OdessaLogo";
 import { ArrowRightEndOnRectangleIcon } from "@heroicons/react/24/solid";
@@ -27,6 +28,7 @@ export default function NavBar() {
 		onlinePharmacyCart,
 		laboratoryBrand,
 		hasOdessaAfiliateAccount,
+		inAppNotificationFeed,
 	} = usePage().props;
 
 	const { user } = auth;
@@ -135,6 +137,8 @@ export default function NavBar() {
 								}
 							/>
 						</Dropdown>
+
+						<NotificationBell feed={inAppNotificationFeed} />
 
 						<UserNavigationDropdown
 							dropdownButtonProps={{
