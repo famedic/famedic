@@ -182,7 +182,7 @@ export default function CouponsIndex({
 				<Heading>Créditos a favor</Heading>
 				<div className="flex flex-wrap items-center justify-end gap-2">
 					<Button href={route("admin.coupons.settings")} outline>
-						Reglas y seguridad
+						Configuración
 					</Button>
 					<Button href={route("admin.coupons.assign")}>
 						<PlusIcon />
@@ -689,6 +689,13 @@ export default function CouponsIndex({
 													{c.code || "Sin código"}
 												</Button>
 											</div>
+											{(c.concept?.title || c.concept_other) && (
+												<div className="mt-1.5">
+													<Badge color="orange">
+														{c.concept?.title || c.concept_other}
+													</Badge>
+												</div>
+											)}
 											{c.description ? (
 												<p className="mt-1 line-clamp-3 text-sm leading-snug text-zinc-700 dark:text-zinc-300">
 													{c.description}

@@ -6,6 +6,7 @@ import { Text } from "@/Components/Catalyst/text";
 import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Textarea } from "@/Components/Catalyst/textarea";
+import { Select } from "@/Components/Catalyst/select";
 import { Checkbox, CheckboxField } from "@/Components/Catalyst/checkbox";
 import { useForm } from "@inertiajs/react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -93,7 +94,9 @@ function errorsForTab(errs, tabId) {
 				match("code") ||
 				match("description") ||
 				match("max_beneficiaries") ||
-				match("is_active")
+				match("is_active") ||
+				match("coupon_concept_id") ||
+				match("concept_other")
 			);
 		case "assignment":
 			return (
@@ -144,6 +147,7 @@ export default function CouponsAssign({
 	focus = "",
 	initialTab = "coupon",
 	isSuperadmin = false,
+	concepts = [],
 }) {
 	const requireAuth = !!settings?.require_authorization;
 
@@ -222,6 +226,8 @@ export default function CouponsAssign({
 		send_notification: true,
 		send_notifications: true,
 		authorizer_ids: [],
+		coupon_concept_id: "",
+		concept_other: "",
 	});
 
 	bulkRowsRef.current = bulkRows;
@@ -254,6 +260,16 @@ export default function CouponsAssign({
 			const maxB = String(d.max_beneficiaries ?? "").trim();
 			out.max_beneficiaries = maxB === "" ? null : parseInt(maxB, 10);
 			out.is_active = d.is_active;
+			if (d.coupon_concept_id === "other") {
+				out.coupon_concept_id = null;
+				out.concept_other = d.concept_other?.trim() || null;
+			} else if (d.coupon_concept_id !== "" && d.coupon_concept_id != null) {
+				out.coupon_concept_id = parseInt(d.coupon_concept_id, 10);
+				out.concept_other = null;
+			} else {
+				out.coupon_concept_id = null;
+				out.concept_other = null;
+			}
 		}
 		if (d.assignment_mode === "individual") {
 			const emails = [];
@@ -598,8 +614,16 @@ export default function CouponsAssign({
 		authorizers,
 	]);
 
+	const conceptStepOk = useMemo(() => {
+		if (data.coupon_concept_id === "other") {
+			return String(data.concept_other ?? "").trim().length > 0;
+		}
+		return true;
+	}, [data.coupon_concept_id, data.concept_other]);
+
 	const couponStepComplete = useMemo(() => {
 		if (!amountOk) return false;
+		if (!conceptStepOk) return false;
 		if (data.assignment_mode === "none") {
 			return true;
 		}
@@ -607,7 +631,7 @@ export default function CouponsAssign({
 		if (maxB === "") return false;
 		const n = parseInt(maxB, 10);
 		return !Number.isNaN(n) && n >= 1;
-	}, [data.max_beneficiaries, data.assignment_mode, amountOk]);
+	}, [data.max_beneficiaries, data.assignment_mode, amountOk, conceptStepOk]);
 
 	const assignmentStepComplete = useMemo(() => {
 		if (data.assignment_mode === "none") return true;
@@ -824,8 +848,8 @@ export default function CouponsAssign({
 										<>
 
 											<div className="space-y-4">
-												<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-													<Field>
+												<div className="grid grid-cols-12 gap-4">
+													<Field className="col-span-12 md:col-span-6">
 														<Label>Monto por beneficiario (MXN)</Label>
 														<Input
 															type="number"
@@ -840,7 +864,7 @@ export default function CouponsAssign({
 															</p>
 														)}
 													</Field>
-													<Field>
+													<Field className="col-span-12 md:col-span-6">
 														<Label>Número de beneficiarios</Label>
 														<Input
 															type="number"
@@ -857,22 +881,65 @@ export default function CouponsAssign({
 															</p>
 														)}
 													</Field>
-													<Field>
+													<Field className="col-span-12 md:col-span-6">
 														<Label>Código (opcional)</Label>
 														<Input
 															value={data.code}
 															onChange={(e) => setData("code", e.target.value)}
 														/>
 													</Field>
+													<Field className="col-span-12 md:col-span-6">
+														<Label>Concepto</Label>
+														<Select
+															value={data.coupon_concept_id ?? ""}
+															onChange={(e) => {
+																const v = e.target.value;
+																setData("coupon_concept_id", v);
+																if (v !== "other") {
+																	setData("concept_other", "");
+																}
+															}}
+														>
+															<option value="">Sin concepto</option>
+															{concepts.map((c) => (
+																<option key={c.id} value={String(c.id)}>
+																	{c.title}
+																</option>
+															))}
+															<option value="other">Otra</option>
+														</Select>
+														{errors.coupon_concept_id && (
+															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+																{errors.coupon_concept_id}
+															</p>
+														)}
+														{data.coupon_concept_id === "other" && (
+															<div className="mt-2">
+																<Input
+																	value={data.concept_other ?? ""}
+																	onChange={(e) =>
+																		setData("concept_other", e.target.value)
+																	}
+																	placeholder="Especifica el concepto"
+																	maxLength={255}
+																/>
+																{errors.concept_other && (
+																	<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+																		{errors.concept_other}
+																	</p>
+																)}
+															</div>
+														)}
+													</Field>
+													<Field className="col-span-12">
+														<Label>Descripción del crédito a otorgar (opcional)</Label>
+														<Textarea
+															rows={2}
+															value={data.description}
+															onChange={(e) => setData("description", e.target.value)}
+														/>
+													</Field>
 												</div>
-												<Field>
-													<Label>Descripción del crédito a otorgar (opcional)</Label>
-													<Textarea
-														rows={2}
-														value={data.description}
-														onChange={(e) => setData("description", e.target.value)}
-													/>
-												</Field>
 												{requireAuth && (
 													<p className="text-sm text-amber-800 dark:text-amber-200">
 														Con la política actual, el cupón nuevo quedará pendiente hasta que
@@ -1408,6 +1475,22 @@ export default function CouponsAssign({
 												</div>
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
+														Concepto
+													</dt>
+													<dd>
+														{data.coupon_concept_id === "other"
+															? data.concept_other?.trim() || "—"
+															: data.coupon_concept_id
+																? concepts.find(
+																		(c) =>
+																			String(c.id) ===
+																			String(data.coupon_concept_id),
+																	)?.title || "—"
+																: "—"}
+													</dd>
+												</div>
+												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Tipo de asignación
 													</dt>
 													<dd>{ASSIGNMENT_LABELS[data.assignment_mode]}</dd>
@@ -1641,10 +1724,6 @@ export default function CouponsAssign({
 						)}
 						{rulesSidebarExpanded && (
 							<>
-								<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-									Resumen de &quot;Reglas y seguridad&quot;. El sistema toma el máximo entre
-									aprobaciones por monto y por número de beneficiarios.
-								</Text>
 								<ul className="space-y-2 text-sm text-zinc-800 dark:text-zinc-200">
 									{/*
 									<li>

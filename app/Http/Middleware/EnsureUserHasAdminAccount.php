@@ -138,7 +138,14 @@ class EnsureUserHasAdminAccount
                         [
                             'label' => 'Configuración',
                             'url' => route('admin.coupons.settings'),
-                            'current' => Route::currentRouteName() === 'admin.coupons.settings',
+                            'current' => Route::currentRouteName() === 'admin.coupons.settings'
+                                && $request->query('tab') !== 'concepts',
+                        ],
+                        [
+                            'label' => 'Conceptos',
+                            'url' => route('admin.coupons.settings', ['tab' => 'concepts']),
+                            'current' => Route::currentRouteName() === 'admin.coupons.settings'
+                                && $request->query('tab') === 'concepts',
                         ],
                         [
                             'label' => 'Historial',

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdministratorController;
+use App\Http\Controllers\Admin\CouponConceptController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CartController;
 use App\Http\Controllers\Admin\ConfigMonitorController;
@@ -158,6 +159,9 @@ Route::prefix('admin')->middleware([
         Route::post('coupons/import', [CouponController::class, 'import'])->name('coupons.import.store');
         Route::post('coupons/approval-requests/{approvalRequest}/approve', [CouponController::class, 'approveRequest'])->name('coupons.approval-requests.approve');
         Route::post('coupons/approval-requests/{approvalRequest}/reject', [CouponController::class, 'rejectRequest'])->name('coupons.approval-requests.reject');
+        Route::post('coupons/concepts', [CouponConceptController::class, 'store'])->name('coupons.concepts.store');
+        Route::put('coupons/concepts/{couponConcept}', [CouponConceptController::class, 'update'])->name('coupons.concepts.update');
+        Route::delete('coupons/concepts/{couponConcept}', [CouponConceptController::class, 'destroy'])->name('coupons.concepts.destroy');
         Route::post('coupons/{coupon}/authorize', [CouponController::class, 'authorizeCoupon'])->name('coupons.authorize');
         Route::post('coupons/{coupon}/resend-authorization', [CouponController::class, 'resendAuthorization'])->name('coupons.resend-authorization');
         Route::delete('coupons/{coupon}/assignments/{couponUser}', [CouponController::class, 'destroyAssignment'])->name('coupons.assignments.destroy');

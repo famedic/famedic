@@ -16,6 +16,7 @@ use App\Models\CouponBeneficiaryApprovalRule;
 use App\Models\Administrator;
 use App\Models\Coupon;
 use App\Models\CouponAdminSettings;
+use App\Models\CouponConcept;
 use App\Models\CouponUser;
 use App\Models\Customer;
 use App\Models\User;
@@ -139,7 +140,7 @@ class CouponController extends Controller
             ]);
 
         $tab = (string) $request->query('tab', 'limits');
-        $allowedTabs = ['limits', 'approval', 'authorizers', 'history'];
+        $allowedTabs = ['limits', 'approval', 'authorizers', 'history', 'concepts'];
         if (! in_array($tab, $allowedTabs, true)) {
             $tab = 'limits';
         }
@@ -173,6 +174,16 @@ class CouponController extends Controller
             'authorizers' => $authorizers,
             'initialTab' => $tab,
             'settingsApprovalHistory' => $this->settingsApprovalHistoryForUi($currentAdministratorId),
+            'concepts' => CouponConcept::query()
+                ->orderBy('title')
+                ->get(['id', 'title', 'description'])
+                ->map(fn (CouponConcept $c) => [
+                    'id' => (int) $c->id,
+                    'title' => $c->title,
+                    'description' => $c->description,
+                ])
+                ->values()
+                ->all(),
         ]);
     }
 
@@ -392,6 +403,8 @@ class CouponController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'max_beneficiaries' => ['nullable', 'integer', 'min:1'],
             'is_active' => ['boolean'],
+            'coupon_concept_id' => ['nullable', 'integer', Rule::exists('coupon_concepts', 'id')],
+            'concept_other' => ['nullable', 'string', 'max:255'],
         ]);
 
         $adminSettings = CouponAdminSettings::singleton();
@@ -417,6 +430,10 @@ class CouponController extends Controller
         $coupon = Coupon::create([
             'code' => $data['code'] ?? null,
             'description' => $data['description'] ?? null,
+            'coupon_concept_id' => $data['coupon_concept_id'] ?? null,
+            'concept_other' => isset($data['concept_other']) && trim((string) $data['concept_other']) !== ''
+                ? trim((string) $data['concept_other'])
+                : null,
             'amount_cents' => $data['amount_cents'],
             'remaining_cents' => $pending ? 0 : $data['amount_cents'],
             'max_beneficiaries' => $data['max_beneficiaries'] ?? null,
@@ -461,6 +478,7 @@ class CouponController extends Controller
             'createdByUser:id,name,paternal_lastname,maternal_lastname,email',
             'updatedByUser:id,name,paternal_lastname,maternal_lastname,email',
             'authorizedByUser:id,name,paternal_lastname,maternal_lastname,email',
+            'concept:id,title,description',
             'transactions',
             'couponUsers' => fn ($q) => $q->orderBy('assigned_at'),
             'couponUsers.user:id,name,paternal_lastname,maternal_lastname,email',
@@ -708,6 +726,16 @@ class CouponController extends Controller
             'focus' => $request->query('focus', ''),
             'initialTab' => $tab,
             'isSuperadmin' => (bool) $request->user()->administrator?->hasRole('superadmin'),
+            'concepts' => CouponConcept::query()
+                ->orderBy('title')
+                ->get(['id', 'title', 'description'])
+                ->map(fn (CouponConcept $c) => [
+                    'id' => (int) $c->id,
+                    'title' => $c->title,
+                    'description' => $c->description,
+                ])
+                ->values()
+                ->all(),
         ]);
     }
 
@@ -861,6 +889,8 @@ class CouponController extends Controller
             'is_active' => ['boolean'],
             'authorizer_ids' => ['nullable', 'array'],
             'authorizer_ids.*' => ['integer', Rule::exists('administrators', 'id')],
+            'coupon_concept_id' => ['nullable', 'integer', Rule::exists('coupon_concepts', 'id')],
+            'concept_other' => ['nullable', 'string', 'max:255'],
         ]);
 
         $sendForIndividual = $data['send_notification'] ?? true;
@@ -1699,6 +1729,10 @@ class CouponController extends Controller
         $coupon = Coupon::create([
             'code' => $data['code'] ?? null,
             'description' => $data['description'] ?? null,
+            'coupon_concept_id' => $data['coupon_concept_id'] ?? null,
+            'concept_other' => isset($data['concept_other']) && trim((string) $data['concept_other']) !== ''
+                ? trim((string) $data['concept_other'])
+                : null,
             'amount_cents' => (int) $data['amount_cents'],
             'remaining_cents' => $pending ? 0 : (int) $data['amount_cents'],
             'max_beneficiaries' => $data['max_beneficiaries'] ?? null,
@@ -1898,6 +1932,7 @@ class CouponController extends Controller
                 },
                 'couponUsers.user',
                 'createdByUser:id,name,paternal_lastname,maternal_lastname,email',
+                'concept:id,title',
             ])
             ->withCount(['couponUsers', 'childCoupons']);
 

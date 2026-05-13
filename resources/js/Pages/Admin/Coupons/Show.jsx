@@ -740,9 +740,18 @@ export default function CouponsShow({
 						open={showCouponDataCard}
 						onToggle={setShowCouponDataCard}
 						title={
-							<p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-								Datos del cupón
-							</p>
+							<div className="space-y-2">
+								<p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+									Datos del cupón
+								</p>
+								{(coupon.concept?.title || coupon.concept_other) && (
+									<div>
+										<Badge color="orange">
+											{coupon.concept?.title || coupon.concept_other}
+										</Badge>
+									</div>
+								)}
+							</div>
 						}
 						summaryCollapsed={
 							<div className="space-y-1">
@@ -770,6 +779,12 @@ export default function CouponsShow({
 								<dt className="text-zinc-500 dark:text-zinc-400">Código</dt>
 								<dd className="font-medium text-zinc-900 dark:text-zinc-100">
 									{coupon.code || "—"}
+								</dd>
+							</div>
+							<div className="flex justify-between gap-3">
+								<dt className="text-zinc-500 dark:text-zinc-400">Concepto</dt>
+								<dd className="font-medium text-zinc-900 dark:text-zinc-100">
+									{coupon.concept?.title || coupon.concept_other || "—"}
 								</dd>
 							</div>
 							<div className="flex justify-between gap-3">

@@ -18,6 +18,8 @@ class Coupon extends Model
         'parent_coupon_id',
         'code',
         'description',
+        'coupon_concept_id',
+        'concept_other',
         'amount_cents',
         'remaining_cents',
         'max_beneficiaries',
@@ -76,6 +78,11 @@ class Coupon extends Model
     public function authorizedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'authorized_by_user_id');
+    }
+
+    public function concept(): BelongsTo
+    {
+        return $this->belongsTo(CouponConcept::class, 'coupon_concept_id');
     }
 
     public function scopeRootCoupons(Builder $query): Builder

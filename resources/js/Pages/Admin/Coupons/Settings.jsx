@@ -5,15 +5,27 @@ import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
 import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
+import { Textarea } from "@/Components/Catalyst/textarea";
 import { Checkbox, CheckboxField } from "@/Components/Catalyst/checkbox";
 import { Badge } from "@/Components/Catalyst/badge";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/Components/Catalyst/table";
+import Modal from "@/Components/Catalyst/modal";
+import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import { router, useForm, usePage } from "@inertiajs/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { PlusIcon, TrashIcon } from "@heroicons/react/16/solid";
+import { PlusIcon, TrashIcon, PencilSquareIcon } from "@heroicons/react/16/solid";
 
 // Temporal: pestaña "Límites de créditos" oculta; los valores siguen yendo en el PUT con los actuales.
 const TABS = [
 	{ id: "approval", label: "Reglas de aprobación" },
+	{ id: "concepts", label: "Conceptos" },
 	{ id: "history", label: "Historial de cambios" },
 	{ id: "authorizers", label: "Autorizadores" },
 ];
@@ -49,6 +61,8 @@ function errorsForTab(errs, tabId) {
 			return false;
 		case "history":
 			return false;
+		case "concepts":
+			return false;
 		default:
 			return false;
 	}
@@ -83,6 +97,7 @@ export default function Settings() {
 		amountRules = [],
 		beneficiaryRules = [],
 		settingsApprovalHistory = [],
+		concepts = [],
 	} = usePage().props;
 
 	const allowed = new Set(TABS.map((t) => t.id));
@@ -184,6 +199,79 @@ export default function Settings() {
 	const submit = (e) => {
 		e.preventDefault();
 		put(route("admin.coupons.settings.update"));
+	};
+
+	const [conceptModalOpen, setConceptModalOpen] = useState(false);
+	const [conceptDeleteTarget, setConceptDeleteTarget] = useState(null);
+	const {
+		data: conceptForm,
+		setData: setConceptForm,
+		post: postConcept,
+		put: putConcept,
+		processing: conceptProcessing,
+		errors: conceptErrors,
+		reset: resetConceptForm,
+		clearErrors: clearConceptErrors,
+	} = useForm({
+		id: null,
+		title: "",
+		description: "",
+	});
+
+	const openConceptModal = (concept = null) => {
+		clearConceptErrors();
+		if (concept) {
+			setConceptForm({
+				id: concept.id,
+				title: concept.title ?? "",
+				description: concept.description ?? "",
+			});
+		} else {
+			setConceptForm({ id: null, title: "", description: "" });
+		}
+		setConceptModalOpen(true);
+	};
+
+	const closeConceptModal = () => {
+		setConceptModalOpen(false);
+		resetConceptForm();
+		clearConceptErrors();
+	};
+
+	const submitConcept = (e) => {
+		e.preventDefault();
+		const onSuccess = () => closeConceptModal();
+		if (conceptForm.id) {
+			putConcept(
+				route("admin.coupons.concepts.update", {
+					couponConcept: conceptForm.id,
+				}),
+				{ preserveScroll: true, onSuccess },
+			);
+			return;
+		}
+		postConcept(route("admin.coupons.concepts.store"), {
+			preserveScroll: true,
+			onSuccess,
+		});
+	};
+
+	const {
+		delete: destroyConcept,
+		processing: deletingConcept,
+	} = useForm({});
+
+	const confirmDeleteConcept = () => {
+		if (!conceptDeleteTarget) return;
+		destroyConcept(
+			route("admin.coupons.concepts.destroy", {
+				couponConcept: conceptDeleteTarget.id,
+			}),
+			{
+				preserveScroll: true,
+				onSuccess: () => setConceptDeleteTarget(null),
+			},
+		);
 	};
 
 	const decideApproval = (requestId, approve) => {
@@ -755,12 +843,113 @@ export default function Settings() {
 										</div>
 									</>
 								)}
+
+								{activeTab === "concepts" && (
+									<>
+										<div className={highlightedCardClass}>
+											<div className="flex flex-wrap items-start justify-between gap-3">
+												<div>
+													<Subheading level={3}>Conceptos</Subheading>
+												</div>
+												<Button
+													type="button"
+													onClick={() => openConceptModal()}
+												>
+													<PlusIcon />
+													Nuevo concepto
+												</Button>
+											</div>
+
+											<div className="mt-5 overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
+												<Table>
+													<TableHead>
+														<TableRow>
+															<TableHeader className="w-16">ID</TableHeader>
+															<TableHeader>Título</TableHeader>
+															<TableHeader>Descripción</TableHeader>
+															<TableHeader className="text-right">Acciones</TableHeader>
+														</TableRow>
+													</TableHead>
+													<TableBody>
+														{concepts.length === 0 ? (
+															<TableRow>
+																<TableCell
+																	colSpan={4}
+																	className="text-zinc-500 dark:text-zinc-400"
+																>
+																	Aún no hay conceptos registrados.
+																</TableCell>
+															</TableRow>
+														) : (
+															concepts.map((concept) => (
+																<TableRow key={concept.id}>
+																	<TableCell className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
+																		#{concept.id}
+																	</TableCell>
+																	<TableCell className="font-medium text-zinc-900 dark:text-zinc-100">
+																		{concept.title}
+																	</TableCell>
+																	<TableCell className="max-w-md text-sm text-zinc-700 dark:text-zinc-300">
+																		{concept.description ? (
+																			<span className="line-clamp-3">
+																				{concept.description}
+																			</span>
+																		) : (
+																			<span className="text-zinc-400 dark:text-zinc-500">
+																				—
+																			</span>
+																		)}
+																	</TableCell>
+																	<TableCell className="text-right">
+																		<div className="flex flex-wrap justify-end gap-2">
+																			<Button
+																				type="button"
+																				plain
+																				aria-label="Editar concepto"
+																				title="Editar"
+																				onClick={() => openConceptModal(concept)}
+																			>
+																				<PencilSquareIcon />
+																			</Button>
+																			<Button
+																				type="button"
+																				plain
+																				aria-label="Eliminar concepto"
+																				title="Eliminar"
+																				className="text-red-600 dark:text-red-400"
+																				onClick={() =>
+																					setConceptDeleteTarget(concept)
+																				}
+																			>
+																				<TrashIcon />
+																			</Button>
+																		</div>
+																	</TableCell>
+																</TableRow>
+															))
+														)}
+													</TableBody>
+												</Table>
+											</div>
+										</div>
+									</>
+								)}
 							</motion.div>
 						</AnimatePresence>
 					</div>
 
 					<div className="shrink-0 border-t border-zinc-200 px-4 py-4 dark:border-zinc-700 sm:px-6">
-						{activeTab !== "history" ? (
+						{activeTab === "history" ? (
+							<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+								El historial es solo lectura. Cambia a &quot;Reglas de aprobación&quot; para
+								editar y guardar.
+							</Text>
+						) : activeTab === "concepts" ? (
+							<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+								Los conceptos se guardan al confirmar el formulario del modal. No es
+								necesario presionar &quot;Guardar cambios&quot; en esta pestaña.
+							</Text>
+						) : (
 							<>
 								<Button
 									type="submit"
@@ -774,11 +963,6 @@ export default function Settings() {
 									se pierden al cambiar de tab.
 								</Text>
 							</>
-						) : (
-							<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-								El historial es solo lectura. Cambia a &quot;Reglas de aprobación&quot; para
-								editar y guardar.
-							</Text>
 						)}
 					</div>
 				</form>
@@ -843,12 +1027,85 @@ export default function Settings() {
 								<code className="rounded bg-zinc-200 px-1 text-xs dark:bg-zinc-700">
 									?tab=
 								</code>{" "}
-								approval, history, authorizers (la pestaña de límites está oculta por ahora).
+								approval, concepts, history, authorizers (la pestaña de límites está oculta
+								por ahora).
 							</li>
 						</ul>
 					</div>
 				</div>
 			</div>
+
+			<Modal open={conceptModalOpen} onClose={closeConceptModal} size="lg">
+				<form onSubmit={submitConcept} className="space-y-4">
+					<div className="flex items-start justify-between gap-3">
+						<div>
+							<h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
+								{conceptForm.id ? "Editar concepto" : "Nuevo concepto"}
+							</h3>
+							<p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+								Estos conceptos estarán disponibles al registrar un crédito a favor.
+							</p>
+						</div>
+						<Button type="button" plain onClick={closeConceptModal}>
+							Cerrar
+						</Button>
+					</div>
+
+					<Field>
+						<Label>Título</Label>
+						<Input
+							autoFocus
+							value={conceptForm.title}
+							onChange={(e) => setConceptForm("title", e.target.value)}
+							maxLength={255}
+							placeholder="Ej. Reembolso por cancelación"
+						/>
+						{conceptErrors.title && (
+							<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+								{conceptErrors.title}
+							</p>
+						)}
+					</Field>
+
+					<Field>
+						<Label>Descripción</Label>
+						<Textarea
+							rows={4}
+							value={conceptForm.description ?? ""}
+							onChange={(e) => setConceptForm("description", e.target.value)}
+							maxLength={2000}
+							placeholder="Información adicional o instrucciones internas (opcional)."
+						/>
+						{conceptErrors.description && (
+							<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+								{conceptErrors.description}
+							</p>
+						)}
+					</Field>
+
+					<div className="flex justify-end gap-2 pt-2">
+						<Button type="button" outline onClick={closeConceptModal}>
+							Cancelar
+						</Button>
+						<Button type="submit" disabled={conceptProcessing}>
+							{conceptForm.id ? "Guardar cambios" : "Crear concepto"}
+						</Button>
+					</div>
+				</form>
+			</Modal>
+
+			<DeleteConfirmationModal
+				isOpen={!!conceptDeleteTarget}
+				close={() => setConceptDeleteTarget(null)}
+				title="Eliminar concepto"
+				description={
+					conceptDeleteTarget
+						? `Se eliminará el concepto «${conceptDeleteTarget.title}». Los créditos que ya lo referencian conservarán el registro, pero quedará desvinculado de futuras asignaciones.`
+						: ""
+				}
+				processing={deletingConcept}
+				destroy={confirmDeleteConcept}
+			/>
 		</AdminLayout>
 	);
 }
