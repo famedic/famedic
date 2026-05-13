@@ -259,7 +259,7 @@ export default function Settings() {
 					</Text>
 				</div>
 				<Button href={route("admin.coupons.index")} outline>
-					Volver al listado
+					Ir a créditos
 				</Button>
 			</div>
 
