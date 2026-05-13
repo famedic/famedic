@@ -186,7 +186,7 @@ export default function CouponsIndex({
 					</Button>
 					<Button href={route("admin.coupons.assign")}>
 						<PlusIcon />
-						Crear y asignar cupones
+						Crear y asignar créditos
 					</Button>
 				</div>
 			</div>
@@ -209,9 +209,9 @@ export default function CouponsIndex({
 						{showHelp && (
 							<Card className="p-4 bg-blue-50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900">
 								<Text className="!text-sm">
-									Desde &quot;Crear y asignar cupones&quot; defines el cupón maestro, asignas por correo o
-									por archivo, y ves las reglas vigentes. Cada asignación crea un cupón hijo con saldo
-									propio. Si activas autorización por correo en Reglas, el cupón queda pendiente hasta que
+									Desde &quot;Crear y asignar créditos&quot; defines el crédito maestro, asignas por correo o
+									por archivo, y ves las reglas vigentes. Cada asignación crea un crédito hijo con saldo
+									propio. Si activas autorización por correo en Reglas, el crédito queda pendiente hasta que
 									el autorizador ingrese el código recibido.
 								</Text>
 							</Card>

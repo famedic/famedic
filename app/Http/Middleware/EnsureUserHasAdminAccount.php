@@ -121,7 +121,7 @@ class EnsureUserHasAdminAccount
                     'icon' => 'BanknotesIcon',
                     'items' => [
                         [
-                            'label' => 'Listado - Crear',
+                            'label' => 'Créditos',
                             'url' => route('admin.coupons.index'),
                             'current' => Route::currentRouteName() === 'admin.coupons.index'
                                 || Route::currentRouteName() === 'admin.coupons.create'
@@ -131,12 +131,17 @@ class EnsureUserHasAdminAccount
                                 || Route::currentRouteName() === 'admin.coupons.import',
                         ],
                         [
-                            'label' => 'Reglas',
+                            'label' => 'Crear crédito',
+                            'url' => route('admin.coupons.create'),
+                            'current' => Route::currentRouteName() === 'admin.coupons.create',
+                        ],
+                        [
+                            'label' => 'Configuración',
                             'url' => route('admin.coupons.settings'),
                             'current' => Route::currentRouteName() === 'admin.coupons.settings',
                         ],
                         [
-                            'label' => 'Auditoría',
+                            'label' => 'Historial',
                             'url' => route('admin.coupons.logs'),
                             'current' => Route::currentRouteName() === 'admin.coupons.logs',
                         ],

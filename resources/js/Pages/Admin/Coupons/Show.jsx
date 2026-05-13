@@ -484,7 +484,7 @@ export default function CouponsShow({
 					</div>
 					<div className="flex flex-wrap gap-2">
 						<Button href={route("admin.coupons.index")} plain>
-							Volver al listado
+							Ir a créditos
 						</Button>
 						<Button
 							type="button"
@@ -1220,7 +1220,7 @@ export default function CouponsShow({
 										Descargar plantilla CSV de ejemplo
 									</Button>
 									<span className="text-xs text-zinc-500 dark:text-zinc-400">
-										Misma plantilla que en &quot;Crear y asignar cupones&quot;: encabezado{" "}
+										Misma plantilla que en &quot;Crear y asignar créditos	&quot;: encabezado{" "}
 										<strong>email</strong> y filas de muestra.
 									</span>
 								</div>

@@ -7,7 +7,6 @@ import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Textarea } from "@/Components/Catalyst/textarea";
 import { Checkbox, CheckboxField } from "@/Components/Catalyst/checkbox";
-import { Switch, SwitchField } from "@/Components/Catalyst/switch";
 import { useForm } from "@inertiajs/react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -27,7 +26,7 @@ function csrfTokenFromMeta() {
 }
 
 const TABS = [
-	{ id: "coupon", label: "Cupón" },
+	{ id: "coupon", label: "Crédito" },
 	{ id: "assignment", label: "Asignación de beneficiarios" },
 	{ id: "summary", label: "Resumen" },
 ];
@@ -112,8 +111,8 @@ function errorsForTab(errs, tabId) {
 }
 
 const ASSIGNMENT_LABELS = {
-	none: "Solo guardar cupón",
-	individual: "Lista manual",
+	none: "Solo guardar",
+	individual: "Asignar ahora",
 	bulk: "Archivo masivo",
 };
 
@@ -744,18 +743,17 @@ export default function CouponsAssign({
 	};
 
 	return (
-		<AdminLayout title="Crear y asignar cupones">
+		<AdminLayout title="Crear y asignar créditos">
 			<div className="space-y-8">
 				<div className="flex flex-wrap items-end justify-between gap-8">
 					<div className="max-w-3xl">
-						<Heading>Crear y asignar cupones</Heading>
+						<Heading>Crear y asignar créditos</Heading>
 						<Text className="mt-2 text-zinc-600 dark:text-zinc-400">
-							Define el cupón y la asignación en pasos. Las reglas del sistema siguen
-							visibles a la derecha en todo momento.
+							Define el crédito y la asignación en pasos.
 						</Text>
 					</div>
 					<Button href={route("admin.coupons.index")} outline>
-						Volver al listado
+						Ir a créditos
 					</Button>
 				</div>
 
@@ -875,15 +873,6 @@ export default function CouponsAssign({
 														onChange={(e) => setData("description", e.target.value)}
 													/>
 												</Field>
-												{!requireAuth && (
-													<SwitchField>
-														<Label>Activo al crear</Label>
-														<Switch
-															checked={data.is_active}
-															onChange={(v) => setData("is_active", v)}
-														/>
-													</SwitchField>
-												)}
 												{requireAuth && (
 													<p className="text-sm text-amber-800 dark:text-amber-200">
 														Con la política actual, el cupón nuevo quedará pendiente hasta que
@@ -897,11 +886,6 @@ export default function CouponsAssign({
 
 									{activeTab === "assignment" && (
 										<>
-											<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-												Define cómo quieres aplicar el cupón: solo guardarlo o varios correos
-												en tabla (validados uno a uno)
-												{SHOW_BULK_ASSIGNMENT_UI ? " o un archivo masivo" : ""}.
-											</Text>
 											<div>
 												<p className="mb-2 font-poppins text-base/6 font-medium text-zinc-950 sm:text-sm/6 dark:text-white">
 													Tipo de asignación
@@ -912,7 +896,7 @@ export default function CouponsAssign({
 														className={pillClass(data.assignment_mode === "none")}
 														onClick={() => setData("assignment_mode", "none")}
 													>
-														Solo guardar cupón
+														Solo guardar
 													</button>
 													<button
 														type="button"
@@ -948,6 +932,7 @@ export default function CouponsAssign({
 														<p className="font-poppins text-base/6 font-medium text-zinc-950 sm:text-sm/6 dark:text-white">
 															Beneficiarios (uno por fila)
 														</p>
+														{/*
 														<p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
 															Cada correo se valida contra usuarios registrados. No se
 															pueden repetir correos en la lista. Máximo{" "}
@@ -957,6 +942,7 @@ export default function CouponsAssign({
 																: ""}
 															.
 														</p>
+														*/}
 													</div>
 													<div className="max-h-[min(28rem,55vh)] overflow-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
 														<Table dense>
@@ -1523,6 +1509,7 @@ export default function CouponsAssign({
 												)}
 											</dl>
 
+											{/*
 											<div className="rounded-lg border border-famedic-dark/25 bg-famedic-dark/10 p-4 dark:border-famedic-lime/20 dark:bg-famedic-darker/80">
 												<p className="text-sm font-semibold text-famedic-dark dark:text-famedic-lime">
 													Importante
@@ -1543,6 +1530,7 @@ export default function CouponsAssign({
 													</li>
 												</ul>
 											</div>
+											*/}
 										</>
 									)}
 								</motion.div>
@@ -1551,34 +1539,36 @@ export default function CouponsAssign({
 
 						<div className="mt-auto flex flex-col gap-3 border-t border-zinc-200 px-4 py-4 dark:border-zinc-700 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
 							{activeTab === "coupon" && (
-								<Button
-									type="button"
-									className="w-full sm:w-auto"
-									disabled={!couponStepComplete}
-									onClick={() => trySetTab("assignment")}
-								>
-									Siguiente: asignación de beneficiarios
-								</Button>
+								<div className="flex w-full justify-end">
+									<Button
+										type="button"
+										className="w-full sm:w-auto"
+										disabled={!couponStepComplete}
+										onClick={() => trySetTab("assignment")}
+									>
+										Siguiente: asignación
+									</Button>
+								</div>
 							)}
 							{activeTab === "assignment" && (
-								<>
+								<div className="flex w-full flex-row flex-wrap items-center justify-between gap-3">
 									<Button
 										type="button"
 										outline
-										className="w-full sm:w-auto"
+										className="shrink-0"
 										onClick={() => setActiveTab("coupon")}
 									>
 										Anterior: cupón
 									</Button>
 									<Button
 										type="button"
-										className="w-full sm:w-auto"
+										className="shrink-0"
 										disabled={!summaryUnlocked}
 										onClick={() => trySetTab("summary")}
 									>
 										Siguiente: resumen
 									</Button>
-								</>
+								</div>
 							)}
 							{activeTab === "summary" && (
 								<>
@@ -1656,6 +1646,7 @@ export default function CouponsAssign({
 									aprobaciones por monto y por número de beneficiarios.
 								</Text>
 								<ul className="space-y-2 text-sm text-zinc-800 dark:text-zinc-200">
+									{/*
 									<li>
 										<strong>Monto base referencia:</strong>{" "}
 										{formatMxFromCents(rulesForUi?.base_amount_cents)}
@@ -1685,6 +1676,7 @@ export default function CouponsAssign({
 											</>
 										)}
 									</li>
+									*/}
 									{(rulesForUi?.amount_rules?.length ?? 0) > 0 && (
 										<li className="list-none">
 											<p className="font-medium text-zinc-900 dark:text-white">
