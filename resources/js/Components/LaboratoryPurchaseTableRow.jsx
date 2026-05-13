@@ -100,7 +100,7 @@ export default function LaboratoryPurchaseTableRow({
 									? "s"
 									: ""}
 							</Text>
-							<span className="flex items-center gap-2">
+							<span className="flex flex-wrap items-center gap-2">
 								<Text>
 									<Strong>
 										{laboratoryPurchase.formatted_total}
@@ -109,12 +109,30 @@ export default function LaboratoryPurchaseTableRow({
 								{laboratoryPurchase.transactions &&
 									laboratoryPurchase.transactions.length >
 										0 && (
-										<PaymentMethodBadge
-											transaction={
-												laboratoryPurchase
-													.transactions[0]
-											}
-										/>
+										<span className="inline-flex items-center gap-1.5">
+											<PaymentMethodBadge
+												transaction={
+													laboratoryPurchase
+														.transactions[0]
+												}
+											/>
+											{(Number(
+												laboratoryPurchase.coupon_discount_cents ??
+													0,
+											) > 0 ||
+												laboratoryPurchase.transactions[0]
+													?.payment_method ===
+													"coupon_balance") && (
+												<span
+													className="inline-flex"
+													title="Se aplicó crédito a favor"
+													role="img"
+													aria-label="Se aplicó crédito a favor"
+												>
+													<GiftIcon className="size-4 shrink-0 fill-orange-500 dark:fill-orange-400" aria-hidden />
+												</span>
+											)}
+										</span>
 									)}
 							</span>
 						</div>
@@ -185,13 +203,6 @@ export default function LaboratoryPurchaseTableRow({
 								}
 							</Badge>
 						)}
-					</div>
-				)}
-				{laboratoryPurchase.transactions?.[0]?.payment_method ===
-					"coupon_balance" && (
-					<div className="flex items-center justify-end gap-1">
-						Cupón
-						<GiftIcon className="size-4 fill-famedic-light" />
 					</div>
 				)}
 			</TableCell>
