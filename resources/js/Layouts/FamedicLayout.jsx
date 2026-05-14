@@ -8,12 +8,14 @@ import confettiLib from "canvas-confetti";
 import HelpBubble from "@/Components/Catalyst/HelpBubble";
 import PageBanner from "@/Components/PageBanner";
 import useTrackingEvents from "@/Hooks/useTrackingEvents";
+import AppLayout from "@/Layouts/AppLayout";
 
 export default function FamedicLayout({
 	title,
 	children,
 	banner = null,
 	hasShoppingCartBanner = false,
+	reserveMobileBottomNavSpace = false,
 }) {
 	useTrackingEvents();
 
@@ -30,7 +32,7 @@ export default function FamedicLayout({
 	}, [confetti]);
 
 	return (
-		<>
+		<AppLayout>
 			{banner && (
 				<PageBanner
 					text={banner.text}
@@ -45,9 +47,10 @@ export default function FamedicLayout({
 				</div>
 			</StackedLayout>
 			<HelpBubble
+				reserveMobileBottomNavSpace={reserveMobileBottomNavSpace}
 				className={hasShoppingCartBanner ? "max-sm:mb-10" : ""}
 			/>
 			<Notification />
-		</>
+		</AppLayout>
 	);
 }

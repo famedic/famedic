@@ -6,6 +6,7 @@ import OdessaLogo from "@/Components/OdessaLogo";
 import { LinkIcon } from "@heroicons/react/20/solid";
 import { Button } from "@/Components/Catalyst/button";
 import useTrackingEvents from "@/Hooks/useTrackingEvents";
+import AppLayout from "@/Layouts/AppLayout";
 
 export default function AuthLayout({
 	title,
@@ -16,7 +17,7 @@ export default function AuthLayout({
 	useTrackingEvents();
 
 	return (
-		<>
+		<AppLayout>
 			<Head title={title} />			
 
 			<div className="min-h-screen bg-gradient-to-b from-white to-blue-50 dark:from-slate-950 dark:to-slate-900">
@@ -159,6 +160,6 @@ export default function AuthLayout({
 			</div>
 
 			<Notification />
-		</>
+		</AppLayout>
 	);
 }

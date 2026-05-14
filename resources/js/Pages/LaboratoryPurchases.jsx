@@ -1,47 +1,268 @@
 import SettingsLayout from "@/Layouts/SettingsLayout";
-import { GradientHeading, Subheading } from "@/Components/Catalyst/heading";
+import { GradientHeading } from "@/Components/Catalyst/heading";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { ArrowRightIcon } from "@heroicons/react/20/solid";
 import {
 	DocumentTextIcon,
 	ClockIcon,
-	MagnifyingGlassIcon,
 	ExclamationTriangleIcon,
-	CheckCircleIcon,
-	BeakerIcon,
 } from "@heroicons/react/16/solid";
 import { TableCell, TableHeader, TableRow } from "@/Components/Catalyst/table";
 import { Navbar, NavbarItem } from "@/Components/Catalyst/navbar";
 import { QrCodeIcon } from "@heroicons/react/24/solid";
 import EmptyListCard from "@/Components/EmptyListCard";
-import { Badge } from "@/Components/Catalyst/badge";
 import PurchaseCard from "@/Components/PurchaseCard";
-import PaymentMethodBadge from "@/Components/PaymentMethodBadge";
-import { useForm, usePage } from "@inertiajs/react";
-import { Input, InputGroup } from "@/Components/Catalyst/input";
+import { Badge } from "@/Components/Catalyst/badge";
+import { useForm, Link, router } from "@inertiajs/react";
+import { Button } from "@/Components/Catalyst/button";
+import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
+import { useEffect, useMemo, useRef, useState } from "react";
+import OrdersSummaryCards from "@/Components/LaboratoryPurchases/OrdersSummaryCards";
+import OrdersFilters from "@/Components/LaboratoryPurchases/OrdersFilters";
+import OrdersTable from "@/Components/LaboratoryPurchases/OrdersTable";
+import OrderCardMobile from "@/Components/LaboratoryPurchases/OrderCardMobile";
+import { exportLaboratoryPurchasesPageCsv } from "@/lib/laboratoryPurchaseOrderUi";
+import formatMmSs from "@/Utils/formatMmSs";
 
-export default function LaboratoryPurchases({ laboratoryPurchases, laboratoryQuotes }) {
-	const { filters } = usePage().props;
+async function fetchLabResultsOtpStatus(purchaseId) {
+	try {
+		const statusUrl = route("otp.status", { laboratory_purchase: purchaseId });
+		const res = await fetch(statusUrl, {
+			method: "GET",
+			credentials: "same-origin",
+			headers: { Accept: "application/json" },
+		});
+		const data = await res.json().catch(() => ({}));
+		return {
+			verified: res.ok && Boolean(data?.verified),
+			expiresIn: Number(data?.expires_in ?? 0),
+		};
+	} catch {
+		return { verified: false, expiresIn: 0 };
+	}
+}
+
+function buildEmptyCopy({ pipeline, hasFilterActivity, total }) {
+	if (total === 0 && !hasFilterActivity) {
+		return {
+			heading: "Aún no tienes pedidos de laboratorio",
+			message:
+				"Cuando compres estudios en línea aparecerán aquí con su estado, resultados y opciones de facturación.",
+		};
+	}
+	if (pipeline === "processing") {
+		return {
+			heading: "No hay pedidos en proceso",
+			message: "Todos tus pedidos tienen resultados o prueba limpiar filtros para ver el historial completo.",
+		};
+	}
+	if (pipeline === "completed") {
+		return {
+			heading: "No hay resultados en esta vista",
+			message: "Cuando el laboratorio publique resultados podrás abrirlos desde aquí. También revisa otros filtros.",
+		};
+	}
+	if (pipeline === "invoiced") {
+		return {
+			heading: "No hay facturas que coincidan",
+			message:
+				"Solo mostramos pedidos con factura generada y solicitud de factura registrada. Puedes solicitar factura en el detalle del pedido.",
+		};
+	}
+	return {
+		heading: "No hay pedidos con estos criterios",
+		message: "Ajusta la búsqueda, el embudo o los filtros avanzados e intenta de nuevo.",
+	};
+}
+
+export default function LaboratoryPurchases({
+	purchaseCards = [],
+	pagination = null,
+	summary = { pending_count: 0, ready_count: 0, processing_count: 0, completed_count: 0, invoiced_count: 0 },
+	filters: filtersProp = {},
+	filterOptions = {},
+	laboratoryQuotes = [],
+}) {
+	const pendingAfterOtpRef = useRef(null);
+	const [showOtpModal, setShowOtpModal] = useState(false);
+	const [otpPurchaseId, setOtpPurchaseId] = useState(null);
+	const [showFilters, setShowFilters] = useState(false);
+	const [otpTrustSecondsLeft, setOtpTrustSecondsLeft] = useState(0);
+
+	const requireOtpThen = async (purchaseId, fn) => {
+		const status = await fetchLabResultsOtpStatus(purchaseId);
+		if (status.verified) {
+			setOtpTrustSecondsLeft(Math.max(0, Math.floor(status.expiresIn)));
+			fn?.();
+			return true;
+		}
+		pendingAfterOtpRef.current = fn;
+		setOtpPurchaseId(purchaseId);
+		setShowOtpModal(true);
+		return false;
+	};
+
+	const handleOtpSuccess = (payload = {}) => {
+		setShowOtpModal(false);
+		const next = pendingAfterOtpRef.current;
+		pendingAfterOtpRef.current = null;
+		setOtpPurchaseId(null);
+		if (typeof payload?.expires_in === "number") {
+			setOtpTrustSecondsLeft(Math.max(0, Math.floor(payload.expires_in)));
+		}
+		if (typeof next === "function") next();
+	};
+
+	const handleOtpModalClose = () => {
+		pendingAfterOtpRef.current = null;
+		setShowOtpModal(false);
+		setOtpPurchaseId(null);
+	};
 
 	const { data, setData, get, processing } = useForm({
-		search: filters?.search || "",
+		search: filtersProp.search ?? "",
+		patient: filtersProp.patient ?? "",
+		study_status: filtersProp.study_status ?? "all",
+		payment_method: filtersProp.payment_method ?? "",
+		brand: filtersProp.brand ?? "",
+		start_date: filtersProp.start_date ?? "",
+		end_date: filtersProp.end_date ?? "",
+		pipeline: filtersProp.pipeline ?? "all",
 	});
 
-	const updateResults = (e) => {
-		e.preventDefault();
-		if (!processing) {
-			get(route("laboratory-purchases.index"), {
-				replace: true,
-				preserveState: true,
-			});
+	const filtersKey = JSON.stringify(filtersProp ?? {});
+	useEffect(() => {
+		setData({
+			search: filtersProp.search ?? "",
+			patient: filtersProp.patient ?? "",
+			study_status: filtersProp.study_status ?? "all",
+			payment_method: filtersProp.payment_method ?? "",
+			brand: filtersProp.brand ?? "",
+			start_date: filtersProp.start_date ?? "",
+			end_date: filtersProp.end_date ?? "",
+			pipeline: filtersProp.pipeline ?? "all",
+		});
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- sincronizar con respuesta Inertia
+	}, [filtersKey]);
+
+	useEffect(() => {
+		const timer = setInterval(() => {
+			setOtpTrustSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+		}, 1000);
+		return () => clearInterval(timer);
+	}, []);
+
+	useEffect(() => {
+		const firstPurchaseId = purchaseCards?.[0]?.id;
+		if (!firstPurchaseId) {
+			setOtpTrustSecondsLeft(0);
+			return;
 		}
+		fetchLabResultsOtpStatus(firstPurchaseId).then((status) => {
+			setOtpTrustSecondsLeft(status.verified ? Math.max(0, Math.floor(status.expiresIn)) : 0);
+		});
+	}, [purchaseCards]);
+
+	const navigateWithFilters = (overrides = {}) => {
+		router.get(
+			route("laboratory-purchases.index"),
+			{
+				search: overrides.search ?? data.search,
+				patient: overrides.patient ?? data.patient,
+				study_status: overrides.study_status ?? data.study_status,
+				payment_method: overrides.payment_method ?? data.payment_method,
+				brand: overrides.brand ?? data.brand,
+				start_date: overrides.start_date ?? data.start_date,
+				end_date: overrides.end_date ?? data.end_date,
+				deleted: "false",
+				pipeline: Object.prototype.hasOwnProperty.call(overrides, "pipeline") ? overrides.pipeline : data.pipeline,
+			},
+			{ preserveState: true, preserveScroll: true, replace: true },
+		);
+	};
+
+	const applyFilters = (e) => {
+		e?.preventDefault?.();
+		get(route("laboratory-purchases.index"), {
+			preserveState: true,
+			preserveScroll: true,
+			replace: true,
+		});
+	};
+
+	const showUpdateButton = useMemo(
+		() =>
+			(data.search || "") !== (filtersProp.search || "") ||
+			(data.patient || "") !== (filtersProp.patient || "") ||
+			(data.study_status || "all") !== (filtersProp.study_status || "all") ||
+			(data.payment_method || "") !== (filtersProp.payment_method || "") ||
+			(data.brand || "") !== (filtersProp.brand || "") ||
+			(data.start_date || "") !== (filtersProp.start_date || "") ||
+			(data.end_date || "") !== (filtersProp.end_date || "") ||
+			(data.pipeline || "all") !== (filtersProp.pipeline || "all"),
+		[data, filtersProp],
+	);
+
+	const activeFiltersCount = useMemo(() => {
+		let count = 0;
+		if (filtersProp.search) count += 1;
+		if (filtersProp.patient) count += 1;
+		if (filtersProp.study_status && filtersProp.study_status !== "all") count += 1;
+		if (filtersProp.payment_method) count += 1;
+		if (filtersProp.brand) count += 1;
+		if (filtersProp.start_date) count += 1;
+		if (filtersProp.end_date) count += 1;
+		if (filtersProp.pipeline && filtersProp.pipeline !== "all") count += 1;
+		return count;
+	}, [filtersProp]);
+
+	const hasFilterActivity = useMemo(() => activeFiltersCount > 0, [activeFiltersCount]);
+
+	const emptyCopy = buildEmptyCopy({
+		pipeline: filtersProp.pipeline ?? "all",
+		hasFilterActivity,
+		total: pagination?.total ?? 0,
+	});
+
+	const onPipelineChange = (pipeline) => {
+		setData("pipeline", pipeline);
+		navigateWithFilters({ pipeline });
 	};
 
 	return (
 		<SettingsLayout title="Mis pedidos">
-			<GradientHeading>Mis pedidos</GradientHeading>
+			<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+				<div>
+					<GradientHeading>Mis pedidos de laboratorio</GradientHeading>
+					<Text className="mt-2 max-w-2xl text-base text-zinc-600 dark:text-slate-400">
+						Consulta el estado de tus estudios, resultados y facturación en un solo lugar.
+					</Text>
+				</div>
+				<div className="flex shrink-0 flex-col items-stretch gap-1 sm:items-end">
+					<Button
+						type="button"
+						outline
+						className="min-h-11 w-full sm:w-auto"
+						disabled={purchaseCards.length === 0}
+						onClick={() => exportLaboratoryPurchasesPageCsv(purchaseCards)}
+					>
+						Exportar historial
+					</Button>
+					<Text className="text-center text-xs text-zinc-500 dark:text-slate-500 sm:text-right">
+						CSV de la página actual
+					</Text>
+				</div>
+			</div>
 
-			<Navbar className="-mt-6 mb-6 sm:mb-10">
+			<div className="mt-8">
+				<OrdersSummaryCards
+					summary={summary}
+					activePipeline={filtersProp.pipeline ?? "all"}
+					onPipelineSelect={onPipelineChange}
+				/>
+			</div>
+
+			<Navbar className="mt-8 border-b border-zinc-200/80 dark:border-slate-800">
 				<NavbarItem
 					href={route("laboratory-purchases.index")}
 					current={route().current("laboratory-purchases.index")}
@@ -56,119 +277,179 @@ export default function LaboratoryPurchases({ laboratoryPurchases, laboratoryQuo
 				</NavbarItem>
 			</Navbar>
 
-			<form className="mb-6 sm:mb-10" onSubmit={updateResults}>
-				<div className="max-w-full md:max-w-md">
-					<InputGroup>
-						<MagnifyingGlassIcon />
-						<Input
-							placeholder="Buscar pedidos por nombre, código o acuse"
-							value={data.search}
-							onChange={(e) => setData("search", e.target.value)}
-						/>
-					</InputGroup>
+			<form className="mt-6 space-y-6" onSubmit={applyFilters}>
+				<OrdersFilters
+					data={data}
+					setData={setData}
+					showFilters={showFilters}
+					setShowFilters={setShowFilters}
+					activeFiltersCount={activeFiltersCount}
+					filterOptions={filterOptions}
+					onPipelineChange={onPipelineChange}
+				/>
+
+				{showUpdateButton && (
+					<div className="flex flex-wrap gap-3">
+						<Button type="submit" disabled={processing} className="min-h-11 min-w-[160px]">
+							{processing ? "Aplicando…" : "Aplicar cambios pendientes"}
+						</Button>
+					</div>
+				)}
+
+				<div className="flex flex-wrap gap-3 border-t border-zinc-100 pt-4 dark:border-slate-800">
+					<Button
+						type="button"
+						outline
+						className="min-h-11"
+						onClick={() => {
+							router.get(
+								route("laboratory-purchases.index"),
+								{
+									search: "",
+									patient: "",
+									study_status: "all",
+									payment_method: "",
+									brand: "",
+									start_date: "",
+									end_date: "",
+									deleted: "false",
+									pipeline: "all",
+								},
+								{ preserveScroll: true, replace: true },
+							);
+						}}
+					>
+						Restablecer vista
+					</Button>
 				</div>
 			</form>
 
-			{/* Sección de Cotizaciones */}
 			{laboratoryQuotes.length > 0 && (
-				<div className="mb-8 sm:mb-12">
-					<Subheading className="mb-4 sm:mb-6 text-base sm:text-lg font-semibold">
-						Pedidos con Pago en sucursal
-					</Subheading>
-					<LaboratoryQuotesList
-						laboratoryQuotes={laboratoryQuotes}
-					/>
+				<div className="mb-10 mt-10 sm:mb-12">
+					<Text className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Pedidos con pago en sucursal</Text>
+					<LaboratoryQuotesList laboratoryQuotes={laboratoryQuotes} />
 				</div>
 			)}
 
-			{/* Sección de Pedidos */}
-			<LaboratoryPurchasesList
-				laboratoryPurchases={laboratoryPurchases}
-			/>
+			<Text className="mb-4 mt-10 text-base font-semibold text-zinc-900 dark:text-white">Pagos en línea</Text>
+			{otpTrustSecondsLeft > 0 && (
+				<div className="mb-4">
+					<Badge color="green" className="inline-flex items-center gap-2 px-3 py-1.5">
+						<ClockIcon className="size-4" />
+						<span>Verificación activa · {formatMmSs(otpTrustSecondsLeft)} restantes</span>
+					</Badge>
+				</div>
+			)}
+
+			{processing && (
+				<div className="mb-4 text-sm text-zinc-500 dark:text-slate-400">Actualizando lista…</div>
+			)}
+
+			{!processing && purchaseCards.length === 0 && (
+				<EmptyListCard heading={emptyCopy.heading} message={emptyCopy.message} className="dark:border-slate-800" />
+			)}
+
+			{purchaseCards.length > 0 && (
+				<>
+					<OrdersTable purchases={purchaseCards} requireOtpThen={requireOtpThen} />
+					<div className="space-y-3 md:hidden" aria-label="Lista de pedidos">
+						{purchaseCards.map((purchase) => (
+							<OrderCardMobile key={purchase.id} purchase={purchase} requireOtpThen={requireOtpThen} />
+						))}
+					</div>
+				</>
+			)}
+
+			{pagination && pagination.last_page > 1 && (
+				<div className="mt-10 flex flex-col items-center justify-between gap-4 sm:flex-row">
+					<Text className="text-sm text-zinc-600 dark:text-slate-400">
+						Mostrando {pagination.from ?? 0}–{pagination.to ?? 0} de {pagination.total} pedidos
+					</Text>
+					<div className="flex flex-wrap items-center gap-3">
+						{pagination.prev_page_url && (
+							<Link
+								href={pagination.prev_page_url}
+								className="inline-flex min-h-11 min-w-[120px] items-center justify-center rounded-xl border border-zinc-300 px-4 text-base font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-slate-600 dark:text-white dark:hover:bg-slate-800"
+								preserveScroll
+							>
+								Anterior
+							</Link>
+						)}
+						<Text className="text-sm">
+							Página {pagination.current_page} de {pagination.last_page}
+						</Text>
+						{pagination.next_page_url && (
+							<Link
+								href={pagination.next_page_url}
+								className="inline-flex min-h-11 min-w-[120px] items-center justify-center rounded-xl border border-zinc-300 px-4 text-base font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-slate-600 dark:text-white dark:hover:bg-slate-800"
+								preserveScroll
+							>
+								Siguiente
+							</Link>
+						)}
+					</div>
+				</div>
+			)}
+
+			{showOtpModal && otpPurchaseId != null && (
+				<SecurityVerificationModal
+					isOpen={showOtpModal}
+					purchaseId={otpPurchaseId}
+					onSuccess={handleOtpSuccess}
+					onClose={handleOtpModalClose}
+				/>
+			)}
 		</SettingsLayout>
 	);
 }
 
-// Función para formatear precios correctamente
 const formatPrice = (price) => {
-	if (price === undefined || price === null) return '';
-
-	if (typeof price === 'number') {
-		return new Intl.NumberFormat('es-MX', {
-			style: 'currency',
-			currency: 'MXN',
+	if (price === undefined || price === null) return "";
+	if (typeof price === "number") {
+		return new Intl.NumberFormat("es-MX", {
+			style: "currency",
+			currency: "MXN",
 			minimumFractionDigits: 2,
-			maximumFractionDigits: 2
+			maximumFractionDigits: 2,
 		}).format(price);
 	}
-
-	if (typeof price === 'string') {
-		const cleanPrice = price.replace(/[^\d.]/g, '');
+	if (typeof price === "string") {
+		const cleanPrice = price.replace(/[^\d.]/g, "");
 		const numberPrice = parseFloat(cleanPrice);
-
-		if (isNaN(numberPrice)) {
-			console.warn('No se pudo convertir el precio:', price);
-			return price;
-		}
-
-		return new Intl.NumberFormat('es-MX', {
-			style: 'currency',
-			currency: 'MXN',
+		if (Number.isNaN(numberPrice)) return price;
+		return new Intl.NumberFormat("es-MX", {
+			style: "currency",
+			currency: "MXN",
 			minimumFractionDigits: 2,
-			maximumFractionDigits: 2
+			maximumFractionDigits: 2,
 		}).format(numberPrice);
 	}
-
 	return price;
 };
 
-// Función para convertir precio de centavos a pesos
 const convertFromCents = (price) => {
 	if (price === undefined || price === null) return 0;
-
-	const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
-
-	if (isNaN(numericPrice)) {
-		console.warn('Precio inválido para conversión:', price);
-		return 0;
-	}
-
+	const numericPrice = typeof price === "string" ? parseFloat(price) : price;
+	if (Number.isNaN(numericPrice)) return 0;
 	return numericPrice / 100;
 };
 
-// Función para calcular el precio total de un item
 const calculateItemTotal = (item) => {
 	const quantity = item.quantity || 1;
-	let price;
-
-	if (typeof item.price === 'string') {
-		price = convertFromCents(item.price);
-	} else {
-		price = convertFromCents(item.price);
-	}
-
-	if (isNaN(price)) {
-		console.warn('Precio inválido para item:', item);
-		return 0;
-	}
-
+	const price = convertFromCents(item.price);
 	return price * quantity;
 };
 
-// Función específica para manejar formatted_total incorrecto
 const fixFormattedTotal = (totalValue, formattedTotal) => {
 	if (totalValue !== undefined && totalValue !== null) {
 		return formatPrice(convertFromCents(totalValue));
 	}
-
 	if (formattedTotal) {
 		return formatPrice(formattedTotal);
 	}
-
-	return '';
+	return "";
 };
 
-// Componente para Cotizaciones
 function LaboratoryQuotesList({ laboratoryQuotes }) {
 	return (
 		<div className="space-y-4 sm:space-y-6">
@@ -179,24 +460,17 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 					cardContent={
 						<>
 							<div className="flex flex-col gap-4 sm:flex-row sm:justify-between">
-								{/* Información principal - Izquierda */}
-								<div className="flex-1 min-w-0 space-y-3">
+								<div className="min-w-0 flex-1 space-y-3">
 									<div className="text-center sm:text-left">
 										<Text className="text-sm sm:text-base">
-											<Strong className="break-words">
-												Pedido #{quote.gda_order_id || quote.id}
-											</Strong>
+											<Strong className="break-words">Pedido #{quote.gda_order_id || quote.id}</Strong>
 										</Text>
 									</div>
-
-									{/* Precio y estado */}
 									<div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
-										<Text className="text-sm sm:text-base whitespace-nowrap">
+										<Text className="whitespace-nowrap text-sm sm:text-base">
 											{fixFormattedTotal(quote.total, quote.formatted_total)} MXN
 										</Text>
 									</div>
-
-									{/* Badges informativos */}
 									<div className="flex flex-col gap-2">
 										<Badge color="blue" className="justify-center sm:justify-start">
 											<ClockIcon className="size-3 sm:size-4" />
@@ -208,23 +482,29 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 												<span className="text-xs sm:text-sm">Cita programada</span>
 											</Badge>
 										)}
-										<Badge color={
-											quote.status === 'pending_branch_payment' ? 'yellow' :
-												quote.status === 'expired' ? 'red' : 'green'
-										} className="flex-shrink-0">
-											{quote.status === 'pending_branch_payment' && (
+										<Badge
+											color={
+												quote.status === "pending_branch_payment"
+													? "yellow"
+													: quote.status === "expired"
+														? "red"
+														: "green"
+											}
+											className="flex-shrink-0"
+										>
+											{quote.status === "pending_branch_payment" && (
 												<>
 													<ClockIcon className="size-3 sm:size-4" />
 													<span className="text-xs sm:text-sm">Pendiente</span>
 												</>
 											)}
-											{quote.status === 'expired' && (
+											{quote.status === "expired" && (
 												<>
 													<ExclamationTriangleIcon className="size-3 sm:size-4" />
 													<span className="text-xs sm:text-sm">Expirada</span>
 												</>
 											)}
-											{quote.status === 'completed' && (
+											{quote.status === "completed" && (
 												<>
 													<DocumentTextIcon className="size-3 sm:size-4" />
 													<span className="text-xs sm:text-sm">Completada</span>
@@ -233,21 +513,16 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 										</Badge>
 									</div>
 								</div>
-
-								{/* Información secundaria - Derecha */}
 								<div className="flex flex-col items-center gap-3 sm:items-end sm:gap-2">
-									<div className="flex flex-col items-center gap-2 sm:flex-row sm:items-end">
-										<img
-											src={`/images/gda/GDA-${quote.laboratory_brand?.toUpperCase() || 'GDA'}.png`}
-											className="order-1 sm:order-2 w-24 sm:w-36 rounded-lg object-contain flex-shrink-0"
-											alt={`Logo ${quote.laboratory_brand}`}
-										/>
-									</div>
-
-									<Subheading className="flex items-center text-sm sm:text-base group-hover:underline">
-										Ver Pedido
-										<ArrowRightIcon className="ml-1 size-4 sm:size-5 transform transition-transform group-hover:translate-x-1 group-hover:scale-125" />
-									</Subheading>
+									<img
+										src={`/images/gda/GDA-${(quote.laboratory_brand || "GDA").toUpperCase()}.png`}
+										className="order-1 h-24 w-auto max-w-[9rem] flex-shrink-0 rounded-lg object-contain sm:order-2 sm:h-36 sm:max-w-[10rem]"
+										alt=""
+									/>
+									<Text className="flex items-center text-sm font-semibold text-zinc-900 group-hover:underline dark:text-white sm:text-base">
+										Ver pedido
+										<ArrowRightIcon className="ml-1 size-4 transform transition-transform group-hover:translate-x-1 sm:size-5" />
+									</Text>
 								</div>
 							</div>
 						</>
@@ -256,9 +531,7 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 						<>
 							<TableHeader className="text-xs sm:text-sm">Estudio</TableHeader>
 							<TableHeader className="text-xs sm:text-sm">Cantidad</TableHeader>
-							<TableHeader className="text-right text-xs sm:text-sm">
-								Precio
-							</TableHeader>
+							<TableHeader className="text-right text-xs sm:text-sm">Precio</TableHeader>
 						</>
 					}
 					tableRows={
@@ -268,10 +541,8 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 									<TableCell className="text-xs sm:text-sm">
 										<span className="break-words">{item.name}</span>
 									</TableCell>
-									<TableCell className="text-xs sm:text-sm">
-										{item.quantity || 1}
-									</TableCell>
-									<TableCell className="text-right text-xs sm:text-sm whitespace-nowrap">
+									<TableCell className="text-xs sm:text-sm">{item.quantity || 1}</TableCell>
+									<TableCell className="whitespace-nowrap text-right text-xs sm:text-sm">
 										{formatPrice(calculateItemTotal(item))} MXN
 									</TableCell>
 								</TableRow>
@@ -280,225 +551,6 @@ function LaboratoryQuotesList({ laboratoryQuotes }) {
 					}
 				/>
 			))}
-		</div>
-	);
-}
-
-// Componente para Pedidos con badges de estado GDA
-function LaboratoryPurchasesList({ laboratoryPurchases }) {
-	if (laboratoryPurchases.length === 0)
-		return (
-			<EmptyListCard
-				heading="No tienes pedidos con pagos en línea"
-				message="Puedes hacer pedidos de laboratorios y farmacia en línea desde el menú principal."
-			/>
-		);
-
-	// Función para determinar el color del badge según el estado
-	const getStatusBadgeColor = (hasSample, hasResults) => {
-		if (hasResults) return "emerald";
-		if (hasSample) return "amber";
-		return "zinc";
-	};
-
-	// Función para obtener el icono según el estado
-	const getStatusIcon = (hasSample, hasResults) => {
-		if (hasResults) return CheckCircleIcon;
-		if (hasSample) return BeakerIcon;
-		return ClockIcon;
-	};
-
-	// Función para obtener el texto según el estado
-	const getStatusText = (hasSample, hasResults, sampleDate, resultsDate) => {
-		if (hasResults) {
-			return resultsDate
-				? `Resultados: ${resultsDate}`
-				: "Resultados disponibles (fecha por confirmar)";
-		}
-		if (hasSample) {
-			return sampleDate
-				? `Muestra tomada: ${sampleDate}`
-				: "Muestra tomada (fecha por confirmar)";
-		}
-		return "Procesando orden";
-	};
-
-	return (
-		<div className="mb-12 sm:mb-20 space-y-12 sm:space-y-20">
-			{laboratoryPurchases.map((laboratoryPurchase) => {
-				// CORREGIDO: Usar los nombres correctos del modelo
-				// En LaboratoryPurchasesList component, dentro del map
-				const hasSampleCollection = laboratoryPurchase.has_sample_collected || false;
-				const hasResults = laboratoryPurchase.has_results_available || false;
-				const sampleDate = laboratoryPurchase.formatted_sample_collection_at;
-				const resultsDate = laboratoryPurchase.formatted_results_at;
-
-				// Log para debugging (puedes quitarlo después)
-				console.log('✅ Datos recibidos:', {
-					id: laboratoryPurchase.id,
-					has_sample_collected: laboratoryPurchase.has_sample_collected,
-					has_results_available: laboratoryPurchase.has_results_available,
-					formatted_sample_collection_at: laboratoryPurchase.formatted_sample_collection_at,
-					formatted_results_at: laboratoryPurchase.formatted_results_at,
-					sampleDate,
-					resultsDate
-				});
-
-				return (
-					<PurchaseCard
-						key={laboratoryPurchase.id}
-						href={route("laboratory-purchases.show", {
-							laboratory_purchase: laboratoryPurchase,
-						})}
-						cardContent={
-							<>
-								<div className="flex flex-col gap-4 sm:flex-row sm:justify-between">
-									{/* Información principal - Izquierda */}
-									<div className="flex-1 min-w-0 space-y-3">
-										<div className="text-center sm:text-left">
-											<Text className="text-sm sm:text-base">
-												<Strong className="break-words">
-													{laboratoryPurchase.temporarly_hide_gda_order_id
-														? "Nombre de paciente pendiente"
-														: laboratoryPurchase.full_name}
-												</Strong>
-											</Text>
-										</div>
-
-										{/* Precio y método de pago */}
-										<div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
-											<Text className="text-sm sm:text-base whitespace-nowrap">
-												{fixFormattedTotal(laboratoryPurchase.total, laboratoryPurchase.formatted_total)}
-											</Text>
-
-											{laboratoryPurchase.transactions &&
-												laboratoryPurchase.transactions
-													.length > 0 && (
-													<PaymentMethodBadge
-														transaction={
-															laboratoryPurchase
-																.transactions[0]
-														}
-														className="flex-shrink-0"
-													/>
-												)}
-										</div>
-
-										{/* Badges informativos */}
-										<div className="flex flex-col gap-2">
-											{/* Badge de muestra tomada */}
-											{hasSampleCollection && (
-												<Badge color="amber" className="justify-center sm:justify-start">
-													<BeakerIcon className="size-3 sm:size-4" />
-													<span className="text-xs sm:text-sm">
-														{sampleDate
-															? `Muestra tomada: ${sampleDate}`
-															: "Muestra tomada (fecha por confirmar)"}
-													</span>
-												</Badge>
-											)}
-
-											{/* Badge de resultados GDA */}
-											{hasResults && (
-												<Badge color="emerald" className="justify-center sm:justify-start">
-													<CheckCircleIcon className="size-3 sm:size-4" />
-													<span className="text-xs sm:text-sm">
-														{resultsDate
-															? `Resultados: ${resultsDate}`
-															: "Resultados disponibles (fecha por confirmar)"}
-													</span>
-												</Badge>
-											)}
-
-											{/* Badge de factura */}
-											<Badge color="slate" className="justify-center sm:justify-start">
-												{laboratoryPurchase.invoice ? (
-													<>
-														<DocumentTextIcon className="size-3 sm:size-4" />
-														<span className="text-xs sm:text-sm">Factura generada</span>
-													</>
-												) : laboratoryPurchase.invoice_request ? (
-													<>
-														<ClockIcon className="size-3 sm:size-4" />
-														<span className="text-xs sm:text-sm">Factura solicitada</span>
-													</>
-												) : (
-													<>
-														<DocumentTextIcon className="size-3 sm:size-4" />
-														<span className="text-xs sm:text-sm">Factura no solicitada</span>
-													</>
-												)}
-											</Badge>
-
-											{/* Badge de resultados manuales */}
-											{laboratoryPurchase.results && (
-												<Badge color="emerald" className="justify-center sm:justify-start">
-													<DocumentTextIcon className="size-3 sm:size-4" />
-													<span className="text-xs sm:text-sm">Resultados cargados manualmente</span>
-												</Badge>
-											)}
-										</div>
-									</div>
-
-									{/* Información secundaria - Derecha */}
-									<div className="flex flex-col items-center gap-3 sm:items-end sm:gap-2">
-										<Text className="text-xs sm:text-sm text-gray-500 text-center sm:text-right">
-											{laboratoryPurchase.formatted_created_at}
-										</Text>
-
-										<div className="flex flex-col items-center gap-2 sm:flex-row sm:items-end">
-											<Badge className="order-2 sm:order-1">
-												<QrCodeIcon className="size-4 sm:size-6" />
-												<span className="text-sm sm:text-xl font-mono">
-													{laboratoryPurchase.gda_order_id}
-												</span>
-											</Badge>
-											<img
-												src={`/images/gda/GDA-${laboratoryPurchase.brand.toUpperCase()}.png`}
-												className="order-1 sm:order-2 w-24 sm:w-36 rounded-lg object-contain flex-shrink-0"
-												alt={`Logo ${laboratoryPurchase.brand}`}
-											/>
-										</div>
-
-										<Subheading className="flex items-center text-sm sm:text-base group-hover:underline">
-											Ver detalle
-											<ArrowRightIcon className="ml-1 size-4 sm:size-5 transform transition-transform group-hover:translate-x-1 group-hover:scale-125" />
-										</Subheading>
-									</div>
-								</div>
-							</>
-						}
-						tableHeaders={
-							<>
-								<TableHeader className="text-xs sm:text-sm">Estudio</TableHeader>
-								<TableHeader className="text-xs sm:text-sm">Código</TableHeader>
-								<TableHeader className="text-right text-xs sm:text-sm">
-									Precio
-								</TableHeader>
-							</>
-						}
-						tableRows={
-							<>
-								{laboratoryPurchase.laboratory_purchase_items.map(
-									(laboratoryPurchaseItem) => (
-										<TableRow key={laboratoryPurchaseItem.id}>
-											<TableCell className="text-xs sm:text-sm">
-												<span className="break-words">{laboratoryPurchaseItem.name}</span>
-											</TableCell>
-											<TableCell className="text-xs sm:text-sm">
-												<span className="font-mono">{laboratoryPurchaseItem.gda_id}</span>
-											</TableCell>
-											<TableCell className="text-right text-xs sm:text-sm whitespace-nowrap">
-												{fixFormattedTotal(laboratoryPurchaseItem.price, laboratoryPurchaseItem.formatted_price)} MXN
-											</TableCell>
-										</TableRow>
-									),
-								)}
-							</>
-						}
-					/>
-				);
-			})}
 		</div>
 	);
 }
