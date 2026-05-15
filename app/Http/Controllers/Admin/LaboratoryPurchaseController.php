@@ -98,6 +98,8 @@ class LaboratoryPurchaseController extends Controller
             'laboratoryNotifications',
         ]);
 
+        $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
+
         return Inertia::render('Admin/LaboratoryPurchase', [
             'laboratoryPurchase' => $laboratoryPurchase,
             'showDeleteButton' => $request->user()->can('delete', $laboratoryPurchase),
@@ -105,6 +107,7 @@ class LaboratoryPurchaseController extends Controller
 
             'hasSampleCollected' => $laboratoryPurchase->hasSampleCollected(),
             'hasResultsAvailable' => $laboratoryPurchase->hasResultsAvailable(),
+            'hasManualResults' => filled($laboratoryPurchase->results),
             'latestSampleCollectionAt' => optional(
                 $laboratoryPurchase->latestSampleCollection()?->created_at
             )?->isoFormat('D MMM Y h:mm a'),

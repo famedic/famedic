@@ -13,7 +13,6 @@ use App\Models\Address;
 use App\Models\Contact;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
-use App\Models\LaboratoryTest;
 use App\Services\Tracking\Purchase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -278,7 +277,7 @@ class LaboratoryPurchaseController extends Controller
             'invoice'
         ]);
 
-        $this->hydratePurchaseItemFeatureLists($laboratoryPurchase);
+        $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
 
         $hasManualResults = !empty($laboratoryPurchase->results);
         $hasSampleCollected = false;
@@ -318,38 +317,5 @@ class LaboratoryPurchaseController extends Controller
                 : 0,
             ...session()->get('confetti') ? ['confetti' => true] : [],
         ]);
-    }
-
-    /**
-     * Completa feature_list en ítems antiguos (antes de persistir el JSON en el pedido)
-     * usando el catálogo vigente del mismo gda_id y marca.
-     */
-    private function hydratePurchaseItemFeatureLists(LaboratoryPurchase $laboratoryPurchase): void
-    {
-        $items = $laboratoryPurchase->laboratoryPurchaseItems;
-        if ($items->isEmpty()) {
-            return;
-        }
-
-        $gdaIds = $items->pluck('gda_id')->filter()->unique()->values();
-        if ($gdaIds->isEmpty()) {
-            return;
-        }
-
-        $tests = LaboratoryTest::query()
-            ->where('brand', $laboratoryPurchase->brand)
-            ->whereIn('gda_id', $gdaIds->all())
-            ->get()
-            ->keyBy(fn ($t) => (string) $t->gda_id);
-
-        foreach ($items as $item) {
-            if (filled($item->feature_list)) {
-                continue;
-            }
-            $test = $tests->get((string) $item->gda_id);
-            if ($test && filled($test->feature_list)) {
-                $item->setAttribute('feature_list', $test->feature_list);
-            }
-        }
     }
 }

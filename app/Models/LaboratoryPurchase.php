@@ -176,6 +176,38 @@ class LaboratoryPurchase extends Model
     }
 
     /**
+     * Completa feature_list en ítems sin JSON persistido, usando el catálogo (mismo gda_id y marca).
+     */
+    public function hydrateLaboratoryPurchaseItemsFeatureLists(): void
+    {
+        $items = $this->laboratoryPurchaseItems;
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $gdaIds = $items->pluck('gda_id')->filter()->unique()->values();
+        if ($gdaIds->isEmpty()) {
+            return;
+        }
+
+        $tests = LaboratoryTest::query()
+            ->where('brand', $this->brand)
+            ->whereIn('gda_id', $gdaIds->all())
+            ->get()
+            ->keyBy(fn ($t) => (string) $t->gda_id);
+
+        foreach ($items as $item) {
+            if (filled($item->feature_list)) {
+                continue;
+            }
+            $test = $tests->get((string) $item->gda_id);
+            if ($test && filled($test->feature_list)) {
+                $item->setAttribute('feature_list', $test->feature_list);
+            }
+        }
+    }
+
+    /**
      * Datos presentables del laboratorio (marca GDA) asociado a la compra.
      * Útil en correos y vistas donde se requiera nombre y logo sin acoplar a una tabla `laboratories`.
      */

@@ -274,9 +274,6 @@ export default function SecurityVerificationModal({ isOpen, purchaseId, onSucces
 				</div>
 
 				<DialogBody className="space-y-4">
-					<Text className="text-zinc-700 dark:text-slate-300">
-						Para proteger tu información médica, confirma tu identidad antes de ver o descargar tus resultados.
-					</Text>
 					<Text className="text-sm text-zinc-600 dark:text-slate-400">
 						Te enviaremos un código de 6 dígitos para verificar tu identidad.
 					</Text>
@@ -291,7 +288,7 @@ export default function SecurityVerificationModal({ isOpen, purchaseId, onSucces
 							setShowWhy((p) => !p);
 						}}
 					>
-						¿Por qué es necesario?
+						Seleciona el canal de envío del código
 					</TextLink>
 					{showWhy && (
 						<div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">

@@ -43,6 +43,32 @@ import DevAssistanceDropdown from "@/Components/DevAssistance/DevAssistanceDropd
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import PaymentDetails from "@/Components/PaymentDetails";
 
+function normalizePackageFeatureLabels(raw) {
+	if (raw == null) return [];
+	let list = [];
+	if (Array.isArray(raw)) {
+		list = raw;
+	} else if (typeof raw === "string") {
+		try {
+			const parsed = JSON.parse(raw);
+			list = Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	} else {
+		return [];
+	}
+	return list
+		.map((entry) => {
+			if (typeof entry === "string") return entry.trim();
+			if (entry != null && typeof entry === "object" && "name" in entry) {
+				return String(entry.name ?? "").trim();
+			}
+			return String(entry ?? "").trim();
+		})
+		.filter(Boolean);
+}
+
 
 export default function LaboratoryPurchase({
 	laboratoryPurchase,
@@ -50,6 +76,7 @@ export default function LaboratoryPurchase({
 	canResendConfirmationEmail,
 	hasSampleCollected,
 	hasResultsAvailable,
+	hasManualResults = false,
 	latestSampleCollectionAt,
 	latestResultsAt,
 }) {
@@ -63,6 +90,7 @@ export default function LaboratoryPurchase({
 				canResendConfirmationEmail={canResendConfirmationEmail}
 				hasSampleCollected={hasSampleCollected}
 				hasResultsAvailable={hasResultsAvailable}
+				hasManualResults={hasManualResults}
 				latestSampleCollectionAt={latestSampleCollectionAt}
 				latestResultsAt={latestResultsAt}
 			/>
@@ -91,6 +119,7 @@ function Header({
 	canResendConfirmationEmail,
 	hasSampleCollected,
 	hasResultsAvailable,
+	hasManualResults,
 	latestSampleCollectionAt,
 	latestResultsAt,
 }) {
@@ -210,15 +239,22 @@ function Header({
 							)}
 						</Badge>
 
-						<Badge color={hasResultsAvailable ? "emerald" : "slate"}>
-							{hasResultsAvailable ? "Resultados disponibles" : "Resultados pendientes"}
+						<div className="flex flex-wrap items-center gap-2">
+							<Badge color={hasResultsAvailable ? "emerald" : "slate"}>
+								{hasResultsAvailable ? "Resultados disponibles" : "Resultados pendientes"}
 
-							{hasResultsAvailable && latestResultsAt && (
-								<span className="ml-2 text-xs opacity-70">
-									{latestResultsAt}
-								</span>
+								{hasResultsAvailable && latestResultsAt && (
+									<span className="ml-2 text-xs opacity-70">
+										{latestResultsAt}
+									</span>
+								)}
+							</Badge>
+							{hasManualResults && (
+								<Badge color="violet" className="font-medium">
+									PDF · carga manual
+								</Badge>
 							)}
-						</Badge>
+						</div>
 
 					</div>
 
@@ -464,23 +500,32 @@ function Order({ laboratoryPurchase }) {
 
 				<DescriptionDetails>
 
-					<div className="flex flex-col gap-1">
+					<div className="flex flex-col gap-3">
 
-						{laboratoryPurchase.laboratory_purchase_items.map(
-							(item) => (
-
-								<span key={item.id}>
-
-									<Badge color="slate">
-
-										{item.name} ({item.formatted_price})
-
-									</Badge>
-
-								</span>
-
-							)
-						)}
+						{laboratoryPurchase.laboratory_purchase_items.map((item) => {
+							const packageFeatures = normalizePackageFeatureLabels(item.feature_list);
+							return (
+								<div key={item.id} className="space-y-1.5">
+									<div>
+										<Badge color="slate">
+											{item.name} ({item.formatted_price})
+										</Badge>
+									</div>
+									{packageFeatures.length > 0 && (
+										<div className="ml-0.5 border-l-2 border-orange-400/80 pl-3 dark:border-orange-500/70">
+											<p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+												Incluye en el paquete
+											</p>
+											<ul className="list-disc space-y-0.5 pl-4 text-xs leading-snug text-zinc-600 dark:text-slate-400">
+												{packageFeatures.map((label, idx) => (
+													<li key={`${item.id}-f-${idx}`}>{label}</li>
+												))}
+											</ul>
+										</div>
+									)}
+								</div>
+							);
+						})}
 
 					</div>
 
