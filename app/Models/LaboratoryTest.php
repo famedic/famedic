@@ -40,7 +40,7 @@ class LaboratoryTest extends Model
             'other_name' => $this->other_name,
             'elements' => $this->elements,
             'common_use' => $this->common_use,
-            'brand' => $this->brand,
+            'brand' => $this->brand->value,
             'gda_id' => $this->gda_id,
         ];
     }
