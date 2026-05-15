@@ -50,6 +50,15 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
 
         $transaction = $p->transactions->first();
 
+        $couponDiscountCents = (int) ($p->coupon_discount_cents ?? 0);
+        $couponFromTxCents = (int) data_get($transaction?->details, 'coupon_amount_cents', 0);
+        $appliedCreditBalanceCents = max($couponDiscountCents, $couponFromTxCents);
+        $hasAppliedCreditBalance = $appliedCreditBalanceCents > 0
+            || ($transaction?->payment_method === 'coupon_balance');
+        $showCreditGiftNextToPayment = $hasAppliedCreditBalance
+            && $transaction?->payment_method !== null
+            && $transaction->payment_method !== 'coupon_balance';
+
         $isNewResult = false;
         if ($resultsNotif && $resultsNotif->results_received_at && $resultsNotif->read_at === null) {
             $isNewResult = true;
@@ -83,6 +92,7 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
             'study_status_label' => $this->statusLabel($studyStatus),
             'payment_method' => $transaction?->payment_method,
             'payment_method_label' => $this->paymentMethodLabel($transaction?->payment_method),
+            'show_credit_gift_next_to_payment' => $showCreditGiftNextToPayment,
             'laboratory_name' => $p->brand?->label() ?? (string) $p->brand,
             'laboratory_brand_value' => $p->brand?->value ?? $p->brand,
             'purchased_at' => $p->created_at?->toIso8601String(),
@@ -166,8 +176,9 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
         return match ($method) {
             'stripe' => 'Tarjeta (Stripe)',
             'odessa' => 'Caja de ahorro (Odessa)',
-            'efevoopay' => 'Efevoo',
+            'efevoopay' => 'Tarjeta (Efevoo Pay)',
             'paypal' => 'PayPal',
+            'coupon_balance' => 'Crédito a favor',
             null => '—',
             default => ucfirst(str_replace('_', ' ', (string) $method)),
         };

@@ -3,6 +3,20 @@ import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { BeakerIcon, CheckCircleIcon, ClockIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 
+function normalizePackageFeatures(raw) {
+	if (raw == null) return [];
+	const list = Array.isArray(raw) ? raw : [];
+	return list
+		.map((entry) => {
+			if (typeof entry === "string") return entry.trim();
+			if (entry != null && typeof entry === "object" && "name" in entry) {
+				return String(entry.name ?? "").trim();
+			}
+			return String(entry ?? "").trim();
+		})
+		.filter(Boolean);
+}
+
 export default function StudiesTable({ studies, onOpenPreparationInstructions }) {
 	return (
 		<Card className="min-w-0 max-w-full overflow-hidden rounded-2xl p-0 shadow-sm">
@@ -37,18 +51,32 @@ export default function StudiesTable({ studies, onOpenPreparationInstructions })
 							</tr>
 						</thead>
 						<tbody>
-							{studies.map((study) => (
+							{studies.map((study) => {
+								const packageFeatures = normalizePackageFeatures(study.featureList);
+								return (
 								<tr
 									key={study.id}
 									className="border-t border-zinc-100 transition hover:bg-zinc-50/70 dark:border-slate-800 dark:hover:bg-slate-800/50"
 								>
 									<td className="max-w-[200px] px-3 py-3 font-medium break-words text-zinc-900 dark:text-white sm:max-w-xs sm:px-4 md:max-w-md">
-										{study.name}
+										<div>{study.name}</div>
+										{packageFeatures.length > 0 && (
+											<div className="mt-2.5 border-l-2 border-orange-400/80 pl-3 text-left font-normal dark:border-orange-500/70">
+												<p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+													Incluye en este paquete
+												</p>
+												<ul className="list-disc space-y-1 pl-4 text-xs leading-snug text-zinc-600 dark:text-slate-400">
+													{packageFeatures.map((label, idx) => (
+														<li key={`${study.id}-pkg-${idx}`}>{label}</li>
+													))}
+												</ul>
+											</div>
+										)}
 									</td>
-									<td className="whitespace-nowrap px-3 py-3 tabular-nums text-zinc-900 dark:text-white sm:px-4">
+									<td className="whitespace-nowrap px-3 py-3 align-top tabular-nums text-zinc-900 dark:text-white sm:px-4">
 										{study.formattedPrice}
 									</td>
-									<td className="px-3 py-3 text-right sm:px-4">
+									<td className="px-3 py-3 align-top text-right sm:px-4">
 										{study.resultsUrl ? (
 											<div className="inline-flex flex-col items-end gap-1">
 												<Badge color="green" className="inline-flex items-center gap-1">
@@ -68,7 +96,8 @@ export default function StudiesTable({ studies, onOpenPreparationInstructions })
 										)}
 									</td>
 								</tr>
-							))}
+								);
+							})}
 						</tbody>
 					</table>
 				</div>

@@ -4,6 +4,7 @@ import { Text, Strong } from "@/Components/Catalyst/text";
 import OrderRowActions from "@/Components/LaboratoryPurchases/OrderRowActions";
 import { getOrderBadgePresentation, purchaseHasResults } from "@/lib/laboratoryPurchaseOrderUi";
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
+import { GiftIcon } from "@heroicons/react/16/solid";
 
 export default function OrderCardMobile({ purchase, requireOtpThen }) {
 	const badge = getOrderBadgePresentation(purchase);
@@ -70,11 +71,23 @@ export default function OrderCardMobile({ purchase, requireOtpThen }) {
 					<dt className="text-xs font-medium uppercase tracking-wide text-zinc-400 dark:text-slate-500">Total</dt>
 					<dd className="mt-0.5 font-semibold text-zinc-900 dark:text-white">{purchase.formatted_total}</dd>
 					<dd className="mt-1 flex justify-end">
-						<PaymentMethodDisplayIcon
-							method={purchase.payment_method}
-							label={purchase.payment_method_label}
-							size="sm"
-						/>
+						<span className="inline-flex flex-wrap items-center justify-end gap-1.5">
+							<PaymentMethodDisplayIcon
+								method={purchase.payment_method}
+								label={purchase.payment_method_label}
+								size="sm"
+							/>
+							{purchase.show_credit_gift_next_to_payment && (
+								<span
+									className="inline-flex shrink-0"
+									title="Se usó crédito a favor"
+									role="img"
+									aria-label="Se usó crédito a favor"
+								>
+									<GiftIcon className="size-4 shrink-0 fill-orange-500 dark:fill-orange-400" aria-hidden />
+								</span>
+							)}
+						</span>
 					</dd>
 				</div>
 			</dl>

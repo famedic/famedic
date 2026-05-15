@@ -107,11 +107,26 @@ export default function LaboratoryOrderDetail({
 					laboratoryPurchase?.laboratory_appointment,
 			);
 
+			const rawFeatures = item.feature_list ?? item.featureList;
+			const featureList = Array.isArray(rawFeatures)
+				? rawFeatures
+				: typeof rawFeatures === "string"
+					? (() => {
+							try {
+								const parsed = JSON.parse(rawFeatures);
+								return Array.isArray(parsed) ? parsed : [];
+							} catch {
+								return [];
+							}
+						})()
+					: [];
+
 			const formattedPrice =
 				item.formatted_price || priceFormatter.format(Number(item.price_cents || 0) / 100);
 			return {
 				id: item.id,
 				name: item.name,
+				featureList,
 				formattedPrice,
 				requiresAppointment,
 				appointmentStatus: requiresAppointment
@@ -268,7 +283,7 @@ export default function LaboratoryOrderDetail({
 			0,
 		);
 		const totalCents = Number(laboratoryPurchase?.total_cents || subtotalCents);
-		const discountCents = Math.max(subtotalCents - totalCents, 0);
+		const otherDiscountCents = Math.max(subtotalCents - totalCents, 0);
 		const formatter = new Intl.NumberFormat("es-MX", {
 			style: "currency",
 			currency: "MXN",
@@ -276,22 +291,36 @@ export default function LaboratoryOrderDetail({
 
 		const paymentMethodMap = {
 			stripe: "Tarjeta",
-			odessa: "Saldo Odessa",
-			efevoopay: "Pago en línea",
+			odessa: "Caja de ahorro (Odessa)",
+			efevoopay: "Tarjeta (Efevoo Pay)",
+			paypal: "PayPal",
+			coupon_balance: "Crédito a favor",
 		};
 
 		const firstTx = laboratoryPurchase?.transactions?.[0];
 		const paymentMethodKey =
 			laboratoryPurchase?.payment_method || firstTx?.payment_method || "";
 
+		const couponDiscountCents = Number(laboratoryPurchase?.coupon_discount_cents || 0);
+		const couponFromTxCents = Number(firstTx?.details?.coupon_amount_cents || 0);
+		let creditAppliedCents = Math.max(couponDiscountCents, couponFromTxCents);
+		if (creditAppliedCents === 0 && paymentMethodKey === "coupon_balance") {
+			creditAppliedCents = subtotalCents;
+		}
+		const hasAppliedCreditBalance =
+			creditAppliedCents > 0 || paymentMethodKey === "coupon_balance";
+		const discountDisplayCents = hasAppliedCreditBalance ? creditAppliedCents : otherDiscountCents;
+
 		return {
 			subtotal: formatter.format(subtotalCents / 100),
-			discount: formatter.format(discountCents / 100),
+			discount: formatter.format(discountDisplayCents / 100),
+			hasAppliedCreditBalance,
+			creditAppliedCents,
 			total: formatter.format(totalCents / 100),
-			paymentMethod: paymentMethodMap[paymentMethodKey] || "No disponible",
+			paymentMethodLabel: paymentMethodMap[paymentMethodKey] || "No disponible",
 			paymentMethodKey,
-			cardBrand: firstTx?.details?.card_brand,
-			cardLastFour: firstTx?.details?.card_last_four,
+			cardBrand: firstTx?.details?.card_brand || firstTx?.details?.token_info?.card_brand,
+			cardLastFour: firstTx?.details?.card_last_four || firstTx?.details?.token_info?.card_last_four,
 			paymentStatusLabel: laboratoryPurchase?.transactions?.length ? "Pagado" : "Pendiente",
 			paymentStatusColor: laboratoryPurchase?.transactions?.length ? "green" : "amber",
 		};

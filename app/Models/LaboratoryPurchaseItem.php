@@ -17,6 +17,13 @@ class LaboratoryPurchaseItem extends Model
         'formatted_price',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'feature_list' => 'array',
+        ];
+    }
+
     protected function formattedPrice(): Attribute
     {
         return Attribute::make(

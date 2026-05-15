@@ -11,6 +11,7 @@ import { Text, Strong } from "@/Components/Catalyst/text";
 import OrderRowActions from "@/Components/LaboratoryPurchases/OrderRowActions";
 import { purchaseHasResults } from "@/lib/laboratoryPurchaseOrderUi";
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
+import { GiftIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
 
 function studiesExtraCount(purchase) {
@@ -141,12 +142,22 @@ export default function OrdersTable({ purchases, requireOtpThen }) {
 												<Text className="mt-1 text-sm">
 													<Strong className="text-zinc-900 dark:text-white">{purchase.formatted_total}</Strong>
 												</Text>
-												<div className="mt-1">
+												<div className="mt-1 flex flex-wrap items-center gap-1.5">
 													<PaymentMethodDisplayIcon
 														method={purchase.payment_method}
 														label={purchase.payment_method_label}
 														size="sm"
 													/>
+													{purchase.show_credit_gift_next_to_payment && (
+														<span
+															className="inline-flex shrink-0"
+															title="Se usó crédito a favor"
+															role="img"
+															aria-label="Se usó crédito a favor"
+														>
+															<GiftIcon className="size-4 shrink-0 fill-orange-500 dark:fill-orange-400" aria-hidden />
+														</span>
+													)}
 												</div>
 											</div>
 											{extraStudies > 0 && (
