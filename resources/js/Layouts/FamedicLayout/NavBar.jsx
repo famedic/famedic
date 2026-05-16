@@ -13,6 +13,7 @@ import { BeakerIcon } from "@heroicons/react/20/solid";
 import { DocumentCheckIcon } from "@heroicons/react/20/solid";
 
 import ApplicationLogo from "@/Components/ApplicationLogo";
+import EnvironmentIndicator from "@/Components/EnvironmentBanner";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import UserNavigationDropdown from "@/Components/UserNavigationDropdown";
 import NotificationBell from "@/Components/NotificationBell";
@@ -65,15 +66,18 @@ export default function NavBar() {
 
 	return (
 		<Navbar>
-			<NavbarItem href={homeRoute}>
-				{hasOdessaAfiliateAccount && (
-					<OdessaLogo className="-mr-2 h-6 w-auto" />
-				)}
-				<ApplicationLogo className="h-6 w-auto" />
-				<Text className="-ml-1">
-					<Strong className="!font-poppins">Famedic</Strong>
-				</Text>
-			</NavbarItem>
+			<div className="flex items-center gap-1.5">
+				<NavbarItem href={homeRoute}>
+					{hasOdessaAfiliateAccount && (
+						<OdessaLogo className="-mr-2 h-6 w-auto" />
+					)}
+					<ApplicationLogo className="h-6 w-auto" />
+					<Text className="-ml-1">
+						<Strong className="!font-poppins">Famedic</Strong>
+					</Text>
+				</NavbarItem>
+				<EnvironmentIndicator />
+			</div>
 			<NavbarDivider className="!bg-slate-400 max-lg:hidden dark:!bg-slate-500" />
 			<NavbarSection className="max-lg:hidden">
 				{mainNavigation.map(({ label, url, current }) => (

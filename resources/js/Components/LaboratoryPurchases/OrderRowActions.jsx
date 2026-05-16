@@ -100,15 +100,6 @@ export default function OrderRowActions({ purchase, requireOtpThen, layout = "ro
 			{!isMenuOnly && isMobile ? (
 				<div className="min-w-0 flex-1">
 					{primaryButton}
-					{primary.key === "results" && (
-						<p
-							className="mt-1 flex items-center gap-1 text-xs text-zinc-500 dark:text-slate-400"
-							title="Tus resultados están protegidos. Te pediremos un código OTP."
-						>
-							<LockClosedIcon className="size-3.5" />
-							Requiere verificación OTP
-						</p>
-					)}
 				</div>
 			) : !isMenuOnly ? (
 				<div className="min-w-0">
@@ -133,6 +124,10 @@ export default function OrderRowActions({ purchase, requireOtpThen, layout = "ro
 					<EllipsisVerticalIcon className="size-5" />
 				</DropdownButton>
 				<DropdownMenu anchor="bottom end">
+					<DropdownItem href={purchase.show_detail_url}>
+						<DocumentTextIcon data-slot="icon" />
+						Ver pedido
+					</DropdownItem>
 					{hasResults && (
 						<DropdownItem onClick={handleViewResults} disabled={isProcessingResults}>
 							<EyeIcon data-slot="icon" />

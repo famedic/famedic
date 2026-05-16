@@ -11,9 +11,12 @@ export default function NavBar() {
 		<Navbar>
 			<NavbarSpacer />
 			<NavbarSection>
-				<Link href={route("home")}>
-					<ApplicationLogo className="h-6 w-auto" />
-				</Link>
+				<div className="flex items-center gap-1.5">
+					<EnvironmentIndicator />
+					<Link href={route("home")}>
+						<ApplicationLogo className="h-6 w-auto" />
+					</Link>
+				</div>
 				<Dropdown>
 					<DropdownButton as={NavbarItem} dusk="adminUserNavigation">
 						<Avatar src={user.profile_photo_url} square />
@@ -49,6 +52,7 @@ export default function NavBar() {
 }
 
 import ApplicationLogo from "@/Components/ApplicationLogo";
+import EnvironmentIndicator from "@/Components/EnvironmentBanner";
 import { Avatar } from "@/Components/Catalyst/avatar";
 import {
 	Dropdown,

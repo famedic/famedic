@@ -16,19 +16,22 @@ export default function FocusedLayout({
 				{/* Navbar */}
 				<header className="px-4 pt-2">
 					<Navbar className="flex items-center justify-between">
-						<NavbarItem
-							href={auth.user ? route("home") : route("welcome")}
-						>
-							{hasOdessaAfiliateAccount && (
-								<OdessaLogo className="h-6 w-auto" />
-							)}
-							<ApplicationLogo className="h-6 w-auto" />
-							<Text>
-								<Strong className="!font-poppins">
-									Famedic
-								</Strong>
-							</Text>
-						</NavbarItem>
+						<div className="flex items-center gap-1.5">
+							<NavbarItem
+								href={auth.user ? route("home") : route("welcome")}
+							>
+								{hasOdessaAfiliateAccount && (
+									<OdessaLogo className="h-6 w-auto" />
+								)}
+								<ApplicationLogo className="h-6 w-auto" />
+								<Text>
+									<Strong className="!font-poppins">
+										Famedic
+									</Strong>
+								</Text>
+							</NavbarItem>
+							<EnvironmentIndicator />
+						</div>
 						{auth.user && (
 							<NavbarSection>
 								<NotificationBell feed={inAppNotificationFeed} />
@@ -73,3 +76,4 @@ import OdessaLogo from "@/Components/OdessaLogo";
 import HelpBubble from "@/Components/Catalyst/HelpBubble";
 import useTrackingEvents from "@/Hooks/useTrackingEvents";
 import AppLayout from "@/Layouts/AppLayout";
+import EnvironmentIndicator from "@/Components/EnvironmentBanner";
