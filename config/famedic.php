@@ -93,4 +93,7 @@ return [
      * sea desde otro entorno. Sobrescribe con FAMEDIC_EMAIL_PUBLIC_URL si necesitas otro host.
      */
     'email_public_url' => rtrim((string) env('FAMEDIC_EMAIL_PUBLIC_URL', 'https://famedic.com.mx'), '/'),
+
+    /** Menú admin: muestra "Créditos a favor" pero sin permitir navegación. */
+    'admin_coupons_navigation_disabled' => env('ADMIN_COUPONS_NAVIGATION_DISABLED', true),
 ];

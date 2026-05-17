@@ -119,6 +119,7 @@ class EnsureUserHasAdminAccount
                 ...$request->user()->administrator->hasPermissionTo('coupons.manage') ? [[
                     'label' => 'Créditos a favor',
                     'icon' => 'BanknotesIcon',
+                    'disabled' => (bool) config('famedic.admin_coupons_navigation_disabled', false),
                     'items' => [
                         [
                             'label' => 'Créditos',
