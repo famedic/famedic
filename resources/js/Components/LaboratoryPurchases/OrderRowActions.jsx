@@ -8,7 +8,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { Button } from "@/Components/Catalyst/button";
 import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from "@/Components/Catalyst/dropdown";
-import { getPrimaryPurchaseAction, purchaseHasResults } from "@/lib/laboratoryPurchaseOrderUi";
+import { getPrimaryPurchaseAction, purchaseHasResults, purchaseIsCancelled } from "@/lib/laboratoryPurchaseOrderUi";
 import { useState } from "react";
 
 function openExternal(url) {
@@ -20,6 +20,7 @@ export default function OrderRowActions({ purchase, requireOtpThen, layout = "ro
 	const isMobile = layout === "mobile";
 	const isMenuOnly = layout === "menu-only";
 	const [isProcessingResults, setIsProcessingResults] = useState(false);
+	const isCancelled = purchaseIsCancelled(purchase);
 	const primary = getPrimaryPurchaseAction(purchase);
 	const hasResults = purchaseHasResults(purchase);
 
@@ -95,8 +96,17 @@ export default function OrderRowActions({ purchase, requireOtpThen, layout = "ro
 		? "flex w-full items-stretch gap-2"
 		: "flex flex-wrap items-center justify-end gap-2";
 
+	const stopRowNavigation = (event) => {
+		event.stopPropagation();
+	};
+
 	return (
-		<div className={wrapClass}>
+		<div
+			className={wrapClass}
+			onClick={stopRowNavigation}
+			onPointerDown={stopRowNavigation}
+			onKeyDown={stopRowNavigation}
+		>
 			{!isMenuOnly && isMobile ? (
 				<div className="min-w-0 flex-1">
 					{primaryButton}
@@ -119,6 +129,8 @@ export default function OrderRowActions({ purchase, requireOtpThen, layout = "ro
 				<DropdownButton
 					outline
 					aria-label="Más acciones"
+					onClick={stopRowNavigation}
+					onPointerDown={stopRowNavigation}
 					className={isMobile ? "min-h-12 min-w-12 shrink-0 justify-center px-0" : "min-h-10 min-w-10 justify-center px-0 sm:px-2"}
 				>
 					<EllipsisVerticalIcon className="size-5" />
@@ -139,7 +151,7 @@ export default function OrderRowActions({ purchase, requireOtpThen, layout = "ro
 							<DocumentTextIcon data-slot="icon" />
 							Ver factura
 						</DropdownItem>
-					) : !purchase.invoice_requested ? (
+					) : !purchase.invoice_requested && !isCancelled ? (
 						<DropdownItem href={purchase.invoice_request_url || `${purchase.show_detail_url}?tab=facturas`}>
 							<DocumentTextIcon data-slot="icon" />
 							Solicitar factura

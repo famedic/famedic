@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import LaboratoryOrderDetail from "@/Pages/LaboratoryOrderDetail";
 export default function LaboratoryPurchase({
 	laboratoryPurchase,
+	isCancelled = false,
 	confetti,
 	latestSampleCollectionAt,
 	latestResultsAt,
@@ -41,6 +42,7 @@ export default function LaboratoryPurchase({
 	return (
 		<LaboratoryOrderDetail
 			laboratoryPurchase={laboratoryPurchase}
+			isCancelled={isCancelled || Boolean(laboratoryPurchase?.deleted_at)}
 			confetti={confetti}
 			latestSampleCollectionAt={latestSampleCollectionAt}
 			latestResultsAt={latestResultsAt}

@@ -71,7 +71,8 @@ class LaboratoryPurchaseController extends Controller
 
         $filters = array_merge(
             [
-                'deleted' => 'false',
+                // Incluir pedidos cancelados en el historial del paciente.
+                'deleted' => '',
             ],
             $request->only([
                 'search',
@@ -267,6 +268,8 @@ class LaboratoryPurchaseController extends Controller
 
     public function show(Request $request, LaboratoryPurchase $laboratoryPurchase)
     {
+        $this->authorize('view', $laboratoryPurchase);
+
         $lastDayOfPurchaseMonth = localizedDate($laboratoryPurchase->created_at)->endOfMonth();
         $nowInMonterrey = localizedDate(now());
         $laboratoryPurchase->load([
@@ -306,6 +309,7 @@ class LaboratoryPurchaseController extends Controller
 
         return Inertia::render('LaboratoryPurchase', [
             'laboratoryPurchase' => $laboratoryPurchase,
+            'isCancelled' => $laboratoryPurchase->trashed(),
             'hasSampleCollected' => $hasSampleCollected,
             'hasResultsAvailable' => $hasResultsAvailable,
             'latestSampleCollectionAt' => $latestSampleCollectionAt,

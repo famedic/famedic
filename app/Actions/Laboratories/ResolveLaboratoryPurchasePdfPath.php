@@ -6,7 +6,9 @@ use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryStore;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Browsershot\Browsershot;
 use Spatie\LaravelPdf\Facades\Pdf;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class ResolveLaboratoryPurchasePdfPath
 {
@@ -28,11 +30,23 @@ class ResolveLaboratoryPurchasePdfPath
             }
         }
 
+        if ($gdaPath = $this->resolveFromGdaPdfBase64($laboratoryPurchase)) {
+            return $gdaPath;
+        }
+
         $this->deleteStaleFile($laboratoryPurchase);
 
         $storagePath = $this->storagePath();
 
-        $this->generate($laboratoryPurchase, $storagePath);
+        try {
+            $this->generate($laboratoryPurchase, $storagePath);
+        } catch (ProcessFailedException $e) {
+            if ($gdaPath = $this->resolveFromGdaPdfBase64($laboratoryPurchase)) {
+                return $gdaPath;
+            }
+
+            throw $e;
+        }
 
         $laboratoryPurchase->updateQuietly(['pdf_hash' => $this->contentHash]);
 
@@ -83,9 +97,58 @@ class ResolveLaboratoryPurchasePdfPath
         ])
             ->format('a4')
             ->margins(15, 15, 15, 15)
-            ->withBrowsershot(fn ($browsershot) => $browsershot->noSandbox())
+            ->withBrowsershot(fn (Browsershot $browsershot) => $this->configureBrowsershot($browsershot))
             ->disk(config('filesystems.default'))
             ->save($storagePath);
+
+        return $storagePath;
+    }
+
+    protected function configureBrowsershot(Browsershot $browsershot): Browsershot
+    {
+        $browsershot->noSandbox();
+
+        $nodeBinary = config('famedic.browsershot.node_binary');
+        $npmBinary = config('famedic.browsershot.npm_binary');
+        $chromePath = config('famedic.browsershot.chrome_path');
+
+        if (is_string($nodeBinary) && $nodeBinary !== '') {
+            $browsershot->setNodeBinary($nodeBinary);
+        }
+
+        if (is_string($npmBinary) && $npmBinary !== '') {
+            $browsershot->setNpmBinary($npmBinary);
+        }
+
+        if (is_string($chromePath) && $chromePath !== '' && is_executable($chromePath)) {
+            $browsershot->setChromePath($chromePath);
+        }
+
+        return $browsershot;
+    }
+
+    /**
+     * PDF entregado por GDA al crear la orden (base64 en BD).
+     */
+    protected function resolveFromGdaPdfBase64(LaboratoryPurchase $laboratoryPurchase): ?string
+    {
+        $encoded = $laboratoryPurchase->pdf_base64;
+
+        if (! is_string($encoded) || trim($encoded) === '') {
+            return null;
+        }
+
+        $pdfContent = base64_decode($encoded, true);
+
+        if ($pdfContent === false || $pdfContent === '') {
+            return null;
+        }
+
+        $storagePath = "{$this->storageDirectory}/gda-order-{$laboratoryPurchase->id}.pdf";
+
+        if (! Storage::exists($storagePath)) {
+            Storage::put($storagePath, $pdfContent);
+        }
 
         return $storagePath;
     }

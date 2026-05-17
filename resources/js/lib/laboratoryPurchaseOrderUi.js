@@ -17,7 +17,7 @@ export function purchaseIsInvoicedPipeline(purchase) {
 }
 
 export function purchaseIsCancelled(purchase) {
-	return purchase.study_status === "cancelled";
+	return purchase.is_cancelled === true || purchase.study_status === "cancelled";
 }
 
 /**

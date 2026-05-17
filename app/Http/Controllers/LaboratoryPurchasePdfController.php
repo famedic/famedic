@@ -22,7 +22,17 @@ class LaboratoryPurchasePdfController extends Controller
 
     public function download(DownloadLaboratoryPurchasePdfRequest $request, LaboratoryPurchase $laboratoryPurchase)
     {
-        $storagePath = ($this->resolvePdfPath)($laboratoryPurchase);
+        try {
+            $storagePath = ($this->resolvePdfPath)($laboratoryPurchase);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('laboratory-purchases.show', $laboratoryPurchase)
+                ->withErrors([
+                    'pdf' => 'No se pudo generar el PDF de la orden. Si usas Docker en local, reconstruye el contenedor app (node y Chromium) o contacta a soporte.',
+                ]);
+        }
 
         return Inertia::location(
             Storage::temporaryUrl(

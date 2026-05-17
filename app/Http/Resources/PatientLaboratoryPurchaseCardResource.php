@@ -86,6 +86,11 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
 
         return [
             'id' => $p->id,
+            'is_cancelled' => $cancelled,
+            'cancelled_at' => $cancelled ? $p->deleted_at?->toIso8601String() : null,
+            'cancelled_at_formatted' => $cancelled && $p->deleted_at
+                ? localizedDate($p->deleted_at)->isoFormat('D MMM Y')
+                : null,
             'patient_name' => trim($p->full_name ?? '') ?: 'Paciente',
             'study_name' => $studyName,
             'study_status' => $studyStatus,

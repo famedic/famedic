@@ -9,7 +9,7 @@ import {
 import { Table, TableHead, TableHeader, TableBody, TableRow, TableCell } from "@/Components/Catalyst/table";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import OrderRowActions from "@/Components/LaboratoryPurchases/OrderRowActions";
-import { purchaseHasResults } from "@/lib/laboratoryPurchaseOrderUi";
+import { getOrderBadgePresentation, purchaseHasResults, purchaseIsCancelled } from "@/lib/laboratoryPurchaseOrderUi";
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
 import { GiftIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
@@ -114,6 +114,8 @@ export default function OrdersTable({ purchases, requireOtpThen }) {
 									? String(purchase.gda_consecutivo)
 									: null;
 							const isLoading = loadingRowId === purchase.id;
+							const isCancelled = purchaseIsCancelled(purchase);
+							const statusBadge = getOrderBadgePresentation(purchase);
 							return (
 								<TableRow
 									key={purchase.id}
@@ -210,6 +212,20 @@ export default function OrdersTable({ purchases, requireOtpThen }) {
 									</TableCell>
 									<TableCell>
 										<div className="space-y-2 text-xs">
+											{isCancelled ? (
+												<div className="mb-2 space-y-1">
+													<span
+														className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadge.className}`}
+													>
+														{statusBadge.label}
+													</span>
+													{purchase.cancelled_at_formatted ? (
+														<Text className="text-[11px] text-zinc-500 dark:text-slate-400">
+															Cancelado el {purchase.cancelled_at_formatted}
+														</Text>
+													) : null}
+												</div>
+											) : null}
 											<div className="flex items-center justify-between gap-2">
 												<Text className="text-[11px] tracking-wide text-zinc-500">Cita</Text>
 												<span title={`Cita: ${statusTooltip(statusMap.cita)}`}>
@@ -236,7 +252,12 @@ export default function OrdersTable({ purchases, requireOtpThen }) {
 											</div>
 										</div>
 									</TableCell>
-									<TableCell className="text-right">
+									<TableCell
+										className="text-right"
+										onClick={(event) => event.stopPropagation()}
+										onPointerDown={(event) => event.stopPropagation()}
+										onKeyDown={(event) => event.stopPropagation()}
+									>
 										<div className="relative z-10 flex justify-end">
 											{isLoading ? (
 												<span className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-600 dark:text-slate-300">

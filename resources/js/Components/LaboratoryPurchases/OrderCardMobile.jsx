@@ -44,6 +44,12 @@ export default function OrderCardMobile({ purchase, requireOtpThen }) {
 				</span>
 			</div>
 
+			{purchase.cancelled_at_formatted && (
+				<Text className="mt-2 text-xs text-red-600 dark:text-red-300">
+					Cancelado el {purchase.cancelled_at_formatted}
+				</Text>
+			)}
+
 			<dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm text-zinc-600 dark:text-slate-400">
 				<div className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-zinc-100 pt-3 dark:border-slate-800">
 					<dt className="sr-only">Folio</dt>
