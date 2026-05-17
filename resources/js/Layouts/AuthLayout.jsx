@@ -6,6 +6,8 @@ import OdessaLogo from "@/Components/OdessaLogo";
 import { LinkIcon } from "@heroicons/react/20/solid";
 import { Button } from "@/Components/Catalyst/button";
 import useTrackingEvents from "@/Hooks/useTrackingEvents";
+import AppLayout from "@/Layouts/AppLayout";
+import EnvironmentIndicator from "@/Components/EnvironmentBanner";
 
 export default function AuthLayout({
 	title,
@@ -16,29 +18,32 @@ export default function AuthLayout({
 	useTrackingEvents();
 
 	return (
-		<>
+		<AppLayout>
 			<Head title={title} />			
 
 			<div className="min-h-screen bg-gradient-to-b from-white to-blue-50 dark:from-slate-950 dark:to-slate-900">
 				<div className="container mx-auto px-4 py-8 sm:px-6 lg:px-8">
 					{/* Header con logo */}
 					<div className="mb-8 sm:mb-10 text-center">
-						<Button
-							plain
-							href={route("welcome")}
-							className="inline-flex items-center gap-3 hover:opacity-80 transition-opacity"
-						>
-							{showOdessaLogo && (
-								<>
-									<OdessaLogo className="h-10 w-auto sm:h-12" />
-									<LinkIcon className="h-6 w-6 sm:h-7 sm:w-7 text-blue-500" />
-								</>
-							)}
-							<ApplicationLogo className="h-10 w-auto sm:h-12" />
-							<Heading className="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">
-								Famedic
-							</Heading>
-						</Button>
+						<div className="inline-flex items-center gap-2">
+							<Button
+								plain
+								href={route("welcome")}
+								className="inline-flex items-center gap-3 hover:opacity-80 transition-opacity"
+							>
+								{showOdessaLogo && (
+									<>
+										<OdessaLogo className="h-10 w-auto sm:h-12" />
+										<LinkIcon className="h-6 w-6 sm:h-7 sm:w-7 text-blue-500" />
+									</>
+								)}
+								<ApplicationLogo className="h-10 w-auto sm:h-12" />
+								<Heading className="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">
+									Famedic
+								</Heading>
+							</Button>
+							<EnvironmentIndicator />
+						</div>
 						<p className="mt-2 sm:mt-3 text-sm text-gray-600 dark:text-gray-400 sm:text-lg">
 							Salud y tecnología a bajo costo • Cobertura nacional
 						</p>
@@ -159,6 +164,6 @@ export default function AuthLayout({
 			</div>
 
 			<Notification />
-		</>
+		</AppLayout>
 	);
 }

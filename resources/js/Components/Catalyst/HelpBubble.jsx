@@ -11,11 +11,18 @@ import {
 	PhoneIcon,
 } from "@heroicons/react/24/solid";
 import { Button } from "@/Components/Catalyst/button";
+import clsx from "clsx";
 
-export default function HelpBubble({ className = "" }) {
+export default function HelpBubble({ className = "", reserveMobileBottomNavSpace = false }) {
 	return (
 		<div
-			className={`pointer-events-none fixed bottom-0 right-0 flex justify-end ${className}`}
+			className={clsx(
+				"pointer-events-none fixed right-0 z-[45] flex justify-end",
+				reserveMobileBottomNavSpace
+					? "bottom-[calc(5.75rem+env(safe-area-inset-bottom))] lg:bottom-0"
+					: "bottom-0",
+				className,
+			)}
 		>
 			<Dropdown>
 				<Headless.MenuButton as="div" className="pointer-events-auto">

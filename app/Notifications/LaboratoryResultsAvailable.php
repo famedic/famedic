@@ -8,6 +8,7 @@ use Illuminate\Notifications\Notification;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryQuote;
 use App\Models\User;
+use App\Services\Laboratory\LabResultsAccessTokenService;
 use Carbon\Carbon;
 
 class LaboratoryResultsAvailable extends Notification
@@ -39,6 +40,16 @@ class LaboratoryResultsAvailable extends Notification
             ?? $this->gdaOrderId 
             ?? 'N/A';
 
+        $resultsAccessUrl = null;
+        if ($this->laboratoryPurchase && $notifiable instanceof User) {
+            $plainToken = app(LabResultsAccessTokenService::class)->generate(
+                $notifiable,
+                $this->laboratoryPurchase
+            );
+
+            $resultsAccessUrl = route('lab-results.show', ['token' => $plainToken]);
+        }
+
         $mailMessage = (new MailMessage)
             ->subject('¡Tus resultados de laboratorio están disponibles! - Famedic')
             ->greeting('Hola ' . $notifiable->name . ',')
@@ -67,9 +78,14 @@ class LaboratoryResultsAvailable extends Notification
         }
         
         // Agregar enlace según lo que tengamos
-        if ($this->laboratoryPurchase) {
+        if ($resultsAccessUrl) {
             $mailMessage->action(
                 '🔬 Consultar mis resultados', 
+                $resultsAccessUrl
+            );
+        } elseif ($this->laboratoryPurchase) {
+            $mailMessage->action(
+                '🔬 Consultar mis resultados',
                 url(route('laboratory-purchases.show', $this->laboratoryPurchase->id))
             );
         } elseif ($this->laboratoryQuote) {

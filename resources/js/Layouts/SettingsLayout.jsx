@@ -45,14 +45,16 @@ export default function SettingsLayout({ title, children }) {
 				title={title}
 				navbar={<NavBar />}
 				sidebar={<SideBar />}
+				reserveMobileBottomNavSpace
 			>
-				<div className="flex flex-col gap-x-8 gap-y-6 lg:flex-row lg:gap-x-10">
+				<div className="flex min-w-0 max-w-full flex-col gap-x-8 gap-y-6 lg:flex-row lg:gap-x-10">
 					<VerticalNavbar
 						links={navigationMap}
+						enableMobileBottomNav
 						className="top-0 w-auto sm:w-min lg:sticky lg:top-[6.5rem]"
 					/>
 
-					<main className="flex-auto space-y-6 lg:space-y-8">
+					<main className="min-w-0 max-w-full flex-auto space-y-6 overflow-x-clip lg:space-y-8">
 						{children}
 					</main>
 				</div>

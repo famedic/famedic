@@ -42,7 +42,7 @@ class LaboratoryPurchase extends Model
             'brand' => LaboratoryBrand::class,
             'birth_date' => 'date',
             'gender' => Gender::class,
-            'phone' => RawPhoneNumberCast::class . ':country_field',
+            'phone' => RawPhoneNumberCast::class.':country_field',
             'temporarily_hide_gda_order_id' => 'boolean',
             'gda_consecutivo' => 'integer',
         ];
@@ -51,7 +51,7 @@ class LaboratoryPurchase extends Model
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         // Apply filtering based on the deleted flag:
-        if (!isset($filters['deleted']) || $filters['deleted'] === '') {
+        if (! isset($filters['deleted']) || $filters['deleted'] === '') {
             // "Todos": include both active and trashed records.
             $query->withTrashed();
         } elseif ($filters['deleted'] === 'true') {
@@ -84,6 +84,13 @@ class LaboratoryPurchase extends Model
                         $query->where('name', 'LIKE', "%$search%");
                     });
                 });
+            })
+            ->when(isset($filters['patient']) && trim((string) $filters['patient']) !== '', function ($query) use ($filters) {
+                $patient = trim((string) $filters['patient']);
+                $query->whereRaw(
+                    "TRIM(CONCAT(COALESCE(name,''),' ',COALESCE(paternal_lastname,''),' ',COALESCE(maternal_lastname,''))) LIKE ?",
+                    ['%'.$patient.'%']
+                );
             })
             ->when(isset($filters['payment_method']) && $filters['payment_method'] !== '', function ($query) use ($filters) {
                 $query->whereHas('transactions', function ($query) use ($filters) {
@@ -169,6 +176,38 @@ class LaboratoryPurchase extends Model
     }
 
     /**
+     * Completa feature_list en ítems sin JSON persistido, usando el catálogo (mismo gda_id y marca).
+     */
+    public function hydrateLaboratoryPurchaseItemsFeatureLists(): void
+    {
+        $items = $this->laboratoryPurchaseItems;
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $gdaIds = $items->pluck('gda_id')->filter()->unique()->values();
+        if ($gdaIds->isEmpty()) {
+            return;
+        }
+
+        $tests = LaboratoryTest::query()
+            ->where('brand', $this->brand)
+            ->whereIn('gda_id', $gdaIds->all())
+            ->get()
+            ->keyBy(fn ($t) => (string) $t->gda_id);
+
+        foreach ($items as $item) {
+            if (filled($item->feature_list)) {
+                continue;
+            }
+            $test = $tests->get((string) $item->gda_id);
+            if ($test && filled($test->feature_list)) {
+                $item->setAttribute('feature_list', $test->feature_list);
+            }
+        }
+    }
+
+    /**
      * Datos presentables del laboratorio (marca GDA) asociado a la compra.
      * Útil en correos y vistas donde se requiera nombre y logo sin acoplar a una tabla `laboratories`.
      */
@@ -203,14 +242,14 @@ class LaboratoryPurchase extends Model
     protected function formattedCreatedAt(): Attribute
     {
         return Attribute::make(
-            get: fn() => localizedDate($this->created_at)?->isoFormat('D MMM Y h:mm a')
+            get: fn () => localizedDate($this->created_at)?->isoFormat('D MMM Y h:mm a')
         );
     }
 
     protected function formattedTotal(): Attribute
     {
         return Attribute::make(
-            get: fn() => formattedCentsPrice($this->total_cents),
+            get: fn () => formattedCentsPrice($this->total_cents),
         );
     }
 
@@ -226,35 +265,35 @@ class LaboratoryPurchase extends Model
     protected function total(): Attribute
     {
         return Attribute::make(
-            get: fn() => numberCents($this->total_cents)
+            get: fn () => numberCents($this->total_cents)
         );
     }
 
     protected function fullName(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->name . ' ' . $this->paternal_lastname . ' ' . $this->maternal_lastname
+            get: fn () => $this->name.' '.$this->paternal_lastname.' '.$this->maternal_lastname
         );
     }
 
     protected function fullPhone(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->phone?->formatE164()
+            get: fn () => $this->phone?->formatE164()
         );
     }
 
     protected function formattedBirthDate(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->birth_date?->isoFormat('D [de] MMM [de] YYYY'),
+            get: fn () => $this->birth_date?->isoFormat('D [de] MMM [de] YYYY'),
         );
     }
 
     protected function formattedGender(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->gender?->label()
+            get: fn () => $this->gender?->label()
         );
     }
 
@@ -262,7 +301,7 @@ class LaboratoryPurchase extends Model
     {
         return Attribute::make(
             get: function () {
-                if (!$this->results) {
+                if (! $this->results) {
                     return null;
                 }
 
@@ -280,14 +319,14 @@ class LaboratoryPurchase extends Model
     protected function temporarlyHideGdaOrderId(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->created_at?->lt(Carbon::parse('October 20, 2024')) ? true : false
+            get: fn () => $this->created_at?->lt(Carbon::parse('October 20, 2024')) ? true : false
         );
     }
 
     protected function formattedCommission(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->transactions->first()?->formatted_commission ?? formattedCentsPrice(0)
+            get: fn () => $this->transactions->first()?->formatted_commission ?? formattedCentsPrice(0)
         );
     }
 
@@ -383,7 +422,7 @@ class LaboratoryPurchase extends Model
     public function latestResultsNotification()
     {
         return $this->resultsNotification()->first();
-    }   
+    }
 
     public function scopeWithNotificationStatus($query)
     {
@@ -426,14 +465,13 @@ class LaboratoryPurchase extends Model
 
     public function getHasSampleCollectionAttribute()
     {
-        return !is_null($this->latest_sample_collection_at ?? null);
+        return ! is_null($this->latest_sample_collection_at ?? null);
     }
 
     public function getHasResultsAvailableAttribute()
     {
-        return !is_null($this->latest_results_at ?? null);
+        return ! is_null($this->latest_results_at ?? null);
     }
-
 
     public function getFormattedResultsAtAttribute()
     {
@@ -453,8 +491,9 @@ class LaboratoryPurchase extends Model
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Error formateando fecha resultados', [
                 'purchase_id' => $this->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -477,8 +516,9 @@ class LaboratoryPurchase extends Model
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Error formateando fecha sample', [
                 'purchase_id' => $this->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -486,7 +526,84 @@ class LaboratoryPurchase extends Model
     // Estos métodos ya existen, pero verifica que estén correctos
     public function getHasSampleCollectedAttribute()
     {
-        return !is_null($this->latest_sample_collection_at ?? null);
+        return ! is_null($this->latest_sample_collection_at ?? null);
     }
 
+    /**
+     * Filtro de estado del estudio para el panel del paciente (Mis pedidos).
+     */
+    public function scopeWherePatientStudyStatus(Builder $query, ?string $status): Builder
+    {
+        if (! $status || $status === 'all') {
+            return $query;
+        }
+
+        $resultsNotif = function ($n) {
+            $n->where(function ($q2) {
+                $q2->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
+            })->whereNotNull('results_received_at');
+        };
+
+        $sampleNotif = function ($n) {
+            $n->where(function ($q2) {
+                $q2->where('notification_type', LaboratoryNotification::TYPE_SAMPLE_COLLECTION)
+                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_SAMPLE);
+            });
+        };
+
+        return match ($status) {
+            'cancelled' => $query->onlyTrashed(),
+            'results_ready' => $query->whereNull('deleted_at')->where(function ($q) use ($resultsNotif) {
+                $q->whereNotNull('results')
+                    ->orWhereHas('laboratoryNotifications', $resultsNotif);
+            }),
+            'sample_taken' => $query->whereNull('deleted_at')
+                ->whereHas('laboratoryNotifications', $sampleNotif)
+                ->where(function ($q) use ($resultsNotif) {
+                    $q->whereNull('results')
+                        ->whereDoesntHave('laboratoryNotifications', $resultsNotif);
+                }),
+            'in_progress' => $query->whereNull('deleted_at')
+                ->whereNull('results')
+                ->whereDoesntHave('laboratoryNotifications', $resultsNotif)
+                ->whereDoesntHave('laboratoryNotifications', $sampleNotif),
+            default => $query,
+        };
+    }
+
+    /**
+     * Filtro por embudo del panel del paciente (Todos / En proceso / Completados / Facturados).
+     *
+     * - processing: sin resultados (incluye muestra tomada, etc.)
+     * - completed: con resultados disponibles
+     * - invoiced: factura emitida y solicitud de factura registrada
+     */
+    public function scopeWherePatientPipeline(Builder $query, ?string $pipeline): Builder
+    {
+        if (! $pipeline || $pipeline === 'all') {
+            return $query;
+        }
+
+        $resultsReceived = function ($n) {
+            $n->where(function ($q2) {
+                $q2->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
+            })->whereNotNull('results_received_at');
+        };
+
+        return match ($pipeline) {
+            'processing' => $query->whereNull('deleted_at')
+                ->whereNull('results')
+                ->whereDoesntHave('laboratoryNotifications', $resultsReceived),
+            'completed' => $query->whereNull('deleted_at')->where(function ($q) use ($resultsReceived) {
+                $q->whereNotNull('results')
+                    ->orWhereHas('laboratoryNotifications', $resultsReceived);
+            }),
+            'invoiced' => $query->whereNull('deleted_at')
+                ->whereHas('invoice')
+                ->whereHas('invoiceRequest'),
+            default => $query,
+        };
+    }
 }

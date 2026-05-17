@@ -375,14 +375,11 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 
 function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
 	return (
-		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+		<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
 			{taxProfiles.map((taxProfile) => (
-				<div
-					key={taxProfile.id}
-					className="border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow bg-white"
-				>
 					<SettingsCard
-						className="h-full"
+						key={taxProfile.id}
+						className="h-full !max-w-none rounded-xl shadow-sm transition-shadow hover:shadow-md"
 						actions={
 							<div className="flex gap-2 mt-4">
 								<Button
@@ -422,8 +419,10 @@ function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
 							
 							<div className="space-y-2">
 								<div className="flex items-center justify-between">
-									<span className="text-sm text-gray-600">Código Postal:</span>
-									<span className="font-medium text-white">CP {taxProfile.zipcode}</span>
+									<span className="text-sm text-gray-600 dark:text-slate-400">Código Postal:</span>
+									<span className="font-medium text-zinc-900 dark:text-white">
+										CP {taxProfile.zipcode}
+									</span>
 								</div>
 								
 								<div className="flex items-center justify-between">
@@ -485,7 +484,6 @@ function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
 							</div>
 						</div>
 					</SettingsCard>
-				</div>
 			))}
 
 			{taxProfiles.length === 0 && (

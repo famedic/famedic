@@ -34,8 +34,8 @@ export function DropdownMenu({ anchor = "bottom", className, ...props }) {
 				"shadow-lg ring-1 ring-zinc-950/10 dark:ring-inset dark:ring-white/10",
 				// Define grid at the menu level if subgrid is supported
 				"supports-[grid-template-columns:subgrid]:grid supports-[grid-template-columns:subgrid]:grid-cols-[auto_1fr_1.5rem_0.5rem_auto]",
-				// Transitions
-				"transition data-[closed]:data-[leave]:opacity-0 data-[leave]:duration-100 data-[leave]:ease-in",
+				// Transitions (apertura un poco más suave)
+				"transition data-[closed]:data-[leave]:opacity-0 data-[enter]:duration-200 data-[enter]:ease-out data-[leave]:duration-150 data-[leave]:ease-in",
 			)}
 		/>
 	);

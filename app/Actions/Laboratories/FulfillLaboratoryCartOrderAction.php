@@ -157,6 +157,8 @@ class FulfillLaboratoryCartOrderAction
             $laboratoryPurchase->laboratoryPurchaseItems()->save(
                 new LaboratoryPurchaseItem([
                     'name' => $laboratoryCartItem->laboratoryTest->name,
+                    'description' => $laboratoryCartItem->laboratoryTest->description,
+                    'feature_list' => $laboratoryCartItem->laboratoryTest->feature_list,
                     'gda_id' => $laboratoryCartItem->laboratoryTest->gda_id,
                     'indications' => $laboratoryCartItem->laboratoryTest->indications,
                     'price_cents' => $laboratoryCartItem->laboratoryTest->famedic_price_cents,

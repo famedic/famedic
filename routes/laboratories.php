@@ -12,6 +12,9 @@ use App\Http\Controllers\LaboratoryResultsController;
 use App\Http\Controllers\LaboratoryShoppingCartController;
 use App\Http\Controllers\LaboratoryStoreController;
 use App\Http\Controllers\PayPalController;
+use App\Http\Controllers\LabResultsAccessController;
+use App\Http\Controllers\LaboratoryResultsOtpController;
+use App\Http\Middleware\EnsureLabResultsOtpVerified;
 use Illuminate\Support\Facades\Route;
 
 // Public browsing routes
@@ -19,6 +22,27 @@ Route::get('/laboratory-brand-selection', LaboratoryBrandSelectionController::cl
 Route::get('/laboratory/{laboratory_brand}/laboratory-tests', [LaboratoryTestsController::class, 'index'])->name('laboratory-tests');
 Route::get('/laboratory-tests/{laboratory_test}', [LaboratoryTestsController::class, 'show'])->name('laboratory-tests.test');
 Route::resource('laboratory-stores', LaboratoryStoreController::class)->only(['index']);
+$labResultsThrottle = 'throttle:'.config('laboratory-results.rate_limit_per_minute', 12).',1';
+
+Route::get('/lab-results/{token}', [LabResultsAccessController::class, 'show'])->name('lab-results.show');
+
+Route::get('/lab-results/shared/{token}', [LabResultsAccessController::class, 'showShared'])
+    ->middleware('signed')
+    ->name('lab-results.show-shared');
+
+Route::get('/lab-results/shared/{token}/pdf', [LabResultsAccessController::class, 'streamSharedPdf'])
+    ->middleware('signed')
+    ->name('lab-results.shared-pdf');
+
+Route::middleware([$labResultsThrottle])->group(function () {
+    Route::post('/lab-results/send-otp', [LabResultsAccessController::class, 'sendOtp'])->name('lab-results.send-otp');
+    Route::post('/lab-results/verify', [LabResultsAccessController::class, 'verify'])->name('lab-results.verify');
+    Route::post('/lab-results/resend', [LabResultsAccessController::class, 'resend'])->name('lab-results.resend');
+});
+
+Route::get('/lab-results/{token}/pdf', [LabResultsAccessController::class, 'streamPdf'])
+    ->middleware(['signed', 'throttle:60,1'])
+    ->name('lab-results.pdf');
 
 // Protected routes requiring authentication
 Route::middleware([
@@ -29,6 +53,13 @@ Route::middleware([
     'phone-verified',
     'customer',
 ])->group(function () {
+    Route::middleware(['throttle:12,1'])->group(function () {
+        Route::get('/otp/status/{laboratory_purchase}', [LaboratoryResultsOtpController::class, 'status'])->name('otp.status');
+        Route::post('/otp/send/{laboratory_purchase}', [LaboratoryResultsOtpController::class, 'send'])->name('otp.send');
+        Route::post('/otp/resend/{laboratory_purchase}', [LaboratoryResultsOtpController::class, 'resend'])->name('otp.resend');
+        Route::post('/otp/verify/{laboratory_purchase}', [LaboratoryResultsOtpController::class, 'verify'])->name('otp.verify');
+    });
+
     // Shopping Cart & Checkout
     Route::resource('laboratory-cart-items', LaboratoryCartItemController::class)->only(['store', 'destroy']);
     Route::get('/laboratory/{laboratory_brand}/shopping-cart', LaboratoryShoppingCartController::class)->name('laboratory.shopping-cart');
@@ -99,8 +130,12 @@ Route::middleware([
         Route::get('/', [LaboratoryResultController::class, 'index'])->name('laboratory-results.index');
         Route::post('/notification/{notification}/mark-read', [LaboratoryResultController::class, 'markAsRead'])->name('laboratory-results.mark-read');
         Route::post('/notification/{notification}/refresh', [LaboratoryResultController::class, 'refreshResults'])->name('laboratory-results.refresh');
-        Route::get('/{type}/{id}/view', [LaboratoryResultController::class, 'view'])->name('laboratory-results.view');
-        Route::get('/{type}/{id}/download', [LaboratoryResultController::class, 'download'])->name('laboratory-results.download');
+        Route::get('/{type}/{id}/view', [LaboratoryResultController::class, 'view'])
+            ->middleware(EnsureLabResultsOtpVerified::class)
+            ->name('laboratory-results.view');
+        Route::get('/{type}/{id}/download', [LaboratoryResultController::class, 'download'])
+            ->middleware(EnsureLabResultsOtpVerified::class)
+            ->name('laboratory-results.download');
 
         Route::get('/debug/{notificationId}', [LaboratoryResultController::class, 'debugNotification'])->name('laboratory-results.debug');
     });
@@ -109,5 +144,6 @@ Route::middleware([
     Route::post(
         '/laboratory-purchases/{laboratoryPurchase}/results-automatic-fetch',
         [LaboratoryResultsController::class, 'fetch']
-    )->name('laboratory-purchases.results.automatic-fetch');
+    )->middleware(EnsureLabResultsOtpVerified::class)
+        ->name('laboratory-purchases.results.automatic-fetch');
 });
