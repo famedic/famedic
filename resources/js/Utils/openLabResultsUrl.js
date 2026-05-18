@@ -1,55 +1,41 @@
 /**
- * Abre resultados de laboratorio evitando el bloqueo de ventanas emergentes tras OTP/async.
- *
- * Uso: llamar prepareLabResultsPopup() de forma síncrona en el onClick del usuario,
- * luego complete(url) cuando OTP esté validado (o abort() si cancela el modal).
+ * Navega a resultados en la misma pestaña (siempre funciona tras OTP/async).
  */
-export function prepareLabResultsPopup() {
-	let popup = null;
+export function navigateToLabResults(url) {
+	if (!url) return { opened: false, method: "none" };
 
+	window.location.assign(url);
+	return { opened: true, method: "same-tab" };
+}
+
+/**
+ * Intenta nueva pestaña; si el navegador bloquea, abre en la misma pestaña.
+ * Útil cuando ya hay sesión OTP activa (sin modal).
+ */
+export function openLabResultsInNewTabOrSame(url) {
+	if (!url) return { opened: false, method: "none", popupBlocked: false };
+
+	let popup = null;
 	try {
-		popup = window.open("about:blank", "_blank", "noopener,noreferrer");
+		popup = window.open(url, "_blank", "noopener,noreferrer");
 	} catch {
 		popup = null;
 	}
 
-	return {
-		complete(url) {
-			if (!url) {
-				this.abort();
-				return { opened: false, method: "none", popupBlocked: false };
-			}
+	if (popup) {
+		try {
+			popup.focus?.();
+		} catch {
+			// ignore
+		}
+		return { opened: true, method: "tab", popupBlocked: false };
+	}
 
-			if (popup && !popup.closed) {
-				try {
-					popup.location.href = url;
-					popup.focus?.();
-					return { opened: true, method: "tab", popupBlocked: false };
-				} catch {
-					// Continúa con fallback en la misma pestaña.
-				}
-			}
-
-			window.location.assign(url);
-			return { opened: true, method: "same-tab", popupBlocked: popup === null };
-		},
-		abort() {
-			if (popup && !popup.closed) {
-				try {
-					popup.close();
-				} catch {
-					// ignore
-				}
-			}
-			popup = null;
-		},
-	};
+	window.location.assign(url);
+	return { opened: true, method: "same-tab", popupBlocked: true };
 }
 
-/** Apertura directa (sin OTP previo); usa nueva pestaña o la misma si el navegador bloquea. */
+/** @deprecated Usar navigateToLabResults o openLabResultsInNewTabOrSame según el flujo. */
 export function openLabResultsUrl(url) {
-	if (!url) return { opened: false, method: "none", popupBlocked: false };
-
-	const popup = prepareLabResultsPopup();
-	return popup.complete(url);
+	return openLabResultsInNewTabOrSame(url);
 }

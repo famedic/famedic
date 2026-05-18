@@ -9,7 +9,7 @@ import {
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
-import { openLabResultsUrl, prepareLabResultsPopup } from "@/Utils/openLabResultsUrl";
+import { navigateToLabResults, openLabResultsInNewTabOrSame } from "@/Utils/openLabResultsUrl";
 
 const TAG_STYLES = {
 	cancelled:
@@ -163,38 +163,32 @@ export default function LaboratoryPurchaseDashboardCard({ purchase, beginProtect
 		return purchase.result_download_url;
 	};
 
-	const beginProtectedAction = (url, onDone) => {
+	const handleViewResults = () => {
+		if (!purchase.result_view_url) return;
+
+		const url = resolveViewUrl();
 		if (!url) return;
 
 		if (typeof beginProtectedUrl === "function") {
-			void beginProtectedUrl(purchase.id, url).finally(onDone);
+			void beginProtectedUrl(purchase.id, url);
 			return;
 		}
 
-		openLabResultsUrl(url);
-		onDone?.();
-	};
-
-	const handleViewResults = () => {
-		if (!purchase.result_view_url) return;
-		beginProtectedAction(resolveViewUrl());
+		openLabResultsInNewTabOrSame(url);
 	};
 
 	const handleDownload = () => {
 		const url = resolveDownloadUrl();
 		if (!url) return;
 
-		const popup = prepareLabResultsPopup();
-		const run = () => {
-			popup.complete(url);
-		};
+		const openDownload = () => navigateToLabResults(url);
 
 		if (typeof beginProtectedUrl === "function") {
-			void beginProtectedUrl(purchase.id, run);
+			void beginProtectedUrl(purchase.id, openDownload);
 			return;
 		}
 
-		run();
+		openDownload();
 	};
 
 	const showFolio =

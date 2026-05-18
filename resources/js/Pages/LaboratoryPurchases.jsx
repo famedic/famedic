@@ -24,7 +24,7 @@ import OrdersTable from "@/Components/LaboratoryPurchases/OrdersTable";
 import OrderCardMobile from "@/Components/LaboratoryPurchases/OrderCardMobile";
 import { exportLaboratoryPurchasesPageCsv } from "@/lib/laboratoryPurchaseOrderUi";
 import formatMmSs from "@/Utils/formatMmSs";
-import { prepareLabResultsPopup } from "@/Utils/openLabResultsUrl";
+import { navigateToLabResults } from "@/Utils/openLabResultsUrl";
 
 async function fetchLabResultsOtpStatus(purchaseId) {
 	try {
@@ -86,7 +86,6 @@ export default function LaboratoryPurchases({
 	laboratoryQuotes = [],
 }) {
 	const pendingAfterOtpRef = useRef(null);
-	const pendingPopupRef = useRef(null);
 	const [showOtpModal, setShowOtpModal] = useState(false);
 	const [otpPurchaseId, setOtpPurchaseId] = useState(null);
 	const [showFilters, setShowFilters] = useState(false);
@@ -117,8 +116,6 @@ export default function LaboratoryPurchases({
 	};
 
 	const handleOtpModalClose = () => {
-		pendingPopupRef.current?.abort();
-		pendingPopupRef.current = null;
 		pendingAfterOtpRef.current = null;
 		setShowOtpModal(false);
 		setOtpPurchaseId(null);
@@ -127,12 +124,8 @@ export default function LaboratoryPurchases({
 	const beginProtectedUrl = (purchaseId, url) => {
 		if (!purchaseId || !url) return Promise.resolve(false);
 
-		const popup = prepareLabResultsPopup();
-		pendingPopupRef.current = popup;
-
 		return requireOtpThen(purchaseId, () => {
-			popup.complete(url);
-			pendingPopupRef.current = null;
+			navigateToLabResults(url);
 		});
 	};
 

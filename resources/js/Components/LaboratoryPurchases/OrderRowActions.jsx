@@ -10,7 +10,7 @@ import { Button } from "@/Components/Catalyst/button";
 import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from "@/Components/Catalyst/dropdown";
 import { getPrimaryPurchaseAction, purchaseHasResults, purchaseIsCancelled } from "@/lib/laboratoryPurchaseOrderUi";
 import { useState } from "react";
-import { openLabResultsUrl } from "@/Utils/openLabResultsUrl";
+import { openLabResultsInNewTabOrSame } from "@/Utils/openLabResultsUrl";
 
 export default function OrderRowActions({ purchase, beginProtectedUrl, layout = "row" }) {
 	const isMobile = layout === "mobile";
@@ -47,7 +47,7 @@ export default function OrderRowActions({ purchase, beginProtectedUrl, layout = 
 			return;
 		}
 
-		openLabResultsUrl(url);
+		openLabResultsInNewTabOrSame(url);
 		setIsProcessingResults(false);
 	};
 
