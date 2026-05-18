@@ -51,7 +51,28 @@ class LaboratoryResultsOtpNotification extends Notification
             return ['mail'];
         }
 
+        Log::info('Laboratory results OTP: enviando por SMS (Vonage).', [
+            'user_id' => $notifiable->id ?? null,
+            'destination_masked' => $this->maskPhoneForLog($vonageDestination),
+            'app_env' => config('app.env'),
+        ]);
+
         return ['vonage'];
+    }
+
+    private function maskPhoneForLog(?string $phone): ?string
+    {
+        if ($phone === null || $phone === '') {
+            return null;
+        }
+
+        $digits = preg_replace('/\D/', '', $phone) ?? '';
+
+        if (strlen($digits) < 4) {
+            return '***';
+        }
+
+        return '***'.substr($digits, -4);
     }
 
     private function resolveVonageDestination(object $notifiable): ?string

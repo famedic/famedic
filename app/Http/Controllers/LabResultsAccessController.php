@@ -168,7 +168,21 @@ class LabResultsAccessController extends Controller
         }
 
         $otp = $this->issueOtp($user->id, $purchase->id, $validated['channel']);
-        $user->notify(new LaboratoryResultsOtpNotification($otp['plain_code'], $validated['channel']));
+
+        try {
+            $user->notify(new LaboratoryResultsOtpNotification($otp['plain_code'], $validated['channel']));
+        } catch (\Throwable $e) {
+            Log::error('lab_results_otp_send_failed', [
+                'user_id' => $user->id,
+                'purchase_id' => $purchase->id,
+                'channel' => $validated['channel'],
+                'otp_id' => $otp['otp_id'],
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->route('lab-results.show', ['token' => $validated['token']])
+                ->withErrors(['channel' => 'No se pudo enviar el código. Intenta con otro canal o más tarde.']);
+        }
 
         $this->persistAccessLog('otp_requested', $user->id, $purchase->id, $validated['channel'], [
             'otp_id' => $otp['otp_id'],

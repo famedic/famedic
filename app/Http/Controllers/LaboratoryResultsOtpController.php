@@ -56,7 +56,24 @@ class LaboratoryResultsOtpController extends Controller
         }
 
         $otp = $this->issueOtp($userId, $laboratoryPurchase->id, $validated['channel']);
-        $user->notify(new LaboratoryResultsOtpNotification($otp['plain_code'], $validated['channel']));
+
+        try {
+            $user->notify(new LaboratoryResultsOtpNotification($otp['plain_code'], $validated['channel']));
+        } catch (\Throwable $e) {
+            Log::error('lab_results_otp_send_failed', [
+                'user_id' => $userId,
+                'purchase_id' => $laboratoryPurchase->id,
+                'channel' => $validated['channel'],
+                'otp_id' => $otp['otp_id'],
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => $validated['channel'] === OtpCode::CHANNEL_SMS
+                    ? 'No se pudo enviar el SMS. Intenta por correo o vuelve a intentar en unos minutos.'
+                    : 'No se pudo enviar el correo. Intenta por SMS o vuelve a intentar en unos minutos.',
+            ], 503);
+        }
 
         $this->persistAccessLog('otp_requested_modal', $userId, $laboratoryPurchase->id, $validated['channel'], [
             'otp_id' => $otp['otp_id'],

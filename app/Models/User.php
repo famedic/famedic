@@ -170,9 +170,9 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
         );
     }
 
-    public function routeNotificationForVonage(Notification $notification): string
+    public function routeNotificationForVonage(Notification $notification): ?string
     {
-        return $this->phone?->formatInternational();
+        return $this->phone?->formatE164();
     }
 
     /**
