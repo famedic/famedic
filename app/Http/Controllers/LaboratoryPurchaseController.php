@@ -71,8 +71,8 @@ class LaboratoryPurchaseController extends Controller
 
         $filters = array_merge(
             [
-                // Incluir pedidos cancelados en el historial del paciente.
-                'deleted' => '',
+                // Solo pedidos activos; los cancelados (soft-deleted) no se muestran en Mis pedidos.
+                'deleted' => 'false',
             ],
             $request->only([
                 'search',

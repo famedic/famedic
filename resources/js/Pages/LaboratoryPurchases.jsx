@@ -17,8 +17,9 @@ import { useForm, Link, router } from "@inertiajs/react";
 import { Button } from "@/Components/Catalyst/button";
 import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
 import { useEffect, useMemo, useRef, useState } from "react";
-import OrdersSummaryCards from "@/Components/LaboratoryPurchases/OrdersSummaryCards";
-import OrdersFilters from "@/Components/LaboratoryPurchases/OrdersFilters";
+// Temporalmente desactivado en /laboratory-purchases
+// import OrdersSummaryCards from "@/Components/LaboratoryPurchases/OrdersSummaryCards";
+// import OrdersFilters from "@/Components/LaboratoryPurchases/OrdersFilters";
 import OrdersTable from "@/Components/LaboratoryPurchases/OrdersTable";
 import OrderCardMobile from "@/Components/LaboratoryPurchases/OrderCardMobile";
 import { exportLaboratoryPurchasesPageCsv } from "@/lib/laboratoryPurchaseOrderUi";
@@ -254,6 +255,7 @@ export default function LaboratoryPurchases({
 				</div>
 			</div>
 
+			{/* Tarjetas informativas (En proceso / Completados / Facturados) — desactivadas temporalmente
 			<div className="mt-8">
 				<OrdersSummaryCards
 					summary={summary}
@@ -261,6 +263,7 @@ export default function LaboratoryPurchases({
 					onPipelineSelect={onPipelineChange}
 				/>
 			</div>
+			*/}
 
 			<Navbar className="mt-8 border-b border-zinc-200/80 dark:border-slate-800">
 				<NavbarItem
@@ -277,6 +280,7 @@ export default function LaboratoryPurchases({
 				</NavbarItem>
 			</Navbar>
 
+			{/* Filtros (búsqueda, embudo, filtros avanzados) — desactivados temporalmente
 			<form className="mt-6 space-y-6" onSubmit={applyFilters}>
 				<OrdersFilters
 					data={data}
@@ -323,6 +327,7 @@ export default function LaboratoryPurchases({
 					</Button>
 				</div>
 			</form>
+			*/}
 
 			{laboratoryQuotes.length > 0 && (
 				<div className="mb-10 mt-10 sm:mb-12">
