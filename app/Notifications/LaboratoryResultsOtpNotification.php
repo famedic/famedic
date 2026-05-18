@@ -20,6 +20,17 @@ class LaboratoryResultsOtpNotification extends Notification
     public function via(object $notifiable): array
     {
         if ($this->channel === 'email') {
+            $email = $notifiable->routeNotificationFor('mail', $this)
+                ?? ($notifiable->email ?? null);
+
+            Log::info('Laboratory results OTP: enviando por correo.', [
+                'user_id' => $notifiable->id ?? null,
+                'destination_masked' => $this->maskEmailForLog(is_string($email) ? $email : null),
+                'mailer' => config('mail.default'),
+                'from' => config('mail.from.address'),
+                'app_env' => config('app.env'),
+            ]);
+
             return ['mail'];
         }
 
@@ -58,6 +69,25 @@ class LaboratoryResultsOtpNotification extends Notification
         ]);
 
         return ['vonage'];
+    }
+
+    private function maskEmailForLog(?string $email): ?string
+    {
+        if ($email === null || $email === '') {
+            return null;
+        }
+
+        $parts = explode('@', $email, 2);
+        if (count($parts) !== 2) {
+            return '***';
+        }
+
+        $local = $parts[0];
+        $maskedLocal = strlen($local) <= 1
+            ? '*'
+            : substr($local, 0, 1).str_repeat('*', max(1, strlen($local) - 1));
+
+        return $maskedLocal.'@'.$parts[1];
     }
 
     private function maskPhoneForLog(?string $phone): ?string
