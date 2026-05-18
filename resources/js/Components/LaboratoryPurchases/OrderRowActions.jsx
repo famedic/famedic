@@ -10,13 +10,9 @@ import { Button } from "@/Components/Catalyst/button";
 import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from "@/Components/Catalyst/dropdown";
 import { getPrimaryPurchaseAction, purchaseHasResults, purchaseIsCancelled } from "@/lib/laboratoryPurchaseOrderUi";
 import { useState } from "react";
+import { openLabResultsUrl } from "@/Utils/openLabResultsUrl";
 
-function openExternal(url) {
-	if (!url) return;
-	window.open(url, "_blank", "noopener,noreferrer");
-}
-
-export default function OrderRowActions({ purchase, requireOtpThen, layout = "row" }) {
+export default function OrderRowActions({ purchase, beginProtectedUrl, layout = "row" }) {
 	const isMobile = layout === "mobile";
 	const isMenuOnly = layout === "menu-only";
 	const [isProcessingResults, setIsProcessingResults] = useState(false);
@@ -31,29 +27,28 @@ export default function OrderRowActions({ purchase, requireOtpThen, layout = "ro
 				? "Ver resultados del laboratorio"
 				: "Ver resultados";
 
-	const handleViewResults = async () => {
-		if (isProcessingResults) return;
-		if (!purchase.result_view_url) return;
-		setIsProcessingResults(true);
-		const run = () => {
-			if (purchase.result_source === "manual") {
-				openExternal(purchase.result_view_url);
-			} else if (purchase.result_source === "api") {
-				openExternal(purchase.api_result_url || purchase.result_view_url);
-			} else {
-				openExternal(purchase.result_view_url);
-			}
-		};
-		try {
-			if (typeof requireOtpThen === "function") {
-				await requireOtpThen(purchase.id, run);
-			} else {
-				run();
-			}
-		} finally {
-			// Permite nuevo intento tras completar validación de estado/modal.
-			setIsProcessingResults(false);
+	const resolveResultsUrl = () => {
+		if (purchase.result_source === "api") {
+			return purchase.api_result_url || purchase.result_view_url;
 		}
+		return purchase.result_view_url;
+	};
+
+	const handleViewResults = () => {
+		if (isProcessingResults) return;
+
+		const url = resolveResultsUrl();
+		if (!url) return;
+
+		setIsProcessingResults(true);
+
+		if (typeof beginProtectedUrl === "function") {
+			void beginProtectedUrl(purchase.id, url).finally(() => setIsProcessingResults(false));
+			return;
+		}
+
+		openLabResultsUrl(url);
+		setIsProcessingResults(false);
 	};
 
 	const btnBase = isMobile

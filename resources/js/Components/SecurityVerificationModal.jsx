@@ -192,19 +192,27 @@ export default function SecurityVerificationModal({ isOpen, purchaseId, onSucces
 		[digits],
 	);
 
+	const applyOtpSendResponse = (r) => {
+		const expiresIn = Math.floor(Number(r?.expires_in ?? 0));
+		if (expiresIn <= 0) {
+			throw new Error("El servidor no devolvió tiempo de vigencia para el código. Intenta reenviar en unos segundos.");
+		}
+		if (typeof r?.trust_minutes === "number") setTrustMinutes(r.trust_minutes);
+		setStep("code");
+		setOtpSecondsLeft(expiresIn);
+		setResendSecondsLeft(Math.floor(Number(r?.resend_in ?? 0)));
+		setRemainingAttempts(Number(r?.max_attempts ?? 5));
+		setDigits(["", "", "", "", "", ""]);
+		autoSubmitLock.current = false;
+	};
+
 	const submitSend = async () => {
 		setError("");
 		if (!channel) return;
 		setSending(true);
 		try {
 			const r = await jsonFetch(sendUrl, { method: "POST", body: { channel } });
-			if (typeof r?.trust_minutes === "number") setTrustMinutes(r.trust_minutes);
-			setStep("code");
-			setOtpSecondsLeft(Math.floor(Number(r.expires_in ?? 0)));
-			setResendSecondsLeft(Math.floor(Number(r.resend_in ?? 0)));
-			setRemainingAttempts(Number(r.max_attempts ?? 5));
-			setDigits(["", "", "", "", "", ""]);
-			autoSubmitLock.current = false;
+			applyOtpSendResponse(r);
 		} catch (e) {
 			setError(e.message || "No se pudo enviar el código.");
 		} finally {
@@ -217,11 +225,7 @@ export default function SecurityVerificationModal({ isOpen, purchaseId, onSucces
 		setSending(true);
 		try {
 			const r = await jsonFetch(resendUrl, { method: "POST", body: { channel } });
-			if (typeof r?.trust_minutes === "number") setTrustMinutes(r.trust_minutes);
-			setOtpSecondsLeft(Math.floor(Number(r.expires_in ?? 0)));
-			setResendSecondsLeft(Math.floor(Number(r.resend_in ?? 0)));
-			setDigits(["", "", "", "", "", ""]);
-			autoSubmitLock.current = false;
+			applyOtpSendResponse(r);
 		} catch (e) {
 			if (e.status === 429 && e.data?.resend_in) setResendSecondsLeft(Math.floor(Number(e.data.resend_in)));
 			setError(e.message || "No se pudo reenviar el código.");

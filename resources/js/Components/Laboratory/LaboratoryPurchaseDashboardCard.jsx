@@ -9,6 +9,7 @@ import {
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
+import { openLabResultsUrl, prepareLabResultsPopup } from "@/Utils/openLabResultsUrl";
 
 const TAG_STYLES = {
 	cancelled:
@@ -116,12 +117,7 @@ function buildTags(purchase) {
 	return tags.slice(0, MAX_TAGS);
 }
 
-function openExternal(url) {
-	if (!url) return;
-	window.open(url, "_blank", "noopener,noreferrer");
-}
-
-export default function LaboratoryPurchaseDashboardCard({ purchase, requireOtpThen }) {
+export default function LaboratoryPurchaseDashboardCard({ purchase, beginProtectedUrl }) {
 	const canViewResults = Boolean(purchase.result_view_url);
 	const canDownloadPdf =
 		typeof purchase.can_download_pdf === "boolean"
@@ -153,37 +149,52 @@ export default function LaboratoryPurchaseDashboardCard({ purchase, requireOtpTh
 
 	const tags = buildTags(purchase);
 
-	const handleViewResults = async () => {
-		if (!purchase.result_view_url) return;
-		const run = () => {
-			if (purchase.result_source === "manual") {
-				openExternal(purchase.result_view_url);
-			} else if (purchase.result_source === "api") {
-				openExternal(purchase.api_result_url || purchase.result_view_url);
-			} else {
-				openExternal(purchase.result_view_url);
-			}
-		};
-		if (typeof requireOtpThen === "function") {
-			await requireOtpThen(purchase.id, run);
-		} else {
-			run();
+	const resolveViewUrl = () => {
+		if (purchase.result_source === "api") {
+			return purchase.api_result_url || purchase.result_view_url;
 		}
+		return purchase.result_view_url;
 	};
 
-	const handleDownload = async () => {
-		const run = () => {
-			if (purchase.result_source === "manual") {
-				openExternal(purchase.result_download_url || purchase.pdf_url);
-			} else {
-				openExternal(purchase.result_download_url);
-			}
-		};
-		if (typeof requireOtpThen === "function") {
-			await requireOtpThen(purchase.id, run);
-		} else {
-			run();
+	const resolveDownloadUrl = () => {
+		if (purchase.result_source === "manual") {
+			return purchase.result_download_url || purchase.pdf_url;
 		}
+		return purchase.result_download_url;
+	};
+
+	const beginProtectedAction = (url, onDone) => {
+		if (!url) return;
+
+		if (typeof beginProtectedUrl === "function") {
+			void beginProtectedUrl(purchase.id, url).finally(onDone);
+			return;
+		}
+
+		openLabResultsUrl(url);
+		onDone?.();
+	};
+
+	const handleViewResults = () => {
+		if (!purchase.result_view_url) return;
+		beginProtectedAction(resolveViewUrl());
+	};
+
+	const handleDownload = () => {
+		const url = resolveDownloadUrl();
+		if (!url) return;
+
+		const popup = prepareLabResultsPopup();
+		const run = () => {
+			popup.complete(url);
+		};
+
+		if (typeof beginProtectedUrl === "function") {
+			void beginProtectedUrl(purchase.id, run);
+			return;
+		}
+
+		run();
 	};
 
 	const showFolio =

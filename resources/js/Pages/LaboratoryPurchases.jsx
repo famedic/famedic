@@ -24,6 +24,7 @@ import OrdersTable from "@/Components/LaboratoryPurchases/OrdersTable";
 import OrderCardMobile from "@/Components/LaboratoryPurchases/OrderCardMobile";
 import { exportLaboratoryPurchasesPageCsv } from "@/lib/laboratoryPurchaseOrderUi";
 import formatMmSs from "@/Utils/formatMmSs";
+import { prepareLabResultsPopup } from "@/Utils/openLabResultsUrl";
 
 async function fetchLabResultsOtpStatus(purchaseId) {
 	try {
@@ -85,6 +86,7 @@ export default function LaboratoryPurchases({
 	laboratoryQuotes = [],
 }) {
 	const pendingAfterOtpRef = useRef(null);
+	const pendingPopupRef = useRef(null);
 	const [showOtpModal, setShowOtpModal] = useState(false);
 	const [otpPurchaseId, setOtpPurchaseId] = useState(null);
 	const [showFilters, setShowFilters] = useState(false);
@@ -115,9 +117,23 @@ export default function LaboratoryPurchases({
 	};
 
 	const handleOtpModalClose = () => {
+		pendingPopupRef.current?.abort();
+		pendingPopupRef.current = null;
 		pendingAfterOtpRef.current = null;
 		setShowOtpModal(false);
 		setOtpPurchaseId(null);
+	};
+
+	const beginProtectedUrl = (purchaseId, url) => {
+		if (!purchaseId || !url) return Promise.resolve(false);
+
+		const popup = prepareLabResultsPopup();
+		pendingPopupRef.current = popup;
+
+		return requireOtpThen(purchaseId, () => {
+			popup.complete(url);
+			pendingPopupRef.current = null;
+		});
 	};
 
 	const { data, setData, get, processing } = useForm({
@@ -356,10 +372,10 @@ export default function LaboratoryPurchases({
 
 			{purchaseCards.length > 0 && (
 				<>
-					<OrdersTable purchases={purchaseCards} requireOtpThen={requireOtpThen} />
+					<OrdersTable purchases={purchaseCards} beginProtectedUrl={beginProtectedUrl} />
 					<div className="space-y-3 md:hidden" aria-label="Lista de pedidos">
 						{purchaseCards.map((purchase) => (
-							<OrderCardMobile key={purchase.id} purchase={purchase} requireOtpThen={requireOtpThen} />
+							<OrderCardMobile key={purchase.id} purchase={purchase} beginProtectedUrl={beginProtectedUrl} />
 						))}
 					</div>
 				</>

@@ -6,7 +6,7 @@ import { getOrderBadgePresentation, purchaseHasResults } from "@/lib/laboratoryP
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
 import { GiftIcon } from "@heroicons/react/16/solid";
 
-export default function OrderCardMobile({ purchase, requireOtpThen }) {
+export default function OrderCardMobile({ purchase, beginProtectedUrl }) {
 	const badge = getOrderBadgePresentation(purchase);
 	const showFolio = !purchase.temporarly_hide_gda_order_id && Boolean(purchase.gda_order_id);
 	const hasProtectedResults = purchaseHasResults(purchase);
@@ -99,7 +99,7 @@ export default function OrderCardMobile({ purchase, requireOtpThen }) {
 			</dl>
 
 			<div className="mt-4 border-t border-zinc-100 pt-4 dark:border-slate-800">
-				<OrderRowActions purchase={purchase} requireOtpThen={requireOtpThen} layout="mobile" />
+				<OrderRowActions purchase={purchase} beginProtectedUrl={beginProtectedUrl} layout="mobile" />
 			</div>
 		</article>
 	);

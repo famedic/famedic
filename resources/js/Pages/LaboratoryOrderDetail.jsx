@@ -16,6 +16,7 @@ import InstructionsContent from "@/Components/LaboratoryOrderDetail/Instructions
 import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
 import PurchasePdfDialog from "@/Components/PurchasePdfDialog";
 import Card from "@/Components/Card";
+import { prepareLabResultsPopup } from "@/Utils/openLabResultsUrl";
 
 function onlyDateLabel(value = "") {
 	const raw = String(value || "").trim();
@@ -70,6 +71,7 @@ export default function LaboratoryOrderDetail({
 	const [pdfDialogTab, setPdfDialogTab] = useState(0);
 	const [shareNotice, setShareNotice] = useState(null);
 	const pendingAfterOtpRef = useRef(null);
+	const pendingPopupRef = useRef(null);
 	const { daysLeftToRequestInvoice = 0, errors: pageErrors = {} } = usePage().props;
 
 	useEffect(() => {
@@ -471,38 +473,46 @@ export default function LaboratoryOrderDetail({
 	};
 
 	const handleOtpModalClose = () => {
+		pendingPopupRef.current?.abort();
+		pendingPopupRef.current = null;
 		pendingAfterOtpRef.current = null;
 		setShowOtpModal(false);
 		setOtpPurchaseId(null);
 	};
 
-	const openResultsFromSidebar = async () => {
-		if (isProcessingResults) return;
-		setIsProcessingResults(true);
-		const openResults = () => {
-			if (laboratoryPurchase?.results) {
-				window.open(
-					route("laboratory-purchases.results", { laboratory_purchase: laboratoryPurchase.id }),
-					"_blank",
-					"noopener,noreferrer",
-				);
-				return;
-			}
-			window.open(
-				route("laboratory-results.view", { type: "purchase", id: laboratoryPurchase.id }),
-				"_blank",
-				"noopener,noreferrer",
-			);
-		};
-		try {
-			const allowed = await requireOtpThen(laboratoryPurchase.id, openResults);
-			if (allowed) {
-				const status = await fetchLabResultsOtpStatus(laboratoryPurchase.id);
-				setOtpStatus(status);
-			}
-		} finally {
-			setIsProcessingResults(false);
+	const getResultsUrl = () => {
+		if (!laboratoryPurchase?.id) return null;
+		if (laboratoryPurchase.results) {
+			return route("laboratory-purchases.results", { laboratory_purchase: laboratoryPurchase.id });
 		}
+		return route("laboratory-results.view", { type: "purchase", id: laboratoryPurchase.id });
+	};
+
+	const openResultsFromSidebar = () => {
+		if (isProcessingResults || !laboratoryPurchase?.id) return;
+
+		const url = getResultsUrl();
+		if (!url) return;
+
+		const popup = prepareLabResultsPopup();
+		pendingPopupRef.current = popup;
+
+		setIsProcessingResults(true);
+
+		void (async () => {
+			try {
+				const allowed = await requireOtpThen(laboratoryPurchase.id, () => {
+					popup.complete(url);
+					pendingPopupRef.current = null;
+				});
+				if (allowed) {
+					const status = await fetchLabResultsOtpStatus(laboratoryPurchase.id);
+					setOtpStatus(status);
+				}
+			} finally {
+				setIsProcessingResults(false);
+			}
+		})();
 	};
 
 	const main = (

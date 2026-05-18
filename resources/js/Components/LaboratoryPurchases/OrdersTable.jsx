@@ -82,7 +82,7 @@ function getStatusMap(purchase) {
 	};
 }
 
-export default function OrdersTable({ purchases, requireOtpThen }) {
+export default function OrdersTable({ purchases, beginProtectedUrl }) {
 	const [loadingRowId, setLoadingRowId] = useState(null);
 
 	const openPurchaseDetail = (purchase) => {
@@ -267,7 +267,7 @@ export default function OrdersTable({ purchases, requireOtpThen }) {
 											) : (
 												<OrderRowActions
 													purchase={purchase}
-													requireOtpThen={requireOtpThen}
+													beginProtectedUrl={beginProtectedUrl}
 													layout="menu-only"
 												/>
 											)}

@@ -79,18 +79,21 @@ class LaboratoryResultsOtpController extends Controller
             'otp_id' => $otp['otp_id'],
         ]);
 
+        $expiresIn = $this->otpExpiresInSeconds($otp['expires_at']);
+
         Log::info('lab_results_otp_requested_modal', [
             'user_id' => $userId,
             'purchase_id' => $laboratoryPurchase->id,
             'channel' => $validated['channel'],
             'otp_id' => $otp['otp_id'],
+            'expires_in' => $expiresIn,
             'ip' => $request->ip(),
         ]);
 
         return response()->json([
             'sent' => true,
             'channel' => $validated['channel'],
-            'expires_in' => (int) max(0, now()->diffInSeconds($otp['expires_at'], false)),
+            'expires_in' => $expiresIn,
             'resend_in' => $this->resendCooldownSeconds(),
             'max_attempts' => self::MAX_ATTEMPTS,
             'trust_minutes' => LabResultsOtpTrustSession::trustMinutes(),
@@ -117,8 +120,8 @@ class LaboratoryResultsOtpController extends Controller
             ->first();
 
         $cooldown = $this->resendCooldownSeconds();
-        if ($latestOtp && now()->diffInSeconds($latestOtp->created_at) < $cooldown) {
-            $remaining = $cooldown - (int) now()->diffInSeconds($latestOtp->created_at);
+        if ($latestOtp && $this->secondsSince($latestOtp->created_at) < $cooldown) {
+            $remaining = $cooldown - $this->secondsSince($latestOtp->created_at);
 
             return response()->json([
                 'sent' => false,
@@ -224,7 +227,8 @@ class LaboratoryResultsOtpController extends Controller
                 ->update(['status' => OtpCode::STATUS_EXPIRED]);
 
             $plainCode = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-            $expiresAt = now()->addMinutes((int) config('otp.expiry', 10));
+            $expiryMinutes = max(1, (int) config('otp.expiry', 10));
+            $expiresAt = now()->addMinutes($expiryMinutes);
 
             $row = OtpCode::query()->create([
                 'user_id' => $userId,
@@ -247,6 +251,16 @@ class LaboratoryResultsOtpController extends Controller
     private function resendCooldownSeconds(): int
     {
         return max(1, (int) config('laboratory-results.resend_seconds', 60));
+    }
+
+    private function otpExpiresInSeconds(\DateTimeInterface $expiresAt): int
+    {
+        return (int) max(0, $expiresAt->getTimestamp() - now()->getTimestamp());
+    }
+
+    private function secondsSince(\DateTimeInterface $moment): int
+    {
+        return (int) max(0, now()->getTimestamp() - $moment->getTimestamp());
     }
 
     private function ownsPurchase(LaboratoryPurchase $purchase, int $userId): bool
