@@ -37,6 +37,7 @@ use App\Http\Controllers\Admin\TaxProfileController as AdminTaxProfileController
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ExportAdministratorsController;
+use App\Http\Controllers\ExportCartsController;
 use App\Http\Controllers\ExportCustomersController;
 use App\Http\Controllers\ExportLaboratoryPurchasesController;
 use App\Http\Controllers\ExportLaboratoryTestsController;
@@ -59,6 +60,7 @@ Route::prefix('admin')->middleware([
         Route::post('customers/export', ExportCustomersController::class)->name('customers.export');
         Route::resource('users', UserController::class)->only(['index', 'show']);
         Route::resource('carts', CartController::class)->only(['index', 'show']);
+        Route::post('carts/export', ExportCartsController::class)->name('carts.export');
         Route::resource('roles', RoleController::class)->except('show');
         Route::resource('laboratory-tests', LaboratoryTestController::class)->except(['destroy']);
         Route::post('laboratory-tests/export', ExportLaboratoryTestsController::class)->name('laboratory-tests.export');

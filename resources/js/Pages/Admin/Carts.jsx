@@ -18,6 +18,7 @@ import { ListboxOption, ListboxLabel } from "@/Components/Catalyst/listbox";
 import SearchInput from "@/Components/Admin/SearchInput";
 import FilterCountBadge from "@/Components/Admin/FilterCountBadge";
 import PaginatedTable from "@/Components/Admin/PaginatedTable";
+import ResultsAndExport from "@/Components/ResultsAndExport";
 import ListboxFilter from "@/Components/Filters/ListboxFilter";
 import DateFilter from "@/Components/Filters/DateFilter";
 import UpdateButton from "@/Components/Admin/UpdateButton";
@@ -128,6 +129,7 @@ export default function Carts({
 	filters,
 	metrics,
 	canViewCartDetails = true,
+	canExport = false,
 }) {
 	const { data, setData, get, processing } = useForm({
 		search: filters.search || "",
@@ -279,13 +281,14 @@ export default function Carts({
 					</div>
 				)}
 
-				{filterBadges.length > 0 && (
-					<div className="flex flex-wrap gap-2">
-						{filterBadges.map((badge, index) => (
-							<span key={index}>{badge}</span>
-						))}
-					</div>
-				)}
+				<ResultsAndExport
+					paginatedData={carts}
+					filterBadges={filterBadges}
+					canExport={canExport}
+					filters={filters}
+					exportUrl={route("admin.carts.export")}
+					exportTitle="Descargar carritos"
+				/>
 
 				<PaginatedTable paginatedData={carts}>
 					<Table>

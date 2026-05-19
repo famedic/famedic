@@ -40,23 +40,7 @@ class CartController extends Controller
                 'user.customer.laboratoryAppointments',
             ])
             ->withCount('items')
-            ->when($filters['search'] ?? null, function ($q, string $search) {
-                $q->whereHas('user', function ($uq) use ($search) {
-                    $uq->where(function ($inner) use ($search) {
-                        $inner->where('name', 'like', '%' . $search . '%')
-                            ->orWhere('paternal_lastname', 'like', '%' . $search . '%')
-                            ->orWhere('maternal_lastname', 'like', '%' . $search . '%')
-                            ->orWhere('email', 'like', '%' . $search . '%')
-                            ->orWhere('phone', 'like', '%' . $search . '%');
-                    });
-                });
-            })
-            ->when($filters['type'] ?? null, fn ($q, string $type) => $q->where('type', $type))
-            ->when($filters['display_status'] ?? null, function ($q, string $status) {
-                $q->displayStatusFilter($status);
-            })
-            ->when($start, fn ($q, $d) => $q->where('updated_at', '>=', $d))
-            ->when($end, fn ($q, $d) => $q->where('updated_at', '<=', $d))
+            ->adminMonitoringFilter($filters, $start, $end)
             ->orderByDesc('updated_at');
 
         $carts = $query->paginate(25)->withQueryString();
@@ -98,6 +82,7 @@ class CartController extends Controller
             'filters' => $filters,
             'metrics' => $metrics,
             'canViewCartDetails' => $request->user()->administrator->hasPermissionTo('view cart details'),
+            'canExport' => $request->user()->administrator->hasPermissionTo('view carts'),
         ]);
     }
 

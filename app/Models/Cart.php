@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -52,6 +53,48 @@ class Cart extends Model
         }
 
         return 'active';
+    }
+
+    public function displayStatusLabel(): string
+    {
+        return match ($this->displayStatus()) {
+            'completed' => 'Comprado',
+            'abandoned' => 'Abandonado',
+            default => 'Activo',
+        };
+    }
+
+    public function appointmentExportStatus(): string
+    {
+        if ($this->type !== MonitoringCartType::Lab || ! $this->requiresAppointmentForExport()) {
+            return 'No aplica';
+        }
+
+        if ($this->hasRelatedLaboratoryAppointment()) {
+            return 'Con cita';
+        }
+
+        return 'Sin cita';
+    }
+
+    public function scopeAdminMonitoringFilter(Builder $query, array $filters, ?Carbon $start = null, ?Carbon $end = null): Builder
+    {
+        return $query
+            ->when($filters['search'] ?? null, function (Builder $q, string $search) {
+                $q->whereHas('user', function (Builder $uq) use ($search) {
+                    $uq->where(function (Builder $inner) use ($search) {
+                        $inner->where('name', 'like', '%'.$search.'%')
+                            ->orWhere('paternal_lastname', 'like', '%'.$search.'%')
+                            ->orWhere('maternal_lastname', 'like', '%'.$search.'%')
+                            ->orWhere('email', 'like', '%'.$search.'%')
+                            ->orWhere('phone', 'like', '%'.$search.'%');
+                    });
+                });
+            })
+            ->when($filters['type'] ?? null, fn (Builder $q, string $type) => $q->where('type', $type))
+            ->when($filters['display_status'] ?? null, fn (Builder $q, string $status) => $q->displayStatusFilter($status))
+            ->when($start, fn (Builder $q, Carbon $d) => $q->where('updated_at', '>=', $d))
+            ->when($end, fn (Builder $q, Carbon $d) => $q->where('updated_at', '<=', $d));
     }
 
     public function scopeDisplayStatusFilter($query, string $status): void
@@ -296,6 +339,53 @@ class Cart extends Model
                 fn ($appointment) => $appointment->brand === $brand && $appointment->confirmed_at === null,
             );
         });
+    }
+
+    private function requiresAppointmentForExport(): bool
+    {
+        if ($this->type !== MonitoringCartType::Lab) {
+            return false;
+        }
+
+        $testIds = $this->relationLoaded('items')
+            ? $this->items->pluck('product_id')->filter()->unique()->values()
+            : $this->items()->pluck('product_id')->filter();
+
+        if ($testIds->isNotEmpty()) {
+            return LaboratoryTest::query()
+                ->whereIn('id', $testIds)
+                ->where('requires_appointment', true)
+                ->exists();
+        }
+
+        $customer = $this->user?->customer;
+        if (! $customer) {
+            return false;
+        }
+
+        return $customer->laboratoryCartItems()->requiringAppointment()->exists();
+    }
+
+    private function hasRelatedLaboratoryAppointment(): bool
+    {
+        $customer = $this->user?->customer;
+        if (! $customer) {
+            return false;
+        }
+
+        $brandValues = collect($this->labBrands())->pluck('value')->filter()->values();
+
+        $appointments = $customer->relationLoaded('laboratoryAppointments')
+            ? $customer->laboratoryAppointments
+            : $customer->laboratoryAppointments()->get();
+
+        if ($brandValues->isEmpty()) {
+            return $appointments->isNotEmpty();
+        }
+
+        return $appointments->contains(
+            fn (LaboratoryAppointment $appointment) => $brandValues->contains($appointment->brand->value),
+        );
     }
 
     private function appointmentBrandsConfirmedPendingPayment(Customer $customer): Collection
