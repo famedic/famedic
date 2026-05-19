@@ -9,18 +9,14 @@ import {
 	DocumentTextIcon,
 	PlusIcon,
 	QrCodeIcon,
-	ExclamationTriangleIcon,
-	InformationCircleIcon,
 	CheckCircleIcon,
 	UserIcon,
-	XCircleIcon,
-	ArrowDownTrayIcon,
-	LinkIcon,
-	ChevronDownIcon,
+	ClockIcon,
 } from "@heroicons/react/24/outline";
 import { PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 import TaxProfileForm from "@/Pages/TaxProfiles/TaxProfileForm";
 import TaxProfileDeleteConfirmation from "@/Pages/TaxProfiles/TaxProfileDeleteConfirmation";
+import TaxProfilesInfoPanel from "@/Pages/TaxProfiles/TaxProfilesInfoPanel";
 import { useState } from "react";
 import SettingsCard from "@/Components/SettingsCard";
 import {
@@ -74,150 +70,7 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 					</div>
 				</div>
 
-				{/* Panel de información condensada */}
-				<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-					{/* Tarjeta de Importancia */}
-					<div className="group relative">
-						<div className="border border-amber-200 bg-amber-50 rounded-lg p-4 hover:bg-amber-100 transition-all cursor-pointer h-full">
-							<div className="flex items-start gap-3">
-								<div className="p-2 bg-amber-100 rounded-lg">
-									<ExclamationTriangleIcon className="h-6 w-6 text-amber-600" />
-								</div>
-								<div>
-									<h4 className="font-semibold text-amber-800 text-sm">
-										Datos correctos = Facturas
-									</h4>
-									<p className="text-xs text-amber-600 mt-1">
-										Datos incorrectos impedirán la emisión
-									</p>
-								</div>
-							</div>
-							
-							{/* Tooltip detallado al hover */}
-							<div className="absolute z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 bg-white border border-amber-200 rounded-lg shadow-lg p-3 -bottom-2 left-1/2 transform -translate-x-1/2 translate-y-full">
-								<div className="text-xs text-amber-700">
-									<strong>¡Atención!</strong> Los datos deben coincidir exactamente con tu constancia de situación fiscal del SAT.
-									<div className="mt-2 pt-2 border-t border-amber-100">
-										<span className="font-medium text-amber-800">Recomendación:</span> Verifica cada campo minuciosamente.
-									</div>
-								</div>
-								<div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-white"></div>
-							</div>
-						</div>
-					</div>
-
-					{/* Tarjeta de Requisitos */}
-					<div className="group relative">
-						<div className="border border-blue-200 bg-blue-50 rounded-lg p-4 hover:bg-blue-100 transition-all cursor-pointer h-full">
-							<div className="flex items-start gap-3">
-								<div className="p-2 bg-blue-100 rounded-lg">
-									<InformationCircleIcon className="h-6 w-6 text-blue-600" />
-								</div>
-								<div>
-									<h4 className="font-semibold text-blue-800 text-sm">
-										¿Qué necesitas?
-									</h4>
-									<p className="text-xs text-blue-600 mt-1">
-										RFC Persona Física • PDF vigente
-									</p>
-								</div>
-							</div>
-							
-							{/* Tooltip detallado al hover */}
-							<div className="absolute z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-72 bg-white border border-blue-200 rounded-lg shadow-lg p-3 -bottom-2 left-1/2 transform -translate-x-1/2 translate-y-full">
-								<div className="text-xs">
-									<div className="mb-2">
-										<span className="font-medium text-blue-700">✓ Se acepta:</span>
-										<ul className="list-disc list-inside mt-1 text-blue-600">
-											<li className="text-xs">RFC Persona Física</li>
-											<li className="text-xs">PDF (máx. 5MB)</li>
-											<li className="text-xs">Constancia vigente (≤3 meses)</li>
-										</ul>
-									</div>
-									<div>
-										<span className="font-medium text-red-700">✗ No se acepta:</span>
-										<ul className="list-disc list-inside mt-1 text-red-600">
-											<li className="text-xs">Personas Morales</li>
-											<li className="text-xs">Imágenes, Word, etc.</li>
-											<li className="text-xs">Constancias vencidas</li>
-										</ul>
-									</div>
-								</div>
-								<div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-white"></div>
-							</div>
-						</div>
-					</div>
-
-					{/* Tarjeta de Proceso */}
-					<div className="group relative">
-						<div className="border border-green-200 bg-green-50 rounded-lg p-4 hover:bg-green-100 transition-all cursor-pointer h-full">
-							<div className="flex items-start gap-3">
-								<div className="p-2 bg-green-100 rounded-lg">
-									<CheckCircleIcon className="h-6 w-6 text-green-600" />
-								</div>
-								<div>
-									<h4 className="font-semibold text-green-800 text-sm">
-										Proceso rápido
-									</h4>
-									<p className="text-xs text-green-600 mt-1">
-										4 pasos simples para facturar
-									</p>
-								</div>
-							</div>
-							
-							{/* Tooltip detallado al hover */}
-							<div className="absolute z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-64 bg-white border border-green-200 rounded-lg shadow-lg p-3 -bottom-2 left-1/2 transform -translate-x-1/2 translate-y-full">
-								<div className="text-xs text-gray-700">
-									<div className="space-y-2">
-										<div className="flex items-center gap-2">
-											<span className="w-4 h-4 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs font-bold">1</span>
-											<span>Sube tu constancia fiscal en PDF</span>
-										</div>
-										<div className="flex items-center gap-2">
-											<span className="w-4 h-4 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs font-bold">2</span>
-											<span>Extracción automática de datos</span>
-										</div>
-										<div className="flex items-center gap-2">
-											<span className="w-4 h-4 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs font-bold">3</span>
-											<span>Verifica y confirma los datos</span>
-										</div>
-										<div className="flex items-center gap-2">
-											<span className="w-4 h-4 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs font-bold">4</span>
-											<span>Solicita tus facturas sin problemas</span>
-										</div>
-									</div>
-								</div>
-								<div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-white"></div>
-							</div>
-						</div>
-					</div>
-				</div>
-
-				{/* Enlace al SAT - Compacto */}
-				<div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3">
-					<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-						<div className="flex items-center gap-3">
-							<ArrowDownTrayIcon className="h-5 w-5 text-blue-600 flex-shrink-0" />
-							<div>
-								<p className="text-sm font-medium text-blue-800">
-									¿Necesitas tu constancia del SAT?
-								</p>
-								<p className="text-xs text-blue-600">
-									Descárgala gratuitamente desde el portal oficial
-								</p>
-							</div>
-						</div>
-						<a
-							href="https://wwwmat.sat.gob.mx/aplicacion/login/53027/genera-tu-constancia-de-situacion-fiscal"
-							target="_blank"
-							rel="noopener noreferrer"
-							className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap flex-shrink-0"
-						>
-							<LinkIcon className="h-4 w-4" />
-							Ir al SAT
-						</a>
-					</div>
-				</div>
+				<TaxProfilesInfoPanel />
 
 				{/* Botón de agregar perfil - Ahora después de las recomendaciones */}
 				<div className="flex justify-center my-4">
@@ -415,6 +268,12 @@ function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
 									{taxProfile.name}
 								</Subheading>
 								<Code className="text-sm">{taxProfile.rfc}</Code>
+								{taxProfile.formatted_activity_label && (
+									<p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+										<ClockIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+										<span>{taxProfile.formatted_activity_label}</span>
+									</p>
+								)}
 							</div>
 							
 							<div className="space-y-2">

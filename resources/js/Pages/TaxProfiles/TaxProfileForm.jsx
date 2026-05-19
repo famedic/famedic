@@ -17,7 +17,6 @@ import {
 	CheckCircleIcon,
 	ExclamationTriangleIcon,
 	PencilIcon,
-	ClipboardDocumentIcon,
 	ArrowUpTrayIcon,
 	XMarkIcon,
 	ChevronRightIcon,
@@ -30,6 +29,15 @@ import {
 	ListboxLabel,
 	ListboxOption,
 } from "@/Components/Catalyst/listbox";
+import {
+	TaxProfileModalCloseButton,
+	TaxProfileFormStepper,
+	TaxProfilePageHeading,
+	TaxProfileEntryModeCard,
+	TaxProfileCompactAlert,
+	TaxProfileTrustIndicators,
+	TaxProfileModalFooter,
+} from "@/Pages/TaxProfiles/TaxProfileFormUI";
 
 // Definimos los pasos del proceso
 const STEPS = {
@@ -65,16 +73,11 @@ export default function TaxProfileForm({ isOpen }) {
 	const [isEditing, setIsEditing] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
 	const [saveStep, setSaveStep] = useState("");
-	
+
 	// Nuevo estado para el modo de entrada
 	const [entryMode, setEntryMode] = useState(ENTRY_MODES.AUTOMATIC);
 	const [fileRequired, setFileRequired] = useState(true);
 	const [isModeSelected, setIsModeSelected] = useState(false);
-
-	// Estados para drag & drop
-	const [isDragging, setIsDragging] = useState(false);
-	const [dragReject, setDragReject] = useState(false);
-	const [pasteHintVisible, setPasteHintVisible] = useState(false);
 
 	const resetFormData = (taxProfile) => ({
 		name: taxProfile?.name || "",
@@ -91,7 +94,6 @@ export default function TaxProfileForm({ isOpen }) {
 	);
 
 	// Refs
-	const dropAreaRef = useRef(null);
 	const fileInputRef = useRef(null);
 	const manualFileInputRef = useRef(null);
 	const activeStepRef = useRef(activeStep);
@@ -103,13 +105,13 @@ export default function TaxProfileForm({ isOpen }) {
 
 	useEffect(() => {
 		console.log("🔄 useEffect - isOpen cambió a:", isOpen);
-		
+
 		if (isOpen) {
 			console.log("🚀 INICIALIZANDO FORMULARIO (diálogo abierto)");
-			
+
 			const isEditMode = route().current("tax-profiles.edit") || false;
 			console.log("📝 Modo edición detectado:", isEditMode);
-			
+
 			// Resetear todo al abrir
 			setCachedTaxRegimes(taxRegimes || {});
 			setCachedTaxProfile(taxProfile || null);
@@ -124,55 +126,13 @@ export default function TaxProfileForm({ isOpen }) {
 			setIsEditing(false);
 			setIsSaving(false);
 			setSaveStep("");
-			setIsDragging(false);
-			setDragReject(false);
-			setPasteHintVisible(false);
 			setEntryMode(ENTRY_MODES.AUTOMATIC);
 			setFileRequired(true);
 			setIsModeSelected(false);
-			
+
 			console.log("✅ Estado inicializado - activeStep:", STEPS.UPLOAD, "entryMode:", ENTRY_MODES.AUTOMATIC);
 		}
 
-		// Agregar event listeners cuando el componente se monta
-		const handlePaste = async (e) => {
-			console.log("📋 Evento de pegado detectado");
-			// Solo activar en el paso de subida de archivos y en modo automático
-			if (activeStepRef.current !== STEPS.UPLOAD || !isOpen || entryMode !== ENTRY_MODES.AUTOMATIC || !isModeSelected) {
-				console.log("❌ No en paso UPLOAD o modo manual activo o modo no seleccionado");
-				return;
-			}
-
-			const items = e.clipboardData?.items;
-			console.log("📋 Items en portapapeles:", items?.length);
-			if (!items) return;
-
-			// Buscar archivos en el portapapeles
-			for (let i = 0; i < items.length; i++) {
-				const item = items[i];
-				console.log(`📋 Item ${i}:`, item.kind, item.type);
-				if (item.kind === 'file' && item.type === 'application/pdf') {
-					const file = item.getAsFile();
-					if (file) {
-						console.log("✅ Archivo PDF encontrado en portapapeles:", file.name, file.size);
-						e.preventDefault();
-						e.stopPropagation();
-						await handleFileProcess(file, true);
-						return;
-					}
-				}
-			}
-			
-			console.log("ℹ️ No se encontraron archivos PDF en el portapapeles");
-		};
-
-		// Escuchar evento de pegado
-		document.addEventListener('paste', handlePaste);
-
-		return () => {
-			console.log("🧹 Limpiando event listener de pegado");
-			document.removeEventListener('paste', handlePaste);
-		};
 	}, [isOpen, taxProfile, taxRegimes, setData]);
 
 	// Debug para cambios de estado importantes
@@ -183,22 +143,20 @@ export default function TaxProfileForm({ isOpen }) {
 			uploadedFile: uploadedFile?.name,
 			extractedData: !!extractedData,
 			processingPdf,
-			isDragging,
-			dragReject,
 			isModeSelected
 		});
-	}, [activeStep, entryMode, uploadedFile, extractedData, processingPdf, isDragging, dragReject, isModeSelected]);
+	}, [activeStep, entryMode, uploadedFile, extractedData, processingPdf, isModeSelected]);
 
 	// Función para cambiar el modo de entrada
 	const handleEntryModeChange = (mode) => {
 		console.log("🔄 Cambiando modo de entrada a:", mode);
 		setEntryMode(mode);
 		setIsModeSelected(true);
-		
+
 		// En ambos modos el archivo es obligatorio
 		setFileRequired(true);
 		clearErrors("fiscal_certificate");
-		
+
 		// Resetear archivo si cambia de modo
 		if (uploadedFile) {
 			setUploadedFile(null);
@@ -210,7 +168,7 @@ export default function TaxProfileForm({ isOpen }) {
 	// Función para procesar archivo (común para selección y pegado) - SOLO PARA MODO AUTOMÁTICO
 	const handleFileProcess = async (file, fromPaste = false) => {
 		console.log("📄 handleFileProcess llamado con archivo:", file.name, "fromPaste:", fromPaste);
-		
+
 		if (!file) {
 			console.log("❌ No hay archivo");
 			return;
@@ -335,7 +293,7 @@ export default function TaxProfileForm({ isOpen }) {
 				console.log("🔔 Archivo procesado:", fromPaste
 					? "Archivo pegado y procesado exitosamente. Revisa los datos."
 					: "La información se extrajo correctamente. Revisa los datos.");
-				
+
 				setInfoMessage({
 					type: "success",
 					message: fromPaste
@@ -364,17 +322,17 @@ export default function TaxProfileForm({ isOpen }) {
 			} else {
 				console.log("❌ Error en respuesta del servidor:", result?.message);
 				console.log("🔔 Error al procesar el archivo:", result?.message || `Error ${response.status}`);
-				
+
 				// Manejar error pero mantener el archivo subido
 				setUploadedFile(file);
 				setData("fiscal_certificate", file);
-				
+
 				// Mostrar mensaje de error pero permitir continuar
 				setInfoMessage({
 					type: "warning",
 					message: "No se pudo extraer información automáticamente. Complete los datos manualmente."
 				});
-				
+
 				// Cambiar al paso 2 inmediatamente
 				setProcessingPdf(false);
 				setCurrentStep(null);
@@ -409,7 +367,7 @@ export default function TaxProfileForm({ isOpen }) {
 			console.log("🔔 Archivo subido:", fromPaste
 				? "Archivo pegado. Completa los datos manualmente."
 				: "Completa los datos manualmente.");
-			
+
 			setInfoMessage({
 				type: "warning",
 				message: fromPaste
@@ -448,7 +406,7 @@ export default function TaxProfileForm({ isOpen }) {
 		const file = e.target.files[0];
 		if (file) {
 			console.log("📄 Archivo seleccionado para modo manual:", file.name);
-			
+
 			if (file.type !== "application/pdf") {
 				console.log("❌ Tipo de archivo inválido:", file.type);
 				setError("fiscal_certificate", "Solo se aceptan archivos PDF");
@@ -464,7 +422,7 @@ export default function TaxProfileForm({ isOpen }) {
 			setUploadedFile(file);
 			setData("fiscal_certificate", file);
 			clearErrors("fiscal_certificate");
-			
+
 			console.log("✅ Archivo subido en modo manual:", file.name);
 		} else {
 			console.log("❌ No se seleccionó ningún archivo");
@@ -478,31 +436,13 @@ export default function TaxProfileForm({ isOpen }) {
 		setExtractedData(null);
 		setData("fiscal_certificate", null);
 		clearErrors("fiscal_certificate");
-		
+
 		// Resetear el input file correspondiente
 		if (entryMode === ENTRY_MODES.AUTOMATIC && fileInputRef.current) {
 			fileInputRef.current.value = '';
 		} else if (entryMode === ENTRY_MODES.MANUAL && manualFileInputRef.current) {
 			manualFileInputRef.current.value = '';
 		}
-	};
-
-	// Función para activar el modo "pegar"
-	const activatePasteMode = () => {
-		setPasteHintVisible(true);
-		console.log("🔔 Modo pegar activado: Ahora haz clic en cualquier parte de la pantalla y usa Ctrl+V (Windows) o Cmd+V (Mac) para pegar un archivo PDF");
-		
-		setInfoMessage({
-			type: "info",
-			message: "Modo pegar activado. Haz clic en cualquier parte y usa Ctrl+V (Windows) o Cmd+V (Mac) para pegar un archivo PDF"
-		});
-		
-		// Desactivar después de 10 segundos
-		setTimeout(() => {
-			if (pasteHintVisible) {
-				setPasteHintVisible(false);
-			}
-		}, 10000);
 	};
 
 	// Función de validación de RFC
@@ -585,7 +525,7 @@ export default function TaxProfileForm({ isOpen }) {
 
 	const handleNextStep = () => {
 		console.log("➡️ handleNextStep llamado, activeStep actual:", activeStep);
-		
+
 		if (activeStep === STEPS.UPLOAD) {
 			// Si estamos en el paso de selección de modo
 			if (!isModeSelected) {
@@ -596,21 +536,21 @@ export default function TaxProfileForm({ isOpen }) {
 				});
 				return;
 			}
-			
+
 			// Si ya seleccionó modo pero aún no ha subido archivo (en modo automático)
 			if (entryMode === ENTRY_MODES.AUTOMATIC && !uploadedFile) {
 				console.log("❌ No se ha subido archivo en modo automático");
 				setError("fiscal_certificate", "Debe subir una constancia fiscal");
 				return;
 			}
-			
+
 			// Avanzar al siguiente paso
 			console.log("✅ Avanzando a REVIEW");
 			setActiveStep(STEPS.REVIEW);
-			
+
 		} else if (activeStep === STEPS.REVIEW) {
 			console.log("📋 Validando datos en paso REVIEW");
-			
+
 			// Validar campos requeridos antes de avanzar
 			const requiredFields = {
 				name: data.name,
@@ -618,20 +558,20 @@ export default function TaxProfileForm({ isOpen }) {
 				zipcode: data.zipcode,
 				tax_regime: data.tax_regime
 			};
-			
+
 			const missingFields = Object.entries(requiredFields)
 				.filter(([_, value]) => !value)
 				.map(([key]) => key);
-			
+
 			if (missingFields.length > 0) {
 				console.log("❌ Campos incompletos:", missingFields);
 				console.log("🔔 Complete todos los campos requeridos antes de continuar.");
-				
+
 				// Mostrar errores en los campos faltantes
 				missingFields.forEach(field => {
 					setError(field, `Este campo es requerido`);
 				});
-				
+
 				setInfoMessage({
 					type: "error",
 					message: "Complete todos los campos requeridos antes de continuar."
@@ -644,7 +584,7 @@ export default function TaxProfileForm({ isOpen }) {
 				console.log("❌ RFC inválido:", data.rfc);
 				setError("rfc", "Formato RFC inválido");
 				console.log("🔔 Verifique el formato de su RFC.");
-				
+
 				setInfoMessage({
 					type: "error",
 					message: "Verifique el formato de su RFC."
@@ -657,7 +597,7 @@ export default function TaxProfileForm({ isOpen }) {
 				console.log("❌ Código postal inválido:", data.zipcode);
 				setError("zipcode", "Debe tener 5 dígitos");
 				console.log("🔔 El código postal debe tener 5 dígitos.");
-				
+
 				setInfoMessage({
 					type: "error",
 					message: "El código postal debe tener 5 dígitos."
@@ -665,9 +605,9 @@ export default function TaxProfileForm({ isOpen }) {
 				return;
 			}
 
-			// En modo manual, validar que se haya subido archivo
-			if (entryMode === ENTRY_MODES.MANUAL && !uploadedFile) {
-				console.log("❌ No se ha subido archivo en modo manual");
+			// Constancia obligatoria en ambos modos antes del resumen
+			if (!uploadedFile || !data.fiscal_certificate) {
+				console.log("❌ No se ha subido constancia fiscal");
 				setError("fiscal_certificate", "Debe subir una constancia fiscal");
 				setInfoMessage({
 					type: "error",
@@ -683,11 +623,11 @@ export default function TaxProfileForm({ isOpen }) {
 
 	const handlePrevStep = () => {
 		console.log("⬅️ handlePrevStep llamado, activeStep actual:", activeStep);
-		
+
 		if (activeStep === STEPS.REVIEW) {
 			console.log("🔄 Regresando a UPLOAD desde REVIEW");
 			setActiveStep(STEPS.UPLOAD);
-			
+
 		} else if (activeStep === STEPS.CONFIRM) {
 			console.log("🔄 Regresando a REVIEW desde CONFIRM");
 			setActiveStep(STEPS.REVIEW);
@@ -698,25 +638,39 @@ export default function TaxProfileForm({ isOpen }) {
 	const submit = async (e) => {
 		e.preventDefault();
 
+		// Solo guardar en el paso de confirmación; en otros pasos avanzar
+		if (activeStep !== STEPS.CONFIRM) {
+			handleNextStep();
+			return;
+		}
+
 		console.log('=== GUARDANDO PERFIL FISCAL ===');
 
 		// Resetear estados
 		setInfoMessage(null);
 		clearErrors();
 		setIsSaving(true);
-		setSaveStep('Validando datos...');
+		setSaveStep("Validando datos...");
+
+		// Permitir que React pinte el estado de carga antes del trabajo pesado
+		await new Promise((resolve) => {
+			requestAnimationFrame(() => requestAnimationFrame(resolve));
+		});
 
 		try {
 			// Validaciones finales antes de enviar
 			// Requerir archivo en ambos modos
 			if (!data.fiscal_certificate) {
-				setError('fiscal_certificate', 'Debe subir una constancia fiscal');
+				setError("fiscal_certificate", "Debe subir una constancia fiscal");
 				setIsSaving(false);
 				return;
 			}
 
 			if (extractedData && !data.confirm_data) {
-				setError('confirm_data', 'Debe confirmar que los datos extraídos son correctos');
+				setError(
+					"confirm_data",
+					"Debe confirmar que los datos extraídos son correctos",
+				);
 				setIsSaving(false);
 				return;
 			}
@@ -729,10 +683,10 @@ export default function TaxProfileForm({ isOpen }) {
 			formData.append('tax_regime', data.tax_regime);
 			formData.append('cfdi_use', data.cfdi_use || 'G03');
 			formData.append('entry_mode', entryMode);
-			
+
 			// Agregar archivo (obligatorio en ambos modos)
 			formData.append('fiscal_certificate', data.fiscal_certificate);
-			
+
 			formData.append('confirm_data', data.confirm_data ? '1' : '0');
 
 			if (extractedData) {
@@ -788,7 +742,7 @@ export default function TaxProfileForm({ isOpen }) {
 						: 'Tu perfil fiscal ha sido creado correctamente.';
 
 					console.log(`🔔 ${successTitle}: ${successMessage}`);
-					
+
 					setInfoMessage({
 						type: "success",
 						message: successMessage
@@ -814,7 +768,7 @@ export default function TaxProfileForm({ isOpen }) {
 						});
 
 						console.log('🔔 Por favor corrija los errores en el formulario.');
-						
+
 						setInfoMessage({
 							type: "error",
 							message: 'Por favor corrija los errores en el formulario.'
@@ -823,7 +777,7 @@ export default function TaxProfileForm({ isOpen }) {
 					} else if (result.message) {
 						// Mostrar mensaje de error general
 						console.log(`🔔 Error: ${result.message}`);
-						
+
 						setInfoMessage({
 							type: "error",
 							message: result.message
@@ -844,12 +798,12 @@ export default function TaxProfileForm({ isOpen }) {
 				if (response.ok) {
 					console.log('⚠️ Respuesta exitosa no-JSON');
 					console.log('🔔 La operación se completó correctamente.');
-					
+
 					// Mostrar mensaje de éxito
-					const successTitle = cachedEditMode 
-						? '¡Perfil actualizado!' 
+					const successTitle = cachedEditMode
+						? '¡Perfil actualizado!'
 						: '¡Perfil creado exitosamente!';
-					
+
 					setInfoMessage({
 						type: "success",
 						message: 'La operación se completó correctamente.'
@@ -862,10 +816,10 @@ export default function TaxProfileForm({ isOpen }) {
 							preserveScroll: true,
 						});
 					}, 2000);
-					
+
 				} else {
 					console.log('🔔 Error del servidor. Por favor intente nuevamente.');
-					
+
 					setInfoMessage({
 						type: "error",
 						message: 'Por favor intente nuevamente.'
@@ -876,7 +830,7 @@ export default function TaxProfileForm({ isOpen }) {
 		} catch (error) {
 			console.error('💥 Error de red:', error);
 			console.log('🔔 Error de conexión. Verifique su internet e intente nuevamente.');
-			
+
 			setInfoMessage({
 				type: "error",
 				message: 'Verifique su internet e intente nuevamente.'
@@ -900,7 +854,7 @@ export default function TaxProfileForm({ isOpen }) {
 	// Paso 1: Selección de modo de entrada
 	const renderModeSelectionStep = () => {
 		console.log("🖼️ Renderizando paso de selección de modo, isModeSelected:", isModeSelected);
-		
+
 		return (
 			<>
 				<DialogTitle>
@@ -915,9 +869,9 @@ export default function TaxProfileForm({ isOpen }) {
 				<DialogBody className="space-y-6">
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 						{/* Opción 1: Modo Automático */}
-						<div 
-							className={`p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${entryMode === ENTRY_MODES.AUTOMATIC 
-								? 'border-blue-500 bg-blue-50' 
+						<div
+							className={`p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${entryMode === ENTRY_MODES.AUTOMATIC
+								? 'border-blue-500 bg-blue-50'
 								: 'border-gray-200 bg-white hover:border-gray-300'}`}
 							onClick={() => handleEntryModeChange(ENTRY_MODES.AUTOMATIC)}
 						>
@@ -929,10 +883,10 @@ export default function TaxProfileForm({ isOpen }) {
 									Extracción Automática
 								</h3>
 								<p className="text-sm text-gray-600">
-									Recomendado para mayor precisión
+									Recomendado
 								</p>
 							</div>
-							
+
 							<div className="space-y-3">
 								<div className="flex items-start">
 									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
@@ -943,17 +897,17 @@ export default function TaxProfileForm({ isOpen }) {
 								<div className="flex items-start">
 									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
 									<span className="text-sm text-gray-700">
-										Extraemos automáticamente tus datos
+										Analisis automático
 									</span>
 								</div>
 								<div className="flex items-start">
 									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
 									<span className="text-sm text-gray-700">
-										Revisa y confirma la información
+										Revisa y confirma
 									</span>
 								</div>
 							</div>
-							
+
 							{entryMode === ENTRY_MODES.AUTOMATIC && (
 								<div className="mt-6 text-center">
 									<div className="text-sm font-medium text-blue-700 mb-2">
@@ -967,9 +921,9 @@ export default function TaxProfileForm({ isOpen }) {
 						</div>
 
 						{/* Opción 2: Modo Manual */}
-						<div 
-							className={`p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${entryMode === ENTRY_MODES.MANUAL 
-								? 'border-green-500 bg-green-50' 
+						<div
+							className={`p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${entryMode === ENTRY_MODES.MANUAL
+								? 'border-green-500 bg-green-50'
 								: 'border-gray-200 bg-white hover:border-gray-300'}`}
 							onClick={() => handleEntryModeChange(ENTRY_MODES.MANUAL)}
 						>
@@ -981,10 +935,10 @@ export default function TaxProfileForm({ isOpen }) {
 									Llenado Manual
 								</h3>
 								<p className="text-sm text-gray-600">
-									Cuando la extracción automática no funciona
+									Sus datos fiscales
 								</p>
 							</div>
-							
+
 							<div className="space-y-3">
 								<div className="flex items-start">
 									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
@@ -995,17 +949,17 @@ export default function TaxProfileForm({ isOpen }) {
 								<div className="flex items-start">
 									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
 									<span className="text-sm text-gray-700">
-										Sube tu constancia fiscal (PDF obligatorio)
+										Sube tu constancia fiscal (PDF)
 									</span>
 								</div>
 								<div className="flex items-start">
 									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
 									<span className="text-sm text-gray-700">
-										Útil si la lectura automática falla
+										Útil si la lectura automática no reconoce tu .PDF
 									</span>
 								</div>
 							</div>
-							
+
 							{entryMode === ENTRY_MODES.MANUAL && (
 								<div className="mt-6 text-center">
 									<div className="text-sm font-medium text-green-700 mb-2">
@@ -1019,18 +973,6 @@ export default function TaxProfileForm({ isOpen }) {
 						</div>
 					</div>
 
-					<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-						<div className="flex">
-							<ExclamationTriangleIcon className="h-5 w-5 text-yellow-400 mr-2 flex-shrink-0" />
-							<div>
-								<p className="text-sm text-yellow-700">
-									<strong>Importante:</strong> En ambos métodos deberás subir tu constancia fiscal en PDF. 
-									La diferencia es que en el modo automático intentaremos extraer los datos por ti, 
-									mientras que en el modo manual tú ingresarás los datos manualmente.
-								</p>
-							</div>
-						</div>
-					</div>
 				</DialogBody>
 
 				<DialogActions>
@@ -1060,7 +1002,7 @@ export default function TaxProfileForm({ isOpen }) {
 	// Paso 1B: Subir archivo (solo para modo automático)
 	const renderUploadStep = () => {
 		console.log("🖼️ Renderizando paso UPLOAD (modo automático)");
-		
+
 		return (
 			<>
 				<DialogTitle>
@@ -1087,23 +1029,10 @@ export default function TaxProfileForm({ isOpen }) {
 
 				<DialogBody className="space-y-6">
 					<Field>
-						<Label>Constancia de Situación Fiscal *</Label>
-						<Description>
-							Sube el archivo PDF de tu constancia (máximo 5MB). Debe
-							ser emitida en los últimos 3 meses.
-						</Description>
-
 						<div className="space-y-4">
-							{/* Área para mostrar archivo subido o seleccionar */}
-							<div className={`relative rounded-xl transition-all duration-200 ${
-								uploadedFile
-									? "border-2 border-solid border-green-200 bg-green-50"
-									: "border-2 border-dashed border-gray-300 bg-gray-50"
-							} ${processingPdf || isSaving ? "opacity-50 cursor-not-allowed" : ""}`}>
-								{!isDragging && (
-									<div className="p-8 text-center">
-										{uploadedFile ? (
-											<div className="space-y-4">
+							{uploadedFile && (
+									<div className="rounded-xl border-2 border-solid border-green-200 bg-green-50 p-8 text-center">
+										<div className="space-y-4">
 												<div className="flex items-center justify-center">
 													<div className="p-3 bg-green-100 rounded-full">
 														<CheckCircleIcon className="h-10 w-10 text-green-600" />
@@ -1130,21 +1059,8 @@ export default function TaxProfileForm({ isOpen }) {
 													Cambiar archivo
 												</Button>
 											</div>
-										) : (
-											<div className="space-y-4">
-												<div>
-													<h4 className="font-semibold text-gray-700 text-lg">
-														Selecciona cómo subir tu archivo
-													</h4>
-													<p className="text-sm text-gray-500 mt-2">
-														Elige uno de los métodos a continuación
-													</p>
-												</div>
-											</div>
-										)}
 									</div>
 								)}
-							</div>
 
 							{processingPdf && (
 								<div className="space-y-2">
@@ -1161,85 +1077,42 @@ export default function TaxProfileForm({ isOpen }) {
 								</div>
 							)}
 
-							{pasteHintVisible && (
-								<div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-pulse">
-									<div className="flex items-center">
-										<ClipboardDocumentIcon className="h-5 w-5 text-blue-600 mr-2" />
-										<div>
-											<p className="font-medium text-blue-800 text-sm">
-												Modo pegar activado
-											</p>
-											<p className="text-xs text-blue-600">
-												Haz clic en cualquier parte y presiona Ctrl+V (Windows) o Cmd+V (Mac) para pegar un archivo PDF
-											</p>
-										</div>
-									</div>
-								</div>
-							)}
-
 							{errors.fiscal_certificate && (
 								<ErrorMessage>{errors.fiscal_certificate}</ErrorMessage>
 							)}
 						</div>
 					</Field>
 
-					{/* Guía de métodos de subida - SOLO PARA MODO AUTOMÁTICO */}
 					{!uploadedFile && !processingPdf && (
-						<div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-							<h4 className="font-semibold text-gray-800 mb-3">
-								Métodos para subir tu archivo
-							</h4>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div className="text-center p-4 bg-white rounded-lg border hover:border-blue-300 hover:shadow-sm transition-all">
+						<div className="rounded-xl border border-slate-200 bg-slate-50/80 p-6 dark:border-slate-700 dark:bg-slate-800/40">
+							<div className="mx-auto max-w-sm text-center">
+								<div className="text-center p-4">
 									<div className="w-12 h-12 mx-auto mb-3 flex items-center justify-center bg-blue-100 rounded-full">
 										<ArrowUpTrayIcon className="h-6 w-6 text-blue-600" />
 									</div>
-									<p className="font-medium text-gray-700">Seleccionar archivo</p>
-									<p className="text-sm text-gray-500 mt-1">
-										Busca en tu computadora
+									<p className="text-base font-semibold text-slate-900 dark:text-white">
+										Selecciona tu constancia fiscal
+									</p>
+									<p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+										Busca el archivo PDF en tu computadora
 									</p>
 									<Button
 										type="button"
-										onClick={(e) => {
-											e.stopPropagation();
-											fileInputRef.current?.click();
-										}}
-										className="mt-3 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+										onClick={() => fileInputRef.current?.click()}
+										className="mt-5 inline-flex items-center gap-2"
 										disabled={processingPdf || isSaving}
 									>
 										<ArrowUpTrayIcon className="h-4 w-4" />
 										Seleccionar archivo
-										<input
-											ref={fileInputRef}
-											type="file"
-											className="hidden"
-											accept="application/pdf"
-											onChange={handleFileUpload}
-											disabled={processingPdf || isSaving}
-										/>
 									</Button>
-								</div>
-								
-								<div className="text-center p-4 bg-white rounded-lg border hover:border-green-300 hover:shadow-sm transition-all">
-									<div className="w-12 h-12 mx-auto mb-3 flex items-center justify-center bg-green-100 rounded-full">
-										<ClipboardDocumentIcon className="h-6 w-6 text-green-600" />
-									</div>
-									<p className="font-medium text-gray-700">Pegar archivo</p>
-									<p className="text-sm text-gray-500 mt-1">
-										Desde WhatsApp, Google Drive, etc.
-									</p>
-									<Button
-										type="button"
-										onClick={(e) => {
-											e.stopPropagation();
-											activatePasteMode();
-										}}
-										className="mt-3 inline-flex items-center gap-2 bg-green-600 hover:bg-green-700"
-										disabled={processingPdf || isSaving || pasteHintVisible}
-									>
-										<ClipboardDocumentIcon className="h-4 w-4" />
-										{pasteHintVisible ? "Pega ahora (Ctrl+V)" : "Pegar archivo"}
-									</Button>
+									<input
+										ref={fileInputRef}
+										type="file"
+										className="hidden"
+										accept="application/pdf"
+										onChange={handleFileUpload}
+										disabled={processingPdf || isSaving}
+									/>
 								</div>
 							</div>
 							<div className="mt-4 pt-4 border-t border-gray-200">
@@ -1249,7 +1122,7 @@ export default function TaxProfileForm({ isOpen }) {
 							</div>
 						</div>
 					)}
-					
+
 					{/* Opción para cambiar a modo manual si hay problemas */}
 					{uploadedFile && !processingPdf && (
 						<div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -1306,7 +1179,7 @@ export default function TaxProfileForm({ isOpen }) {
 	// Paso 2: Revisar y editar información (común para ambos modos)
 	const renderReviewStep = () => {
 		console.log("🖼️ Renderizando paso REVIEW, entryMode:", entryMode);
-		
+
 		return (
 			<>
 				<DialogTitle>
@@ -1555,12 +1428,8 @@ export default function TaxProfileForm({ isOpen }) {
 							{/* Subida de archivo en modo manual (si aún no se ha subido) */}
 							{entryMode === ENTRY_MODES.MANUAL && !uploadedFile && (
 								<Field>
-									<Label>Constancia de Situación Fiscal *</Label>
-									<Description>
-										Sube el archivo PDF de tu constancia (máximo 5MB). Debe
-										ser emitida en los últimos 3 meses.
-									</Description>
-									
+
+
 									<div className="space-y-3">
 										<div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
 											<DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
@@ -1734,7 +1603,7 @@ export default function TaxProfileForm({ isOpen }) {
 	// Paso 3: Confirmar y guardar (común para ambos modos)
 	const renderConfirmStep = () => {
 		console.log("🖼️ Renderizando paso CONFIRM, entryMode:", entryMode);
-		
+
 		return (
 			<>
 				<DialogTitle>Confirma tu información</DialogTitle>
@@ -1743,22 +1612,12 @@ export default function TaxProfileForm({ isOpen }) {
 				</DialogDescription>
 
 				<DialogBody className="space-y-6">
-					<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-						<div className="flex">
-							<ExclamationTriangleIcon className="h-5 w-5 text-yellow-400 mr-2 flex-shrink-0" />
-							<div>
-								<h4 className="font-semibold text-yellow-800">
-									¡Importante!
-								</h4>
-								<p className="text-sm text-yellow-700 mt-1">
-									Los datos que confirmes se utilizarán para
-									solicitar tus facturas. Asegúrate de que sean
-									correctos, ya que errores podrían afectar la
-									validez fiscal de tus compras.
-								</p>
-							</div>
-						</div>
-					</div>
+					<TaxProfileCompactAlert>
+						<strong className="font-medium">¡Importante!</strong> Los datos
+						que confirmes se utilizarán para solicitar tus facturas.
+						Asegúrate de que sean correctos; errores podrían afectar la
+						validez fiscal de tus compras.
+					</TaxProfileCompactAlert>
 
 					<div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
 						<h4 className="font-semibold text-gray-800 mb-4">
@@ -1849,11 +1708,11 @@ export default function TaxProfileForm({ isOpen }) {
 									disabled={isSaving}
 								/>
 								<div>
-									<span className="font-medium text-white">
+									<span className="font-medium text-slate-900 dark:text-white">
 										Confirmo que los datos extraídos de mi
 										constancia son correctos
 									</span>
-									<p className="text-sm text-gray-500 mt-1">
+									<p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
 										He verificado que toda la información
 										coincide con mi constancia de situación
 										fiscal y está actualizada.
@@ -1886,14 +1745,26 @@ export default function TaxProfileForm({ isOpen }) {
 								isSaving ||
 								(extractedData && !data.confirm_data)
 							}
+							aria-busy={isSaving}
+							aria-live="polite"
+							className={`min-w-[11.5rem] transition-opacity ${
+								isSaving ? "cursor-wait opacity-90" : ""
+							}`}
 						>
-							{isSaving
-								? "Guardando..."
-								: cachedEditMode
-									? "Actualizar perfil"
-									: "Guardar perfil fiscal"}
-							{isSaving && (
-								<ArrowPathIcon className="ml-2 h-4 w-4 animate-spin" />
+							{isSaving ? (
+								<span className="inline-flex items-center justify-center gap-2">
+									<ArrowPathIcon
+										className="h-4 w-4 shrink-0 animate-spin"
+										aria-hidden
+									/>
+									<span>Guardando...</span>
+								</span>
+							) : (
+								<span>
+									{cachedEditMode
+										? "Actualizar perfil"
+										: "Guardar perfil fiscal"}
+								</span>
 							)}
 						</Button>
 					</div>
@@ -1901,32 +1772,6 @@ export default function TaxProfileForm({ isOpen }) {
 			</>
 		);
 	};
-
-	// Componente para mostrar el progreso de pasos
-	const StepIndicator = ({ step, label, isActive, isCompleted }) => (
-		<div className="flex flex-col items-center">
-			<div
-				className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${isCompleted
-					? "bg-green-100 border-green-600 text-green-600"
-					: isActive
-						? "bg-blue-100 border-blue-600 text-blue-600"
-						: "bg-gray-100 border-gray-300 text-gray-400"
-					}`}
-			>
-				{isCompleted ? (
-					<CheckCircleIcon className="w-6 h-6" />
-				) : (
-					<span className="font-semibold">{step}</span>
-				)}
-			</div>
-			<span
-				className={`mt-2 text-sm font-medium ${isActive || isCompleted ? "text-gray-900" : "text-gray-500"
-					}`}
-			>
-				{label}
-			</span>
-		</div>
-	);
 
 	// Componente Label personalizado para usar fuera de Field
 	const SimpleLabel = ({ children, className = "" }) => (
@@ -1937,21 +1782,43 @@ export default function TaxProfileForm({ isOpen }) {
 
 	// Componente para mostrar progreso de guardado
 	const SavingProgress = () => (
-		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-			<div className="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+		<div
+			className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-[2px]"
+			role="alertdialog"
+			aria-modal="true"
+			aria-labelledby="saving-progress-title"
+			aria-describedby="saving-progress-desc"
+		>
+			<div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
 				<div className="text-center">
-					<ArrowPathIcon className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
-					<h3 className="text-lg font-semibold text-gray-900 mb-2">
+					<div className="relative mx-auto mb-5 flex h-14 w-14 items-center justify-center">
+						<span className="absolute inset-0 animate-ping rounded-full bg-blue-500/20" />
+						<span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-blue-500/10 ring-1 ring-blue-500/30">
+							<ArrowPathIcon
+								className="h-7 w-7 animate-spin text-blue-600 dark:text-blue-400"
+								aria-hidden
+							/>
+						</span>
+					</div>
+					<h3
+						id="saving-progress-title"
+						className="text-lg font-semibold text-slate-900 dark:text-white"
+					>
 						{cachedEditMode
 							? "Actualizando perfil fiscal..."
 							: "Guardando perfil fiscal..."}
 					</h3>
-					<p className="text-gray-600 mb-4">{saveStep}</p>
-					<div className="w-full bg-gray-200 rounded-full h-2">
-						<div className="bg-blue-600 h-2 rounded-full animate-pulse"></div>
+					<p
+						id="saving-progress-desc"
+						className="mt-2 text-sm text-slate-600 dark:text-slate-400"
+					>
+						{saveStep}
+					</p>
+					<div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+						<div className="h-full w-full animate-pulse rounded-full bg-gradient-to-r from-blue-400 via-blue-600 to-blue-400 dark:from-blue-500 dark:via-blue-400 dark:to-blue-500" />
 					</div>
-					<p className="text-xs text-gray-500 mt-4">
-						Por favor no cierre esta ventana
+					<p className="mt-4 text-xs text-slate-500 dark:text-slate-500">
+						Por favor no cierres esta ventana
 					</p>
 				</div>
 			</div>
@@ -1990,7 +1857,7 @@ export default function TaxProfileForm({ isOpen }) {
 	// Renderizar contenido basado en el paso activo y modo seleccionado
 	const renderContent = () => {
 		console.log("🎬 renderContent llamado, activeStep:", activeStep, "isModeSelected:", isModeSelected, "entryMode:", entryMode);
-		
+
 		if (activeStep === STEPS.UPLOAD) {
 			// Si ya seleccionó modo automático y no ha subido archivo, mostrar pantalla de subida
 			if (isModeSelected && entryMode === ENTRY_MODES.AUTOMATIC) {
@@ -2008,7 +1875,7 @@ export default function TaxProfileForm({ isOpen }) {
 		} else if (activeStep === STEPS.CONFIRM) {
 			return renderConfirmStep();
 		}
-		
+
 		return renderModeSelectionStep();
 	};
 
@@ -2022,30 +1889,12 @@ export default function TaxProfileForm({ isOpen }) {
 				onClose={isSaving ? () => { } : closeDialog}
 			>
 				<form dusk="taxProfileForm" onSubmit={submit}>
-					{/* Indicador de pasos */}
-					<div className="px-6 pt-6">
-						<div className="flex justify-between items-center mb-6">
-							<StepIndicator
-								step="1"
-								label={entryMode === ENTRY_MODES.AUTOMATIC && isModeSelected ? "Subir archivo" : "Seleccionar método"}
-								isActive={activeStep === STEPS.UPLOAD}
-								isCompleted={activeStep > STEPS.UPLOAD}
-							/>
-							<div className="flex-1 h-0.5 mx-4 bg-gray-200"></div>
-							<StepIndicator
-								step="2"
-								label="Revisar datos"
-								isActive={activeStep === STEPS.REVIEW}
-								isCompleted={activeStep > STEPS.REVIEW}
-							/>
-							<div className="flex-1 h-0.5 mx-4 bg-gray-200"></div>
-							<StepIndicator
-								step="3"
-								label="Confirmar"
-								isActive={activeStep === STEPS.CONFIRM}
-								isCompleted={false}
-							/>
-						</div>
+					<div className="relative border-b border-slate-200/80 px-6 pb-5 pt-6 dark:border-slate-800">
+						<TaxProfileModalCloseButton
+							onClose={closeDialog}
+							disabled={isSaving || processingPdf}
+						/>
+						<TaxProfileFormStepper activeStep={activeStep} />
 					</div>
 
 					{renderContent()}

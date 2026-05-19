@@ -48,6 +48,7 @@ class TaxProfile extends Model
     protected $appends = [
         'formatted_tax_regime',
         'formatted_cfdi_use',
+        'formatted_activity_label',
     ];
 
     public function customer(): BelongsTo
@@ -79,6 +80,29 @@ class TaxProfile extends Model
                 $label = config('taxregimes.uses.'.$this->cfdi_use);
 
                 return $label ? $this->cfdi_use.' - '.$label : (string) $this->cfdi_use;
+            }
+        );
+    }
+
+    protected function formattedActivityLabel(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if (! $this->created_at) {
+                    return null;
+                }
+
+                $wasUpdated = $this->updated_at
+                    && $this->updated_at->gt($this->created_at->copy()->addMinute());
+
+                $date = localizedDate($wasUpdated ? $this->updated_at : $this->created_at);
+                if (! $date) {
+                    return null;
+                }
+
+                $prefix = $wasUpdated ? 'Actualizado' : 'Creado';
+
+                return $prefix.' el '.$date->locale('es')->isoFormat('D MMM Y');
             }
         );
     }
