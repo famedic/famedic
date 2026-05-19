@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
 use App\Models\Cart;
+use App\Models\LaboratoryAppointment;
+use App\Models\LaboratoryTest;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -32,7 +34,11 @@ class CartController extends Controller
             : null;
 
         $query = Cart::query()
-            ->with(['user'])
+            ->with([
+                'items',
+                'user.customer.laboratoryCartItems.laboratoryTest',
+                'user.customer.laboratoryAppointments',
+            ])
             ->withCount('items')
             ->when($filters['search'] ?? null, function ($q, string $search) {
                 $q->whereHas('user', function ($uq) use ($search) {
@@ -72,6 +78,12 @@ class CartController extends Controller
                 ->where('updated_at', '<', $staleBefore)
                 ->count(),
             'completed' => (clone $metricsBase)->where('status', MonitoringCartStatus::Completed)->count(),
+            'appointment_pending_confirmation' => (clone $metricsBase)
+                ->appointmentPendingConfirmation()
+                ->count(),
+            'appointment_confirmed_pending_payment' => (clone $metricsBase)
+                ->appointmentConfirmedPendingPayment()
+                ->count(),
         ];
 
         $den = $metrics['completed'] + $metrics['abandoned'];
@@ -93,7 +105,10 @@ class CartController extends Controller
     {
         $request->user()->administrator->hasPermissionTo('view cart details') || abort(403);
 
-        $cart->load(['user', 'items']);
+        $cart->load([
+            'items',
+            'user.customer.laboratoryAppointments',
+        ]);
 
         return Inertia::render('Admin/CartShow', [
             'cart' => $this->serializeCartDetail($cart),
@@ -113,6 +128,9 @@ class CartController extends Controller
             ] : null,
             'type' => $cart->type->value,
             'type_label' => $cart->type === MonitoringCartType::Pharmacy ? 'Farmacia' : 'Laboratorio',
+            'lab_brands' => $cart->labBrands(),
+            'appointment_pending_confirmation' => $cart->hasAppointmentPendingConfirmation(),
+            'appointment_confirmed_pending_payment' => $cart->hasAppointmentConfirmedPendingPayment(),
             'items_count' => $cart->items_count ?? $cart->items->count(),
             'total' => (string) $cart->total,
             'total_formatted' => formattedPrice((float) $cart->total),
@@ -124,15 +142,36 @@ class CartController extends Controller
 
     private function serializeCartDetail(Cart $cart): array
     {
-        $items = $cart->items->map(fn ($row) => [
-            'id' => $row->id,
-            'name' => $row->name,
-            'quantity' => $row->quantity,
-            'unit_price' => (string) $row->price,
-            'unit_price_formatted' => formattedPrice((float) $row->price),
-            'line_total' => (string) round((float) $row->price * (int) $row->quantity, 2),
-            'line_total_formatted' => formattedPrice(round((float) $row->price * (int) $row->quantity, 2)),
-        ]);
+        $isLab = $cart->type === MonitoringCartType::Lab;
+        $testsById = collect();
+
+        if ($isLab) {
+            $testIds = $cart->items->pluck('product_id')->filter()->unique()->values();
+            if ($testIds->isNotEmpty()) {
+                $testsById = LaboratoryTest::query()
+                    ->whereIn('id', $testIds)
+                    ->get()
+                    ->keyBy(fn (LaboratoryTest $test) => (string) $test->id);
+            }
+        }
+
+        $items = $cart->items->map(function ($row) use ($isLab, $testsById) {
+            $test = $testsById->get((string) $row->product_id);
+
+            return [
+                'id' => $row->id,
+                'name' => $row->name,
+                'quantity' => $row->quantity,
+                'unit_price' => (string) $row->price,
+                'unit_price_formatted' => formattedPrice((float) $row->price),
+                'line_total' => (string) round((float) $row->price * (int) $row->quantity, 2),
+                'line_total_formatted' => formattedPrice(round((float) $row->price * (int) $row->quantity, 2)),
+                'brand_label' => $test?->brand?->label(),
+                'requires_appointment' => (bool) ($test?->requires_appointment ?? false),
+            ];
+        });
+
+        $purchase = $isLab ? $cart->relatedLaboratoryPurchase() : null;
 
         return [
             'id' => $cart->id,
@@ -140,14 +179,46 @@ class CartController extends Controller
                 'id' => $cart->user->id,
                 'full_name' => $cart->user->full_name,
                 'email' => $cart->user->email,
+                'phone' => $cart->user->full_phone,
+                'admin_url' => route('admin.users.show', $cart->user),
             ] : null,
             'type' => $cart->type->value,
-            'type_label' => $cart->type === MonitoringCartType::Pharmacy ? 'Farmacia' : 'Laboratorio',
+            'type_label' => $isLab ? 'Laboratorio' : 'Farmacia',
+            'lab_brands' => $cart->labBrands(),
             'total' => (string) $cart->total,
             'total_formatted' => formattedPrice((float) $cart->total),
             'display_status' => $cart->displayStatus(),
+            'monitoring_status' => $cart->status->value,
+            'monitoring_status_label' => $cart->status === MonitoringCartStatus::Completed ? 'Completado en monitoreo' : 'Activo en monitoreo',
+            'appointment_pending_confirmation' => $cart->hasAppointmentPendingConfirmation(),
+            'appointment_confirmed_pending_payment' => $cart->hasAppointmentConfirmedPendingPayment(),
+            'items_count' => $cart->items->count(),
             'items' => $items,
+            'created_at_human' => $cart->created_at?->format('d/m/Y H:i'),
             'updated_at_human' => $cart->updated_at?->format('d/m/Y H:i'),
+            'completed_at_human' => $cart->completed_at?->format('d/m/Y H:i'),
+            'abandoned_threshold_minutes' => Cart::ABANDONED_AFTER_MINUTES,
+            'related_laboratory_purchase' => $purchase ? [
+                'id' => $purchase->id,
+                'brand_label' => $purchase->brand->label(),
+                'created_at_human' => $purchase->created_at?->format('d/m/Y H:i'),
+                'total_formatted' => $purchase->formatted_total ?? formattedPrice((float) $purchase->total),
+                'admin_url' => route('admin.laboratory-purchases.show', $purchase),
+            ] : null,
+            'laboratory_appointments' => $isLab
+                ? $cart->laboratoryAppointmentsForDisplay()->map(
+                    fn (LaboratoryAppointment $appointment) => [
+                        'id' => $appointment->id,
+                        'brand_label' => $appointment->brand->label(),
+                        'patient_name' => $appointment->patient_full_name,
+                        'is_confirmed' => $appointment->confirmed_at !== null,
+                        'confirmed_at_human' => $appointment->confirmed_at?->format('d/m/Y H:i'),
+                        'appointment_date_human' => $appointment->formatted_appointment_date,
+                        'has_linked_purchase' => $appointment->laboratory_purchase_id !== null,
+                        'admin_url' => route('admin.laboratory-appointments.show', $appointment),
+                    ],
+                )->values()->all()
+                : [],
         ];
     }
 }
