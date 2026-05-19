@@ -15,12 +15,10 @@ import {
 	Description,
 } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
-import { Anchor } from "@/Components/Catalyst/text";
 import {
 	BeakerIcon,
 	ArrowPathIcon,
 	ArrowsUpDownIcon,
-	DocumentTextIcon,
 } from "@heroicons/react/16/solid";
 
 export default function ResultsDialog({
@@ -75,7 +73,7 @@ export default function ResultsDialog({
 					</DialogTitle>
 					<DialogDescription>
 						{hasResults
-							? "Visualiza o actualiza el archivo PDF de los resultados."
+							? "Actualiza el archivo PDF de los resultados."
 							: "Sube el archivo PDF de los resultados."}
 					</DialogDescription>
 					<DialogBody className="space-y-6">
@@ -87,12 +85,13 @@ export default function ResultsDialog({
 									data-slot="control"
 									className="flex flex-wrap gap-2"
 								>
-									<Anchor href={resultsRoute} target="_blank">
+									{/* Los administradores no deben visualizar resultados de pacientes; solo subir/actualizar. */}
+									{/* <Anchor href={resultsRoute} target="_blank">
 										<Button outline type="button">
 											<DocumentTextIcon />
 											Ver resultados
 										</Button>
-									</Anchor>
+									</Anchor> */}
 									<Button
 										outline
 										type="button"
