@@ -34,6 +34,7 @@ use App\Http\Controllers\Admin\OnlinePharmacyPurchases\VendorPaymentsController 
 use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\TaxProfileController as AdminTaxProfileController;
+use App\Http\Controllers\Admin\TaxProfileFiscalCertificateController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ExportAdministratorsController;
@@ -137,6 +138,8 @@ Route::prefix('admin')->middleware([
 
         // Perfiles fiscales (agrupados por usuario/cliente)
         Route::get('tax-profiles', [AdminTaxProfileController::class, 'index'])->name('tax-profiles.index');
+        Route::get('tax-profiles/{tax_profile}/fiscal-certificate', TaxProfileFiscalCertificateController::class)
+            ->name('tax-profiles.fiscal-certificate');
         Route::get('tax-profiles/{customer}', [AdminTaxProfileController::class, 'show'])->name('tax-profiles.show');
 
         // Intentos de pago

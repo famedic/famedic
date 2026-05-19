@@ -12,10 +12,12 @@ import {
 import EmptyListCard from "@/Components/EmptyListCard";
 import CustomerInfo from "@/Components/CustomerInfo";
 import { Badge } from "@/Components/Catalyst/badge";
+import { Button } from "@/Components/Catalyst/button";
 import {
 	CheckCircleIcon,
 	XCircleIcon,
 	DocumentArrowDownIcon,
+	DocumentTextIcon,
 } from "@heroicons/react/16/solid";
 
 export default function TaxProfilePage({ customer }) {
@@ -109,15 +111,38 @@ export default function TaxProfilePage({ customer }) {
 										</TableCell>
 										<TableCell>
 											{profile.fiscal_certificate ? (
-												<a
-													href={profile.certificate_url}
-													target="_blank"
-													rel="noreferrer"
-													className="inline-flex items-center gap-1 text-xs text-sky-600 hover:underline"
-												>
-													<DocumentArrowDownIcon className="size-4" />
-													Descargar
-												</a>
+												<div className="flex flex-wrap gap-1">
+													<Button
+														href={route(
+															"admin.tax-profiles.fiscal-certificate",
+															{
+																tax_profile: profile.id,
+															},
+														)}
+														outline
+														size="sm"
+														target="_blank"
+														className="!text-xs"
+													>
+														<DocumentTextIcon className="size-4" />
+														Ver
+													</Button>
+													<Button
+														href={route(
+															"admin.tax-profiles.fiscal-certificate",
+															{
+																tax_profile: profile.id,
+																download: 1,
+															},
+														)}
+														outline
+														size="sm"
+														className="!text-xs"
+													>
+														<DocumentArrowDownIcon className="size-4" />
+														Descargar
+													</Button>
+												</div>
 											) : (
 												<Text className="text-xs text-zinc-400">
 													Sin archivo
