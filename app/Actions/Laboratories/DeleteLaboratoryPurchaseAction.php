@@ -50,16 +50,9 @@ class DeleteLaboratoryPurchaseAction
                     "No se pudo reembolsar la transacción {$transaction->id}"
                 );
             }
-
-            if (config('services.gda.report_emails')) {
-                Log::info('📧 Enviando notificación GDA', [
-                    'laboratory_purchase_id' => $laboratoryPurchase->id,
-                ]);
-
-                Notification::route('mail', config('services.gda.report_emails'))
-                    ->notify(new GDALaboratoryPurchaseDeleted($laboratoryPurchase));
-            }
         }
+
+        $this->sendCancellationNotifications($laboratoryPurchase);
 
         Log::info('🧹 Eliminando items del laboratorio', [
             'laboratory_purchase_id' => $laboratoryPurchase->id,
@@ -78,5 +71,36 @@ class DeleteLaboratoryPurchaseAction
         ]);
     }
 
+    private function sendCancellationNotifications(LaboratoryPurchase $laboratoryPurchase): void
+    {
+        $laboratoryPurchase->loadMissing('customer.user');
 
+        if (config('services.gda.report_emails')) {
+            Log::info('📧 Enviando notificación GDA', [
+                'laboratory_purchase_id' => $laboratoryPurchase->id,
+            ]);
+
+            Notification::route('mail', config('services.gda.report_emails'))
+                ->notify(new GDALaboratoryPurchaseDeleted($laboratoryPurchase));
+        }
+
+        $user = $laboratoryPurchase->customer?->user;
+
+        if ($user?->email) {
+            Log::info('📧 Enviando notificación de cancelación al cliente', [
+                'laboratory_purchase_id' => $laboratoryPurchase->id,
+                'user_id' => $user->id,
+                'email' => $user->email,
+            ]);
+
+            $user->notify(new CustomerLaboratoryPurchaseDeleted($laboratoryPurchase));
+
+            return;
+        }
+
+        Log::warning('⚠️ No se envió correo de cancelación al cliente: sin usuario o correo', [
+            'laboratory_purchase_id' => $laboratoryPurchase->id,
+            'customer_id' => $laboratoryPurchase->customer_id,
+        ]);
+    }
 }
