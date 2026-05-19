@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\LabResultsOtp;
 use App\Support\LabResultsOtpTrustSession;
 use Closure;
 use Illuminate\Http\Request;
@@ -10,6 +11,10 @@ class EnsureLabResultsOtpVerified
 {
     public function handle(Request $request, Closure $next)
     {
+        if (! LabResultsOtp::required()) {
+            return $next($request);
+        }
+
         $type = (string) ($request->route('type') ?? '');
         if ($type !== '' && $type !== 'purchase') {
             return $next($request);

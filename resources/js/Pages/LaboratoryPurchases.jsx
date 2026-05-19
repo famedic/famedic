@@ -13,7 +13,7 @@ import { QrCodeIcon } from "@heroicons/react/24/solid";
 import EmptyListCard from "@/Components/EmptyListCard";
 import PurchaseCard from "@/Components/PurchaseCard";
 import { Badge } from "@/Components/Catalyst/badge";
-import { useForm, Link, router } from "@inertiajs/react";
+import { useForm, Link, router, usePage } from "@inertiajs/react";
 import { Button } from "@/Components/Catalyst/button";
 import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -25,6 +25,7 @@ import OrderCardMobile from "@/Components/LaboratoryPurchases/OrderCardMobile";
 import { exportLaboratoryPurchasesPageCsv } from "@/lib/laboratoryPurchaseOrderUi";
 import formatMmSs from "@/Utils/formatMmSs";
 import { navigateToLabResults } from "@/Utils/openLabResultsUrl";
+import { isLabResultsOtpRequired } from "@/Utils/labResultsOtp";
 
 async function fetchLabResultsOtpStatus(purchaseId) {
 	try {
@@ -85,6 +86,9 @@ export default function LaboratoryPurchases({
 	filterOptions = {},
 	laboratoryQuotes = [],
 }) {
+	const { props: pageProps } = usePage();
+	const labResultsOtpRequired = isLabResultsOtpRequired(pageProps);
+
 	const pendingAfterOtpRef = useRef(null);
 	const [showOtpModal, setShowOtpModal] = useState(false);
 	const [otpPurchaseId, setOtpPurchaseId] = useState(null);
@@ -92,6 +96,11 @@ export default function LaboratoryPurchases({
 	const [otpTrustSecondsLeft, setOtpTrustSecondsLeft] = useState(0);
 
 	const requireOtpThen = async (purchaseId, fn) => {
+		if (!labResultsOtpRequired) {
+			fn?.();
+			return true;
+		}
+
 		const status = await fetchLabResultsOtpStatus(purchaseId);
 		if (status.verified) {
 			setOtpTrustSecondsLeft(Math.max(0, Math.floor(status.expiresIn)));
@@ -156,13 +165,20 @@ export default function LaboratoryPurchases({
 	}, [filtersKey]);
 
 	useEffect(() => {
+		if (!labResultsOtpRequired) return undefined;
+
 		const timer = setInterval(() => {
 			setOtpTrustSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
 		}, 1000);
 		return () => clearInterval(timer);
-	}, []);
+	}, [labResultsOtpRequired]);
 
 	useEffect(() => {
+		if (!labResultsOtpRequired) {
+			setOtpTrustSecondsLeft(0);
+			return;
+		}
+
 		const firstPurchaseId = purchaseCards?.[0]?.id;
 		if (!firstPurchaseId) {
 			setOtpTrustSecondsLeft(0);
@@ -171,7 +187,7 @@ export default function LaboratoryPurchases({
 		fetchLabResultsOtpStatus(firstPurchaseId).then((status) => {
 			setOtpTrustSecondsLeft(status.verified ? Math.max(0, Math.floor(status.expiresIn)) : 0);
 		});
-	}, [purchaseCards]);
+	}, [purchaseCards, labResultsOtpRequired]);
 
 	const navigateWithFilters = (overrides = {}) => {
 		router.get(
@@ -346,7 +362,7 @@ export default function LaboratoryPurchases({
 			)}
 
 			<Text className="mb-4 mt-10 text-base font-semibold text-zinc-900 dark:text-white">Pagos en línea</Text>
-			{otpTrustSecondsLeft > 0 && (
+			{labResultsOtpRequired && otpTrustSecondsLeft > 0 && (
 				<div className="mb-4">
 					<Badge color="green" className="inline-flex items-center gap-2 px-3 py-1.5">
 						<ClockIcon className="size-4" />
@@ -405,7 +421,7 @@ export default function LaboratoryPurchases({
 				</div>
 			)}
 
-			{showOtpModal && otpPurchaseId != null && (
+			{labResultsOtpRequired && showOtpModal && otpPurchaseId != null && (
 				<SecurityVerificationModal
 					isOpen={showOtpModal}
 					purchaseId={otpPurchaseId}

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Laboratories\GetGDAResultsAction;
+use App\Support\LabResultsOtp;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use App\Models\LabResultAccessToken;
@@ -34,6 +35,16 @@ class LabResultsAccessController extends Controller
 
         if (! $this->orderHasResults($purchase->id)) {
             return $this->renderError('Los resultados aún no están disponibles para esta orden.');
+        }
+
+        if (! LabResultsOtp::required()) {
+            $purchaseUrl = route('laboratory-purchases.show', ['laboratory_purchase' => $purchase->id]);
+
+            if (auth()->check() && (int) auth()->id() === (int) $user->id) {
+                return redirect($purchaseUrl);
+            }
+
+            return redirect()->guest($purchaseUrl);
         }
 
         $accessToken->update(['last_used_at' => now()]);

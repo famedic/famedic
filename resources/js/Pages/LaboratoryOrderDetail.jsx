@@ -17,6 +17,7 @@ import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
 import PurchasePdfDialog from "@/Components/PurchasePdfDialog";
 import Card from "@/Components/Card";
 import { navigateToLabResults, openLabResultsInNewTabOrSame } from "@/Utils/openLabResultsUrl";
+import { isLabResultsOtpRequired } from "@/Utils/labResultsOtp";
 
 function onlyDateLabel(value = "") {
 	const raw = String(value || "").trim();
@@ -71,7 +72,8 @@ export default function LaboratoryOrderDetail({
 	const [pdfDialogTab, setPdfDialogTab] = useState(0);
 	const [shareNotice, setShareNotice] = useState(null);
 	const pendingAfterOtpRef = useRef(null);
-	const { daysLeftToRequestInvoice = 0, errors: pageErrors = {} } = usePage().props;
+	const { daysLeftToRequestInvoice = 0, errors: pageErrors = {}, ...pageProps } = usePage().props;
+	const labResultsOtpRequired = isLabResultsOtpRequired(pageProps);
 
 	useEffect(() => {
 		if (activeTab !== "instructions" || !pendingScrollToPreparation) return;
@@ -448,6 +450,11 @@ export default function LaboratoryOrderDetail({
 	}
 
 	const requireOtpThen = async (purchaseId, fn) => {
+		if (!labResultsOtpRequired) {
+			fn?.();
+			return true;
+		}
+
 		const status = await fetchLabResultsOtpStatus(purchaseId);
 		if (status.verified) {
 			fn?.();
@@ -495,6 +502,11 @@ export default function LaboratoryOrderDetail({
 
 		void (async () => {
 			try {
+				if (!labResultsOtpRequired) {
+					openLabResultsInNewTabOrSame(url);
+					return;
+				}
+
 				const allowed = await requireOtpThen(laboratoryPurchase.id, () => {
 					navigateToLabResults(url);
 				});
@@ -550,6 +562,7 @@ export default function LaboratoryOrderDetail({
 					resultsUploadedAt={latestResultsAt || laboratoryPurchase?.formatted_results_uploaded_at}
 					onViewResults={openResultsFromSidebar}
 					isProcessing={isProcessingResults}
+					otpRequired={labResultsOtpRequired}
 					otpVerified={otpStatus.verified}
 					otpExpiresIn={otpStatus.expiresIn}
 				/>
@@ -589,7 +602,7 @@ export default function LaboratoryOrderDetail({
 				selectedTab={pdfDialogTab}
 				setSelectedTab={setPdfDialogTab}
 			/>
-			{showOtpModal && otpPurchaseId != null && (
+			{labResultsOtpRequired && showOtpModal && otpPurchaseId != null && (
 				<SecurityVerificationModal
 					isOpen={showOtpModal}
 					purchaseId={otpPurchaseId}

@@ -10,9 +10,12 @@ import { Button } from "@/Components/Catalyst/button";
 import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from "@/Components/Catalyst/dropdown";
 import { getPrimaryPurchaseAction, purchaseHasResults, purchaseIsCancelled } from "@/lib/laboratoryPurchaseOrderUi";
 import { useState } from "react";
+import { usePage } from "@inertiajs/react";
 import { openLabResultsInNewTabOrSame } from "@/Utils/openLabResultsUrl";
+import { isLabResultsOtpRequired } from "@/Utils/labResultsOtp";
 
 export default function OrderRowActions({ purchase, beginProtectedUrl, layout = "row" }) {
+	const labResultsOtpRequired = isLabResultsOtpRequired(usePage().props);
 	const isMobile = layout === "mobile";
 	const isMenuOnly = layout === "menu-only";
 	const [isProcessingResults, setIsProcessingResults] = useState(false);
@@ -62,14 +65,18 @@ export default function OrderRowActions({ purchase, beginProtectedUrl, layout = 
 				className={btnBase}
 				onClick={handleViewResults}
 				disabled={isProcessingResults}
-				title={isProcessingResults ? "Estamos validando tu identidad..." : undefined}
+				title={
+					isProcessingResults && labResultsOtpRequired
+						? "Estamos validando tu identidad..."
+						: undefined
+				}
 			>
 				{isProcessingResults ? (
 					<ArrowPathIcon className="mr-1.5 size-4 shrink-0 animate-spin sm:size-5" />
 				) : (
 					<EyeIcon className="mr-1.5 size-4 shrink-0 sm:size-5" />
 				)}
-				{isProcessingResults ? "Validando..." : primary.label}
+				{isProcessingResults && labResultsOtpRequired ? "Validando..." : primary.label}
 			</Button>
 		) : primary.href ? (
 			<Button outline href={primary.href} className={btnBase}>
@@ -109,7 +116,7 @@ export default function OrderRowActions({ purchase, beginProtectedUrl, layout = 
 			) : !isMenuOnly ? (
 				<div className="min-w-0">
 					{primaryButton}
-					{primary.key === "results" && (
+					{labResultsOtpRequired && primary.key === "results" && (
 						<p
 							className="mt-1 flex items-center gap-1 text-xs text-zinc-500 dark:text-slate-400"
 							title="Tus resultados están protegidos. Te pediremos un código OTP."

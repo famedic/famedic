@@ -9,6 +9,7 @@ use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryQuote;
 use App\Models\User;
 use App\Services\Laboratory\LabResultsAccessTokenService;
+use App\Support\LabResultsOtp;
 use Carbon\Carbon;
 
 class LaboratoryResultsAvailable extends Notification
@@ -42,12 +43,16 @@ class LaboratoryResultsAvailable extends Notification
 
         $resultsAccessUrl = null;
         if ($this->laboratoryPurchase && $notifiable instanceof User) {
-            $plainToken = app(LabResultsAccessTokenService::class)->generate(
-                $notifiable,
-                $this->laboratoryPurchase
-            );
+            if (LabResultsOtp::required()) {
+                $plainToken = app(LabResultsAccessTokenService::class)->generate(
+                    $notifiable,
+                    $this->laboratoryPurchase
+                );
 
-            $resultsAccessUrl = route('lab-results.show', ['token' => $plainToken]);
+                $resultsAccessUrl = route('lab-results.show', ['token' => $plainToken]);
+            } else {
+                $resultsAccessUrl = url(route('laboratory-purchases.show', $this->laboratoryPurchase->id));
+            }
         }
 
         $mailMessage = (new MailMessage)

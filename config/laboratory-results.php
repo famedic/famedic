@@ -2,6 +2,12 @@
 
 return [
     /**
+     * Exigir OTP para ver/descargar resultados (área autenticada y liga pública por token).
+     * Desactivado por defecto hasta estabilizar el flujo en producción.
+     */
+    'otp_required' => (bool) env('LAB_RESULTS_OTP_REQUIRED', false),
+
+    /**
      * Tras validar OTP en el área autenticada, tiempo en minutos sin volver a pedir código (ventana de confianza).
      */
     'otp_trust_session_minutes' => (int) env('LAB_RESULTS_OTP_TRUST_MINUTES', 15),
