@@ -161,6 +161,22 @@ class EnsureUserHasAdminAccount
                     'icon' => 'BookOpenIcon',
                     'current' => Route::currentRouteName() === 'admin.documentation',
                 ]] : [],
+                ...$request->user()->administrator->hasPermissionTo('simulators.manage') ? [[
+                    'label' => 'Simuladores',
+                    'icon' => 'BeakerIcon',
+                    'items' => [
+                        [
+                            'label' => 'Inicio',
+                            'url' => route('admin.simulators.index'),
+                            'current' => Route::currentRouteName() === 'admin.simulators.index',
+                        ],
+                        [
+                            'label' => 'Simulador OTP',
+                            'url' => route('admin.simulators.otp'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.otp'),
+                        ],
+                    ],
+                ]] : [],
                 // Monitoreo y herramientas internas solo para administradores
                 [
                     'label' => 'Monitoreo',

@@ -93,7 +93,15 @@ function ChannelCard({
 	);
 }
 
-export default function SecurityVerificationModal({ isOpen, purchaseId, onSuccess, onClose }) {
+export default function SecurityVerificationModal({
+	isOpen,
+	purchaseId,
+	onSuccess,
+	onClose,
+	variant = "default",
+	apiUrls = null,
+}) {
+	const isSimulator = variant === "simulator";
 	const { auth } = usePage().props;
 	const userHasSms = Boolean(auth?.user?.phone);
 	const userHasEmail = Boolean(auth?.user?.email);
@@ -118,10 +126,30 @@ export default function SecurityVerificationModal({ isOpen, purchaseId, onSucces
 	const inputsRef = useRef([]);
 	const autoSubmitLock = useRef(false);
 
-	const statusUrl = useMemo(() => route("otp.status", { laboratory_purchase: purchaseId }), [purchaseId]);
-	const sendUrl = useMemo(() => route("otp.send", { laboratory_purchase: purchaseId }), [purchaseId]);
-	const resendUrl = useMemo(() => route("otp.resend", { laboratory_purchase: purchaseId }), [purchaseId]);
-	const verifyUrl = useMemo(() => route("otp.verify", { laboratory_purchase: purchaseId }), [purchaseId]);
+	const statusUrl = useMemo(
+		() =>
+			apiUrls?.status ??
+			route("otp.status", { laboratory_purchase: purchaseId }),
+		[purchaseId, apiUrls],
+	);
+	const sendUrl = useMemo(
+		() =>
+			apiUrls?.send ??
+			route("otp.send", { laboratory_purchase: purchaseId }),
+		[purchaseId, apiUrls],
+	);
+	const resendUrl = useMemo(
+		() =>
+			apiUrls?.resend ??
+			route("otp.resend", { laboratory_purchase: purchaseId }),
+		[purchaseId, apiUrls],
+	);
+	const verifyUrl = useMemo(
+		() =>
+			apiUrls?.verify ??
+			route("otp.verify", { laboratory_purchase: purchaseId }),
+		[purchaseId, apiUrls],
+	);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -138,13 +166,15 @@ export default function SecurityVerificationModal({ isOpen, purchaseId, onSucces
 		setDigits(["", "", "", "", "", ""]);
 		autoSubmitLock.current = false;
 
-		jsonFetch(statusUrl)
-			.then((s) => {
-				if (typeof s?.trust_minutes === "number") setTrustMinutes(s.trust_minutes);
-				if (s?.verified) onSuccess?.({ expires_in: s.expires_in });
-			})
-			.catch(() => {});
-	}, [isOpen, statusUrl, userHasSms]);
+		if (!isSimulator) {
+			jsonFetch(statusUrl)
+				.then((s) => {
+					if (typeof s?.trust_minutes === "number") setTrustMinutes(s.trust_minutes);
+					if (s?.verified) onSuccess?.({ expires_in: s.expires_in });
+				})
+				.catch(() => {});
+		}
+	}, [isOpen, statusUrl, userHasSms, isSimulator]);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -269,21 +299,35 @@ export default function SecurityVerificationModal({ isOpen, purchaseId, onSucces
 						<ShieldCheckIcon className="size-6 text-emerald-700 dark:text-emerald-300" />
 					</div>
 					<div className="min-w-0">
-						<DialogTitle>Verificación de seguridad</DialogTitle>
+						<DialogTitle>
+							{isSimulator ? "Simulador OTP" : "Verificación de seguridad"}
+						</DialogTitle>
 						<div className="mt-1 inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700 dark:bg-slate-800 dark:text-slate-200">
 							<LockClosedIcon className="size-3.5" />
-							🔒 Tus resultados están protegidos
+							{isSimulator
+								? "Entorno de prueba — sin afectar pacientes"
+								: "🔒 Tus resultados están protegidos"}
 						</div>
 					</div>
 				</div>
 
 				<DialogBody className="space-y-4">
+					{isSimulator && (
+						<div className="rounded-xl border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-100">
+							El código se enviará a <Strong>tu usuario administrador</Strong> (
+							{channelTarget}), no al paciente. Esto no desbloquea resultados reales del pedido.
+						</div>
+					)}
 					<Text className="text-sm text-zinc-600 dark:text-slate-400">
-						Te enviaremos un código de 6 dígitos para verificar tu identidad.
+						{isSimulator
+							? "Simula el envío de un código de 6 dígitos por SMS o correo con la misma notificación del flujo de resultados."
+							: "Te enviaremos un código de 6 dígitos para verificar tu identidad."}
 					</Text>
-					<Text className="text-xs text-emerald-700 dark:text-emerald-300">
-						Después de verificar, tendrás <Strong>{trustMinutes} minutos</Strong> para consultar resultados sin volver a validar OTP.
-					</Text>
+					{!isSimulator && (
+						<Text className="text-xs text-emerald-700 dark:text-emerald-300">
+							Después de verificar, tendrás <Strong>{trustMinutes} minutos</Strong> para consultar resultados sin volver a validar OTP.
+						</Text>
+					)}
 					<TextLink
 						href="#"
 						className="inline-flex text-xs"
@@ -380,7 +424,7 @@ export default function SecurityVerificationModal({ isOpen, purchaseId, onSucces
 
 				<DialogActions>
 					<Button outline onClick={onClose} className="min-h-11 justify-center">
-						Cancelar
+						{isSimulator ? "Cerrar" : "Cancelar"}
 					</Button>
 					{step === "channel" ? (
 						<Button
@@ -405,7 +449,9 @@ export default function SecurityVerificationModal({ isOpen, purchaseId, onSucces
 				</DialogActions>
 
 				<Text className="text-center text-xs text-zinc-500 dark:text-slate-500">
-					Tu información está protegida con estándares de seguridad médica.
+					{isSimulator
+						? "Simulación aislada: no modifica el acceso OTP de pacientes en producción."
+						: "Tu información está protegida con estándares de seguridad médica."}
 				</Text>
 			</div>
 		</Dialog>

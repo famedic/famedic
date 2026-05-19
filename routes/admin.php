@@ -32,7 +32,9 @@ use App\Http\Controllers\Admin\OnlinePharmacyPurchases\ResolvedDevAssistanceRequ
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\UnresolvedDevAssistanceRequestController as OnlinePharmacyUnresolvedDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\VendorPaymentsController as OnlinePharmacyVendorPaymentsController;
 use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
+use App\Http\Controllers\Admin\OtpSimulatorController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\SimulatorController;
 use App\Http\Controllers\Admin\TaxProfileController as AdminTaxProfileController;
 use App\Http\Controllers\Admin\TaxProfileFiscalCertificateController;
 use App\Http\Controllers\Admin\UserController;
@@ -171,6 +173,15 @@ Route::prefix('admin')->middleware([
         Route::post('coupons/{coupon}/resend-authorization', [CouponController::class, 'resendAuthorization'])->name('coupons.resend-authorization');
         Route::delete('coupons/{coupon}/assignments/{couponUser}', [CouponController::class, 'destroyAssignment'])->name('coupons.assignments.destroy');
         Route::resource('coupons', CouponController::class);
+        Route::get('simulators', [SimulatorController::class, 'index'])->name('simulators.index');
+        Route::get('simulators/otp', [OtpSimulatorController::class, 'show'])->name('simulators.otp');
+        Route::prefix('simulators/otp/{laboratory_purchase}')->name('simulators.otp.')->group(function () {
+            Route::get('status', [OtpSimulatorController::class, 'status'])->name('status');
+            Route::post('send', [OtpSimulatorController::class, 'send'])->name('send');
+            Route::post('resend', [OtpSimulatorController::class, 'resend'])->name('resend');
+            Route::post('verify', [OtpSimulatorController::class, 'verify'])->name('verify');
+        });
+
         // Monitor de configuración (solo lectura; metadatos en BD)
         Route::get('config-monitor', [ConfigMonitorController::class, 'index'])->name('config-monitor.index');
         Route::post('config-monitor/refresh', [ConfigMonitorController::class, 'refresh'])->name('config-monitor.refresh');
