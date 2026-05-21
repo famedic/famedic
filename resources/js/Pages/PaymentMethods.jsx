@@ -21,6 +21,7 @@ import { useMemo, useState } from "react";
 import { usePage } from "@inertiajs/react";
 import CreditCardBrand from "@/Components/CreditCardBrand";
 import SettingsCard from "@/Components/SettingsCard";
+import EnvironmentBadge from "@/Components/EnvironmentBadge";
 
 export default function PaymentMethods({
     paymentMethods = [],
@@ -28,6 +29,7 @@ export default function PaymentMethods({
     efevooConfig = {},
     pending3dsSessions = [],
     formattedBalanceCoupons,
+    paymentUsesMock = false,
 }) {
     const { props } = usePage();
     const [paymentMethodToDelete, setPaymentMethodToDelete] = useState(null);
@@ -95,10 +97,13 @@ export default function PaymentMethods({
                     <GradientHeading noDivider className="text-xl sm:text-2xl">
                         Mis métodos de pago
                     </GradientHeading>
-                    <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                            {efevooConfig?.environment?.toUpperCase() ?? ''}
-                        </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <EnvironmentBadge />
+                        {paymentUsesMock && (
+                            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                                Pagos simulados · sin cargo real
+                            </span>
+                        )}
                         {sortedCards.length > 0 && (
                             <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">
                                 {sortedCards.length} {sortedCards.length === 1 ? 'tarjeta' : 'tarjetas'}

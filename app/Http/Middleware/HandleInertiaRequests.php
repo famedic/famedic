@@ -3,6 +3,8 @@
 namespace App\Http\Middleware;
 
 use App\Enums\LaboratoryBrand;
+use App\Support\AppEnvironmentLabel;
+use App\Support\MockEfevooPaymentSupport;
 use App\Services\NotificationService;
 use App\Services\Tracking\Tracking;
 use Illuminate\Http\Request;
@@ -75,6 +77,9 @@ class HandleInertiaRequests extends Middleware
             'userNavigation' => $request->user() ? $this->getUserNavigation((bool) $request->user()->administrator, (bool) $request->user()?->customer?->medical_attention_subscription_is_active) : [],
             'flashMessage' => session('flashMessage'),
             'appEnv' => app()->environment(),
+            'appEnvLabel' => AppEnvironmentLabel::current(),
+            'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
+            'paymentUsesMock' => MockEfevooPaymentSupport::isMockMode(),
             'labResultsOtpRequired' => (bool) config('laboratory-results.otp_required', false),
             'trackingEvents' => function () {
                 if (! app()->environment('production')) {

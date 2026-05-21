@@ -45,6 +45,7 @@ export default function PaymentMethodStep({
     hasPayPal = false,
     addCardReturnUrl,
     forceMobile = false,
+    paymentUsesMock = false,
     ...props
 }) {
     const selectedPaymentMethod = useMemo(() => {
@@ -153,15 +154,23 @@ export default function PaymentMethodStep({
                 )
             }
             formContent={
-                <PaymentMethodSelection
-                    forceMobile={forceMobile}
-                    addCardReturnUrl={addCardReturnUrl}
-                    setData={setData}
-                    paymentMethods={paymentMethods}
-                    hasOdessaPay={hasOdessaPay}
-                    hasPayPal={hasPayPal}
-                    clearErrors={clearErrors}
-                />
+                <>
+                    {paymentUsesMock && (
+                        <div className="mb-3 rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/25 dark:text-amber-100">
+                            Tarjetas de prueba precargadas (Visa/Mastercard aprueban; terminación 0002 rechaza).
+                        </div>
+                    )}
+                    <PaymentMethodSelection
+                        forceMobile={forceMobile}
+                        addCardReturnUrl={addCardReturnUrl}
+                        setData={setData}
+                        paymentMethods={paymentMethods}
+                        hasOdessaPay={hasOdessaPay}
+                        hasPayPal={hasPayPal}
+                        clearErrors={clearErrors}
+                        paymentUsesMock={paymentUsesMock}
+                    />
+                </>
             }
             onClickEdit={() => setData("payment_method", null)}
         />
@@ -277,13 +286,19 @@ function PaymentMethodSelection({
             )}
 
             {paymentMethods.map((paymentMethod) => {
-                const isSandbox = paymentMethod.metadata?.environment === 'sandbox';
+                const isMock = paymentMethod.metadata?.mock === true;
+                const isSandbox =
+                    paymentMethod.metadata?.environment === "sandbox" || isMock;
 
                 return (
                     <CheckoutSelectionCard
                         onClick={() => selectPaymentMethod(paymentMethod)}
                         key={paymentMethod.id}
-                        className="min-h-[11rem]"
+                        className={clsx(
+                            "min-h-[11rem]",
+                            isMock &&
+                                "ring-2 ring-amber-300/80 dark:ring-amber-600/50",
+                        )}
                     >
                         <div className="flex h-full flex-col justify-between">
                             <div className="flex justify-between items-start">
@@ -292,7 +307,12 @@ function PaymentMethodSelection({
                                         brand={paymentMethod.card?.brand}
                                         className="size-7"
                                     />
-                                    {isSandbox && (
+                                    {isMock && (
+                                        <Badge color="amber" size="xs">
+                                            Prueba
+                                        </Badge>
+                                    )}
+                                    {!isMock && isSandbox && (
                                         <Badge color="yellow" size="xs">
                                             Test
                                         </Badge>
@@ -314,9 +334,10 @@ function PaymentMethodSelection({
                                 <Text className="text-xs">
                                     Exp: {paymentMethod.card?.exp_month}/{paymentMethod.card?.exp_year_short || paymentMethod.card?.exp_year}
                                 </Text>
-                                {isSandbox && (
+                                {(isMock || isSandbox) && (
                                     <Text className="text-xs text-gray-500 mt-1">
-                                        Tarjeta de prueba - No se realizarán cargos reales
+                                        {paymentMethod.metadata?.description ??
+                                            "Tarjeta de prueba — sin cargo real"}
                                     </Text>
                                 )}
                             </div>

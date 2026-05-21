@@ -5,15 +5,16 @@ namespace App\Actions\EfevooPay;
 use App\Models\Customer;
 use App\Models\Transaction;
 use App\Models\PaymentAttempt;
-use App\Services\EfevooPayService;
+use App\Contracts\EfevooPayGateway;
+use App\Support\MockEfevooPaymentSupport;
 use Illuminate\Support\Facades\Log;
 use App\Exceptions\EfevooPaymentException;
 
 class ChargeEfevooPaymentMethodAction
 {
-    protected EfevooPayService $efevooPayService;
+    protected EfevooPayGateway $efevooPayService;
 
-    public function __construct(EfevooPayService $efevooPayService)
+    public function __construct(EfevooPayGateway $efevooPayService)
     {
         $this->efevooPayService = $efevooPayService;
     }
@@ -49,6 +50,12 @@ class ChargeEfevooPaymentMethodAction
             if (!$token) {
                 throw new EfevooPaymentException(
                     'El método de pago seleccionado no está disponible o ha expirado.'
+                );
+            }
+
+            if (! MockEfevooPaymentSupport::isMockMode() && MockEfevooPaymentSupport::isMockToken($token)) {
+                throw new EfevooPaymentException(
+                    'No se puede pagar con una tarjeta de prueba en ambiente productivo.'
                 );
             }
 

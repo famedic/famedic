@@ -16,8 +16,14 @@ import { useState } from "react";
 import CreditCardBrand from "@/Components/CreditCardBrand";
 import SimpleField from "@/Components/Form/SimpleField";
 import SimpleInput from "@/Components/Form/SimpleInput";
+import EnvironmentBadge from "@/Components/EnvironmentBadge";
 
-export default function Create({ efevooConfig = {}, hasPending3ds = false }) {
+export default function Create({
+    efevooConfig = {},
+    hasPending3ds = false,
+    paymentUsesMock = false,
+    mockTestCards = [],
+}) {
 
     const { data, setData, post, processing, errors } = useForm({
         card_number: "",
@@ -42,6 +48,20 @@ export default function Create({ efevooConfig = {}, hasPending3ds = false }) {
     /* ==========================================================
      * DETECT CARD TYPE
      * ========================================================== */
+
+    const applyTestCard = (card) => {
+        const raw = String(card.number).replace(/\D/g, "");
+        setData({
+            ...data,
+            card_number: raw,
+            exp_month: card.exp_month,
+            exp_year: `20${card.exp_year}`,
+            cvv: card.cvv,
+            card_holder: card.card_holder ?? card.name ?? "Titular Mock",
+            alias: card.alias ?? `mock-${raw.slice(-4)}`,
+        });
+        detectCardType(raw);
+    };
 
     const detectCardType = (number) => {
         const cleaned = number.replace(/\D/g, "");
@@ -104,10 +124,34 @@ export default function Create({ efevooConfig = {}, hasPending3ds = false }) {
                 >
                     <ArrowLeftIcon className="size-4" />
                 </Button>
-                <GradientHeading noDivider>
-                    Agregar nueva tarjeta
-                </GradientHeading>
+                <div className="flex flex-wrap items-center gap-2">
+                    <GradientHeading noDivider>
+                        Agregar nueva tarjeta
+                    </GradientHeading>
+                    <EnvironmentBadge />
+                </div>
             </div>
+
+            {paymentUsesMock && mockTestCards.length > 0 && (
+                <div className="mb-6 rounded-lg border border-amber-200/80 bg-amber-50/70 p-4 dark:border-amber-800/50 dark:bg-amber-950/30">
+                    <Text className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                        Tarjetas de prueba (sin cargo real)
+                    </Text>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                        {mockTestCards.map((card) => (
+                            <Button
+                                key={card.number}
+                                type="button"
+                                outline
+                                onClick={() => applyTestCard(card)}
+                                className="text-xs"
+                            >
+                                {card.name}
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {efevooConfig?.requires_3ds && (
                 <div className="mb-6 rounded-lg bg-blue-50 p-4 text-sm text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">

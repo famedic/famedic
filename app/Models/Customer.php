@@ -362,6 +362,7 @@ class Customer extends Model
     {
         return $this->efevooTokens()
             ->active()
+            ->excludeMockInProduction()
             ->get()
             ->map(function ($token) {
                 // Crear un objeto stdClass para mantener compatibilidad
@@ -395,6 +396,7 @@ class Customer extends Model
     {
         return $this->efevooTokens()
             ->active()
+            ->excludeMockInProduction()
             ->get()
             ->map(function ($token) {
                 return [

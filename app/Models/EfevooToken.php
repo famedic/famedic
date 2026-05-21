@@ -1,6 +1,8 @@
 <?php
 namespace App\Models;
 
+use App\Support\MockEfevooPaymentSupport;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -69,6 +71,40 @@ class EfevooToken extends Model
     public function scopeProduction($query)
     {
         return $query->where('environment', 'production');
+    }
+
+    public function isMock(): bool
+    {
+        return MockEfevooPaymentSupport::isMockToken($this);
+    }
+
+    /**
+     * En production oculta tokens creados por el simulador de pagos.
+     */
+    public function scopeExcludeMockInProduction(Builder $query): Builder
+    {
+        if (! app()->environment('production')) {
+            return $query;
+        }
+
+        return $query
+            ->where(function (Builder $q) {
+                $q->whereNull('card_token')
+                    ->orWhere('card_token', 'not like', 'mock_tok_%');
+            })
+            ->where(function (Builder $q) {
+                $q->whereNull('client_token')
+                    ->orWhere('client_token', 'not like', 'mock_clt_%');
+            })
+            ->where(function (Builder $q) {
+                $q->whereNull('metadata')
+                    ->orWhere('metadata->mock', false)
+                    ->orWhereNull('metadata->mock');
+            })
+            ->where(function (Builder $q) {
+                $q->whereNull('card_holder')
+                    ->orWhere('card_holder', 'not like', '%MOCK%');
+            });
     }
     
     // Helper para formatear expiración

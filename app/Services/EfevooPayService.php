@@ -2,13 +2,14 @@
 
 namespace App\Services;
 
+use App\Contracts\EfevooPayGateway;
 use App\Models\Efevoo3dsSession;
 use App\Models\EfevooToken;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
-class EfevooPayService
+class EfevooPayService implements EfevooPayGateway
 {
     public const ERROR_BANK = 'bank';
 
@@ -669,6 +670,11 @@ class EfevooPayService
             'payload' => $payload,
             'method' => 'getTranSearch',
         ], logRawBody: false);
+    }
+
+    public function getTestCards(): array
+    {
+        return [];
     }
 
     /* ==========================================================

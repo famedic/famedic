@@ -29,7 +29,8 @@ class HomeController extends Controller
 
                 // Obtener métodos de pago únicos (misma lógica que en PaymentMethodController)
                 $tokens = EfevooToken::where('customer_id', $customer->id)
-                    ->where('is_active', true)
+                    ->active()
+                    ->excludeMockInProduction()
                     ->orderByDesc('created_at')
                     ->get();
 

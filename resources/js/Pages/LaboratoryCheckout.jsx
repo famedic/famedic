@@ -25,6 +25,7 @@ import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import Card from "@/Components/Card";
 import { Button } from "@/Components/Catalyst/button";
 import { router } from "@inertiajs/react";
+import EnvironmentBadge from "@/Components/EnvironmentBadge";
 
 export default function LaboratoryCheckout({
     laboratoryAppointment,
@@ -43,6 +44,8 @@ export default function LaboratoryCheckout({
     hasPayPal,
     paypalClientId,
     contacts,
+    paymentUsesMock = false,
+    defaultMockPaymentMethodId = null,
 }) {
     const {
         laboratoryCartItemToDelete,
@@ -73,17 +76,15 @@ export default function LaboratoryCheckout({
         setError,
     } = useForm(initialFormData);
 
-    // DEBUG: Log para ver los datos del formulario
     useEffect(() => {
-        console.log('DEBUG - Form data updated:', {
-            contact: data.contact,
-            address: data.address,
-            payment_method: data.payment_method,
-            payment_method_type: typeof data.payment_method,
-            is_string: typeof data.payment_method === 'string',
-            is_number: typeof data.payment_method === 'number',
-        });
-    }, [data]);
+        if (
+            paymentUsesMock &&
+            defaultMockPaymentMethodId &&
+            !data.payment_method
+        ) {
+            setData("payment_method", String(defaultMockPaymentMethodId));
+        }
+    }, [paymentUsesMock, defaultMockPaymentMethodId, data.payment_method, setData]);
 
     // Transformar datos antes de enviar
     transform((data) => {
@@ -378,9 +379,17 @@ export default function LaboratoryCheckout({
                         />
 
                         <div className="flex flex-col gap-3">
-                            <GradientHeading noDivider>
-                                Completar compra
-                            </GradientHeading>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <GradientHeading noDivider>
+                                    Completar compra
+                                </GradientHeading>
+                                <EnvironmentBadge />
+                            </div>
+                            {paymentUsesMock && (
+                                <Text className="text-sm text-amber-800/90 dark:text-amber-200/90">
+                                    Modo pruebas: las tarjetas precargadas no generan cargos reales en EfevooPay.
+                                </Text>
+                            )}
                             <Subheading>
                                 <span className="text-xl lg:text-2xl">
                                     Vamos a asegurarnos de que todo sea
@@ -537,6 +546,7 @@ export default function LaboratoryCheckout({
                         hasOdessaPay={hasOdessaPay}
                         hasPayPal={hasPayPal}
                         addCardReturnUrl={addCardReturnUrl}
+                        paymentUsesMock={paymentUsesMock}
                     />
                 </>
             </CheckoutLayout>

@@ -117,7 +117,7 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
 
         $customer = auth()->user()->customer;
 
-        foreach ($customer->efevooTokens()->active()->get() as $token) {
+        foreach ($customer->efevooTokens()->active()->excludeMockInProduction()->get() as $token) {
             $allowed[] = (string) $token->id;
         }
 
