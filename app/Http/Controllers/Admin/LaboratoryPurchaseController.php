@@ -33,25 +33,19 @@ class LaboratoryPurchaseController extends Controller
             'dev_assistance',
         ]))->filter()->all();
 
-        // Aplicar filtro de fecha por defecto (último año en ambiente local)
-        if (empty($filters['start_date']) && empty($filters['end_date']) && app()->environment('staging')) {
-            $filters['start_date'] = Carbon::now('America/Monterrey')->subYear()->startOfDay()->toDateString();
+        // Sin fechas en la petición: últimos 3 meses (evita escanear toda la tabla y timeouts/502).
+        // Si el usuario elige fechas en los filtros, se respetan tal cual.
+        if (empty($filters['start_date']) && empty($filters['end_date'])) {
+            $filters['start_date'] = Carbon::now('America/Monterrey')->subMonths(3)->startOfDay()->toDateString();
             $filters['end_date'] = Carbon::now('America/Monterrey')->endOfDay()->toDateString();
         }
 
-        $laboratoryPurchasesQuery = LaboratoryPurchase::with([
-            'transactions',
-            'vendorPayments',
-            'laboratoryPurchaseItems',
-            'customer.user',
-            'invoice',
-            'invoiceRequest',
-            'devAssistanceRequests',
-        ])
-            ->withNotificationStatus()
-            ->filter($filters);
-
-        $laboratoryPurchases = $laboratoryPurchasesQuery->latest()->paginate()->withQueryString();
+        $laboratoryPurchases = LaboratoryPurchase::query()
+            ->filter($filters)
+            ->forAdminIndexList()
+            ->latest('laboratory_purchases.created_at')
+            ->paginate()
+            ->withQueryString();
 
         if (!empty($filters['start_date'])) {
             $filters['formatted_start_date'] = Carbon::parse($filters['start_date'], 'America/Monterrey')->isoFormat('MMM D, Y');

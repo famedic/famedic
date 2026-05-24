@@ -48,6 +48,33 @@ class LaboratoryPurchase extends Model
         ];
     }
 
+    public function scopeForAdminIndexList(Builder $query): Builder
+    {
+        return $query
+            ->withNotificationStatus()
+            ->withCount([
+                'laboratoryPurchaseItems',
+                'vendorPayments',
+                'devAssistanceRequests',
+                'devAssistanceRequests as open_dev_assistance_requests_count' => fn (Builder $q) => $q->whereNull('resolved_at'),
+            ])
+            ->withExists([
+                'invoice',
+                'invoiceRequest',
+            ])
+            ->with([
+                'transactions' => fn ($query) => $query->select(
+                    'transactions.id',
+                    'transactions.payment_method',
+                    'transactions.payment_status',
+                    'transactions.reference_id',
+                    'transactions.gateway_transaction_id',
+                    'transactions.provider_order_id',
+                    'transactions.details',
+                ),
+            ]);
+    }
+
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         $table = $query->getModel()->getTable();

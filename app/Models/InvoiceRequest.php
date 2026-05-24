@@ -28,14 +28,34 @@ class InvoiceRequest extends Model
     protected function formattedTaxRegime(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->tax_regime.' - '.config('taxregimes.regimes.'.$this->tax_regime)['name']
+            get: function () {
+                if (! $this->tax_regime) {
+                    return null;
+                }
+
+                $regime = config('taxregimes.regimes.'.$this->tax_regime);
+
+                return is_array($regime)
+                    ? $this->tax_regime.' - '.($regime['name'] ?? $this->tax_regime)
+                    : (string) $this->tax_regime;
+            }
         );
     }
 
     protected function formattedCfdiUse(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->cfdi_use.' - '.config('taxregimes.uses.'.$this->cfdi_use)
+            get: function () {
+                if (! $this->cfdi_use) {
+                    return null;
+                }
+
+                $use = config('taxregimes.uses.'.$this->cfdi_use);
+
+                return $use
+                    ? $this->cfdi_use.' - '.$use
+                    : (string) $this->cfdi_use;
+            }
         );
     }
 

@@ -113,7 +113,11 @@ class LaboratoryTest extends Model
                 });
             })
             ->when($filters['brand'] ?? null, function ($query, $brand) {
-                $query->ofBrand(LaboratoryBrand::from($brand));
+                $brandEnum = LaboratoryBrand::tryFrom($brand);
+
+                if ($brandEnum) {
+                    $query->ofBrand($brandEnum);
+                }
             })
             ->when($filters['category'] ?? null, function ($query, $categoryId) {
                 $query->where('laboratory_test_category_id', $categoryId);

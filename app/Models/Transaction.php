@@ -78,14 +78,18 @@ class Transaction extends Model
     protected function formattedAmount(): Attribute
     {
         return Attribute::make(
-            get: fn() => formattedCentsPrice($this->transaction_amount_cents)
+            get: fn () => $this->transaction_amount_cents !== null
+                ? formattedCentsPrice($this->transaction_amount_cents)
+                : null
         );
     }
 
     protected function formattedCreatedAt(): Attribute
     {
         return Attribute::make(
-            get: fn() => localizedDate($this->created_at)->isoFormat('D MMM Y h:mm a')
+            get: fn () => $this->created_at
+                ? localizedDate($this->created_at)->isoFormat('D MMM Y h:mm a')
+                : null
         );
     }
 

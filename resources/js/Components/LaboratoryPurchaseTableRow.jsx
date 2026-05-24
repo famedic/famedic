@@ -90,13 +90,15 @@ export default function LaboratoryPurchaseTableRow({
 							<br />
 							{laboratoryPurchase.formatted_created_at}
 							<Text>
-								{
+								{laboratoryPurchase.laboratory_purchase_items_count ??
 									laboratoryPurchase.laboratory_purchase_items
-										.length
-								}{" "}
+										?.length ??
+									0}{" "}
 								estudio
-								{laboratoryPurchase.laboratory_purchase_items
-									.length > 1
+								{(laboratoryPurchase.laboratory_purchase_items_count ??
+									laboratoryPurchase.laboratory_purchase_items
+										?.length ??
+									0) > 1
 									? "s"
 									: ""}
 							</Text>
@@ -172,9 +174,9 @@ export default function LaboratoryPurchaseTableRow({
 				</div>
 				<div className="flex items-center justify-end gap-1">
 					Factura
-					{laboratoryPurchase.invoice ? (
+					{laboratoryPurchase.invoice_exists ? (
 						<CheckIcon className="size-4 fill-famedic-light" />
-					) : laboratoryPurchase.invoice_request ? (
+					) : laboratoryPurchase.invoice_request_exists ? (
 						<ClockIcon className="size-4 fill-famedic-light" />
 					) : (
 						<NoSymbolIcon className="size-4 fill-slate-500" />
@@ -182,25 +184,30 @@ export default function LaboratoryPurchaseTableRow({
 				</div>
 				<div className="flex items-center justify-end gap-1">
 					Pago a proveedor
-					{laboratoryPurchase.vendor_payments.length ? (
+					{(laboratoryPurchase.vendor_payments_count ??
+						laboratoryPurchase.vendor_payments?.length ??
+						0) > 0 ? (
 						<CheckIcon className="size-4 fill-famedic-light" />
 					) : (
 						<NoSymbolIcon className="size-4 fill-slate-500" />
 					)}
 				</div>
-				{laboratoryPurchase.dev_assistance_requests.length > 0 && (
+				{(laboratoryPurchase.dev_assistance_requests_count ??
+					laboratoryPurchase.dev_assistance_requests?.length ??
+					0) > 0 && (
 					<div className="flex items-center justify-end gap-1">
 						Asistencia técnica
-						{laboratoryPurchase.dev_assistance_requests.some(
+						{(laboratoryPurchase.open_dev_assistance_requests_count ??
+							0) > 0 ||
+						laboratoryPurchase.dev_assistance_requests?.some?.(
 							(r) => !r.resolved_at,
 						) ? (
 							<CommandLineIcon className="size-4 animate-pulse fill-famedic-light" />
 						) : (
 							<Badge color="slate" className="text-xs">
-								{
+								{laboratoryPurchase.dev_assistance_requests_count ??
 									laboratoryPurchase.dev_assistance_requests
-										.length
-								}
+										?.length}
 							</Badge>
 						)}
 					</div>
