@@ -55,6 +55,8 @@ class LaboratoryNotification extends Model
         'payload' => 'array',
         'gda_message' => 'array',
         'results_received_at' => 'datetime',
+        'email_sent_at' => 'datetime',
+        'email_attempted_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',

@@ -1,8 +1,12 @@
+import { Fragment, useState } from "react";
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { Badge } from "@/Components/Catalyst/badge";
+import { BadgeButton } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
+import { Divider } from "@/Components/Catalyst/divider";
 import {
 	Table,
 	TableBody,
@@ -20,18 +24,47 @@ function formatDiff(minutes) {
 	return `${h}h ${m}m`;
 }
 
+function formatDateTime(value) {
+	if (!value) return "—";
+	return new Date(value).toLocaleString("es-MX");
+}
+
+function statusBadgeColor(status) {
+	if (status === "error") return "red";
+	if (status === "processed") return "famedic-lime";
+	return "slate";
+}
+
+function pdfLocationBadge(pdf) {
+	if (!pdf) return { color: "slate", label: "—" };
+	switch (pdf.location) {
+		case "db_base64":
+			return { color: "famedic-lime", label: pdf.label };
+		case "gda_provider":
+			return { color: "sky", label: pdf.label };
+		default:
+			return { color: "slate", label: pdf.label };
+	}
+}
+
 export default function LaboratoryNotificationsMonitorShow({
+	orderKey,
 	gdaOrderId,
+	gdaConsecutivo,
 	owner,
 	summary,
-	notifications,
+	sampleNotifications,
+	resultsNotifications,
 }) {
+	const [tabIndex, setTabIndex] = useState(0);
+	const orderLabel = gdaConsecutivo ?? gdaOrderId ?? orderKey;
+
 	return (
-		<AdminLayout title={`Orden ${gdaOrderId} - Notificaciones`}>
+		<AdminLayout title={`Orden ${orderLabel} - Notificaciones`}>
 			<div className="space-y-6">
 				<div className="flex flex-wrap items-center justify-between gap-4">
 					<div className="space-y-1">
-						<Heading>Orden {gdaOrderId}</Heading>
+						<Heading>Orden {orderLabel}</Heading>
 						{owner ? (
 							<Text className="text-sm text-zinc-600 dark:text-zinc-300">
 								<Strong>{owner.full_name}</Strong> · {owner.email}
@@ -40,81 +73,279 @@ export default function LaboratoryNotificationsMonitorShow({
 							<Text className="text-sm text-zinc-500">Propietario: —</Text>
 						)}
 					</div>
-					<Button outline href={route("admin.laboratory-notifications-monitor.index")}>
+					<Button
+						outline
+						href={route("admin.laboratory-notifications-monitor.index")}
+					>
 						Volver
 					</Button>
 				</div>
 
-				<div className="grid gap-4 md:grid-cols-3">
-					<Card title="Toma de muestra" value={summary.sample_at ? new Date(summary.sample_at).toLocaleString("es-MX") : "—"} />
-					<Card title="Resultados" value={summary.results_at ? new Date(summary.results_at).toLocaleString("es-MX") : "—"} />
-					<Card title="Tiempo (muestra → resultados)" value={formatDiff(summary.diff_minutes)} />
-				</div>
-
-				<div className="flex flex-wrap gap-2">
-					<Badge color="sky">Muestra: {summary.sample_notifications}</Badge>
-					<Badge color="emerald">Resultados: {summary.results_notifications}</Badge>
-					<Badge color="slate">Total: {summary.total_notifications}</Badge>
-				</div>
-
 				<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-					<Subheading>Notificaciones recibidas</Subheading>
+					<TabGroup selectedIndex={tabIndex} onChange={setTabIndex}>
+						<TabList className="flex flex-wrap gap-2">
+							<OrderTab label="Resumen" />
+							<OrderTab
+								label={`Toma de muestra (${summary.sample_notifications})`}
+							/>
+							<OrderTab
+								label={`Resultados (${summary.results_notifications})`}
+							/>
+						</TabList>
 
-					<Table className="mt-4">
-						<TableHead>
-							<TableRow>
-								<TableHeader>ID</TableHeader>
-								<TableHeader>Tipo</TableHeader>
-								<TableHeader>Estatus</TableHeader>
-								<TableHeader>GDA</TableHeader>
-								<TableHeader>Creada</TableHeader>
-								<TableHeader>Recibida resultados</TableHeader>
-								<TableHeader>Email</TableHeader>
-								<TableHeader>Error email</TableHeader>
-							</TableRow>
-						</TableHead>
-						<TableBody>
-							{notifications.map((n) => (
-								<TableRow key={n.id}>
-									<TableCell>{n.id}</TableCell>
-									<TableCell>
-										<Text className="text-xs">{n.notification_type}</Text>
-									</TableCell>
-									<TableCell>
-										<Badge color={n.status === "error" ? "red" : n.status === "processed" ? "famedic-lime" : "slate"}>
-											{n.status}
-										</Badge>
-									</TableCell>
-									<TableCell>
-										<Text className="text-xs">{n.gda_status || "—"}</Text>
-									</TableCell>
-									<TableCell>
-										<Text className="text-xs">{n.created_at ? new Date(n.created_at).toLocaleString("es-MX") : "—"}</Text>
-									</TableCell>
-									<TableCell>
-										<Text className="text-xs">{n.results_received_at ? new Date(n.results_received_at).toLocaleString("es-MX") : "—"}</Text>
-									</TableCell>
-									<TableCell>
-										<Text className="text-xs">{n.email_sent_at ? new Date(n.email_sent_at).toLocaleString("es-MX") : "—"}</Text>
-									</TableCell>
-									<TableCell>
-										<Text className="text-xs text-red-600 dark:text-red-400">
-											{n.email_error || "—"}
-										</Text>
-									</TableCell>
-								</TableRow>
-							))}
-						</TableBody>
-					</Table>
+						<Divider className="my-4" />
+
+						<TabPanels>
+							<TabPanel>
+								<OrderSummaryTab
+									summary={summary}
+									gdaConsecutivo={gdaConsecutivo}
+									gdaOrderId={gdaOrderId}
+								/>
+							</TabPanel>
+							<TabPanel>
+								<NotificationTable
+									notifications={sampleNotifications}
+									emptyMessage="Sin notificaciones de toma de muestra."
+									showPdfColumn={false}
+								/>
+							</TabPanel>
+							<TabPanel>
+								<NotificationTable
+									notifications={resultsNotifications}
+									emptyMessage="Sin notificaciones de resultados."
+									showPdfColumn={true}
+								/>
+							</TabPanel>
+						</TabPanels>
+					</TabGroup>
 				</div>
 			</div>
 		</AdminLayout>
 	);
 }
 
+function OrderTab({ label }) {
+	return (
+		<Tab as={Fragment}>
+			{({ selected }) => (
+				<BadgeButton color={selected ? "famedic" : "slate"}>{label}</BadgeButton>
+			)}
+		</Tab>
+	);
+}
+
+function OrderSummaryTab({ summary, gdaConsecutivo, gdaOrderId }) {
+	const pdfBadge = pdfLocationBadge(summary.results_pdf);
+	const emails = summary.emails;
+
+	return (
+		<div className="space-y-6">
+			<div className="flex flex-wrap gap-2 text-xs text-zinc-500">
+				{gdaConsecutivo && <span>Consecutivo: {gdaConsecutivo}</span>}
+				{gdaOrderId && <span>gda_order_id: {gdaOrderId}</span>}
+			</div>
+
+			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				<Card
+					title="Notificaciones toma de muestra"
+					value={String(summary.sample_notifications)}
+				/>
+				<Card
+					title="Notificaciones resultados"
+					value={String(summary.results_notifications)}
+				/>
+				<Card
+					title="Primera toma de muestra"
+					value={formatDateTime(summary.sample_at)}
+				/>
+				<Card
+					title="Primeros resultados"
+					value={formatDateTime(summary.results_at)}
+				/>
+			</div>
+
+			<Card
+				title="Tiempo muestra → resultados"
+				value={formatDiff(summary.diff_minutes)}
+			/>
+
+			<div className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+				<Subheading>Ubicación del PDF de resultados</Subheading>
+				<Badge color={pdfBadge.color}>{pdfBadge.label}</Badge>
+				<div className="flex flex-wrap gap-2">
+					<Badge color={summary.results_pdf?.has_pdf_in_db ? "famedic-lime" : "slate"}>
+						En BD (base64): {summary.results_pdf?.has_pdf_in_db ? "Sí" : "No"}
+					</Badge>
+					<Badge color={summary.results_pdf?.available_at_gda ? "sky" : "slate"}>
+						En proveedor GDA: {summary.results_pdf?.available_at_gda ? "Sí" : "No"}
+					</Badge>
+				</div>
+			</div>
+
+			<div className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+				<Subheading>Emails al paciente</Subheading>
+				<div className="flex flex-wrap gap-2">
+					<Badge color="sky">
+						Muestra enviados: {emails?.sample_sent_count ?? 0}
+					</Badge>
+					<Badge color="emerald">
+						Resultados enviados: {emails?.results_sent_count ?? 0}
+					</Badge>
+				</div>
+
+				{emails?.order_state && (
+					<div className="grid gap-2 text-sm sm:grid-cols-2">
+						<Text>
+							Estado orden · muestra:{" "}
+							<Strong>
+								{formatDateTime(emails.order_state.sample_email_sent_at)}
+							</Strong>
+						</Text>
+						<Text>
+							Estado orden · resultados:{" "}
+							<Strong>
+								{formatDateTime(emails.order_state.results_email_sent_at)}
+							</Strong>
+						</Text>
+					</div>
+				)}
+
+				{emails?.entries?.length > 0 ? (
+					<Table>
+						<TableHead>
+							<TableRow>
+								<TableHeader>Tipo</TableHeader>
+								<TableHeader>Destinatario</TableHeader>
+								<TableHeader>Enviado</TableHeader>
+								<TableHeader>Intento</TableHeader>
+								<TableHeader>Error</TableHeader>
+							</TableRow>
+						</TableHead>
+						<TableBody>
+							{emails.entries.map((entry) => (
+								<TableRow key={entry.notification_id}>
+									<TableCell>
+										<Text className="text-xs">{entry.type_label}</Text>
+									</TableCell>
+									<TableCell>
+										<Text className="text-xs">
+											{entry.recipient || "—"}
+										</Text>
+									</TableCell>
+									<TableCell>
+										<Text className="text-xs">
+											{formatDateTime(entry.sent_at)}
+										</Text>
+									</TableCell>
+									<TableCell>
+										<Text className="text-xs">
+											{formatDateTime(entry.attempted_at)}
+										</Text>
+									</TableCell>
+									<TableCell>
+										<Text className="text-xs text-red-600 dark:text-red-400">
+											{entry.error || "—"}
+										</Text>
+									</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
+				) : (
+					<Text className="text-sm text-zinc-500">
+						No hay registros de envío de email para esta orden.
+					</Text>
+				)}
+			</div>
+		</div>
+	);
+}
+
+function NotificationTable({ notifications, emptyMessage, showPdfColumn }) {
+	if (notifications.length === 0) {
+		return <Text className="text-sm text-zinc-500">{emptyMessage}</Text>;
+	}
+
+	return (
+		<Table>
+			<TableHead>
+				<TableRow>
+					<TableHeader>ID</TableHeader>
+					<TableHeader>Estatus</TableHeader>
+					<TableHeader>GDA</TableHeader>
+					<TableHeader>Creada</TableHeader>
+					<TableHeader>Recibida resultados</TableHeader>
+					<TableHeader>Email enviado</TableHeader>
+					<TableHeader>Destinatario</TableHeader>
+					{showPdfColumn && <TableHeader>PDF</TableHeader>}
+					<TableHeader>Error email</TableHeader>
+				</TableRow>
+			</TableHead>
+			<TableBody>
+				{notifications.map((n) => {
+					const pdf = pdfLocationBadge({
+						location: n.pdf_location,
+						label:
+							n.pdf_location === "db_base64"
+								? "En BD"
+								: n.pdf_location === "gda_provider"
+									? "En GDA"
+									: "Sin PDF",
+					});
+
+					return (
+						<TableRow key={n.id}>
+							<TableCell>{n.id}</TableCell>
+							<TableCell>
+								<Badge color={statusBadgeColor(n.status)}>
+									{n.status}
+								</Badge>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs">{n.gda_status || "—"}</Text>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs">
+									{formatDateTime(n.created_at)}
+								</Text>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs">
+									{formatDateTime(n.results_received_at)}
+								</Text>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs">
+									{formatDateTime(n.email_sent_at)}
+								</Text>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs">
+									{n.email_recipient_email || "—"}
+								</Text>
+							</TableCell>
+							{showPdfColumn && (
+								<TableCell>
+									<Badge color={pdf.color}>{pdf.label}</Badge>
+								</TableCell>
+							)}
+							<TableCell>
+								<Text className="text-xs text-red-600 dark:text-red-400">
+									{n.email_error || "—"}
+								</Text>
+							</TableCell>
+						</TableRow>
+					);
+				})}
+			</TableBody>
+		</Table>
+	);
+}
+
 function Card({ title, value }) {
 	return (
-		<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+		<div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
 			<Text className="text-xs text-zinc-500">{title}</Text>
 			<Text className="mt-1 text-sm">
 				<Strong>{value}</Strong>
@@ -122,4 +353,3 @@ function Card({ title, value }) {
 		</div>
 	);
 }
-

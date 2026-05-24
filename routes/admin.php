@@ -150,6 +150,8 @@ Route::prefix('admin')->middleware([
         // Monitoreo de notificaciones de laboratorio (toma de muestra vs resultados)
         Route::get('laboratory-notifications-monitor', [LaboratoryNotificationMonitorController::class, 'index'])
             ->name('laboratory-notifications-monitor.index');
+        Route::get('laboratory-notifications-monitor/order/{orderKey}/details', [LaboratoryNotificationMonitorController::class, 'orderDetails'])
+            ->name('laboratory-notifications-monitor.order-details');
         Route::get('laboratory-notifications-monitor/{gdaOrderId}', [LaboratoryNotificationMonitorController::class, 'show'])
             ->name('laboratory-notifications-monitor.show');
 
