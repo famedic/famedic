@@ -153,6 +153,18 @@ class LaboratoryAppointment extends Model
                 fn (Builder $query) => $query->where('created_at', '>=', now()->subDays(7)->startOfDay())
             )
             ->when(
+                $dateRange === 'last_15_days',
+                fn (Builder $query) => $query->where('created_at', '>=', now()->subDays(15)->startOfDay())
+            )
+            ->when(
+                $dateRange === 'last_30_days',
+                fn (Builder $query) => $query->where('created_at', '>=', now()->subDays(30)->startOfDay())
+            )
+            ->when(
+                $dateRange === 'last_60_days',
+                fn (Builder $query) => $query->where('created_at', '>=', now()->subDays(60)->startOfDay())
+            )
+            ->when(
                 $dateRange === 'last_6_months',
                 fn (Builder $query) => $query->where('created_at', '>=', now()->subMonths(6)->startOfDay())
             )

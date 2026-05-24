@@ -6,6 +6,7 @@ use App\Actions\Admin\LaboratoryAppointments\BuildLaboratoryAppointmentDashboard
 use App\Actions\Admin\LaboratoryAppointments\UpdateLaboratoryAppointmentAction;
 use App\Enums\Gender;
 use App\Enums\LaboratoryAppointmentInteractionType;
+use App\Enums\LaboratoryBrand;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LaboratoryAppointments\DestroyLaboratoryAppointmentRequest;
 use App\Http\Requests\Admin\LaboratoryAppointments\IndexLaboratoryAppointmentRequest;
@@ -29,18 +30,27 @@ class LaboratoryAppointmentController extends Controller
     ) {
         $view = $request->get('view', 'list');
 
-        $filters = collect($request->only([
+        $filterKeys = [
             'search',
             'completed',
             'start_date',
             'end_date',
-        ]))->filter()->all();
+            'date_range',
+            'brand',
+            'phone_call_intent',
+            'callback_info',
+        ];
 
+        $filters = collect($request->only($filterKeys))->filter()->all();
         $filters['view'] = $view;
 
         $queryFilters = collect($request->only([
             'search',
             'completed',
+            'date_range',
+            'brand',
+            'phone_call_intent',
+            'callback_info',
         ]))->filter()->all();
 
         $dashboard = null;
@@ -77,6 +87,11 @@ class LaboratoryAppointmentController extends Controller
             'laboratoryAppointments' => $laboratoryAppointments,
             'filters' => $filters,
             'dashboard' => $dashboard,
+            'brands' => collect(LaboratoryBrand::cases())
+                ->map(fn (LaboratoryBrand $brand) => [
+                    'value' => $brand->value,
+                    'label' => $brand->label(),
+                ])->values(),
         ]);
     }
 
