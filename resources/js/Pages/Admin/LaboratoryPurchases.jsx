@@ -30,8 +30,8 @@ import FilterCountBadge from "@/Components/Admin/FilterCountBadge";
 import ListboxFilter from "@/Components/Filters/ListboxFilter";
 import DateFilter from "@/Components/Filters/DateFilter";
 import UpdateButton from "@/Components/Admin/UpdateButton";
-import PurchasesChart from "@/Components/PurchasesChart";
 import PaginatedTable from "@/Components/Admin/PaginatedTable";
+import { buildLaboratoryPurchaseQueryParams } from "@/Pages/Admin/laboratoryPurchaseQueryParams";
 import ResultsAndExport from "@/Components/ResultsAndExport";
 import { Heading } from "@/Components/Catalyst/heading";
 import SearchInput from "@/Components/Admin/SearchInput";
@@ -45,7 +45,6 @@ import EfevooPayBadge from "@/Components/EfevooPayBadge";
 
 export default function LaboratoryPurchases({
 	laboratoryPurchases,
-	chart,
 	filters,
 	brands,
 	canExport,
@@ -64,8 +63,12 @@ export default function LaboratoryPurchases({
 		dev_assistance: filters.dev_assistance || "",
 	});
 
-	const [showChart, setShowChart] = useState(false);
 	const [showFilters, setShowFilters] = useState(false);
+
+	const chartHref = route(
+		"admin.laboratory-purchases.chart",
+		buildLaboratoryPurchaseQueryParams(data),
+	);
 
 	const updateResults = (e) => {
 		e.preventDefault();
@@ -270,11 +273,7 @@ export default function LaboratoryPurchases({
 							)}
 							Filtros
 						</Button>
-						<Button
-							outline
-							className="w-full"
-							onClick={() => setShowChart(!showChart)}
-						>
+						<Button outline className="w-full" href={chartHref}>
 							<PresentationChartLineIcon />
 							Gráfica
 						</Button>
@@ -296,8 +295,6 @@ export default function LaboratoryPurchases({
 					</div>
 				)}
 			</form>
-
-			{showChart && <PurchasesChart chart={chart} />}
 
 			<LaboratoryPurchasesList
 				laboratoryPurchases={laboratoryPurchases}

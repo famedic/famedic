@@ -30,8 +30,8 @@ class BuildDailyChartDataAction
             $endDate = $endDate->setTimezone('America/Monterrey')->endOfDay();
         }
 
-        if (!$this->isValidDateRange($startDate, $endDate)) {
-            return [];
+        if (! $this->isValidDateRange($startDate, $endDate)) {
+            return $this->emptyChart();
         }
 
         $hasADateFromPreviousYears = $startDate->year !== $endDate->year;
@@ -73,5 +73,14 @@ class BuildDailyChartDataAction
     protected function generateDateRange(Carbon $startDate, Carbon $endDate): Collection
     {
         return collect($startDate->toPeriod($endDate, '1 day'));
+    }
+
+    protected function emptyChart(): array
+    {
+        return [
+            'dataPoints' => [],
+            'averagePerDay' => formattedCentsPrice(0),
+            'total' => formattedCentsPrice(0),
+        ];
     }
 }

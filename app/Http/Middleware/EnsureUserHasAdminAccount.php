@@ -52,6 +52,7 @@ class EnsureUserHasAdminAccount
                             'label' => 'Pedidos',
                             'url' => route('admin.laboratory-purchases.index'),
                             'current' => Route::currentRouteName() === 'admin.laboratory-purchases.index' ||
+                                Route::currentRouteName() === 'admin.laboratory-purchases.chart' ||
                                 Route::currentRouteName() === 'admin.laboratory-purchases.show',
                         ] : null,
                         $request->user()->administrator->hasPermissionTo('laboratory-tests.manage') ? [

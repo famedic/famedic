@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\LaboratoryAppointmentController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
 use App\Http\Controllers\Admin\LaboratoryNotificationController;
 use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
+use App\Http\Controllers\Admin\LaboratoryPurchaseChartController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\DevAssistanceRequestController as LaboratoryDevAssistanceRequestController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\InvoiceController;
@@ -82,6 +83,8 @@ Route::prefix('admin')->middleware([
             'update' => 'laboratory-purchases.vendor-payments.update',
             'destroy' => 'laboratory-purchases.vendor-payments.destroy',
         ]);
+        Route::get('laboratory-purchases/chart', [LaboratoryPurchaseChartController::class, 'index'])
+            ->name('laboratory-purchases.chart');
         Route::resource('laboratory-purchases', LaboratoryPurchaseController::class)->only(['index', 'show', 'destroy']);
         Route::post(
             'laboratory-purchases/{laboratory_purchase}/resend-confirmation-email',

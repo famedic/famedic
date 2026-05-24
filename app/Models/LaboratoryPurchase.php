@@ -50,6 +50,8 @@ class LaboratoryPurchase extends Model
 
     public function scopeFilter(Builder $query, array $filters): Builder
     {
+        $table = $query->getModel()->getTable();
+
         // Apply filtering based on the deleted flag:
         if (! isset($filters['deleted']) || $filters['deleted'] === '') {
             // "Todos": include both active and trashed records.
@@ -61,12 +63,12 @@ class LaboratoryPurchase extends Model
         // "false": leave query as is (defaults to active only).
 
         return $query
-            ->when($filters['search'] ?? null, function ($query, $search) {
-                $query->where(function ($query) use ($search) {
-                    $query->orWhere('gda_order_id', 'LIKE', "%$search%")
-                        ->orWhere('name', 'LIKE', "%$search%")
-                        ->orWhere('paternal_lastname', 'LIKE', "%$search%")
-                        ->orWhere('maternal_lastname', 'LIKE', "%$search%");
+            ->when($filters['search'] ?? null, function ($query, $search) use ($table) {
+                $query->where(function ($query) use ($search, $table) {
+                    $query->orWhere("{$table}.gda_order_id", 'LIKE', "%$search%")
+                        ->orWhere("{$table}.name", 'LIKE', "%$search%")
+                        ->orWhere("{$table}.paternal_lastname", 'LIKE', "%$search%")
+                        ->orWhere("{$table}.maternal_lastname", 'LIKE', "%$search%");
 
                     $query->orWhereHas('customer.user', function ($query) use ($search) {
                         $query->where('name', 'LIKE', "%$search%")
@@ -85,10 +87,10 @@ class LaboratoryPurchase extends Model
                     });
                 });
             })
-            ->when(isset($filters['patient']) && trim((string) $filters['patient']) !== '', function ($query) use ($filters) {
+            ->when(isset($filters['patient']) && trim((string) $filters['patient']) !== '', function ($query) use ($filters, $table) {
                 $patient = trim((string) $filters['patient']);
                 $query->whereRaw(
-                    "TRIM(CONCAT(COALESCE(name,''),' ',COALESCE(paternal_lastname,''),' ',COALESCE(maternal_lastname,''))) LIKE ?",
+                    "TRIM(CONCAT(COALESCE({$table}.name,''),' ',COALESCE({$table}.paternal_lastname,''),' ',COALESCE({$table}.maternal_lastname,''))) LIKE ?",
                     ['%'.$patient.'%']
                 );
             })
@@ -102,14 +104,14 @@ class LaboratoryPurchase extends Model
                     $query->where('payment_status', $filters['payment_status']);
                 });
             })
-            ->when(isset($filters['brand']) && $filters['brand'] !== '', function ($query) use ($filters) {
-                $query->where('brand', $filters['brand']);
+            ->when(isset($filters['brand']) && $filters['brand'] !== '', function ($query) use ($filters, $table) {
+                $query->where("{$table}.brand", $filters['brand']);
             })
-            ->when($filters['start_date'] ?? null, function ($query, $startDate) {
-                $query->where('created_at', '>=', Carbon::parse($startDate, 'America/Monterrey')->setTimezone('UTC'));
+            ->when($filters['start_date'] ?? null, function ($query, $startDate) use ($table) {
+                $query->where("{$table}.created_at", '>=', Carbon::parse($startDate, 'America/Monterrey')->setTimezone('UTC'));
             })
-            ->when($filters['end_date'] ?? null, function ($query, $endDate) {
-                $query->where('created_at', '<=', Carbon::parse($endDate, 'America/Monterrey')->endOfDay()->setTimezone('UTC'));
+            ->when($filters['end_date'] ?? null, function ($query, $endDate) use ($table) {
+                $query->where("{$table}.created_at", '<=', Carbon::parse($endDate, 'America/Monterrey')->endOfDay()->setTimezone('UTC'));
             })
             ->when(isset($filters['invoice_requested']) && $filters['invoice_requested'] !== '', function ($query) use ($filters) {
                 if ($filters['invoice_requested'] === 'true') {
@@ -125,11 +127,11 @@ class LaboratoryPurchase extends Model
                     $query->whereDoesntHave('invoice');
                 }
             })
-            ->when(isset($filters['results_uploaded']) && $filters['results_uploaded'] !== '', function ($query) use ($filters) {
+            ->when(isset($filters['results_uploaded']) && $filters['results_uploaded'] !== '', function ($query) use ($filters, $table) {
                 if ($filters['results_uploaded'] === 'true') {
-                    $query->whereNotNull('results');
+                    $query->whereNotNull("{$table}.results");
                 } elseif ($filters['results_uploaded'] === 'false') {
-                    $query->whereNull('results');
+                    $query->whereNull("{$table}.results");
                 }
             })
             ->when(isset($filters['dev_assistance']) && $filters['dev_assistance'] !== '', function ($query) use ($filters) {
