@@ -1,7 +1,7 @@
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
-import { useForm } from "@inertiajs/react";
+import { router, useForm } from "@inertiajs/react";
 import { useMemo, useState } from "react";
 import {
 	Table,
@@ -29,6 +29,7 @@ import LaboratoryPurchaseTableRow from "@/Components/LaboratoryPurchaseTableRow"
 import FilterCountBadge from "@/Components/Admin/FilterCountBadge";
 import ListboxFilter from "@/Components/Filters/ListboxFilter";
 import DateFilter from "@/Components/Filters/DateFilter";
+import ReloadListButton from "@/Components/Admin/ReloadListButton";
 import UpdateButton from "@/Components/Admin/UpdateButton";
 import PaginatedTable from "@/Components/Admin/PaginatedTable";
 import { buildLaboratoryPurchaseQueryParams } from "@/Pages/Admin/laboratoryPurchaseQueryParams";
@@ -64,6 +65,25 @@ export default function LaboratoryPurchases({
 	});
 
 	const [showFilters, setShowFilters] = useState(false);
+	const [reloading, setReloading] = useState(false);
+
+	const appliedFilterParams = useMemo(
+		() =>
+			buildLaboratoryPurchaseQueryParams({
+				search: filters.search || "",
+				deleted: filters.deleted || "",
+				start_date: filters.start_date || "",
+				end_date: filters.end_date || "",
+				invoice_requested: filters.invoice_requested || "",
+				results_uploaded: filters.results_uploaded || "",
+				invoice_uploaded: filters.invoice_uploaded || "",
+				payment_method: filters.payment_method || "",
+				payment_status: filters.payment_status || "",
+				brand: filters.brand || "",
+				dev_assistance: filters.dev_assistance || "",
+			}),
+		[filters],
+	);
 
 	const chartHref = route(
 		"admin.laboratory-purchases.chart",
@@ -72,11 +92,28 @@ export default function LaboratoryPurchases({
 
 	const updateResults = (e) => {
 		e.preventDefault();
-		if (!processing && showUpdateButton) {
+		if (!processing && !reloading && showUpdateButton) {
 			get(route("admin.laboratory-purchases.index"), {
 				preserveState: true,
 			});
 		}
+	};
+
+	const reloadList = () => {
+		if (processing || reloading) {
+			return;
+		}
+
+		router.get(
+			route("admin.laboratory-purchases.index"),
+			appliedFilterParams,
+			{
+				preserveState: true,
+				replace: true,
+				onStart: () => setReloading(true),
+				onFinish: () => setReloading(false),
+			},
+		);
 	};
 
 	const showUpdateButton = useMemo(
@@ -260,7 +297,12 @@ export default function LaboratoryPurchases({
 						value={data.search}
 						onChange={(value) => setData("search", value)}
 					/>
-					<div className="flex items-center justify-end gap-2">
+					<div className="flex flex-wrap items-center justify-end gap-2">
+						<ReloadListButton
+							type="button"
+							processing={reloading}
+							onClick={reloadList}
+						/>
 						<Button
 							outline
 							className="w-full"
@@ -291,10 +333,19 @@ export default function LaboratoryPurchases({
 
 				{showUpdateButton && (
 					<div className="flex justify-center">
-						<UpdateButton type="submit" processing={processing} />
+						<UpdateButton
+							type="submit"
+							processing={processing || reloading}
+						/>
 					</div>
 				)}
 			</form>
+
+			<p className="-mt-4 text-sm text-zinc-500">
+				Usa &quot;Recargar lista&quot; para actualizar los datos. Evita
+				recargar el navegador (F5) mientras investigamos un problema
+				temporal.
+			</p>
 
 			<LaboratoryPurchasesList
 				laboratoryPurchases={laboratoryPurchases}
