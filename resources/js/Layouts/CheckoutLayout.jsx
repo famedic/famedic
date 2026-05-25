@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/Components/Catalyst/button";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Text, Strong, Anchor } from "@/Components/Catalyst/text";
@@ -13,6 +13,7 @@ import {
 import { Subheading } from "@/Components/Catalyst/heading";
 import FocusedLayout from "@/Layouts/FocusedLayout";
 import CheckoutWhatsAppHelp from "@/Components/Checkout/CheckoutWhatsAppHelp";
+import CheckoutWizardFloatingFooter from "@/Components/Checkout/CheckoutWizardFloatingFooter";
 import { Divider } from "@/Components/Catalyst/divider";
 import { XMarkIcon, InformationCircleIcon } from "@heroicons/react/20/solid";
 import FAQs from "@/Components/FAQs";
@@ -47,9 +48,14 @@ export default function CheckoutLayout({
   footerActions = null,
   couponSection = null,
   hideDefaultSubmit = false,
+  /** Ancla para scroll al cambiar de paso del wizard */
+  stepContentRef = null,
+  /** Footer Continuar/Volver pegado al fondo en pasos con listas largas */
+  floatingWizardFooter = false,
 }) {
   const [isOnlineProcessing, setIsOnlineProcessing] = useState(false);
   const [isBranchProcessing, setIsBranchProcessing] = useState(false);
+  const formColumnRef = useRef(null);
 
   const onlineDisabled = onlinePaymentDisabled !== undefined ? onlinePaymentDisabled : paymentDisabled;
   const branchDisabled = branchPaymentDisabled !== undefined ? branchPaymentDisabled : paymentDisabled;
@@ -74,6 +80,7 @@ export default function CheckoutLayout({
 
       <div className="mx-auto mt-8 grid grid-cols-1 gap-8 lg:max-w-none lg:grid-cols-5">
         <form
+          ref={formColumnRef}
           onSubmit={async (e) => {
             e.preventDefault();
             const isBranch = e.nativeEvent.submitter?.name === "branch_payment";
@@ -92,10 +99,30 @@ export default function CheckoutLayout({
           }}
           className="flex w-full flex-col gap-6 lg:col-span-3"
         >
-          {stepper}
-          {children}
+          <div
+            ref={stepContentRef}
+            id="checkout-wizard-step"
+            className={clsx(
+              "scroll-mt-20 space-y-6",
+              floatingWizardFooter && "pb-28",
+            )}
+          >
+            {stepper}
+            {children}
+          </div>
 
-          {footerActions}
+          {floatingWizardFooter && (
+            <div className="h-20 shrink-0" aria-hidden="true" />
+          )}
+
+          {footerActions &&
+            (floatingWizardFooter ? (
+              <CheckoutWizardFloatingFooter anchorRef={formColumnRef}>
+                {footerActions}
+              </CheckoutWizardFloatingFooter>
+            ) : (
+              footerActions
+            ))}
 
           {!hideDefaultSubmit && (
             <>

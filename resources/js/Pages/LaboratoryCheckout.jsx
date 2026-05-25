@@ -16,7 +16,7 @@ import { Divider } from "@/Components/Catalyst/divider";
 import CheckoutLayout from "@/Layouts/CheckoutLayout";
 import { useForm } from "@inertiajs/react";
 import { GradientHeading } from "@/Components/Catalyst/heading";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import ContactStep from "@/Components/Checkout/ContactStep";
 import AddressStep from "@/Components/Checkout/AddressStep";
 import PaymentMethodStep from "@/Components/Checkout/PaymentMethodStep";
@@ -381,8 +381,14 @@ export default function LaboratoryCheckout({
     }, [data]);
 
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
+    const stepContentRef = useRef(null);
+    const skipStepScrollRef = useRef(true);
 
     const currentStep = WIZARD_STEPS[currentStepIndex];
+
+    const floatingWizardFooter = ["patient", "address", "payment"].includes(
+        currentStep.id,
+    );
 
     const goToStep = (stepId) => {
         const index = WIZARD_STEPS.findIndex((s) => s.id === stepId);
@@ -425,6 +431,29 @@ export default function LaboratoryCheckout({
             setCurrentStepIndex((prev) => prev - 1);
         }
     };
+
+    useEffect(() => {
+        if (skipStepScrollRef.current) {
+            skipStepScrollRef.current = false;
+            return;
+        }
+
+        const el = stepContentRef.current;
+        if (!el) return;
+
+        const scrollToStep = () => {
+            const prefersReducedMotion = window.matchMedia(
+                "(prefers-reduced-motion: reduce)",
+            ).matches;
+
+            el.scrollIntoView({
+                behavior: prefersReducedMotion ? "auto" : "smooth",
+                block: "start",
+            });
+        };
+
+        requestAnimationFrame(() => requestAnimationFrame(scrollToStep));
+    }, [currentStepIndex]);
 
     const couponSection = balanceCouponsCents > 0 && (
         <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/50 p-4 dark:border-emerald-800/40 dark:bg-emerald-950/20">
@@ -740,6 +769,8 @@ export default function LaboratoryCheckout({
                 footerActions={footerWithLegal}
                 couponSection={couponSection}
                 hideDefaultSubmit
+                stepContentRef={stepContentRef}
+                floatingWizardFooter={floatingWizardFooter}
             >
                 {renderStepContent()}
             </CheckoutLayout>
