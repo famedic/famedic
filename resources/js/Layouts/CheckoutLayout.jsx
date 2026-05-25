@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/Components/Catalyst/button";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Text, Strong, Anchor } from "@/Components/Catalyst/text";
@@ -55,8 +55,6 @@ export default function CheckoutLayout({
 }) {
   const [isOnlineProcessing, setIsOnlineProcessing] = useState(false);
   const [isBranchProcessing, setIsBranchProcessing] = useState(false);
-  const formColumnRef = useRef(null);
-
   const onlineDisabled = onlinePaymentDisabled !== undefined ? onlinePaymentDisabled : paymentDisabled;
   const branchDisabled = branchPaymentDisabled !== undefined ? branchPaymentDisabled : paymentDisabled;
 
@@ -80,7 +78,6 @@ export default function CheckoutLayout({
 
       <div className="mx-auto mt-8 grid grid-cols-1 gap-8 lg:max-w-none lg:grid-cols-5">
         <form
-          ref={formColumnRef}
           onSubmit={async (e) => {
             e.preventDefault();
             const isBranch = e.nativeEvent.submitter?.name === "branch_payment";
@@ -117,7 +114,7 @@ export default function CheckoutLayout({
 
           {footerActions &&
             (floatingWizardFooter ? (
-              <CheckoutWizardFloatingFooter anchorRef={formColumnRef}>
+              <CheckoutWizardFloatingFooter>
                 {footerActions}
               </CheckoutWizardFloatingFooter>
             ) : (
