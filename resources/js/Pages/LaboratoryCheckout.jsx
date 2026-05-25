@@ -20,12 +20,25 @@ import { useState, useMemo, useEffect } from "react";
 import ContactStep from "@/Components/Checkout/ContactStep";
 import AddressStep from "@/Components/Checkout/AddressStep";
 import PaymentMethodStep from "@/Components/Checkout/PaymentMethodStep";
+import CheckoutStepper from "@/Components/Checkout/CheckoutStepper";
+import ConfirmationStep from "@/Components/Checkout/ConfirmationStep";
+import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
 import LaboratoryPayPalButton from "@/Components/Checkout/LaboratoryPayPalButton";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import Card from "@/Components/Card";
 import { Button } from "@/Components/Catalyst/button";
 import { router } from "@inertiajs/react";
 import EnvironmentBadge from "@/Components/EnvironmentBadge";
+import { ChevronLeftIcon } from "@heroicons/react/16/solid";
+import { ArrowPathIcon } from "@heroicons/react/16/solid";
+import clsx from "clsx";
+
+const WIZARD_STEPS = [
+    { id: "patient", number: 1, label: "Paciente" },
+    { id: "address", number: 2, label: "Dirección" },
+    { id: "payment", number: 3, label: "Pago" },
+    { id: "confirmation", number: 4, label: "Confirmación" },
+];
 
 export default function LaboratoryCheckout({
     laboratoryAppointment,
@@ -367,6 +380,286 @@ export default function LaboratoryCheckout({
         });
     }, [data]);
 
+    const [currentStepIndex, setCurrentStepIndex] = useState(0);
+
+    const currentStep = WIZARD_STEPS[currentStepIndex];
+
+    const goToStep = (stepId) => {
+        const index = WIZARD_STEPS.findIndex((s) => s.id === stepId);
+        if (index >= 0) setCurrentStepIndex(index);
+    };
+
+    const canProceedFromStep = useMemo(() => {
+        switch (currentStep.id) {
+            case "patient":
+                return contactStepIsComplete;
+            case "address":
+                return addressStepIsComplete;
+            case "payment":
+                return paymentMethodStepIsComplete;
+            case "confirmation":
+                return (
+                    contactStepIsComplete &&
+                    addressStepIsComplete &&
+                    paymentMethodStepIsComplete
+                );
+            default:
+                return false;
+        }
+    }, [
+        currentStep.id,
+        contactStepIsComplete,
+        addressStepIsComplete,
+        paymentMethodStepIsComplete,
+    ]);
+
+    const handleNextStep = () => {
+        if (!canProceedFromStep) return;
+        if (currentStepIndex < WIZARD_STEPS.length - 1) {
+            setCurrentStepIndex((prev) => prev + 1);
+        }
+    };
+
+    const handlePrevStep = () => {
+        if (currentStepIndex > 0) {
+            setCurrentStepIndex((prev) => prev - 1);
+        }
+    };
+
+    const couponSection = balanceCouponsCents > 0 && (
+        <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/50 p-4 dark:border-emerald-800/40 dark:bg-emerald-950/20">
+            <Text className="text-sm font-medium">Saldo a favor</Text>
+            <Text className="mt-1 text-sm">
+                Tienes <Strong>{formattedBalanceCoupons}</Strong> disponibles.
+            </Text>
+            {noCouponApplicable && (
+                <Text className="mt-2 text-xs text-amber-800 dark:text-amber-200">
+                    Tu saldo es mayor al total de la compra, no puede aplicarse
+                    en esta compra.
+                </Text>
+            )}
+            {errors.coupon_id && (
+                <ErrorMessage className="mt-2">{errors.coupon_id}</ErrorMessage>
+            )}
+            <div className="mt-3">
+                {!data.coupon_id ? (
+                    <Button
+                        type="button"
+                        color="emerald"
+                        className="w-full text-sm"
+                        disabled={noCouponApplicable}
+                        onClick={applyBalanceCoupon}
+                    >
+                        Usar saldo completo
+                    </Button>
+                ) : (
+                    <Button
+                        type="button"
+                        plain
+                        className="w-full text-sm"
+                        onClick={clearBalanceCoupon}
+                    >
+                        Quitar cupón
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
+
+    const footerActions = (
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {currentStepIndex > 0 ? (
+                <Button type="button" plain onClick={handlePrevStep}>
+                    <ChevronLeftIcon className="size-4" />
+                    Volver
+                </Button>
+            ) : (
+                <div />
+            )}
+
+            {currentStep.id !== "confirmation" ? (
+                <Button
+                    type="button"
+                    className="w-full sm:ml-auto sm:w-auto"
+                    disabled={!canProceedFromStep}
+                    onClick={handleNextStep}
+                >
+                    Continuar
+                </Button>
+            ) : (
+                <div
+                    className={clsx(
+                        "w-full sm:ml-auto sm:max-w-md",
+                        onlinePaymentDisabled &&
+                            "pointer-events-none opacity-50",
+                    )}
+                >
+                    {hasPayPal &&
+                    paypalClientId &&
+                    data.payment_method === "paypal" ? (
+                        <LaboratoryPayPalButton
+                            paypalClientId={paypalClientId}
+                            laboratoryBrand={laboratoryBrand.value}
+                            patientId={data.contact}
+                            addressId={data.address}
+                            totalCents={total}
+                            couponId={data.coupon_id}
+                            disabled={onlinePaymentDisabled}
+                        />
+                    ) : (
+                        <Button
+                            disabled={
+                                onlinePaymentDisabled || checkoutProcessing
+                            }
+                            type="submit"
+                            name="online_payment"
+                            className="w-full !py-3"
+                        >
+                            Confirmar compra{" "}
+                            {summaryDetails[summaryDetails.length - 1]?.value}
+                            {checkoutProcessing && (
+                                <ArrowPathIcon className="ml-2 size-5 animate-spin" />
+                            )}
+                        </Button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+
+    const confirmationLegalText =
+        currentStep.id === "confirmation" ? (
+            <Text className="mt-4 text-sm text-zinc-600 dark:text-slate-400">
+                Al confirmar tu compra, aceptas los{" "}
+                <a
+                    href="/terminos-y-condiciones"
+                    target="_blank"
+                    className="underline"
+                >
+                    Términos y condiciones
+                </a>{" "}
+                y la{" "}
+                <a
+                    href="/politica-de-privacidad"
+                    target="_blank"
+                    className="underline"
+                >
+                    Política de privacidad
+                </a>
+                .
+            </Text>
+        ) : null;
+
+    const footerWithLegal = (
+        <>
+            {footerActions}
+            {confirmationLegalText}
+        </>
+    );
+
+    const renderStepContent = () => {
+        switch (currentStep.id) {
+            case "patient":
+                if (laboratoryAppointment) {
+                    return (
+                        <CheckoutWizardStep
+                            title="Información del paciente"
+                            description="Tu cita ya incluye la información del paciente."
+                        >
+                            <LaboratoryAppointmentInfo
+                                data={data}
+                                setData={setData}
+                                laboratoryAppointment={laboratoryAppointment}
+                                errors={errors}
+                                variant="wizard"
+                            />
+                        </CheckoutWizardStep>
+                    );
+                }
+                return (
+                    <ContactStep
+                        variant="wizard"
+                        data={data}
+                        setData={setData}
+                        errors={errors}
+                        error={errors.contact}
+                        clearErrors={clearErrors}
+                        contacts={contacts}
+                        toggleContactForm={toggleContactForm}
+                        showContactForm={showContactForm}
+                    />
+                );
+            case "address":
+                return (
+                    <AddressStep
+                        variant="wizard"
+                        data={data}
+                        setData={setData}
+                        errors={errors}
+                        error={errors.address}
+                        clearErrors={clearErrors}
+                        addresses={addresses}
+                        toggleAddressForm={toggleAddressForm}
+                        showAddressForm={showAddressForm}
+                    />
+                );
+            case "payment":
+                if (amountAfterCoupon === 0 && data.coupon_id) {
+                    return (
+                        <CheckoutWizardStep
+                            title="Método de pago"
+                            description="Tu saldo a favor cubre el total de la compra."
+                        >
+                            <div className="flex items-center gap-3 rounded-lg bg-emerald-50 p-4 dark:bg-emerald-950/30">
+                                <CheckCircleIcon className="size-6 fill-green-600 dark:fill-famedic-lime" />
+                                <div>
+                                    <Text className="font-medium">
+                                        Pago con saldo a favor
+                                    </Text>
+                                    <Text className="text-sm text-zinc-600 dark:text-slate-400">
+                                        No necesitas seleccionar otro método de
+                                        pago.
+                                    </Text>
+                                </div>
+                            </div>
+                        </CheckoutWizardStep>
+                    );
+                }
+                return (
+                    <PaymentMethodStep
+                        variant="wizard"
+                        data={data}
+                        setData={setData}
+                        errors={errors}
+                        error={errors.payment_method}
+                        clearErrors={clearErrors}
+                        paymentMethods={paymentMethods}
+                        hasOdessaPay={hasOdessaPay}
+                        hasPayPal={hasPayPal}
+                        addCardReturnUrl={addCardReturnUrl}
+                        paymentUsesMock={paymentUsesMock}
+                        disabled={amountAfterCoupon === 0 && !!data.coupon_id}
+                    />
+                );
+            case "confirmation":
+                return (
+                    <ConfirmationStep
+                        data={data}
+                        contacts={contacts}
+                        addresses={addresses}
+                        paymentMethods={paymentMethods}
+                        hasOdessaPay={hasOdessaPay}
+                        hasPayPal={hasPayPal}
+                        selectedCoupon={selectedCoupon}
+                        laboratoryAppointment={laboratoryAppointment}
+                        onEditStep={goToStep}
+                    />
+                );
+            default:
+                return null;
+        }
+    };
+
     return (
         <>
             <CheckoutLayout
@@ -391,9 +684,8 @@ export default function LaboratoryCheckout({
                                 </Text>
                             )}
                             <Subheading>
-                                <span className="text-xl lg:text-2xl">
-                                    Vamos a asegurarnos de que todo sea
-                                    correcto.{" "}
+                                <span className="text-base lg:text-lg">
+                                    Completa tu compra en unos sencillos pasos.
                                 </span>
                             </Subheading>
                         </div>
@@ -439,116 +731,17 @@ export default function LaboratoryCheckout({
                 submit={submit}
                 showBranchPayment={true}
                 data={data}
-                alternateOnlinePayment={
-                    hasPayPal &&
-                    paypalClientId &&
-                    data.payment_method === "paypal" ? (
-                        <LaboratoryPayPalButton
-                            paypalClientId={paypalClientId}
-                            laboratoryBrand={laboratoryBrand.value}
-                            patientId={data.contact}
-                            addressId={data.address}
-                            totalCents={total}
-                            couponId={data.coupon_id}
-                            disabled={onlinePaymentDisabled}
-                        />
-                    ) : null
+                stepper={
+                    <CheckoutStepper
+                        steps={WIZARD_STEPS}
+                        currentStep={currentStepIndex}
+                    />
                 }
+                footerActions={footerWithLegal}
+                couponSection={couponSection}
+                hideDefaultSubmit
             >
-                <>
-                    {laboratoryAppointment ? (
-                        <LaboratoryAppointmentInfo
-                            data={data}
-                            setData={setData}
-                            laboratoryAppointment={laboratoryAppointment}
-                            errors={errors}
-                        />
-                    ) : (
-                        <ContactStep
-                            data={data}
-                            setData={setData}
-                            errors={errors}
-                            error={errors.contact}
-                            clearErrors={clearErrors}
-                            contacts={contacts}
-                            toggleContactForm={toggleContactForm}
-                            showContactForm={showContactForm}
-                        />
-                    )}
-                    <AddressStep
-                        disabled={!contactStepIsComplete}
-                        data={data}
-                        setData={setData}
-                        errors={errors}
-                        error={errors.address}
-                        clearErrors={clearErrors}
-                        addresses={addresses}
-                        toggleAddressForm={toggleAddressForm}
-                        showAddressForm={showAddressForm}
-                    />
-                    {balanceCouponsCents > 0 && (
-                        <Card className="bg-emerald-50/80 px-4 py-6 sm:p-6 dark:bg-emerald-950/30">
-                            <Subheading>Saldo a favor</Subheading>
-                            <Text className="mt-2">
-                                Tienes{" "}
-                                <Strong>{formattedBalanceCoupons}</Strong>{" "}
-                                disponibles.
-                            </Text>
-                            {noCouponApplicable && (
-                                <Text className="mt-2 text-amber-800 dark:text-amber-200">
-                                    Tu saldo es mayor al total de la compra, no
-                                    puede aplicarse en esta compra.
-                                </Text>
-                            )}
-                            {errors.coupon_id && (
-                                <ErrorMessage className="mt-2">
-                                    {errors.coupon_id}
-                                </ErrorMessage>
-                            )}
-                            <div className="mt-4 flex flex-wrap gap-3">
-                                {!data.coupon_id ? (
-                                    <Button
-                                        type="button"
-                                        color="emerald"
-                                        disabled={
-                                            noCouponApplicable ||
-                                            !addressStepIsComplete ||
-                                            !contactStepIsComplete
-                                        }
-                                        onClick={applyBalanceCoupon}
-                                    >
-                                        Usar saldo completo
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        type="button"
-                                        plain
-                                        onClick={clearBalanceCoupon}
-                                    >
-                                        Quitar cupón
-                                    </Button>
-                                )}
-                            </div>
-                        </Card>
-                    )}
-                    <PaymentMethodStep
-                        disabled={
-                            !addressStepIsComplete ||
-                            !contactStepIsComplete ||
-                            (amountAfterCoupon === 0 && !!data.coupon_id)
-                        }
-                        data={data}
-                        setData={setData}
-                        errors={errors}
-                        error={errors.payment_method}
-                        clearErrors={clearErrors}
-                        paymentMethods={paymentMethods}
-                        hasOdessaPay={hasOdessaPay}
-                        hasPayPal={hasPayPal}
-                        addCardReturnUrl={addCardReturnUrl}
-                        paymentUsesMock={paymentUsesMock}
-                    />
-                </>
+                {renderStepContent()}
             </CheckoutLayout>
 
             <DeleteConfirmationModal
@@ -568,7 +761,77 @@ function LaboratoryAppointmentInfo({
     data,
     setData,
     errors,
+    variant = "accordion",
 }) {
+    const isWizard = variant === "wizard";
+
+    const patientContent = (
+        <div className="space-y-3">
+            {!isWizard && <Subheading>Paciente</Subheading>}
+            <div>
+                <Text className={isWizard ? "font-medium" : ""}>
+                    {laboratoryAppointment.patient_full_name}
+                </Text>
+                <Text>{laboratoryAppointment.formatted_patient_gender}</Text>
+                <Text>{laboratoryAppointment.formatted_patient_birth_date}</Text>
+                <Text>{laboratoryAppointment.patient_phone}</Text>
+            </div>
+            <SwitchField>
+                <Label>¿Guardar paciente?</Label>
+                <Description>
+                    Si decides guardar el paciente, podrás usarlo en futuras
+                    compras.
+                </Description>
+                <Switch
+                    checked={data.save_contact}
+                    onChange={(value) => setData("save_contact", value)}
+                />
+                {errors.save_contact && (
+                    <ErrorMessage>{errors.save_contact}</ErrorMessage>
+                )}
+            </SwitchField>
+        </div>
+    );
+
+    const appointmentContent = (
+        <div className="space-y-3">
+            {!isWizard && <Subheading>Cita en laboratorio</Subheading>}
+            <div>
+                <Text>{laboratoryAppointment.laboratory_store.name}</Text>
+                <Text className="max-w-sm">
+                    <span className="text-xs">
+                        {laboratoryAppointment.laboratory_store.address}
+                    </span>
+                </Text>
+                <Badge color="sky" className="mt-2">
+                    {laboratoryAppointment.formatted_appointment_date}
+                </Badge>
+            </div>
+        </div>
+    );
+
+    if (isWizard) {
+        return (
+            <div className="space-y-6">
+                <div className="flex items-start gap-2">
+                    <CheckCircleIcon className="mt-0.5 size-6 flex-shrink-0 rounded-full fill-green-600 dark:fill-famedic-lime" />
+                    {patientContent}
+                </div>
+                <Divider soft />
+                <div className="flex items-start gap-2">
+                    <CheckCircleIcon className="mt-0.5 size-6 flex-shrink-0 rounded-full fill-green-600 dark:fill-famedic-lime" />
+                    {appointmentContent}
+                </div>
+                <Text className="text-sm text-zinc-600 dark:text-slate-400">
+                    Si necesitas modificar tu cita, contáctanos al{" "}
+                    <a href="tel:5566515232" className="underline">
+                        55 6651 5232
+                    </a>
+                </Text>
+            </div>
+        );
+    }
+
     return (
         <>
             <Card className="bg-zinc-50 px-4 py-6 sm:p-6 lg:p-8">

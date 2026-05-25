@@ -7,6 +7,8 @@ export default function AddressStep({
 	addresses,
 	toggleAddressForm,
 	showAddressForm,
+	variant = "accordion",
+	onSelected,
 	...props
 }) {
 	const selectedAddress = useMemo(() => {
@@ -19,6 +21,40 @@ export default function AddressStep({
 		}
 		return data.address ? "Dirección" : "Selecciona la dirección";
 	}, [showAddressForm, data.address]);
+
+	const isWizard = variant === "wizard";
+
+	if (isWizard) {
+		return (
+			<CheckoutWizardStep
+				title={stepHeading}
+				description={description}
+				error={props.error}
+			>
+				{addresses.length > 0 && !showAddressForm && (
+					<AddressSelection
+						variant={variant}
+						setData={setData}
+						addresses={addresses}
+						toggleAddressForm={toggleAddressForm}
+						clearErrors={clearErrors}
+						selectedId={data.address}
+						showRadio
+						onSelected={onSelected}
+					/>
+				)}
+				{showAddressForm && (
+					<AddressForm
+						variant={variant}
+						setCheckoutData={setData}
+						toggleAddressForm={toggleAddressForm}
+						showAddressesButton={addresses.length > 0}
+						onSelected={onSelected}
+					/>
+				)}
+			</CheckoutWizardStep>
+		);
+	}
 
 	return (
 		<CheckoutStep
@@ -43,6 +79,7 @@ export default function AddressStep({
 				<>
 					{addresses.length > 0 && !showAddressForm && (
 						<AddressSelection
+							variant="accordion"
 							setData={setData}
 							addresses={addresses}
 							toggleAddressForm={toggleAddressForm}
@@ -51,6 +88,7 @@ export default function AddressStep({
 					)}
 					{showAddressForm && (
 						<AddressForm
+							variant="accordion"
 							setCheckoutData={setData}
 							toggleAddressForm={toggleAddressForm}
 							showAddressesButton={addresses.length > 0}
@@ -63,13 +101,28 @@ export default function AddressStep({
 	);
 }
 
-function AddressSelection({
+function AddressSelection(props) {
+	if (props.variant === "wizard") {
+		return <AddressSelectionInner close={() => {}} {...props} />;
+	}
+	return <AddressSelectionAccordion {...props} />;
+}
+
+function AddressSelectionAccordion(props) {
+	const close = useClose();
+	return <AddressSelectionInner close={close} {...props} />;
+}
+
+function AddressSelectionInner({
 	setData,
 	addresses,
 	toggleAddressForm,
 	clearErrors,
+	selectedId,
+	showRadio = false,
+	onSelected,
+	close,
 }) {
-	const close = useClose();
 
 	const selectAddress = (address) => {
 		setData("address", address.id);
@@ -81,16 +134,19 @@ function AddressSelection({
 		clearErrors("address_city");
 		clearErrors("address_zipcode");
 		close();
+		onSelected?.();
 	};
 
 	return (
-		<ul className="mt-3 grid gap-8 sm:grid-cols-2">
+		<ul className={clsx("mt-3 grid gap-4", showRadio ? "grid-cols-1" : "gap-8 sm:grid-cols-2")}>
 			{addresses.map((address) => (
 				<CheckoutSelectionCard
 					key={address.id}
 					onClick={() => selectAddress(address)}
 					heading={address.street + " " + address.number}
-					IconComponent={MapPinIcon}
+					IconComponent={showRadio ? null : MapPinIcon}
+					selected={selectedId == address.id}
+					showRadio={showRadio}
 				>
 					<Text>
 						{address.street} {address.number}
@@ -104,8 +160,8 @@ function AddressSelection({
 			<CheckoutSelectionCard
 				onClick={toggleAddressForm}
 				heading="Nueva dirección"
-				IconComponent={PlusIcon}
-				greenIcon
+				IconComponent={showRadio ? null : PlusIcon}
+				greenIcon={!showRadio}
 			>
 				<Text className="line-clamp-3 max-w-64">
 					Puedes agregar una nueva dirección y guardarla para futuras
@@ -116,12 +172,25 @@ function AddressSelection({
 	);
 }
 
-function AddressForm({
+function AddressForm(props) {
+	if (props.variant === "wizard") {
+		return <AddressFormInner close={() => {}} {...props} />;
+	}
+	return <AddressFormAccordion {...props} />;
+}
+
+function AddressFormAccordion(props) {
+	const close = useClose();
+	return <AddressFormInner close={close} {...props} />;
+}
+
+function AddressFormInner({
 	toggleAddressForm,
 	showAddressesButton,
 	setCheckoutData,
+	onSelected,
+	close,
 }) {
-	const close = useClose();
 
 	const { mexicanStates } = usePage().props;
 
@@ -146,6 +215,7 @@ function AddressForm({
 					onFinish: () => {
 						setCheckoutData("address", response.data.address);
 						close();
+						onSelected?.();
 					},
 				});
 			})
@@ -323,6 +393,8 @@ import {
 	ChevronLeftIcon,
 } from "@heroicons/react/16/solid";
 import CheckoutStep from "@/Components/Checkout/CheckoutStep";
+import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
 import { MapIcon } from "@heroicons/react/24/solid";
 import CheckoutSelectionCard from "@/Components/Checkout/CheckoutSelectionCard";
 import { Button } from "@/Components/Catalyst/button";
+import clsx from "clsx";

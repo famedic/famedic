@@ -8,6 +8,7 @@ import {
   BuildingStorefrontIcon,
   CreditCardIcon,
   InformationCircleIcon as InformationCircleIconSolid,
+  LockClosedIcon,
 } from "@heroicons/react/16/solid";
 import { Subheading } from "@/Components/Catalyst/heading";
 import FocusedLayout from "@/Layouts/FocusedLayout";
@@ -40,6 +41,11 @@ export default function CheckoutLayout({
   data = {},
   /** Si se pasa, sustituye el botón "Pagar ahora" (p. ej. PayPal). */
   alternateOnlinePayment = null,
+  /** Modo wizard multi-paso */
+  stepper = null,
+  footerActions = null,
+  couponSection = null,
+  hideDefaultSubmit = false,
 }) {
   const [isOnlineProcessing, setIsOnlineProcessing] = useState(false);
   const [isBranchProcessing, setIsBranchProcessing] = useState(false);
@@ -83,10 +89,15 @@ export default function CheckoutLayout({
               setIsBranchProcessing(false);
             }
           }}
-          className="flex w-full flex-col gap-8 lg:col-span-3"
+          className="flex w-full flex-col gap-6 lg:col-span-3"
         >
-          {children}          
-          
+          {stepper}
+          {children}
+
+          {footerActions}
+
+          {!hideDefaultSubmit && (
+            <>
           {/* PAGO ONLINE */}
           {alternateOnlinePayment ? (
             <div
@@ -148,9 +159,15 @@ export default function CheckoutLayout({
             </Anchor>
             .
           </Text>
+            </>
+          )}
         </form>
 
-        <CheckoutSummary summaryDetails={summaryDetails} items={items} />
+        <CheckoutSummary
+          summaryDetails={summaryDetails}
+          items={items}
+          couponSection={couponSection}
+        />
       </div>
 
       <Footer />
@@ -158,11 +175,18 @@ export default function CheckoutLayout({
   );
 }
 
-function CheckoutSummary({ summaryDetails, items }) {
+function CheckoutSummary({ summaryDetails, items, couponSection = null }) {
     return (
         <div className="order-first mx-auto w-full lg:order-last lg:col-span-2">
             <section className="sticky top-8 space-y-6 rounded-lg bg-white px-4 py-6 shadow sm:p-6 lg:col-span-5 lg:p-8 dark:bg-slate-900">
-                <div className="flow-root">
+                <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-slate-400">
+                    <LockClosedIcon className="size-4" />
+                    <Text>Pago 100% seguro</Text>
+                </div>
+
+                <Subheading>Resumen del pedido</Subheading>
+
+                <div className="flow-root max-h-64 overflow-y-auto lg:max-h-80">
                     <ul role="list" className="[&>*:last-child]:hidden">
                         {items.length > 0 ? (
                             items.map((item, index) => (
@@ -189,6 +213,8 @@ function CheckoutSummary({ summaryDetails, items }) {
                         )}
                     </ul>
                 </div>
+
+                {couponSection}
 
                 <Subheading>Resumen</Subheading>
 
