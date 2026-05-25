@@ -163,7 +163,7 @@ function ContactSelectionInner({
 				heading="Nuevo paciente"
 				IconComponent={showRadio ? null : PlusIcon}
 				greenIcon={!showRadio}
-				showRadio={false}
+				showRadio={showRadio}
 			>
 				<Text className="line-clamp-3 max-w-64">
 					Puedes agregar un nuevo paciente y guardarlo para futuras

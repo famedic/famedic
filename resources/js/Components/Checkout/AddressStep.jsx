@@ -162,6 +162,7 @@ function AddressSelectionInner({
 				heading="Nueva dirección"
 				IconComponent={showRadio ? null : PlusIcon}
 				greenIcon={!showRadio}
+				showRadio={showRadio}
 			>
 				<Text className="line-clamp-3 max-w-64">
 					Puedes agregar una nueva dirección y guardarla para futuras

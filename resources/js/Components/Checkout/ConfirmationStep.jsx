@@ -149,7 +149,7 @@ function ConfirmationSection({
                         className="text-sm"
                     >
                         <PencilIcon className="size-4" />
-                        Editar
+                        Cambiar
                     </Button>
                 )}
             </div>

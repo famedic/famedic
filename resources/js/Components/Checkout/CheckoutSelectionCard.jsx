@@ -16,16 +16,26 @@ export default function CheckoutSelectionCard({
         <Card
             hoverable={!selected}
             className={clsx(
-                "flex h-full w-full flex-col p-4",
-                !showRadio && "hover:ring-1 md:aspect-[16/9]",
+                "flex w-full flex-col p-4",
+                showRadio ? "h-auto" : "h-full hover:ring-1 md:aspect-[16/9]",
                 selected &&
                     "ring-2 ring-famedic-dark dark:ring-famedic-lime bg-famedic-dark/5 dark:bg-famedic-lime/5",
                 className,
             )}
             {...props}
         >
-            <div className="pointer-events-none h-full w-full">
-                <div className="flex h-full items-start gap-3">
+            <div
+                className={clsx(
+                    "pointer-events-none w-full",
+                    showRadio ? "" : "h-full",
+                )}
+            >
+                <div
+                    className={clsx(
+                        "flex items-start gap-3",
+                        showRadio ? "" : "h-full",
+                    )}
+                >
                     {showRadio && (
                         <div
                             className={clsx(
@@ -50,7 +60,7 @@ export default function CheckoutSelectionCard({
                             )}
                         />
                     )}
-                    <div className="h-full w-full min-w-0">
+                    <div className="w-full min-w-0">
                         {heading && (
                             <Subheading className="mb-2 line-clamp-1">
                                 {heading}

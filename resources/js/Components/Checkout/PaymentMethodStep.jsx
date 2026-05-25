@@ -403,9 +403,10 @@ function PaymentMethodSelectionInner({
             <CheckoutSelectionCard
                 href={addCardUrl}
                 heading="Nueva tarjeta"
-                IconComponent={PlusIcon}
-                greenIcon
-                className="min-h-[11rem]"
+                IconComponent={showRadio ? null : PlusIcon}
+                greenIcon={!showRadio}
+                showRadio={showRadio}
+                className={clsx(showRadio ? "min-h-0" : "min-h-[11rem]")}
             >
                 <div className="space-y-2">
                     <Text className="line-clamp-2">

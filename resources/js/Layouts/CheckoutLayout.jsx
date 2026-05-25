@@ -12,6 +12,7 @@ import {
 } from "@heroicons/react/16/solid";
 import { Subheading } from "@/Components/Catalyst/heading";
 import FocusedLayout from "@/Layouts/FocusedLayout";
+import CheckoutWhatsAppHelp from "@/Components/Checkout/CheckoutWhatsAppHelp";
 import { Divider } from "@/Components/Catalyst/divider";
 import { XMarkIcon, InformationCircleIcon } from "@heroicons/react/20/solid";
 import FAQs from "@/Components/FAQs";
@@ -171,6 +172,7 @@ export default function CheckoutLayout({
       </div>
 
       <Footer />
+      <CheckoutWhatsAppHelp />
     </FocusedLayout>
   );
 }

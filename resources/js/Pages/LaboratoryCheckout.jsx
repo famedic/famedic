@@ -36,7 +36,7 @@ import clsx from "clsx";
 const WIZARD_STEPS = [
     { id: "patient", number: 1, label: "Paciente" },
     { id: "address", number: 2, label: "Dirección" },
-    { id: "payment", number: 3, label: "Pago" },
+    { id: "payment", number: 3, label: "Método de Pago" },
     { id: "confirmation", number: 4, label: "Confirmación" },
 ];
 
@@ -188,21 +188,21 @@ export default function LaboratoryCheckout({
             );
         } else {
             // PAGO ONLINE
-            console.log('DEBUG - Enviando pago online a:', 
-                route("laboratory.checkout.store", { 
-                    laboratory_brand: laboratoryBrand.value 
+            console.log('DEBUG - Enviando pago online a:',
+                route("laboratory.checkout.store", {
+                    laboratory_brand: laboratoryBrand.value
                 })
             );
 
-            post(route("laboratory.checkout.store", { 
-                laboratory_brand: laboratoryBrand.value 
+            post(route("laboratory.checkout.store", {
+                laboratory_brand: laboratoryBrand.value
             }), {
                 onSuccess: (page) => {
                     console.log('DEBUG - Pago exitoso, redirigiendo');
                 },
                 onError: (errors) => {
                     console.error('DEBUG - Errores del backend:', errors);
-                    
+
                     // Manejar errores específicos
                     if (errors.payment_method) {
                         alert(`Error en método de pago: ${errors.payment_method}`);
@@ -227,24 +227,24 @@ export default function LaboratoryCheckout({
     );
 
     const toggleAddressForm = () => setShowAddressForm((prev) => !prev);
-    const toggleContactForm = () => 
+    const toggleContactForm = () =>
     setShowContactForm((prev) => !prev);
 
     const contactStepIsComplete = useMemo(() => {
         const isComplete = !!data.contact || laboratoryAppointment;
-        console.log('DEBUG - Contact step complete:', { 
-            isComplete, 
-            contact: data.contact, 
-            appointment: laboratoryAppointment 
+        console.log('DEBUG - Contact step complete:', {
+            isComplete,
+            contact: data.contact,
+            appointment: laboratoryAppointment
         });
         return isComplete;
     }, [data.contact, laboratoryAppointment]);
 
     const addressStepIsComplete = useMemo(() => {
         const isComplete = !!data.address;
-        console.log('DEBUG - Address step complete:', { 
-            isComplete, 
-            address: data.address 
+        console.log('DEBUG - Address step complete:', {
+            isComplete,
+            address: data.address
         });
         return isComplete;
     }, [data.address]);
