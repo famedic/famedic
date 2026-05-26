@@ -126,7 +126,7 @@ export default function CheckoutWhatsAppHelp() {
                             onClick={() => handleTopicClick(DEFAULT_MESSAGE)}
                             className="mt-2 w-full py-2 text-center text-sm font-medium text-[#25D366] hover:underline"
                         >
-                            Escríbenos por WhatsApp
+                            Escríbenos por WhatsApp (81) 2860 1893
                         </button>
                     </div>
                 </div>

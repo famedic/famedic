@@ -19,7 +19,7 @@ export default function AddressStep({
 		if (showAddressForm) {
 			return "Ingresa la dirección del paciente";
 		}
-		return data.address ? "Dirección" : "Selecciona la dirección";
+		return data.address ? "Selecciona la dirección del paciente" : "Selecciona la dirección";
 	}, [showAddressForm, data.address]);
 
 	const isWizard = variant === "wizard";

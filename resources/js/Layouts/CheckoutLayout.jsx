@@ -204,7 +204,7 @@ export default function CheckoutLayout({
 function CheckoutSummary({ summaryDetails, items, couponSection = null }) {
     return (
         <div className="order-first mx-auto w-full lg:order-last lg:col-span-2">
-            <section className="sticky top-8 space-y-6 rounded-lg bg-white px-4 py-6 shadow sm:p-6 lg:col-span-5 lg:p-8 dark:bg-slate-900">
+            <section className="sticky top-8 space-y-6 overflow-hidden rounded-lg bg-white px-4 py-6 shadow sm:p-6 lg:col-span-5 lg:p-8 dark:bg-slate-900">
                 <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-slate-400">
                     <LockClosedIcon className="size-4" />
                     <Text>Pago 100% seguro</Text>
@@ -212,7 +212,7 @@ function CheckoutSummary({ summaryDetails, items, couponSection = null }) {
 
                 <Subheading>Resumen del pedido</Subheading>
 
-                <div className="flow-root max-h-64 overflow-y-auto lg:max-h-80">
+                <div className="flow-root max-h-64 overflow-x-hidden overflow-y-auto lg:max-h-80">
                     <ul role="list" className="[&>*:last-child]:hidden">
                         {items.length > 0 ? (
                             items.map((item, index) => (
@@ -261,8 +261,8 @@ function CheckoutSummary({ summaryDetails, items, couponSection = null }) {
 function CartDetail({ label, value, totalRow = false }) {
     return (
         <>
-            <div className="flex items-center justify-between gap-2 py-6">
-                <dt>
+            <div className="flex min-w-0 items-center justify-between gap-2 py-6">
+                <dt className="min-w-0 shrink">
                     {totalRow ? (
                         <Subheading
                             className={totalRow ? "dark:!text-famedic-light" : ""}
@@ -273,8 +273,8 @@ function CartDetail({ label, value, totalRow = false }) {
                         <Text>{label}</Text>
                     )}
                 </dt>
-                <dd>
-                    <Text className="max-w-48 text-right">
+                <dd className="min-w-0 shrink-0">
+                    <Text className="max-w-48 break-words text-right">
                         {totalRow ? (
                             <Strong
                                 className={totalRow ? "dark:!text-famedic-light" : ""}
@@ -308,7 +308,7 @@ function CartItem({
 }) {
     return (
         <>
-            <li className="flex pb-6">
+            <li className="flex min-w-0 pb-6">
                 {(showDefaultImage || imgSrc) && (
                     <div className="flex-shrink-0">
                         {imgSrc ? (
@@ -325,12 +325,12 @@ function CartItem({
                     </div>
                 )}
                 <div
-                    className={`w-full ${imgSrc || showDefaultImage ? "ml-4 sm:ml-6" : ""}`}
+                    className={`min-w-0 w-full ${imgSrc || showDefaultImage ? "ml-4 sm:ml-6" : ""}`}
                 >
-                    <div className="relative flex sm:gap-x-6">
-                        <div className="w-full">
+                    <div className="relative flex min-w-0 sm:gap-x-6">
+                        <div className="min-w-0 w-full">
                             <div className="pr-9">
-                                <Subheading className="mb-3">
+                                <Subheading className="mb-3 break-words">
                                     {quantity && (
                                         <Badge color="slate">{quantity}</Badge>
                                     )}{" "}
@@ -348,7 +348,7 @@ function CartItem({
                                 )}
 
                                 {description && (
-                                    <Text className="sm:max-w-[80%]">
+                                    <Text className="break-words">
                                         <span className="text-xs">
                                             {description}
                                         </span>
@@ -356,7 +356,7 @@ function CartItem({
                                 )}
 
                                 {indications && (
-                                    <Text className="sm:max-w-[80%]">
+                                    <Text className="break-words">
                                         <span className="text-xs">
                                             {indications}
                                         </span>
@@ -383,19 +383,19 @@ function CartItem({
                                 )}
                             </div>
                             {discountedPrice && discountPercentage > 0 && (
-                                <Text className="mt-3 space-x-2 text-right">
+                                <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
                                     {discountPercentage && (
                                         <Badge color="famedic-lime">
                                             {discountPercentage}%
                                         </Badge>
                                     )}
-                                    <span className="line-through">
+                                    <span className="text-sm text-zinc-500 line-through dark:text-slate-400">
                                         {discountedPrice}
                                     </span>
-                                </Text>
+                                </div>
                             )}
 
-                            <Text className="mt-4 text-right">
+                            <Text className="mt-4 break-words text-right">
                                 <Strong>
                                     <span className="text-famedic-dark dark:text-white">
                                         {price}

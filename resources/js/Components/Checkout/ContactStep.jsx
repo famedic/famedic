@@ -19,7 +19,7 @@ export default function ContactStep({
 		if (showContactForm) {
 			return "Ingresa los datos del paciente";
 		}
-		return data.contact ? "Paciente" : "Selecciona el paciente";
+		return data.contact ? "Seleciona el Paciente" : "Selecciona el paciente";
 	}, [showContactForm, data.contact]);
 
 	const isWizard = variant === "wizard";
