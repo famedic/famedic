@@ -82,6 +82,25 @@ function getStatusMap(purchase) {
 	};
 }
 
+function getVisibleStatusRows(purchase, statusMap) {
+	const rows = [];
+
+	if (purchase.requires_appointment) {
+		rows.push({ key: "cita", label: "Cita", state: statusMap.cita, tooltipPrefix: "Cita" });
+	}
+
+	rows.push(
+		{ key: "muestra", label: "Muestras", state: statusMap.muestra, tooltipPrefix: "Toma de muestra" },
+		{ key: "resultados", label: "Resultados", state: statusMap.resultados, tooltipPrefix: "Resultados" },
+	);
+
+	if (purchase.invoice_requested) {
+		rows.push({ key: "factura", label: "Factura", state: statusMap.factura, tooltipPrefix: "Factura" });
+	}
+
+	return rows;
+}
+
 export default function OrdersTable({ purchases, beginProtectedUrl }) {
 	const [loadingRowId, setLoadingRowId] = useState(null);
 
@@ -93,8 +112,14 @@ export default function OrdersTable({ purchases, beginProtectedUrl }) {
 
 	return (
 		<div className="hidden md:block">
-			<div className="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white/60 shadow-sm dark:border-slate-700/90 dark:bg-slate-900/40 dark:shadow-none">
-				<Table bleed dense>
+			<div className="overflow-x-auto rounded-2xl border border-zinc-200/90 bg-white/60 shadow-sm dark:border-slate-700/90 dark:bg-slate-900/40 dark:shadow-none">
+				<Table bleed dense wrap tableClassName="w-full min-w-[720px] table-fixed">
+					<colgroup>
+						<col style={{ width: "22%" }} />
+						<col style={{ width: "24%" }} />
+						<col style={{ width: "26%" }} />
+						<col style={{ width: "28%" }} />
+					</colgroup>
 					<TableHead>
 						<TableRow>
 							<TableHeader>Paciente y estudios</TableHeader>
@@ -132,13 +157,19 @@ export default function OrdersTable({ purchases, beginProtectedUrl }) {
 										}
 									}}
 								>
-									<TableCell>
-										<div className="flex flex-wrap items-start gap-2">
+									<TableCell className="max-w-0">
+										<div className="flex min-w-0 items-start gap-2">
 											<div className="min-w-0 flex-1">
-												<Text className="font-semibold text-zinc-900 dark:text-white">
+												<Text
+													className="truncate font-semibold text-zinc-900 dark:text-white"
+													title={patientName}
+												>
 													{patientName}
 												</Text>
-												<Text className="mt-0.5 text-sm text-zinc-600 dark:text-slate-300">
+												<Text
+													className="mt-0.5 line-clamp-2 text-sm text-zinc-600 dark:text-slate-300"
+													title={purchase.study_name}
+												>
 													{purchase.study_name}
 												</Text>
 												<Text className="mt-1 text-sm">
@@ -172,12 +203,12 @@ export default function OrdersTable({ purchases, beginProtectedUrl }) {
 											)}
 										</div>
 									</TableCell>
-									<TableCell>
-										<div className="flex items-start gap-3">
+									<TableCell className="w-[24%]">
+										<div className="flex min-w-0 items-start gap-2">
 											<img
 												src={laboratoryLogoSrc(purchase)}
 												alt=""
-												className="mt-0.5 h-16 w-auto max-w-[6rem] shrink-0 rounded-lg object-contain"
+												className="mt-0.5 h-12 w-auto max-w-[4.5rem] shrink-0 rounded-lg object-contain"
 											/>
 											<div className="min-w-0 space-y-1.5">
 												<Text className="text-xs font-medium uppercase tracking-wide text-zinc-500">
@@ -210,7 +241,7 @@ export default function OrdersTable({ purchases, beginProtectedUrl }) {
 											</div>
 										</div>
 									</TableCell>
-									<TableCell>
+									<TableCell className="w-[26%]">
 										<div className="space-y-2 text-xs">
 											{isCancelled ? (
 												<div className="mb-2 space-y-1">
@@ -226,34 +257,18 @@ export default function OrdersTable({ purchases, beginProtectedUrl }) {
 													) : null}
 												</div>
 											) : null}
-											<div className="flex items-center justify-between gap-2">
-												<Text className="text-[11px] tracking-wide text-zinc-500">Cita</Text>
-												<span title={`Cita: ${statusTooltip(statusMap.cita)}`}>
-													<StatusBullet state={statusMap.cita} />
-												</span>
-											</div>
-											<div className="flex items-center justify-between gap-2">
-												<Text className="text-[11px] tracking-wide text-zinc-500">Muestras</Text>
-												<span title={`Toma de muestra: ${statusTooltip(statusMap.muestra)}`}>
-													<StatusBullet state={statusMap.muestra} />
-												</span>
-											</div>
-											<div className="flex items-center justify-between gap-2">
-												<Text className="text-[11px] tracking-wide text-zinc-500">Resultados</Text>
-												<span title={`Resultados: ${statusTooltip(statusMap.resultados)}`}>
-													<StatusBullet state={statusMap.resultados} />
-												</span>
-											</div>
-											<div className="flex items-center justify-between gap-2">
-												<Text className="text-[11px] tracking-wide text-zinc-500">Factura</Text>
-												<span title={`Factura: ${statusTooltip(statusMap.factura)}`}>
-													<StatusBullet state={statusMap.factura} />
-												</span>
-											</div>
+											{getVisibleStatusRows(purchase, statusMap).map(({ key, label, state, tooltipPrefix }) => (
+												<div key={key} className="flex items-center justify-between gap-2">
+													<Text className="text-[11px] tracking-wide text-zinc-500">{label}</Text>
+													<span title={`${tooltipPrefix}: ${statusTooltip(state)}`}>
+														<StatusBullet state={state} />
+													</span>
+												</div>
+											))}
 										</div>
 									</TableCell>
 									<TableCell
-										className="text-right"
+										className="w-[26%] text-right"
 										onClick={(event) => event.stopPropagation()}
 										onPointerDown={(event) => event.stopPropagation()}
 										onKeyDown={(event) => event.stopPropagation()}

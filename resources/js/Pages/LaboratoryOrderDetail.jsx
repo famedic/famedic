@@ -72,6 +72,21 @@ export default function LaboratoryOrderDetail({
 	const [pdfDialogTab, setPdfDialogTab] = useState(0);
 	const [shareNotice, setShareNotice] = useState(null);
 	const pendingAfterOtpRef = useRef(null);
+
+	const scrollToTabContent = () => {
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				document
+					.getElementById("laboratory-order-tabs")
+					?.scrollIntoView({ behavior: "smooth", block: "start" });
+			});
+		});
+	};
+
+	const handleTabChange = (tab) => {
+		setActiveTab(tab);
+		scrollToTabContent();
+	};
 	const { daysLeftToRequestInvoice = 0, errors: pageErrors = {}, ...pageProps } = usePage().props;
 	const labResultsOtpRequired = isLabResultsOtpRequired(pageProps);
 
@@ -431,13 +446,13 @@ export default function LaboratoryOrderDetail({
 			gdaConsecutivo={laboratoryPurchase?.gda_consecutivo}
 			isCancelled={orderIsCancelled}
 			cancelledAtLabel={cancelledAtLabel}
-			onRequestInvoice={() => setActiveTab("invoice")}
+			onRequestInvoice={() => handleTabChange("invoice")}
 			onDownload={handleDownloadOrder}
 			onShare={handleShareOrder}
 		/>
 	);
 
-	const tabs = <Tabs activeTab={activeTab} onChange={setActiveTab} />;
+	const tabs = <Tabs activeTab={activeTab} onChange={handleTabChange} />;
 
 	if (!laboratoryPurchase) {
 		return (

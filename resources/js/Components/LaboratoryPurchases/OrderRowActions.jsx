@@ -130,12 +130,19 @@ export default function OrderRowActions({ purchase, beginProtectedUrl, layout = 
 			<Dropdown>
 				<DropdownButton
 					outline
-					aria-label="Más acciones"
+					aria-label={isMenuOnly ? "Acciones del pedido" : "Más acciones"}
 					onClick={stopRowNavigation}
 					onPointerDown={stopRowNavigation}
-					className={isMobile ? "min-h-12 min-w-12 shrink-0 justify-center px-0" : "min-h-10 min-w-10 justify-center px-0 sm:px-2"}
+					className={
+						isMobile
+							? "min-h-12 min-w-12 shrink-0 justify-center px-0"
+							: isMenuOnly
+								? "min-h-10 gap-1.5 whitespace-nowrap px-3 text-sm font-medium"
+								: "min-h-10 min-w-10 justify-center px-0 sm:px-2"
+					}
 				>
-					<EllipsisVerticalIcon className="size-5" />
+					{isMenuOnly && <span>Acciones</span>}
+					<EllipsisVerticalIcon className="size-5 shrink-0" />
 				</DropdownButton>
 				<DropdownMenu anchor="bottom end">
 					<DropdownItem href={purchase.show_detail_url}>
