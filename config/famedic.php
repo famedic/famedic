@@ -88,9 +88,12 @@ return [
     ],
 
     'browsershot' => [
-        'node_binary' => env('BROWSERSHOT_NODE_BINARY', 'node'),
-        'npm_binary' => env('BROWSERSHOT_NPM_BINARY', 'npm'),
+        // Rutas absolutas en Docker; evita NODE_PATH=public/npm cuando el cwd es public/
+        'node_binary' => env('BROWSERSHOT_NODE_BINARY', '/usr/bin/node'),
+        'npm_binary' => env('BROWSERSHOT_NPM_BINARY', '/usr/bin/npm'),
         'chrome_path' => env('BROWSERSHOT_CHROME_PATH', '/usr/bin/chromium'),
+        // Chromium 128+ en contenedores: crashpad exige directorios escribibles (ver Dockerfile / compose).
+        'chrome_user_data_dir' => env('BROWSERSHOT_CHROME_USER_DATA_DIR', '/tmp/.chromium'),
     ],
 
     /**

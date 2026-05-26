@@ -2,12 +2,11 @@
 
 namespace App\Notifications;
 
-use App\Models\LaboratoryAppointment;
+use App\Actions\Laboratories\LaboratoryPurchaseConfirmationViewData;
 use App\Models\LaboratoryPurchase;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use Illuminate\Support\Facades\URL;
 
 /**
  * Correo de confirmación de compra de laboratorio (plantillas Markdown según PDF).
@@ -58,10 +57,9 @@ class LaboratoryPurchaseCreated extends Notification
             'transactions',
         ]);
 
-        $appointment = $purchase->laboratoryAppointment;
-        $isWithAppointment = $appointment !== null && $appointment->appointment_date !== null;
+        $isWithAppointment = LaboratoryPurchaseConfirmationViewData::hasAppointmentForConfirmation($purchase);
 
-        $data = $this->mailViewData($notifiable, $purchase, $appointment);
+        $data = LaboratoryPurchaseConfirmationViewData::build($purchase, $notifiable, false);
 
         if ($isWithAppointment) {
             return (new MailMessage)
@@ -72,55 +70,6 @@ class LaboratoryPurchaseCreated extends Notification
         return (new MailMessage)
             ->subject('Gracias por tu orden de Laboratorio en Famedic')
             ->markdown('emails.laboratory.purchase-without-appointment', $data);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function mailViewData(object $notifiable, LaboratoryPurchase $purchase, ?LaboratoryAppointment $appointment): array
-    {
-        $transaction = $purchase->transactions->first();
-
-        $studies = $purchase->laboratoryPurchaseItems->map(function ($item) {
-            return [
-                'name' => $item->name,
-                'instructions' => ($item->indications !== null && $item->indications !== '') ? $item->indications : '—',
-            ];
-        })->values()->all();
-
-        // Logos: mismas rutas que el front (/images/...), pero host desde config('famedic.email_public_url')
-        // (por defecto https://famedic.com.mx) para que carguen en bandeja aunque APP_URL sea local/staging.
-        $famedicLogoUrl = $this->emailPublicAssetUrl('images/logo.png');
-        $laboratorioLogoUrl = $this->emailPublicAssetUrl('images/gda/'.$purchase->brand->imageSrc());
-
-        $data = [
-            'nombre_usuario' => $notifiable->full_name ?? trim((string) $notifiable->name),
-            'consecutivo' => $purchase->gda_consecutivo !== null ? (string) $purchase->gda_consecutivo : '—',
-            'folio_orden' => (string) $purchase->gda_order_id,
-            'nombre_paciente' => $purchase->full_name,
-            'fecha_nacimiento' => $purchase->formatted_birth_date ?? '—',
-            'laboratorio_marca' => $purchase->brand->label(),
-            'famedic_logo_url' => $famedicLogoUrl,
-            'laboratorio_logo_url' => $laboratorioLogoUrl,
-            'estatus_pago' => $this->paymentStatusLabel($transaction?->payment_status),
-            'metodo_pago' => $this->paymentMethodLabel($transaction?->payment_method ?? $transaction?->gateway),
-            'total' => $purchase->formatted_total,
-            'fecha_compra' => $purchase->formatted_created_at ?? '—',
-            'studies' => $studies,
-            'branches_url' => URL::route('laboratory-stores.index', ['brand' => $purchase->brand->value]),
-        ];
-
-        if ($appointment?->appointment_date) {
-            $dt = localizedDate($appointment->appointment_date);
-            $store = $appointment->laboratoryStore;
-
-            $data['appointment_date'] = $dt->isoFormat('dddd D [de] MMMM [de] YYYY');
-            $data['appointment_time'] = $dt->isoFormat('h:mm a');
-            $data['branch_name'] = $store?->name ?? '—';
-            $data['branch_address'] = ($store?->address !== null && $store->address !== '') ? $store->address : '—';
-        }
-
-        return $data;
     }
 
     /**
@@ -141,10 +90,9 @@ class LaboratoryPurchaseCreated extends Notification
             'transactions',
         ]);
 
-        $appointment = $purchase->laboratoryAppointment;
-        $hasAppointment = $appointment !== null && $appointment->appointment_date !== null;
+        $hasAppointment = LaboratoryPurchaseConfirmationViewData::hasAppointmentForConfirmation($purchase);
 
-        $data = $this->mailViewData($notifiable, $purchase, $appointment);
+        $data = LaboratoryPurchaseConfirmationViewData::build($purchase, $notifiable, false);
 
         if ($variant === 'auto') {
             $useWithAppointment = $hasAppointment;
@@ -182,40 +130,6 @@ class LaboratoryPurchaseCreated extends Notification
             'subject' => 'Gracias por tu orden de Laboratorio en Famedic',
             'data' => $data,
         ];
-    }
-
-    /**
-     * URL absoluta a un recurso en /public (p. ej. images/logo.png) usando config('famedic.email_public_url').
-     */
-    protected function emailPublicAssetUrl(string $path): string
-    {
-        $base = rtrim((string) config('famedic.email_public_url'), '/');
-        $path = ltrim($path, '/');
-
-        return $base.'/'.$path;
-    }
-
-    protected function paymentStatusLabel(?string $status): string
-    {
-        return match (strtolower((string) $status)) {
-            'captured', 'completed', 'paid', 'success', 'succeeded' => 'Pagado',
-            'pending', 'processing' => 'En proceso',
-            'failed', 'declined' => 'No completado',
-            'refunded' => 'Reembolsado',
-            'credit' => 'Acreditado',
-            default => $status ? ucfirst(str_replace('_', ' ', $status)) : '—',
-        };
-    }
-
-    protected function paymentMethodLabel(?string $method): string
-    {
-        return match (strtolower((string) $method)) {
-            'paypal' => 'PayPal',
-            'efevoopay' => 'EfevooPay',
-            'odessa' => 'Caja de ahorro',
-            'stripe' => 'Tarjeta',
-            default => $method ? ucfirst(str_replace('_', ' ', $method)) : '—',
-        };
     }
 
     public function toArray(object $notifiable): array

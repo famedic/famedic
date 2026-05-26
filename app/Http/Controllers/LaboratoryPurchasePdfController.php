@@ -9,7 +9,6 @@ use App\Models\LaboratoryPurchase;
 use App\Notifications\LaboratoryPurchasePdfEmail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
-use Inertia\Inertia;
 
 class LaboratoryPurchasePdfController extends Controller
 {
@@ -34,12 +33,11 @@ class LaboratoryPurchasePdfController extends Controller
                 ]);
         }
 
-        return Inertia::location(
-            Storage::temporaryUrl(
-                $storagePath,
-                now()->addMinutes(5)
-            )
-        );
+        $filename = 'orden-laboratorio-'.($laboratoryPurchase->gda_order_id ?: $laboratoryPurchase->id).'.pdf';
+
+        return Storage::disk(config('filesystems.default'))->download($storagePath, $filename, [
+            'Content-Type' => 'application/pdf',
+        ]);
     }
 
     public function email(EmailLaboratoryPurchasePdfRequest $request, LaboratoryPurchase $laboratoryPurchase)

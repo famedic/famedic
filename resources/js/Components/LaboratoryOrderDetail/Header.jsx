@@ -1,8 +1,7 @@
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import {
-	ArrowDownTrayIcon,
-	ArrowUpOnSquareIcon,
+	DocumentArrowDownIcon,
 	BeakerIcon,
 	CalendarDaysIcon,
 	ArrowsRightLeftIcon,
@@ -32,7 +31,6 @@ export default function Header({
 	gdaConsecutivo,
 	onRequestInvoice,
 	onDownload,
-	onShare,
 	isCancelled = false,
 	cancelledAtLabel = null,
 }) {
@@ -110,26 +108,16 @@ export default function Header({
 						)}
 					</div>
 				</div>
-				<div className="flex min-w-0 w-full max-w-full flex-col gap-2 sm:flex-row sm:flex-wrap lg:w-auto lg:max-w-md lg:justify-end">
+				<div className="flex min-w-0 w-full max-w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-start lg:w-auto lg:max-w-md lg:justify-end">
 					<Button
 						outline
 						type="button"
-						className="w-full justify-center sm:w-auto"
+						className="w-full shrink-0 justify-center self-start sm:w-auto"
 						onClick={onDownload}
-						title="Descargar PDF de la orden"
+						title="Descargar comprobante en PDF"
 					>
-						<ArrowDownTrayIcon className="size-4" />
-						Descargar orden
-					</Button>
-					<Button
-						outline
-						type="button"
-						className="w-full justify-center sm:w-auto"
-						onClick={onShare}
-						title="Compartir enlace o enviar PDF por correo"
-					>
-						<ArrowUpOnSquareIcon className="size-4" />
-						Compartir
+						<DocumentArrowDownIcon data-slot="icon" className="size-4" aria-hidden />
+						Descargar
 					</Button>
 					{canRequestInvoice && !isCancelled && (
 						<div className="flex w-full min-w-0 flex-col gap-1 sm:w-auto">

@@ -51,6 +51,13 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 COPY docker/php/docker-entrypoint.sh /usr/local/bin/docker-entrypoint-famedic.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint-famedic.sh
 
+# Chromium/Puppeteer en contenedor: directorios escribibles para crashpad (Chrome 128+)
+ENV XDG_CONFIG_HOME=/tmp/.chromium
+ENV XDG_CACHE_HOME=/tmp/.chromium
+ENV HOME=/tmp/.chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
 WORKDIR /var/www/html
 
 ENTRYPOINT ["docker-entrypoint-famedic.sh"]

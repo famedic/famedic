@@ -64,6 +64,11 @@ if (app()->environment('local')) {
         '/debug/laboratory-purchase-email/{laboratory_purchase}',
         \App\Http\Controllers\Debug\LaboratoryPurchaseEmailPreviewController::class
     )->name('debug.laboratory-purchase-email');
+
+    Route::get(
+        '/debug/laboratory-purchase-pdf/{laboratory_purchase}',
+        \App\Http\Controllers\Debug\LaboratoryPurchasePdfPreviewController::class
+    )->name('debug.laboratory-purchase-pdf');
 }
 
 require __DIR__ . '/odessa.php';

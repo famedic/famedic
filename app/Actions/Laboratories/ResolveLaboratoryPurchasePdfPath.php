@@ -6,7 +6,7 @@ use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryStore;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Storage;
-use Spatie\Browsershot\Browsershot;
+use App\Support\BrowsershotConfigurator;
 use Spatie\LaravelPdf\Facades\Pdf;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
@@ -91,40 +91,24 @@ class ResolveLaboratoryPurchasePdfPath
 
     protected function generate(LaboratoryPurchase $laboratoryPurchase, string $storagePath): string
     {
-        Pdf::view('pdfs.laboratory-purchase', [
-            'laboratoryPurchase' => $laboratoryPurchase,
-            'laboratoryStores' => $this->laboratoryStores,
-        ])
+        $notifiable = $laboratoryPurchase->customer?->user ?? (object) [
+            'name' => 'Cliente',
+            'full_name' => null,
+        ];
+
+        $confirmation = LaboratoryPurchaseConfirmationViewData::build($laboratoryPurchase, $notifiable, true);
+        $withAppointment = LaboratoryPurchaseConfirmationViewData::hasAppointmentForConfirmation($laboratoryPurchase);
+
+        Pdf::view('pdfs.laboratory-purchase-confirmation', array_merge($confirmation, [
+            'withAppointment' => $withAppointment,
+        ]))
             ->format('a4')
             ->margins(15, 15, 15, 15)
-            ->withBrowsershot(fn (Browsershot $browsershot) => $this->configureBrowsershot($browsershot))
+            ->withBrowsershot(fn ($browsershot) => BrowsershotConfigurator::apply($browsershot))
             ->disk(config('filesystems.default'))
             ->save($storagePath);
 
         return $storagePath;
-    }
-
-    protected function configureBrowsershot(Browsershot $browsershot): Browsershot
-    {
-        $browsershot->noSandbox();
-
-        $nodeBinary = config('famedic.browsershot.node_binary');
-        $npmBinary = config('famedic.browsershot.npm_binary');
-        $chromePath = config('famedic.browsershot.chrome_path');
-
-        if (is_string($nodeBinary) && $nodeBinary !== '') {
-            $browsershot->setNodeBinary($nodeBinary);
-        }
-
-        if (is_string($npmBinary) && $npmBinary !== '') {
-            $browsershot->setNpmBinary($npmBinary);
-        }
-
-        if (is_string($chromePath) && $chromePath !== '' && is_executable($chromePath)) {
-            $browsershot->setChromePath($chromePath);
-        }
-
-        return $browsershot;
     }
 
     /**
@@ -156,6 +140,7 @@ class ResolveLaboratoryPurchasePdfPath
     protected function calculateContentHash(LaboratoryPurchase $laboratoryPurchase): string
     {
         $contentData = [
+            'pdf_template' => 'laboratory-confirmation-email-v1',
             'purchase' => [
                 'id' => $laboratoryPurchase->id,
                 'gda_order_id' => $laboratoryPurchase->gda_order_id,
