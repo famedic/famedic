@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Laboratories\ResolveLaboratoryPurchasePdfPath;
+use App\Exceptions\ChromiumNotAvailableException;
 use App\Http\Requests\Laboratories\DownloadLaboratoryPurchasePdfRequest;
 use App\Http\Requests\Laboratories\EmailLaboratoryPurchasePdfRequest;
 use App\Models\LaboratoryPurchase;
@@ -23,13 +24,19 @@ class LaboratoryPurchasePdfController extends Controller
     {
         try {
             $storagePath = ($this->resolvePdfPath)($laboratoryPurchase);
+        } catch (ChromiumNotAvailableException $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('laboratory-purchases.show', $laboratoryPurchase)
+                ->withErrors(['pdf' => $exception->getMessage()]);
         } catch (\Throwable $exception) {
             report($exception);
 
             return redirect()
                 ->route('laboratory-purchases.show', $laboratoryPurchase)
                 ->withErrors([
-                    'pdf' => 'No se pudo generar el PDF de la orden. Si usas Docker en local, reconstruye el contenedor app (node y Chromium) o contacta a soporte.',
+                    'pdf' => 'No se pudo generar el PDF de la orden. Verifica que Node, Chromium y las dependencias del sistema estén instalados en el servidor.',
                 ]);
         }
 
