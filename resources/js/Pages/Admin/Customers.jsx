@@ -185,6 +185,14 @@ export default function Customers({ customers, chart, filters, canExport }) {
 					/>
 					<div className="flex items-center justify-end gap-2">
 						<Button
+							href={route("admin.customers.referrals")}
+							outline
+							className="w-full"
+						>
+							Referenciados
+							<UserGroupIcon className="size-4" />
+						</Button>
+						<Button
 							outline
 							className="w-full"
 							onClick={() => setShowFilters(!showFilters)}

@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\CartController;
 use App\Http\Controllers\Admin\ConfigMonitorController;
 use App\Http\Controllers\Admin\ConfigMonitorMetadataController;
 use App\Http\Controllers\Admin\CustomerController;
+use App\Http\Controllers\Admin\CustomerReferralController;
 use App\Http\Controllers\Admin\DocumentationController;
 use App\Http\Controllers\Admin\EfevooTokenController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentController;
@@ -62,6 +63,7 @@ Route::prefix('admin')->middleware([
         Route::get('admin', AdminController::class)->name('admin');
         Route::resource('administrators', AdministratorController::class)->except(['show']);
         Route::post('administrators/export', ExportAdministratorsController::class)->name('administrators.export');
+        Route::get('customers/referrals', [CustomerReferralController::class, 'index'])->name('customers.referrals');
         Route::resource('customers', CustomerController::class)->only(['index', 'show', 'destroy']);
         Route::post('customers/export', ExportCustomersController::class)->name('customers.export');
         Route::resource('users', UserController::class)->only(['index', 'show']);
