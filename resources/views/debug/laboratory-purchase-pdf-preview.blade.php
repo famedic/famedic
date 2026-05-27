@@ -27,8 +27,6 @@
             text-decoration: none;
             font-size: 13px;
         }
-        .toolbar a:hover { background: #fefcbf; }
-        .toolbar code { background: #fef3c7; padding: 2px 6px; border-radius: 4px; }
         .frame-wrap {
             max-width: 900px;
             margin: 0 auto;
@@ -44,30 +42,26 @@
             border-bottom: 1px solid #e2e8f0;
             background: #f7fafc;
         }
-        .pdf-content { padding: 24px; }
+        .pdf-content { padding: 0; }
     </style>
 </head>
 <body>
     <div class="toolbar">
-        <strong>Vista previa PDF (solo local)</strong>
-        Pedido #{{ $laboratoryPurchase->id }}
-        · Folio {{ $laboratoryPurchase->gda_order_id ?? '—' }}
-        · Variante: <code>{{ $variant }}</code>
-        · Plantilla: <code>{{ $withAppointment ? 'con-cita' : 'sin-cita' }}</code>
+        <strong>Vista previa PDF (DomPDF · solo local)</strong>
+        Pedido #{{ $laboratoryPurchase->id }} · Folio {{ $laboratoryPurchase->gda_order_id ?? '—' }}
+        · Variante: <code>{{ $variant }}</code> · Plantilla: <code>{{ $withAppointment ? 'con-cita' : 'sin-cita' }}</code>
         <div style="margin-top:10px;">
             <a href="{{ $previewUrls['html_auto'] }}">HTML · auto</a>
-            <a href="{{ $previewUrls['html_with'] }}">HTML · con cita</a>
             <a href="{{ $previewUrls['html_without'] }}">HTML · sin cita</a>
             <a href="{{ $previewUrls['pdf_auto'] }}" target="_blank" rel="noopener">PDF · auto</a>
-            <a href="{{ $previewUrls['pdf_with'] }}" target="_blank" rel="noopener">PDF · con cita</a>
             <a href="{{ $previewUrls['pdf_without'] }}" target="_blank" rel="noopener">PDF · sin cita</a>
             <a href="{{ $previewUrls['download'] }}" target="_blank" rel="noopener">Descarga real (auth)</a>
-            <a href="{{ route('debug.laboratory-purchase-email', ['laboratory_purchase' => $laboratoryPurchase->id]) }}" target="_blank" rel="noopener">Correo de confirmación</a>
+            <a href="{{ $previewUrls['email'] }}" target="_blank" rel="noopener">Correo confirmación</a>
         </div>
     </div>
 
     <div class="frame-wrap">
-        <div class="frame-label">Contenido del PDF (HTML — logos vía URL pública; el PDF final embebe imágenes en base64 para Chromium)</div>
+        <div class="frame-label">Vista HTML (misma plantilla que el PDF DomPDF)</div>
         <div class="pdf-content">
             {!! $pdfContent !!}
         </div>

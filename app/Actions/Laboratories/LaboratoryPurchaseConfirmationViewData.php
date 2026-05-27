@@ -89,7 +89,7 @@ final class LaboratoryPurchaseConfirmationViewData
     }
 
     /**
-     * Imágenes embebidas para PDF (Browsershot no permite file:// en el HTML).
+     * Imágenes embebidas en base64 para PDF (DomPDF).
      */
     protected static function assetDataUri(string $path): string
     {

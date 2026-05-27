@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# Ejecutar UNA VEZ en el servidor Forge (SSH como forge) para PDFs de órdenes de laboratorio.
+# Ejecutar UNA VEZ en el servidor Forge (SSH como usuario forge).
 set -euo pipefail
 
-echo "==> Instalando Chromium y dependencias para Puppeteer/Browsershot..."
+echo "==> Instalando Chromium y dependencias para PDFs (Browsershot)..."
 sudo apt-get update
-# En Ubuntu 22+/24+ el paquete puede llamarse chromium o chromium-browser
-if apt-cache show chromium-browser &>/dev/null; then
+
+# Ubuntu 22/24: el paquete suele llamarse "chromium" (no siempre chromium-browser)
+if apt-cache show chromium &>/dev/null; then
+  CHROMIUM_PKG=chromium
+elif apt-cache show chromium-browser &>/dev/null; then
   CHROMIUM_PKG=chromium-browser
 else
-  CHROMIUM_PKG=chromium
+  echo "ERROR: No hay paquete chromium en apt. Prueba: sudo snap install chromium"
+  exit 1
 fi
 
 sudo apt-get install -y \
@@ -25,7 +29,7 @@ sudo apt-get install -y \
   fonts-liberation
 
 CHROME=""
-for candidate in /usr/bin/chromium-browser /usr/bin/chromium /snap/bin/chromium; do
+for candidate in /usr/bin/chromium /usr/bin/chromium-browser /usr/bin/google-chrome-stable /snap/bin/chromium; do
   if [ -x "$candidate" ]; then
     CHROME="$candidate"
     break
@@ -33,19 +37,21 @@ for candidate in /usr/bin/chromium-browser /usr/bin/chromium /snap/bin/chromium;
 done
 
 if [ -z "$CHROME" ]; then
-  echo "ERROR: No se encontró chromium después de instalar. Revisa manualmente con: which chromium-browser"
+  echo "ERROR: Chromium instalado pero no hay binario en rutas conocidas."
+  echo "Prueba: ls -la /usr/bin/chromium*  &&  command -v chromium"
   exit 1
 fi
 
-echo "==> Chromium encontrado en: $CHROME"
+echo "==> Chromium: $CHROME"
 "$CHROME" --version || true
 
 mkdir -p /tmp/.chromium/profile /tmp/.chromium/crashdumps /tmp/.chromium/Crashpad
 chmod -R 777 /tmp/.chromium
 
 echo ""
-echo "Listo. En Forge → Environment del sitio, agrega:"
-echo "  BROWSERSHOT_CHROME_PATH=$CHROME"
-echo "  BROWSERSHOT_CHROME_USER_DATA_DIR=/tmp/.chromium"
+echo "=== Agrega en Forge → Environment (sitio) ==="
+echo "BROWSERSHOT_CHROME_PATH=$CHROME"
+echo "BROWSERSHOT_CHROME_USER_DATA_DIR=/tmp/.chromium"
 echo ""
-echo "Tras cada deploy, asegúrate de que exista node_modules (npm ci en el script de deploy)."
+echo "=== Verifica con Laravel (desde current del sitio) ==="
+echo "php artisan laboratory:check-pdf-deps"

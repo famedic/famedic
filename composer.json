@@ -29,7 +29,7 @@
 		"paragonie/constant_time_encoding": "^3.1",
 		"propaganistas/laravel-phone": "^5.3",
 		"smalot/pdfparser": "^2.12",
-		"spatie/laravel-pdf": "^1.5",
+		"barryvdh/laravel-dompdf": "^3.1",
 		"spatie/laravel-permission": "^6.9",
 		"spomky-labs/otphp": "^11.4",
 		"symfony/http-client": "^7.2",

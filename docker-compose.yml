@@ -30,11 +30,6 @@ services:
     environment:
       APP_ENV: "${APP_ENV:-local}"
       APP_DEBUG: "${APP_DEBUG:-true}"
-      XDG_CONFIG_HOME: /tmp/.chromium
-      XDG_CACHE_HOME: /tmp/.chromium
-      HOME: /tmp/.chromium
-      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
-      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
     healthcheck:
       test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
       interval: 5s
