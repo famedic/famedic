@@ -33,6 +33,8 @@ use App\Http\Controllers\Admin\OnlinePharmacyPurchases\ResolvedDevAssistanceRequ
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\UnresolvedDevAssistanceRequestController as OnlinePharmacyUnresolvedDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\VendorPaymentsController as OnlinePharmacyVendorPaymentsController;
 use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
+use App\Http\Controllers\Admin\EmailSimulatorController;
+use App\Http\Controllers\Admin\GdaNotificationSimulatorController;
 use App\Http\Controllers\Admin\OtpSimulatorController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SimulatorController;
@@ -179,6 +181,17 @@ Route::prefix('admin')->middleware([
         Route::delete('coupons/{coupon}/assignments/{couponUser}', [CouponController::class, 'destroyAssignment'])->name('coupons.assignments.destroy');
         Route::resource('coupons', CouponController::class);
         Route::get('simulators', [SimulatorController::class, 'index'])->name('simulators.index');
+        Route::get('simulators/gda', [GdaNotificationSimulatorController::class, 'show'])->name('simulators.gda');
+        Route::get('simulators/gda/{laboratory_purchase}/history', [GdaNotificationSimulatorController::class, 'history'])
+            ->name('simulators.gda.history');
+        Route::post('simulators/gda/{laboratory_purchase}/simulate', [GdaNotificationSimulatorController::class, 'simulate'])
+            ->name('simulators.gda.simulate');
+        Route::post('simulators/gda/{laboratory_purchase}/resend', [GdaNotificationSimulatorController::class, 'resend'])
+            ->name('simulators.gda.resend');
+        Route::get('simulators/emails', [EmailSimulatorController::class, 'index'])->name('simulators.emails');
+        Route::get('simulators/emails/preview/{type}', [EmailSimulatorController::class, 'preview'])
+            ->where('type', '[a-z0-9_]+')
+            ->name('simulators.emails.preview');
         Route::get('simulators/otp', [OtpSimulatorController::class, 'show'])->name('simulators.otp');
         Route::prefix('simulators/otp/{laboratory_purchase}')->name('simulators.otp.')->group(function () {
             Route::get('status', [OtpSimulatorController::class, 'status'])->name('status');

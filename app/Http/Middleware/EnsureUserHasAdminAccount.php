@@ -176,6 +176,16 @@ class EnsureUserHasAdminAccount
                             'url' => route('admin.simulators.otp'),
                             'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.otp'),
                         ],
+                        [
+                            'label' => 'Simulador de correos',
+                            'url' => route('admin.simulators.emails'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.emails'),
+                        ],
+                        [
+                            'label' => 'Simulador GDA',
+                            'url' => route('admin.simulators.gda'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.gda'),
+                        ],
                     ],
                 ]] : [],
                 // Monitoreo y herramientas internas solo para administradores
