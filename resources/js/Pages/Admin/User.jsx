@@ -23,11 +23,16 @@ import {
 	CreditCardIcon,
 	BellAlertIcon,
 	ShoppingCartIcon,
+	Cog6ToothIcon,
 } from "@heroicons/react/16/solid";
 import { router } from "@inertiajs/react";
+import { useState } from "react";
+import ManageUserDialog from "@/Components/Admin/ManageUserDialog";
 
 export default function UserPage({
 	user,
+	genders = [],
+	states = {},
 	customer,
 	canViewTaxProfilesAdmin = false,
 	efevooTokens,
@@ -37,10 +42,20 @@ export default function UserPage({
 	monitoringCarts = null,
 	canViewCartDetails = false,
 }) {
+	const [manageOpen, setManageOpen] = useState(false);
+
 	return (
 		<AdminLayout title={user.full_name || user.email || "Usuario"}>
 			<div className="space-y-6">
-				<Header user={user} />
+				<Header user={user} onManage={() => setManageOpen(true)} />
+
+				<ManageUserDialog
+					open={manageOpen}
+					onClose={setManageOpen}
+					user={user}
+					genders={genders}
+					states={states}
+				/>
 
 				<div className="grid gap-4 md:grid-cols-2">
 					<ProfileCard user={user} />
@@ -80,37 +95,43 @@ export default function UserPage({
 	);
 }
 
-function Header({ user }) {
+function Header({ user, onManage }) {
 	return (
-		<div className="flex flex-wrap items-center gap-4">
-			<Avatar
-				src={user.profile_photo_url}
-				alt={user.full_name || user.email}
-				className="h-16 w-16"
-			/>
-			<div className="space-y-1">
-				<Heading>{user.full_name || user.email}</Heading>
-				<div className="flex flex-wrap gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-					{user.email && (
-						<span className="inline-flex items-center gap-1">
-							<EnvelopeIcon className="size-4" />
-							{user.email}
-						</span>
-					)}
-					{user.full_phone && (
-						<span className="inline-flex items-center gap-1">
-							<PhoneIcon className="size-4" />
-							{user.full_phone}
-						</span>
-					)}
-					{user.created_at && (
-						<span className="inline-flex items-center gap-1">
-							<CalendarIcon className="size-4" />
-							Registrado: {user.created_at}
-						</span>
-					)}
+		<div className="flex flex-wrap items-center justify-between gap-4">
+			<div className="flex flex-wrap items-center gap-4">
+				<Avatar
+					src={user.profile_photo_url}
+					alt={user.full_name || user.email}
+					className="h-16 w-16"
+				/>
+				<div className="space-y-1">
+					<Heading>{user.full_name || user.email}</Heading>
+					<div className="flex flex-wrap gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+						{user.email && (
+							<span className="inline-flex items-center gap-1">
+								<EnvelopeIcon className="size-4" />
+								{user.email}
+							</span>
+						)}
+						{user.full_phone && (
+							<span className="inline-flex items-center gap-1">
+								<PhoneIcon className="size-4" />
+								{user.full_phone}
+							</span>
+						)}
+						{user.created_at && (
+							<span className="inline-flex items-center gap-1">
+								<CalendarIcon className="size-4" />
+								Registrado: {user.created_at}
+							</span>
+						)}
+					</div>
 				</div>
 			</div>
+			<Button type="button" onClick={onManage}>
+				<Cog6ToothIcon />
+				Gestionar
+			</Button>
 		</div>
 	);
 }

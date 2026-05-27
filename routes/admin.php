@@ -66,6 +66,9 @@ Route::prefix('admin')->middleware([
         Route::get('customers/referrals', [CustomerReferralController::class, 'index'])->name('customers.referrals');
         Route::resource('customers', CustomerController::class)->only(['index', 'show', 'destroy']);
         Route::post('customers/export', ExportCustomersController::class)->name('customers.export');
+        Route::patch('users/{user}', [UserController::class, 'update'])->name('users.update');
+        Route::post('users/{user}/verify-email', [UserController::class, 'verifyEmail'])->name('users.verify-email');
+        Route::post('users/{user}/verify-phone', [UserController::class, 'verifyPhone'])->name('users.verify-phone');
         Route::resource('users', UserController::class)->only(['index', 'show']);
         Route::resource('carts', CartController::class)->only(['index', 'show']);
         Route::post('carts/export', ExportCartsController::class)->name('carts.export');

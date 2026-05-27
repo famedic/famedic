@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Admin\Users\UpdateAdminUserAction;
 use App\Actions\BuildUserAdminChartDataAction;
+use App\Data\StatesMexico;
+use App\Enums\Gender;
 use App\Enums\MonitoringCartType;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\Users\UpdateUserRequest;
 use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\EfevooToken;
@@ -182,6 +186,8 @@ class UserController extends Controller
 
         return Inertia::render('Admin/User', [
             'user' => $user,
+            'genders' => Gender::casesWithLabels(),
+            'states' => StatesMexico::todos(),
             'customer' => $customer,
             'canViewTaxProfilesAdmin' => request()->user()->administrator->hasPermissionTo('tax-profiles.manage'),
             'efevooTokens' => $efevooTokens,
@@ -191,5 +197,32 @@ class UserController extends Controller
             'monitoringCarts' => $monitoringCarts,
             'canViewCartDetails' => $canViewCartDetails,
         ]);
+    }
+
+    public function update(UpdateUserRequest $request, User $user, UpdateAdminUserAction $updateAdminUserAction)
+    {
+        $updateAdminUserAction($user, $request->validated());
+
+        return back()->flashMessage('Usuario actualizado correctamente.');
+    }
+
+    public function verifyEmail(User $user)
+    {
+        request()->user()->administrator->hasPermissionTo('users.manage') || abort(403);
+
+        $user->email_verified_at = now();
+        $user->save();
+
+        return back()->flashMessage('Correo marcado como verificado.');
+    }
+
+    public function verifyPhone(User $user)
+    {
+        request()->user()->administrator->hasPermissionTo('users.manage') || abort(403);
+
+        $user->phone_verified_at = now();
+        $user->save();
+
+        return back()->flashMessage('Teléfono marcado como verificado.');
     }
 }
