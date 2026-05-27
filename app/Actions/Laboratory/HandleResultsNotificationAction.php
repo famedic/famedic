@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Notifications\LaboratoryResultsAvailable;
 use App\Services\Laboratory\LabOrderNotificationGateService;
+use App\Support\Laboratory\GdaSimulatorSettings;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -55,7 +56,16 @@ class HandleResultsNotificationAction
         // Encontrar usuario
         $userToNotify = $this->findUserToNotify($references, $quote, $purchase);
 
-        if ($gateResult['should_send_results_email']) {
+        $simulator = $this->simulatorSettings();
+
+        if ($simulator && ! $simulator->sendEmail) {
+            Log::info('Results email skipped (GDA simulator: send_email disabled)', [
+                'gda_order_id' => $gdaOrderId,
+                'notification_id' => $notification->id,
+            ]);
+        } elseif ($simulator?->bypassGate) {
+            $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase, $hasResultsInPayload);
+        } elseif ($gateResult['should_send_results_email']) {
             $wasSent = $this->notificationGateService->sendResultsOnce($gdaOrderId, function () use (
                 $userToNotify,
                 $notification,
@@ -264,6 +274,13 @@ class HandleResultsNotificationAction
         }
 
         return null;
+    }
+
+    protected function simulatorSettings(): ?GdaSimulatorSettings
+    {
+        return app()->bound(GdaSimulatorSettings::class)
+            ? app(GdaSimulatorSettings::class)
+            : null;
     }
 
     protected function sendEmailNotification(?User $user, LaboratoryNotification $notification, array $data, $quote, $purchase, bool $hasResultsInPayload): void
