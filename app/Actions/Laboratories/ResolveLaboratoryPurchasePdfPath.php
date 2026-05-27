@@ -3,12 +3,7 @@
 namespace App\Actions\Laboratories;
 
 use App\Models\LaboratoryPurchase;
-use App\Models\LaboratoryStore;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Storage;
-use Spatie\Browsershot\Browsershot;
-use Spatie\LaravelPdf\Facades\Pdf;
-use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class ResolveLaboratoryPurchasePdfPath
 {
@@ -16,7 +11,10 @@ class ResolveLaboratoryPurchasePdfPath
 
     protected string $storageDirectory;
 
-    protected Collection $laboratoryStores;
+    public function __construct(
+        private GenerateLaboratoryPurchaseConfirmationPdf $generatePdf,
+    ) {
+    }
 
     public function __invoke(LaboratoryPurchase $laboratoryPurchase): string
     {
@@ -38,15 +36,7 @@ class ResolveLaboratoryPurchasePdfPath
 
         $storagePath = $this->storagePath();
 
-        try {
-            $this->generate($laboratoryPurchase, $storagePath);
-        } catch (ProcessFailedException $e) {
-            if ($gdaPath = $this->resolveFromGdaPdfBase64($laboratoryPurchase)) {
-                return $gdaPath;
-            }
-
-            throw $e;
-        }
+        $this->generate($laboratoryPurchase, $storagePath);
 
         $laboratoryPurchase->updateQuietly(['pdf_hash' => $this->contentHash]);
 
@@ -66,7 +56,6 @@ class ResolveLaboratoryPurchasePdfPath
     protected function prepare(LaboratoryPurchase $laboratoryPurchase): void
     {
         $this->storageDirectory = config('famedic.storage_paths.laboratory_purchase_pdfs');
-        $this->laboratoryStores = LaboratoryStore::ofBrand($laboratoryPurchase->brand)->get();
 
         $laboratoryPurchase->loadMissing([
             'customer.user',
@@ -74,6 +63,8 @@ class ResolveLaboratoryPurchasePdfPath
             'laboratoryAppointment.laboratoryStore',
             'transactions',
         ]);
+
+        $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
 
         $this->contentHash = $this->calculateContentHash($laboratoryPurchase);
     }
@@ -91,40 +82,18 @@ class ResolveLaboratoryPurchasePdfPath
 
     protected function generate(LaboratoryPurchase $laboratoryPurchase, string $storagePath): string
     {
-        Pdf::view('pdfs.laboratory-purchase', [
-            'laboratoryPurchase' => $laboratoryPurchase,
-            'laboratoryStores' => $this->laboratoryStores,
-        ])
-            ->format('a4')
-            ->margins(15, 15, 15, 15)
-            ->withBrowsershot(fn (Browsershot $browsershot) => $this->configureBrowsershot($browsershot))
-            ->disk(config('filesystems.default'))
-            ->save($storagePath);
+        $notifiable = $laboratoryPurchase->customer?->user ?? (object) [
+            'name' => 'Cliente',
+            'full_name' => null,
+        ];
+
+        $withAppointment = LaboratoryPurchaseConfirmationViewData::hasAppointmentForConfirmation($laboratoryPurchase);
+
+        $binary = $this->generatePdf->binary($laboratoryPurchase, $notifiable, $withAppointment);
+
+        Storage::disk(config('filesystems.default'))->put($storagePath, $binary);
 
         return $storagePath;
-    }
-
-    protected function configureBrowsershot(Browsershot $browsershot): Browsershot
-    {
-        $browsershot->noSandbox();
-
-        $nodeBinary = config('famedic.browsershot.node_binary');
-        $npmBinary = config('famedic.browsershot.npm_binary');
-        $chromePath = config('famedic.browsershot.chrome_path');
-
-        if (is_string($nodeBinary) && $nodeBinary !== '') {
-            $browsershot->setNodeBinary($nodeBinary);
-        }
-
-        if (is_string($npmBinary) && $npmBinary !== '') {
-            $browsershot->setNpmBinary($npmBinary);
-        }
-
-        if (is_string($chromePath) && $chromePath !== '' && is_executable($chromePath)) {
-            $browsershot->setChromePath($chromePath);
-        }
-
-        return $browsershot;
     }
 
     /**
@@ -156,6 +125,7 @@ class ResolveLaboratoryPurchasePdfPath
     protected function calculateContentHash(LaboratoryPurchase $laboratoryPurchase): string
     {
         $contentData = [
+            'pdf_engine' => 'dompdf-v2',
             'purchase' => [
                 'id' => $laboratoryPurchase->id,
                 'gda_order_id' => $laboratoryPurchase->gda_order_id,
@@ -166,35 +136,21 @@ class ResolveLaboratoryPurchasePdfPath
                 'phone' => $laboratoryPurchase->phone,
                 'birth_date' => $laboratoryPurchase->birth_date?->format('Y-m-d'),
                 'gender' => $laboratoryPurchase->gender?->value,
-                'street' => $laboratoryPurchase->street,
-                'number' => $laboratoryPurchase->number,
-                'neighborhood' => $laboratoryPurchase->neighborhood,
-                'city' => $laboratoryPurchase->city,
-                'state' => $laboratoryPurchase->state,
-                'zipcode' => $laboratoryPurchase->zipcode,
-                'additional_references' => $laboratoryPurchase->additional_references,
                 'total_cents' => $laboratoryPurchase->total_cents,
                 'created_at' => $laboratoryPurchase->created_at?->format('Y-m-d H:i:s'),
             ],
             'items' => $laboratoryPurchase->laboratoryPurchaseItems->map(fn ($item) => [
                 'name' => $item->name,
                 'indications' => $item->indications,
-                'price_cents' => $item->price_cents,
+                'feature_list' => LaboratoryPurchaseConfirmationViewData::normalizePackageFeatureList($item->feature_list),
             ])->toArray(),
             'appointment' => $laboratoryPurchase->laboratoryAppointment ? [
                 'appointment_date' => $laboratoryPurchase->laboratoryAppointment->appointment_date?->format('Y-m-d H:i:s'),
-                'notes' => $laboratoryPurchase->laboratoryAppointment->notes,
                 'store_name' => $laboratoryPurchase->laboratoryAppointment->laboratoryStore?->name,
-                'store_address' => $laboratoryPurchase->laboratoryAppointment->laboratoryStore?->address,
             ] : null,
             'transactions' => $laboratoryPurchase->transactions->map(fn ($transaction) => [
                 'payment_method' => $transaction->payment_method,
-                'details' => $transaction->details,
-            ])->toArray(),
-            'laboratory_stores' => $this->laboratoryStores->map(fn ($store) => [
-                'name' => $store->name,
-                'address' => $store->address,
-                'state' => $store->state,
+                'payment_status' => $transaction->payment_status,
             ])->toArray(),
         ];
 

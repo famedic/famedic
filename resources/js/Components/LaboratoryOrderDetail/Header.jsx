@@ -1,8 +1,7 @@
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import {
-	ArrowDownTrayIcon,
-	ArrowUpOnSquareIcon,
+	DocumentArrowDownIcon,
 	BeakerIcon,
 	CalendarDaysIcon,
 	ArrowsRightLeftIcon,
@@ -13,7 +12,7 @@ import {
 const typeConfig = {
 	without_appointment: { label: "Sin cita", icon: BeakerIcon, color: "blue" },
 	with_appointment: {
-		label: "Requiere cita",
+		label: "Cita confirmada",
 		icon: CalendarDaysIcon,
 		color: "amber",
 	},
@@ -32,12 +31,12 @@ export default function Header({
 	gdaConsecutivo,
 	onRequestInvoice,
 	onDownload,
-	onShare,
 	isCancelled = false,
 	cancelledAtLabel = null,
 }) {
 	const config = typeConfig[orderType] || typeConfig.without_appointment;
 	const TypeIcon = config.icon;
+	const showTypeBadge = orderType !== "without_appointment";
 
 	return (
 		<div className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
@@ -95,10 +94,12 @@ export default function Header({
 						<Badge color="slate" className="max-w-full break-words">
 							{dateLabel}
 						</Badge>
-						<Badge color={config.color} className="max-w-full">
-							<TypeIcon className="size-4 shrink-0" />
-							<span className="min-w-0">{config.label}</span>
-						</Badge>
+						{showTypeBadge && (
+							<Badge color={config.color} className="max-w-full">
+								<TypeIcon className="size-4 shrink-0" />
+								<span className="min-w-0">{config.label}</span>
+							</Badge>
+						)}
 						{isCancelled ? (
 							<Badge color="red" className="max-w-full">
 								Cancelado
@@ -110,26 +111,16 @@ export default function Header({
 						)}
 					</div>
 				</div>
-				<div className="flex min-w-0 w-full max-w-full flex-col gap-2 sm:flex-row sm:flex-wrap lg:w-auto lg:max-w-md lg:justify-end">
+				<div className="flex min-w-0 w-full max-w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-start lg:w-auto lg:max-w-md lg:justify-end">
 					<Button
 						outline
 						type="button"
-						className="w-full justify-center sm:w-auto"
+						className="w-full shrink-0 justify-center self-start sm:w-auto"
 						onClick={onDownload}
-						title="Descargar PDF de la orden"
+						title="Descargar comprobante en PDF"
 					>
-						<ArrowDownTrayIcon className="size-4" />
-						Descargar orden
-					</Button>
-					<Button
-						outline
-						type="button"
-						className="w-full justify-center sm:w-auto"
-						onClick={onShare}
-						title="Compartir enlace o enviar PDF por correo"
-					>
-						<ArrowUpOnSquareIcon className="size-4" />
-						Compartir
+						<DocumentArrowDownIcon data-slot="icon" className="size-4" aria-hidden />
+						Descargar
 					</Button>
 					{canRequestInvoice && !isCancelled && (
 						<div className="flex w-full min-w-0 flex-col gap-1 sm:w-auto">

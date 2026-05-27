@@ -9,15 +9,12 @@ use App\Models\LaboratoryPurchase;
 use App\Notifications\LaboratoryPurchasePdfEmail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
-use Inertia\Inertia;
 
 class LaboratoryPurchasePdfController extends Controller
 {
-    private ResolveLaboratoryPurchasePdfPath $resolvePdfPath;
-
-    public function __construct(ResolveLaboratoryPurchasePdfPath $resolvePdfPath)
-    {
-        $this->resolvePdfPath = $resolvePdfPath;
+    public function __construct(
+        private ResolveLaboratoryPurchasePdfPath $resolvePdfPath,
+    ) {
     }
 
     public function download(DownloadLaboratoryPurchasePdfRequest $request, LaboratoryPurchase $laboratoryPurchase)
@@ -30,16 +27,15 @@ class LaboratoryPurchasePdfController extends Controller
             return redirect()
                 ->route('laboratory-purchases.show', $laboratoryPurchase)
                 ->withErrors([
-                    'pdf' => 'No se pudo generar el PDF de la orden. Si usas Docker en local, reconstruye el contenedor app (node y Chromium) o contacta a soporte.',
+                    'pdf' => 'No se pudo generar el PDF de la orden. Intenta de nuevo más tarde o contacta a soporte.',
                 ]);
         }
 
-        return Inertia::location(
-            Storage::temporaryUrl(
-                $storagePath,
-                now()->addMinutes(5)
-            )
-        );
+        $filename = 'orden-laboratorio-'.($laboratoryPurchase->gda_order_id ?: $laboratoryPurchase->id).'.pdf';
+
+        return Storage::disk(config('filesystems.default'))->download($storagePath, $filename, [
+            'Content-Type' => 'application/pdf',
+        ]);
     }
 
     public function email(EmailLaboratoryPurchasePdfRequest $request, LaboratoryPurchase $laboratoryPurchase)

@@ -8,9 +8,12 @@ import {
   BuildingStorefrontIcon,
   CreditCardIcon,
   InformationCircleIcon as InformationCircleIconSolid,
+  LockClosedIcon,
 } from "@heroicons/react/16/solid";
 import { Subheading } from "@/Components/Catalyst/heading";
 import FocusedLayout from "@/Layouts/FocusedLayout";
+import CheckoutWhatsAppHelp from "@/Components/Checkout/CheckoutWhatsAppHelp";
+import CheckoutWizardFloatingFooter from "@/Components/Checkout/CheckoutWizardFloatingFooter";
 import { Divider } from "@/Components/Catalyst/divider";
 import { XMarkIcon, InformationCircleIcon } from "@heroicons/react/20/solid";
 import FAQs from "@/Components/FAQs";
@@ -40,10 +43,18 @@ export default function CheckoutLayout({
   data = {},
   /** Si se pasa, sustituye el botón "Pagar ahora" (p. ej. PayPal). */
   alternateOnlinePayment = null,
+  /** Modo wizard multi-paso */
+  stepper = null,
+  footerActions = null,
+  couponSection = null,
+  hideDefaultSubmit = false,
+  /** Ancla para scroll al cambiar de paso del wizard */
+  stepContentRef = null,
+  /** Footer Continuar/Volver pegado al fondo en pasos con listas largas */
+  floatingWizardFooter = false,
 }) {
   const [isOnlineProcessing, setIsOnlineProcessing] = useState(false);
   const [isBranchProcessing, setIsBranchProcessing] = useState(false);
-
   const onlineDisabled = onlinePaymentDisabled !== undefined ? onlinePaymentDisabled : paymentDisabled;
   const branchDisabled = branchPaymentDisabled !== undefined ? branchPaymentDisabled : paymentDisabled;
 
@@ -83,10 +94,35 @@ export default function CheckoutLayout({
               setIsBranchProcessing(false);
             }
           }}
-          className="flex w-full flex-col gap-8 lg:col-span-3"
+          className="flex w-full flex-col gap-6 lg:col-span-3"
         >
-          {children}          
-          
+          <div
+            ref={stepContentRef}
+            id="checkout-wizard-step"
+            className={clsx(
+              "scroll-mt-20 space-y-6",
+              floatingWizardFooter && "pb-28",
+            )}
+          >
+            {stepper}
+            {children}
+          </div>
+
+          {floatingWizardFooter && (
+            <div className="h-20 shrink-0" aria-hidden="true" />
+          )}
+
+          {footerActions &&
+            (floatingWizardFooter ? (
+              <CheckoutWizardFloatingFooter>
+                {footerActions}
+              </CheckoutWizardFloatingFooter>
+            ) : (
+              footerActions
+            ))}
+
+          {!hideDefaultSubmit && (
+            <>
           {/* PAGO ONLINE */}
           {alternateOnlinePayment ? (
             <div
@@ -148,21 +184,35 @@ export default function CheckoutLayout({
             </Anchor>
             .
           </Text>
+            </>
+          )}
         </form>
 
-        <CheckoutSummary summaryDetails={summaryDetails} items={items} />
+        <CheckoutSummary
+          summaryDetails={summaryDetails}
+          items={items}
+          couponSection={couponSection}
+        />
       </div>
 
       <Footer />
+      <CheckoutWhatsAppHelp />
     </FocusedLayout>
   );
 }
 
-function CheckoutSummary({ summaryDetails, items }) {
+function CheckoutSummary({ summaryDetails, items, couponSection = null }) {
     return (
         <div className="order-first mx-auto w-full lg:order-last lg:col-span-2">
-            <section className="sticky top-8 space-y-6 rounded-lg bg-white px-4 py-6 shadow sm:p-6 lg:col-span-5 lg:p-8 dark:bg-slate-900">
-                <div className="flow-root">
+            <section className="sticky top-8 space-y-6 overflow-hidden rounded-lg bg-white px-4 py-6 shadow sm:p-6 lg:col-span-5 lg:p-8 dark:bg-slate-900">
+                <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-slate-400">
+                    <LockClosedIcon className="size-4" />
+                    <Text>Pago 100% seguro</Text>
+                </div>
+
+                <Subheading>Resumen del pedido</Subheading>
+
+                <div className="flow-root max-h-64 overflow-x-hidden overflow-y-auto lg:max-h-80">
                     <ul role="list" className="[&>*:last-child]:hidden">
                         {items.length > 0 ? (
                             items.map((item, index) => (
@@ -190,6 +240,8 @@ function CheckoutSummary({ summaryDetails, items }) {
                     </ul>
                 </div>
 
+                {couponSection}
+
                 <Subheading>Resumen</Subheading>
 
                 <dl className="[&>:first-child]:pt-0 [&>:last-child]:pb-6">
@@ -209,8 +261,8 @@ function CheckoutSummary({ summaryDetails, items }) {
 function CartDetail({ label, value, totalRow = false }) {
     return (
         <>
-            <div className="flex items-center justify-between gap-2 py-6">
-                <dt>
+            <div className="flex min-w-0 items-center justify-between gap-2 py-6">
+                <dt className="min-w-0 shrink">
                     {totalRow ? (
                         <Subheading
                             className={totalRow ? "dark:!text-famedic-light" : ""}
@@ -221,8 +273,8 @@ function CartDetail({ label, value, totalRow = false }) {
                         <Text>{label}</Text>
                     )}
                 </dt>
-                <dd>
-                    <Text className="max-w-48 text-right">
+                <dd className="min-w-0 shrink-0">
+                    <Text className="max-w-48 break-words text-right">
                         {totalRow ? (
                             <Strong
                                 className={totalRow ? "dark:!text-famedic-light" : ""}
@@ -256,7 +308,7 @@ function CartItem({
 }) {
     return (
         <>
-            <li className="flex pb-6">
+            <li className="flex min-w-0 pb-6">
                 {(showDefaultImage || imgSrc) && (
                     <div className="flex-shrink-0">
                         {imgSrc ? (
@@ -273,12 +325,12 @@ function CartItem({
                     </div>
                 )}
                 <div
-                    className={`w-full ${imgSrc || showDefaultImage ? "ml-4 sm:ml-6" : ""}`}
+                    className={`min-w-0 w-full ${imgSrc || showDefaultImage ? "ml-4 sm:ml-6" : ""}`}
                 >
-                    <div className="relative flex sm:gap-x-6">
-                        <div className="w-full">
+                    <div className="relative flex min-w-0 sm:gap-x-6">
+                        <div className="min-w-0 w-full">
                             <div className="pr-9">
-                                <Subheading className="mb-3">
+                                <Subheading className="mb-3 break-words">
                                     {quantity && (
                                         <Badge color="slate">{quantity}</Badge>
                                     )}{" "}
@@ -296,7 +348,7 @@ function CartItem({
                                 )}
 
                                 {description && (
-                                    <Text className="sm:max-w-[80%]">
+                                    <Text className="break-words">
                                         <span className="text-xs">
                                             {description}
                                         </span>
@@ -304,7 +356,7 @@ function CartItem({
                                 )}
 
                                 {indications && (
-                                    <Text className="sm:max-w-[80%]">
+                                    <Text className="break-words">
                                         <span className="text-xs">
                                             {indications}
                                         </span>
@@ -331,19 +383,19 @@ function CartItem({
                                 )}
                             </div>
                             {discountedPrice && discountPercentage > 0 && (
-                                <Text className="mt-3 space-x-2 text-right">
+                                <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
                                     {discountPercentage && (
                                         <Badge color="famedic-lime">
                                             {discountPercentage}%
                                         </Badge>
                                     )}
-                                    <span className="line-through">
+                                    <span className="text-sm text-zinc-500 line-through dark:text-slate-400">
                                         {discountedPrice}
                                     </span>
-                                </Text>
+                                </div>
                             )}
 
-                            <Text className="mt-4 text-right">
+                            <Text className="mt-4 break-words text-right">
                                 <Strong>
                                     <span className="text-famedic-dark dark:text-white">
                                         {price}

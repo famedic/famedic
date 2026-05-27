@@ -14,6 +14,8 @@ export function Table({
 	dense = false,
 	grid = false,
 	striped = false,
+	wrap = false,
+	tableClassName,
 	className,
 	children,
 	...props
@@ -25,7 +27,8 @@ export function Table({
 					{...props}
 					className={clsx(
 						className,
-						"-mx-[--gutter] overflow-x-auto whitespace-nowrap",
+						"-mx-[--gutter] overflow-x-auto",
+						wrap ? "whitespace-normal" : "whitespace-nowrap",
 					)}
 				>
 					<div
@@ -34,7 +37,12 @@ export function Table({
 							!bleed && "sm:px-[--gutter]",
 						)}
 					>
-						<table className="min-w-full text-left text-sm/6 text-zinc-950 dark:text-white">
+						<table
+							className={clsx(
+								"min-w-full text-left text-sm/6 text-zinc-950 dark:text-white",
+								tableClassName,
+							)}
+						>
 							{children}
 						</table>
 					</div>

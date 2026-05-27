@@ -14,7 +14,6 @@ import ResultsSection from "@/Components/LaboratoryOrderDetail/ResultsSection";
 import OrderTimeline from "@/Components/LaboratoryOrderDetail/OrderTimeline";
 import InstructionsContent from "@/Components/LaboratoryOrderDetail/InstructionsContent";
 import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
-import PurchasePdfDialog from "@/Components/PurchasePdfDialog";
 import Card from "@/Components/Card";
 import { navigateToLabResults, openLabResultsInNewTabOrSame } from "@/Utils/openLabResultsUrl";
 import { isLabResultsOtpRequired } from "@/Utils/labResultsOtp";
@@ -68,10 +67,22 @@ export default function LaboratoryOrderDetail({
 	const [otpPurchaseId, setOtpPurchaseId] = useState(null);
 	const [isProcessingResults, setIsProcessingResults] = useState(false);
 	const [otpStatus, setOtpStatus] = useState({ verified: false, expiresIn: 0 });
-	const [showPdfDialog, setShowPdfDialog] = useState(false);
-	const [pdfDialogTab, setPdfDialogTab] = useState(0);
-	const [shareNotice, setShareNotice] = useState(null);
 	const pendingAfterOtpRef = useRef(null);
+
+	const scrollToTabContent = () => {
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				document
+					.getElementById("laboratory-order-tabs")
+					?.scrollIntoView({ behavior: "smooth", block: "start" });
+			});
+		});
+	};
+
+	const handleTabChange = (tab) => {
+		setActiveTab(tab);
+		scrollToTabContent();
+	};
 	const { daysLeftToRequestInvoice = 0, errors: pageErrors = {}, ...pageProps } = usePage().props;
 	const labResultsOtpRequired = isLabResultsOtpRequired(pageProps);
 
@@ -370,52 +381,15 @@ export default function LaboratoryOrderDetail({
 
 	const handleDownloadOrder = () => {
 		if (!laboratoryPurchase?.id) return;
-		window.open(
-			route("laboratory-purchases.download-pdf", {
-				laboratory_purchase: laboratoryPurchase.id,
-			}),
-			"_blank",
-			"noopener,noreferrer",
-		);
-	};
-
-	const handleShareOrder = async () => {
-		if (!laboratoryPurchase?.id) return;
-
-		const shareUrl = window.location.href;
-		const shareTitle = `Orden de laboratorio ${laboratoryPurchase.gda_order_id || laboratoryPurchase.id}`;
-		const sharePayload = {
-			title: shareTitle,
-			text: "Consulta el detalle de mi orden de laboratorio en Famedic.",
-			url: shareUrl,
-		};
-
-		if (typeof navigator.share === "function") {
-			try {
-				const canShare =
-					typeof navigator.canShare !== "function" || navigator.canShare(sharePayload);
-				if (canShare) {
-					await navigator.share(sharePayload);
-					return;
-				}
-			} catch (error) {
-				if (error?.name === "AbortError") return;
-			}
-		}
-
-		if (navigator.clipboard?.writeText) {
-			try {
-				await navigator.clipboard.writeText(shareUrl);
-				setShareNotice("Enlace copiado al portapapeles.");
-				window.setTimeout(() => setShareNotice(null), 4000);
-				return;
-			} catch {
-				// Continúa con el diálogo de correo.
-			}
-		}
-
-		setPdfDialogTab(1);
-		setShowPdfDialog(true);
+		const url = route("laboratory-purchases.download-pdf", {
+			laboratory_purchase: laboratoryPurchase.id,
+		});
+		const a = document.createElement("a");
+		a.href = url;
+		a.rel = "noopener";
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
 	};
 
 	const header = (
@@ -431,13 +405,12 @@ export default function LaboratoryOrderDetail({
 			gdaConsecutivo={laboratoryPurchase?.gda_consecutivo}
 			isCancelled={orderIsCancelled}
 			cancelledAtLabel={cancelledAtLabel}
-			onRequestInvoice={() => setActiveTab("invoice")}
+			onRequestInvoice={() => handleTabChange("invoice")}
 			onDownload={handleDownloadOrder}
-			onShare={handleShareOrder}
 		/>
 	);
 
-	const tabs = <Tabs activeTab={activeTab} onChange={setActiveTab} />;
+	const tabs = <Tabs activeTab={activeTab} onChange={handleTabChange} />;
 
 	if (!laboratoryPurchase) {
 		return (
@@ -577,14 +550,6 @@ export default function LaboratoryOrderDetail({
 	return (
 		<SettingsLayout title="Pedido de laboratorio">
 			<div className="min-w-0 max-w-full">
-				{shareNotice && (
-					<p
-						className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100"
-						role="status"
-					>
-						{shareNotice}
-					</p>
-				)}
 				{pageErrors?.pdf && (
 					<p
 						className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100"
@@ -595,13 +560,6 @@ export default function LaboratoryOrderDetail({
 				)}
 				<Layout header={header} tabs={tabs} main={main} sidebar={sidebar} />
 			</div>
-			<PurchasePdfDialog
-				laboratoryPurchase={laboratoryPurchase}
-				isOpen={showPdfDialog}
-				onClose={setShowPdfDialog}
-				selectedTab={pdfDialogTab}
-				setSelectedTab={setPdfDialogTab}
-			/>
 			{labResultsOtpRequired && showOtpModal && otpPurchaseId != null && (
 				<SecurityVerificationModal
 					isOpen={showOtpModal}

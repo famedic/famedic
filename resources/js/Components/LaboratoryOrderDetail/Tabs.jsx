@@ -20,8 +20,8 @@ export default function Tabs({ activeTab, onChange }) {
 						aria-current={isActive ? "page" : undefined}
 						className={`shrink-0 rounded-full border px-3 py-2 text-sm font-medium whitespace-nowrap transition sm:px-4 ${
 							isActive
-								? "border-famedic-500 bg-famedic-50 text-famedic-800 shadow-sm dark:border-famedic-300 dark:bg-famedic-700 dark:text-white"
-								: "border-zinc-200 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+								? "border-famedic-lime bg-famedic-lime font-semibold text-famedic-dark shadow-md ring-2 ring-famedic-lime/40"
+								: "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-slate-600 dark:bg-slate-800/60 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:bg-slate-800"
 						}`}
 					>
 						{tab.label}

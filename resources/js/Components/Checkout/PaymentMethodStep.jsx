@@ -6,6 +6,7 @@ import { Badge } from "@/Components/Catalyst/badge";
 import { useClose } from "@headlessui/react";
 import { PlusIcon, CreditCardIcon } from "@heroicons/react/24/solid";
 import CheckoutStep from "@/Components/Checkout/CheckoutStep";
+import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
 import CheckoutSelectionCard from "@/Components/Checkout/CheckoutSelectionCard";
 import CreditCardBrand from "@/Components/CreditCardBrand";
 
@@ -46,6 +47,8 @@ export default function PaymentMethodStep({
     addCardReturnUrl,
     forceMobile = false,
     paymentUsesMock = false,
+    variant = "accordion",
+    onSelected,
     ...props
 }) {
     const selectedPaymentMethod = useMemo(() => {
@@ -72,6 +75,38 @@ export default function PaymentMethodStep({
             ? "Método de pago"
             : "Selecciona el método de pago";
     }, [data.payment_method]);
+
+    const isWizard = variant === "wizard";
+
+    if (isWizard) {
+        return (
+            <CheckoutWizardStep
+                title={stepHeading}
+                description={description}
+                error={props.error}
+            >
+                {paymentUsesMock && (
+                    <div className="mb-3 rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/25 dark:text-amber-100">
+                        Tarjetas de prueba precargadas (Visa/Mastercard aprueban; terminación 0002 rechaza).
+                    </div>
+                )}
+                <PaymentMethodSelection
+                    variant={variant}
+                    forceMobile={isWizard || forceMobile}
+                    addCardReturnUrl={addCardReturnUrl}
+                    setData={setData}
+                    paymentMethods={paymentMethods}
+                    hasOdessaPay={hasOdessaPay}
+                    hasPayPal={hasPayPal}
+                    clearErrors={clearErrors}
+                    paymentUsesMock={paymentUsesMock}
+                    selectedId={data.payment_method}
+                    showRadio
+                    onSelected={onSelected}
+                />
+            </CheckoutWizardStep>
+        );
+    }
 
     return (
         <CheckoutStep
@@ -161,6 +196,7 @@ export default function PaymentMethodStep({
                         </div>
                     )}
                     <PaymentMethodSelection
+                        variant="accordion"
                         forceMobile={forceMobile}
                         addCardReturnUrl={addCardReturnUrl}
                         setData={setData}
@@ -177,7 +213,19 @@ export default function PaymentMethodStep({
     );
 }
 
-function PaymentMethodSelection({
+function PaymentMethodSelection(props) {
+    if (props.variant === "wizard") {
+        return <PaymentMethodSelectionInner close={() => {}} {...props} />;
+    }
+    return <PaymentMethodSelectionAccordion {...props} />;
+}
+
+function PaymentMethodSelectionAccordion(props) {
+    const close = useClose();
+    return <PaymentMethodSelectionInner close={close} {...props} />;
+}
+
+function PaymentMethodSelectionInner({
     setData,
     addCardReturnUrl,
     paymentMethods,
@@ -185,20 +233,17 @@ function PaymentMethodSelection({
     hasPayPal = false,
     clearErrors,
     forceMobile = false,
+    selectedId,
+    showRadio = false,
+    onSelected,
+    close,
 }) {
-    const close = useClose();
 
     const selectPaymentMethod = (paymentMethod) => {
-        console.log('DEBUG - Seleccionando método de pago:', {
-            id: paymentMethod.id,
-            type: typeof paymentMethod.id,
-            will_be_set_as: String(paymentMethod.id),
-        });
-
-        // Siempre guardar como string
         setData("payment_method", String(paymentMethod.id));
         clearErrors("payment_method");
         close();
+        onSelected?.();
     };
 
     const addCardUrl = useMemo(() => {
@@ -209,13 +254,18 @@ function PaymentMethodSelection({
 
     return (
         <ul
-            className={`mt-3 grid gap-4 ${!forceMobile ? "sm:grid-cols-2" : ""}`}
+            className={clsx(
+                "mt-3 grid gap-3",
+                showRadio || forceMobile ? "grid-cols-1" : "sm:grid-cols-2",
+            )}
         >
             {hasPayPal && (
                 <CheckoutSelectionCard
                     onClick={() => selectPaymentMethod({ id: "paypal" })}
+                    selected={selectedId === "paypal"}
+                    showRadio={showRadio}
                     className={clsx(
-                        "relative min-h-[11rem] overflow-hidden",
+                        showRadio ? "min-h-0" : "relative min-h-[11rem] overflow-hidden",
                         "border-[#003087]/20 bg-gradient-to-br from-[#003087]/8 via-sky-50 to-[#009cde]/10",
                         "ring-1 ring-[#003087]/25",
                         "dark:border-[#009cde]/25 dark:from-[#003087]/25 dark:via-slate-900 dark:to-[#009cde]/15 dark:ring-[#009cde]/30",
@@ -249,8 +299,10 @@ function PaymentMethodSelection({
             {hasOdessaPay && (
                 <CheckoutSelectionCard
                     onClick={() => selectPaymentMethod({ id: "odessa" })}
+                    selected={selectedId === "odessa"}
+                    showRadio={showRadio}
                     className={clsx(
-                        "relative min-h-[11rem] overflow-hidden",
+                        showRadio ? "min-h-0" : "relative min-h-[11rem] overflow-hidden",
                         "border-orange-200/80 bg-gradient-to-br from-orange-50 via-amber-50/90 to-orange-100/50",
                         "ring-1 ring-orange-200/70",
                         "dark:border-orange-800/50 dark:from-orange-950/40 dark:via-slate-900 dark:to-amber-950/30 dark:ring-orange-800/40",
@@ -294,8 +346,10 @@ function PaymentMethodSelection({
                     <CheckoutSelectionCard
                         onClick={() => selectPaymentMethod(paymentMethod)}
                         key={paymentMethod.id}
+                        selected={String(selectedId) === String(paymentMethod.id)}
+                        showRadio={showRadio}
                         className={clsx(
-                            "min-h-[11rem]",
+                            showRadio ? "min-h-0" : "min-h-[11rem]",
                             isMock &&
                                 "ring-2 ring-amber-300/80 dark:ring-amber-600/50",
                         )}
@@ -349,9 +403,10 @@ function PaymentMethodSelection({
             <CheckoutSelectionCard
                 href={addCardUrl}
                 heading="Nueva tarjeta"
-                IconComponent={PlusIcon}
-                greenIcon
-                className="min-h-[11rem]"
+                IconComponent={showRadio ? null : PlusIcon}
+                greenIcon={!showRadio}
+                showRadio={showRadio}
+                className={clsx(showRadio ? "min-h-0" : "min-h-[11rem]")}
             >
                 <div className="space-y-2">
                     <Text className="line-clamp-2">

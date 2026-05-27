@@ -76,5 +76,5 @@ Usuario/clave: los de MYSQL_USER / MYSQL_PASSWORD o root / MYSQL_ROOT_PASSWORD
     docker compose restart app
 
 ================================================================================
-Fin de referencia..
+Fin de referencia....
 ================================================================================

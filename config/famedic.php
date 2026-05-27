@@ -87,12 +87,6 @@ return [
         'laboratory_purchase_pdfs' => env('LABORATORY_PURCHASE_PDFS_PATH', 'pdfs/laboratory-purchases'),
     ],
 
-    'browsershot' => [
-        'node_binary' => env('BROWSERSHOT_NODE_BINARY', 'node'),
-        'npm_binary' => env('BROWSERSHOT_NPM_BINARY', 'npm'),
-        'chrome_path' => env('BROWSERSHOT_CHROME_PATH', '/usr/bin/chromium'),
-    ],
-
     /**
      * URL base (sin barra final) para imágenes públicas en correos, p. ej. /images/logo.png.
      * Por defecto https://famedic.com.mx para que los logos carguen desde producción aunque el envío
