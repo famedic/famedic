@@ -25,6 +25,28 @@ Lee con atención. Estas indicaciones ayudan a que tus resultados sean correctos
 <p style="margin:0 0 14px;color:#2d3748;font-size:16px;line-height:1.5;font-weight:600;">
 {{ $study['name'] ?? '—' }}
 </p>
+@php
+    $featureList = $study['feature_list'] ?? $study['featureList'] ?? [];
+    if (is_string($featureList)) {
+        $decoded = json_decode($featureList, true);
+        $featureList = is_array($decoded) ? $decoded : [];
+    }
+    $featureList = is_array($featureList) ? array_values(array_filter(array_map(function ($entry) {
+        if (is_string($entry)) return trim($entry);
+        if (is_array($entry)) return trim((string) ($entry['name'] ?? $entry['label'] ?? ''));
+        return trim((string) $entry);
+    }, $featureList))) : [];
+@endphp
+@if (count($featureList) > 0)
+<p style="margin:0 0 6px;color:#c2410c;font-size:12px;line-height:1.4;text-transform:uppercase;letter-spacing:0.02em;font-weight:700;">
+    Incluye en este paquete
+</p>
+<ul style="margin:0 0 14px;padding-left:20px;color:#4b5563;font-size:14px;line-height:1.5;">
+@foreach ($featureList as $feature)
+    <li style="margin:0 0 4px;">{{ $feature }}</li>
+@endforeach
+</ul>
+@endif
 <p style="margin:0 0 6px;color:#718096;font-size:13px;line-height:1.4;text-transform:uppercase;letter-spacing:0.02em;">
 Preparación / Indicaciones
 </p>

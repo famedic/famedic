@@ -12,7 +12,7 @@ import {
 const typeConfig = {
 	without_appointment: { label: "Sin cita", icon: BeakerIcon, color: "blue" },
 	with_appointment: {
-		label: "Requiere cita",
+		label: "Cita confirmada",
 		icon: CalendarDaysIcon,
 		color: "amber",
 	},
@@ -36,6 +36,7 @@ export default function Header({
 }) {
 	const config = typeConfig[orderType] || typeConfig.without_appointment;
 	const TypeIcon = config.icon;
+	const showTypeBadge = orderType !== "without_appointment";
 
 	return (
 		<div className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
@@ -93,10 +94,12 @@ export default function Header({
 						<Badge color="slate" className="max-w-full break-words">
 							{dateLabel}
 						</Badge>
-						<Badge color={config.color} className="max-w-full">
-							<TypeIcon className="size-4 shrink-0" />
-							<span className="min-w-0">{config.label}</span>
-						</Badge>
+						{showTypeBadge && (
+							<Badge color={config.color} className="max-w-full">
+								<TypeIcon className="size-4 shrink-0" />
+								<span className="min-w-0">{config.label}</span>
+							</Badge>
+						)}
 						{isCancelled ? (
 							<Badge color="red" className="max-w-full">
 								Cancelado

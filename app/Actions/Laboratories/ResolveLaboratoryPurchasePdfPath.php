@@ -64,6 +64,8 @@ class ResolveLaboratoryPurchasePdfPath
             'transactions',
         ]);
 
+        $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
+
         $this->contentHash = $this->calculateContentHash($laboratoryPurchase);
     }
 
@@ -123,7 +125,7 @@ class ResolveLaboratoryPurchasePdfPath
     protected function calculateContentHash(LaboratoryPurchase $laboratoryPurchase): string
     {
         $contentData = [
-            'pdf_engine' => 'dompdf-v1',
+            'pdf_engine' => 'dompdf-v2',
             'purchase' => [
                 'id' => $laboratoryPurchase->id,
                 'gda_order_id' => $laboratoryPurchase->gda_order_id,
@@ -140,6 +142,7 @@ class ResolveLaboratoryPurchasePdfPath
             'items' => $laboratoryPurchase->laboratoryPurchaseItems->map(fn ($item) => [
                 'name' => $item->name,
                 'indications' => $item->indications,
+                'feature_list' => LaboratoryPurchaseConfirmationViewData::normalizePackageFeatureList($item->feature_list),
             ])->toArray(),
             'appointment' => $laboratoryPurchase->laboratoryAppointment ? [
                 'appointment_date' => $laboratoryPurchase->laboratoryAppointment->appointment_date?->format('Y-m-d H:i:s'),

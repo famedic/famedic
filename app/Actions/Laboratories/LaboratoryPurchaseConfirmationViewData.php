@@ -2,7 +2,6 @@
 
 namespace App\Actions\Laboratories;
 
-use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryPurchase;
 use Illuminate\Support\Facades\URL;
 
@@ -23,6 +22,8 @@ final class LaboratoryPurchaseConfirmationViewData
             'transactions',
         ]);
 
+        $purchase->hydrateLaboratoryPurchaseItemsFeatureLists();
+
         $appointment = $purchase->laboratoryAppointment;
         $transaction = $purchase->transactions->first();
 
@@ -30,6 +31,7 @@ final class LaboratoryPurchaseConfirmationViewData
             return [
                 'name' => $item->name,
                 'instructions' => ($item->indications !== null && $item->indications !== '') ? $item->indications : '—',
+                'feature_list' => self::normalizePackageFeatureList($item->feature_list),
             ];
         })->values()->all();
 
@@ -73,6 +75,43 @@ final class LaboratoryPurchaseConfirmationViewData
         $appointment = $purchase->laboratoryAppointment;
 
         return $appointment !== null && $appointment->appointment_date !== null;
+    }
+
+    /**
+     * @param  mixed  $raw  array|string|null desde JSON o cast Eloquent
+     * @return list<string>
+     */
+    public static function normalizePackageFeatureList(mixed $raw): array
+    {
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? $decoded : [];
+        }
+
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $labels = [];
+        foreach ($raw as $entry) {
+            if (is_string($entry)) {
+                $t = trim($entry);
+                if ($t !== '') {
+                    $labels[] = $t;
+                }
+            } elseif (is_array($entry)) {
+                $t = trim((string) ($entry['name'] ?? $entry['label'] ?? ''));
+                if ($t !== '') {
+                    $labels[] = $t;
+                }
+            }
+        }
+
+        return array_values(array_unique($labels));
     }
 
     protected static function assetUrl(string $path, bool $forPdf): string
