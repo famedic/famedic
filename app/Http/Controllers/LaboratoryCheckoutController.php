@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
+use App\Actions\Laboratories\SyncLaboratoryAppointmentFromContactAction;
 use App\Enums\Gender;
+use App\Enums\LaboratoryAppointmentInteractionType;
 use App\Enums\LaboratoryBrand;
+use App\Http\Requests\LaboratoryCheckout\SyncLaboratoryAppointmentRequest;
 use App\Services\CouponService;
 use App\Support\AppEnvironmentLabel;
 use App\Support\MockEfevooPaymentSupport;
@@ -47,11 +50,28 @@ class LaboratoryCheckoutController extends Controller
             ]
         );
 
+        $requiresAppointment = $customer->getHasLaboratoryCartItemRequiringAppointment($laboratoryBrand);
+        $laboratoryAppointment = null;
+        $pendingLaboratoryAppointment = null;
+        $callbackPreferenceSavedAtFormatted = null;
+
+        if ($requiresAppointment) {
+            $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand);
+
+            if (! $laboratoryAppointment) {
+                $pendingLaboratoryAppointment = $customer->getPendingLaboratoryAppointment($laboratoryBrand);
+                $callbackPreferenceSavedAtFormatted = $this->formatCallbackPreferenceSavedAt(
+                    $pendingLaboratoryAppointment
+                );
+            }
+        }
+
         return Inertia::render('LaboratoryCheckout', [
             'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryBrand),
-            ...($request->user()->customer->getHasLaboratoryCartItemRequiringAppointment($laboratoryBrand) ?
-                ['laboratoryAppointment' => $request->user()->customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand)] :
-                []),
+            'requiresAppointment' => $requiresAppointment,
+            'laboratoryAppointment' => $laboratoryAppointment,
+            'pendingLaboratoryAppointment' => $pendingLaboratoryAppointment,
+            'callbackPreferenceSavedAtFormatted' => $callbackPreferenceSavedAtFormatted,
             ...$totals,
             'balanceCouponsCents' => $balanceCents,
             'formattedBalanceCoupons' => $balanceCents > 0 ? formattedCentsPrice($balanceCents) : null,
@@ -111,5 +131,49 @@ class LaboratoryCheckoutController extends Controller
         }
 
         return MockEfevooPaymentSupport::mergePaymentMethodsForCheckout($userTokens, $mockTokens);
+    }
+
+    public function syncAppointment(
+        SyncLaboratoryAppointmentRequest $request,
+        LaboratoryBrand $laboratoryBrand,
+        SyncLaboratoryAppointmentFromContactAction $action,
+    ) {
+        $customer = $request->user()->customer;
+
+        if (! $customer->getHasLaboratoryCartItemRequiringAppointment($laboratoryBrand)) {
+            abort(422, 'El carrito no requiere cita.');
+        }
+
+        $contact = $customer->contacts()->findOrFail($request->validated('contact_id'));
+        $action($customer, $laboratoryBrand, $contact);
+
+        $query = array_filter([
+            'step' => 'appointment',
+            'contact' => $request->validated('contact_id'),
+            'address' => $request->input('address'),
+            'payment_method' => $request->input('payment_method'),
+        ], fn ($value) => $value !== null && $value !== '');
+
+        return redirect()->route('laboratory.checkout', [
+            'laboratory_brand' => $laboratoryBrand,
+            ...$query,
+        ]);
+    }
+
+    private function formatCallbackPreferenceSavedAt($appointment): ?string
+    {
+        if (! $appointment) {
+            return null;
+        }
+
+        $lastPreferenceInteraction = $appointment->interactions()
+            ->where('type', LaboratoryAppointmentInteractionType::PatientCallbackPreference->value)
+            ->latest('id')
+            ->first();
+
+        return $lastPreferenceInteraction?->created_at
+            ?->timezone(config('app.timezone'))
+            ?->locale('es')
+            ?->isoFormat('dddd D [de] MMMM [de] YYYY, h:mm a');
     }
 }

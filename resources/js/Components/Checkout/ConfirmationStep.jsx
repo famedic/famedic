@@ -9,6 +9,7 @@ import {
     UserCircleIcon,
     MapPinIcon,
     CreditCardIcon,
+    BuildingStorefrontIcon,
     PencilIcon,
 } from "@heroicons/react/24/outline";
 
@@ -112,16 +113,16 @@ export default function ConfirmationStep({
                 )}
             </ConfirmationSection>
 
-            {laboratoryAppointment && (
-                <Card className="bg-sky-50/50 p-4 dark:bg-sky-950/20">
-                    <Subheading className="text-sm">Cita en laboratorio</Subheading>
-                    <Text className="mt-1 text-sm">
-                        {laboratoryAppointment.laboratory_store.name}
-                    </Text>
-                    <Badge color="sky" className="mt-2">
-                        {laboratoryAppointment.formatted_appointment_date}
-                    </Badge>
-                </Card>
+            {laboratoryAppointment?.laboratory_store && (
+                <ConfirmationSection
+                    icon={BuildingStorefrontIcon}
+                    title="Cita en laboratorio"
+                    canEdit={false}
+                >
+                    <LaboratoryAppointmentSummary
+                        laboratoryAppointment={laboratoryAppointment}
+                    />
+                </ConfirmationSection>
             )}
         </div>
     );
@@ -171,6 +172,34 @@ function DetailBlock({ name, details }) {
                     {detail}
                 </Text>
             ))}
+        </div>
+    );
+}
+
+function LaboratoryAppointmentSummary({ laboratoryAppointment }) {
+    const store = laboratoryAppointment.laboratory_store;
+    const storeName = store?.name
+        ? store.name.charAt(0).toUpperCase() + store.name.slice(1).toLowerCase()
+        : null;
+
+    return (
+        <div className="space-y-2">
+            <Text className="font-medium">
+                Sucursal:{" "}
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                    {storeName}
+                </span>
+            </Text>
+            {store?.address && (
+                <Text className="text-sm text-zinc-600 dark:text-slate-400">
+                    {store.address}
+                </Text>
+            )}
+            {laboratoryAppointment.formatted_appointment_date && (
+                <Badge color="sky" className="mt-1">
+                    {laboratoryAppointment.formatted_appointment_date}
+                </Badge>
+            )}
         </div>
     );
 }

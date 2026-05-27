@@ -1,3 +1,30 @@
+import { useMemo, useState, useEffect } from "react";
+import { router, useForm, usePage } from "@inertiajs/react";
+import axios from "axios";
+import { Text } from "@/Components/Catalyst/text";
+import { Input } from "@/Components/Catalyst/input";
+import {
+	Field,
+	Label,
+	Description,
+	ErrorMessage,
+} from "@/Components/Catalyst/fieldset";
+import { Select } from "@/Components/Catalyst/select";
+import { useClose } from "@headlessui/react";
+import {
+	PlusIcon,
+	MapPinIcon,
+	ChevronLeftIcon,
+	ArrowPathIcon,
+} from "@heroicons/react/16/solid";
+import CheckoutStep from "@/Components/Checkout/CheckoutStep";
+import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
+import { MapIcon } from "@heroicons/react/24/solid";
+import CheckoutSelectionCard from "@/Components/Checkout/CheckoutSelectionCard";
+import { Button } from "@/Components/Catalyst/button";
+import CheckoutSaveSuccessAlert from "@/Components/Checkout/CheckoutSaveSuccessAlert";
+import clsx from "clsx";
+
 export default function AddressStep({
 	data,
 	setData,
@@ -11,18 +38,37 @@ export default function AddressStep({
 	onSelected,
 	...props
 }) {
+	const [saveSuccessMessage, setSaveSuccessMessage] = useState(null);
+
+	useEffect(() => {
+		if (showAddressForm) {
+			setSaveSuccessMessage(null);
+		}
+	}, [showAddressForm]);
+
 	const selectedAddress = useMemo(() => {
 		return addresses.find((address) => address.id == data.address);
-	}, [data.address]);
+	}, [data.address, addresses]);
 
 	const stepHeading = useMemo(() => {
 		if (showAddressForm) {
 			return "Ingresa la dirección del paciente";
 		}
-		return data.address ? "Selecciona la dirección del paciente" : "Selecciona la dirección";
-	}, [showAddressForm, data.address]);
+		if (saveSuccessMessage || data.address) {
+			return "Dirección seleccionada";
+		}
+		return "Selecciona la dirección";
+	}, [showAddressForm, data.address, saveSuccessMessage]);
 
 	const isWizard = variant === "wizard";
+
+	const handleAddressSaved = (displayLabel) => {
+		setSaveSuccessMessage(
+			displayLabel
+				? `La dirección ${displayLabel} se guardó correctamente.`
+				: "Dirección guardada correctamente.",
+		);
+	};
 
 	if (isWizard) {
 		return (
@@ -31,6 +77,12 @@ export default function AddressStep({
 				description={description}
 				error={props.error}
 			>
+				{saveSuccessMessage && !showAddressForm && (
+					<CheckoutSaveSuccessAlert
+						className="mb-4"
+						message={saveSuccessMessage}
+					/>
+				)}
 				{addresses.length > 0 && !showAddressForm && (
 					<AddressSelection
 						variant={variant}
@@ -50,6 +102,7 @@ export default function AddressStep({
 						toggleAddressForm={toggleAddressForm}
 						showAddressesButton={addresses.length > 0}
 						onSelected={onSelected}
+						onSaved={handleAddressSaved}
 					/>
 				)}
 			</CheckoutWizardStep>
@@ -186,16 +239,18 @@ function AddressFormAccordion(props) {
 }
 
 function AddressFormInner({
+	variant = "accordion",
 	toggleAddressForm,
 	showAddressesButton,
 	setCheckoutData,
 	onSelected,
+	onSaved,
 	close,
 }) {
-
 	const { mexicanStates } = usePage().props;
+	const [saving, setSaving] = useState(false);
 
-	const { data, setData, processing, errors, setError } = useForm({
+	const { data, setData, errors, setError, clearErrors } = useForm({
 		street: "",
 		number: "",
 		neighborhood: "",
@@ -206,6 +261,9 @@ function AddressFormInner({
 	});
 
 	const submit = () => {
+		setSaving(true);
+		const savedLabel = [data.street, data.number].filter(Boolean).join(" ");
+
 		axios
 			.post(route("checkout.addresses.store"), {
 				...data,
@@ -215,13 +273,22 @@ function AddressFormInner({
 					only: ["addresses"],
 					onFinish: () => {
 						setCheckoutData("address", response.data.address);
-						close();
+						setSaving(false);
+						onSaved?.(savedLabel);
+
+						if (variant === "wizard") {
+							toggleAddressForm();
+						} else {
+							close();
+						}
+
 						onSelected?.();
 					},
 				});
 			})
 			.catch((error) => {
-				if (error.status === 422) {
+				setSaving(false);
+				if (error.response?.status === 422) {
 					clearErrors();
 					setError(error.response.data.errors);
 				}
@@ -366,36 +433,19 @@ function AddressFormInner({
 				<Button
 					onClick={submit}
 					type="button"
-					className={`w-full sm:w-auto ${processing ? "opacity-0" : ""}`}
-					disabled={processing}
+					className="w-full sm:w-auto"
+					disabled={saving}
 				>
-					Guardar dirección
+					{saving ? (
+						<>
+							<ArrowPathIcon className="size-4 animate-spin" />
+							Guardando…
+						</>
+					) : (
+						"Guardar dirección"
+					)}
 				</Button>
 			</div>
 		</>
 	);
 }
-
-import { useMemo } from "react";
-import { router, useForm, usePage } from "@inertiajs/react";
-import { Text } from "@/Components/Catalyst/text";
-import { Input } from "@/Components/Catalyst/input";
-import {
-	Field,
-	Label,
-	Description,
-	ErrorMessage,
-} from "@/Components/Catalyst/fieldset";
-import { Select } from "@/Components/Catalyst/select";
-import { useClose } from "@headlessui/react";
-import {
-	PlusIcon,
-	MapPinIcon,
-	ChevronLeftIcon,
-} from "@heroicons/react/16/solid";
-import CheckoutStep from "@/Components/Checkout/CheckoutStep";
-import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
-import { MapIcon } from "@heroicons/react/24/solid";
-import CheckoutSelectionCard from "@/Components/Checkout/CheckoutSelectionCard";
-import { Button } from "@/Components/Catalyst/button";
-import clsx from "clsx";

@@ -66,11 +66,15 @@ Route::middleware([
 
     Route::get('/laboratory/{laboratory_brand}/checkout', LaboratoryCheckoutController::class)
         ->name('laboratory.checkout')
-        ->middleware('laboratory-appointment', 'redirect-if-empty-laboratory-cart-items');
+        ->middleware('redirect-if-empty-laboratory-cart-items');
+
+    Route::post('/laboratory/{laboratory_brand}/checkout/appointment', [LaboratoryCheckoutController::class, 'syncAppointment'])
+        ->name('laboratory.checkout.appointment.sync')
+        ->middleware('redirect-if-empty-laboratory-cart-items');
 
     Route::post('/laboratory/{laboratory_brand}/checkout', [LaboratoryPurchaseController::class, 'store'])
         ->name('laboratory.checkout.store')
-        ->middleware('laboratory-appointment', 'redirect-if-empty-laboratory-cart-items');
+        ->middleware('redirect-if-empty-laboratory-cart-items');
 
     Route::post('/paypal/create-order', [PayPalController::class, 'createOrder'])->name('paypal.create-order');
     Route::post('/paypal/capture-order', [PayPalController::class, 'captureOrder'])->name('paypal.capture-order');

@@ -1,3 +1,29 @@
+import { useMemo, useState, useEffect } from "react";
+import { router, usePage, useForm } from "@inertiajs/react";
+import axios from "axios";
+import { Text } from "@/Components/Catalyst/text";
+import { Input } from "@/Components/Catalyst/input";
+import { Field, Label, ErrorMessage } from "@/Components/Catalyst/fieldset";
+import { Select } from "@/Components/Catalyst/select";
+import { Badge } from "@/Components/Catalyst/badge";
+import { useClose } from "@headlessui/react";
+import CountryListbox from "@/Components/CountryListbox";
+import {
+	PlusIcon,
+	UserCircleIcon,
+	ChevronLeftIcon,
+	PhoneIcon,
+	CalendarDaysIcon,
+	ArrowPathIcon,
+} from "@heroicons/react/16/solid";
+import CheckoutStep from "@/Components/Checkout/CheckoutStep";
+import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
+import { IdentificationIcon } from "@heroicons/react/24/solid";
+import CheckoutSelectionCard from "@/Components/Checkout/CheckoutSelectionCard";
+import { Button } from "@/Components/Catalyst/button";
+import CheckoutSaveSuccessAlert from "@/Components/Checkout/CheckoutSaveSuccessAlert";
+import clsx from "clsx";
+
 export default function ContactStep({
 	data,
 	setData,
@@ -11,18 +37,37 @@ export default function ContactStep({
 	onSelected,
 	...props
 }) {
+	const [saveSuccessMessage, setSaveSuccessMessage] = useState(null);
+
+	useEffect(() => {
+		if (showContactForm) {
+			setSaveSuccessMessage(null);
+		}
+	}, [showContactForm]);
+
 	const selectedContact = useMemo(() => {
 		return contacts.find((contact) => contact.id == data.contact);
-	}, [data.contact]);
+	}, [data.contact, contacts]);
 
 	const stepHeading = useMemo(() => {
 		if (showContactForm) {
 			return "Ingresa los datos del paciente";
 		}
-		return data.contact ? "Seleciona el Paciente" : "Selecciona el paciente";
-	}, [showContactForm, data.contact]);
+		if (saveSuccessMessage || data.contact) {
+			return "Paciente seleccionado";
+		}
+		return "Selecciona el paciente";
+	}, [showContactForm, data.contact, saveSuccessMessage]);
 
 	const isWizard = variant === "wizard";
+
+	const handleContactSaved = (displayName) => {
+		setSaveSuccessMessage(
+			displayName
+				? `${displayName} se guardó correctamente.`
+				: "Paciente guardado correctamente.",
+		);
+	};
 
 	if (isWizard) {
 		return (
@@ -31,6 +76,12 @@ export default function ContactStep({
 				description={description}
 				error={props.error}
 			>
+				{saveSuccessMessage && !showContactForm && (
+					<CheckoutSaveSuccessAlert
+						className="mb-4"
+						message={saveSuccessMessage}
+					/>
+				)}
 				{contacts.length > 0 && !showContactForm && (
 					<ContactSelection
 						variant={variant}
@@ -50,6 +101,7 @@ export default function ContactStep({
 						toggleContactForm={toggleContactForm}
 						showContactsButton={contacts.length > 0}
 						onSelected={onSelected}
+						onSaved={handleContactSaved}
 					/>
 				)}
 			</CheckoutWizardStep>
@@ -187,27 +239,33 @@ function ContactFormAccordion(props) {
 }
 
 function ContactFormInner({
+	variant = "accordion",
 	toggleContactForm,
 	showContactsButton,
 	setCheckoutData,
 	onSelected,
+	onSaved,
 	close,
 }) {
-
 	const { genders } = usePage().props;
+	const [saving, setSaving] = useState(false);
 
-	const { data, setData, processing, errors, setError, clearErrors } =
-		useForm({
-			name: "",
-			paternal_lastname: "",
-			maternal_lastname: "",
-			birth_date: "",
-			gender: "",
-			phone: "",
-			phone_country: "MX",
-		});
+	const { data, setData, errors, setError, clearErrors } = useForm({
+		name: "",
+		paternal_lastname: "",
+		maternal_lastname: "",
+		birth_date: "",
+		gender: "",
+		phone: "",
+		phone_country: "MX",
+	});
 
 	const submit = () => {
+		setSaving(true);
+		const savedLabel = [data.name, data.paternal_lastname]
+			.filter(Boolean)
+			.join(" ");
+
 		axios
 			.post(route("checkout.contacts.store"), {
 				...data,
@@ -217,13 +275,22 @@ function ContactFormInner({
 					only: ["contacts"],
 					onFinish: () => {
 						setCheckoutData("contact", response.data.contact);
-						close();
+						setSaving(false);
+						onSaved?.(savedLabel);
+
+						if (variant === "wizard") {
+							toggleContactForm();
+						} else {
+							close();
+						}
+
 						onSelected?.();
 					},
 				});
 			})
 			.catch((error) => {
-				if (error.status === 422) {
+				setSaving(false);
+				if (error.response?.status === 422) {
 					clearErrors();
 					setError(error.response.data.errors);
 				}
@@ -350,35 +417,19 @@ function ContactFormInner({
 				<Button
 					onClick={submit}
 					type="button"
-					className={`w-full sm:w-auto ${processing ? "opacity-0" : ""}`}
-					disabled={processing}
+					className="w-full sm:w-auto"
+					disabled={saving}
 				>
-					Guardar paciente
+					{saving ? (
+						<>
+							<ArrowPathIcon className="size-4 animate-spin" />
+							Guardando…
+						</>
+					) : (
+						"Guardar paciente"
+					)}
 				</Button>
 			</div>
 		</>
 	);
 }
-
-import { useMemo } from "react";
-import { router, usePage, useForm } from "@inertiajs/react";
-import { Text } from "@/Components/Catalyst/text";
-import { Input } from "@/Components/Catalyst/input";
-import { Field, Label, ErrorMessage } from "@/Components/Catalyst/fieldset";
-import { Select } from "@/Components/Catalyst/select";
-import { Badge } from "@/Components/Catalyst/badge";
-import { useClose } from "@headlessui/react";
-import CountryListbox from "@/Components/CountryListbox";
-import {
-	PlusIcon,
-	UserCircleIcon,
-	ChevronLeftIcon,
-	PhoneIcon,
-	CalendarDaysIcon,
-} from "@heroicons/react/16/solid";
-import CheckoutStep from "@/Components/Checkout/CheckoutStep";
-import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
-import { IdentificationIcon } from "@heroicons/react/24/solid";
-import CheckoutSelectionCard from "@/Components/Checkout/CheckoutSelectionCard";
-import { Button } from "@/Components/Catalyst/button";
-import clsx from "clsx";
