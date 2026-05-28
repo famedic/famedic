@@ -162,6 +162,10 @@ Route::prefix('admin')->middleware([
             ->name('laboratory-notifications-monitor.index');
         Route::get('laboratory-notifications-monitor/order/{orderKey}/details', [LaboratoryNotificationMonitorController::class, 'orderDetails'])
             ->name('laboratory-notifications-monitor.order-details');
+        Route::post('laboratory-notifications-monitor/order/{orderKey}/fetch-results', [LaboratoryNotificationMonitorController::class, 'fetchResults'])
+            ->name('laboratory-notifications-monitor.fetch-results');
+        Route::get('laboratory-notifications-monitor/order/{orderKey}/download-results', [LaboratoryNotificationMonitorController::class, 'downloadResults'])
+            ->name('laboratory-notifications-monitor.download-results');
         Route::get('laboratory-notifications-monitor/{gdaOrderId}', [LaboratoryNotificationMonitorController::class, 'show'])
             ->name('laboratory-notifications-monitor.show');
 

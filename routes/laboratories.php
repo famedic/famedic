@@ -8,6 +8,7 @@ use App\Http\Controllers\LaboratoryCartItemController;
 use App\Http\Controllers\LaboratoryCheckoutController;
 use App\Http\Controllers\LaboratoryPurchaseController;
 use App\Http\Controllers\LaboratoryQuoteController;
+use App\Http\Controllers\LaboratoryResultController;
 use App\Http\Controllers\LaboratoryResultsController;
 use App\Http\Controllers\LaboratoryShoppingCartController;
 use App\Http\Controllers\LaboratoryStoreController;
