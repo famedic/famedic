@@ -6,10 +6,16 @@ use App\Enums\LaboratoryBrand;
 use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\LaboratoryAppointment;
+use App\Services\Monitoring\SyncMonitoringCartService;
 use Propaganistas\LaravelPhone\PhoneNumber;
 
 class SyncLaboratoryAppointmentFromContactAction
 {
+    public function __construct(
+        private SyncMonitoringCartService $syncMonitoringCartService,
+    ) {
+    }
+
     public function __invoke(
         Customer $customer,
         LaboratoryBrand $laboratoryBrand,
@@ -37,6 +43,8 @@ class SyncLaboratoryAppointmentFromContactAction
             'patient_phone' => $formattedPhone,
             'patient_phone_country' => $phoneCountry,
         ]);
+
+        $this->syncMonitoringCartService->touchLaboratoryCartActivity($customer);
 
         return $laboratoryAppointment->refresh();
     }

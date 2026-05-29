@@ -8,6 +8,7 @@ use App\Enums\LaboratoryBrand;
 use App\Http\Requests\LaboratoryAppointments\RecordLaboratoryAppointmentPhoneIntentRequest;
 use App\Http\Requests\LaboratoryAppointments\UpdateLaboratoryAppointmentCallbackAvailabilityRequest;
 use App\Models\LaboratoryAppointment;
+use App\Services\Monitoring\SyncMonitoringCartService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -15,6 +16,11 @@ use Inertia\Inertia;
 
 class LaboratoryAppointmentController extends Controller
 {
+    public function __construct(
+        private SyncMonitoringCartService $syncMonitoringCartService,
+    ) {
+    }
+
     public function create(Request $request, LaboratoryBrand $laboratoryBrand)
     {
         return Inertia::render('LaboratoryAppointmentCreation', [
@@ -41,7 +47,7 @@ class LaboratoryAppointmentController extends Controller
             ->first();
 
         $callbackPreferenceSavedAtFormatted = $lastPreferenceInteraction?->created_at
-            ?->timezone(config('app.timezone'))
+            ?->timezone('America/Monterrey')
             ?->locale('es')
             ?->isoFormat('dddd D [de] MMMM [de] YYYY, h:mm a');
 
@@ -63,6 +69,8 @@ class LaboratoryAppointmentController extends Controller
             ]);
         });
 
+        $this->syncMonitoringCartService->touchLaboratoryCartActivity($laboratoryAppointment->customer);
+
         return back();
     }
 
@@ -71,14 +79,14 @@ class LaboratoryAppointmentController extends Controller
         LaboratoryBrand $laboratoryBrand,
         LaboratoryAppointment $laboratoryAppointment
     ) {
-        $data = $request->validated();
+        $data = $request->parsedCallbackAvailability();
 
         Log::info('laboratory.callback_availability.request_validated', [
             'appointment_id' => $laboratoryAppointment->id,
             'brand' => $laboratoryBrand->value,
             'validated' => [
-                'callback_availability_starts_at' => $data['callback_availability_starts_at'] ?? null,
-                'callback_availability_ends_at' => $data['callback_availability_ends_at'] ?? null,
+                'callback_availability_starts_at' => $data['callback_availability_starts_at']?->toIso8601String(),
+                'callback_availability_ends_at' => $data['callback_availability_ends_at']?->toIso8601String(),
                 'patient_callback_comment_len' => isset($data['patient_callback_comment'])
                     ? strlen((string) $data['patient_callback_comment'])
                     : 0,
@@ -98,8 +106,8 @@ class LaboratoryAppointmentController extends Controller
             $interaction = $laboratoryAppointment->interactions()->create([
                 'type' => LaboratoryAppointmentInteractionType::PatientCallbackPreference,
                 'metadata' => [
-                    'callback_availability_starts_at' => $data['callback_availability_starts_at'] ?? null,
-                    'callback_availability_ends_at' => $data['callback_availability_ends_at'] ?? null,
+                    'callback_availability_starts_at' => $data['callback_availability_starts_at']?->toIso8601String(),
+                    'callback_availability_ends_at' => $data['callback_availability_ends_at']?->toIso8601String(),
                     'patient_callback_comment' => $data['patient_callback_comment'] ?? null,
                 ],
             ]);
@@ -120,6 +128,8 @@ class LaboratoryAppointmentController extends Controller
                     : null,
             ],
         ]);
+
+        $this->syncMonitoringCartService->touchLaboratoryCartActivity($laboratoryAppointment->customer);
 
         return back()->flashMessage('Guardamos tu disponibilidad y comentarios.');
     }

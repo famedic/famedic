@@ -21,6 +21,7 @@ class LaboratoryAppointment extends Model
 
     protected $appends = [
         'formatted_created_at',
+        'formatted_request_saved_at',
         'formatted_confirmed_at',
         'formatted_appointment_date',
         'formatted_patient_birth_date',
@@ -244,6 +245,16 @@ class LaboratoryAppointment extends Model
     {
         return Attribute::make(
             get: fn () => $this->created_at->diffForHumans(),
+        );
+    }
+
+    protected function formattedRequestSavedAt(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->created_at
+                ?->timezone(config('app.timezone'))
+                ?->locale('es')
+                ?->isoFormat('dddd D [de] MMMM [de] YYYY, h:mm a'),
         );
     }
 

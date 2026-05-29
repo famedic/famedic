@@ -68,6 +68,10 @@ Route::middleware([
         ->name('laboratory.checkout')
         ->middleware('redirect-if-empty-laboratory-cart-items');
 
+    Route::post('/laboratory/{laboratory_brand}/checkout/draft', [LaboratoryCheckoutController::class, 'syncDraft'])
+        ->name('laboratory.checkout.draft.sync')
+        ->middleware('redirect-if-empty-laboratory-cart-items');
+
     Route::post('/laboratory/{laboratory_brand}/checkout/appointment', [LaboratoryCheckoutController::class, 'syncAppointment'])
         ->name('laboratory.checkout.appointment.sync')
         ->middleware('redirect-if-empty-laboratory-cart-items');

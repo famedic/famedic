@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
 use App\Models\Cart;
+use App\Models\EfevooToken;
 use App\Models\LaboratoryAppointment;
+use App\Models\LaboratoryCheckoutDraft;
 use App\Models\LaboratoryTest;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -38,6 +40,8 @@ class CartController extends Controller
                 'items',
                 'user.customer.laboratoryCartItems.laboratoryTest',
                 'user.customer.laboratoryAppointments',
+                'user.customer.laboratoryCheckoutDrafts.contact',
+                'user.customer.laboratoryCheckoutDrafts.address',
             ])
             ->withCount('items')
             ->adminMonitoringFilter($filters, $start, $end)
@@ -93,6 +97,8 @@ class CartController extends Controller
         $cart->load([
             'items',
             'user.customer.laboratoryAppointments',
+            'user.customer.laboratoryCheckoutDrafts.contact',
+            'user.customer.laboratoryCheckoutDrafts.address',
         ]);
 
         return Inertia::render('Admin/CartShow', [
@@ -122,6 +128,9 @@ class CartController extends Controller
             'display_status' => $display,
             'updated_at' => $cart->updated_at?->toIso8601String(),
             'updated_at_human' => $cart->updated_at?->format('d/m/Y H:i'),
+            'checkout_summary' => $cart->type === MonitoringCartType::Lab
+                ? $this->serializeCheckoutSummaryForRow($cart)
+                : null,
         ];
     }
 
@@ -192,18 +201,228 @@ class CartController extends Controller
             ] : null,
             'laboratory_appointments' => $isLab
                 ? $cart->laboratoryAppointmentsForDisplay()->map(
-                    fn (LaboratoryAppointment $appointment) => [
-                        'id' => $appointment->id,
-                        'brand_label' => $appointment->brand->label(),
-                        'patient_name' => $appointment->patient_full_name,
-                        'is_confirmed' => $appointment->confirmed_at !== null,
-                        'confirmed_at_human' => $appointment->confirmed_at?->format('d/m/Y H:i'),
-                        'appointment_date_human' => $appointment->formatted_appointment_date,
-                        'has_linked_purchase' => $appointment->laboratory_purchase_id !== null,
-                        'admin_url' => route('admin.laboratory-appointments.show', $appointment),
-                    ],
+                    fn (LaboratoryAppointment $appointment) => $this->serializeLaboratoryAppointmentForAdmin($appointment),
                 )->values()->all()
                 : [],
+            'checkout_drafts' => $isLab
+                ? $this->serializeCheckoutDrafts($cart)
+                : [],
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function serializeCheckoutDrafts(Cart $cart): array
+    {
+        return $this->mapCheckoutDrafts($cart, detailed: true);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function serializeCheckoutSummaryForRow(Cart $cart): array
+    {
+        return $this->mapCheckoutDrafts($cart, detailed: false);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function mapCheckoutDrafts(Cart $cart, bool $detailed): array
+    {
+        $customer = $cart->user?->customer;
+        if (! $customer) {
+            return [];
+        }
+
+        $brandValues = collect($cart->labBrands())->pluck('value')->filter()->values();
+
+        $drafts = $customer->relationLoaded('laboratoryCheckoutDrafts')
+            ? $customer->laboratoryCheckoutDrafts
+            : $customer->laboratoryCheckoutDrafts()->with(['contact', 'address'])->get();
+
+        return $drafts
+            ->when(
+                $brandValues->isNotEmpty(),
+                fn ($rows) => $rows->filter(
+                    fn (LaboratoryCheckoutDraft $draft) => $brandValues->contains($draft->laboratory_brand->value),
+                ),
+            )
+            ->sortByDesc('updated_at')
+            ->map(function (LaboratoryCheckoutDraft $draft) use ($customer, $cart, $detailed) {
+                $appointment = $this->appointmentForBrand($cart, $draft->laboratory_brand);
+                $appointmentData = $appointment
+                    ? $this->serializeLaboratoryAppointmentForAdmin($appointment, compact: ! $detailed)
+                    : null;
+
+                $entry = [
+                    'id' => $draft->id,
+                    'brand_label' => $draft->laboratory_brand->label(),
+                    'checkout_step' => $draft->checkout_step,
+                    'checkout_step_label' => $this->checkoutStepLabel($draft->checkout_step),
+                    'patient_name' => $draft->contact?->full_name,
+                    'address_short' => $this->shortAddressLabel($draft->address),
+                    'payment_method_label' => $this->paymentMethodLabel(
+                        $draft->payment_method,
+                        $customer,
+                    ),
+                    'appointment' => $appointmentData,
+                ];
+
+                if ($detailed) {
+                    $entry['updated_at_human'] = $draft->updated_at?->format('d/m/Y H:i');
+                    $entry['patient'] = $draft->contact ? [
+                        'full_name' => $draft->contact->full_name,
+                        'phone' => $draft->contact->phone_for_display ?? $draft->contact->phone,
+                        'formatted_birth_date' => $draft->contact->formatted_birth_date,
+                        'formatted_gender' => $draft->contact->formatted_gender,
+                    ] : null;
+                    $entry['address'] = $draft->address ? [
+                        'formatted_address' => $draft->address->formatted_address,
+                        'full_address' => $draft->address->full_address,
+                    ] : null;
+                }
+
+                return $entry;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function shortAddressLabel(?\App\Models\Address $address): ?string
+    {
+        if (! $address) {
+            return null;
+        }
+
+        $text = trim((string) ($address->formatted_address ?: $address->full_address));
+
+        if ($text === '') {
+            return null;
+        }
+
+        return mb_strlen($text) > 48
+            ? mb_substr($text, 0, 45).'…'
+            : $text;
+    }
+
+    private function appointmentForBrand(Cart $cart, \App\Enums\LaboratoryBrand $brand): ?LaboratoryAppointment
+    {
+        $customer = $cart->user?->customer;
+        if (! $customer) {
+            return null;
+        }
+
+        $appointments = $customer->relationLoaded('laboratoryAppointments')
+            ? $customer->laboratoryAppointments
+            : $customer->laboratoryAppointments()->get();
+
+        return $appointments
+            ->filter(fn (LaboratoryAppointment $appointment) => $appointment->brand === $brand)
+            ->sortByDesc('updated_at')
+            ->first();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeLaboratoryAppointmentForAdmin(
+        LaboratoryAppointment $appointment,
+        bool $compact = false,
+    ): array {
+        $data = [
+            'id' => $appointment->id,
+            'brand_label' => $appointment->brand->label(),
+            'patient_name' => $appointment->patient_full_name,
+            'is_confirmed' => $appointment->confirmed_at !== null,
+            'confirmed_at_human' => $appointment->confirmed_at?->format('d/m/Y H:i'),
+            'appointment_date_human' => $appointment->formatted_appointment_date,
+            'has_linked_purchase' => $appointment->laboratory_purchase_id !== null,
+            'request_saved_at' => $appointment->formatted_request_saved_at,
+            'callback_availability_range' => $appointment->formatted_callback_availability_range,
+            'callback_comment' => filled($appointment->patient_callback_comment)
+                ? $appointment->patient_callback_comment
+                : null,
+            'callback_comment_short' => $this->shortText($appointment->patient_callback_comment, 60),
+            'has_callback_info' => (bool) $appointment->has_left_callback_info,
+            'has_phone_call_intent' => $appointment->phone_call_intent_at !== null,
+            'phone_call_intent_at_human' => $appointment->formatted_phone_call_intent_at,
+            'updated_at_human' => $appointment->updated_at?->format('d/m/Y H:i'),
+            'admin_url' => route('admin.laboratory-appointments.show', $appointment),
+        ];
+
+        if ($compact) {
+            return collect($data)->only([
+                'request_saved_at',
+                'callback_availability_range',
+                'callback_comment_short',
+                'has_callback_info',
+                'has_phone_call_intent',
+                'phone_call_intent_at_human',
+            ])->filter(fn ($value) => $value !== null && $value !== false)->all();
+        }
+
+        return $data;
+    }
+
+    private function shortText(?string $text, int $maxLength): ?string
+    {
+        $text = trim((string) $text);
+        if ($text === '') {
+            return null;
+        }
+
+        return mb_strlen($text) > $maxLength
+            ? mb_substr($text, 0, $maxLength - 1).'…'
+            : $text;
+    }
+
+    private function checkoutStepLabel(string $step): string
+    {
+        return match ($step) {
+            'patient' => 'Paciente',
+            'address' => 'Dirección',
+            'payment' => 'Método de pago',
+            'appointment' => 'Cita',
+            'confirmation' => 'Confirmación',
+            default => $step,
+        };
+    }
+
+    private function paymentMethodLabel(?string $paymentMethod, \App\Models\Customer $customer): ?string
+    {
+        if ($paymentMethod === null || $paymentMethod === '') {
+            return null;
+        }
+
+        return match ($paymentMethod) {
+            'odessa' => 'Saldo a la Vista (Odessa)',
+            'paypal' => 'PayPal',
+            'coupon_balance' => 'Crédito a favor (cupón)',
+            default => $this->efevooTokenPaymentLabel($paymentMethod, $customer),
+        };
+    }
+
+    private function efevooTokenPaymentLabel(string $paymentMethod, \App\Models\Customer $customer): string
+    {
+        if (! ctype_digit($paymentMethod)) {
+            return $paymentMethod;
+        }
+
+        $token = EfevooToken::query()
+            ->where('customer_id', $customer->id)
+            ->where('id', (int) $paymentMethod)
+            ->first();
+
+        if (! $token) {
+            return 'Tarjeta #'.$paymentMethod;
+        }
+
+        return sprintf(
+            '%s •••• %s',
+            ucfirst(strtolower((string) $token->card_brand)),
+            $token->card_last_four,
+        );
     }
 }

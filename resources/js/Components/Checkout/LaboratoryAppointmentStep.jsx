@@ -1,8 +1,11 @@
 import { Subheading } from "@/Components/Catalyst/heading";
 import { Button } from "@/Components/Catalyst/button";
-import { Text } from "@/Components/Catalyst/text";
+import { Text, Strong } from "@/Components/Catalyst/text";
 import { CheckIcon, PhoneIcon } from "@heroicons/react/20/solid";
-import { CalendarDaysIcon } from "@heroicons/react/24/outline";
+import {
+	CalendarDaysIcon,
+	ClipboardDocumentListIcon,
+} from "@heroicons/react/24/outline";
 import {
 	Field,
 	Label,
@@ -25,6 +28,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { router, useForm, usePage } from "@inertiajs/react";
 import clsx from "clsx";
 import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
+import CheckoutSaveSuccessAlert from "@/Components/Checkout/CheckoutSaveSuccessAlert";
 
 function toDatetimeLocal(value) {
 	if (!value) return "";
@@ -65,6 +69,9 @@ function getDefaultHourWindow(dayOffset = 0) {
 	};
 }
 
+const TAB_RECEIVE_CALL = 1;
+const TAB_TRACKING = 2;
+
 function toDayOffsetOption(value) {
 	const map = { today: 0, tomorrow: 1, day_after_tomorrow: 2 };
 	return map[value] ?? 0;
@@ -86,8 +93,9 @@ export default function LaboratoryAppointmentStep({
 
 	const hydratedFromServerKeyRef = useRef("");
 
-	const { data, setData, patch, processing, errors, recentlySuccessful } =
-		useForm({
+	const [submittingAvailability, setSubmittingAvailability] = useState(false);
+
+	const { data, setData, errors, setError, clearErrors } = useForm({
 			callback_availability_starts_at: toDatetimeLocal(
 				laboratoryAppointment.callback_availability_starts_at,
 			),
@@ -108,6 +116,7 @@ export default function LaboratoryAppointmentStep({
 			laboratoryAppointment.id,
 			laboratoryAppointment.callback_availability_starts_at ?? "",
 			laboratoryAppointment.callback_availability_ends_at ?? "",
+			laboratoryAppointment.patient_callback_comment ?? "",
 		].join("\0");
 
 		if (hydratedFromServerKeyRef.current === serverKey) {
@@ -123,6 +132,16 @@ export default function LaboratoryAppointmentStep({
 			: null;
 
 		if (!start || Number.isNaN(start.getTime())) {
+			setData({
+				callback_availability_starts_at: toDatetimeLocal(
+					laboratoryAppointment.callback_availability_starts_at,
+				),
+				callback_availability_ends_at: toDatetimeLocal(
+					laboratoryAppointment.callback_availability_ends_at,
+				),
+				patient_callback_comment:
+					laboratoryAppointment.patient_callback_comment ?? "",
+			});
 			return;
 		}
 
@@ -147,7 +166,20 @@ export default function LaboratoryAppointmentStep({
 			if (end && !Number.isNaN(end.getTime())) {
 				setEndTime(`${pad2(end.getHours())}:${pad2(end.getMinutes())}`);
 			}
+		} else if (laboratoryAppointment.has_left_callback_info) {
+			setReceiveCallMode("now");
 		}
+
+		setData({
+			callback_availability_starts_at: toDatetimeLocal(
+				laboratoryAppointment.callback_availability_starts_at,
+			),
+			callback_availability_ends_at: toDatetimeLocal(
+				laboratoryAppointment.callback_availability_ends_at,
+			),
+			patient_callback_comment:
+				laboratoryAppointment.patient_callback_comment ?? "",
+		});
 	}, [laboratoryAppointment]);
 
 	useEffect(() => {
@@ -184,6 +216,21 @@ export default function LaboratoryAppointmentStep({
 		});
 	}, [receiveCallMode, dayOption, startTime, endTime]);
 
+	useEffect(() => {
+		if (
+			laboratoryAppointment.has_left_callback_info ||
+			callbackPreferenceSavedAtFormatted ||
+			laboratoryAppointment.formatted_request_saved_at
+		) {
+			setTabIndex(TAB_TRACKING);
+		}
+	}, [
+		laboratoryAppointment.id,
+		laboratoryAppointment.has_left_callback_info,
+		laboratoryAppointment.formatted_request_saved_at,
+		callbackPreferenceSavedAtFormatted,
+	]);
+
 	const telHref = "tel:5566515232";
 
 	const onCallClick = (e) => {
@@ -201,18 +248,6 @@ export default function LaboratoryAppointmentStep({
 				},
 			},
 		);
-	};
-
-	const submitAvailability = (e) => {
-		e.preventDefault();
-		if (!processing && canSave) {
-			patch(
-				route("laboratory-appointments.callback-availability", {
-					laboratory_brand: laboratoryAppointment.brand,
-					laboratory_appointment: laboratoryAppointment.id,
-				}),
-			);
-		}
 	};
 
 	const minForStart = minNowTick;
@@ -238,15 +273,79 @@ export default function LaboratoryAppointmentStep({
 	const commentFilled = Boolean(data.patient_callback_comment?.trim());
 	const windowComplete = startChosen && endValid;
 	const canSave = commentFilled || windowComplete;
+
+	const buildAvailabilityPayload = () => {
+		const comment = data.patient_callback_comment?.trim() ?? "";
+
+		if (comment && !windowComplete) {
+			return {
+				patient_callback_comment: comment,
+				callback_availability_starts_at: null,
+				callback_availability_ends_at: null,
+			};
+		}
+
+		return {
+			patient_callback_comment: comment || null,
+			callback_availability_starts_at:
+				data.callback_availability_starts_at || null,
+			callback_availability_ends_at:
+				data.callback_availability_ends_at || null,
+		};
+	};
+
+	const submitAvailability = (e) => {
+		e.preventDefault();
+		if (submittingAvailability || !canSave) {
+			return;
+		}
+
+		clearErrors();
+		setSubmittingAvailability(true);
+
+		router.patch(
+			route("laboratory-appointments.callback-availability", {
+				laboratory_brand: laboratoryAppointment.brand,
+				laboratory_appointment: laboratoryAppointment.id,
+			}),
+			buildAvailabilityPayload(),
+			{
+				preserveScroll: true,
+				onSuccess: () => {
+					setTabIndex(TAB_TRACKING);
+					router.reload({
+						only: [
+							"pendingLaboratoryAppointment",
+							"callbackPreferenceSavedAtFormatted",
+						],
+					});
+				},
+				onError: (submitErrors) => {
+					Object.entries(submitErrors).forEach(([field, message]) => {
+						setError(field, message);
+					});
+				},
+				onFinish: () => setSubmittingAvailability(false),
+			},
+		);
+	};
+
 	const hasSavedCallbackPreference = Boolean(callbackPreferenceSavedAtFormatted);
+	const hasSavedAvailability = Boolean(
+		laboratoryAppointment.has_left_callback_info || hasSavedCallbackPreference,
+	);
+	const requestSavedAtFormatted =
+		laboratoryAppointment.formatted_request_saved_at ?? null;
+	const hasTrackingContent =
+		Boolean(requestSavedAtFormatted) || hasSavedAvailability;
 
 	return (
 		<CheckoutWizardStep
 			title="Agendar tu cita"
-			description="Llama ahora o indica cuándo podemos contactarte. Un asesor confirmará fecha y sucursal."
+			description="Llama ahora, indica cuándo contactarte o consulta el seguimiento de tu solicitud."
 		>
 			<TabGroup selectedIndex={tabIndex} onChange={setTabIndex}>
-				<TabList className="grid grid-cols-2 gap-2 rounded-xl bg-zinc-100 p-1.5 dark:bg-zinc-800/80">
+				<TabList className="grid grid-cols-3 gap-2 rounded-xl bg-zinc-100 p-1.5 dark:bg-zinc-800/80">
 					<Tab className="rounded-lg py-3 text-sm font-semibold outline-none transition-colors sm:py-2.5">
 						{(selected) => (
 							<span
@@ -274,6 +373,21 @@ export default function LaboratoryAppointmentStep({
 							>
 								<CalendarDaysIcon className="size-5 shrink-0" />
 								Recibir llamada
+							</span>
+						)}
+					</Tab>
+					<Tab className="rounded-lg py-3 text-sm font-semibold outline-none transition-colors sm:py-2.5">
+						{(selected) => (
+							<span
+								className={clsx(
+									"flex flex-col items-center gap-0.5 rounded-md px-2 py-1 sm:flex-row sm:justify-center sm:gap-2",
+									selected
+										? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-white"
+										: "text-zinc-500 dark:text-zinc-400",
+								)}
+							>
+								<ClipboardDocumentListIcon className="size-5 shrink-0" />
+								Seguimiento
 							</span>
 						)}
 					</Tab>
@@ -323,7 +437,7 @@ export default function LaboratoryAppointmentStep({
 							<button
 								type="button"
 								className="mt-6 text-sm font-medium text-sky-600 underline decoration-sky-600/30 underline-offset-2 hover:text-sky-700 dark:text-sky-400"
-								onClick={() => setTabIndex(1)}
+								onClick={() => setTabIndex(TAB_RECEIVE_CALL)}
 							>
 								← Prefiero indicar cuándo llamarme
 							</button>
@@ -371,24 +485,7 @@ export default function LaboratoryAppointmentStep({
 							</button>
 						</div>
 
-						{hasSavedCallbackPreference && (
-							<div
-								className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-left dark:border-emerald-900/60 dark:bg-emerald-950/40"
-								role="status"
-							>
-								<Text className="font-semibold text-emerald-900 dark:text-emerald-100">
-									Tu información ya está en el laboratorio
-								</Text>
-								<Text className="mt-1 text-sm text-emerald-800/95 dark:text-emerald-200/90">
-									Registramos tu disponibilidad. Puedes actualizarla cuando quieras.
-								</Text>
-								<Text className="mt-1 text-xs font-medium text-emerald-700/90 dark:text-emerald-300/90">
-									Enviado el {callbackPreferenceSavedAtFormatted}
-								</Text>
-							</div>
-						)}
-
-						<form onSubmit={submitAvailability} className="mt-6 space-y-6">
+						<div className="mt-6 space-y-6">
 							{receiveCallMode === "later" && (
 								<>
 									<Field>
@@ -435,22 +532,121 @@ export default function LaboratoryAppointmentStep({
 								{errors.patient_callback_comment && (
 									<ErrorMessage>{errors.patient_callback_comment}</ErrorMessage>
 								)}
+								{errors.callback_availability_starts_at && (
+									<ErrorMessage>
+										{errors.callback_availability_starts_at}
+									</ErrorMessage>
+								)}
+								{errors.callback_availability_ends_at && (
+									<ErrorMessage>
+										{errors.callback_availability_ends_at}
+									</ErrorMessage>
+								)}
 							</Field>
 							<div className="flex flex-col items-center gap-2">
-								<Button type="submit" disabled={processing || !canSave}>
-									{processing
-										? "Guardando…"
-										: hasSavedCallbackPreference
-											? "Actualizar disponibilidad"
-											: "Guardar disponibilidad"}
+								<Button
+									type="button"
+									disabled={submittingAvailability || !canSave}
+									onClick={submitAvailability}
+								>
+									{submittingAvailability
+										? "Actualizando…"
+										: "Actualizar disponibilidad"}
 								</Button>
-								{recentlySuccessful && (
-									<Text className="text-center text-sm font-medium text-emerald-600 dark:text-emerald-400">
-										Listo: guardamos tu información para el equipo del laboratorio.
+								{!canSave && (
+									<Text className="text-center text-xs text-zinc-500 dark:text-zinc-400">
+										Escribe un comentario o confirma un horario válido
+										para guardar.
 									</Text>
 								)}
 							</div>
-						</form>
+						</div>
+					</TabPanel>
+
+					<TabPanel className="rounded-2xl border border-zinc-200/80 bg-white p-5 outline-none dark:border-zinc-700 dark:bg-zinc-900/40 sm:p-6">
+						<Subheading className="text-center text-base">
+							Seguimiento de tu solicitud
+						</Subheading>
+						<Text className="mt-2 text-center text-sm text-zinc-600 dark:text-zinc-400">
+							Resumen de lo que ya registraste para esta cita.
+						</Text>
+
+						<div className="mt-6 space-y-4">
+							{requestSavedAtFormatted ? (
+								<CheckoutSaveSuccessAlert
+									message="Tu solicitud de cita se guardó correctamente"
+									hint={
+										<>
+											<Strong>Solicitud:</Strong> el{" "}
+											{requestSavedAtFormatted} · <br />
+											{laboratoryAppointment.patient_full_name && (
+												<>
+													<Strong>Paciente:</Strong>{" "}
+													{laboratoryAppointment.patient_full_name}{" "}
+													· <br />
+												</>
+											)}
+											Un asesor te contactará para agendar tu cita y
+											confirmar fecha y sucursal.
+										</>
+									}
+								/>
+							) : (
+								<Text className="text-center text-sm text-zinc-500 dark:text-zinc-400">
+									Aún no hay solicitud de cita registrada.
+								</Text>
+							)}
+
+							{hasSavedAvailability ? (
+								<CheckoutSaveSuccessAlert
+									message="Tu disponibilidad para recibir llamada quedó registrada"
+									hint={
+										<>
+											{callbackPreferenceSavedAtFormatted && (
+												<>
+													<Strong>Actualización:</Strong> el{" "}
+													{callbackPreferenceSavedAtFormatted}
+													<br />
+												</>
+											)}
+											{laboratoryAppointment.formatted_callback_availability_range && (
+												<>
+													<Strong>Horario:</Strong>{" "}
+													{
+														laboratoryAppointment.formatted_callback_availability_range
+													}
+													<br />
+												</>
+											)}
+											{laboratoryAppointment.patient_callback_comment?.trim() && (
+												<>
+													<Strong>Comentarios:</Strong>{" "}
+													{laboratoryAppointment.patient_callback_comment.trim()}
+												</>
+											)}
+										</>
+									}
+								/>
+							) : (
+								<Text className="text-center text-sm text-zinc-500 dark:text-zinc-400">
+									No has registrado disponibilidad para recibir llamada.
+								</Text>
+							)}
+
+							{hasTrackingContent && (
+								<p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
+									Puedes actualizar tu disponibilidad en la pestaña{" "}
+									<button
+										type="button"
+										className="font-medium text-sky-600 underline underline-offset-2 dark:text-sky-400"
+										onClick={() => setTabIndex(TAB_RECEIVE_CALL)}
+									>
+										Recibir llamada
+									</button>
+									.
+								</p>
+							)}
+						</div>
 					</TabPanel>
 				</TabPanels>
 			</TabGroup>

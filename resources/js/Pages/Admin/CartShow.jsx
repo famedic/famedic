@@ -21,6 +21,8 @@ import {
 	CalendarDaysIcon,
 	CheckCircleIcon,
 	ClockIcon,
+	CreditCardIcon,
+	MapPinIcon,
 	ShoppingCartIcon,
 	UserIcon,
 } from "@heroicons/react/16/solid";
@@ -40,6 +42,50 @@ function InfoCard({ title, children }) {
 		<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-600/80 dark:bg-zinc-800/90">
 			<Subheading className="mb-3">{title}</Subheading>
 			{children}
+		</div>
+	);
+}
+
+function AppointmentCheckoutSummary({ appointment }) {
+	if (!appointment) {
+		return (
+			<Text className="text-sm text-zinc-500 dark:text-zinc-400">
+				Sin solicitud
+			</Text>
+		);
+	}
+
+	return (
+		<div className="space-y-1 text-sm">
+			{appointment.request_saved_at && (
+				<Text className="text-zinc-600 dark:text-zinc-300">
+					<Strong>Solicitud:</Strong> {appointment.request_saved_at}
+				</Text>
+			)}
+			{appointment.has_phone_call_intent && (
+				<Text className="text-zinc-600 dark:text-zinc-300">
+					<Strong>Llamada:</Strong>{" "}
+					{appointment.phone_call_intent_at_human ?? "Intentó llamar"}
+				</Text>
+			)}
+			{appointment.callback_availability_range && (
+				<Text className="text-zinc-600 dark:text-zinc-300">
+					<Strong>Disponibilidad:</Strong>{" "}
+					{appointment.callback_availability_range}
+				</Text>
+			)}
+			{appointment.callback_comment && (
+				<Text className="text-zinc-600 dark:text-zinc-300">
+					<Strong>Comentarios:</Strong> {appointment.callback_comment}
+				</Text>
+			)}
+			{!appointment.request_saved_at &&
+				!appointment.has_callback_info &&
+				!appointment.has_phone_call_intent && (
+					<Text className="text-zinc-500 dark:text-zinc-400">
+						Solicitud registrada, sin actividad adicional
+					</Text>
+				)}
 		</div>
 	);
 }
@@ -218,6 +264,7 @@ export default function CartShow({ cart }) {
 										<TableHeader>Marca</TableHeader>
 										<TableHeader>Paciente</TableHeader>
 										<TableHeader>Estatus</TableHeader>
+										<TableHeader>Solicitud / disponibilidad</TableHeader>
 										<TableHeader>Fecha de cita</TableHeader>
 										<TableHeader></TableHeader>
 									</TableRow>
@@ -247,7 +294,22 @@ export default function CartShow({ cart }) {
 															Con pedido
 														</Badge>
 													)}
+													{appointment.has_phone_call_intent && (
+														<Badge color="sky">
+															Intentó llamar
+														</Badge>
+													)}
+													{appointment.has_callback_info && (
+														<Badge color="violet">
+															Con disponibilidad
+														</Badge>
+													)}
 												</div>
+											</TableCell>
+											<TableCell>
+												<AppointmentCheckoutSummary
+													appointment={appointment}
+												/>
 											</TableCell>
 											<TableCell>
 												<div className="flex items-center gap-1 text-sm">
@@ -269,6 +331,106 @@ export default function CartShow({ cart }) {
 									))}
 								</TableBody>
 							</Table>
+						</div>
+					</InfoCard>
+				)}
+
+				{isLab && cart.checkout_drafts?.length > 0 && (
+					<InfoCard title="Progreso de checkout">
+						<div className="space-y-4">
+							{cart.checkout_drafts.map((draft) => (
+								<div
+									key={draft.id}
+									className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-600/80"
+								>
+									<div className="mb-3 flex flex-wrap items-center gap-2">
+										<Badge color="zinc">{draft.brand_label}</Badge>
+										<Badge color="sky">
+											Paso: {draft.checkout_step_label}
+										</Badge>
+										{draft.updated_at_human && (
+											<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+												Actualizado {draft.updated_at_human}
+											</Text>
+										)}
+									</div>
+
+									<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+										<div>
+											<div className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+												<UserIcon className="size-3.5" />
+												Paciente
+											</div>
+											{draft.patient ? (
+												<div className="text-sm">
+													<Text>
+														<Strong>
+															{draft.patient.full_name}
+														</Strong>
+													</Text>
+													<Text className="text-zinc-600 dark:text-zinc-300">
+														{draft.patient.formatted_gender}
+														{draft.patient.formatted_birth_date &&
+															` · ${draft.patient.formatted_birth_date}`}
+													</Text>
+													{draft.patient.phone && (
+														<Text className="text-zinc-600 dark:text-zinc-300">
+															{draft.patient.phone}
+														</Text>
+													)}
+												</div>
+											) : (
+												<Text className="text-sm text-zinc-500">
+													Sin seleccionar
+												</Text>
+											)}
+										</div>
+
+										<div>
+											<div className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+												<MapPinIcon className="size-3.5" />
+												Dirección
+											</div>
+											{draft.address ? (
+												<Text className="text-sm text-zinc-600 dark:text-zinc-300">
+													{draft.address.formatted_address ||
+														draft.address.full_address}
+												</Text>
+											) : (
+												<Text className="text-sm text-zinc-500">
+													Sin seleccionar
+												</Text>
+											)}
+										</div>
+
+										<div>
+											<div className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+												<CreditCardIcon className="size-3.5" />
+												Método de pago
+											</div>
+											{draft.payment_method_label ? (
+												<Text className="text-sm text-zinc-600 dark:text-zinc-300">
+													{draft.payment_method_label}
+												</Text>
+											) : (
+												<Text className="text-sm text-zinc-500">
+													Sin seleccionar
+												</Text>
+											)}
+										</div>
+
+										<div>
+											<div className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+												<CalendarDaysIcon className="size-3.5" />
+												Cita
+											</div>
+											<AppointmentCheckoutSummary
+												appointment={draft.appointment}
+											/>
+										</div>
+									</div>
+								</div>
+							))}
 						</div>
 					</InfoCard>
 				)}

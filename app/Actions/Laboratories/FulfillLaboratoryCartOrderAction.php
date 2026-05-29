@@ -24,6 +24,7 @@ class FulfillLaboratoryCartOrderAction
         private CreateGDAQuotationAction $createGDAQuotationAction,
         private SyncMonitoringCartService $syncMonitoringCartService,
         private CouponApplicationService $couponApplicationService,
+        private SyncLaboratoryCheckoutDraftAction $syncLaboratoryCheckoutDraftAction,
     ) {
     }
 
@@ -100,6 +101,7 @@ class FulfillLaboratoryCartOrderAction
             }
 
             $this->syncMonitoringCartService->markLaboratoryCartCompleted($customer);
+            $this->syncLaboratoryCheckoutDraftAction->clearForCustomer($customer, $laboratoryBrand);
             $this->clearCart($customer);
 
             DB::commit();

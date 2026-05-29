@@ -3,7 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
+use App\Actions\Laboratories\SyncLaboratoryCheckoutDraftAction;
 use App\Actions\Laboratories\SyncLaboratoryAppointmentFromContactAction;
+use App\Http\Requests\LaboratoryCheckout\SyncLaboratoryCheckoutDraftRequest;
+use App\Models\Customer;
+use App\Models\LaboratoryCheckoutDraft;
 use App\Enums\Gender;
 use App\Enums\LaboratoryAppointmentInteractionType;
 use App\Enums\LaboratoryBrand;
@@ -66,8 +70,30 @@ class LaboratoryCheckoutController extends Controller
             }
         }
 
+        $savedCheckout = LaboratoryCheckoutDraft::query()
+            ->where('customer_id', $customer->id)
+            ->where('laboratory_brand', $laboratoryBrand)
+            ->first()
+            ?->forCheckout();
+
+        if ($requiresAppointment && ! $laboratoryAppointment && ! $pendingLaboratoryAppointment) {
+            $pendingLaboratoryAppointment = $this->ensurePendingLaboratoryAppointment(
+                $customer,
+                $laboratoryBrand,
+                $savedCheckout,
+                $request,
+            );
+
+            if ($pendingLaboratoryAppointment) {
+                $callbackPreferenceSavedAtFormatted = $this->formatCallbackPreferenceSavedAt(
+                    $pendingLaboratoryAppointment
+                );
+            }
+        }
+
         return Inertia::render('LaboratoryCheckout', [
             'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryBrand),
+            'savedCheckout' => $savedCheckout,
             'requiresAppointment' => $requiresAppointment,
             'laboratoryAppointment' => $laboratoryAppointment,
             'pendingLaboratoryAppointment' => $pendingLaboratoryAppointment,
@@ -133,6 +159,44 @@ class LaboratoryCheckoutController extends Controller
         return MockEfevooPaymentSupport::mergePaymentMethodsForCheckout($userTokens, $mockTokens);
     }
 
+    public function syncDraft(
+        SyncLaboratoryCheckoutDraftRequest $request,
+        LaboratoryBrand $laboratoryBrand,
+        SyncLaboratoryCheckoutDraftAction $action,
+    ) {
+        $validated = $request->validated();
+
+        $draft = $action(
+            $request->user()->customer,
+            $laboratoryBrand,
+            [
+                'step' => $validated['step'],
+                'contact_id' => isset($validated['contact_id']) ? (int) $validated['contact_id'] : null,
+                'address_id' => isset($validated['address_id']) ? (int) $validated['address_id'] : null,
+                'payment_method' => $validated['payment_method'] ?? null,
+                'coupon_id' => isset($validated['coupon_id']) ? (int) $validated['coupon_id'] : null,
+            ],
+        );
+
+        $query = array_filter([
+            'step' => $draft->checkout_step,
+            'contact' => $draft->contact_id
+                ?? $validated['contact_id']
+                ?? $request->query('contact'),
+            'address' => $draft->address_id
+                ?? $validated['address_id']
+                ?? $request->query('address'),
+            'payment_method' => $draft->payment_method
+                ?? ($validated['payment_method'] ?? null)
+                ?? $request->query('payment_method'),
+        ], fn ($value) => $value !== null && $value !== '');
+
+        return redirect()->route('laboratory.checkout', [
+            'laboratory_brand' => $laboratoryBrand,
+            ...$query,
+        ]);
+    }
+
     public function syncAppointment(
         SyncLaboratoryAppointmentRequest $request,
         LaboratoryBrand $laboratoryBrand,
@@ -146,6 +210,19 @@ class LaboratoryCheckoutController extends Controller
 
         $contact = $customer->contacts()->findOrFail($request->validated('contact_id'));
         $action($customer, $laboratoryBrand, $contact);
+
+        LaboratoryCheckoutDraft::query()->updateOrCreate(
+            [
+                'customer_id' => $customer->id,
+                'laboratory_brand' => $laboratoryBrand,
+            ],
+            [
+                'contact_id' => $contact->id,
+                'address_id' => $request->filled('address') ? (int) $request->input('address') : null,
+                'payment_method' => $request->input('payment_method'),
+                'checkout_step' => 'appointment',
+            ],
+        );
 
         $query = array_filter([
             'step' => 'appointment',
@@ -172,8 +249,43 @@ class LaboratoryCheckoutController extends Controller
             ->first();
 
         return $lastPreferenceInteraction?->created_at
-            ?->timezone(config('app.timezone'))
+            ?->timezone('America/Monterrey')
             ?->locale('es')
             ?->isoFormat('dddd D [de] MMMM [de] YYYY, h:mm a');
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $savedCheckout
+     */
+    private function ensurePendingLaboratoryAppointment(
+        Customer $customer,
+        LaboratoryBrand $laboratoryBrand,
+        ?array $savedCheckout,
+        Request $request,
+    ): ?\App\Models\LaboratoryAppointment {
+        $step = $request->query('step') ?? ($savedCheckout['checkout_step'] ?? null);
+
+        $shouldEnsure = in_array($step, ['appointment', 'confirmation'], true)
+            || in_array($savedCheckout['checkout_step'] ?? null, ['appointment', 'confirmation'], true);
+
+        if (! $shouldEnsure) {
+            return null;
+        }
+
+        $contactId = $savedCheckout['contact_id'] ?? $request->query('contact');
+        if (! $contactId) {
+            return null;
+        }
+
+        $contact = $customer->contacts()->find($contactId);
+        if (! $contact) {
+            return null;
+        }
+
+        return app(SyncLaboratoryAppointmentFromContactAction::class)(
+            $customer,
+            $laboratoryBrand,
+            $contact,
+        );
     }
 }
