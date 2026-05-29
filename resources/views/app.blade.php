@@ -140,7 +140,7 @@
 
         @env('local', 'testing', 'staging')
             <script>window.$zoho=window.$zoho || {};$zoho.salesiq=$zoho.salesiq||{ready:function(){}}</script>
-            <script id="zsiqscript" src="https://salesiq.zohopublic.com/widget?wc=siqa5c1962de4be78bdee6d1289a9999c2f57b865275c57f26970b8bae68fc5e5b4" defer></script>
+            <script id="zsiqscript" src="https://salesiq.zohopublic.com/widget?wc=siq1ca43d7679f1f83dfd15f5b210e2b2d14e610fb5bbe971a5cc7541fcad777e7d" defer></script>            
         @endenv
 </body>
 
