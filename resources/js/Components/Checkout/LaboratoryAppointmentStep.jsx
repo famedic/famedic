@@ -69,6 +69,7 @@ function getDefaultHourWindow(dayOffset = 0) {
 	};
 }
 
+const TAB_CALL_NOW = 0;
 const TAB_RECEIVE_CALL = 1;
 const TAB_TRACKING = 2;
 
@@ -217,17 +218,16 @@ export default function LaboratoryAppointmentStep({
 	}, [receiveCallMode, dayOption, startTime, endTime]);
 
 	useEffect(() => {
-		if (
-			laboratoryAppointment.has_left_callback_info ||
-			callbackPreferenceSavedAtFormatted ||
-			laboratoryAppointment.formatted_request_saved_at
-		) {
-			setTabIndex(TAB_TRACKING);
-		}
+		const hasSavedCallbackProgress =
+			Boolean(callbackPreferenceSavedAtFormatted) ||
+			Boolean(laboratoryAppointment.has_left_callback_info);
+
+		setTabIndex(
+			hasSavedCallbackProgress ? TAB_TRACKING : TAB_CALL_NOW,
+		);
 	}, [
 		laboratoryAppointment.id,
 		laboratoryAppointment.has_left_callback_info,
-		laboratoryAppointment.formatted_request_saved_at,
 		callbackPreferenceSavedAtFormatted,
 	]);
 
