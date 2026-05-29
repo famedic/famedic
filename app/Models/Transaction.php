@@ -196,4 +196,38 @@ class Transaction extends Model
     {
         return $this->details['simulated'] ?? false;
     }
+
+    public function isSuccessfulPayment(): bool
+    {
+        $status = strtolower((string) ($this->payment_status ?? ''));
+
+        if (in_array($status, ['failed', 'refunded', 'declined', 'pending'], true)) {
+            return false;
+        }
+
+        if (in_array($status, [
+            'captured',
+            'completed',
+            'paid',
+            'success',
+            'succeeded',
+            'credit',
+        ], true)) {
+            return true;
+        }
+
+        $gatewayStatus = strtolower((string) ($this->gateway_status ?? ''));
+
+        if (in_array($gatewayStatus, [
+            'completed',
+            'captured',
+            'paid',
+            'success',
+            'succeeded',
+        ], true)) {
+            return true;
+        }
+
+        return filled($this->reference_id);
+    }
 }

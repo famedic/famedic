@@ -21,7 +21,12 @@ class BuildLaboratoryAppointmentCheckoutProgressAction
      */
     public function __invoke(LaboratoryAppointment $appointment): array
     {
-        $appointment->loadMissing(['customer']);
+        $appointment->loadMissing([
+            'customer',
+            'laboratoryPurchase.transactions',
+        ]);
+
+        $purchase = $appointment->laboratoryPurchase;
 
         $draft = LaboratoryCheckoutDraft::query()
             ->where('customer_id', $appointment->customer_id)
@@ -34,15 +39,18 @@ class BuildLaboratoryAppointmentCheckoutProgressAction
         $appointmentPatientName = $appointment->patient_full_name;
         $hasAppointmentPatient = filled($appointment->patient_name);
 
+        $hasCompletedPurchase = $appointment->hasPaidLaboratoryPurchase();
+
         $hasPatient = $hasAppointmentPatient || ($draft?->contact_id !== null);
-        $hasAddress = $draft?->address_id !== null;
-        $hasPaymentMethod = filled($draft?->payment_method);
+        $hasAddress = $draft?->address_id !== null || $purchase !== null;
+        $hasPaymentMethod = filled($draft?->payment_method)
+            || ($purchase !== null && $purchase->transactions->isNotEmpty());
         $isAppointmentConfirmed = $appointment->confirmed_at !== null;
         $hasAppointmentActivity = $isAppointmentConfirmed
             || (bool) $appointment->has_left_callback_info
             || $appointment->phone_call_intent_at !== null
             || $hasAppointmentPatient;
-        $isPaid = $appointment->hasPaidLaboratoryPurchase();
+        $isPaid = $hasCompletedPurchase;
 
         // En detalle de cita, el paciente de la solicitud tiene prioridad sobre el borrador
         // (el draft puede quedar con otro contact_id si el usuario cambió de paciente en checkout).
@@ -50,12 +58,13 @@ class BuildLaboratoryAppointmentCheckoutProgressAction
             ? $appointmentPatientName
             : $draft?->contact?->full_name;
 
-        $addressDetail = $this->shortAddressLabel($draft?->address);
+        $addressDetail = $this->shortAddressLabel($draft?->address)
+            ?? $this->purchaseAddressLabel($purchase);
 
         $paymentDetail = $this->paymentMethodLabel(
             $draft?->payment_method,
             $appointment->customer,
-        );
+        ) ?? $this->transactionPaymentLabel($purchase?->transactions->first());
 
         $appointmentDetail = match (true) {
             $isAppointmentConfirmed => 'Confirmada'
@@ -195,5 +204,51 @@ class BuildLaboratoryAppointmentCheckoutProgressAction
             ucfirst(strtolower((string) $token->card_brand)),
             $token->card_last_four,
         );
+    }
+
+    private function purchaseAddressLabel(?\App\Models\LaboratoryPurchase $purchase): ?string
+    {
+        if ($purchase === null) {
+            return null;
+        }
+
+        $parts = array_filter([
+            trim("{$purchase->street} {$purchase->number}"),
+            $purchase->neighborhood,
+            $purchase->city,
+            $purchase->state,
+        ]);
+
+        $text = implode(', ', $parts);
+
+        if ($text === '') {
+            return null;
+        }
+
+        return mb_strlen($text) > 56
+            ? mb_substr($text, 0, 53).'…'
+            : $text;
+    }
+
+    private function transactionPaymentLabel(?\App\Models\Transaction $transaction): ?string
+    {
+        if ($transaction === null) {
+            return 'Compra registrada';
+        }
+
+        $tokenInfo = $transaction->details['token_info'] ?? null;
+        if (is_array($tokenInfo) && filled($tokenInfo['card_last_four'] ?? null)) {
+            $brand = ucfirst(strtolower((string) ($tokenInfo['card_brand'] ?? 'Tarjeta')));
+
+            return sprintf('%s •••• %s', $brand, $tokenInfo['card_last_four']);
+        }
+
+        return match (strtolower((string) $transaction->payment_method)) {
+            'odessa' => 'Saldo a la Vista (Odessa)',
+            'paypal' => 'PayPal',
+            'coupon_balance' => 'Crédito a favor (cupón)',
+            'efevoopay' => 'Tarjeta',
+            default => ucfirst((string) ($transaction->payment_method ?: 'Pago')),
+        };
     }
 }

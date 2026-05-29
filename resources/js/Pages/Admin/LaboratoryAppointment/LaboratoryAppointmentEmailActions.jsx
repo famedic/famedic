@@ -62,7 +62,7 @@ export default function LaboratoryAppointmentEmailActions({
 					<EnvelopeIcon />
 					{busyAction === "appointment-instructions"
 						? "Enviando…"
-						: "Enviar indicaciones y cita"}
+						: "Enviar indicación y cita"}
 				</Button>
 			)}
 		</>

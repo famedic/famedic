@@ -90,19 +90,10 @@ class LaboratoryAppointment extends Model
 
         $transaction = $purchase->transactions->first();
         if ($transaction === null) {
-            return false;
+            return true;
         }
 
-        $status = strtolower((string) $transaction->payment_status);
-
-        return in_array($status, [
-            'captured',
-            'completed',
-            'paid',
-            'success',
-            'succeeded',
-            'credit',
-        ], true);
+        return $transaction->isSuccessfulPayment();
     }
 
     public function scopeFilter(Builder $query, array $filters): Builder

@@ -61,13 +61,7 @@ export default function LaboratoryAppointment({
 			: "pending";
 
 	const purchase = laboratoryAppointment.laboratory_purchase ?? null;
-	const primaryTransaction = purchase?.transactions?.[0] ?? null;
-	const hasCapturedPayment = ["captured", "paid", "completed"].includes(
-		primaryTransaction?.payment_status,
-	);
-	const purchaseStatus = hasCapturedPayment || laboratoryAppointment.laboratory_purchase_id
-		? "paid"
-		: "pending";
+	const purchaseStatus = hasPaidLaboratoryPurchase ? "paid" : "pending";
 
 	const studies = useMemo(() => {
 		if (
@@ -172,10 +166,10 @@ export default function LaboratoryAppointment({
 
 				<PurchaseStatusCard
 					purchaseStatus={purchaseStatus}
-					orderNumber={purchase?.gda_order_id ?? primaryTransaction?.reference_id}
+					orderNumber={purchase?.gda_order_id ?? purchase?.transactions?.[0]?.reference_id}
 					purchaseDate={
 						purchase?.formatted_created_at ??
-						primaryTransaction?.formatted_created_at ??
+						purchase?.transactions?.[0]?.formatted_created_at ??
 						null
 					}
 					studies={studies}
