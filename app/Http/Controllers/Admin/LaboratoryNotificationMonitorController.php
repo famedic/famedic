@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Laboratories\GetGDAResultsAction;
 use App\Http\Controllers\Controller;
 use App\Models\LabOrderEventState;
 use App\Models\LaboratoryNotification;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -154,6 +156,100 @@ class LaboratoryNotificationMonitorController extends Controller
         $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
 
         return response()->json($this->buildOrderDetail($orderKey));
+    }
+
+    public function fetchResults(Request $request, string $orderKey): JsonResponse
+    {
+        $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
+
+        $resultsNotifications = $this->notificationsForOrder($orderKey)
+            ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+            ->values();
+
+        $notification = $resultsNotifications->sortByDesc('created_at')->first();
+
+        if (! $notification) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No existe notificación de resultados para esta orden.',
+            ], 404);
+        }
+
+        if ($notification->hasResults()) {
+            return response()->json([
+                'success' => true,
+                'cached' => true,
+                'message' => 'El PDF ya estaba almacenado en la base de datos.',
+                'pdf_base64' => $notification->results_pdf_base64,
+                'results_pdf' => $this->buildResultsPdfSummary($resultsNotifications),
+            ]);
+        }
+
+        if (! $notification->hasAvailableResults() && ! $notification->needsPdfFetch()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Los resultados aún no están disponibles en GDA.',
+            ], 422);
+        }
+
+        try {
+            $response = app(GetGDAResultsAction::class)(
+                $notification->gda_order_id,
+                $notification->payload
+            );
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error consultando GDA: '.$e->getMessage(),
+            ], 500);
+        }
+
+        $pdf = $response['infogda_resultado_b64'] ?? null;
+
+        if (! $pdf) {
+            return response()->json([
+                'success' => false,
+                'message' => 'GDA no devolvió el PDF de resultados.',
+            ], 500);
+        }
+
+        $notification->update([
+            'results_pdf_base64' => $pdf,
+        ]);
+
+        $notification->refresh();
+        $resultsNotifications = $this->notificationsForOrder($orderKey)
+            ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'cached' => false,
+            'message' => 'PDF obtenido desde GDA y guardado en la base de datos.',
+            'pdf_base64' => $pdf,
+            'results_pdf' => $this->buildResultsPdfSummary($resultsNotifications),
+        ]);
+    }
+
+    public function downloadResults(Request $request, string $orderKey)
+    {
+        $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
+
+        $notification = $this->notificationsForOrder($orderKey)
+            ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+            ->sortByDesc('created_at')
+            ->first();
+
+        if (! $notification || ! $notification->hasResults()) {
+            abort(404, 'PDF no disponible en la base de datos.');
+        }
+
+        $pdfContent = base64_decode($notification->results_pdf_base64);
+        $filename = 'resultados_'.($notification->gda_consecutivo ?? $notification->gda_order_id ?? $orderKey).'.pdf';
+
+        return response($pdfContent)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="'.$filename.'"');
     }
 
     private function baseNotificationsQuery(Carbon $startDate, Carbon $endDate, string $search = ''): Builder

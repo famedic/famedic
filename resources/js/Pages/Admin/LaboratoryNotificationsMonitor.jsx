@@ -35,6 +35,7 @@ import {
 	CartesianGrid,
 } from "recharts";
 import { Divider } from "@/Components/Catalyst/divider";
+import LaboratoryNotificationResultsPdfActions from "@/Components/Admin/LaboratoryNotificationResultsPdfActions";
 
 function formatDiff(minutes) {
 	if (minutes == null) return "—";
@@ -340,12 +341,13 @@ export default function LaboratoryNotificationsMonitor({
 				loading={detailLoading}
 				error={detailError}
 				detail={orderDetail}
+				onDetailUpdated={setOrderDetail}
 			/>
 		</AdminLayout>
 	);
 }
 
-function OrderDetailDialog({ open, onClose, loading, error, detail }) {
+function OrderDetailDialog({ open, onClose, loading, error, detail, onDetailUpdated }) {
 	const [tabIndex, setTabIndex] = useState(0);
 	const orderLabel =
 		detail?.gdaConsecutivo ?? detail?.gdaOrderId ?? detail?.orderKey;
@@ -392,7 +394,18 @@ function OrderDetailDialog({ open, onClose, loading, error, detail }) {
 
 						<TabPanels>
 							<TabPanel>
-								<OrderSummaryTab detail={detail} />
+								<OrderSummaryTab
+									detail={detail}
+									onResultsPdfUpdated={(resultsPdf) =>
+										onDetailUpdated?.({
+											...detail,
+											summary: {
+												...detail.summary,
+												results_pdf: resultsPdf,
+											},
+										})
+									}
+								/>
 							</TabPanel>
 							<TabPanel>
 								<NotificationTable
@@ -432,7 +445,7 @@ function OrderTab({ label }) {
 	);
 }
 
-function OrderSummaryTab({ detail }) {
+function OrderSummaryTab({ detail, onResultsPdfUpdated }) {
 	const pdfBadge = pdfLocationBadge(detail.summary.results_pdf);
 	const emails = detail.summary.emails;
 
@@ -487,6 +500,11 @@ function OrderSummaryTab({ detail }) {
 						Notificación de referencia: #{detail.summary.results_pdf.notification_id}
 					</Text>
 				)}
+				<LaboratoryNotificationResultsPdfActions
+					orderKey={detail.orderKey}
+					resultsPdf={detail.summary.results_pdf}
+					onResultsPdfUpdated={onResultsPdfUpdated}
+				/>
 			</div>
 
 			<div className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">

@@ -7,6 +7,7 @@ import { Badge } from "@/Components/Catalyst/badge";
 import { BadgeButton } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Divider } from "@/Components/Catalyst/divider";
+import LaboratoryNotificationResultsPdfActions from "@/Components/Admin/LaboratoryNotificationResultsPdfActions";
 import {
 	Table,
 	TableBody,
@@ -57,6 +58,7 @@ export default function LaboratoryNotificationsMonitorShow({
 	resultsNotifications,
 }) {
 	const [tabIndex, setTabIndex] = useState(0);
+	const [resultsPdf, setResultsPdf] = useState(summary.results_pdf);
 	const orderLabel = gdaConsecutivo ?? gdaOrderId ?? orderKey;
 
 	return (
@@ -101,6 +103,9 @@ export default function LaboratoryNotificationsMonitorShow({
 									summary={summary}
 									gdaConsecutivo={gdaConsecutivo}
 									gdaOrderId={gdaOrderId}
+									orderKey={orderKey}
+									resultsPdf={resultsPdf}
+									onResultsPdfUpdated={setResultsPdf}
 								/>
 							</TabPanel>
 							<TabPanel>
@@ -135,8 +140,15 @@ function OrderTab({ label }) {
 	);
 }
 
-function OrderSummaryTab({ summary, gdaConsecutivo, gdaOrderId }) {
-	const pdfBadge = pdfLocationBadge(summary.results_pdf);
+function OrderSummaryTab({
+	summary,
+	gdaConsecutivo,
+	gdaOrderId,
+	orderKey,
+	resultsPdf,
+	onResultsPdfUpdated,
+}) {
+	const pdfBadge = pdfLocationBadge(resultsPdf);
 	const emails = summary.emails;
 
 	return (
@@ -174,13 +186,23 @@ function OrderSummaryTab({ summary, gdaConsecutivo, gdaOrderId }) {
 				<Subheading>Ubicación del PDF de resultados</Subheading>
 				<Badge color={pdfBadge.color}>{pdfBadge.label}</Badge>
 				<div className="flex flex-wrap gap-2">
-					<Badge color={summary.results_pdf?.has_pdf_in_db ? "famedic-lime" : "slate"}>
-						En BD (base64): {summary.results_pdf?.has_pdf_in_db ? "Sí" : "No"}
+					<Badge color={resultsPdf?.has_pdf_in_db ? "famedic-lime" : "slate"}>
+						En BD (base64): {resultsPdf?.has_pdf_in_db ? "Sí" : "No"}
 					</Badge>
-					<Badge color={summary.results_pdf?.available_at_gda ? "sky" : "slate"}>
-						En proveedor GDA: {summary.results_pdf?.available_at_gda ? "Sí" : "No"}
+					<Badge color={resultsPdf?.available_at_gda ? "sky" : "slate"}>
+						En proveedor GDA: {resultsPdf?.available_at_gda ? "Sí" : "No"}
 					</Badge>
 				</div>
+				{resultsPdf?.notification_id && (
+					<Text className="text-xs text-zinc-500">
+						Notificación de referencia: #{resultsPdf.notification_id}
+					</Text>
+				)}
+				<LaboratoryNotificationResultsPdfActions
+					orderKey={orderKey}
+					resultsPdf={resultsPdf}
+					onResultsPdfUpdated={onResultsPdfUpdated}
+				/>
 			</div>
 
 			<div className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">

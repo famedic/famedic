@@ -10,6 +10,7 @@ use App\Models\LaboratoryQuote;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryNotification;
 use App\Actions\Laboratories\GetGDAResultsAction;
+use Illuminate\Support\Facades\Gate;
 
 class LaboratoryResultController extends Controller
 {
@@ -378,35 +379,79 @@ class LaboratoryResultController extends Controller
     }
 
     /**
-     * Buscar notificación del usuario por tipo y ID
+     * Buscar notificación de resultados autorizada para el usuario (por pedido/cotización, no solo user_id en la fila).
      */
-    private function findUserNotification($user, $type, $id)
+    private function findUserNotification($user, $type, $id): ?LaboratoryNotification
     {
         logger('🔎 Buscando notificación:', [
             'user_id' => $user->id,
             'type' => $type,
-            'id' => $id
+            'id' => $id,
         ]);
 
+        $resultsScope = function ($query) {
+            $query->where(function ($q) {
+                $q->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
+            })->whereNotNull('results_received_at');
+        };
+
         if ($type === 'quote') {
-            return LaboratoryNotification::where('user_id', $user->id)
-                ->where('laboratory_quote_id', $id)
-                ->whereNotNull('results_received_at') // Solo notificaciones con resultados disponibles
-                ->first();
-        } else if ($type === 'purchase') {
-            return LaboratoryNotification::where('user_id', $user->id)
-                ->where('laboratory_purchase_id', $id)
-                ->whereNotNull('results_received_at') // Solo notificaciones con resultados disponibles
-                ->first();
-        } else if ($type === 'notification') {
-            return LaboratoryNotification::where('user_id', $user->id)
-                ->where('id', $id)
-                ->whereNotNull('results_received_at') // Solo notificaciones con resultados disponibles
+            $quote = LaboratoryQuote::query()->find($id);
+            if (! $quote || (int) $quote->user_id !== (int) $user->id) {
+                return null;
+            }
+
+            return LaboratoryNotification::query()
+                ->where('laboratory_quote_id', $quote->id)
+                ->where($resultsScope)
+                ->latest('id')
                 ->first();
         }
 
+        if ($type === 'purchase') {
+            $purchase = LaboratoryPurchase::query()->find($id);
+            if (! $purchase || ! Gate::forUser($user)->allows('view', $purchase)) {
+                return null;
+            }
+
+            return LaboratoryNotification::query()
+                ->where('laboratory_purchase_id', $purchase->id)
+                ->where($resultsScope)
+                ->latest('id')
+                ->first();
+        }
+
+        if ($type === 'notification') {
+            $notification = LaboratoryNotification::query()
+                ->with(['laboratoryPurchase', 'laboratoryQuote'])
+                ->where('id', $id)
+                ->where($resultsScope)
+                ->first();
+
+            if (! $notification || ! $this->userCanAccessNotification($user, $notification)) {
+                return null;
+            }
+
+            return $notification;
+        }
+
         logger('⚠️ Tipo de notificación desconocido:', ['type' => $type]);
+
         return null;
+    }
+
+    private function userCanAccessNotification($user, LaboratoryNotification $notification): bool
+    {
+        if ($notification->laboratoryPurchase) {
+            return Gate::forUser($user)->allows('view', $notification->laboratoryPurchase);
+        }
+
+        if ($notification->laboratoryQuote) {
+            return (int) $notification->laboratoryQuote->user_id === (int) $user->id;
+        }
+
+        return (int) $notification->user_id === (int) $user->id;
     }
 
     /**

@@ -98,7 +98,9 @@ class FindReferencesAction
                 $contact = $this->findContactAction->execute($patientId);
                 if ($contact) {
                     $references['contact_id'] = $this->validateContactId($contact->id);
-                    $references['user_id'] = $contact->user_id;
+                    if (empty($references['user_id'])) {
+                        $references['user_id'] = $contact->user_id;
+                    }
                 }
             }
         }
