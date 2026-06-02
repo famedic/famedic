@@ -1,0 +1,14 @@
+name: Deploy to Forge
+
+on:
+  push:
+    branches:
+      - feature/hey-banco
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Forge Deploy
+        run: curl -X POST "${{ secrets.FORGE_DEPLOY_HOOK_MURGUIA }}"
