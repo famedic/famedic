@@ -37,16 +37,6 @@ import {
 	ShoppingBagIcon,
 } from "@heroicons/react/24/outline";
 
-function statusBadge(displayStatus) {
-	if (displayStatus === "completed") {
-		return { color: "blue", label: "Comprado" };
-	}
-	if (displayStatus === "abandoned") {
-		return { color: "red", label: "Abandonado" };
-	}
-	return { color: "green", label: "Activo" };
-}
-
 function MetricCard({ title, value, valueClassName }) {
 	return (
 		<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-600/80 dark:bg-zinc-800/90">
@@ -61,6 +51,99 @@ function MetricCard({ title, value, valueClassName }) {
 			>
 				{value}
 			</p>
+		</div>
+	);
+}
+
+function statusBadge(displayStatus) {
+	if (displayStatus === "completed") {
+		return { color: "blue", label: "Comprado" };
+	}
+	if (displayStatus === "abandoned") {
+		return { color: "red", label: "Abandonado" };
+	}
+	return { color: "green", label: "Activo" };
+}
+
+function CheckoutSummaryCell({ cart }) {
+	if (cart.type !== "lab") {
+		return (
+			<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+				No aplica
+			</Text>
+		);
+	}
+
+	const entries = cart.checkout_summary ?? [];
+
+	if (entries.length === 0) {
+		return (
+			<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+				Sin avance
+			</Text>
+		);
+	}
+
+	return (
+		<div className="space-y-2">
+			{entries.map((entry) => (
+				<div key={entry.id} className="space-y-1">
+					<div className="flex flex-wrap items-center gap-1">
+						{entries.length > 1 && (
+							<Badge color="zinc">{entry.brand_label}</Badge>
+						)}
+						<Badge color="sky">{entry.checkout_step_label}</Badge>
+					</div>
+					{entry.patient_name && (
+						<Text className="text-xs text-zinc-700 dark:text-zinc-200">
+							{entry.patient_name}
+						</Text>
+					)}
+					{entry.address_short && (
+						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+							{entry.address_short}
+						</Text>
+					)}
+					{entry.payment_method_label && (
+						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+							{entry.payment_method_label}
+						</Text>
+					)}
+					{entry.appointment?.request_saved_at && (
+						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+							Solicitud: {entry.appointment.request_saved_at}
+						</Text>
+					)}
+					{entry.appointment?.has_phone_call_intent && (
+						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+							Intentó llamar
+							{entry.appointment.phone_call_intent_at_human
+								? ` · ${entry.appointment.phone_call_intent_at_human}`
+								: ""}
+						</Text>
+					)}
+					{entry.appointment?.callback_availability_range && (
+						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+							{entry.appointment.callback_availability_range}
+						</Text>
+					)}
+					{entry.appointment?.callback_comment_short && (
+						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+							{entry.appointment.callback_comment_short}
+						</Text>
+					)}
+					{!entry.patient_name &&
+						!entry.address_short &&
+						!entry.payment_method_label &&
+						!entry.appointment?.request_saved_at &&
+						!entry.appointment?.has_callback_info &&
+						!entry.appointment?.has_phone_call_intent && (
+							<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+								Sin datos aún
+							</Text>
+						)}
+				</div>
+			))}
 		</div>
 	);
 }
@@ -298,6 +381,7 @@ export default function Carts({
 								<TableHeader>Tipo</TableHeader>
 								<TableHeader>Ítems</TableHeader>
 								<TableHeader>Total</TableHeader>
+								<TableHeader>Checkout</TableHeader>
 								<TableHeader>Estatus</TableHeader>
 								<TableHeader>Última actividad</TableHeader>
 								<TableHeader></TableHeader>
@@ -352,6 +436,9 @@ export default function Carts({
 											<Strong>{cart.items_count}</Strong>
 										</TableCell>
 										<TableCell>{cart.total_formatted}</TableCell>
+										<TableCell>
+											<CheckoutSummaryCell cart={cart} />
+										</TableCell>
 										<TableCell>
 											<div className="flex flex-wrap gap-1">
 												<Badge color={b.color}>{b.label}</Badge>

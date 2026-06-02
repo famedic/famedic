@@ -194,6 +194,11 @@ class Customer extends Model
         return $this->hasMany(LaboratoryCartItem::class);
     }
 
+    public function laboratoryCheckoutDrafts(): HasMany
+    {
+        return $this->hasMany(LaboratoryCheckoutDraft::class);
+    }
+
     public function laboratoryAppointments(): HasMany
     {
         return $this->hasMany(LaboratoryAppointment::class);

@@ -126,6 +126,8 @@ class PayPalController extends Controller
             ], 422);
         }
 
+        session()->flash('confetti', true);
+
         return response()->json([
             'status' => $status,
             'laboratory_purchase_id' => $purchase?->id,

@@ -78,6 +78,10 @@ Route::prefix('admin')->middleware([
         Route::get('laboratory-appointments/metrics', LaboratoryAppointmentMetricsController::class)->name('laboratory-appointments.metrics');
         Route::post('laboratory-appointments/{laboratory_appointment}/interactions', [LaboratoryAppointmentController::class, 'storeInteraction'])
             ->name('laboratory-appointments.interactions.store');
+        Route::post('laboratory-appointments/{laboratory_appointment}/send-payment-summary', [LaboratoryAppointmentController::class, 'sendPaymentSummary'])
+            ->name('laboratory-appointments.send-payment-summary');
+        Route::post('laboratory-appointments/{laboratory_appointment}/send-appointment-instructions', [LaboratoryAppointmentController::class, 'sendAppointmentInstructions'])
+            ->name('laboratory-appointments.send-appointment-instructions');
         Route::resource('laboratory-appointments', LaboratoryAppointmentController::class)->except(['create', 'store', 'edit']);
         Route::resource('laboratory-vendor-payments', LaboratoryVendorPaymentsController::class)->parameters([
             'laboratory-vendor-payments' => 'vendor_payment',

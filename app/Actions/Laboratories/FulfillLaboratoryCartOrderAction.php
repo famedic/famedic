@@ -11,6 +11,7 @@ use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryPurchaseItem;
 use App\Models\Transaction;
 use App\Notifications\FewDaysLeftToRequestInvoice;
+use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Services\CouponApplicationService;
 use App\Services\Monitoring\SyncMonitoringCartService;
@@ -24,6 +25,7 @@ class FulfillLaboratoryCartOrderAction
         private CreateGDAQuotationAction $createGDAQuotationAction,
         private SyncMonitoringCartService $syncMonitoringCartService,
         private CouponApplicationService $couponApplicationService,
+        private SyncLaboratoryCheckoutDraftAction $syncLaboratoryCheckoutDraftAction,
     ) {
     }
 
@@ -100,6 +102,7 @@ class FulfillLaboratoryCartOrderAction
             }
 
             $this->syncMonitoringCartService->markLaboratoryCartCompleted($customer);
+            $this->syncLaboratoryCheckoutDraftAction->clearForCustomer($customer, $laboratoryBrand);
             $this->clearCart($customer);
 
             DB::commit();
@@ -109,6 +112,20 @@ class FulfillLaboratoryCartOrderAction
         }
 
         $laboratoryPurchase->customer->user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));
+
+        if ($laboratoryAppointment?->laboratory_purchase_id === $laboratoryPurchase->id) {
+            $laboratoryAppointment->refresh();
+            $laboratoryAppointment->loadMissing([
+                'laboratoryStore',
+                'laboratoryPurchase.transactions',
+                'laboratoryPurchase.laboratoryPurchaseItems',
+                'customer.laboratoryCartItems.laboratoryTest',
+            ]);
+
+            $laboratoryPurchase->customer->user->notify(
+                new LaboratoryAppointmentUpdatedByConcierge($laboratoryAppointment)
+            );
+        }
 
         $this->checkAndSendInvoiceDeadlineNotification($laboratoryPurchase);
 

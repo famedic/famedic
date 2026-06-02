@@ -20,10 +20,13 @@ export default function ThreeDSResult({
     status,
     cardLastFour,
     amount,
-    createdAt
+    createdAt,
+    returnUrl = null,
 }) {
 
     const [countdown, setCountdown] = useState(5);
+    const redirectTarget =
+        success && returnUrl ? returnUrl : route("payment-methods.index");
 
     /* ==========================================================
      * AUTO REDIRECT
@@ -37,17 +40,17 @@ export default function ThreeDSResult({
         }, 1000);
 
         const redirectTimer = setTimeout(() => {
-            router.visit(route("payment-methods.index"));
+            router.visit(redirectTarget);
         }, 5000);
 
         return () => {
             clearInterval(interval);
             clearTimeout(redirectTimer);
         };
-    }, [success]);
+    }, [success, redirectTarget]);
 
     const goNow = () => {
-        router.visit(route("payment-methods.index"));
+        router.visit(redirectTarget);
     };
 
     return (

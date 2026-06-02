@@ -23,6 +23,7 @@ export default function Create({
     hasPending3ds = false,
     paymentUsesMock = false,
     mockTestCards = [],
+    returnUrl = null,
 }) {
 
     const { data, setData, post, processing, errors } = useForm({
@@ -104,6 +105,7 @@ export default function Create({
 
         post(route("payment-methods.store"), {
             data: formattedData,
+            return_url: returnUrl,
             preserveScroll: true,
             onFinish: () => setSubmitting(false),
         });
@@ -118,7 +120,7 @@ export default function Create({
 
             <div className="flex items-center gap-3 mb-6">
                 <Button
-                    href={route("payment-methods.index")}
+                    href={returnUrl ?? route("payment-methods.index")}
                     outline
                     className="size-9 p-0"
                 >

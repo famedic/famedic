@@ -13,8 +13,7 @@ class LaboratoryAppointmentUpdatedByConcierge extends Notification
 
     public function __construct(
         protected LaboratoryAppointment $appointment
-    ) {
-    }
+    ) {}
 
     public function via(object $notifiable): array
     {
@@ -33,7 +32,7 @@ class LaboratoryAppointmentUpdatedByConcierge extends Notification
         $data = $this->mailViewData($notifiable, $appointment);
 
         return (new MailMessage)
-            ->subject('Tu cita de laboratorio fue actualizada')
+            ->subject('Gracias por confirmar el pago de tu cita de laboratorio')
             ->markdown('emails.laboratory.appointment-updated-by-concierge', $data);
     }
 
@@ -49,18 +48,18 @@ class LaboratoryAppointmentUpdatedByConcierge extends Notification
         $hasPurchase = $purchase !== null;
 
         $studies = $hasPurchase
-            ? $purchase->laboratoryPurchaseItems->map(fn ($item) => [
+            ? $purchase->laboratoryPurchaseItems->map(fn($item) => [
                 'name' => $item->name,
                 'instructions' => ($item->indications !== null && $item->indications !== '') ? $item->indications : '—',
             ])->values()->all()
             : $appointment->customer->laboratoryCartItems
-                ->filter(function ($item) use ($appointment) {
-                    return $item->laboratoryTest?->brand?->value === $appointment->brand->value;
-                })
-                ->map(fn ($item) => [
-                    'name' => $item->laboratoryTest?->name ?? 'Estudio',
-                    'instructions' => ($item->laboratoryTest?->indications !== null && $item->laboratoryTest?->indications !== '') ? $item->laboratoryTest->indications : '—',
-                ])->values()->all();
+            ->filter(function ($item) use ($appointment) {
+                return $item->laboratoryTest?->brand?->value === $appointment->brand->value;
+            })
+            ->map(fn($item) => [
+                'name' => $item->laboratoryTest?->name ?? 'Estudio',
+                'instructions' => ($item->laboratoryTest?->indications !== null && $item->laboratoryTest?->indications !== '') ? $item->laboratoryTest->indications : '—',
+            ])->values()->all();
 
         return [
             'nombre_usuario' => $notifiable->full_name ?? trim((string) $notifiable->name),
@@ -68,7 +67,7 @@ class LaboratoryAppointmentUpdatedByConcierge extends Notification
             'fecha_nacimiento' => $appointment->formatted_patient_birth_date ?? '—',
             'laboratorio_marca' => $appointment->brand->label(),
             'famedic_logo_url' => $this->emailPublicAssetUrl('images/logo.png'),
-            'laboratorio_logo_url' => $this->emailPublicAssetUrl('images/gda/'.$appointment->brand->imageSrc()),
+            'laboratorio_logo_url' => $this->emailPublicAssetUrl('images/gda/' . $appointment->brand->imageSrc()),
             'appointment_date' => $dt?->isoFormat('dddd D [de] MMMM [de] YYYY') ?? '—',
             'appointment_time' => $dt?->isoFormat('h:mm a') ?? '—',
             'branch_name' => $store?->name ?? '—',
@@ -89,7 +88,7 @@ class LaboratoryAppointmentUpdatedByConcierge extends Notification
         $base = rtrim((string) config('famedic.email_public_url'), '/');
         $path = ltrim($path, '/');
 
-        return $base.'/'.$path;
+        return $base . '/' . $path;
     }
 
     protected function paymentStatusLabel(?string $status): string

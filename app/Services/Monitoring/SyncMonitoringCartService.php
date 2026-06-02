@@ -8,6 +8,7 @@ use App\Enums\MonitoringCartType;
 use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\LaboratoryCartItem;
+use App\Models\LaboratoryCheckoutDraft;
 use App\Models\OnlinePharmacyCartItem;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -30,6 +31,10 @@ class SyncMonitoringCartService
 
         if ($items->isEmpty()) {
             $this->deleteActiveCartIfEmpty($userId, MonitoringCartType::Lab);
+            $customer = Customer::query()->where('user_id', $userId)->first();
+            if ($customer) {
+                LaboratoryCheckoutDraft::query()->where('customer_id', $customer->id)->delete();
+            }
 
             return;
         }
@@ -153,6 +158,19 @@ class SyncMonitoringCartService
                 'completed_at' => now(),
             ]);
         }
+    }
+
+    public function touchLaboratoryCartActivity(Customer $customer): void
+    {
+        if (! $customer->user_id) {
+            return;
+        }
+
+        Cart::query()
+            ->where('user_id', $customer->user_id)
+            ->where('type', MonitoringCartType::Lab)
+            ->where('status', MonitoringCartStatus::Active)
+            ->update(['updated_at' => now()]);
     }
 
     private function firstOrCreateActiveCart(int $userId, MonitoringCartType $type): Cart

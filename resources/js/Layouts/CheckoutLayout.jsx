@@ -66,12 +66,6 @@ export default function CheckoutLayout({
     return "Pagar en sucursal " + (summaryDetails[summaryDetails.length - 1]?.value || "$0");
   }, [summaryDetails]);
 
-  console.log('CheckoutLayout - onlineDisabled:', onlineDisabled);
-  console.log('CheckoutLayout - branchDisabled:', branchDisabled);
-  console.log('CheckoutLayout - paymentProcessing:', paymentProcessing);
-  console.log('CheckoutLayout - data.payment_method:', data?.payment_method);
-  console.log('CheckoutLayout - showBranchPayment:', showBranchPayment);
-
   return (
     <FocusedLayout title={title} hideHelpBubble={true}>
       {header}

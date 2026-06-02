@@ -14,15 +14,16 @@ import { Switch, SwitchField } from "@/Components/Catalyst/switch";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { Divider } from "@/Components/Catalyst/divider";
 import CheckoutLayout from "@/Layouts/CheckoutLayout";
-import { useForm } from "@inertiajs/react";
+import { useForm, usePage } from "@inertiajs/react";
 import { GradientHeading } from "@/Components/Catalyst/heading";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import ContactStep from "@/Components/Checkout/ContactStep";
 import AddressStep from "@/Components/Checkout/AddressStep";
 import PaymentMethodStep from "@/Components/Checkout/PaymentMethodStep";
 import CheckoutStepper from "@/Components/Checkout/CheckoutStepper";
 import ConfirmationStep from "@/Components/Checkout/ConfirmationStep";
 import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
+import LaboratoryAppointmentStep from "@/Components/Checkout/LaboratoryAppointmentStep";
 import LaboratoryPayPalButton from "@/Components/Checkout/LaboratoryPayPalButton";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import Card from "@/Components/Card";
@@ -33,15 +34,139 @@ import { ChevronLeftIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import clsx from "clsx";
 
-const WIZARD_STEPS = [
+const BASE_WIZARD_STEPS = [
     { id: "patient", number: 1, label: "Paciente" },
     { id: "address", number: 2, label: "Dirección" },
     { id: "payment", number: 3, label: "Método de Pago" },
-    { id: "confirmation", number: 4, label: "Confirmación" },
 ];
 
-export default function LaboratoryCheckout({
+function buildWizardSteps(requiresAppointment) {
+    if (requiresAppointment) {
+        return [
+            ...BASE_WIZARD_STEPS,
+            { id: "appointment", number: 4, label: "Cita" },
+            { id: "confirmation", number: 5, label: "Confirmación" },
+        ];
+    }
+
+    return [
+        ...BASE_WIZARD_STEPS,
+        { id: "confirmation", number: 4, label: "Confirmación" },
+    ];
+}
+
+function checkoutStorageKey(brand) {
+    return `laboratory-checkout-wizard:${brand}`;
+}
+
+function resolveActiveStepId(
+    requiresAppointment,
     laboratoryAppointment,
+    savedCheckout = null,
+) {
+    if (requiresAppointment && laboratoryAppointment?.confirmed_at) {
+        return "confirmation";
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    let stepId = params.get("step");
+
+    if (!stepId && savedCheckout?.checkout_step) {
+        stepId = savedCheckout.checkout_step;
+    }
+
+    if (
+        stepId === "confirmation" &&
+        requiresAppointment &&
+        !laboratoryAppointment?.confirmed_at
+    ) {
+        stepId = "appointment";
+    }
+
+    return stepId;
+}
+
+function resolveInitialStepIndex(
+    wizardSteps,
+    requiresAppointment,
+    laboratoryAppointment,
+    brand,
+    savedCheckout = null,
+) {
+    const stepId = resolveActiveStepId(
+        requiresAppointment,
+        laboratoryAppointment,
+        savedCheckout,
+    );
+
+    if (stepId) {
+        const fromLocation = wizardSteps.findIndex((s) => s.id === stepId);
+        if (fromLocation >= 0) {
+            return fromLocation;
+        }
+    }
+
+    try {
+        const saved = sessionStorage.getItem(checkoutStorageKey(brand));
+        if (saved) {
+            const { stepId: savedStepId } = JSON.parse(saved);
+            const fromStorage = wizardSteps.findIndex((s) => s.id === savedStepId);
+            if (fromStorage >= 0) {
+                return fromStorage;
+            }
+        }
+    } catch {
+        // ignore invalid session storage
+    }
+
+    return 0;
+}
+
+function resolveInitialCheckoutData(savedCheckout = null) {
+    const params = new URLSearchParams(window.location.search);
+
+    const fromParams = {
+        contact: params.get("contact") || null,
+        address: params.get("address") || null,
+        payment_method: params.get("payment_method") || null,
+        coupon_id: params.get("coupon_id")
+            ? Number(params.get("coupon_id"))
+            : null,
+    };
+
+    if (!savedCheckout) {
+        return {
+            ...fromParams,
+            coupon_id: fromParams.coupon_id || null,
+        };
+    }
+
+    return {
+        contact:
+            fromParams.contact ??
+            savedCheckout.contact_id ??
+            null,
+        address:
+            fromParams.address ??
+            savedCheckout.address_id ??
+            null,
+        payment_method:
+            fromParams.payment_method ??
+            savedCheckout.payment_method ??
+            null,
+        coupon_id:
+            fromParams.coupon_id ??
+            savedCheckout.coupon_id ??
+            null,
+    };
+}
+
+export default function LaboratoryCheckout({
+    requiresAppointment = false,
+    laboratoryAppointment,
+    pendingLaboratoryAppointment: pendingLaboratoryAppointmentProp = null,
+    callbackPreferenceSavedAtFormatted,
+    savedCheckout = null,
     laboratoryCarts,
     laboratoryBrand,
     total,
@@ -67,16 +192,9 @@ export default function LaboratoryCheckout({
         processing,
     } = useDeleteLaboratoryCartItem();
 
-    const initialFormData = {
-        contact:
-            new URLSearchParams(window.location.search).get("contact") || null,
-        address:
-            new URLSearchParams(window.location.search).get("address") || null,
-        payment_method:
-            new URLSearchParams(window.location.search).get("payment_method") ||
-            null,
-        coupon_id: null,
-    };
+    const { url } = usePage();
+
+    const initialFormData = resolveInitialCheckoutData(savedCheckout);
 
     const {
         data,
@@ -99,43 +217,18 @@ export default function LaboratoryCheckout({
         }
     }, [paymentUsesMock, defaultMockPaymentMethodId, data.payment_method, setData]);
 
-    // Transformar datos antes de enviar
-    transform((data) => {
-        console.log('DEBUG - Transformando datos antes de enviar:', {
-            original_payment_method: data.payment_method,
-            original_type: typeof data.payment_method,
-        });
-
-        // Asegurar que payment_method sea string
-        const transformedData = {
-            ...data,
-            payment_method: String(data.payment_method), // Convertir explícitamente a string
-            laboratory_appointment: laboratoryAppointment?.id,
-            total: total,
-            coupon_id: data.coupon_id || null,
-        };
-
-        console.log('DEBUG - Datos transformados:', {
-            transformed_payment_method: transformedData.payment_method,
-            transformed_type: typeof transformedData.payment_method,
-        });
-
-        return transformedData;
-    });
+    transform((data) => ({
+        ...data,
+        payment_method: String(data.payment_method),
+        laboratory_appointment: laboratoryAppointment?.id,
+        total: total,
+        coupon_id: data.coupon_id || null,
+    }));
 
     const submit = (e, isBranchPayment) => {
         e.preventDefault();
 
         if (checkoutProcessing) return;
-
-        console.log('DEBUG - Enviando formulario:', {
-            isBranchPayment,
-            formData: data,
-            payment_method: data.payment_method,
-            payment_method_type: typeof data.payment_method,
-            laboratoryBrand: laboratoryBrand.value,
-            total: total,
-        });
 
         // Validaciones adicionales
         if (!data.address) {
@@ -157,13 +250,6 @@ export default function LaboratoryCheckout({
                 quantity: 1,
             }));
 
-            console.log('DEBUG - Generando cotización para pago en sucursal:', {
-                items_count: items.length,
-                appointment_id: laboratoryAppointment?.id,
-                contact_id: data.contact,
-                address_id: data.address,
-            });
-
             router.post(
                 route("api.laboratory.quote.store", laboratoryBrand.value),
                 {
@@ -176,7 +262,6 @@ export default function LaboratoryCheckout({
                     onSuccess: (page) => {
                         const redirectUrl = page.props.redirect_url;
                         if (redirectUrl) {
-                            console.log('DEBUG - Redirigiendo a:', redirectUrl);
                             router.visit(redirectUrl);
                         }
                     },
@@ -187,21 +272,11 @@ export default function LaboratoryCheckout({
                 }
             );
         } else {
-            // PAGO ONLINE
-            console.log('DEBUG - Enviando pago online a:',
-                route("laboratory.checkout.store", {
-                    laboratory_brand: laboratoryBrand.value
-                })
-            );
-
             post(route("laboratory.checkout.store", {
                 laboratory_brand: laboratoryBrand.value
             }), {
-                onSuccess: (page) => {
-                    console.log('DEBUG - Pago exitoso, redirigiendo');
-                },
                 onError: (errors) => {
-                    console.error('DEBUG - Errores del backend:', errors);
+                    console.error('Errores del backend:', errors);
 
                     // Manejar errores específicos
                     if (errors.payment_method) {
@@ -212,9 +287,6 @@ export default function LaboratoryCheckout({
                         alert('Error al procesar el pago. Por favor intenta de nuevo.');
                     }
                 },
-                onFinish: () => {
-                    console.log('DEBUG - Petición completada');
-                }
             });
         }
     };
@@ -230,24 +302,31 @@ export default function LaboratoryCheckout({
     const toggleContactForm = () =>
     setShowContactForm((prev) => !prev);
 
-    const contactStepIsComplete = useMemo(() => {
-        const isComplete = !!data.contact || laboratoryAppointment;
-        console.log('DEBUG - Contact step complete:', {
-            isComplete,
-            contact: data.contact,
-            appointment: laboratoryAppointment
-        });
-        return isComplete;
-    }, [data.contact, laboratoryAppointment]);
+    const cartRequiresAppointment = useMemo(() => {
+        const items = laboratoryCarts?.[laboratoryBrand.value] ?? [];
+        return items.some((item) => item.laboratory_test?.requires_appointment);
+    }, [laboratoryCarts, laboratoryBrand.value]);
 
-    const addressStepIsComplete = useMemo(() => {
-        const isComplete = !!data.address;
-        console.log('DEBUG - Address step complete:', {
-            isComplete,
-            address: data.address
-        });
-        return isComplete;
-    }, [data.address]);
+    const needsAppointment = requiresAppointment || cartRequiresAppointment;
+
+    const wizardSteps = useMemo(
+        () => buildWizardSteps(needsAppointment),
+        [needsAppointment],
+    );
+
+    const [pendingLaboratoryAppointment, setPendingLaboratoryAppointment] =
+        useState(pendingLaboratoryAppointmentProp);
+
+    useEffect(() => {
+        setPendingLaboratoryAppointment(pendingLaboratoryAppointmentProp);
+    }, [pendingLaboratoryAppointmentProp]);
+
+    const wizardLaboratoryAppointment =
+        pendingLaboratoryAppointment ?? laboratoryAppointment;
+
+    const contactStepIsComplete = useMemo(() => !!data.contact, [data.contact]);
+
+    const addressStepIsComplete = useMemo(() => !!data.address, [data.address]);
 
     const selectedCoupon = useMemo(() => {
         if (!data.coupon_id) return null;
@@ -347,24 +426,107 @@ export default function LaboratoryCheckout({
     const onlinePaymentDisabled = checkoutProcessing ||
         !addressStepIsComplete ||
         !contactStepIsComplete ||
-        !paymentMethodStepIsComplete;
+        !paymentMethodStepIsComplete ||
+        (needsAppointment && !laboratoryAppointment?.confirmed_at);
 
     const branchPaymentDisabled = checkoutProcessing ||
         !addressStepIsComplete ||
-        !contactStepIsComplete;
+        !contactStepIsComplete ||
+        (needsAppointment && !laboratoryAppointment?.confirmed_at);
 
-    console.log('DEBUG - Estado del checkout:', {
-        onlinePaymentDisabled,
-        branchPaymentDisabled,
-        steps: {
-            contact: contactStepIsComplete,
-            address: addressStepIsComplete,
-            payment: paymentMethodStepIsComplete
-        },
-        paymentMethodsCount: paymentMethods?.length || 0,
-        hasOdessaPay,
-        laboratoryBrand: laboratoryBrand.value,
+    const [currentStepIndex, setCurrentStepIndex] = useState(() => {
+        const cartNeeds = (laboratoryCarts?.[laboratoryBrand.value] ?? []).some(
+            (item) => item.laboratory_test?.requires_appointment,
+        );
+        const needs = requiresAppointment || cartNeeds;
+
+        return resolveInitialStepIndex(
+            buildWizardSteps(needs),
+            needs,
+            laboratoryAppointment,
+            laboratoryBrand.value,
+            savedCheckout,
+        );
     });
+    const [syncingAppointment, setSyncingAppointment] = useState(false);
+    const [syncingDraft, setSyncingDraft] = useState(false);
+    const [appointmentSyncFailed, setAppointmentSyncFailed] = useState(false);
+    const stepContentRef = useRef(null);
+    const skipStepScrollRef = useRef(true);
+    const appointmentAutoSyncRef = useRef(false);
+
+    const currentStep = wizardSteps[currentStepIndex];
+
+    const persistWizardState = (stepId) => {
+        const filteredData = Object.fromEntries(
+            Object.entries(data).filter(
+                ([_, value]) =>
+                    value !== undefined && value !== null && value !== "",
+            ),
+        );
+
+        try {
+            sessionStorage.setItem(
+                checkoutStorageKey(laboratoryBrand.value),
+                JSON.stringify({ stepId, ...filteredData }),
+            );
+        } catch {
+            // ignore quota errors
+        }
+
+        const url = new URL(window.location.href);
+        url.searchParams.set("step", stepId);
+        Object.entries(filteredData).forEach(([key, value]) => {
+            url.searchParams.set(key, String(value));
+        });
+        window.history.replaceState({}, "", url);
+    };
+
+    const syncStepFromLocation = useCallback(() => {
+        const stepId = resolveActiveStepId(
+            needsAppointment,
+            laboratoryAppointment,
+            savedCheckout,
+        );
+
+        if (!stepId) {
+            return;
+        }
+
+        const index = wizardSteps.findIndex((s) => s.id === stepId);
+        if (index >= 0) {
+            setCurrentStepIndex(index);
+        }
+    }, [
+        needsAppointment,
+        laboratoryAppointment,
+        savedCheckout,
+        wizardSteps,
+    ]);
+
+    const persistWizardFormDataToUrl = useCallback(() => {
+        const filteredData = Object.fromEntries(
+            Object.entries(data).filter(
+                ([_, value]) =>
+                    value !== undefined && value !== null && value !== "",
+            ),
+        );
+
+        try {
+            sessionStorage.setItem(
+                checkoutStorageKey(laboratoryBrand.value),
+                JSON.stringify({ stepId: currentStep.id, ...filteredData }),
+            );
+        } catch {
+            // ignore quota errors
+        }
+
+        const currentUrl = new URL(window.location.href);
+        Object.entries(filteredData).forEach(([key, value]) => {
+            currentUrl.searchParams.set(key, String(value));
+        });
+        window.history.replaceState({}, "", currentUrl);
+    }, [data, currentStep.id, laboratoryBrand.value]);
 
     const addCardReturnUrl = useMemo(() => {
         const filteredData = Object.fromEntries(
@@ -376,23 +538,21 @@ export default function LaboratoryCheckout({
 
         return route("laboratory.checkout", {
             laboratory_brand: laboratoryBrand.value,
+            step: currentStep?.id ?? "payment",
             ...filteredData,
         });
-    }, [data]);
+    }, [data, laboratoryBrand.value, currentStep?.id]);
 
-    const [currentStepIndex, setCurrentStepIndex] = useState(0);
-    const stepContentRef = useRef(null);
-    const skipStepScrollRef = useRef(true);
-
-    const currentStep = WIZARD_STEPS[currentStepIndex];
-
-    const floatingWizardFooter = ["patient", "address", "payment"].includes(
+    const floatingWizardFooter = ["patient", "address", "payment", "appointment"].includes(
         currentStep.id,
     );
 
     const goToStep = (stepId) => {
-        const index = WIZARD_STEPS.findIndex((s) => s.id === stepId);
-        if (index >= 0) setCurrentStepIndex(index);
+        const index = wizardSteps.findIndex((s) => s.id === stepId);
+        if (index >= 0) {
+            setCurrentStepIndex(index);
+            persistWizardState(stepId);
+        }
     };
 
     const canProceedFromStep = useMemo(() => {
@@ -403,11 +563,14 @@ export default function LaboratoryCheckout({
                 return addressStepIsComplete;
             case "payment":
                 return paymentMethodStepIsComplete;
+            case "appointment":
+                return !!wizardLaboratoryAppointment?.confirmed_at;
             case "confirmation":
                 return (
                     contactStepIsComplete &&
                     addressStepIsComplete &&
-                    paymentMethodStepIsComplete
+                    paymentMethodStepIsComplete &&
+                    (!needsAppointment || !!laboratoryAppointment?.confirmed_at)
                 );
             default:
                 return false;
@@ -417,20 +580,207 @@ export default function LaboratoryCheckout({
         contactStepIsComplete,
         addressStepIsComplete,
         paymentMethodStepIsComplete,
+        needsAppointment,
+        wizardLaboratoryAppointment?.confirmed_at,
     ]);
 
+    const syncAppointmentFromContact = useCallback(
+        (onFinish) => {
+            if (!data.contact) {
+                setError("contact", "Selecciona un paciente");
+                onFinish?.();
+                return;
+            }
+
+            setSyncingAppointment(true);
+            setAppointmentSyncFailed(false);
+            router.post(
+                route("laboratory.checkout.appointment.sync", {
+                    laboratory_brand: laboratoryBrand.value,
+                }),
+                {
+                    contact_id: Number(data.contact),
+                    contact: data.contact,
+                    address: data.address,
+                    payment_method: data.payment_method,
+                },
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        appointmentAutoSyncRef.current = true;
+                        setAppointmentSyncFailed(false);
+                    },
+                    onError: (syncErrors) => {
+                        appointmentAutoSyncRef.current = false;
+                        setAppointmentSyncFailed(true);
+                        console.error("No se pudo registrar la cita:", syncErrors);
+                    },
+                    onFinish: () => {
+                        setSyncingAppointment(false);
+                        onFinish?.();
+                    },
+                },
+            );
+        },
+        [
+            data.contact,
+            data.address,
+            data.payment_method,
+            laboratoryBrand.value,
+            setError,
+        ],
+    );
+
+    const syncCheckoutDraft = useCallback(() => {
+            if (!["patient", "address", "payment"].includes(currentStep.id)) {
+                return;
+            }
+
+            const payload = {
+                step: currentStep.id,
+                contact_id: data.contact ? Number(data.contact) : null,
+            };
+
+            if (currentStep.id === "address" || currentStep.id === "payment") {
+                payload.address_id = data.address ? Number(data.address) : null;
+            }
+
+            if (currentStep.id === "payment") {
+                payload.payment_method = data.payment_method;
+                if (data.coupon_id) {
+                    payload.coupon_id = Number(data.coupon_id);
+                }
+            }
+
+            setSyncingDraft(true);
+            router.post(
+                route("laboratory.checkout.draft.sync", {
+                    laboratory_brand: laboratoryBrand.value,
+                }),
+                payload,
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        syncStepFromLocation();
+                    },
+                    onError: (syncErrors) => {
+                        console.error("No se pudo guardar el checkout:", syncErrors);
+                        Object.entries(syncErrors).forEach(([field, message]) => {
+                            const mappedField =
+                                field === "contact_id"
+                                    ? "contact"
+                                    : field === "address_id"
+                                      ? "address"
+                                      : field;
+                            setError(mappedField, message);
+                        });
+                    },
+                    onFinish: () => setSyncingDraft(false),
+                },
+            );
+        },
+        [
+            currentStep.id,
+            data.contact,
+            data.address,
+            data.payment_method,
+            data.coupon_id,
+            laboratoryBrand.value,
+            setError,
+            syncStepFromLocation,
+        ],
+    );
+
     const handleNextStep = () => {
-        if (!canProceedFromStep) return;
-        if (currentStepIndex < WIZARD_STEPS.length - 1) {
+        if (!canProceedFromStep || syncingAppointment || syncingDraft) return;
+
+        if (["patient", "address", "payment"].includes(currentStep.id)) {
+            syncCheckoutDraft();
+            return;
+        }
+
+        if (currentStepIndex < wizardSteps.length - 1) {
+            const nextStep = wizardSteps[currentStepIndex + 1];
             setCurrentStepIndex((prev) => prev + 1);
+            persistWizardState(nextStep.id);
         }
     };
 
     const handlePrevStep = () => {
         if (currentStepIndex > 0) {
+            const prevStep = wizardSteps[currentStepIndex - 1];
             setCurrentStepIndex((prev) => prev - 1);
+            persistWizardState(prevStep.id);
         }
     };
+
+    useEffect(() => {
+        if (currentStep.id !== "appointment") {
+            appointmentAutoSyncRef.current = false;
+            return;
+        }
+
+        if (!needsAppointment) {
+            return;
+        }
+
+        if (
+            !pendingLaboratoryAppointment &&
+            data.contact &&
+            !syncingAppointment &&
+            !appointmentAutoSyncRef.current
+        ) {
+            appointmentAutoSyncRef.current = true;
+            syncAppointmentFromContact();
+        }
+
+        const intervalId = setInterval(() => {
+            router.reload({
+                only: [
+                    "laboratoryAppointment",
+                    "pendingLaboratoryAppointment",
+                    "callbackPreferenceSavedAtFormatted",
+                ],
+            });
+        }, 10000);
+
+        return () => clearInterval(intervalId);
+    }, [
+        currentStep.id,
+        needsAppointment,
+        pendingLaboratoryAppointment,
+        data.contact,
+        syncingAppointment,
+        syncAppointmentFromContact,
+    ]);
+
+    useEffect(() => {
+        if (
+            needsAppointment &&
+            wizardLaboratoryAppointment?.confirmed_at &&
+            currentStep.id === "appointment"
+        ) {
+            goToStep("confirmation");
+        }
+    }, [
+        wizardLaboratoryAppointment?.confirmed_at,
+        needsAppointment,
+        currentStep.id,
+    ]);
+
+    useEffect(() => {
+        syncStepFromLocation();
+    }, [url, savedCheckout?.checkout_step, syncStepFromLocation]);
+
+    useEffect(() => {
+        persistWizardFormDataToUrl();
+    }, [
+        data.contact,
+        data.address,
+        data.payment_method,
+        data.coupon_id,
+        persistWizardFormDataToUrl,
+    ]);
 
     useEffect(() => {
         if (skipStepScrollRef.current) {
@@ -497,7 +847,7 @@ export default function LaboratoryCheckout({
 
     const footerActions = (
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            {currentStepIndex > 0 ? (
+            {currentStepIndex > 0 && currentStep.id !== "confirmation" ? (
                 <Button type="button" plain onClick={handlePrevStep}>
                     <ChevronLeftIcon className="size-4" />
                     Volver
@@ -510,10 +860,19 @@ export default function LaboratoryCheckout({
                 <Button
                     type="button"
                     className="w-full sm:ml-auto sm:w-auto"
-                    disabled={!canProceedFromStep}
+                    disabled={
+                        !canProceedFromStep || syncingAppointment || syncingDraft
+                    }
                     onClick={handleNextStep}
                 >
-                    Continuar
+                    {syncingDraft
+                        ? "Guardando…"
+                        : syncingAppointment
+                          ? "Guardando cita…"
+                          : currentStep.id === "appointment" &&
+                              !wizardLaboratoryAppointment?.confirmed_at
+                            ? "Esperando confirmación…"
+                            : "Continuar"}
                 </Button>
             ) : (
                 <div
@@ -589,22 +948,6 @@ export default function LaboratoryCheckout({
     const renderStepContent = () => {
         switch (currentStep.id) {
             case "patient":
-                if (laboratoryAppointment) {
-                    return (
-                        <CheckoutWizardStep
-                            title="Información del paciente"
-                            description="Tu cita ya incluye la información del paciente."
-                        >
-                            <LaboratoryAppointmentInfo
-                                data={data}
-                                setData={setData}
-                                laboratoryAppointment={laboratoryAppointment}
-                                errors={errors}
-                                variant="wizard"
-                            />
-                        </CheckoutWizardStep>
-                    );
-                }
                 return (
                     <ContactStep
                         variant="wizard"
@@ -668,6 +1011,33 @@ export default function LaboratoryCheckout({
                         addCardReturnUrl={addCardReturnUrl}
                         paymentUsesMock={paymentUsesMock}
                         disabled={amountAfterCoupon === 0 && !!data.coupon_id}
+                    />
+                );
+            case "appointment":
+                if (!pendingLaboratoryAppointment) {
+                    const waitingForSync =
+                        syncingAppointment ||
+                        (!appointmentSyncFailed && !!data.contact);
+
+                    return (
+                        <CheckoutWizardStep
+                            title="Cita de laboratorio"
+                            description="Preparando tu solicitud de cita…"
+                        >
+                            <Text className="text-sm text-zinc-600 dark:text-slate-400">
+                                {waitingForSync
+                                    ? "Registrando tu solicitud de cita…"
+                                    : "No pudimos cargar la cita. Usa Volver e intenta de nuevo desde el método de pago."}
+                            </Text>
+                        </CheckoutWizardStep>
+                    );
+                }
+                return (
+                    <LaboratoryAppointmentStep
+                        laboratoryAppointment={pendingLaboratoryAppointment}
+                        callbackPreferenceSavedAtFormatted={
+                            callbackPreferenceSavedAtFormatted
+                        }
                     />
                 );
             case "confirmation":
@@ -762,7 +1132,7 @@ export default function LaboratoryCheckout({
                 data={data}
                 stepper={
                     <CheckoutStepper
-                        steps={WIZARD_STEPS}
+                        steps={wizardSteps}
                         currentStep={currentStepIndex}
                     />
                 }

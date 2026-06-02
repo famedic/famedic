@@ -58,9 +58,10 @@ class PaymentMethodController extends Controller
      * CREATE
      * ========================================================== */
 
-    public function create()
+    public function create(Request $request)
     {
         return Inertia::render('PaymentMethods/Create', [
+            'returnUrl' => $request->query('return_url'),
             'efevooConfig' => [
                 'environment' => config('efevoopay.environment'),
                 'tokenization_amount' => config('efevoopay.test_amounts.default') / 100,
@@ -142,6 +143,8 @@ class PaymentMethodController extends Controller
             return $redirect->with('success', 'Tarjeta de prueba registrada correctamente (sin cargo real).');
         }
 
+        $returnUrl = $request->input('return_url') ?? $request->query('return_url');
+
         Log::info('[3DS] Iniciando proceso');
 
         $result = $this->service->initiate3DS($cardData, $customer->id);
@@ -153,6 +156,10 @@ class PaymentMethodController extends Controller
         }
 
         Session::put('3ds_card_data_' . $result['session_id'], $cardData);
+
+        if ($returnUrl) {
+            Session::put('3ds_return_url_' . $result['session_id'], $returnUrl);
+        }
 
         return redirect()->route('payment-methods.3ds-redirect', [
             'sessionId' => $result['session_id']
@@ -208,6 +215,8 @@ class PaymentMethodController extends Controller
             ? 'Tarjeta verificada correctamente'
             : ($session->error_message ?: $this->resolveStatusMessage($session->status));
 
+        $returnUrl = Session::pull('3ds_return_url_' . $session->id);
+
         return Inertia::render('PaymentMethods/ThreeDSResult', [
             'sessionId' => $session->id,
             'success' => $success,
@@ -217,6 +226,7 @@ class PaymentMethodController extends Controller
             'cardLastFour' => $session->card_last_four,
             'amount' => $session->amount,
             'createdAt' => $session->created_at,
+            'returnUrl' => $returnUrl,
         ]);
     }
 
