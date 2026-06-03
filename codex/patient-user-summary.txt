@@ -1,0 +1,476 @@
+Resumen tecnico de paciente / usuario comprador - Famedic
+=========================================================
+
+Descripcion general del flujo del paciente/usuario
+--------------------------------------------------
+El usuario paciente navega una aplicacion Laravel + React + Inertia. Las paginas publicas permiten ver bienvenida, documentacion, atencion medica, seleccion de marca de laboratorio y catalogo de estudios. Las operaciones sensibles requieren autenticacion, documentacion aceptada, perfil completo, email verificado, telefono verificado y cuenta Customer.
+
+Los flujos principales del usuario son:
+- Registro/login, verificacion de email y telefono, aceptacion de documentacion.
+- Gestion de perfil, direcciones, contactos/pacientes, familia y perfiles fiscales.
+- Seleccion de estudios de laboratorio por marca, carrito, cita si aplica, checkout y compra.
+- Pago con EfevooPay/Odessa/PayPal o saldo a favor segun flujo.
+- Consulta de ordenes, PDFs, resultados de laboratorio con OTP y solicitudes de factura.
+- Atencion medica / membresia.
+- Farmacia en linea: rutas publicas deshabilitadas, pero existen carrito/checkout/ordenes autenticadas.
+
+Funcionalidades principales disponibles para el paciente
+--------------------------------------------------------
+- Ver landing/welcome y documentos legales.
+- Registro normal, registro/upgrade Odessa y login con Google/passwordless.
+- Completar perfil y verificar telefono.
+- Administrar direcciones, contactos/pacientes, familia y perfiles fiscales.
+- Ver marcas de laboratorio, buscar estudios, ver detalle y agregar al carrito.
+- Crear/confirmar cita de laboratorio para estudios que la requieren.
+- Checkout de laboratorio con pasos de contacto/paciente, direccion, cita, metodo de pago y confirmacion.
+- Guardar borrador de checkout por marca.
+- Pagar compra de laboratorio.
+- Ver historial de compras de laboratorio, estado de muestra/resultados, factura, PDF de orden y detalle de compra.
+- Solicitar factura y descargar constancia fiscal/factura si existe.
+- Acceder a resultados de laboratorio mediante OTP y enlaces firmados.
+- Gestionar metodos de pago EfevooPay y 3DS.
+- Ver y pagar/consultar compras de farmacia si el usuario llega por rutas autenticadas.
+- Comprar o activar membresia de atencion medica.
+
+Pantallas o paginas del paciente
+--------------------------------
+Layouts:
+- resources/js/Layouts/FamedicLayout.jsx
+- resources/js/Layouts/CheckoutLayout.jsx
+- resources/js/Layouts/ShoppingCartLayout.jsx
+- resources/js/Layouts/SettingsLayout.jsx
+- resources/js/Layouts/AuthLayout.jsx
+- resources/js/Layouts/FocusedLayout.jsx
+
+Paginas principales:
+- resources/js/Pages/Welcome.jsx
+- resources/js/Pages/Home.jsx
+- resources/js/Pages/Account.jsx
+- resources/js/Pages/Addresses.jsx
+- resources/js/Pages/Contacts.jsx
+- resources/js/Pages/Family.jsx
+- resources/js/Pages/TaxProfiles.jsx
+- resources/js/Pages/PaymentMethods.jsx
+- resources/js/Pages/PaymentMethods/Create.jsx
+- resources/js/Pages/PaymentMethods/ThreeDSRedirect.jsx
+- resources/js/Pages/PaymentMethods/ThreeDSResult.jsx
+- resources/js/Pages/PaymentMethods/MockThreeDS.jsx
+- resources/js/Pages/LaboratoryBrandSelection.jsx
+- resources/js/Pages/LaboratoryTests.jsx
+- resources/js/Pages/Laboratories/LaboratoryTestsGrid.jsx
+- resources/js/Pages/LaboratoryStores.jsx
+- resources/js/Pages/LaboratoryShoppingCart.jsx
+- resources/js/Pages/LaboratoryCheckout.jsx
+- resources/js/Pages/LaboratoryAppointmentCreation.jsx
+- resources/js/Pages/LaboratoryAppointment.jsx
+- resources/js/Pages/LaboratoryPurchases.jsx
+- resources/js/Pages/LaboratoryPurchase.jsx
+- resources/js/Pages/LaboratoryOrderDetail.jsx
+- resources/js/Pages/LaboratoryQuoteSuccess.jsx
+- resources/js/Pages/LaboratoryResultsList.jsx
+- resources/js/Pages/LaboratoryResults/OtpAccess.jsx
+- resources/js/Pages/OnlinePharmacy.jsx
+- resources/js/Pages/OnlinePharmacySearch.jsx
+- resources/js/Pages/OnlinePharmacyShoppingCart.jsx
+- resources/js/Pages/OnlinePharmacyCheckout.jsx
+- resources/js/Pages/OnlinePharmacyPurchases.jsx
+- resources/js/Pages/OnlinePharmacyPurchase.jsx
+- resources/js/Pages/MedicalAttention.jsx
+- resources/js/Pages/MedicalAttention/Index.jsx
+- resources/js/Pages/Documents/*
+- resources/js/Pages/Auth/*
+
+Rutas publicas o autenticadas relacionadas con pacientes/compras
+----------------------------------------------------------------
+Publicas:
+- GET / -> welcome
+- GET /terms-of-service
+- GET /privacy-policy
+- GET /derechos-arco y POST /derechos-arco
+- GET /medical-attention
+- GET /laboratory-brand-selection
+- GET /laboratory/{laboratory_brand}/laboratory-tests
+- GET /laboratory-tests/{laboratory_test}
+- GET /laboratory-stores
+- GET /lab-results/{token}
+- GET /lab-results/shared/{token} y /pdf con signed URL
+- POST /lab-results/send-otp, /verify, /resend con throttle
+- GET /odessa/{odessa_token}, /odessa-register/{token}, /odessa-link-auth-selection/{token}
+
+Autenticadas de usuario/customer:
+- GET /home
+- resources addresses y contacts
+- POST /checkout/addresses y /checkout/contacts
+- resources payment-methods index/create/store/destroy
+- PATCH /payment-methods/{token}/alias
+- GET/POST rutas /payment-methods/3ds/*
+- resource laboratory-purchases index/show
+- GET /laboratory-purchases/{id}/download-pdf
+- POST /laboratory-purchases/{id}/email-pdf
+- GET /laboratory-purchases/{id}/results con EnsureLabResultsOtpVerified
+- POST /laboratory-purchases/{id}/invoice-request
+- POST /laboratory-cart-items y DELETE /laboratory-cart-items/{id}
+- GET /laboratory/{brand}/shopping-cart
+- GET /laboratory/{brand}/checkout
+- POST /laboratory/{brand}/checkout/draft
+- POST /laboratory/{brand}/checkout/appointment
+- POST /laboratory/{brand}/checkout
+- POST /paypal/create-order
+- POST /paypal/capture-order
+- GET/POST/PATCH/DELETE rutas de laboratory-appointments
+- POST /{brand}/quote y GET /laboratory/quote/{quote}
+- GET/POST rutas laboratory-results/*
+- POST /laboratory-purchases/{id}/results-automatic-fetch
+- POST /medical-attention/subscription y /free-medical-attention/subscription
+- GET /odessa-upgrade/{token} y POST /odessa-upgrade/{token}
+- resources tax-profiles con password.confirm
+- family/* con medical-attention-subscription y password.confirm
+
+Farmacia:
+- GET /online-pharmacy y GET /online-pharmacy/search redirigen a welcome con mensaje de deshabilitado.
+- Autenticadas existentes: online-pharmacy-cart-items store/update/destroy, /online-pharmacy/shopping-cart, /online-pharmacy/checkout, POST /online-pharmacy/checkout, POST invoice-request.
+
+Webhooks/callbacks externos relacionados:
+- POST /paypal/webhook
+- POST /apigda/webhook/notification
+- POST /apigda/webhook/results
+- POST /api/laboratory/webhook/notifications
+- POST /efevoo/webhook
+- POST /api/efevoopay/*
+
+Controllers relacionados con usuarios pacientes
+-----------------------------------------------
+- WelcomeController, HomeController
+- Auth controllers en app/Http/Controllers/Auth/*
+- CompleteProfileController, DocumentationAcceptController, DocumentsServiceController
+- AddressController, ContactController, Checkout\AddressController, Checkout\ContactController
+- PaymentMethodController
+- LaboratoryBrandSelectionController
+- Laboratories\LaboratoryTestsController
+- LaboratoryCartItemController
+- LaboratoryShoppingCartController
+- LaboratoryCheckoutController
+- LaboratoryAppointmentController
+- LaboratoryPurchaseController
+- LaboratoryPurchasePdfController
+- LaboratoryQuoteController
+- LaboratoryResultController, LaboratoryResultsController, LaboratoryResultsOtpController, LabResultsAccessController
+- Laboratories\LaboratoryPurchases\InvoiceRequestController
+- PayPalController
+- OnlinePharmacyController, OnlinePharmacySearchController, OnlinePharmacyCartItemController, OnlinePharmacyShoppingCartController, OnlinePharmacyCheckoutController, OnlinePharmacyPurchaseController
+- OnlinePharmacy\OnlinePharmacyPurchases\InvoiceRequestController
+- MedicalAttentionController, MedicalAttentionSubscriptionController, FreeMedicalAttentionSubscriptionController
+- FamilyController
+- TaxProfileController, TaxProfiles\FiscalCertificateController
+- Odessa\OdessaController, OdessaUpgradeController, OdessaLinkAuthSelectionController
+- InvoiceController, InvoiceRequests\FiscalCertificateController, VendorPaymentController, InAppNotificationController
+
+Modelos usados en el flujo del paciente
+---------------------------------------
+- User, Customer, RegularAccount, FamilyAccount, OdessaAfiliateAccount, CertificateAccount.
+- Address, Contact, TaxProfile.
+- LaboratoryBrand enum, LaboratoryTest, LaboratoryTestCategory, LaboratoryStore.
+- LaboratoryCartItem, LaboratoryCheckoutDraft, LaboratoryAppointment, LaboratoryAppointmentInteraction.
+- LaboratoryPurchase, LaboratoryPurchaseItem, LaboratoryQuote, LaboratoryQuoteItem.
+- LaboratoryNotification, LabOrderEventState, LabOrderEventReceipt, LabResultAccessToken.
+- Transaction, PaymentAttempt, PaymentLog, EfevooToken, EfevooTransaction, Efevoo3dsSession.
+- Coupon, CouponUser, CouponTransaction.
+- OnlinePharmacyCartItem, OnlinePharmacyPurchase, OnlinePharmacyPurchaseItem.
+- MedicalAttentionSubscription.
+- Invoice, InvoiceRequest, VendorPayment.
+- OtpCode, OtpAccessLog, InAppNotification.
+
+Servicios o clases involucradas
+-------------------------------
+Laboratorio:
+- App\Actions\Laboratories\AddItemToCartAction, DeleteItemFromCartAction
+- App\Actions\Laboratories\CalculateTotalsAndDiscountAction
+- App\Actions\Laboratories\OrderAction
+- App\Actions\Laboratories\FulfillLaboratoryCartOrderAction
+- App\Actions\Laboratories\CreateGDAQuotationAction, CreatePatientAction, CreatePractitionerAction
+- App\Actions\Laboratories\CreateLaboratoryAppointmentAction
+- App\Actions\Laboratories\SyncLaboratoryCheckoutDraftAction, SyncLaboratoryAppointmentFromContactAction
+- App\Actions\Laboratories\PrepareLaboratoryCheckoutPaymentLinkAction
+- App\Actions\Laboratories\GetGDAResultsAction, ResolveLaboratoryPurchasePdfPath, GenerateLaboratoryPurchaseConfirmationPdf
+
+Pagos:
+- App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction
+- App\Actions\Efevoo\ChargeEfevooTokenAction (flujo anterior/compatibilidad)
+- App\Actions\Stripe\ChargeStripePaymentMethodAction, FindOrCreateStripeCustomerAction, DeleteStripePaymentMethodAction
+- App\Actions\Odessa\ChargeOdessaAction
+- App\Actions\PayPal\CreatePayPalOrderAction, CapturePayPalOrderAction, FinalizeLaboratoryPayPalPaymentAction, HandlePayPalWebhookAction
+- App\Actions\Transactions\CreateCouponBalanceTransactionAction, RefundTransactionAction
+- App\Services\EfevooPayService, EfevooPayFactoryService, EfevooPay\MockEfevooPayGateway
+- App\Services\PayPalService
+- App\Services\CouponApplicationService, CouponService
+- App\Services\PaymentRetryService
+
+Farmacia:
+- App\Actions\OnlinePharmacy\FetchAuthenticationTokenAction, FetchProductsAction, FetchProductAction, FetchCategoriesAction, FetchCalculateAction, FetchOrderAction
+- App\Actions\OnlinePharmacy\AddItemToCartAction, UpdateItemToCartAction, DeleteItemFromCartAction, CalculateTotalsAction, OrderAction
+
+Otros:
+- App\Services\Monitoring\SyncMonitoringCartService
+- App\Services\ActiveCampaign\ActiveCampaignService
+- App\Services\Tracking\AddToCart, InitiateCheckout, Purchase, Search, ViewContent
+- App\Services\Laboratory\LabResultsAccessTokenService, LabOrderNotificationGateService
+- App\Services\NotificationService
+- App\Services\ConstanciaFiscalService
+
+Flujo completo de compra de laboratorio
+---------------------------------------
+1. Seleccion de producto/servicio:
+- El usuario entra a /laboratory-brand-selection y luego /laboratory/{brand}/laboratory-tests.
+- Controller: Laboratories\LaboratoryBrandSelectionController y Laboratories\LaboratoryTestsController.
+- Paginas: LaboratoryBrandSelection.jsx, LaboratoryTests.jsx, LaboratoryTestsGrid.jsx.
+- Modelo: LaboratoryTest con brand, gda_id, famedic_price_cents, indications, feature_list y requires_appointment.
+
+2. Carrito:
+- POST /laboratory-cart-items agrega estudios usando LaboratoryCartItemController y AddItemToCartAction.
+- DELETE /laboratory-cart-items/{id} elimina con DeleteItemFromCartAction.
+- GET /laboratory/{brand}/shopping-cart muestra LaboratoryShoppingCart.jsx.
+- SyncMonitoringCartService actualiza carts/cart_items para monitoreo y ActiveCampaign.
+
+3. Checkout:
+- GET /laboratory/{brand}/checkout usa LaboratoryCheckoutController y middleware redirect-if-empty-laboratory-cart-items.
+- Componentes: CheckoutStepper, ContactStep, AddressStep, LaboratoryAppointmentStep, PaymentMethodStep, ConfirmationStep, CheckoutWizardFloatingFooter, LaboratoryPayPalButton.
+- POST /laboratory/{brand}/checkout/draft guarda LaboratoryCheckoutDraft con customer_id, laboratory_brand, contact_id, address_id, payment_method, coupon_id y checkout_step.
+- POST /laboratory/{brand}/checkout/appointment sincroniza cita.
+
+4. Cita:
+- Si un estudio requiere cita, OrderAction exige getRecentlyConfirmedUncompletedLaboratoryAppointment.
+- Rutas de cita: create/store/show, phone-intent, callback-availability, destroy.
+- Modelo: LaboratoryAppointment guarda paciente, telefono, fechas, tienda, estado de confirmacion e interacciones.
+
+5. Seleccion de pago:
+- EfevooPay: payment_method es el id del EfevooToken guardado.
+- Odessa: payment_method = odessa.
+- PayPal: payment_method = paypal en frontend, pero se usa flujo separado create-order/capture-order.
+- Saldo a favor: si coupon cubre total, se usa coupon_balance en OrderAction.
+
+6. Creacion de orden con EfevooPay/Odessa/saldo:
+- POST /laboratory/{brand}/checkout -> LaboratoryPurchaseController@store.
+- Request: StoreLaboratoryPurchaseRequest valida address, contact, payment_method, total y coupon_id.
+- OrderAction recalcula total con CalculateTotalsAndDiscountAction y lanza UnmatchingTotalPriceException si difiere del total enviado.
+- Si hay coupon_id, CouponApplicationService valida aplicacion y calcula discountCents.
+- Si amountToChargeCents > 0:
+  - odessa llama ChargeOdessaAction.
+  - otro valor llama ChargeEfevooPaymentMethodAction con customer, amountCents y token id.
+- Si amountToChargeCents <= 0 crea Transaction por CreateCouponBalanceTransactionAction.
+- FulfillLaboratoryCartOrderAction crea LaboratoryPurchase y LaboratoryPurchaseItem, adjunta Transaction via transactionables, liga LaboratoryAppointment si aplica, crea orden/cotizacion GDA, aplica coupon, marca carrito completado, borra borrador/carrito y notifica.
+- Si falla despues de cobrar, intenta RefundTransactionAction sobre la Transaction creada.
+
+7. Creacion de orden con PayPal:
+- El frontend LaboratoryPayPalButton carga SDK de PayPal.
+- createOrder llama POST /paypal/create-order.
+- CreatePayPalOrderAction recalcula total, valida coupon/cita, crea Transaction pendiente con payment_method/gateway/payment_provider paypal, payment_status pending, provider_order_id y details con customer_id, contact_id, address_id, brand, appointment, total y coupon.
+- PayPalService::createOrder crea orden PayPal en MXN.
+- captureOrder llama POST /paypal/capture-order.
+- CapturePayPalOrderAction valida que la Transaction pertenezca al customer, captura PayPal o consulta getOrder si capture falla, extrae capture_id y llama FinalizeLaboratoryPayPalPaymentAction.
+- FinalizeLaboratoryPayPalPaymentAction actualiza Transaction con gateway_transaction_id/provider_transaction_id, payment_status captured, gateway_status, raw_response/gateway_response, comision y luego ejecuta FulfillLaboratoryCartOrderAction.
+- Webhook POST /paypal/webhook verifica firma y HandlePayPalWebhookAction procesa PAYMENT.CAPTURE.COMPLETED de forma idempotente. PAYMENT.CAPTURE.DENIED marca failed.
+
+8. Confirmacion:
+- Se redirige a laboratory-purchases.show.
+- Se flashea confetti y se dispara Tracking\Purchase.
+- Notificacion: LaboratoryPurchaseCreated por correo; si hubo cita, LaboratoryAppointmentUpdatedByConcierge; posible FewDaysLeftToRequestInvoice.
+
+9. Historial:
+- GET /laboratory-purchases lista compras del customer con filtros por paciente, payment_method, marca, fechas, pipeline y study_status.
+- Pagina: LaboratoryPurchases.jsx con componentes LaboratoryPurchases/OrdersTable, OrderCardMobile, OrdersFilters, OrdersSummaryCards.
+- GET /laboratory-purchases/{id} muestra detalle.
+- GET /laboratory-purchases/{id}/download-pdf y POST email-pdf usan LaboratoryPurchasePdfController.
+
+10. Facturacion:
+- POST /laboratory-purchases/{id}/invoice-request crea InvoiceRequest.
+- GET /invoice/{invoice} y /invoice-requests/{id}/fiscal-certificate muestran documentos.
+- TaxProfileController permite crear perfiles fiscales y extraer datos de constancia.
+
+11. Resultados:
+- GDA notifica por /apigda/webhook/notification y /apigda/webhook/results o /api/laboratory/webhook/notifications.
+- LaboratoryNotification y campos results/pdf_base64 se usan para estado.
+- Acceso autenticado a resultados usa EnsureLabResultsOtpVerified.
+- Acceso por token publico usa LabResultsAccessController con OTP y enlaces firmados.
+- Componentes: LaboratoryResults/*, LaboratoryOrderDetail/ResultsSection, LabResultsOtpSessionBadge.
+
+12. Manejo de errores:
+- EfevooPaymentException vuelve al checkout con error payment_method.
+- CouponApplicationException vuelve con error coupon_id.
+- OdessaInsufficientFundsException muestra falta de saldo.
+- PayPal create-order devuelve 503 si no disponible; capture devuelve 404/422 segun not_found, forbidden, failed, error o invalid_capture.
+- Si fulfillment falla despues de captura PayPal, se intenta refund PayPal y se marca Transaction failed/FULFILLMENT_FAILED.
+
+Flujo completo de compra de farmacia
+------------------------------------
+Estado actual:
+- Las rutas publicas /online-pharmacy y /online-pharmacy/search redirigen a welcome con mensaje de farmacia temporalmente deshabilitada.
+- Aun existen rutas autenticadas, controllers, paginas y admin.
+
+Flujo si se accede autenticado:
+1. Productos se obtienen de Vitau con FetchProductsAction/FetchProductAction/FetchCategoriesAction.
+2. Carrito usa OnlinePharmacyCartItemController y OnlinePharmacyCartItem.
+3. GET /online-pharmacy/shopping-cart muestra OnlinePharmacyShoppingCart.jsx.
+4. GET /online-pharmacy/checkout muestra OnlinePharmacyCheckout.jsx.
+5. POST /online-pharmacy/checkout -> OnlinePharmacyPurchaseController@store.
+6. OnlinePharmacy\OrderAction calcula total con FetchCalculateAction usando zipcode y detalles del carrito.
+7. Si total difiere lanza UnmatchingTotalPriceException.
+8. chargeAndCreateTransaction usa Odessa si payment_method = odessa, o Stripe con ChargeStripePaymentMethodAction para otros payment methods.
+9. sendVitauRequest crea orden en Vitau con payment_method config('services.vitau.payment_method') y payment_status credit.
+10. createOnlinePharmacyPurchase persiste compra, items, vitau_order_id, direccion, contacto, totales, expected_delivery_date.
+11. Adjunta Transaction, marca carrito farmacia completado, borra carrito, trackea Purchase y redirige a online-pharmacy-purchases.show.
+12. Errores Stripe CardException se traducen a mensajes al usuario; OdessaInsufficientFundsException muestra falta de saldo.
+
+Componentes React/Inertia usados por pacientes
+----------------------------------------------
+Checkout y pagos:
+- resources/js/Layouts/CheckoutLayout.jsx
+- resources/js/Components/Checkout/CheckoutStepper.jsx
+- resources/js/Components/Checkout/ContactStep.jsx
+- resources/js/Components/Checkout/AddressStep.jsx
+- resources/js/Components/Checkout/LaboratoryAppointmentStep.jsx
+- resources/js/Components/Checkout/PaymentMethodStep.jsx
+- resources/js/Components/Checkout/ConfirmationStep.jsx
+- resources/js/Components/Checkout/LaboratoryPayPalButton.jsx
+- resources/js/Components/PaymentMethodBadge.jsx
+- resources/js/Components/PaymentMethodDisplayIcon.jsx
+- resources/js/Components/EfevooPayBadge.jsx, EfevooPayLogo.jsx, EfevooCardBrand.jsx
+- resources/js/Components/CouponBalanceBadge.jsx
+
+Catalogo/carrito/compras:
+- ProductCard.jsx, ShoppingCartBanner.jsx, PurchaseCard.jsx, Purchase.jsx
+- LaboratoryPurchases/OrdersTable.jsx, OrderCardMobile.jsx, OrderRowActions.jsx, OrdersFilters.jsx, OrdersSummaryCards.jsx
+- LaboratoryOrderDetail/*
+- PurchasePdfDialog.jsx, RequestInvoiceModal.jsx, ResultsDialog.jsx
+
+Cuenta:
+- Account/* forms, Addresses/*, Contacts/*, Family/*, TaxProfiles/*
+- PaymentMethods/Create.jsx, ThreeDSRedirect.jsx, ThreeDSResult.jsx, MockThreeDS.jsx, PaymentMethodDeleteConfirmation.jsx
+
+Resultados:
+- LaboratoryResults/LabResultsVerificationLayout.jsx, OtpVerification.jsx, OtpVerificationPage.jsx, OtpInput.jsx, ResultsDownload.jsx, SecurityNotice.jsx, StudyInfoCard.jsx
+
+Integraciones externas usadas en el flujo del paciente
+------------------------------------------------------
+- EfevooPay: tokenizacion, 3DS, cargos con token, refunds, busqueda y simulacion/mock.
+- PayPal: SDK JS en checkout de laboratorio, Orders API, Capture API, Webhook Signature Verification y refunds.
+- Odessa: cargo a saldo/caja de ahorro para afiliados.
+- Stripe/Cashier: farmacia y compatibilidad historica de metodos/transacciones.
+- GDA: ordenes/cotizaciones de laboratorio, pacientes, practicantes, resultados y notificaciones.
+- Vitau: farmacia en linea, productos, calculo y orden.
+- ActiveCampaign: contactos, carritos, compras y resultados.
+- Facebook CAPI/Pixel: eventos de tracking.
+- Vonage/mail/OTP: verificacion telefonica, OTP de resultados y notificaciones.
+- Google OAuth: login/registro.
+- SAT/constancia fiscal por PDF parser: perfiles fiscales.
+
+Archivos clave involucrados
+---------------------------
+- routes/web.php
+- routes/settings.php
+- routes/laboratories.php
+- routes/online-pharmacy.php
+- routes/medical-attention.php
+- routes/odessa.php
+- routes/webhooks.php
+- routes/api.php
+- app/Http/Controllers/LaboratoryPurchaseController.php
+- app/Http/Controllers/LaboratoryCheckoutController.php
+- app/Http/Controllers/PayPalController.php
+- app/Actions/Laboratories/OrderAction.php
+- app/Actions/Laboratories/FulfillLaboratoryCartOrderAction.php
+- app/Actions/PayPal/CreatePayPalOrderAction.php
+- app/Actions/PayPal/CapturePayPalOrderAction.php
+- app/Actions/PayPal/FinalizeLaboratoryPayPalPaymentAction.php
+- app/Actions/PayPal/HandlePayPalWebhookAction.php
+- app/Services/PayPalService.php
+- app/Actions/EfevooPay/ChargeEfevooPaymentMethodAction.php
+- app/Services/EfevooPayService.php
+- app/Http/Controllers/PaymentMethodController.php
+- app/Actions/OnlinePharmacy/OrderAction.php
+- app/Http/Controllers/OnlinePharmacyPurchaseController.php
+- app/Actions/Transactions/RefundTransactionAction.php
+- app/Models/Transaction.php
+- app/Models/LaboratoryPurchase.php
+- app/Models/OnlinePharmacyPurchase.php
+- resources/js/Pages/LaboratoryCheckout.jsx
+- resources/js/Components/Checkout/LaboratoryPayPalButton.jsx
+- resources/js/Components/Checkout/PaymentMethodStep.jsx
+- resources/js/Components/Checkout/ConfirmationStep.jsx
+- resources/js/Pages/PaymentMethods/*
+- database/migrations/*efevoo*, *payment_attempts*, *paypal*, *coupon*, *laboratory_purchases*, *online_pharmacy*, *transactionables*, *laboratory_checkout_drafts*
+
+Datos importantes que se guardan en base de datos
+-------------------------------------------------
+Usuario/cliente:
+- users: nombre, apellidos, email, telefono, verificacion, fecha nacimiento, genero, documentacion aceptada.
+- customers: tipo polimorfico, vencimiento de membresia medica, cart_abandoned_tagged_at.
+- addresses y contacts: datos de envio/paciente.
+- tax_profiles: datos fiscales y certificados.
+
+Laboratorio:
+- laboratory_cart_items: customer_id, laboratory_test_id.
+- laboratory_checkout_drafts: customer, marca, contacto, direccion, payment_method, coupon, step.
+- laboratory_appointments: paciente, telefono, tienda, fechas, confirmacion, purchase_id.
+- laboratory_purchases: customer, brand, gda_order_id, gda_consecutivo, paciente, direccion, total_cents, coupon_discount_cents, results, pdf_base64, status, paid/completed/cancelled timestamps y campos GDA.
+- laboratory_purchase_items: gda_id, nombre, descripcion, indicaciones, feature_list, price_cents.
+- laboratory_notifications/lab_order_event_states/lab_order_event_receipts: eventos GDA, resultados y control de duplicados.
+
+Pagos:
+- transactions: amount, payment_method, payment_provider, reference_id, provider_order_id, provider_transaction_id, payment_status, gateway, gateway_transaction_id, gateway_status, gateway_response, raw_response, gateway_token, gateway_processed_at, details, deleted_at/refunded_at.
+- transactionables: relacion polimorfica de Transaction con LaboratoryPurchase, OnlinePharmacyPurchase y MedicalAttentionSubscription.
+- payment_attempts: customer_id, token_id, amount_cents, gateway, reference, status, processor_code/message/transaction_id, raw_response, retry_count, processed_at.
+- payment_logs: provider, order_id, action, request, response, status.
+- efevoo_tokens: alias, client_token, card_token, last4, brand, expiration, holder, customer, environment, expires_at, is_active, metadata.
+- efevoo_transactions: token, transaction_id, reference, amount, currency, status, response_code/message, type, metadata, request/response, cav, processed_at.
+- efevoo_3ds_sessions: datos de sesiones 3DS.
+
+Cupones:
+- coupons, coupon_user, coupon_transactions, coupon_discount_cents en compras.
+- approval/audit tables para autorizaciones.
+
+Farmacia:
+- online_pharmacy_cart_items: customer, vitau_product_id, quantity.
+- online_pharmacy_purchases: vitau_order_id, datos envio/contacto, subtotal/shipping/tax/discount/total, expected_delivery_date, coupon_discount_cents.
+- online_pharmacy_purchase_items: producto Vitau, presentacion, cantidad, precios/impuestos/descuentos.
+
+Notificaciones/documentos:
+- invoices, invoice_requests, vendor_payments.
+- otp_codes, otp_access_logs, lab_result_access_tokens.
+- in_app_notifications.
+
+Riesgos antes de cambiar el motor/procesador de pagos
+-----------------------------------------------------
+- El checkout de laboratorio no usa un solo procesador: EfevooPay y Odessa pasan por OrderAction; PayPal pasa por un flujo de orden/captura/webhook separado; coupon_balance evita cobro real.
+- Farmacia sigue usando Stripe/Odessa aunque su acceso publico este deshabilitado. Si se reactiva, tambien debe migrarse.
+- Medical attention tiene validaciones de payment_method y transacciones propias; revisar antes de retirar Stripe/Odessa.
+- Los metodos guardados EfevooToken probablemente no son portables a otro procesador. Se requiere estrategia de re-tokenizacion.
+- El frontend compara strings como paypal, odessa, coupon_balance y ids de token; cambiar nombres rompe PaymentMethodStep, ConfirmationStep, badges, filtros y validaciones.
+- El total se recalcula en servidor y se compara contra total enviado. El nuevo motor debe cobrar en centavos y respetar MXN.
+- GDA se ejecuta despues del pago. Si GDA falla, algunos caminos intentan reembolso. Hay que probar esta compensacion con el nuevo proveedor.
+- PayPal permite webhook y captura del cliente; FinalizeLaboratoryPayPalPaymentAction usa lockForUpdate e idempotencia. Nuevo proveedor debe manejar duplicados.
+- RefundTransactionAction debe reconocer el nuevo gateway, su id de captura/cargo y estados.
+- Admin y reportes dependen de payment_method/payment_status/gateway_status.
+- PaymentAttempt y PaymentLog son herramientas operativas; si se eliminan sin reemplazo se pierde trazabilidad de pagos fallidos.
+- ActiveCampaign/carritos se cierran despues de fulfillment; errores de pago o fulfillment pueden dejar carritos activos/abandonados.
+
+Notas para migracion de procesador de pagos
+-------------------------------------------
+- Inventariar todos los payment_method actuales en base de datos antes de migrar: stripe, efevoopay, paypal, odessa, coupon_balance.
+- Crear adaptador comun para authorize/capture/charge/refund/webhook/search/commission y normalizacion de errores.
+- Mantener compatibilidad de Transaction para historial y reembolsos antiguos.
+- Decidir si PayPal se reemplaza o sigue como opcion paralela.
+- Definir plan de re-tokenizacion para tarjetas EfevooToken.
+- Actualizar PaymentMethodController y paginas PaymentMethods para alta/3DS del nuevo proveedor.
+- Actualizar LaboratoryPayPalButton si el nuevo flujo usa SDK/browser.
+- Actualizar requests, enums/validaciones y filtros admin/paciente.
+- Agregar logs de intento desde antes de llamar al procesador, similar a PaymentAttempt.
+- Probar flujos: pago exitoso, tarjeta declinada, timeout, refresh durante pago, webhook duplicado, coupon cubre 100%, Odessa, reembolso por cancelacion, fallo GDA posterior al cobro, resultados/factura despues de compra.
+
+Preguntas abiertas o puntos no identificados
+--------------------------------------------
+- No identificado claramente si la farmacia en linea debe migrarse ahora o permanecer deshabilitada.
+- No identificado claramente si Stripe puede retirarse completamente; Customer usa Cashier y farmacia aun depende de ChargeStripePaymentMethodAction.
+- No identificado claramente si los tokens Efevoo existentes deben conservarse visibles historicamente o migrarse a un nuevo esquema.
+- No identificado claramente si PayPal es metodo temporal o parte permanente del checkout de laboratorio.
+- No identificado claramente el contrato definitivo de Efevoo webhook en produccion.
+- No identificado claramente si hay reembolsos parciales; el codigo observado maneja reembolso de transaccion completa.
