@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -59,10 +60,11 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
             && $transaction?->payment_method !== null
             && $transaction->payment_method !== 'coupon_balance';
 
-        $isNewResult = false;
-        if ($resultsNotif && $resultsNotif->results_received_at && $resultsNotif->read_at === null) {
-            $isNewResult = true;
-        }
+        $isNewResult = LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(
+            $p->id,
+            $p->gda_order_id,
+            $p->gda_consecutivo
+        );
 
         $items = $p->laboratoryPurchaseItems ?? collect();
         $requiresAppointment = $items->contains(function ($item) {

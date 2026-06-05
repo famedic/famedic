@@ -11,11 +11,11 @@ import { Button } from "@/Components/Catalyst/button";
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
 import { navigateToLabResults, openLabResultsInNewTabOrSame } from "@/Utils/openLabResultsUrl";
 
+import NewResultBadge from "@/Components/Laboratory/NewResultBadge";
+
 const TAG_STYLES = {
 	cancelled:
 		"bg-red-100 text-red-900 ring-red-200 dark:bg-red-950/40 dark:text-red-100 dark:ring-red-800",
-	new_result:
-		"bg-emerald-100 text-emerald-900 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-100 dark:ring-emerald-800",
 	result_manual:
 		"bg-slate-100 text-slate-800 ring-slate-200 dark:bg-slate-800/80 dark:text-slate-100 dark:ring-slate-600",
 	result_api:
@@ -49,12 +49,8 @@ function buildTags(purchase) {
 	if (purchase.is_new_result) {
 		tags.push({
 			key: "new_result",
-			style: TAG_STYLES.new_result,
-			content: (
-				<>
-					<span aria-hidden>🟢</span> Nuevo resultado
-				</>
-			),
+			style: null,
+			content: <NewResultBadge compact />,
 		});
 	}
 
@@ -208,14 +204,18 @@ export default function LaboratoryPurchaseDashboardCard({ purchase, beginProtect
 
 					{tags.length > 0 && (
 						<div className="flex flex-wrap items-center gap-2">
-							{tags.map((tag) => (
-								<span
-									key={tag.key}
-									className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset sm:text-sm ${tag.style}`}
-								>
-									{tag.content}
-								</span>
-							))}
+							{tags.map((tag) =>
+								tag.style ? (
+									<span
+										key={tag.key}
+										className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset sm:text-sm ${tag.style}`}
+									>
+										{tag.content}
+									</span>
+								) : (
+									<span key={tag.key}>{tag.content}</span>
+								),
+							)}
 						</div>
 					)}
 

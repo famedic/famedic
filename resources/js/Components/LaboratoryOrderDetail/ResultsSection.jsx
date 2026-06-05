@@ -10,6 +10,8 @@ function formatCountdown(totalSeconds = 0) {
 	return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+import NewResultBadge from "@/Components/Laboratory/NewResultBadge";
+
 export default function ResultsSection({
 	hasResults = false,
 	resultsUploadedAt = null,
@@ -18,12 +20,16 @@ export default function ResultsSection({
 	otpRequired = false,
 	otpVerified = false,
 	otpExpiresIn = 0,
+	isNewResult = false,
 }) {
 	return (
 		<div className="space-y-4">
-			<div className="flex items-center justify-between gap-2">
+			<div className="flex flex-wrap items-center justify-between gap-2">
 				<h3 className="break-words text-base font-semibold text-zinc-900 dark:text-white">Resultados</h3>
-				<Badge color={hasResults ? "green" : "slate"}>{hasResults ? "Disponible" : "Pendiente"}</Badge>
+				<div className="flex flex-wrap items-center gap-2">
+					{isNewResult && <NewResultBadge compact />}
+					<Badge color={hasResults ? "green" : "slate"}>{hasResults ? "Disponible" : "Pendiente"}</Badge>
+				</div>
 			</div>
 
 			{hasResults ? (

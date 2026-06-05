@@ -7,7 +7,9 @@ import { Badge } from "@/Components/Catalyst/badge";
 import { BadgeButton } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Divider } from "@/Components/Catalyst/divider";
-import LaboratoryNotificationResultsPdfActions from "@/Components/Admin/LaboratoryNotificationResultsPdfActions";
+import LaboratoryNotificationResultsPdfActions, {
+	pdfLocationBadge,
+} from "@/Components/Admin/LaboratoryNotificationResultsPdfActions";
 import {
 	Table,
 	TableBody,
@@ -34,18 +36,6 @@ function statusBadgeColor(status) {
 	if (status === "error") return "red";
 	if (status === "processed") return "famedic-lime";
 	return "slate";
-}
-
-function pdfLocationBadge(pdf) {
-	if (!pdf) return { color: "slate", label: "—" };
-	switch (pdf.location) {
-		case "db_base64":
-			return { color: "famedic-lime", label: pdf.label };
-		case "gda_provider":
-			return { color: "sky", label: pdf.label };
-		default:
-			return { color: "slate", label: pdf.label };
-	}
 }
 
 export default function LaboratoryNotificationsMonitorShow({
@@ -148,7 +138,6 @@ function OrderSummaryTab({
 	resultsPdf,
 	onResultsPdfUpdated,
 }) {
-	const pdfBadge = pdfLocationBadge(resultsPdf);
 	const emails = summary.emails;
 
 	return (
@@ -184,20 +173,6 @@ function OrderSummaryTab({
 
 			<div className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
 				<Subheading>Ubicación del PDF de resultados</Subheading>
-				<Badge color={pdfBadge.color}>{pdfBadge.label}</Badge>
-				<div className="flex flex-wrap gap-2">
-					<Badge color={resultsPdf?.has_pdf_in_db ? "famedic-lime" : "slate"}>
-						En BD (base64): {resultsPdf?.has_pdf_in_db ? "Sí" : "No"}
-					</Badge>
-					<Badge color={resultsPdf?.available_at_gda ? "sky" : "slate"}>
-						En proveedor GDA: {resultsPdf?.available_at_gda ? "Sí" : "No"}
-					</Badge>
-				</div>
-				{resultsPdf?.notification_id && (
-					<Text className="text-xs text-zinc-500">
-						Notificación de referencia: #{resultsPdf.notification_id}
-					</Text>
-				)}
 				<LaboratoryNotificationResultsPdfActions
 					orderKey={orderKey}
 					resultsPdf={resultsPdf}
@@ -307,10 +282,12 @@ function NotificationTable({ notifications, emptyMessage, showPdfColumn }) {
 			<TableBody>
 				{notifications.map((n) => {
 					const pdf = pdfLocationBadge({
-						location: n.pdf_location,
+						location: n.is_stale ? "db_base64_stale" : n.pdf_location,
 						label:
 							n.pdf_location === "db_base64"
-								? "En BD"
+								? n.is_stale
+									? "En BD (desactualizado)"
+									: "En BD"
 								: n.pdf_location === "gda_provider"
 									? "En GDA"
 									: "Sin PDF",

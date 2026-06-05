@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Laboratories\GetGDAResultsAction;
+use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
 use App\Support\LabResultsOtp;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
@@ -682,46 +682,21 @@ class LabResultsAccessController extends Controller
             return base64_encode($pdfBinary);
         }
 
-        $notification = LaboratoryNotification::query()
-            ->where('laboratory_purchase_id', $purchaseId)
-            ->where(function ($query) {
-                $query->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
-                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
-            })
-            ->latest('id')
-            ->first();
+        $notification = LaboratoryNotification::latestResultsForOrder(
+            $purchaseId,
+            $purchase?->gda_order_id,
+            $purchase?->gda_consecutivo
+        );
 
         if (! $notification) {
             return null;
         }
 
-        if (! empty($notification->results_pdf_base64)) {
-            return $notification->results_pdf_base64;
-        }
-
-        if (! $notification->needsPdfFetch()) {
-            return null;
-        }
-
         try {
-            $purchase = $notification->laboratoryPurchase;
-            if (! $purchase || empty($purchase->gda_order_id)) {
-                return null;
-            }
+            $result = app(ResolveGdaResultsPdfAction::class)($notification);
+            $result['notification']->markAsRead();
 
-            $response = app(GetGDAResultsAction::class)(
-                $purchase->gda_order_id,
-                $notification->payload
-            );
-
-            $pdf = $response['infogda_resultado_b64'] ?? null;
-            if (! $pdf) {
-                return null;
-            }
-
-            $notification->update(['results_pdf_base64' => $pdf]);
-
-            return $pdf;
+            return $result['pdf_base64'];
         } catch (\Throwable $e) {
             Log::error('Failed to fetch PDF while validating OTP', [
                 'purchase_id' => $purchaseId,

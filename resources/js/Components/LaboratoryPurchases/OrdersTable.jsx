@@ -8,6 +8,7 @@ import {
 } from "@heroicons/react/24/solid";
 import { Table, TableHead, TableHeader, TableBody, TableRow, TableCell } from "@/Components/Catalyst/table";
 import { Text, Strong } from "@/Components/Catalyst/text";
+import NewResultBadge from "@/Components/Laboratory/NewResultBadge";
 import OrderRowActions from "@/Components/LaboratoryPurchases/OrderRowActions";
 import { getOrderBadgePresentation, purchaseHasResults, purchaseIsCancelled } from "@/lib/laboratoryPurchaseOrderUi";
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
@@ -172,6 +173,11 @@ export default function OrdersTable({ purchases, beginProtectedUrl }) {
 												>
 													{purchase.study_name}
 												</Text>
+												{purchase.is_new_result && (
+													<div className="mt-1.5">
+														<NewResultBadge compact />
+													</div>
+												)}
 												<Text className="mt-1 text-sm">
 													<Strong className="text-zinc-900 dark:text-white">{purchase.formatted_total}</Strong>
 												</Text>

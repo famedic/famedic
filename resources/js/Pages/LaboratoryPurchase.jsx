@@ -8,6 +8,7 @@ export default function LaboratoryPurchase({
 	latestResultsAt,
 	hasSampleCollected,
 	hasResultsAvailable,
+	is_new_result = false,
 }) {
 	useEffect(() => {
 		if (laboratoryPurchase && !window.ga4PurchaseSent) {
@@ -48,6 +49,7 @@ export default function LaboratoryPurchase({
 			latestResultsAt={latestResultsAt}
 			hasSampleCollected={hasSampleCollected}
 			hasResultsAvailable={hasResultsAvailable}
+			isNewResult={is_new_result}
 		/>
 	);
 }

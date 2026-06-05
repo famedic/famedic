@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -442,6 +444,208 @@ class LaboratoryNotification extends Model
     public function needsPdfFetch(): bool
     {
         return $this->hasAvailableResults() && empty($this->results_pdf_base64);
+    }
+
+    public function scopeOfResultsType(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->where('notification_type', self::TYPE_RESULTS)
+                ->orWhere('lineanegocio', self::LINEA_NEGOCIO_RESULTS);
+        });
+    }
+
+    public function scopeForSameOrderAs(Builder $query, self $notification): Builder
+    {
+        return $query->where(function (Builder $q) use ($notification) {
+            $matched = false;
+
+            if ($notification->laboratory_purchase_id) {
+                $q->orWhere('laboratory_purchase_id', $notification->laboratory_purchase_id);
+                $matched = true;
+            }
+
+            if ($notification->gda_order_id) {
+                $q->orWhere('gda_order_id', $notification->gda_order_id);
+                $matched = true;
+            }
+
+            if ($notification->gda_consecutivo) {
+                $q->orWhere('gda_consecutivo', $notification->gda_consecutivo);
+                $matched = true;
+            }
+
+            if (! $matched) {
+                $q->whereRaw('0 = 1');
+            }
+        });
+    }
+
+    public static function latestResultsForOrder(
+        ?int $purchaseId = null,
+        ?string $gdaOrderId = null,
+        ?string $gdaConsecutivo = null
+    ): ?self {
+        $query = static::query()
+            ->ofResultsType()
+            ->whereNotNull('results_received_at');
+
+        $query->where(function (Builder $q) use ($purchaseId, $gdaOrderId, $gdaConsecutivo) {
+            $matched = false;
+
+            if ($purchaseId) {
+                $q->orWhere('laboratory_purchase_id', $purchaseId);
+                $matched = true;
+            }
+
+            if ($gdaOrderId) {
+                $q->orWhere('gda_order_id', $gdaOrderId);
+                $matched = true;
+            }
+
+            if ($gdaConsecutivo) {
+                $q->orWhere('gda_consecutivo', $gdaConsecutivo);
+                $matched = true;
+            }
+
+            if (! $matched) {
+                $q->whereRaw('0 = 1');
+            }
+        });
+
+        return $query->latest('id')->first();
+    }
+
+    public static function latestResultsReceivedAtForOrder(
+        ?int $purchaseId = null,
+        ?string $gdaOrderId = null,
+        ?string $gdaConsecutivo = null
+    ): ?Carbon {
+        $latest = static::latestResultsForOrder($purchaseId, $gdaOrderId, $gdaConsecutivo);
+
+        return $latest?->results_received_at;
+    }
+
+    public function pdfFetchedAt(): ?Carbon
+    {
+        $fetchedAt = data_get($this->gda_message, 'results_fetched_at');
+
+        return $fetchedAt ? Carbon::parse($fetchedAt) : null;
+    }
+
+    public static function lastPatientResultsAccessAtForOrder(
+        ?int $purchaseId = null,
+        ?string $gdaOrderId = null,
+        ?string $gdaConsecutivo = null
+    ): ?Carbon {
+        $notifications = static::resultsNotificationsForOrderQuery($purchaseId, $gdaOrderId, $gdaConsecutivo)
+            ->get(['read_at', 'gda_message']);
+
+        $accessTimes = [];
+
+        foreach ($notifications as $notification) {
+            if ($notification->read_at) {
+                $accessTimes[] = $notification->read_at;
+            }
+
+            if ($fetchedAt = $notification->pdfFetchedAt()) {
+                $accessTimes[] = $fetchedAt;
+            }
+        }
+
+        if ($accessTimes === []) {
+            return null;
+        }
+
+        return collect($accessTimes)->sort()->last();
+    }
+
+    public static function hasUpdatedResultsSinceLastPatientAccess(
+        ?int $purchaseId = null,
+        ?string $gdaOrderId = null,
+        ?string $gdaConsecutivo = null
+    ): bool {
+        $latestResultsAt = static::latestResultsReceivedAtForOrder($purchaseId, $gdaOrderId, $gdaConsecutivo);
+
+        if (! $latestResultsAt) {
+            return false;
+        }
+
+        $lastAccessAt = static::lastPatientResultsAccessAtForOrder($purchaseId, $gdaOrderId, $gdaConsecutivo);
+
+        if (! $lastAccessAt) {
+            return true;
+        }
+
+        return $latestResultsAt->gt($lastAccessAt);
+    }
+
+    protected static function resultsNotificationsForOrderQuery(
+        ?int $purchaseId,
+        ?string $gdaOrderId,
+        ?string $gdaConsecutivo
+    ): Builder {
+        $query = static::query()->ofResultsType();
+
+        $query->where(function (Builder $q) use ($purchaseId, $gdaOrderId, $gdaConsecutivo) {
+            $matched = false;
+
+            if ($purchaseId) {
+                $q->orWhere('laboratory_purchase_id', $purchaseId);
+                $matched = true;
+            }
+
+            if ($gdaOrderId) {
+                $q->orWhere('gda_order_id', $gdaOrderId);
+                $matched = true;
+            }
+
+            if ($gdaConsecutivo) {
+                $q->orWhere('gda_consecutivo', $gdaConsecutivo);
+                $matched = true;
+            }
+
+            if (! $matched) {
+                $q->whereRaw('0 = 1');
+            }
+        });
+
+        return $query;
+    }
+
+    /**
+     * Determina si el PDF cacheado está desactualizado respecto a notificaciones más recientes de GDA.
+     */
+    public function shouldRefreshPdfFromGda(): bool
+    {
+        if (! $this->hasAvailableResults()) {
+            return false;
+        }
+
+        $latestResultsAt = static::latestResultsReceivedAtForOrder(
+            $this->laboratory_purchase_id,
+            $this->gda_order_id,
+            $this->gda_consecutivo
+        );
+
+        if (empty($this->results_pdf_base64)) {
+            return true;
+        }
+
+        if (data_get($this->gda_message, 'results_source') !== 'gda_api') {
+            return true;
+        }
+
+        if (! $latestResultsAt) {
+            return false;
+        }
+
+        $fetchedAt = $this->pdfFetchedAt();
+
+        if ($fetchedAt) {
+            return $latestResultsAt->gt($fetchedAt);
+        }
+
+        return $latestResultsAt->gt($this->updated_at);
     }
 
     /**

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Http;
 use App\Models\LaboratoryQuote;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryNotification;
-use App\Actions\Laboratories\GetGDAResultsAction;
+use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
 use Illuminate\Support\Facades\Gate;
 
 class LaboratoryResultController extends Controller
@@ -124,138 +124,29 @@ class LaboratoryResultController extends Controller
     /**
      * Obtener y guardar resultados PDF desde GDA (VERSIÓN SIMPLIFICADA)
      */
-    private function fetchAndSaveResults(LaboratoryNotification $notification)
+    private function fetchAndSaveResults(LaboratoryNotification $notification): array
     {
         try {
-            // Verificar si ya tenemos resultados
-            if (!empty($notification->results_pdf_base64)) {
-                logger('✅ Resultados ya presentes en notificación', [
-                    'notification_id' => $notification->id,
-                    'order_id' => $notification->gda_order_id
-                ]);
-                return $notification->results_pdf_base64;
-            }
+            $result = app(ResolveGdaResultsPdfAction::class)($notification);
+            $result['notification']->markAsRead();
 
-            // Obtener información necesaria
-            $orderId = $notification->gda_order_id;
-            $payload = $notification->payload; // ← ¡YA TENEMOS EL PAYLOAD!
-
-            if (!$orderId) {
-                throw new \Exception('Falta el ID de orden GDA');
-            }
-            
-            if (!$payload || !is_array($payload)) {
-                // Intentar decodificar si es JSON string
-                if (is_string($notification->payload)) {
-                    $payload = json_decode($notification->payload, true);
-                }
-                
-                if (!$payload || !is_array($payload)) {
-                    throw new \Exception('No se pudo obtener el payload de la notificación');
-                }
-            }
-
-            // Verificar datos esenciales en el payload
-            $marca = $payload['header']['marca'] ?? null;
-            $convenio = $payload['requisition']['convenio'] ?? null;
-            
-            logger('🔍 Datos extraídos del payload:', [
-                'notification_id' => $notification->id,
-                'order_id' => $orderId,
-                'marca' => $marca,
-                'convenio' => $convenio,
-                'id_en_payload' => $payload['id'] ?? 'NO_ID'
-            ]);
-
-            if (!$marca) {
-                throw new \Exception('No se encontró la marca en el payload');
-            }
-            
-            if (!$convenio) {
-                throw new \Exception('No se encontró el convenio en el payload');
-            }
-
-            // Usar el Action modificado
-            logger('🚀 Llamando a GetGDAResultsAction con payload...', [
-                'order_id' => $orderId,
-                'marca' => $marca,
-                'convenio' => $convenio
-            ]);
-            
-            $gdaAction = app(GetGDAResultsAction::class);
-            $results = $gdaAction($orderId, $payload);
-
-            // Verificar si la respuesta contiene el PDF
-            if (empty($results['infogda_resultado_b64'])) {
-                throw new \Exception('No se encontraron resultados PDF en la respuesta');
-            }
-
-            // Guardar el PDF en base64
-            $notification->update([
-                'results_pdf_base64' => $results['infogda_resultado_b64'],
-                'laboratory_brand' => $this->extractBrandFromPayload($payload), // Opcional
-                'gda_message' => array_merge($notification->gda_message ?? [], [
-                    'results_fetched_at' => now()->toISOString(),
-                    'results_source' => 'gda_api',
-                    'marca_used' => $marca,
-                    'convenio_used' => $convenio
-                ])
-            ]);
-
-            logger('✅ Resultados guardados exitosamente:', [
-                'notification_id' => $notification->id,
-                'order_id' => $orderId,
-                'pdf_size' => strlen($results['infogda_resultado_b64'])
-            ]);
-
-            return $results['infogda_resultado_b64'];
-
+            return $result;
         } catch (\Exception $e) {
             logger()->error('❌ Error al obtener resultados de GDA:', [
                 'notification_id' => $notification->id,
                 'order_id' => $notification->gda_order_id,
-                'has_payload' => !empty($payload),
-                'marca' => $marca ?? 'NO_DEFINIDO',
-                'convenio' => $convenio ?? 'NO_DEFINIDO',
-                'error_message' => $e->getMessage()
+                'error_message' => $e->getMessage(),
             ]);
 
-            // Actualizar el mensaje de error
             $notification->update([
                 'gda_message' => array_merge($notification->gda_message ?? [], [
                     'last_error' => $e->getMessage(),
                     'last_error_at' => now()->toISOString(),
-                    'marca_attempted' => $marca ?? null,
-                    'convenio_attempted' => $convenio ?? null
-                ])
+                ]),
             ]);
 
             throw $e;
         }
-    }
-
-    /**
-     * Extraer brand del payload (opcional, para referencia)
-     */
-    private function extractBrandFromPayload(array $payload): ?string
-    {
-        $marca = $payload['header']['marca'] ?? null;
-        
-        if (!$marca) {
-            return null;
-        }
-        
-        // Mapeo simple (puedes ajustarlo)
-        $map = [
-            1 => 'olab',
-            4 => 'azteca',
-            5 => 'swisslab',
-            7 => 'jenner',
-            15 => 'liacsa',
-            6 => 'famedic',
-        ];
-        
-        return $map[$marca] ?? null;
     }
 
     /**
@@ -285,7 +176,8 @@ class LaboratoryResultController extends Controller
 
         try {
             // Obtener el PDF (si ya existe o obtenerlo de GDA)
-            $pdfBase64 = $this->fetchAndSaveResults($notification);
+            $result = $this->fetchAndSaveResults($notification);
+            $pdfBase64 = $result['pdf_base64'];
             
             if (!$pdfBase64) {
                 abort(404, 'Resultado no disponible');
@@ -294,11 +186,8 @@ class LaboratoryResultController extends Controller
             // Decodificar base64 y mostrar PDF en el navegador
             $pdfContent = base64_decode($pdfBase64);
 
-            // Marcar como leída
-            $notification->markAsRead();
-
             logger('✅ PDF enviado al navegador:', [
-                'notification_id' => $notification->id,
+                'notification_id' => $result['notification']->id,
                 'order_id' => $notification->gda_order_id,
                 'content_length' => strlen($pdfContent)
             ]);
@@ -345,7 +234,8 @@ class LaboratoryResultController extends Controller
 
         try {
             // Obtener el PDF (si ya existe o obtenerlo de GDA)
-            $pdfBase64 = $this->fetchAndSaveResults($notification);
+            $result = $this->fetchAndSaveResults($notification);
+            $pdfBase64 = $result['pdf_base64'];
             
             if (!$pdfBase64) {
                 abort(404, 'Resultado no disponible');
@@ -354,11 +244,8 @@ class LaboratoryResultController extends Controller
             // Decodificar base64 y descargar PDF
             $pdfContent = base64_decode($pdfBase64);
 
-            // Marcar como leída
-            $notification->markAsRead();
-
             logger('✅ PDF preparado para descarga:', [
-                'notification_id' => $notification->id,
+                'notification_id' => $result['notification']->id,
                 'order_id' => $notification->gda_order_id,
                 'content_length' => strlen($pdfContent)
             ]);

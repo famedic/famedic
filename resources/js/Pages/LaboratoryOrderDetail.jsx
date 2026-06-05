@@ -60,6 +60,7 @@ export default function LaboratoryOrderDetail({
 	hasResultsAvailable,
 	latestSampleCollectionAt,
 	latestResultsAt,
+	isNewResult = false,
 }) {
 	const [activeTab, setActiveTab] = useState("patient");
 	const [pendingScrollToPreparation, setPendingScrollToPreparation] = useState(false);
@@ -538,6 +539,7 @@ export default function LaboratoryOrderDetail({
 					otpRequired={labResultsOtpRequired}
 					otpVerified={otpStatus.verified}
 					otpExpiresIn={otpStatus.expiresIn}
+					isNewResult={isNewResult}
 				/>
 			</Sidebar>
 			{activeTab !== "invoice" && <Sidebar title="Facturas"><InvoiceSection purchase={laboratoryPurchase} /></Sidebar>}

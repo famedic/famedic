@@ -34,6 +34,7 @@ class HandleResultsNotificationAction
 
         // Actualizar notificación
         $this->updateNotification($notification, $data, $hasResultsInPayload);
+        $this->invalidateStalePdfCaches($notification);
 
         // Actualizar quote
         $quote = $this->updateQuote($references, $data, $hasResultsInPayload);
@@ -102,10 +103,20 @@ class HandleResultsNotificationAction
         $display = $data['code']['coding'][0]['display'] ?? null;
 
         if ($code || $display) {
-            return trim(($code ?? 'unknown') . '|' . ($display ?? 'unknown'));
+            return trim(($code ?? 'unknown').'|'.($display ?? 'unknown'));
         }
 
         return $data['requisition']['value'] ?? null;
+    }
+
+    protected function invalidateStalePdfCaches(LaboratoryNotification $current): void
+    {
+        LaboratoryNotification::query()
+            ->ofResultsType()
+            ->forSameOrderAs($current)
+            ->where('id', '!=', $current->id)
+            ->whereNotNull('results_pdf_base64')
+            ->update(['results_pdf_base64' => null]);
     }
 
     protected function updateNotification(LaboratoryNotification $notification, array $data, bool $hasResultsInPayload): void

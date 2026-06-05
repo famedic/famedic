@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Actions\Laboratories\GetGDAResultsAction;
+use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
 use App\Http\Controllers\Controller;
 use App\Models\LabOrderEventState;
 use App\Models\LaboratoryNotification;
@@ -175,49 +175,57 @@ class LaboratoryNotificationMonitorController extends Controller
             ], 404);
         }
 
-        if ($notification->hasResults()) {
-            return response()->json([
-                'success' => true,
-                'cached' => true,
-                'message' => 'El PDF ya estaba almacenado en la base de datos.',
-                'pdf_base64' => $notification->results_pdf_base64,
-                'results_pdf' => $this->buildResultsPdfSummary($resultsNotifications),
-            ]);
-        }
-
-        if (! $notification->hasAvailableResults() && ! $notification->needsPdfFetch()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Los resultados aún no están disponibles en GDA.',
-            ], 422);
-        }
-
         try {
-            $response = app(GetGDAResultsAction::class)(
-                $notification->gda_order_id,
-                $notification->payload
-            );
-        } catch (\Exception $e) {
+            $result = app(ResolveGdaResultsPdfAction::class)($notification);
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Error consultando GDA: '.$e->getMessage(),
             ], 500);
         }
 
-        $pdf = $response['infogda_resultado_b64'] ?? null;
+        $resultsNotifications = $this->notificationsForOrder($orderKey)
+            ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+            ->values();
 
-        if (! $pdf) {
+        return response()->json([
+            'success' => true,
+            'cached' => $result['cached'],
+            'refreshed' => $result['refreshed'],
+            'message' => $result['refreshed']
+                ? 'PDF actualizado desde GDA y guardado en la base de datos.'
+                : 'El PDF ya estaba almacenado en la base de datos.',
+            'pdf_base64' => $result['pdf_base64'],
+            'results_pdf' => $this->buildResultsPdfSummary($resultsNotifications),
+        ]);
+    }
+
+    public function forceRefreshResults(Request $request, string $orderKey): JsonResponse
+    {
+        $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
+
+        $resultsNotifications = $this->notificationsForOrder($orderKey)
+            ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+            ->values();
+
+        $notification = $resultsNotifications->sortByDesc('created_at')->first();
+
+        if (! $notification) {
             return response()->json([
                 'success' => false,
-                'message' => 'GDA no devolvió el PDF de resultados.',
+                'message' => 'No existe notificación de resultados para esta orden.',
+            ], 404);
+        }
+
+        try {
+            $result = app(ResolveGdaResultsPdfAction::class)->forceRefresh($notification);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error forzando actualización desde GDA: '.$e->getMessage(),
             ], 500);
         }
 
-        $notification->update([
-            'results_pdf_base64' => $pdf,
-        ]);
-
-        $notification->refresh();
         $resultsNotifications = $this->notificationsForOrder($orderKey)
             ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
             ->values();
@@ -225,8 +233,10 @@ class LaboratoryNotificationMonitorController extends Controller
         return response()->json([
             'success' => true,
             'cached' => false,
-            'message' => 'PDF obtenido desde GDA y guardado en la base de datos.',
-            'pdf_base64' => $pdf,
+            'refreshed' => true,
+            'forced' => true,
+            'message' => 'PDF actualizado desde GDA. Se limpió la caché anterior en la base de datos.',
+            'pdf_base64' => $result['pdf_base64'],
             'results_pdf' => $this->buildResultsPdfSummary($resultsNotifications),
         ]);
     }
@@ -235,10 +245,21 @@ class LaboratoryNotificationMonitorController extends Controller
     {
         $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
 
-        $notification = $this->notificationsForOrder($orderKey)
+        $resultsNotifications = $this->notificationsForOrder($orderKey)
             ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
-            ->sortByDesc('created_at')
-            ->first();
+            ->values();
+
+        $notification = LaboratoryNotification::latestResultsForOrder(
+            $resultsNotifications->first()?->laboratory_purchase_id,
+            $resultsNotifications->first()?->gda_order_id,
+            $resultsNotifications->first()?->gda_consecutivo ?? $orderKey
+        );
+
+        if (! $notification || ! $notification->hasResults()) {
+            $notification = $resultsNotifications
+                ->sortByDesc('created_at')
+                ->first(fn (LaboratoryNotification $n) => $n->hasResults());
+        }
 
         if (! $notification || ! $notification->hasResults()) {
             abort(404, 'PDF no disponible en la base de datos.');
@@ -370,45 +391,96 @@ class LaboratoryNotificationMonitorController extends Controller
 
     private function buildResultsPdfSummary($resultsNotifications): array
     {
-        $latest = $resultsNotifications->sortByDesc('created_at')->first();
+        $latest = $resultsNotifications->sortByDesc(fn (LaboratoryNotification $n) => $n->results_received_at ?? $n->created_at)->first();
 
         if (! $latest) {
-            return [
-                'location' => 'none',
-                'label' => 'Sin resultados recibidos',
-                'notification_id' => null,
-                'has_pdf_in_db' => false,
-                'available_at_gda' => false,
-            ];
+            return $this->emptyResultsPdfSummary();
         }
 
-        if ($latest->hasResults()) {
-            return [
-                'location' => 'db_base64',
-                'label' => 'PDF almacenado en base de datos (base64)',
-                'notification_id' => $latest->id,
-                'has_pdf_in_db' => true,
-                'available_at_gda' => false,
-            ];
-        }
+        $cachedNotification = $resultsNotifications
+            ->filter(fn (LaboratoryNotification $n) => $n->hasResults())
+            ->sortByDesc(fn (LaboratoryNotification $n) => $n->pdfFetchedAt() ?? $n->updated_at)
+            ->first();
 
-        if ($latest->needsPdfFetch() || $latest->hasAvailableResults()) {
-            return [
-                'location' => 'gda_provider',
-                'label' => 'PDF disponible en proveedor GDA (no descargado a la BD)',
-                'notification_id' => $latest->id,
-                'has_pdf_in_db' => false,
-                'available_at_gda' => true,
-            ];
-        }
+        $servingNotification = $cachedNotification ?? $latest;
+        $hasPdfInDb = $cachedNotification !== null;
+        $isStale = $latest->shouldRefreshPdfFromGda();
+        $availableAtGda = $latest->hasAvailableResults();
+
+        $pdfSource = match (true) {
+            ! $hasPdfInDb => null,
+            data_get($servingNotification->gda_message, 'results_source') === 'gda_api' => 'gda_api',
+            default => 'webhook_or_legacy',
+        };
+
+        $location = match (true) {
+            ! $availableAtGda => 'none',
+            $hasPdfInDb && $isStale => 'db_base64_stale',
+            $hasPdfInDb => 'db_base64',
+            $availableAtGda => 'gda_provider',
+            default => 'none',
+        };
+
+        $label = match ($location) {
+            'db_base64' => $pdfSource === 'gda_api'
+                ? 'PDF servido desde caché en BD (obtenido vía API GDA)'
+                : 'PDF almacenado en BD (webhook o carga previa)',
+            'db_base64_stale' => 'PDF en BD desactualizado — existe notificación más reciente en GDA',
+            'gda_provider' => 'PDF disponible en proveedor GDA (sin descargar a la BD)',
+            default => 'Sin PDF de resultados registrado',
+        };
 
         return [
+            'location' => $location,
+            'label' => $label,
+            'notification_id' => $servingNotification->id,
+            'serving_notification_id' => $servingNotification->id,
+            'latest_notification_id' => $latest->id,
+            'has_pdf_in_db' => $hasPdfInDb,
+            'available_at_gda' => $availableAtGda,
+            'is_stale' => $isStale,
+            'has_newer_results' => $isStale,
+            'pdf_source' => $pdfSource,
+            'pdf_source_label' => $this->pdfSourceLabel($pdfSource),
+            'latest_results_at' => $latest->results_received_at?->toIso8601String(),
+            'pdf_fetched_at' => $servingNotification->pdfFetchedAt()?->toIso8601String(),
+            'results_notifications_count' => $resultsNotifications->count(),
+            'can_fetch_from_gda' => $availableAtGda && ! $hasPdfInDb,
+            'can_force_refresh_from_gda' => $availableAtGda && $hasPdfInDb,
+            'can_download_from_db' => $hasPdfInDb,
+        ];
+    }
+
+    private function emptyResultsPdfSummary(): array
+    {
+        return [
             'location' => 'none',
-            'label' => 'Sin PDF de resultados registrado',
-            'notification_id' => $latest->id,
+            'label' => 'Sin resultados recibidos',
+            'notification_id' => null,
+            'serving_notification_id' => null,
+            'latest_notification_id' => null,
             'has_pdf_in_db' => false,
             'available_at_gda' => false,
+            'is_stale' => false,
+            'has_newer_results' => false,
+            'pdf_source' => null,
+            'pdf_source_label' => null,
+            'latest_results_at' => null,
+            'pdf_fetched_at' => null,
+            'results_notifications_count' => 0,
+            'can_fetch_from_gda' => false,
+            'can_force_refresh_from_gda' => false,
+            'can_download_from_db' => false,
         ];
+    }
+
+    private function pdfSourceLabel(?string $source): ?string
+    {
+        return match ($source) {
+            'gda_api' => 'API de consulta GDA',
+            'webhook_or_legacy' => 'Webhook GDA o caché legacy',
+            default => null,
+        };
     }
 
     private function buildEmailSummary($notifications, ?LabOrderEventState $eventState, string $tz): array
@@ -478,6 +550,11 @@ class LaboratoryNotificationMonitorController extends Controller
             'has_pdf_in_db' => $notification->hasResults(),
             'pdf_at_gda' => $notification->needsPdfFetch(),
             'pdf_location' => $pdfLocation,
+            'pdf_source' => data_get($notification->gda_message, 'results_source'),
+            'pdf_fetched_at' => $notification->pdfFetchedAt()?->toIso8601String(),
+            'is_stale' => $notification->notification_type === LaboratoryNotification::TYPE_RESULTS
+                && $notification->hasResults()
+                && $notification->shouldRefreshPdfFromGda(),
         ];
     }
 

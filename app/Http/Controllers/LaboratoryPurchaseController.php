@@ -307,6 +307,12 @@ class LaboratoryPurchaseController extends Controller
             $hasResultsPdfCached = (bool) $latestResultsNotification?->hasResults();
         }
 
+        $isNewResult = ! $hasManualResults && LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(
+            $laboratoryPurchase->id,
+            $laboratoryPurchase->gda_order_id,
+            $laboratoryPurchase->gda_consecutivo
+        );
+
         return Inertia::render('LaboratoryPurchase', [
             'laboratoryPurchase' => $laboratoryPurchase,
             'isCancelled' => $laboratoryPurchase->trashed(),
@@ -315,6 +321,7 @@ class LaboratoryPurchaseController extends Controller
             'latestSampleCollectionAt' => $latestSampleCollectionAt,
             'latestResultsAt' => $latestResultsAt,
             'hasResultsPdfCached' => $hasResultsPdfCached,
+            'is_new_result' => $isNewResult,
             'taxProfiles' => auth()->guard()->user()->customer->taxProfiles,
             'daysLeftToRequestInvoice' => $nowInMonterrey->lt($lastDayOfPurchaseMonth)
                 ? (int)ceil($nowInMonterrey->diffInDays($lastDayOfPurchaseMonth, false))

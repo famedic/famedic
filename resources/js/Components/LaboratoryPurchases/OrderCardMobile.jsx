@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { LockClosedIcon } from "@heroicons/react/24/solid";
 import { Text, Strong } from "@/Components/Catalyst/text";
+import NewResultBadge from "@/Components/Laboratory/NewResultBadge";
 import OrderRowActions from "@/Components/LaboratoryPurchases/OrderRowActions";
 import { getOrderBadgePresentation, purchaseHasResults } from "@/lib/laboratoryPurchaseOrderUi";
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
@@ -24,6 +25,11 @@ export default function OrderCardMobile({ purchase, beginProtectedUrl }) {
 					<Text className="mt-1 text-sm text-zinc-600 dark:text-slate-400">
 						<Strong className="font-medium text-zinc-800 dark:text-slate-200">{purchase.patient_name}</Strong>
 					</Text>
+					{purchase.is_new_result && (
+						<div className="mt-2">
+							<NewResultBadge compact />
+						</div>
+					)}
 					{hasProtectedResults && (
 						<span
 							className="mt-2 inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-700 dark:bg-slate-800 dark:text-slate-200"
