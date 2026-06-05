@@ -23,6 +23,9 @@ export default function Create({
     hasPending3ds = false,
     paymentUsesMock = false,
     mockTestCards = [],
+    heyBancoEnabled = false,
+    defaultPaymentProvider = "efevoopay",
+    heyBancoTestCards = [],
     returnUrl = null,
 }) {
 
@@ -34,6 +37,7 @@ export default function Create({
         card_holder: "",
         alias: "",
         terms_accepted: false,
+        payment_provider: heyBancoEnabled ? defaultPaymentProvider : "efevoopay",
     });
 
     const [cardType, setCardType] = useState("");
@@ -101,10 +105,11 @@ export default function Create({
             ...data,
             exp_month: String(data.exp_month).padStart(2, "0"),
             exp_year: String(data.exp_year).slice(-2),
+            payment_provider: data.payment_provider,
         };
 
         post(route("payment-methods.store"), {
-            data: formattedData,
+            ...formattedData,
             return_url: returnUrl,
             preserveScroll: true,
             onFinish: () => setSubmitting(false),
@@ -134,6 +139,66 @@ export default function Create({
                 </div>
             </div>
 
+            {heyBancoEnabled && (
+                <div className="mb-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+                    <Text className="text-sm font-medium mb-3">
+                        Procesador de pago
+                    </Text>
+                    <div className="flex flex-wrap gap-3">
+                        <label className="flex items-center gap-2 text-sm">
+                            <input
+                                type="radio"
+                                name="payment_provider"
+                                value="efevoopay"
+                                checked={data.payment_provider === "efevoopay"}
+                                onChange={() => setData("payment_provider", "efevoopay")}
+                            />
+                            EfevooPay
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                            <input
+                                type="radio"
+                                name="payment_provider"
+                                value="hey_banco"
+                                checked={data.payment_provider === "hey_banco"}
+                                onChange={() => setData("payment_provider", "hey_banco")}
+                            />
+                            Hey Banco / Banregio Colecto
+                        </label>
+                    </div>
+                    {data.payment_provider === "hey_banco" && (
+                        <Text className="mt-2 text-xs text-zinc-500">
+                            Tokenización directa sin 3D Secure (fase actual).
+                        </Text>
+                    )}
+                </div>
+            )}
+
+            {heyBancoEnabled && data.payment_provider === "hey_banco" && heyBancoTestCards.length > 0 && (
+                <div className="mb-6 rounded-lg border border-emerald-200/80 bg-emerald-50/70 p-4 dark:border-emerald-800/50 dark:bg-emerald-950/30">
+                    <Text className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
+                        Tarjetas de prueba Hey Banco (sandbox)
+                    </Text>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                        {heyBancoTestCards.map((card) => (
+                            <Button
+                                key={card.number}
+                                type="button"
+                                outline
+                                onClick={() => applyTestCard({
+                                    ...card,
+                                    card_holder: "Titular Sandbox",
+                                    alias: `${card.brand}-${String(card.number).slice(-4)}`,
+                                })}
+                                className="text-xs"
+                            >
+                                {card.brand}
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {paymentUsesMock && mockTestCards.length > 0 && (
                 <div className="mb-6 rounded-lg border border-amber-200/80 bg-amber-50/70 p-4 dark:border-amber-800/50 dark:bg-amber-950/30">
                     <Text className="text-sm font-medium text-amber-900 dark:text-amber-100">
@@ -155,7 +220,7 @@ export default function Create({
                 </div>
             )}
 
-            {efevooConfig?.requires_3ds && (
+            {data.payment_provider === "efevoopay" && efevooConfig?.requires_3ds && (
                 <div className="mb-6 rounded-lg bg-blue-50 p-4 text-sm text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                     <div className="flex items-center gap-2">
                         <ShieldCheckIcon className="size-4" />

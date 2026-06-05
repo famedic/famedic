@@ -3,7 +3,7 @@
 namespace App\Actions\Laboratories;
 
 use App\Actions\Odessa\ChargeOdessaAction;
-use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction;
+use App\Actions\Payments\ChargePaymentMethodAction;
 use App\Actions\Transactions\CreateCouponBalanceTransactionAction;
 use App\Actions\Transactions\RefundTransactionAction;
 use App\Enums\LaboratoryBrand;
@@ -25,7 +25,7 @@ use Propaganistas\LaravelPhone\PhoneNumber;
 class OrderAction
 {
     private CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction;
-    private ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction;
+    private ChargePaymentMethodAction $chargePaymentMethodAction;
     private ChargeOdessaAction $chargeOdessaAction;
     private CreateGDAQuotationAction $createGDAQuotationAction;
     private RefundTransactionAction $refundTransactionAction;
@@ -37,7 +37,7 @@ class OrderAction
 
     public function __construct(
         CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
-        ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction,
+        ChargePaymentMethodAction $chargePaymentMethodAction,
         ChargeOdessaAction $chargeOdessaAction,
         CreateGDAQuotationAction $createGDAQuotationAction,
         RefundTransactionAction $refundTransactionAction,
@@ -46,7 +46,7 @@ class OrderAction
         FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction
     ) {
         $this->calculateTotalsAndDiscountAction = $calculateTotalsAndDiscountAction;
-        $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction;
+        $this->chargePaymentMethodAction = $chargePaymentMethodAction;
         $this->chargeOdessaAction = $chargeOdessaAction;
         $this->createGDAQuotationAction = $createGDAQuotationAction;
         $this->refundTransactionAction = $refundTransactionAction;
@@ -186,8 +186,7 @@ class OrderAction
             return ($this->chargeOdessaAction)($customer->customerable, $amountCents);
         }
 
-        // Usar EfevooPay en lugar de Stripe
-        return ($this->chargeEfevooPaymentMethodAction)(
+        return ($this->chargePaymentMethodAction)(
             $customer,
             $amountCents,
             $paymentMethod

@@ -7,6 +7,7 @@ use App\Enums\LaboratoryBrand;
 use App\Exceptions\CouponApplicationException;
 use App\Exceptions\OdessaInsufficientFundsException;
 use App\Exceptions\EfevooPaymentException;
+use App\Exceptions\HeyBancoPaymentException;
 use App\Http\Requests\Laboratories\LaboratoryPurchases\StoreLaboratoryPurchaseRequest;
 use App\Http\Resources\PatientLaboratoryPurchaseCardResource;
 use App\Models\Address;
@@ -32,7 +33,7 @@ class LaboratoryPurchaseController extends Controller
                 totalCents: (int) $request->total,
                 couponId: $request->filled('coupon_id') ? (int) $request->input('coupon_id') : null,
             );
-        } catch (EfevooPaymentException $e) {
+        } catch (EfevooPaymentException|HeyBancoPaymentException $e) {
             return redirect()->back()
                 ->withErrors(['payment_method' => $e->getMessage()]);
         } catch (CouponApplicationException $e) {

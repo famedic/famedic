@@ -15,6 +15,7 @@ use App\Http\Controllers\EfevooWebhookController;
 use App\Http\Controllers\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\InAppNotificationController;
 use App\Http\Controllers\PaymentMethodController;
+use App\Http\Controllers\Payments\HeyBancoPaymentController;
 use App\Http\Controllers\TaxProfileController;
 use App\Http\Controllers\TaxProfiles\FiscalCertificateController;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +49,12 @@ Route::middleware([
         'store',
         'destroy'
     ]);
+
+    Route::prefix('payments/hey-banco')->name('payments.hey-banco.')->group(function () {
+        Route::post('tokenize', [HeyBancoPaymentController::class, 'tokenize'])->name('tokenize');
+        Route::post('charge', [HeyBancoPaymentController::class, 'charge'])->name('charge');
+        Route::post('verify', [HeyBancoPaymentController::class, 'verify'])->name('verify');
+    });
 
     Route::post('in-app-notifications/{in_app_notification}/read', [InAppNotificationController::class, 'markRead'])
         ->name('in-app-notifications.read');

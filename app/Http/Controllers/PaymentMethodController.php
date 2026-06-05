@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\HeyBancoPaymentException;
 use App\Models\EfevooToken;
 use App\Models\Efevoo3dsSession;
+use App\Models\PaymentMethod as StoredPaymentMethod;
 use App\Services\CouponService;
 use App\Contracts\EfevooPayGateway;
+use App\Services\Payments\PaymentGatewayManager;
 use App\Support\AppEnvironmentLabel;
 use App\Support\MockEfevooPaymentSupport;
+use App\Support\PaymentMethodIdentifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Log;
@@ -16,10 +20,12 @@ use Inertia\Inertia;
 class PaymentMethodController extends Controller
 {
     protected EfevooPayGateway $service;
+    protected PaymentGatewayManager $gatewayManager;
 
-    public function __construct(EfevooPayGateway $service)
+    public function __construct(EfevooPayGateway $service, PaymentGatewayManager $gatewayManager)
     {
         $this->service = $service;
+        $this->gatewayManager = $gatewayManager;
     }
 
     /* ==========================================================
@@ -43,8 +49,34 @@ class PaymentMethodController extends Controller
             return $t->card_last_four . '-' . ($t->card_expiration ?? '');
         })->values()->all();
 
+        if (config('heybanco.enabled')) {
+            $heyBancoMethods = StoredPaymentMethod::query()
+                ->active()
+                ->forProvider(config('heybanco.provider_key'))
+                ->where('user_id', $request->user()->id)
+                ->orderByDesc('created_at')
+                ->get()
+                ->map(fn (StoredPaymentMethod $method) => [
+                    'id' => $method->publicId(),
+                    'provider' => $method->provider,
+                    'alias' => $method->alias,
+                    'card_brand' => $method->brand,
+                    'card_last_four' => $method->last4,
+                    'card_expiration' => ($method->exp_month ?? '') . substr((string) $method->exp_year, -2),
+                    'card_holder' => $method->card_holder,
+                    'environment' => config('heybanco.env'),
+                ]);
+
+            $paymentMethods = collect($paymentMethods)
+                ->concat($heyBancoMethods)
+                ->values()
+                ->all();
+        }
+
         return Inertia::render('PaymentMethods', [
             'paymentMethods' => $paymentMethods,
+            'heyBancoEnabled' => (bool) config('heybanco.enabled'),
+            'defaultPaymentProvider' => $this->gatewayManager->defaultProvider(),
             'environment' => config('efevoopay.environment'),
             'paymentUsesMock' => MockEfevooPaymentSupport::isMockMode(),
             'appEnvLabel' => AppEnvironmentLabel::current(),
@@ -62,6 +94,9 @@ class PaymentMethodController extends Controller
     {
         return Inertia::render('PaymentMethods/Create', [
             'returnUrl' => $request->query('return_url'),
+            'heyBancoEnabled' => (bool) config('heybanco.enabled'),
+            'defaultPaymentProvider' => $this->gatewayManager->defaultProvider(),
+            'heyBancoTestCards' => config('heybanco.enabled') ? config('heybanco.test_cards') : [],
             'efevooConfig' => [
                 'environment' => config('efevoopay.environment'),
                 'tokenization_amount' => config('efevoopay.test_amounts.default') / 100,
@@ -91,9 +126,15 @@ class PaymentMethodController extends Controller
             'card_holder' => 'required|string',
             'alias' => 'required|string',
             'terms_accepted' => 'accepted',
+            'payment_provider' => 'nullable|string|in:efevoopay,hey_banco',
         ]);
 
         $customer = $request->user()->customer;
+        $paymentProvider = $validated['payment_provider'] ?? $this->gatewayManager->defaultProvider();
+
+        if ($paymentProvider === 'hey_banco' && config('heybanco.enabled')) {
+            return $this->storeHeyBancoCard($request, $customer, $validated);
+        }
 
         $month = str_pad($validated['exp_month'], 2, '0', STR_PAD_LEFT);
         $year = substr($validated['exp_year'], -2);
@@ -237,8 +278,20 @@ class PaymentMethodController extends Controller
     public function destroy(Request $request, $tokenId)
     {
         $customer = $request->user()->customer;
+        $tokenKey = urldecode((string) $tokenId);
 
-        $token = EfevooToken::where('id', $tokenId)
+        if (PaymentMethodIdentifier::isHeyBanco($tokenKey)) {
+            $method = StoredPaymentMethod::query()
+                ->where('user_id', $request->user()->id)
+                ->where('id', PaymentMethodIdentifier::heyBancoId($tokenKey))
+                ->firstOrFail();
+
+            $method->update(['status' => 'inactive']);
+
+            return back()->with('success', 'Tarjeta eliminada correctamente');
+        }
+
+        $token = EfevooToken::where('id', $tokenKey)
             ->where('customer_id', $customer->id)
             ->firstOrFail();
 
@@ -248,6 +301,26 @@ class PaymentMethodController extends Controller
         ]);
 
         return back()->with('success', 'Tarjeta eliminada correctamente');
+    }
+
+    private function storeHeyBancoCard(Request $request, $customer, array $validated)
+    {
+        $returnUrl = $request->input('return_url') ?? $request->query('return_url');
+
+        try {
+            $gateway = $this->gatewayManager->forProvider('hey_banco');
+            $gateway->tokenize($customer, $validated);
+        } catch (HeyBancoPaymentException $e) {
+            return back()->withErrors([
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $redirect = $returnUrl
+            ? redirect($returnUrl)
+            : redirect()->route('payment-methods.index');
+
+        return $redirect->with('success', 'Tarjeta registrada correctamente con Hey Banco.');
     }
 
     /* ==========================================================

@@ -2,7 +2,7 @@
 
 namespace App\Actions\MedicalAttention;
 
-use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction;
+use App\Actions\Payments\ChargePaymentMethodAction;
 use App\Actions\Odessa\ChargeOdessaAction;
 use App\Actions\Transactions\RefundTransactionAction;
 use App\Exceptions\UnmatchingTotalPriceException;
@@ -16,18 +16,18 @@ class PurchaseRegularSubscriptionAction
 {
     private CreateRegularSubscriptionAction $createRegularSubscriptionAction;
     private ChargeOdessaAction $chargeOdessaAction;
-    private ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction;
+    private ChargePaymentMethodAction $chargePaymentMethodAction;
     private RefundTransactionAction $refundTransactionAction;
 
     public function __construct(
         CreateRegularSubscriptionAction $createRegularSubscriptionAction,
         ChargeOdessaAction $chargeOdessaAction,
-        ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction,
+        ChargePaymentMethodAction $chargePaymentMethodAction,
         RefundTransactionAction $refundTransactionAction
     ) {
         $this->createRegularSubscriptionAction = $createRegularSubscriptionAction;
         $this->chargeOdessaAction = $chargeOdessaAction;
-        $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction;
+        $this->chargePaymentMethodAction = $chargePaymentMethodAction;
         $this->refundTransactionAction = $refundTransactionAction;
     }
 
@@ -177,13 +177,13 @@ class PurchaseRegularSubscriptionAction
             );
         }
 
-        Log::info('🟩 Using EfevooPay gateway', [
+        Log::info('🟩 Using card payment gateway', [
             'customer_id' => $customer->id,
             'amount_cents' => $amountCents,
             'payment_method_token' => $paymentMethod,
         ]);
 
-        return ($this->chargeEfevooPaymentMethodAction)(
+        return ($this->chargePaymentMethodAction)(
             $customer,
             $amountCents,
             $paymentMethod

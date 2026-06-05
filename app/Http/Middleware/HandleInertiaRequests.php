@@ -80,6 +80,8 @@ class HandleInertiaRequests extends Middleware
             'appEnvLabel' => AppEnvironmentLabel::current(),
             'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
             'paymentUsesMock' => MockEfevooPaymentSupport::isMockMode(),
+            'heyBancoEnabled' => (bool) config('heybanco.enabled'),
+            'defaultPaymentProvider' => config('payments.default_provider', 'efevoopay'),
             'labResultsOtpRequired' => (bool) config('laboratory-results.otp_required', false),
             'trackingEvents' => function () {
                 if (! app()->environment('production')) {

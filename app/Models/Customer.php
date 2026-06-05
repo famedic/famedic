@@ -365,14 +365,14 @@ class Customer extends Model
 
     public function paymentMethods()
     {
-        return $this->efevooTokens()
+        $efevooMethods = $this->efevooTokens()
             ->active()
             ->excludeMockInProduction()
             ->get()
             ->map(function ($token) {
-                // Crear un objeto stdClass para mantener compatibilidad
                 $paymentMethod = new \stdClass();
-                $paymentMethod->id = $token->id;
+                $paymentMethod->id = (string) $token->id;
+                $paymentMethod->provider = 'efevoopay';
                 $paymentMethod->object = 'efevoo_token';
                 $paymentMethod->card = (object) [
                     'brand' => strtolower($token->card_brand),
@@ -392,6 +392,46 @@ class Customer extends Model
 
                 return $paymentMethod;
             });
+
+        if (! config('heybanco.enabled')) {
+            return $efevooMethods;
+        }
+
+        $heyBancoMethods = PaymentMethod::query()
+            ->active()
+            ->forProvider(config('heybanco.provider_key'))
+            ->where('user_id', $this->user_id)
+            ->get()
+            ->map(function (PaymentMethod $method) {
+                $paymentMethod = new \stdClass();
+                $paymentMethod->id = $method->publicId();
+                $paymentMethod->provider = $method->provider;
+                $paymentMethod->object = 'hey_banco_token';
+                $paymentMethod->card = (object) [
+                    'brand' => strtolower((string) $method->brand),
+                    'last4' => $method->last4,
+                    'exp_month' => $method->exp_month,
+                    'exp_year' => $method->exp_year,
+                    'exp_year_short' => substr((string) $method->exp_year, -2),
+                ];
+                $paymentMethod->billing_details = (object) [
+                    'name' => $method->card_holder,
+                ];
+                $paymentMethod->alias = $method->alias;
+                $paymentMethod->metadata = (object) [
+                    'environment' => config('heybanco.env'),
+                    'media_id' => $method->media_id,
+                ];
+
+                return $paymentMethod;
+            });
+
+        return $efevooMethods->concat($heyBancoMethods)->values();
+    }
+
+    public function storedPaymentMethods()
+    {
+        return $this->hasMany(PaymentMethod::class, 'user_id', 'user_id');
     }
 
     /**

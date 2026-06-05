@@ -67,6 +67,8 @@ export default function PaymentMethodStep({
 
         return paymentMethods.find(
             (paymentMethod) => String(paymentMethod.id) === paymentMethodId
+        ) ?? paymentMethods.find(
+            (paymentMethod) => paymentMethod.id === data.payment_method
         );
     }, [data.payment_method, paymentMethods]);
 
