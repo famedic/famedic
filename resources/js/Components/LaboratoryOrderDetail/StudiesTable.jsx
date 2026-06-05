@@ -77,7 +77,7 @@ export default function StudiesTable({ studies, onOpenPreparationInstructions })
 										{study.formattedPrice}
 									</td>
 									<td className="px-3 py-3 align-top text-right sm:px-4">
-										{study.resultsUrl ? (
+										{study.hasResults || study.resultsUrl ? (
 											<div className="inline-flex flex-col items-end gap-1">
 												<Badge color="green" className="inline-flex items-center gap-1">
 													<CheckCircleIcon className="size-3.5" />

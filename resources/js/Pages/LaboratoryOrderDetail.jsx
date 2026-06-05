@@ -119,6 +119,20 @@ export default function LaboratoryOrderDetail({
 			style: "currency",
 			currency: "MXN",
 		});
+
+		const orderHasResults = Boolean(hasResultsAvailable || laboratoryPurchase?.results);
+		const orderResultsUrl =
+			orderHasResults && laboratoryPurchase?.id
+				? laboratoryPurchase?.results
+					? route("laboratory-purchases.results", {
+							laboratory_purchase: laboratoryPurchase.id,
+						})
+					: route("laboratory-results.view", {
+							type: "purchase",
+							id: laboratoryPurchase.id,
+						})
+				: null;
+
 		return (laboratoryPurchase?.laboratory_purchase_items || []).map((item) => {
 			const requiresAppointment = Boolean(
 				item?.requires_appointment ??
@@ -154,14 +168,11 @@ export default function LaboratoryOrderDetail({
 						? "scheduled"
 						: "pending"
 					: "not_applicable",
-				resultsUrl: laboratoryPurchase?.results
-					? route("laboratory-purchases.results", {
-							laboratory_purchase: laboratoryPurchase.id,
-						})
-					: null,
+				resultsUrl: orderResultsUrl,
+				hasResults: orderHasResults,
 			};
 		});
-	}, [laboratoryPurchase]);
+	}, [laboratoryPurchase, hasResultsAvailable]);
 
 	const appointmentSummary = useMemo(() => {
 		const totalWithAppointment = studies.filter((study) => study.requiresAppointment).length;
