@@ -3,7 +3,9 @@ import { Badge } from "@/Components/Catalyst/badge";
 import OdessaBadge from "@/Components/OdessaBadge";
 import CreditCardBrand from "@/Components/CreditCardBrand";
 import EfevooPayBadge from "@/Components/EfevooPayBadge";
+import BanregioBadge from "@/Components/BanregioBadge";
 import CouponBalanceBadge from "@/Components/CouponBalanceBadge";
+import { getHeyBancoTransactionDetails } from "@/Utils/heyBancoTransactionDetails";
 
 /**
  * Centralized component for displaying payment method information
@@ -55,6 +57,21 @@ export default function PaymentMethodBadge({
 						{details?.authorization_code && (
 							<div>Auth: {details.authorization_code}</div>
 						)}
+					</div>
+				)}
+			</div>
+		);
+	}
+
+	if (payment_method === "hey_banco") {
+		const heyBanco = getHeyBancoTransactionDetails(transaction);
+
+		return (
+			<div className="flex flex-col gap-1">
+				<BanregioBadge />
+				{heyBanco?.banregioReference && (
+					<div className="text-xs text-gray-500 truncate max-w-[14rem]" title={heyBanco.banregioReference}>
+						Ref: {heyBanco.banregioReference}
 					</div>
 				)}
 			</div>

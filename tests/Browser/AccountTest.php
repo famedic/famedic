@@ -56,6 +56,7 @@ test('user can not update basic info with current date as birth date', function 
     $this->browse(function (Browser $browser) use ($user) {
         $browser->loginAs($user)
             ->visit(new Account)
+            ->click('@accountTabBasic')
             ->clearDateInput('@birthDate')
             ->inputDate('@birthDate', now())
             ->press('@updateBasicInfo')
@@ -146,6 +147,7 @@ test('user can not update contact info with invalid email', function () {
     $this->browse(function (Browser $browser) use ($user) {
         $browser->loginAs($user)
             ->visit(new Account)
+            ->click('@accountTabContact')
             ->disableFormValidation()
             ->clearInput('@email')
             ->type('@email', 'invalid-email')

@@ -89,6 +89,25 @@ export default function PaymentMethodDisplayIcon({ method, label, size = "md", c
 					<img src={PAYPAL_SI_DARK} alt="" className={clsx(imgH, "hidden object-contain dark:block")} aria-hidden />
 				</span>
 			);
+		case "hey_banco":
+			return (
+				<span
+					className={clsx(
+						common,
+						"border border-orange-200/90 bg-orange-50/90 dark:border-orange-800/80 dark:bg-orange-950/40",
+					)}
+					title={readable}
+				>
+					<span className="sr-only">{readable}</span>
+					<CreditCardIcon
+						className={clsx(
+							size === "sm" ? "size-5" : "size-6",
+							"shrink-0 text-orange-600 dark:text-orange-400",
+						)}
+						aria-hidden
+					/>
+				</span>
+			);
 		case "coupon_balance":
 			return (
 				<span

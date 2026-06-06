@@ -24,10 +24,12 @@ import {
 import RequestInvoiceModal from "@/Components/RequestInvoiceModal";
 import CreditCardBrand from "@/Components/CreditCardBrand";
 import EfevooPayBadge from "@/Components/EfevooPayBadge";
+import BanregioBadge from "@/Components/BanregioBadge";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import PurchasePdfDialog from "@/Components/PurchasePdfDialog";
 import Card from "@/Components/Card";
 import PaymentMethodBadge from "@/Components/PaymentMethodBadge";
+import { getHeyBancoTransactionDetails } from "@/Utils/heyBancoTransactionDetails";
 
 const formatCents = (cents) =>
 	new Intl.NumberFormat("es-MX", {
@@ -513,6 +515,50 @@ function PaymentMethod({ purchase }) {
 					</div>
 				)}
 
+				{!hasNoTransactions && pm === "hey_banco" && (() => {
+					const heyBanco = getHeyBancoTransactionDetails(tx);
+
+					return (
+						<div className="space-y-2 rounded-lg border border-orange-200/80 bg-orange-50/50 p-3 dark:border-orange-800/50 dark:bg-orange-950/20">
+							<div className="flex flex-wrap items-center gap-2">
+								<BanregioBadge>Tarjeta (Banregio Colecto)</BanregioBadge>
+							</div>
+							{(heyBanco?.cardBrand || heyBanco?.cardLastFour) && (
+								<div className="flex items-center gap-2">
+									{heyBanco?.cardBrand && (
+										<CreditCardBrand brand={heyBanco.cardBrand} className="size-7" />
+									)}
+									{heyBanco?.cardLastFour && (
+										<Code>**** {heyBanco.cardLastFour}</Code>
+									)}
+								</div>
+							)}
+							{heyBanco?.alias && (
+								<Text className="text-sm text-slate-600 dark:text-slate-300">
+									{heyBanco.alias}
+								</Text>
+							)}
+							{heyBanco?.banregioReference && (
+								<Text className="break-all text-xs text-slate-500 dark:text-slate-400">
+									Referencia:{" "}
+									<Code className="text-xs">{heyBanco.banregioReference}</Code>
+								</Text>
+							)}
+							{heyBanco?.authorizationCode && (
+								<Text className="text-xs text-slate-500 dark:text-slate-400">
+									Autorización:{" "}
+									<Code className="text-xs">{heyBanco.authorizationCode}</Code>
+								</Text>
+							)}
+							{heyBanco?.folio && (
+								<Text className="text-xs text-slate-500 dark:text-slate-400">
+									Folio: <Code className="text-xs">{heyBanco.folio}</Code>
+								</Text>
+							)}
+						</div>
+					);
+				})()}
+
 				{!hasNoTransactions &&
 					pm === "stripe" && (
 						<div className="flex items-center gap-2">
@@ -526,6 +572,7 @@ function PaymentMethod({ purchase }) {
 					pm !== "odessa" &&
 					pm !== "paypal" &&
 					pm !== "efevoopay" &&
+					pm !== "hey_banco" &&
 					pm !== "stripe" &&
 					(cardBrand || cardLastFour) && (
 						<div className="flex items-center gap-2">

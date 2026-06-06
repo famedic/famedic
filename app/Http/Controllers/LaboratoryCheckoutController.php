@@ -123,30 +123,24 @@ class LaboratoryCheckoutController extends Controller
      */
     private function resolveCheckoutPaymentMethods(\App\Models\Customer $customer, array $mockTokens = []): array
     {
-        $userTokens = $customer->efevooTokens()
-            ->active()
-            ->excludeMockInProduction()
-            ->get()
-            ->map(function ($token) {
+        $userTokens = $customer->paymentMethods()
+            ->map(function ($paymentMethod) {
                 return [
-                    'id' => $token->id,
-                    'object' => 'efevoo_token',
+                    'id' => $paymentMethod->id,
+                    'object' => $paymentMethod->object,
+                    'provider' => $paymentMethod->provider ?? null,
                     'card' => [
-                        'brand' => strtolower($token->card_brand),
-                        'last4' => $token->card_last_four,
-                        'exp_month' => substr($token->card_expiration, 0, 2),
-                        'exp_year' => '20'.substr($token->card_expiration, 2, 2),
-                        'exp_year_short' => substr($token->card_expiration, 2, 2),
+                        'brand' => $paymentMethod->card->brand,
+                        'last4' => $paymentMethod->card->last4,
+                        'exp_month' => $paymentMethod->card->exp_month,
+                        'exp_year' => $paymentMethod->card->exp_year,
+                        'exp_year_short' => $paymentMethod->card->exp_year_short,
                     ],
                     'billing_details' => [
-                        'name' => $token->card_holder,
+                        'name' => $paymentMethod->billing_details->name,
                     ],
-                    'alias' => $token->alias ?? $token->generateAlias(),
-                    'metadata' => [
-                        'environment' => $token->environment,
-                        'mock' => (bool) ($token->metadata['mock'] ?? false),
-                        'expires_at' => $token->expires_at?->toISOString(),
-                    ],
+                    'alias' => $paymentMethod->alias,
+                    'metadata' => (array) $paymentMethod->metadata,
                 ];
             })
             ->values()

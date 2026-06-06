@@ -357,7 +357,7 @@ export default function Create({
                             onChange={(e) => setData("terms_accepted", e.target.checked)}
                             required
                         />
-                        <span className="text-sm text-white/80 dark:text-white/70">
+                        <span className="text-sm text-gray-700 dark:text-gray-300">
                             Acepto los{" "}
                             <Link
                                 href={route("terms-of-service")}

@@ -17,6 +17,7 @@ import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
 import Card from "@/Components/Card";
 import { navigateToLabResults, openLabResultsInNewTabOrSame } from "@/Utils/openLabResultsUrl";
 import { isLabResultsOtpRequired } from "@/Utils/labResultsOtp";
+import { getHeyBancoTransactionDetails } from "@/Utils/heyBancoTransactionDetails";
 
 function onlyDateLabel(value = "") {
 	const raw = String(value || "").trim();
@@ -312,6 +313,7 @@ export default function LaboratoryOrderDetail({
 			stripe: "Tarjeta",
 			odessa: "Caja de ahorro (Odessa)",
 			efevoopay: "Tarjeta (Efevoo Pay)",
+			hey_banco: "Tarjeta (Banregio Colecto)",
 			paypal: "PayPal",
 			coupon_balance: "Crédito a favor",
 		};
@@ -319,6 +321,7 @@ export default function LaboratoryOrderDetail({
 		const firstTx = laboratoryPurchase?.transactions?.[0];
 		const paymentMethodKey =
 			laboratoryPurchase?.payment_method || firstTx?.payment_method || "";
+		const heyBancoDetails = getHeyBancoTransactionDetails(firstTx);
 
 		const couponDiscountCents = Number(laboratoryPurchase?.coupon_discount_cents || 0);
 		const couponFromTxCents = Number(firstTx?.details?.coupon_amount_cents || 0);
@@ -338,8 +341,19 @@ export default function LaboratoryOrderDetail({
 			total: formatter.format(totalCents / 100),
 			paymentMethodLabel: paymentMethodMap[paymentMethodKey] || "No disponible",
 			paymentMethodKey,
-			cardBrand: firstTx?.details?.card_brand || firstTx?.details?.token_info?.card_brand,
-			cardLastFour: firstTx?.details?.card_last_four || firstTx?.details?.token_info?.card_last_four,
+			cardBrand:
+				heyBancoDetails?.cardBrand ||
+				firstTx?.details?.card_brand ||
+				firstTx?.details?.token_info?.card_brand,
+			cardLastFour:
+				heyBancoDetails?.cardLastFour ||
+				firstTx?.details?.card_last_four ||
+				firstTx?.details?.token_info?.card_last_four,
+			cardAlias: heyBancoDetails?.alias || firstTx?.details?.token_info?.alias,
+			banregioReference: heyBancoDetails?.banregioReference,
+			authorizationCode: heyBancoDetails?.authorizationCode,
+			clientReference: heyBancoDetails?.clientReference,
+			banregioFolio: heyBancoDetails?.folio,
 			paymentStatusLabel: laboratoryPurchase?.transactions?.length ? "Pagado" : "Pendiente",
 			paymentStatusColor: laboratoryPurchase?.transactions?.length ? "green" : "amber",
 		};

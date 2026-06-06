@@ -3,6 +3,7 @@ import { Badge } from "@/Components/Catalyst/badge";
 import { Code } from "@/Components/Catalyst/text";
 import CreditCardBrand from "@/Components/CreditCardBrand";
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
+import BanregioBadge from "@/Components/BanregioBadge";
 import { GiftIcon } from "@heroicons/react/16/solid";
 
 export default function OrderSummary({ totals }) {
@@ -20,20 +21,26 @@ export default function OrderSummary({ totals }) {
 				<div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
 					<span className="shrink-0 text-zinc-500 dark:text-slate-400">Método de pago</span>
 					<div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2 text-right">
-						{totals.paymentMethodKey ? (
-							<PaymentMethodDisplayIcon
-								method={totals.paymentMethodKey}
-								label={totals.paymentMethodLabel}
-								size="sm"
-								className="shrink-0"
-							/>
+						{totals.paymentMethodKey === "hey_banco" ? (
+							<BanregioBadge />
+						) : totals.paymentMethodKey ? (
+							<>
+								<PaymentMethodDisplayIcon
+									method={totals.paymentMethodKey}
+									label={totals.paymentMethodLabel}
+									size="sm"
+									className="shrink-0"
+								/>
+								<span className="min-w-0 break-words font-medium text-zinc-800 dark:text-slate-200">
+									{totals.paymentMethodLabel}
+								</span>
+							</>
 						) : null}
-						<span className="min-w-0 break-words font-medium text-zinc-800 dark:text-slate-200">
-							{totals.paymentMethodLabel}
-						</span>
 					</div>
 				</div>
-				{(totals.paymentMethodKey === "stripe" || totals.paymentMethodKey === "efevoopay") &&
+				{(totals.paymentMethodKey === "stripe" ||
+					totals.paymentMethodKey === "efevoopay" ||
+					totals.paymentMethodKey === "hey_banco") &&
 					totals.cardBrand &&
 					totals.cardLastFour && (
 						<div className="flex min-w-0 flex-col gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700 dark:bg-slate-800/50">
@@ -51,6 +58,41 @@ export default function OrderSummary({ totals }) {
 							<p className="font-medium text-zinc-800 dark:text-slate-100">Odessa</p>
 							<p className="text-xs text-orange-600 dark:text-orange-400">Cobro a caja de ahorro</p>
 						</div>
+					</div>
+				)}
+				{totals.paymentMethodKey === "hey_banco" && (
+					<div className="space-y-2 rounded-lg border border-orange-200/80 bg-orange-50/50 px-3 py-3 dark:border-orange-800/50 dark:bg-orange-950/20">
+						<div className="flex flex-wrap items-center gap-2">
+							<BanregioBadge />
+							<span className="text-xs text-orange-800/90 dark:text-orange-200/90">
+								Tarjeta procesada por Banregio Colecto
+							</span>
+						</div>
+						{totals.cardAlias && (
+							<p className="text-sm text-zinc-700 dark:text-slate-300">{totals.cardAlias}</p>
+						)}
+						{totals.banregioReference && (
+							<div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+								<span className="shrink-0 text-zinc-500 dark:text-slate-400">Referencia</span>
+								<Code className="break-all text-sm">{totals.banregioReference}</Code>
+							</div>
+						)}
+						{totals.authorizationCode && (
+							<div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+								<span className="shrink-0 text-zinc-500 dark:text-slate-400">Autorización</span>
+								<Code className="text-sm">{totals.authorizationCode}</Code>
+							</div>
+						)}
+						{totals.banregioFolio && (
+							<div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+								<span className="shrink-0 text-zinc-500 dark:text-slate-400">Folio</span>
+								<Code className="text-sm">{totals.banregioFolio}</Code>
+							</div>
+						)}
+						<p className="break-words text-xs text-zinc-500 dark:text-slate-400">
+							Usa la referencia para verificar el cobro con Banregio. El pago se realizó con tarjeta de
+							débito o crédito a través de su procesador.
+						</p>
 					</div>
 				)}
 				{totals.paymentMethodKey === "efevoopay" && (

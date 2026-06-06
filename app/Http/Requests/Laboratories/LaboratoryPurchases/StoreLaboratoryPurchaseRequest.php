@@ -117,8 +117,8 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
 
         $customer = auth()->user()->customer;
 
-        foreach ($customer->efevooTokens()->active()->excludeMockInProduction()->get() as $token) {
-            $allowed[] = (string) $token->id;
+        foreach ($customer->paymentMethods() as $paymentMethod) {
+            $allowed[] = (string) $paymentMethod->id;
         }
 
         if ($customer->has_odessa_afiliate_account) {
