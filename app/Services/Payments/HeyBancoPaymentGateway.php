@@ -2,6 +2,7 @@
 
 namespace App\Services\Payments;
 
+use App\Actions\Payments\HeyBanco\CancelHeyBancoTransactionAction;
 use App\Actions\Payments\HeyBanco\ChargeHeyBancoTokenAction;
 use App\Actions\Payments\HeyBanco\CreateHeyBancoTokenAction;
 use App\Actions\Payments\HeyBanco\VerifyHeyBancoTransactionAction;
@@ -17,6 +18,7 @@ class HeyBancoPaymentGateway implements PaymentGatewayInterface
         private CreateHeyBancoTokenAction $createTokenAction,
         private ChargeHeyBancoTokenAction $chargeTokenAction,
         private VerifyHeyBancoTransactionAction $verifyAction,
+        private CancelHeyBancoTransactionAction $cancelAction,
         private HeyBancoClient $client,
     ) {}
 
@@ -68,6 +70,14 @@ class HeyBancoPaymentGateway implements PaymentGatewayInterface
         $reference = $transaction->gateway_transaction_id;
 
         if (! $reference) {
+            $details = is_array($transaction->details)
+                ? $transaction->details
+                : (json_decode((string) $transaction->details, true) ?? []);
+
+            $reference = $details['payment_details']['banregio_reference'] ?? null;
+        }
+
+        if (! $reference) {
             return [
                 'provider' => config('heybanco.provider_key'),
                 'supported' => false,
@@ -75,13 +85,21 @@ class HeyBancoPaymentGateway implements PaymentGatewayInterface
             ];
         }
 
-        $response = $this->client->cancelByReference($reference);
+        $paymentTransaction = ($this->cancelAction)($transaction);
+        $approved = $paymentTransaction->status === 'approved';
 
         return [
             'provider' => config('heybanco.provider_key'),
             'supported' => true,
-            'approved' => $response->isApproved(),
-            'response' => $response->toArray(),
+            'approved' => $approved,
+            'payment_transaction_id' => $paymentTransaction->id,
+            'previous_reference' => $paymentTransaction->previous_reference,
+            'reference' => $paymentTransaction->reference,
+            'response' => [
+                'status' => $paymentTransaction->status,
+                'bnrg_texto' => $paymentTransaction->bnrg_texto,
+                'bnrg_codigo_rechazo' => $paymentTransaction->bnrg_codigo_rechazo,
+            ],
         ];
     }
 

@@ -108,18 +108,31 @@ class HeyBancoClient
     }
 
     /**
-     * Cancelación por referencia (preparado para flujos futuros).
+     * Cancelación por referencia de la venta original.
      */
-    public function cancelByReference(string $reference, ?string $mediaId = null): HeyBancoResponse
-    {
+    public function cancelByReference(
+        string $reference,
+        ?string $mediaId = null,
+        float|string|null $amount = null,
+    ): HeyBancoResponse {
+        $folio = $this->generateFolio();
+
         $payload = [
             'BNRG_CMD_TRANS' => 'CANCELACION',
+            'BNRG_ID_AFILIACION' => config('heybanco.token_affiliation'),
             'BNRG_ID_MEDIO' => $mediaId ?? config('heybanco.token_media_id'),
+            'BNRG_FOLIO' => $folio,
             'BNRG_HORA_LOCAL' => $this->localTime(),
             'BNRG_FECHA_LOCAL' => $this->localDate(),
             'BNRG_REF_TRANS_PREVIA' => $reference,
+            'BNRG_MODO_ENTRADA' => 'MANUAL',
+            'BNRG_MODO_TRANS' => config('heybanco.mode'),
             'BNRG_IDIOMA_SALIDA' => 'ES',
         ];
+
+        if ($amount !== null) {
+            $payload['BNRG_MONTO_TRANS'] = $this->formatAmount($amount);
+        }
 
         return $this->post($payload, 'cancellation');
     }

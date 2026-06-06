@@ -166,6 +166,33 @@ class HeyBancoClientTest extends TestCase
         $this->assertTrue($response->isVerificationApproved());
     }
 
+    public function test_cancel_by_reference_approved(): void
+    {
+        Http::fake([
+            'testcolecto.banregio.com/*' => Http::response('', 200, [
+                'BNRG_CODIGO_PROC' => 'A',
+                'BNRG_REFERENCIA' => 'REF-CANCEL-001',
+                'BNRG_FOLIO' => 'FM-CANCEL01',
+                'BNRG_TEXTO' => 'Cancelacion%20aprobada',
+            ]),
+        ]);
+
+        $response = $this->client->cancelByReference('REF-ORIGINAL-999', null, 131.00);
+
+        $this->assertTrue($response->isApproved());
+        $this->assertSame('REF-CANCEL-001', $response->referencia());
+
+        Http::assertSent(function ($request) {
+            $data = $request->data();
+
+            return ($data['BNRG_CMD_TRANS'] ?? null) === 'CANCELACION'
+                && ! empty($data['BNRG_FOLIO'])
+                && ($data['BNRG_ID_AFILIACION'] ?? null) === '8379502'
+                && ($data['BNRG_REF_TRANS_PREVIA'] ?? null) === 'REF-ORIGINAL-999'
+                && ($data['BNRG_MONTO_TRANS'] ?? null) === '131.00';
+        });
+    }
+
     public function test_folio_uniqueness_considers_existing_transactions(): void
     {
         PaymentTransaction::create([

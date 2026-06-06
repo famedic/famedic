@@ -108,6 +108,9 @@ class RefundTransactionAction
                 case 'paypal':
                     return $this->refundPayPalTransaction($transaction, $customer);
 
+                case 'hey_banco':
+                    return $this->refundHeyBancoTransaction($transaction, $customer);
+
                 default:
                     Log::error('Gateway no soportado para reembolso', [
                         'transaction_id' => $transaction->id,
@@ -155,7 +158,7 @@ class RefundTransactionAction
         // Prioridad 2: Verificar campo gateway
         if ($transaction->gateway) {
             $gateway = strtolower($transaction->gateway);
-            if (in_array($gateway, ['efevoopay', 'stripe', 'odessa', 'paypal'])) {
+            if (in_array($gateway, ['efevoopay', 'stripe', 'odessa', 'paypal', 'hey_banco'])) {
                 return $gateway;
             }
         }
@@ -163,7 +166,7 @@ class RefundTransactionAction
         // Prioridad 3: Verificar campo payment_method
         if ($transaction->payment_method) {
             $method = strtolower($transaction->payment_method);
-            if (in_array($method, ['efevoopay', 'stripe', 'odessa', 'paypal'])) {
+            if (in_array($method, ['efevoopay', 'stripe', 'odessa', 'paypal', 'hey_banco'])) {
                 return $method;
             }
         }
@@ -303,6 +306,73 @@ class RefundTransactionAction
             return true;
         } catch (\Exception $e) {
             Log::error('Error reembolso PayPal', [
+                'transaction_id' => $transaction->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    private function refundHeyBancoTransaction(Transaction $transaction, Customer $customer): bool
+    {
+        try {
+            Log::info('Refund Hey Banco / Banregio iniciado', [
+                'transaction_id' => $transaction->id,
+                'gateway_transaction_id' => $transaction->gateway_transaction_id,
+                'customer_id' => $customer->id,
+            ]);
+
+            /** @var \App\Services\Payments\HeyBancoPaymentGateway $gateway */
+            $gateway = app(\App\Services\Payments\PaymentGatewayManager::class)
+                ->forProvider('hey_banco');
+
+            $result = $gateway->refundOrCancel($transaction);
+
+            Log::info('Refund Hey Banco / Banregio respuesta', [
+                'transaction_id' => $transaction->id,
+                'result' => $result,
+            ]);
+
+            if (! ($result['supported'] ?? false)) {
+                Log::error('Cancelación Banregio no soportada o sin referencia', [
+                    'transaction_id' => $transaction->id,
+                    'result' => $result,
+                ]);
+
+                return false;
+            }
+
+            if (! ($result['approved'] ?? false)) {
+                Log::error('Cancelación Banregio rechazada', [
+                    'transaction_id' => $transaction->id,
+                    'result' => $result,
+                ]);
+
+                return false;
+            }
+
+            $existingDetails = is_array($transaction->details)
+                ? $transaction->details
+                : (json_decode((string) $transaction->details, true) ?? []);
+
+            $transaction->update([
+                'refunded_at' => now(),
+                'gateway_status' => 'refunded',
+                'details' => array_merge($existingDetails, [
+                    'cancellation' => [
+                        'payment_transaction_id' => $result['payment_transaction_id'] ?? null,
+                        'previous_reference' => $result['previous_reference'] ?? null,
+                        'reference' => $result['reference'] ?? null,
+                        'response' => $result['response'] ?? null,
+                        'cancelled_at' => now()->toISOString(),
+                    ],
+                ]),
+            ]);
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('Error refund Hey Banco / Banregio', [
                 'transaction_id' => $transaction->id,
                 'error' => $e->getMessage(),
             ]);
