@@ -52,6 +52,9 @@ return [
         'efevoo-tokens' => [
             ['manage' => 'Ver tokens de Efevoo'],
         ],
+        'banregio' => [
+            ['manage' => 'Monitorear Banregio / Hey Banco'],
+        ],
         'tax-profiles' => [
             ['manage' => 'Monitorear perfiles fiscales'],
         ],

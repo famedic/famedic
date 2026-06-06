@@ -9,6 +9,9 @@ use App\Http\Controllers\Admin\ConfigMonitorMetadataController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\CustomerReferralController;
 use App\Http\Controllers\Admin\DocumentationController;
+use App\Http\Controllers\Admin\BanregioMonitorController;
+use App\Http\Controllers\Admin\BanregioTokenController;
+use App\Http\Controllers\Admin\BanregioTransactionController;
 use App\Http\Controllers\Admin\EfevooTokenController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
@@ -151,6 +154,11 @@ Route::prefix('admin')->middleware([
 
         // Tokens de Efevoo
         Route::resource('efevoo-tokens', EfevooTokenController::class)->only(['index', 'show']);
+
+        // Banregio / Hey Banco
+        Route::get('banregio', [BanregioMonitorController::class, 'index'])->name('banregio.index');
+        Route::get('banregio/tokens/{paymentMethod}', [BanregioTokenController::class, 'show'])->name('banregio.tokens.show');
+        Route::get('banregio/transactions/{paymentTransaction}', [BanregioTransactionController::class, 'show'])->name('banregio.transactions.show');
 
         // Perfiles fiscales (agrupados por usuario/cliente)
         Route::get('tax-profiles', [AdminTaxProfileController::class, 'index'])->name('tax-profiles.index');

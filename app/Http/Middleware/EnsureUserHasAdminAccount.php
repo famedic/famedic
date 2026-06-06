@@ -216,6 +216,11 @@ class EnsureUserHasAdminAccount
                             'current' => Route::currentRouteName() === 'admin.efevoo-tokens.index'
                                 || Route::currentRouteName() === 'admin.efevoo-tokens.show',
                         ] : null,
+                        $request->user()->administrator->hasPermissionTo('banregio.manage') ? [
+                            'label' => 'Banregio',
+                            'url' => route('admin.banregio.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.banregio'),
+                        ] : null,
                         $request->user()->administrator->hasPermissionTo('tax-profiles.manage') ? [
                             'label' => 'Perfiles fiscales',
                             'url' => route('admin.tax-profiles.index'),
