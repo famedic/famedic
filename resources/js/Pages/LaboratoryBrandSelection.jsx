@@ -37,11 +37,10 @@ const BRANDS = [
 ];
 
 export default function LaboratoryBrandSelection({ states = [] }) {
-	const [state, setState] = useState(
-		() => new URLSearchParams(window.location.search).get("state") || "",
-	);
-	const category =
-		new URLSearchParams(window.location.search).get("category") || "";
+	const { url } = usePage();
+	const searchParams = new URLSearchParams(url.split("?")[1] ?? "");
+	const [state, setState] = useState(() => searchParams.get("state") || "");
+	const category = searchParams.get("category") || "";
 
 	const stateBrandCount = useMemo(() => {
 		return BRANDS.reduce((acc, { states }) => {
@@ -167,4 +166,5 @@ import {
 	ListboxLabel,
 	ListboxOption,
 } from "@/Components/Catalyst/listbox";
+import { usePage } from "@inertiajs/react";
 import { useState, useMemo } from "react";

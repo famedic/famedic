@@ -17,8 +17,6 @@ createInertiaApp({
 			import.meta.glob("./Pages/**/*.jsx"),
 		),
 	setup({ el, App, props }) {
-		initZohoSalesIQTracking();
-
 		if (import.meta.env.DEV) {
 			createRoot(el).render(
 				<React.StrictMode>
@@ -26,11 +24,13 @@ createInertiaApp({
 				</React.StrictMode>,
 			);
 
+			initZohoSalesIQTracking();
 			registerServiceWorker();
 			return;
 		}
 
 		hydrateRoot(el, <App {...props} />);
+		queueMicrotask(() => initZohoSalesIQTracking());
 		registerServiceWorker();
 	},
 	progress: {
