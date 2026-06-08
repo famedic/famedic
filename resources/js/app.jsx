@@ -4,6 +4,7 @@ import { registerServiceWorker } from "./serviceworker";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { createInertiaApp } from "@inertiajs/react";
 import { resolvePageComponent } from "laravel-vite-plugin/inertia-helpers";
+import { initZohoSalesIQTracking } from "./lib/zohoSalesIQ";
 import React from "react";
 
 const appName = import.meta.env.VITE_APP_NAME || "Laravel";
@@ -16,6 +17,8 @@ createInertiaApp({
 			import.meta.glob("./Pages/**/*.jsx"),
 		),
 	setup({ el, App, props }) {
+		initZohoSalesIQTracking();
+
 		if (import.meta.env.DEV) {
 			createRoot(el).render(
 				<React.StrictMode>
