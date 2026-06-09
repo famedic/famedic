@@ -12,6 +12,7 @@ class PaymentAttempt extends Model
         'amount_cents',
         'gateway',
         'reference',
+        'idempotency_key',
         'status',
         'processor_code',
         'processor_message',
