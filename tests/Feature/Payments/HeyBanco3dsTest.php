@@ -22,6 +22,11 @@ class HeyBanco3dsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_payment3ds_session_model_uses_correct_table_name(): void
+    {
+        $this->assertSame('payment_3ds_sessions', (new Payment3dsSession())->getTable());
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

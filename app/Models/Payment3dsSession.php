@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class Payment3dsSession extends Model
 {
+    protected $table = 'payment_3ds_sessions';
+
     protected $fillable = [
         'user_id',
         'customer_id',

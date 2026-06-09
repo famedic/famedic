@@ -1,0 +1,88 @@
+Hey Banco 3DS — Fix nombre de tabla Payment3dsSession
+=====================================================
+Fecha: 2026-06-09
+
+CAUSA DEL ERROR
+---------------
+Laravel infiere el nombre de tabla desde el modelo `Payment3dsSession` usando
+SnakeCase del nombre de clase sin separar "3ds" correctamente:
+
+  Modelo: Payment3dsSession
+  Inferido (incorrecto): payment3ds_sessions
+  Real en BD/migración: payment_3ds_sessions
+
+En beta (`forge_qa_mayo`) la tabla existe como `payment_3ds_sessions`, pero las
+queries fallaban con:
+
+  SQLSTATE[42S02]: Table 'forge_qa_mayo.payment3ds_sessions' doesn't exist
+
+Esto ocurría al generar folio único en CreateHeyBanco3dsTokenChargeSessionAction,
+que consulta Payment3dsSession por folio.
+
+ARCHIVO CORREGIDO
+-----------------
+app/Models/Payment3dsSession.php
+
+CAMBIO APLICADO
+---------------
+Se agregó explícitamente:
+
+  protected $table = 'payment_3ds_sessions';
+
+NOMBRE INCORRECTO DETECTADO
+---------------------------
+payment3ds_sessions (convención Eloquent por defecto)
+
+NOMBRE CORRECTO USADO
+---------------------
+payment_3ds_sessions (coincide con migración y BD beta)
+
+REFERENCIAS HARDCODEADAS
+------------------------
+Búsqueda en app, database, routes, tests, config, resources:
+  grep -R "payment3ds_sessions" ...
+
+Resultado: ninguna referencia hardcodeada a payment3ds_sessions fuera del
+comportamiento inferido del modelo. No se requirieron más cambios.
+
+MIGRACIÓN
+---------
+database/migrations/2026_06_09_100000_create_payment_3ds_sessions_table.php
+usa Schema::create('payment_3ds_sessions', ...) — sin cambios.
+
+TEST AGREGADO
+-------------
+tests/Feature/Payments/HeyBanco3dsTest.php
+  test_payment3ds_session_model_uses_correct_table_name()
+
+Ejecutar:
+  php artisan test --filter=test_payment3ds_session_model_uses_correct_table_name
+
+COMANDOS POST-DEPLOY EN BETA
+----------------------------
+php artisan config:clear
+php artisan cache:clear
+php artisan route:clear
+php artisan config:cache
+
+VALIDACIÓN EN BETA
+------------------
+php artisan tinker --execute="dump((new App\Models\Payment3dsSession)->getTable());"
+# Esperado: "payment_3ds_sessions"
+
+php artisan tinker --execute="dump(Schema::hasTable('payment_3ds_sessions'), Schema::hasTable('payment3ds_sessions'));"
+# Esperado: true, false
+
+RESULTADO ESPERADO TRAS FIX
+---------------------------
+1. Checkout laboratorio con tarjeta Hey Banco ya no lanza QueryException.
+2. Se crea registro en payment_3ds_sessions.
+3. status = pending → redirect_required tras start 3DS.
+4. Redirección a HeyBanco3dsRedirect.jsx y luego Banregio/testcolecto.
+
+PRUEBAS EJECUTADAS
+------------------
+Pendiente de ejecución en entorno local/WSL (shell no respondió en sesión anterior).
+Comando recomendado tras deploy:
+
+  php artisan test --filter=HeyBanco3ds
