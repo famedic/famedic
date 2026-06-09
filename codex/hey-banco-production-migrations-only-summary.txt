@@ -1,0 +1,211 @@
+================================================================================
+FAMEDIC — HEY BANCO: MIGRACIONES SEGURAS PARA PRODUCCIÓN (SOLO 2026_06_08_*)
+================================================================================
+Fecha: 2026-06-09
+Alcance: únicamente migraciones nuevas Hey Banco Fase 1
+================================================================================
+
+
+# Contexto
+
+En staging/producción pueden existir ya las tablas creadas por migraciones
+anteriores (p. ej. `2026_06_04_150000_create_payment_methods_table` y
+`2026_06_04_150100_create_payment_transactions_table`), **sin modificar esas
+migraciones** (regla del proyecto).
+
+Las migraciones Hey Banco `2026_06_08_*` intentaban `Schema::create()` incondicional
+y fallaban con `Table already exists` si las tablas ya existían.
+
+**Criterio principal:** `php artisan migrate` sobre base existente (staging/prod),
+**no** `migrate:fresh` (destruye datos y depende de arreglar migraciones históricas).
+
+
+# Migraciones Hey Banco revisadas
+
+| Archivo | Propósito |
+|---------|-----------|
+| `database/migrations/2026_06_08_100000_create_payment_methods_table.php` | Tabla `payment_methods` + índices |
+| `database/migrations/2026_06_08_100001_create_payment_transactions_table.php` | Tabla `payment_transactions` + FK circular |
+| `database/migrations/2026_06_08_100002_add_hey_banco_idempotency_to_payment_attempts_table.php` | Columna `idempotency_key` + índices en `payment_attempts` |
+
+
+# ¿Son seguras para producción?
+
+**Sí, tras los ajustes documentados aquí.**
+
+| Escenario producción/staging | Comportamiento |
+|------------------------------|----------------|
+| Tablas `payment_methods` / `payment_transactions` **no existen** | `Schema::create()` completo (instalación nueva posterior a 06_08) |
+| Tablas **ya existen** (p. ej. por `2026_06_04_*`) | No-op en CREATE; solo índices/FK faltantes |
+| `payment_attempts.idempotency_key` **ya existe** | No se vuelve a agregar la columna |
+| Índices **ya existen** (por nombre o columnas) | No se duplican |
+| FK `created_from_transaction_id` **ya existe** | No se vuelve a crear |
+| Datos en `payment_attempts` (EfevooPay, etc.) | Columna nullable; sin UNIQUE agresivo |
+
+**No se agregaron UNIQUE** en `reference` ni `(gateway, idempotency_key)` (Fase 2).
+
+
+# Cambios realizados (solo 2026_06_08_*)
+
+## 100000 — payment_methods
+
+- `Schema::hasTable('payment_methods')` antes de `create`.
+- Si la tabla existe: `ensureIndex()` con `Schema::hasIndex` por **nombre y columnas**.
+- Índices asegurados: `provider`, `status`, `created_from_transaction_id`,
+  `(user_id, provider, status)` con nombres explícitos.
+- **No** altera tipos/longitudes de columnas existentes (evita romper datos).
+
+## 100001 — payment_transactions
+
+- `Schema::hasTable('payment_transactions')` antes de `create`.
+- Si existe: solo índices faltantes + FK circular si falta.
+- `ensureCreatedFromTransactionForeignKey()` consulta `information_schema` (MySQL)
+  o `PRAGMA foreign_key_list` (SQLite/tests).
+- `down()` elimina FK solo si existe.
+
+## 100002 — payment_attempts
+
+- Guard `Schema::hasTable('payment_attempts')`.
+- `Schema::hasColumn` para `idempotency_key`.
+- Índices con `ensureIndex()` / `dropIndexIfExists()` idempotentes.
+- Sin UNIQUE en `(gateway, idempotency_key)`.
+
+
+# Riesgos detectados
+
+| Riesgo | Mitigación | Severidad |
+|--------|------------|-----------|
+| Tablas 06_04 con esquema distinto (longitudes, nullable) | No se alteran columnas; solo índices/FK | Baja |
+| Índice existente con nombre distinto pero mismas columnas | `hasIndex($table, $columns)` evita duplicar | Baja |
+| `down()` de 100000/100001 hace `dropIfExists` | **No usar rollback en prod** si hay datos | Alta |
+| `provider_token` NOT NULL en 100000 vs nullable en 06_04 | Solo aplica en CREATE nuevo; prod con 06_04 conserva nullable | Baja |
+| Tests locales con SQLite corrupto | Problema de entorno, no de migraciones Hey Banco | Media |
+| Duplicados futuros en `idempotency_key` | Fase 2: validar datos antes de UNIQUE | Pendiente |
+
+
+# Diferencias de esquema 06_04 vs 06_08 (informativo)
+
+No se corrigen en esta fase (migraciones antiguas intocables):
+
+| Campo | 06_04 | 06_08 (CREATE nuevo) |
+|-------|-------|----------------------|
+| `provider_token` | nullable | NOT NULL |
+| `flow` | required | nullable(64) |
+| `reference` | string | string(128) |
+| `bnrg_*` | longitudes menores | longitudes ampliadas |
+
+Los modelos Hey Banco funcionan con el esquema 06_04 existente.
+
+
+# Comandos recomendados
+
+## Staging (obligatorio antes de producción)
+
+```bash
+# 1. Backup
+# mysqldump o snapshot del volumen RDS/DB
+
+# 2. Simular sin ejecutar
+php artisan migrate --pretend
+
+# 3. Ver estado
+php artisan migrate:status | grep 2026_06_08
+
+# 4. Aplicar solo pendientes
+php artisan migrate --no-interaction
+
+# 5. Verificar tablas
+php artisan tinker --execute="
+echo Schema::hasTable('payment_methods') ? 'payment_methods OK' : 'MISSING';
+echo PHP_EOL;
+echo Schema::hasColumn('payment_attempts', 'idempotency_key') ? 'idempotency_key OK' : 'MISSING';
+"
+
+# 6. Tests Hey Banco
+php artisan test --filter=HeyBancoPaymentTablesSmokeTest
+php artisan test --filter=HeyBanco
+```
+
+## Producción
+
+Mismo flujo que staging, en ventana de mantenimiento, con backup verificado.
+**No ejecutar** `migrate:fresh` ni `migrate:rollback` de 100000/100001 si hay datos.
+
+
+# Resultados de validación en entorno Docker (sesión actual)
+
+| Comando | Resultado |
+|---------|-----------|
+| `migrate --pretend` | OK — muestra `hasTable` checks y SQL de 2026_06_08_* |
+| `migrate` (real) | No ejecutado en esta sesión (pendiente en staging) |
+| `migrate:status` | `2026_06_08_*` **Pending** en BD del contenedor |
+| `HeyBancoPaymentTablesSmokeTest` | FAIL — SQLite corrupto en entorno test (no relacionado con lógica Hey Banco) |
+| `--filter=HeyBanco` | 14 FAIL — mismo problema de SQLite |
+
+**Nota:** validar tests en CI/staging con SQLite limpio o MySQL de prueba.
+
+
+# Por qué no se usó `migrate:fresh` como criterio principal
+
+1. **Producción tiene datos** — `fresh` destruye todo el catálogo, clientes, pagos.
+2. **Migraciones históricas** — muchas dependen de imports/legacy; arreglarlas todas
+   no es requisito para desplegar Hey Banco.
+3. **Escenario real** — en prod/staging las tablas `payment_*` pueden existir desde
+   `2026_06_04_*`; el criterio correcto es `migrate` incremental idempotente.
+4. **`migrate:fresh`** sigue siendo útil en dev/CI, pero no define readiness de prod.
+
+
+# Checklist antes de correr en producción
+
+- [ ] Backup de BD completado y verificado
+- [ ] `migrate --pretend` revisado en staging (sin errores)
+- [ ] `2026_06_04_*` ya en estado **Ran** (o tablas equivalentes existentes)
+- [ ] `2026_06_08_*` en estado **Pending**
+- [ ] `HEYBANCO_ENABLED=false` hasta validar en staging
+- [ ] Smoke test Hey Banco pasa en staging
+- [ ] Verificar que EfevooPay/PayPal/Stripe siguen funcionando (sin cambios de negocio)
+- [ ] Ventana de deploy acordada
+- [ ] Plan de rollback documentado (ver abajo)
+
+
+# Rollback recomendado
+
+| Migración | Rollback seguro | Notas |
+|-----------|-----------------|-------|
+| `100002` | **Parcial** | `down()` quita índices y columna `idempotency_key` si no hay dependencia |
+| `100001` | **NO en prod con datos** | `dropIfExists(payment_transactions)` borra historial Hey Banco |
+| `100000` | **NO en prod con datos** | `dropIfExists(payment_methods)` borra tokens guardados |
+
+**Recomendación:** en producción, si hay problema post-deploy, desactivar
+`HEYBANCO_ENABLED` y revertir código; **no** hacer `migrate:rollback` de 100000/100001
+salvo emergencia con backup restaurable.
+
+
+# Pendientes Fase 2
+
+- UNIQUE en `payment_attempts.reference` (tras auditar duplicados)
+- UNIQUE en `(gateway, idempotency_key)` (tras que la app pueble la columna)
+- Webhooks / 3DS / idempotencia de negocio completa
+- Alinear longitudes de columnas 06_04 → 06_08 si se requiere (migración forward-only nueva)
+- Validar duplicados en prod:
+
+```sql
+SELECT gateway, reference, COUNT(*) FROM payment_attempts
+WHERE reference IS NOT NULL GROUP BY gateway, reference HAVING COUNT(*) > 1;
+
+SELECT gateway, idempotency_key, COUNT(*) FROM payment_attempts
+WHERE idempotency_key IS NOT NULL GROUP BY gateway, idempotency_key HAVING COUNT(*) > 1;
+```
+
+
+# Resumen ejecutivo
+
+| Item | Estado |
+|------|--------|
+| Migraciones 2026_06_08_* seguras para staging/prod | **Sí** (idempotentes) |
+| Migraciones antiguas modificadas | **No** |
+| Correr primero en staging | **Sí, obligatorio** |
+| Listo para producción sin staging | **No** — falta `migrate` + smoke tests en staging |
+| UNIQUE / Fase 2 | **Pendiente** |
+
+================================================================================

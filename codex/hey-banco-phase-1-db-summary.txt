@@ -1,0 +1,217 @@
+================================================================================
+FAMEDIC — HEY BANCO FASE 1: RESUMEN DE BASE DE DATOS
+================================================================================
+Objetivo: migraciones e idempotencia mínima para BD limpia (sin lógica de negocio)
+================================================================================
+
+
+# Migraciones creadas
+
+| Archivo | Acción |
+|---------|--------|
+| `database/migrations/2026_06_08_100000_create_payment_methods_table.php` | CREATE `payment_methods` |
+| `database/migrations/2026_06_08_100001_create_payment_transactions_table.php` | CREATE `payment_transactions` + FK circular |
+| `database/migrations/2026_06_08_100002_add_hey_banco_idempotency_to_payment_attempts_table.php` | ALTER `payment_attempts` |
+
+Orden de ejecución: payment_methods → payment_transactions → alter payment_attempts.
+
+
+# Tabla payment_methods — columnas
+
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id | bigint PK | |
+| user_id | FK → users.id, cascade on delete | |
+| provider | string(32) | ej. hey_banco |
+| provider_token | text | token Colecto |
+| brand | string(32) nullable | |
+| last4 | string(4) nullable | |
+| exp_month | string(2) nullable | |
+| exp_year | string(4) nullable | |
+| affiliation_id | string(32) nullable | |
+| media_id | string(32) nullable | |
+| status | string(32) default active | |
+| alias | string nullable | |
+| card_holder | string nullable | |
+| created_from_transaction_id | unsignedBigInteger nullable | FK agregada en migración payment_transactions |
+| last_used_at | timestamp nullable | |
+| created_at / updated_at | timestamps | |
+
+No se agregó UNIQUE sobre (last4, exp_month, exp_year) para no bloquear tarjetas legítimas repetidas.
+
+
+# Tabla payment_transactions — columnas
+
+Alineadas con `PaymentTransaction::$fillable` (no se usan columnas bnrg_referencia/bnrg_folio
+separadas; el modelo usa `reference`, `folio`, `auth_code`).
+
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id | bigint PK | |
+| user_id | FK → users.id nullable, null on delete | |
+| payment_method_id | FK → payment_methods.id nullable, null on delete | |
+| related_type / related_id | nullableMorphs | relación polimórfica opcional |
+| provider | string(32) | |
+| flow | string(64) nullable | token_creation, token_charge, verification, cancellation |
+| folio | string(12) nullable | max Colecto |
+| reference | string(128) nullable | BNRG_REFERENCIA |
+| previous_reference | string(128) nullable | |
+| auth_code | string(64) nullable | BNRG_CODIGO_AUT |
+| amount | decimal(12,2) default 0 | |
+| currency | string(3) default MXN | |
+| mode | string(8) nullable | AUT / PRD |
+| status | string(32) nullable | |
+| bnrg_codigo_proc | string(8) nullable | |
+| bnrg_codigo_proc_trans | string(8) nullable | |
+| bnrg_codigo_rechazo | string(16) nullable | |
+| bnrg_codigo_emisor | string(16) nullable | |
+| bnrg_texto | text nullable | |
+| bnrg_estado_trans | string(8) nullable | |
+| bnrg_tipo_trans | string(8) nullable | |
+| raw_request | json nullable | |
+| raw_response_headers | json nullable | |
+| created_at / updated_at | timestamps | |
+
+
+# Índices agregados
+
+## payment_methods
+
+- `provider`
+- `status`
+- `(user_id, provider, status)`
+- `created_from_transaction_id`
+- `user_id` (vía FK)
+
+## payment_transactions
+
+- `(provider, reference)`
+- `(provider, folio)`
+- `(flow, status)`
+- `user_id`, `payment_method_id` (vía FK)
+- `(related_type, related_id)` (vía nullableMorphs)
+
+## payment_attempts (alteración)
+
+- `(gateway, reference)` — nombre: payment_attempts_gateway_reference_index
+- `(customer_id, gateway, status)` — payment_attempts_customer_gateway_status_index
+- `processor_transaction_id` — payment_attempts_processor_transaction_id_index
+- `created_at` — payment_attempts_created_at_index
+- `(gateway, idempotency_key)` — payment_attempts_gateway_idempotency_key_index (NO UNIQUE)
+
+Nueva columna: `idempotency_key` string(128) nullable.
+
+
+# Foreign keys agregadas
+
+| Tabla | Columna | Referencia | On delete |
+|-------|---------|------------|-----------|
+| payment_methods | user_id | users.id | cascade |
+| payment_transactions | user_id | users.id | null |
+| payment_transactions | payment_method_id | payment_methods.id | null |
+| payment_methods | created_from_transaction_id | payment_transactions.id | null |
+
+**Dependencia circular:** tokenización crea `PaymentTransaction` antes que `PaymentMethod`.
+Por eso `created_from_transaction_id` se define sin FK en la primera migración y la FK se
+añade al final de `create_payment_transactions`.
+
+
+# Modelos revisados
+
+| Modelo | Cambios |
+|--------|---------|
+| `PaymentMethod` | Sin cambios — fillable, casts y relaciones coinciden con migración |
+| `PaymentTransaction` | Sin cambios — fillable, casts JSON y morph `related()` correctos |
+| `PaymentAttempt` | Agregado `idempotency_key` a `$fillable` (columna nueva) |
+
+`PaymentMethod::publicId()`, scopes `active`/`forProvider`, `isExpired()` — sin cambios.
+
+
+# Tests agregados
+
+| Archivo | Qué valida |
+|---------|------------|
+| `tests/Feature/Payments/HeyBancoPaymentTablesSmokeTest.php` | Persistencia PaymentMethod, PaymentTransaction, PaymentAttempt hey_banco; JSON casts; relaciones FK; idempotency_key |
+
+Tests existentes que ahora dependen de las tablas:
+
+- `tests/Unit/Payments/HeyBancoClientTest.php`
+- `tests/Unit/Payments/CancelHeyBancoTransactionActionTest.php`
+
+
+# Comandos recomendados para validar
+
+```bash
+php artisan migrate:fresh --seed
+php artisan test --filter=HeyBanco
+php artisan test --filter=PaymentMethod
+php artisan test --filter=PaymentTransaction
+```
+
+En Docker (proyecto Famedic):
+
+```bash
+docker compose exec -T app php artisan migrate:fresh --seed
+docker compose exec -T app php artisan test --filter=HeyBanco
+```
+
+# Resultado de validación (ejecución Fase 1)
+
+| Comando | Resultado | Notas |
+|---------|-----------|-------|
+| `migrate:fresh --seed` | **FALLÓ** (exit 1) | Bloqueado por migración preexistente `2025_01_08_140518_create_tax_profiles_table` — hace `Schema::table('tax_profiles')` sin crear la tabla antes. **No relacionado con Fase 1 Hey Banco.** |
+| `test --filter=HeyBanco` | **FALLÓ** (14 tests, exit 2) | Misma causa: `RefreshDatabase` no completa migraciones por `tax_profiles`. |
+| `test --filter=PaymentMethod` | Sin tests (exit 0) | Ningún test con ese nombre de clase; el smoke test está bajo `HeyBancoPaymentTablesSmokeTest`. |
+| `test --filter=PaymentTransaction` | Sin tests (exit 0) | Idem. |
+
+Las migraciones Fase 1 (`2026_06_08_100000`–`100002`) **no se alcanzaron a ejecutar** en `migrate:fresh` porque el pipeline falla antes en `tax_profiles`. Una vez corregida esa migración del proyecto, las nuevas tablas deberían aplicarse en orden correcto.
+
+**Fase 1 DB: COMPLETA en código; validación runtime PARCIAL** por bloqueador ajeno a Hey Banco.
+
+
+# Riesgos y decisiones tomadas
+
+## UNIQUE no agregado en payment_attempts.reference
+
+**Motivo:** La lógica de negocio aún no genera referencias idempotentes de forma
+determinística (`FM-{customer}-{time}-{rand}`). Un UNIQUE ahora podría romper reintentos
+legítimos o datos históricos si ya existen referencias duplicadas en producción.
+**Fase 2:** Poblar `idempotency_key` desde checkout y evaluar UNIQUE(gateway, idempotency_key)
+cuando la key sea obligatoria en cobros nuevos.
+
+## UNIQUE no agregado en (gateway, idempotency_key)
+
+**Motivo:** Columna nueva, siempre NULL en registros existentes; la aplicación aún no la
+puebla en `ChargeHeyBancoTokenAction`. Índice compuesto no único prepara consultas sin
+restricción prematura.
+
+## payment_attempts.customer_id sin FK
+
+**Motivo:** La migración original `2026_03_11_233958` no define FK a `customers`. Agregar FK
+ahora podría fallar si hay `customer_id` huérfanos. Solo se añadieron índices.
+
+## user_id nullable en payment_transactions
+
+**Motivo:** CancelHeyBancoTransactionAction puede persistir cancellation con user_id
+resuelto tarde; nullable evita fallos en edge cases. El flujo normal siempre asigna user_id.
+
+## No se modificó migración original payment_attempts
+
+**Motivo:** Compatibilidad con entornos que ya ejecutaron `2026_03_11_233958`. Cambios vía
+nueva migración alter.
+
+
+# Pendientes para Fase 2
+
+1. Poblar `idempotency_key` en `ChargeHeyBancoTokenAction` / checkout.
+2. Evaluar UNIQUE(gateway, idempotency_key) o UNIQUE(gateway, reference) con datos reales.
+3. Job de reconciliación para `payment_transactions.status=timeout`.
+4. FK `payment_attempts.customer_id` → customers (tras auditoría de datos).
+5. FK `payment_attempts.token_id` → payment_methods (semántica mixta con efevoo_tokens).
+6. Estados `pending_verification` documentados en aplicación.
+7. 3DS, webhooks, lógica de negocio — fuera de Fase 1.
+
+
+================================================================================
+FIN — FASE 1 DB
+================================================================================

@@ -1,0 +1,169 @@
+================================================================================
+FAMEDIC — CORRECCIÓN migrate:fresh (permisos export Spatie Permission)
+================================================================================
+Fecha: 2026-06-08
+================================================================================
+
+
+# Causa exacta del fallo
+
+La migración `database/migrations/2025_07_10_add_export_permissions.php` usaba
+`Permission::create()` sin comprobar si el permiso ya existía.
+
+En `migrate:fresh`, los mismos permisos **ya se crean antes** en:
+
+    database/migrations/2024_11_15_024936_create_permission_tables.php
+
+Esa migración lee `config/famedic.php` → clave `permissions` y crea todos los
+permisos del árbol, incluyendo los hijos `manage.export` bajo cada categoría.
+
+Error al re-ejecutar `Permission::create()`:
+
+    Spatie\Permission\Exceptions\PermissionAlreadyExists:
+    A `laboratory-purchases.manage.export` permission already exists for guard `web`.
+
+
+# Archivo corregido
+
+| Archivo | Cambio |
+|---------|--------|
+| `database/migrations/2025_07_10_add_export_permissions.php` | `Permission::firstOrCreate` vía helper `ensureExportPermission()` |
+
+
+# Permisos involucrados
+
+| Permiso | Descripción en migración | Padre (`permission_id`) |
+|---------|--------------------------|-------------------------|
+| `laboratory-purchases.manage.export` | Descargar compras de laboratorio | `laboratory-purchases.manage` |
+| `online-pharmacy-purchases.manage.export` | Descargar compras de farmacia en línea | `online-pharmacy-purchases.manage` |
+| `medical-attention-subscriptions.manage.export` | Descargar membresías médicas | `medical-attention-subscriptions.manage` |
+| `customers.manage.export` | Descargar clientes | `customers.manage` |
+
+Guard: `web` (implícito en Spatie; explícito en `firstOrCreate`).
+
+
+# Dónde se duplicaban
+
+| Origen | Cuándo corre | Qué crea |
+|--------|--------------|----------|
+| `config/famedic.php` + `2024_11_15_024936_create_permission_tables.php` | Primero (nov 2024) | Los 4 permisos `manage.export` con descripciones del config |
+| `2025_07_10_add_export_permissions.php` (antes del fix) | Después (jul 2025) | Los mismos 4 permisos con `Permission::create()` → **colisión** |
+
+Definiciones en `config/famedic.php`:
+
+- `customers` → `['manage.export' => 'Descargar clientes']`
+- `laboratory-purchases` → `['manage.export' => 'Descargar ordenes']`
+- `online-pharmacy-purchases` → `['manage.export' => 'Descargar ordenes']`
+- `medical-attention-subscriptions` → `['manage.export' => 'Descargar membresías médicas']`
+
+No hay seeders que creen estos permisos. `DatabaseSeeder` no toca permisos.
+
+
+# Cómo se hizo idempotente
+
+Método privado `ensureExportPermission($name, $description, $parentName)`:
+
+```php
+Permission::firstOrCreate(
+    ['name' => $name, 'guard_name' => 'web'],
+    [
+        'description' => $description,
+        'permission_id' => $parentPermission?->id,
+    ]
+);
+```
+
+- Si el permiso ya existe (p. ej. creado por `create_permission_tables`): **no hace nada**.
+- Si no existe (BD antigua migrada antes de añadir `manage.export` al config): **lo crea**
+  con `permission_id` del padre.
+- No asigna permisos a roles (la migración original tampoco lo hacía).
+- Al final se limpia el cache de permisos con el mismo patrón del proyecto:
+
+```php
+app('cache')
+    ->store(config('permission.cache.store') != 'default' ? config('permission.cache.store') : null)
+    ->forget(config('permission.cache.key'));
+```
+
+
+# Impacto en bases existentes
+
+| Escenario | Comportamiento |
+|-----------|----------------|
+| BD con permisos ya creados por config/migración inicial | No-op por fila; sin excepción |
+| BD legacy sin permisos export | Se crean con descripción de esta migración |
+| Permisos/roles existentes | **No se borran** |
+| Descripciones existentes | **No se sobrescriben** (`firstOrCreate` solo escribe en INSERT) |
+
+
+# Migraciones cercanas con riesgo similar (no modificadas)
+
+| Migración | Riesgo |
+|-----------|--------|
+| `2025_09_17_000000_add_vendor_payments_permissions.php` | `Permission::create` para `*.manage.vendor-payments` ya en `config/famedic.php` |
+| `2024_11_16_000000_add_cancel_permissions.php` | Ya idempotente con `exists()` |
+| `2025_06_30_163143_add_medical_attention_subscriptions_permissions_if_not_exists.php` | Ya idempotente con `exists()` |
+
+
+# Comandos ejecutados
+
+```bash
+docker compose exec -T app php artisan migrate:fresh --seed --no-interaction
+docker compose exec -T app php artisan test --filter=HeyBancoPaymentTablesSmokeTest
+docker compose exec -T app php artisan test --filter=HeyBanco
+```
+
+
+# Resultado de migrate:fresh --seed
+
+**Parcialmente exitoso respecto a este fix.**
+
+Migración corregida:
+
+    2025_07_10_add_export_permissions ... 21.72ms DONE
+
+**migrate:fresh --seed completo: FALLA** en migración posterior (no modificada):
+
+    2025_07_16_090353_migrate_pregenerated_certificates_from_old_db ... FAIL
+
+    SQLSTATE[HY000] [1049] Unknown database 'famedic_old'
+    (Connection: mysqlold, SQL: select * from `pregenerated_medical_attention_ids` ...)
+
+El seed no completa.
+
+
+# Migraciones Hey Banco Fase 1 (2026_06_08_*)
+
+**NO ejecutadas** — el batch se detiene en `2025_07_16_090353_...` (anterior a junio 2026).
+
+
+# Resultado de tests HeyBanco
+
+| Comando | Exit code | Resultado |
+|---------|-----------|-----------|
+| `--filter=HeyBancoPaymentTablesSmokeTest` | 2 | 1 failed, 0 assertions (~8.2s) |
+| `--filter=HeyBanco` | 2 | 14 failed, 0 assertions (~119s) |
+
+**Causa:** `RefreshDatabase` falla en `2025_07_16_090353_migrate_pregenerated_certificates_from_old_db`
+por `Unknown database 'famedic_old'`. Ningún test Hey Banco ejecutó assertions.
+
+**Fase 1 Hey Banco en runtime: NO validada.**
+
+
+# Nuevo bloqueador documentado
+
+| Migración | Error |
+|-----------|-------|
+| `2025_07_16_090353_migrate_pregenerated_certificates_from_old_db.php` | `Unknown database 'famedic_old'` en tabla `pregenerated_medical_attention_ids` |
+
+
+# Resumen ejecutivo
+
+| Item | Estado |
+|------|--------|
+| Fix export permissions / PermissionAlreadyExists | **Hecho** |
+| migrate:fresh --seed completo | **Falla** (bloqueador: pregenerated certificates legacy) |
+| Tests HeyBanco | **No validados** (bloqueador de migraciones) |
+| Hey Banco Fase 1 validada en runtime | **No** |
+
+================================================================================

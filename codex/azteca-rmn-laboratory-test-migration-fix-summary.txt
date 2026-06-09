@@ -1,0 +1,171 @@
+================================================================================
+FAMEDIC — CORRECCIÓN migrate:fresh (Azteca RMN / categoría ID 9)
+================================================================================
+Fecha: 2026-06-09
+================================================================================
+
+
+# Causa exacta del fallo
+
+La migración `database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php`
+insertaba el estudio con:
+
+    laboratory_test_category_id => 9   (hardcodeado)
+
+En `migrate:fresh` sobre una base limpia:
+
+- `laboratory_test_categories` solo tiene categorías creadas por migraciones previas
+  (p. ej. «Chequeos y Paquetes» en `2025_04_21_modify_laboratory_tests_table`).
+- No existe fila con `id = 9`.
+- El `updateOrCreate` violaba la FK → `SQLSTATE[23000] Integrity constraint violation: 1452`.
+
+
+# Archivo corregido
+
+| Archivo | Cambio |
+|---------|--------|
+| `database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php` | Resolver categoría por nombre; mantener `updateOrCreate` por `gda_id` |
+
+
+# Por qué fallaba el ID 9
+
+El ID 9 no es un identificador de negocio estable: en producción es el autoincrement
+que le tocó a la categoría **«Resonancia»** cuando se importaron los estudios vía
+`LaboratoryTestsImport` (columna 6 = nombre de categoría).
+
+Evidencia:
+
+- Índice Algolia (catálogo de producción): `gda_id` **445052** (`RMN DE PIE SIMPLE`,
+  marca Azteca) tiene `category: "Resonancia"`.
+- La migración original asignaba `laboratory_test_category_id => 9` al mismo `gda_id`.
+- Mismo patrón que el fix del ID **12** → **«Chequeos y Paquetes»**.
+
+
+# Nombre de la categoría correcta
+
+**Resonancia**
+
+(Confirmado por catálogo Algolia y estudios RMN del mismo tipo; en MySQL local
+post-partial-migrate no existía `id = 9` porque no hay import de producción.)
+
+
+# Cómo se resolvió la categoría
+
+```php
+$resonanceCategoryId = LaboratoryTestCategory::firstOrCreate([
+    'name' => 'Resonancia',
+])->id;
+```
+
+- Si la categoría ya existe (producción): se reutiliza sin duplicar.
+- Si no existe (fresh): se crea con el nombre correcto.
+- Se usa `$resonanceCategoryId` en lugar del literal `9`.
+
+
+# Estudio insertado o actualizado
+
+| Campo | Valor |
+|-------|-------|
+| `gda_id` | `445052` (clave única) |
+| `brand` | `azteca` (`LaboratoryBrand::AZTECA`) |
+| `name` | `RMN DE PIE SIMPLE` |
+| `other_name` | Resonancia magnética de pie simple |
+| `indications` | -Realizar previa cita. |
+| `requires_appointment` | `true` |
+| `public_price_cents` | 250900 |
+| `famedic_price_cents` | 223522 |
+| Categoría | **Resonancia** (ID dinámico) |
+
+Tras el upsert se mantiene `searchable()` con Scout en cola desactivada temporalmente.
+
+
+# Estrategia idempotente usada
+
+| Elemento | Estrategia |
+|----------|------------|
+| Categoría | `LaboratoryTestCategory::firstOrCreate(['name' => 'Resonancia'])` |
+| Estudio | `LaboratoryTest::updateOrCreate(['gda_id' => '445052'], [...])` |
+| `down()` | `forceDelete` por `gda_id` (sin cambios) |
+
+
+# Impacto en bases existentes
+
+| Escenario | Comportamiento |
+|-----------|----------------|
+| Producción con categoría ID 9 = «Resonancia» | `firstOrCreate` encuentra la fila; `updateOrCreate` actualiza el estudio por `gda_id` |
+| Producción sin estudio 445052 | Se inserta con categoría correcta |
+| migrate:fresh | Categoría creada; estudio insertado; FK válida |
+| Re-ejecución | Sin duplicados gracias a `gda_id` UNIQUE |
+
+No se elimina la FK. No se borran datos históricos.
+
+
+# Comandos ejecutados
+
+```bash
+docker compose exec -T app php artisan migrate:fresh --seed --no-interaction
+docker compose exec -T app php artisan test --filter=HeyBancoPaymentTablesSmokeTest
+docker compose exec -T app php artisan test --filter=HeyBanco
+```
+
+
+# Resultado de migrate:fresh --seed
+
+**Parcialmente exitoso respecto a este fix.**
+
+Migración corregida:
+
+    2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test ... DONE
+
+**migrate:fresh --seed completo: FALLA** en migración posterior (no modificada):
+
+    2026_06_08_100000_create_payment_methods_table ... FAIL
+
+    SQLSTATE[42S01]: Table 'payment_methods' already exists
+
+Causa: `2026_06_04_150000_create_payment_methods_table` ya creó `payment_methods`;
+`2026_06_08_100000` (Hey Banco Fase 1) intenta crearla de nuevo.
+
+El seed no completa.
+
+
+# Migraciones Hey Banco Fase 1 (2026_06_08_*)
+
+| Migración | Estado en migrate:fresh |
+|-----------|-------------------------|
+| `2026_06_08_100000_create_payment_methods_table` | **Ejecutada y FALLÓ** (tabla duplicada) |
+| `2026_06_08_100001_create_payment_transactions_table` | **No alcanzada** |
+| `2026_06_08_100002_add_hey_banco_idempotency_to_payment_attempts_table` | **No alcanzada** |
+
+Fase 1 **no completada** en runtime.
+
+
+# Resultado de tests HeyBanco
+
+No se pudieron capturar exit codes en la sesión de shell tras el fallo de migrate.
+
+**Expectativa:** fallan en `RefreshDatabase` en `2026_06_08_100000` (tabla
+`payment_methods` duplicada) hasta resolver el conflicto entre migraciones
+`2026_06_04_*` y `2026_06_08_*`.
+
+**Fase 1 Hey Banco en runtime: NO validada.**
+
+
+# Nuevo bloqueador documentado (sin cambios en este trabajo)
+
+| Migración | Error |
+|-----------|-------|
+| `2026_06_08_100000_create_payment_methods_table.php` | Tabla `payment_methods` ya existe (`2026_06_04_150000`) |
+| `2026_06_08_100001_create_payment_transactions_table.php` | **Probable** mismo conflicto con `2026_06_04_150100` |
+
+
+# Resumen ejecutivo
+
+| Item | Estado |
+|------|--------|
+| Fix Azteca RMN / categoría ID 9 | **Hecho** |
+| migrate:fresh --seed completo | **Falla** (bloqueador: payment_methods duplicada) |
+| Tests HeyBanco | **No validados** (bloqueador de migraciones) |
+| Hey Banco Fase 1 validada en runtime | **No** (100000 falló; 100001/100002 no corrieron) |
+
+================================================================================

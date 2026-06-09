@@ -1,0 +1,181 @@
+================================================================================
+FAMEDIC — CORRECCIÓN migrate:fresh (laboratory_tests / categoría ID 12)
+================================================================================
+Fecha: 2026-06-08
+================================================================================
+
+
+# Causa exacta del fallo
+
+La migración `database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php`
+insertaba paquetes CHECKUP en `laboratory_tests` con:
+
+    laboratory_test_category_id = 12   (hardcodeado)
+
+En `migrate:fresh` sobre una base limpia:
+
+- La tabla `laboratory_test_categories` existe (creada por
+  `2024_10_19_194636_create_laboratory_test_categories_table`) pero está **vacía**.
+- No hay seeders ni migraciones previas que inserten categorías.
+- En producción las categorías se crean vía import Excel (`LaboratoryTestsImport`)
+  o manualmente; la categoría de chequeos quedó con ID 12 por orden de inserción.
+- El INSERT violaba la FK → `SQLSTATE[23000] Integrity constraint violation: 1452`
+  (alrededor de la línea 325 del archivo original).
+
+
+# Archivo corregido
+
+| Archivo | Cambio |
+|---------|--------|
+| `database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php` | Resolver categoría por nombre; inserts idempotentes por `gda_id` |
+
+
+# Por qué fallaba el ID 12
+
+El ID 12 no es un identificador de negocio estable: es el autoincrement que en
+producción le tocó a la categoría **"Chequeos y Paquetes"** cuando se importaron
+los estudios de laboratorio.
+
+Evidencia en el código (sin modificar en este fix):
+
+- `resources/js/Pages/LaboratoryTests.jsx` — filtro `category: "Chequeos y Paquetes"`
+- `resources/js/Pages/Home/CTA.jsx` — mismo nombre de categoría
+- `app/Http/Controllers/Laboratories/LaboratoryTestsController.php` — `find(12)` para
+  priorizar esa categoría en el listado (lógica de negocio / frontend no tocada)
+
+En una BD nueva el ID 12 **nunca se crea** porque no hay datos importados.
+
+
+# Cómo se resolvió la categoría
+
+1. `LaboratoryTestCategory::firstOrCreate(['name' => 'Chequeos y Paquetes'])`
+2. Se usa el `id` real devuelto (`$checkupCategoryId`) en lugar del literal `12`.
+3. Si la categoría ya existe (producción u otra BD), se reutiliza sin duplicar.
+4. Si no existe (fresh), se crea con el nombre correcto.
+
+
+# Registros que inserta la migración (newPackages)
+
+Cinco paquetes CHECKUP, uno por marca de laboratorio (`brand` + `gda_id` único):
+
+| Nombre del paquete | Marcas (gda_id) |
+|--------------------|-----------------|
+| CHECKUP MUJER MAYOR DE 40 | swisslab 128689, liacsa 128698, olab 128750, azteca 128703, jenner 128707 |
+| CHECKUP MUJER MENOR DE 40 | swisslab 128690, liacsa 128699, olab 128751, azteca 128704, jenner 128708 |
+| CHECKUP PARA EL HOMBRE | swisslab 128691, liacsa 128700, olab 128753, azteca 128705, jenner 128709 |
+| CHECKUP PERFIL TIROIDEO | swisslab 128694, liacsa 128701, olab 128696, azteca 128759, jenner 128710 |
+| CHECKUP PERFIL DIABÉTICO | swisslab 128695, liacsa 128702, olab 128697, azteca 128760, jenner 128711 |
+
+Total: 25 filas (5 paquetes × 5 marcas).
+
+
+# IDs hardcodeados eliminados
+
+| Antes | Después |
+|-------|---------|
+| `laboratory_test_category_id => 12` | `$checkupCategoryId` vía `firstOrCreate` por nombre |
+| `DB::table(...)->insert([...])` | `LaboratoryTest::updateOrCreate(['gda_id' => ...], [...])` |
+
+Se mantiene el guard `app()->environment() !== 'testing'` del bloque original.
+
+
+# Estrategia idempotente
+
+- **Categoría:** `firstOrCreate` por `name` (evita duplicar "Chequeos y Paquetes").
+- **Estudios:** `LaboratoryTest::updateOrCreate` con clave única `gda_id` (columna
+  `UNIQUE` en `create_laboratory_tests_table`).
+- `feature_list` se pasa como array; el cast del modelo lo serializa a JSON.
+- En bases que ya tenían los registros insertados con categoría 12, un re-run
+  actualiza por `gda_id` sin duplicar filas; la FK apunta al mismo nombre de
+  categoría (ID puede diferir de 12 en fresh, pero el nombre es el correcto).
+
+
+# Impacto en bases existentes
+
+| Escenario | Comportamiento |
+|-----------|----------------|
+| Producción con categoría ID 12 = "Chequeos y Paquetes" | `firstOrCreate` encuentra la fila existente; `updateOrCreate` actualiza paquetes por `gda_id` |
+| Producción sin paquetes CHECKUP aún | Se insertan con la categoría correcta |
+| migrate:fresh local | Categoría creada; paquetes insertados; FK válida |
+| Re-ejecutar migración (no habitual) | Sin duplicados gracias a `gda_id` |
+
+No se eliminan datos históricos. No se modifica la FK de `laboratory_tests`.
+
+
+# Comandos ejecutados
+
+```bash
+docker compose exec -T app php artisan migrate:fresh --seed --no-interaction
+docker compose exec -T app php artisan test --filter=HeyBancoPaymentTablesSmokeTest
+docker compose exec -T app php artisan test --filter=HeyBanco
+```
+
+
+# Resultado de migrate:fresh --seed
+
+**Parcialmente exitoso respecto al fix de laboratory_tests.**
+
+Migraciones de laboratorio que ahora pasan:
+
+- `2024_10_19_201157_create_laboratory_tests_table` — DONE
+- `2025_04_21_161348_modify_laboratory_tests_table` — DONE  ← fix validado
+- `2025_05_26_171625_add_labtests_data` — DONE
+
+**migrate:fresh --seed completo: FALLA** en migración posterior (no modificada
+en este trabajo):
+
+```
+2025_06_27_205929_migrate_subscription_invoices_from_old_db ... FAIL
+
+SQLSTATE[HY000] [1049] Unknown database 'famedic_old'
+(Connection: mysqlold, SQL: select * from `subscription_invoices` ...)
+```
+
+Archivo: `database/migrations/2025_06_27_205929_migrate_subscription_invoices_from_old_db.php:19`
+
+El seed no llega a ejecutarse porque las migraciones se detienen antes.
+
+
+# Migraciones Hey Banco Fase 1 (2026_06_08_*)
+
+**NO ejecutadas en runtime** durante `migrate:fresh --seed` porque el batch se
+detiene en `2025_06_27_205929_...` (anterior a las migraciones `2026_06_08_*`).
+
+Migraciones Fase 1 pendientes de alcanzar en fresh:
+
+- `2026_06_08_100000_create_payment_methods_table.php`
+- `2026_06_08_100001_create_payment_transactions_table.php`
+- `2026_06_08_100002_add_hey_banco_idempotency_to_payment_attempts_table.php`
+
+
+# Resultado de tests Hey Banco
+
+| Comando | Exit code | Resultado |
+|---------|-----------|-----------|
+| `--filter=HeyBancoPaymentTablesSmokeTest` | 2 | 1 failed, 0 assertions (~9.8s) |
+| `--filter=HeyBanco` | 2 | 14 failed, 0 assertions (~114s) |
+
+**Causa:** los tests usan `RefreshDatabase`; al migrar fallan en la misma
+migración `2025_06_27_205929_migrate_subscription_invoices_from_old_db` por
+`Unknown database 'famedic_old'`. Ningún test Hey Banco ejecutó assertions.
+
+**Fase 1 Hey Banco en runtime: NO validada** (bloqueada por migración legacy).
+
+
+# Nuevo bloqueador documentado (sin cambios en este PR)
+
+| Migración | Error | Acción sugerida (fuera de alcance) |
+|-----------|-------|-------------------------------------|
+| `2025_06_27_205929_migrate_subscription_invoices_from_old_db.php` | BD `famedic_old` inexistente en conexión `mysqlold` | Guard no-op si no hay BD legacy, o provisionar `famedic_old` en Docker |
+
+
+# Resumen ejecutivo
+
+| Item | Estado |
+|------|--------|
+| Fix laboratory_tests / categoría ID 12 | **Hecho** |
+| migrate:fresh --seed completo | **Falla** (bloqueador: `famedic_old`) |
+| Tests HeyBanco | **Fallan** (mismo bloqueador en RefreshDatabase) |
+| Hey Banco Fase 1 validada en runtime | **No** |
+
+================================================================================

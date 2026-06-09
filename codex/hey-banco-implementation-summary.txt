@@ -1,0 +1,1025 @@
+================================================================================
+FAMEDIC — DOCUMENTACIÓN TÉCNICA: INTEGRACIÓN HEY BANCO / BANREGIO COLECTO
+================================================================================
+Generado para compartir con ChatGPT u otros asistentes de IA.
+Alcance: solo lo implementado en el repositorio hasta la fecha de revisión.
+Proveedor interno: hey_banco | API externa: Banregio Colecto ADQ (testcolecto.banregio.com)
+================================================================================
+
+
+# Resumen general de la integración Hey Banco / Banregio
+
+Se ha implementado una integración con **Banregio Colecto** (plataforma ADQ de Hey Banco /
+Banregio) para **tokenización de tarjetas** y **cobros con token**, usando el protocolo BNRG_
+(form POST con respuesta en headers HTTP).
+
+## Qué cubre el flujo actual
+
+1. **Tokenización directa** (comando CREACION_TOKEN) sin 3D Secure.
+2. **Cobro con token** (comando VENTA) contra tarjetas previamente guardadas.
+3. **Verificación** de transacciones (comando VERIFICACION) por referencia o folio — usada
+   principalmente para recuperación ante timeout.
+4. **Cancelación** (comando CANCELACION) por referencia de venta original — usada como
+   mecanismo de reembolso.
+5. **Abstracción de gateway** vía PaymentGatewayInterface + PaymentGatewayManager, conviviendo
+   con EfevooPay.
+6. **Monitoreo administrativo** dedicado (Banregio Monitor) para tokens, transacciones ADQ e
+   intentos de pago.
+7. **API JSON autenticada** para pruebas manuales (tokenize / charge / verify).
+8. **Conexión al checkout de laboratorio** y **suscripción médica** a través del mismo
+   ChargePaymentMethodAction que usa EfevooPay.
+
+## Qué parece completo
+
+- Cliente HTTP (HeyBancoClient) con operaciones ADQ.
+- Wrapper de respuesta (HeyBancoResponse) con códigos BNRG_CODIGO_PROC.
+- Persistencia en payment_methods, payment_transactions, payment_attempts y transactions.
+- Tokenización desde UI de métodos de pago (PaymentMethods/Create).
+- Cobro en flujos de negocio que usan ChargePaymentMethodAction.
+- Cancelación/reembolso vía RefundTransactionAction.
+- Tests unitarios del cliente y de cancelación.
+- UI admin Banregio + badges frontend para hey_banco.
+
+## Qué parece pendiente o incompleto
+
+- **3D Secure Hey Banco**: variables y URL configuradas, pero sin implementación de flujo.
+- **Webhooks/callbacks** entrantes desde Banregio: no existen.
+- **Migraciones versionadas** para tablas payment_methods y payment_transactions: no
+  encontradas en database/migrations/.
+- **Feature flag desactivado por defecto** (HEYBANCO_ENABLED=false).
+- **Farmacia en línea**: no integrada (sigue en Stripe/Odessa).
+- **Filtros admin de compras de laboratorio**: no incluyen hey_banco en validación de filtro.
+- **PaymentLog**: modelo existe pero Hey Banco no lo utiliza.
+- **Paridad completa con EfevooPay**: webhooks, 3DS, API pública documentada, simulación mock.
+
+
+# Estado actual de la implementación
+
+**Veredicto: parcial — funcional en sandbox bajo feature flag — lista para pruebas internas
+— NO lista para producción — pendiente de conectar con checkout real en ambiente productivo.**
+
+## Justificación basada en código
+
+| Indicador | Evidencia |
+|-----------|-----------|
+| En desarrollo / parcial | HEYBANCO_ENABLED default false; 3DS no implementado; migraciones faltantes |
+| Sandbox | adq_url default apunta a testcolecto.banregio.com; HEYBANCO_MODE default AUT |
+| Lista para pruebas | Rutas API + UI tokenización + tests Http::fake + tarjetas test en config |
+| No producción | Sin webhooks, sin 3DS, flag off, modo AUT documentado solo para sandbox |
+| Checkout conectado | OrderAction → ChargePaymentMethodAction → HeyBancoPaymentGateway (condicional) |
+
+La integración **sí está cableada** al checkout de laboratorio y membresía médica, pero solo
+**cuando HEYBANCO_ENABLED=true** y el usuario tiene tarjetas hey_banco:* tokenizadas.
+
+
+# Archivos creados o modificados
+
+## Configuración
+
+| Archivo | Qué hace |
+|---------|----------|
+| config/heybanco.php | Config central: URLs ADQ/3DS, afiliaciones, media IDs, modo, timeout, test cards, provider_key |
+| config/payments.php | Proveedor por defecto (PAYMENT_PROVIDER) y flag hey_banco_enabled |
+| .env.example | Variables HEYBANCO_* documentadas (sin valores secretos reales en repo) |
+| config/famedic.php | Permiso admin banregio.manage en catálogo de permisos |
+
+## Contratos y soporte
+
+| Archivo | Qué hace |
+|---------|----------|
+| app/Contracts/PaymentGatewayInterface.php | Interfaz unificada: tokenize, charge, verify, refundOrCancel |
+| app/Support/PaymentMethodIdentifier.php | Prefijo público hey_banco:{id} para IDs de método de pago |
+| app/Exceptions/HeyBancoPaymentException.php | Excepción de dominio con processorCode y processorMessage |
+| app/Exceptions/InvalidPaymentMethodException.php | Lanzada por PaymentGatewayManager si ID no reconocido |
+
+## Servicios
+
+| Archivo | Qué hace |
+|---------|----------|
+| app/Services/Payments/HeyBanco/HeyBancoClient.php | Cliente HTTP Colecto ADQ (CREACION_TOKEN, VENTA, VERIFICACION, CANCELACION) |
+| app/Services/Payments/HeyBanco/HeyBancoResponse.php | Parser/normalizador de headers BNRG_* |
+| app/Services/Payments/HeyBancoPaymentGateway.php | Adaptador PaymentGatewayInterface → Actions Hey Banco |
+| app/Services/Payments/PaymentGatewayManager.php | Resuelve gateway por proveedor o por payment_method_id |
+| app/Services/Payments/EfevooPaymentGateway.php | Gateway paralelo EfevooPay (referencia comparativa) |
+
+## Actions
+
+| Archivo | Qué hace |
+|---------|----------|
+| app/Actions/Payments/HeyBanco/CreateHeyBancoTokenAction.php | Tokeniza tarjeta y crea PaymentMethod + PaymentTransaction |
+| app/Actions/Payments/HeyBanco/ChargeHeyBancoTokenAction.php | Cobra con token; crea PaymentAttempt, PaymentTransaction, Transaction |
+| app/Actions/Payments/HeyBanco/VerifyHeyBancoTransactionAction.php | Verifica por referencia/folio; actualiza estado si timeout |
+| app/Actions/Payments/HeyBanco/CancelHeyBancoTransactionAction.php | Cancela venta por referencia Banregio |
+| app/Actions/Payments/ChargePaymentMethodAction.php | Punto único de cobro con tarjeta; delega al gateway correcto |
+| app/Actions/Transactions/RefundTransactionAction.php | Reembolsos multi-gateway; incluye refundHeyBancoTransaction |
+
+## Controllers
+
+| Archivo | Qué hace |
+|---------|----------|
+| app/Http/Controllers/Payments/HeyBancoPaymentController.php | API JSON: tokenize, charge, verify (pruebas/diagnóstico) |
+| app/Http/Controllers/PaymentMethodController.php | UI Inertia métodos de pago; storeHeyBancoCard; destroy hey_banco |
+| app/Http/Controllers/Admin/BanregioMonitorController.php | Listado admin tokens/transacciones/intentos |
+| app/Http/Controllers/Admin/BanregioTokenController.php | Detalle admin de un token (PaymentMethod) |
+| app/Http/Controllers/Admin/BanregioTransactionController.php | Detalle admin de PaymentTransaction ADQ |
+| app/Http/Controllers/LaboratoryPurchaseController.php | Checkout laboratorio; captura HeyBancoPaymentException |
+| app/Http/Controllers/LaboratoryCheckoutController.php | Expone paymentMethods() incluyendo hey_banco si enabled |
+| app/Http/Controllers/Admin/PaymentAttemptController.php | Admin genérico intentos (filtra por gateway hey_banco) |
+
+## Rutas
+
+| Archivo | Qué hace |
+|---------|----------|
+| routes/settings.php | Rutas payment-methods + payments/hey-banco/* + webhook Efevoo (no Hey Banco) |
+| routes/admin.php | Rutas admin.banregio.index, tokens.show, transactions.show |
+
+## Modelos
+
+| Archivo | Qué hace |
+|---------|----------|
+| app/Models/PaymentMethod.php | Token de tarjeta Hey Banco (provider=hey_banco, provider_token) |
+| app/Models/PaymentTransaction.php | Registro ADQ por operación (token_creation, token_charge, verification, cancellation) |
+| app/Models/PaymentAttempt.php | Intento de cobro (gateway=hey_banco) |
+| app/Models/PaymentLog.php | Logs genéricos de pago — NO usado por Hey Banco actualmente |
+| app/Models/Transaction.php | Transacción de negocio reutilizada; payment_method/gateway=hey_banco |
+| app/Models/Customer.php | paymentMethods() fusiona EfevooToken + PaymentMethod hey_banco |
+
+## Providers
+
+| Archivo | Qué hace |
+|---------|----------|
+| app/Providers/PaymentGatewayServiceProvider.php | Registra singletons HeyBancoClient, gateways, manager |
+| app/Providers/AppServiceProvider.php | Registra PaymentGatewayServiceProvider |
+| app/Http/Middleware/EnsureUserHasAdminAccount.php | Menú admin "Banregio" con permiso banregio.manage |
+
+## Migraciones
+
+| Archivo | Qué hace |
+|---------|----------|
+| database/migrations/2026_03_11_233958_create_payment_attempts_table.php | Tabla payment_attempts (gateway default efevoopay) |
+| database/migrations/2026_06_05_120000_add_banregio_manage_permission.php | Permiso Spatie banregio.manage |
+| database/migrations/2026_02_17_052522_add_gateway_fields_to_transactions_table.php | Campos gateway en transactions (reutilizados) |
+
+**NOTA:** No se encontraron migraciones create_payment_methods_table ni
+create_payment_transactions_table en el repositorio. Los modelos asumen que existen.
+
+## Tests
+
+| Archivo | Qué hace |
+|---------|----------|
+| tests/Unit/Payments/HeyBancoClientTest.php | Tests cliente: token, charge, verify, cancel, folio, headers |
+| tests/Unit/Payments/CancelHeyBancoTransactionActionTest.php | Test persistencia cancelación en payment_transactions |
+
+## Frontend React / Inertia
+
+| Archivo | Qué hace |
+|---------|----------|
+| resources/js/Pages/PaymentMethods/Create.jsx | Selector proveedor efevoopay vs hey_banco; tarjetas sandbox |
+| resources/js/Pages/PaymentMethods.jsx | Lista métodos (vía controller, incluye hey_banco) |
+| resources/js/Pages/Admin/BanregioMonitor.jsx | Monitor admin 3 pestañas |
+| resources/js/Pages/Admin/BanregioToken.jsx | Detalle token admin |
+| resources/js/Pages/Admin/BanregioTransaction.jsx | Detalle transacción ADQ admin |
+| resources/js/Components/BanregioBadge.jsx | Badge naranja "Banregio Colecto" |
+| resources/js/Components/PaymentMethodBadge.jsx | Badge hey_banco con referencia |
+| resources/js/Components/PaymentMethodDisplayIcon.jsx | Icono tarjeta naranja para hey_banco |
+| resources/js/Components/Purchase.jsx | Detalle compra con datos Banregio |
+| resources/js/Components/LaboratoryOrderDetail/OrderSummary.jsx | Resumen pedido lab con refs Banregio |
+| resources/js/Pages/LaboratoryOrderDetail.jsx | Labels y datos hey_banco en detalle |
+| resources/js/Utils/heyBancoTransactionDetails.js | Helper extrae banregio_reference, folio, auth |
+| resources/js/Components/Checkout/PaymentMethodStep.jsx | Selección genérica de tarjetas (incluye hey_banco:*) |
+| resources/js/Pages/LaboratoryCheckout.jsx | Wizard checkout lab (usa PaymentMethodStep) |
+
+## Archivos de flujo de negocio que CONSUMEN Hey Banco (sin ser exclusivos)
+
+| Archivo | Qué hace |
+|---------|----------|
+| app/Actions/Laboratories/OrderAction.php | Cobro lab vía ChargePaymentMethodAction |
+| app/Http/Requests/Laboratories/LaboratoryPurchases/StoreLaboratoryPurchaseRequest.php | Valida payment_method contra customer.paymentMethods() |
+| app/Actions/MedicalAttention/PurchaseRegularSubscriptionAction.php | Cobro membresía vía ChargePaymentMethodAction |
+| app/Actions/Laboratories/FulfillLaboratoryCartOrderAction.php | Fulfillment post-pago (agnóstico al gateway) |
+
+## Referencias buscadas SIN relación con Hey Banco
+
+- **Openpay**: No identificado claramente en el código como integración de pagos.
+- **Colecto**: Es el nombre comercial de la plataforma Banregio ADQ (URLs testcolecto.banregio.com).
+
+
+# Variables de entorno y configuración
+
+Solo nombres y propósito. NO incluir valores reales en documentación compartida.
+
+## Variables principales (.env / config/heybanco.php)
+
+| Variable | Propósito |
+|----------|-----------|
+| HEYBANCO_ENABLED | Feature flag master; debe ser true para tokenizar/cobrar/mostrar UI |
+| HEYBANCO_ENV | Etiqueta de entorno (sandbox/production) para UI y metadata |
+| HEYBANCO_ADQ_URL | Base URL del endpoint ADQ Colecto (tokenización y cobros) |
+| HEYBANCO_3DS_URL | URL recepción 3DS Colecto — configurada, NO usada en código PHP/JS |
+| HEYBANCO_TOKEN_AFFILIATION | BNRG_ID_AFILIACION para tokenización y cobros |
+| HEYBANCO_TOKEN_MEDIA_ID | BNRG_ID_MEDIO para tokenización y cobros |
+| HEYBANCO_3DS_AFFILIATION | Afiliación 3DS — solo config, sin implementación |
+| HEYBANCO_3DS_MEDIA_ID | Media ID 3DS principal — solo config |
+| HEYBANCO_3DS_MEDIA_ID_ALT | Media ID 3DS alternativo — solo config |
+| HEYBANCO_3DS_SECRET_KEY | Secret key 3DS — solo config, sin uso en código |
+| HEYBANCO_MODE | BNRG_MODO_TRANS: AUT (sandbox auto-approve) o PRD (producción) |
+| HEYBANCO_TIMEOUT | Timeout HTTP en segundos (default 30) |
+| PAYMENT_PROVIDER | Proveedor por defecto al agregar tarjeta: efevoopay \| hey_banco |
+
+## Valores fijos en config (no env)
+
+| Clave | Propósito |
+|-------|-----------|
+| heybanco.currency | Siempre MXN |
+| heybanco.provider_key | Siempre hey_banco |
+| heybanco.test_cards | Tarjetas sandbox Visa/MC/Amex para UI de pruebas |
+
+## Endpoints externos consumidos
+
+| Endpoint | Comandos BNRG_CMD_TRANS |
+|----------|-------------------------|
+| {HEYBANCO_ADQ_URL}/ | CREACION_TOKEN, VENTA, VERIFICACION, CANCELACION |
+
+Mecanismo: POST application/x-www-form-urlencoded vía Laravel Http::asForm().
+Respuesta: headers HTTP con prefijo BNRG_ (no JSON body).
+
+## Webhook secret
+
+No identificado claramente en el código para Hey Banco / Banregio.
+
+
+# Servicios implementados
+
+## 1. HeyBancoClient
+
+- **Clase:** App\Services\Payments\HeyBanco\HeyBancoClient
+- **Archivo:** app/Services/Payments/HeyBanco/HeyBancoClient.php
+- **HTTP:** Laravel Http facade (asForm, timeout configurable)
+- **Logs:** Log::info con prefijo [HeyBanco]; PAN/CVV/token enmascarados en request log
+
+### Métodos públicos
+
+| Método | Qué hace | Endpoint | Entrada | Retorno |
+|--------|----------|----------|---------|---------|
+| createToken($cardData, $reference?) | CREACION_TOKEN | POST adq_url | card_number, exp_month, exp_year, cvv | HeyBancoResponse |
+| chargeToken($token, $amount, $reference, $metadata?) | VENTA | POST adq_url | token, monto, referencia cliente | HeyBancoResponse |
+| verifyByReference($reference, $mediaId?) | VERIFICACION | POST adq_url | BNRG_REF_TRANS_PREVIA | HeyBancoResponse |
+| verifyByFolio($folio, $mediaId?) | VERIFICACION | POST adq_url | BNRG_FOLIO | HeyBancoResponse |
+| cancelByReference($reference, $mediaId?, $amount?) | CANCELACION | POST adq_url | BNRG_REF_TRANS_PREVIA, monto opcional | HeyBancoResponse |
+| normalizeHeaders($headers) | Parsea headers BNRG_ | — | headers HTTP | array normalizado |
+| generateFolio() | Folio único FM+hex (max 12 chars) | — | — | string |
+| localDate() | Fecha DDMMAAAA zona Monterrey | — | — | string |
+| localTime() | Hora HHMMSS zona Monterrey | — | — | string |
+
+### Manejo de errores
+
+- No lanza excepciones HTTP directamente; encapsula en HeyBancoResponse.
+- Códigos de negocio en BNRG_CODIGO_PROC: A=approved, D=declined, R=rejected, T=timeout, X=failed.
+- Las Actions interpretan isApproved(), isTimeout(), etc.
+
+## 2. HeyBancoResponse
+
+- **Archivo:** app/Services/Payments/HeyBanco/HeyBancoResponse.php
+- **Métodos:** getters BNRG_*, isApproved(), isVerificationApproved(), statusLabel(), toArray()
+- **isVerificationApproved:** codigo_proc=A AND codigo_proc_trans=A AND estado_trans=C
+
+## 3. HeyBancoPaymentGateway
+
+- **Archivo:** app/Services/Payments/HeyBancoPaymentGateway.php
+- **Implementa:** PaymentGatewayInterface
+
+| Método | Delega a | Retorno |
+|--------|----------|---------|
+| tokenize($customer, $cardData) | CreateHeyBancoTokenAction | array con payment_method_id hey_banco:{id} |
+| charge($customer, $amountCents, $paymentMethodId, $reference?) | ChargeHeyBancoTokenAction | Transaction |
+| verify($reference, $mediaId?) | VerifyHeyBancoTransactionAction | array supported/approved/verification |
+| refundOrCancel($transaction) | CancelHeyBancoTransactionAction | array supported/approved/response |
+| providerKey() | config heybanco.provider_key | hey_banco |
+| isEnabled() | config heybanco.enabled | bool |
+
+## 4. PaymentGatewayManager
+
+- **Archivo:** app/Services/Payments/PaymentGatewayManager.php
+- **forPaymentMethodId:** hey_banco:* → HeyBanco; dígitos → Efevoo; odessa/paypal/coupon_balance → excepción
+- **defaultProvider:** PAYMENT_PROVIDER si hey_banco enabled, si no fallback efevoopay
+
+
+# Actions implementadas
+
+## CreateHeyBancoTokenAction
+
+- **Archivo:** app/Actions/Payments/HeyBanco/CreateHeyBancoTokenAction.php
+- **Responsabilidad:** Tokenizar tarjeta en Colecto y persistir PaymentMethod
+- **Entrada:** User $user, array cardData (card_number, exp_month, exp_year, cvv, card_holder?, alias?)
+- **Servicios:** HeyBancoClient::createToken
+- **Modelos creados:** PaymentTransaction (flow=token_creation), PaymentMethod (provider=hey_banco)
+- **Retorno:** PaymentMethod
+- **Excepciones:** HeyBancoPaymentException si no approved o sin token
+- **Transacción DB:** Sí, envuelta en DB::transaction
+
+## ChargeHeyBancoTokenAction
+
+- **Archivo:** app/Actions/Payments/HeyBanco/ChargeHeyBancoTokenAction.php
+- **Responsabilidad:** Cobrar monto con token guardado
+- **Entrada:** Customer, amountCents, paymentMethodId (hey_banco:{id}), reference?
+- **Servicios:** HeyBancoClient::chargeToken, VerifyHeyBancoTransactionAction (si timeout)
+- **Modelos:** PaymentAttempt (processing→approved/declined/error), PaymentTransaction (token_charge),
+  Transaction (negocio), actualiza PaymentMethod.last_used_at
+- **Retorno:** Transaction
+- **Excepciones:** HeyBancoPaymentException (método inválido, expirado, rechazado, error genérico)
+- **Timeout:** Si codigo_proc=T, intenta verify por referencia o folio antes de fallar
+
+## VerifyHeyBancoTransactionAction
+
+- **Archivo:** app/Actions/Payments/HeyBanco/VerifyHeyBancoTransactionAction.php
+- **Métodos:** byReference(), byFolio()
+- **Modelos:** PaymentTransaction (flow=verification); actualiza previousTransaction a approved si OK
+- **Excepciones:** HeyBancoPaymentException si verificación no approved
+
+## CancelHeyBancoTransactionAction
+
+- **Archivo:** app/Actions/Payments/HeyBanco/CancelHeyBancoTransactionAction.php
+- **Entrada:** Transaction (negocio), Customer opcional
+- **Resuelve referencia desde:** details.payment_details.banregio_reference, gateway_transaction_id
+- **Modelos:** PaymentTransaction (flow=cancellation, previous_reference)
+- **Excepciones:** HeyBancoPaymentException si sin referencia
+
+## ChargePaymentMethodAction (unificador)
+
+- **Archivo:** app/Actions/Payments/ChargePaymentMethodAction.php
+- **Responsabilidad:** Resolver gateway y ejecutar charge
+- **Usado por:** OrderAction (lab), PurchaseRegularSubscriptionAction (membresía)
+
+
+# Controllers implementados
+
+## HeyBancoPaymentController
+
+- **Archivo:** app/Http/Controllers/Payments/HeyBancoPaymentController.php
+- **Middleware implícito:** auth, documentation, verified, customer (grupo routes/settings.php)
+- **Propósito:** API de pruebas/diagnóstico (no webhook)
+
+| Método | Request validation | Respuesta |
+|--------|-------------------|-----------|
+| tokenize | card_number, exp_month, exp_year, cvv, card_holder?, alias? | JSON 200/422 |
+| charge | payment_method_id, amount_cents, reference? | JSON 200/422 |
+| verify | reference? o folio?, media_id? | JSON 200/422 |
+
+abort_unless(heybanco.enabled) en cada método.
+
+## PaymentMethodController (sección Hey Banco)
+
+| Método | Flujo Hey Banco |
+|--------|-----------------|
+| index | Lista PaymentMethod hey_banco si enabled |
+| create | Pasa heyBancoEnabled, heyBancoTestCards, defaultPaymentProvider |
+| store | Si payment_provider=hey_banco → storeHeyBancoCard → gatewayManager.tokenize |
+| destroy | Si hey_banco:id → status=inactive en PaymentMethod |
+
+## BanregioMonitorController / BanregioTokenController / BanregioTransactionController
+
+- **Permiso:** banregio.manage
+- **Vistas Inertia:** Admin/BanregioMonitor, BanregioToken, BanregioTransaction
+- **Propósito:** Monitoreo admin exclusivo Hey Banco
+
+
+# Rutas implementadas
+
+## Rutas autenticadas (cliente) — routes/settings.php
+
+| HTTP | Path | Nombre | Controller | Middleware | Tipo |
+|------|------|--------|------------|------------|------|
+| GET | /payment-methods | payment-methods.index | PaymentMethodController@index | auth,verified,customer | Autenticada |
+| GET | /payment-methods/create | payment-methods.create | PaymentMethodController@create | auth,verified,customer | Autenticada |
+| POST | /payment-methods | payment-methods.store | PaymentMethodController@store | auth,verified,customer | Autenticada |
+| DELETE | /payment-methods/{token} | payment-methods.destroy | PaymentMethodController@destroy | auth,verified,customer | Autenticada |
+| POST | /payments/hey-banco/tokenize | payments.hey-banco.tokenize | HeyBancoPaymentController@tokenize | auth,verified,customer | API autenticada |
+| POST | /payments/hey-banco/charge | payments.hey-banco.charge | HeyBancoPaymentController@charge | auth,verified,customer | API autenticada |
+| POST | /payments/hey-banco/verify | payments.hey-banco.verify | HeyBancoPaymentController@verify | auth,verified,customer | API autenticada |
+
+## Rutas admin — routes/admin.php
+
+| HTTP | Path | Nombre | Controller | Tipo |
+|------|------|--------|------------|------|
+| GET | /admin/banregio | admin.banregio.index | BanregioMonitorController@index | Admin (banregio.manage) |
+| GET | /admin/banregio/tokens/{paymentMethod} | admin.banregio.tokens.show | BanregioTokenController@show | Admin |
+| GET | /admin/banregio/transactions/{paymentTransaction} | admin.banregio.transactions.show | BanregioTransactionController@show | Admin |
+
+## Rutas de checkout laboratorio (indirectas)
+
+| HTTP | Path | Flujo |
+|------|------|-------|
+| POST | /laboratory-purchases/{brand} | LaboratoryPurchaseController@store → OrderAction → Hey Banco si payment_method=hey_banco:* |
+
+## Webhooks Hey Banco
+
+**No existen.** El webhook efevoo/webhook es solo para EfevooPay.
+
+
+# Modelos y base de datos
+
+## Modelos nuevos (Hey Banco)
+
+### PaymentMethod (tabla: payment_methods — migración NO en repo)
+
+| Columna | Uso Hey Banco |
+|---------|---------------|
+| user_id | Dueño del token |
+| provider | hey_banco |
+| provider_token | Token BNRG devuelto por Colecto (CREACION_TOKEN) |
+| brand, last4, exp_month, exp_year | Metadatos tarjeta |
+| affiliation_id, media_id | IDs Colecto usados al tokenizar |
+| status | active / inactive (soft delete lógico) |
+| alias, card_holder | UI |
+| created_from_transaction_id | FK a PaymentTransaction de tokenización |
+| last_used_at | Actualizado en cada cobro exitoso |
+
+**ID público:** hey_banco:{id} vía PaymentMethodIdentifier
+
+### PaymentTransaction (tabla: payment_transactions — migración NO en repo)
+
+| Columna | Uso |
+|---------|-----|
+| user_id, payment_method_id | Relaciones |
+| provider | hey_banco |
+| flow | token_creation, token_charge, verification, cancellation |
+| folio | BNRG_FOLIO generado o recibido |
+| reference | BNRG_REFERENCIA |
+| previous_reference | Referencia de venta original (verificación/cancelación) |
+| auth_code | BNRG_CODIGO_AUT |
+| amount, currency, mode | Monto y HEYBANCO_MODE |
+| status | approved, declined, rejected, timeout, failed, unknown |
+| bnrg_* | Campos específicos Banregio |
+| raw_request, raw_response_headers | Auditoría (sanitizado/enmascarado) |
+
+## Modelos reutilizados
+
+### Transaction (tabla: transactions)
+
+Al cobrar Hey Banco se crea Transaction con:
+- payment_method = hey_banco
+- gateway = hey_banco
+- gateway_transaction_id = BNRG_REFERENCIA (o folio fallback)
+- gateway_status = completed
+- gateway_response = HeyBancoResponse::toArray()
+- gateway_token = hb-token-ref:{hash parcial} (NO es el token real de Colecto)
+- gateway_authorization_code = BNRG_CODIGO_AUT
+- details JSON estructurado:
+  - token_info: payment_method_id, card_brand, card_last_four, alias
+  - payment_details: banregio_reference, authorization_code, folio, payment_attempt_id, payment_transaction_id
+  - customer_info: customer_id, user_id
+
+### PaymentAttempt (tabla: payment_attempts — migración SÍ en repo)
+
+| Campo Hey Banco | Valor |
+|-----------------|-------|
+| gateway | hey_banco |
+| token_id | PaymentMethod.id |
+| reference | Referencia cliente FM-{customer}-{time}-{rand} |
+| processor_transaction_id | BNRG_REFERENCIA |
+| processor_code | BNRG_CODIGO_PROC |
+| processor_message | BNRG_TEXTO |
+| raw_response | HeyBancoResponse::toArray() |
+| status | processing → approved / declined / error |
+
+### PaymentLog
+
+**No usado** por integración Hey Banco actualmente.
+
+## Relaciones con entidades de negocio
+
+| Entidad | Relación con Hey Banco |
+|---------|------------------------|
+| LaboratoryPurchase | Transaction adjunta post-OrderAction; payment_method en TX |
+| OnlinePharmacyPurchase | NO conectada a Hey Banco |
+| MedicalAttentionSubscription | Transaction vía attach() si cobro con hey_banco:* |
+| Customer/User | PaymentMethod.user_id; Customer.paymentMethods() expone tokens |
+
+## Sesiones 3DS
+
+No existen para Hey Banco. Efevoo3dsSession es exclusivo EfevooPay.
+
+
+# Flujo de tokenización
+
+## Implementado (sin 3DS)
+
+1. **Pantalla:** PaymentMethods/Create.jsx — radio "Hey Banco / Banregio Colecto" si heyBancoEnabled
+2. **Submit:** POST payment-methods.store con payment_provider=hey_banco
+3. **Controller:** PaymentMethodController::storeHeyBancoCard
+4. **Gateway:** PaymentGatewayManager::forProvider('hey_banco')->tokenize()
+5. **Action:** CreateHeyBancoTokenAction → HeyBancoClient::createToken (CREACION_TOKEN)
+6. **Respuesta procesador:** Headers BNRG_TOKEN, BNRG_REFERENCIA, BNRG_CODIGO_PROC
+7. **Persistencia:**
+   - PaymentTransaction (flow=token_creation)
+   - PaymentMethod (provider_token = BNRG_TOKEN)
+8. **UI posterior:** PaymentMethods index muestra tarjeta con id hey_banco:{id}
+9. **Checkout:** Customer.paymentMethods() incluye hey_banco:* → seleccionable en PaymentMethodStep
+
+## Alternativa API (pruebas)
+
+POST /payments/hey-banco/tokenize → mismo CreateHeyBancoTokenAction
+
+## Qué falta
+
+- Flujo 3DS Hey Banco (config HEYBANCO_3DS_* sin código)
+- Validación de expiración de tarjeta en storeHeyBancoCard (Efevoo sí valida; Hey Banco delega al procesador)
+- Endpoint de eliminación remota del token en Colecto (solo status=inactive local)
+
+
+# Flujo de pago
+
+## Flujo completo (laboratorio / membresía)
+
+1. **Selección método:** PaymentMethodStep muestra tarjetas de customer.paymentMethods() incluyendo hey_banco:N
+2. **Validación checkout:** StoreLaboratoryPurchaseRequest valida que payment_method esté en lista permitida
+3. **Creación intento:** ChargeHeyBancoTokenAction crea PaymentAttempt status=processing
+4. **Llamada procesador:** HeyBancoClient::chargeToken (VENTA) con BNRG_TOKEN, BNRG_MONTO_TRANS, BNRG_REF_CLIENTE1
+5. **Respuesta exitosa:** BNRG_CODIGO_PROC=A → PaymentTransaction approved
+6. **Transaction negocio:** Transaction creada con gateway=hey_banco y details completos
+7. **Creación compra:**
+   - Lab: FulfillLaboratoryCartOrderAction + LaboratoryPurchase
+   - Membresía: CreateRegularSubscriptionAction + attach transaction
+8. **Fulfillment:** Post-pago; si falla fulfillment → RefundTransactionAction automático
+9. **Notificaciones:** LaboratoryPurchaseCreated (lab); no específicas Hey Banco
+10. **Redirección:** laboratory-purchases.show con mensaje éxito
+11. **Errores:** HeyBancoPaymentException → redirect back con error payment_method
+
+## Conectado con
+
+| Módulo | Estado |
+|--------|--------|
+| Laboratorio | SÍ — vía OrderAction + ChargePaymentMethodAction |
+| Farmacia | NO — Stripe/Odessa únicamente |
+| Membresía médica | SÍ — vía PurchaseRegularSubscriptionAction |
+| Checkout general | Parcial — solo flujos que usan ChargePaymentMethodAction |
+| Pruebas aisladas | SÍ — API payments/hey-banco/* |
+
+## Orden de operaciones y GDA (laboratorio)
+
+El cobro ocurre ANTES de FulfillLaboratoryCartOrderAction (incluye GDA). Si fulfillment falla,
+RefundTransactionAction intenta cancelar en Banregio. Riesgo: cobro exitoso + GDA fallido +
+cancelación fallida = inconsistencia.
+
+
+# Flujo 3D Secure
+
+## Estado: NO IMPLEMENTADO para Hey Banco / Banregio
+
+### Configuración preparada (sin código)
+
+- HEYBANCO_3DS_URL
+- HEYBANCO_3DS_AFFILIATION
+- HEYBANCO_3DS_MEDIA_ID / HEYBANCO_3DS_MEDIA_ID_ALT
+- HEYBANCO_3DS_SECRET_KEY
+
+### 3DS existente en proyecto (solo EfevooPay)
+
+- Efevoo3dsSession, PaymentMethodController rutas 3ds-*, ThreeDSRedirect.jsx, ThreeDSResult.jsx
+- Create.jsx muestra explícitamente: "Tokenización directa sin 3D Secure (fase actual)" para hey_banco
+
+### Qué falta para 3DS Hey Banco
+
+1. Action/servicio para iniciar challenge Colecto 3DS
+2. Modelo de sesión 3DS Hey Banco (equivalente Efevoo3dsSession)
+3. Página React de redirección al HEYBANCO_3DS_URL
+4. Callback POST para recibir resultado 3DS
+5. Tokenización post-autenticación 3DS
+6. Integración en checkout si 3DS es obligatorio en producción
+
+
+# Webhooks o callbacks
+
+## Hey Banco / Banregio
+
+**No implementados.** La integración es 100% síncrona request/response.
+
+- Sin validación de firma webhook
+- Sin idempotencia por evento externo
+- Verificación manual vía endpoint verify o VerifyHeyBancoTransactionAction ante timeout
+
+## EfevooPay (referencia)
+
+POST efevoo/webhook → EfevooWebhookController (no aplica a Hey Banco)
+
+
+# Frontend React / Inertia
+
+## Páginas
+
+| Página | Rol Hey Banco |
+|--------|---------------|
+| PaymentMethods/Create.jsx | Selector proveedor; tarjetas test sandbox; nota sin 3DS |
+| PaymentMethods.jsx | Lista tarjetas hey_banco si enabled |
+| Admin/BanregioMonitor.jsx | Monitor 3 tabs |
+| Admin/BanregioToken.jsx | Detalle token |
+| Admin/BanregioTransaction.jsx | Detalle TX ADQ |
+| LaboratoryCheckout.jsx | Wizard; paymentMethods incluye hey_banco:* |
+| LaboratoryOrderDetail.jsx | Labels Banregio Colecto + referencias |
+
+## Componentes
+
+| Componente | Rol |
+|------------|-----|
+| BanregioBadge.jsx | Badge naranja identificador |
+| PaymentMethodBadge.jsx | Badge en listados admin/paciente |
+| PaymentMethodDisplayIcon.jsx | Icono hey_banco en tablas |
+| PaymentMethodStep.jsx | Selección tarjeta genérica (sin branding Banregio específico en card) |
+| Purchase.jsx | Bloque detalle pago hey_banco |
+| LaboratoryOrderDetail/OrderSummary.jsx | Referencia, folio, auth Banregio |
+
+## Utilidades
+
+| Archivo | Función |
+|---------|---------|
+| heyBancoTransactionDetails.js | Extrae banregioReference, folio, auth de Transaction.details |
+
+## Llamadas HTTP
+
+- Tokenización UI: Inertia form POST → payment-methods.store (no axios directo a Colecto)
+- API pruebas: POST payments/hey-banco/* (fetch/axios posible, no hay componente dedicado en frontend)
+- Checkout: Inertia POST laboratory-purchases.store
+
+## Validaciones frontend
+
+- payment_provider requerido implícitamente en Create
+- Checkout: payment_method required en LaboratoryCheckout.jsx
+- Sin validación Luhn específica Hey Banco en frontend
+
+## Manejo errores
+
+- Errores de tokenización: flash error en Create
+- Errores de cobro lab: errors.payment_method en redirect back
+- API: JSON 422 con message y code (processorCode)
+
+
+# Integración con checkout de laboratorio
+
+## Archivos revisados
+
+| Archivo | Conexión Hey Banco |
+|---------|-------------------|
+| LaboratoryCheckout.jsx | SÍ — usa paymentMethods del controller |
+| PaymentMethodStep | SÍ — renderiza hey_banco:* como tarjeta genérica |
+| ConfirmationStep | SÍ — confirma payment_method seleccionado (agnóstico) |
+| LaboratoryPurchaseController | SÍ — captura HeyBancoPaymentException |
+| StoreLaboratoryPurchaseRequest | SÍ — valida contra customer.paymentMethods() |
+| OrderAction | SÍ — ChargePaymentMethodAction para no-odessa |
+| FulfillLaboratoryCartOrderAction | Indirecto — recibe Transaction ya creada |
+| Transaction | SÍ — almacena hey_banco |
+| RefundTransactionAction | SÍ — case hey_banco |
+| PaymentMethodController | SÍ — tokenización |
+
+## Qué está conectado
+
+- Listado de métodos de pago en checkout incluye tarjetas Hey Banco cuando HEYBANCO_ENABLED=true
+- Cobro al confirmar pedido pasa por PaymentGatewayManager
+- Detalle de pedido muestra referencia Banregio
+- Reembolso en cancelación admin usa cancelación Colecto
+
+## Qué NO está conectado / falta
+
+- Filtro admin compras lab: IndexLaboratoryPurchaseRequest solo permite odessa,stripe,efevoopay,paypal
+- BuildLaboratoryPurchaseChartsDataAction: sin label hey_banco
+- LaboratoryPurchaseConfirmationViewData: sin label hey_banco
+- Badge Banregio en PaymentMethodStep (muestra tarjeta genérica, no distingue proveedor visualmente)
+- Mensaje sandbox específico Hey Banco en checkout (solo mensaje Efevoo mock)
+- HEYBANCO_ENABLED=false por defecto impide uso sin configuración explícita
+
+
+# Integración con farmacia
+
+## Archivos revisados
+
+| Archivo | Hey Banco |
+|---------|-----------|
+| OnlinePharmacyCheckout | NO |
+| OnlinePharmacyPurchaseController | NO |
+| OnlinePharmacy OrderAction | NO — ChargeStripePaymentMethodAction |
+| ChargeStripePaymentMethodAction | NO |
+| Odessa (farmacia) | SÍ pero no Hey Banco |
+| Transaction | Reutilizable pero no se crea con hey_banco desde farmacia |
+| RefundTransactionAction | Soporta hey_banco pero no se invoca desde farmacia |
+
+**Conclusión: Hey Banco NO está conectado a farmacia en línea.**
+
+
+# Integración con membresía médica
+
+## Archivos revisados
+
+| Archivo | Hey Banco |
+|---------|-----------|
+| MedicalAttentionSubscriptionController | Indirecto — delega a PurchaseRegularSubscriptionAction |
+| PurchaseRegularSubscriptionAction | SÍ — ChargePaymentMethodAction |
+| MedicalAttentionSubscriptionRequest | Permite métodos de customer.paymentMethods() |
+| Odessa | SÍ como alternativa |
+| Stripe | NO en este flujo (usa ChargePaymentMethodAction → Efevoo o Hey Banco) |
+| Transaction | SÍ si payment_method=hey_banco:* |
+
+**Conclusión: SÍ conectado**, condicionado a HEYBANCO_ENABLED y tarjetas tokenizadas.
+Log en PurchaseRegularSubscriptionAction aún dice gateway efevoopay genéricamente en un punto
+(aunque el cobro real respeta el payment_method_id).
+
+
+# Reembolsos
+
+## Implementado
+
+- RefundTransactionAction::refundHeyBancoTransaction
+- Usa HeyBancoPaymentGateway::refundOrCancel → CancelHeyBancoTransactionAction
+- Comando Colecto: CANCELACION por BNRG_REF_TRANS_PREVIA
+- Actualiza Transaction: refunded_at, gateway_status=refunded, details.cancellation
+- NO elimina PaymentMethod token
+
+## Qué falta
+
+- Reembolso parcial: cancelByReference envía monto completo de transaction_amount_cents
+- Reintento/idempotencia si cancelación falla
+- UI admin específica de estado reembolso Banregio
+- Verificación post-cancelación automática
+- Tests de integración RefundTransactionAction + Hey Banco (solo test unitario de CancelAction)
+
+## Admin cancelación compra
+
+RefundTransactionAction se invoca desde OrderAction en rollback y desde flujos admin de
+cancelación (si usan la misma action). La cancelación Banregio depende de tener
+banregio_reference en Transaction.details o gateway_transaction_id.
+
+
+# Logs, monitoreo y administración
+
+## Implementado
+
+| Herramienta | Cobertura Hey Banco |
+|-------------|---------------------|
+| BanregioMonitor (admin) | Tokens, TX ADQ, intentos — filtros search/status/flow |
+| BanregioToken show | Token enmascarado, TX relacionadas, intentos |
+| BanregioTransaction show | Headers BNRG, raw request/response |
+| PaymentAttempt admin genérico | Filtro gateway=hey_banco |
+| Log::info [HeyBanco] | Request/response en HeyBancoClient |
+| Log en RefundTransactionAction | Inicio/respuesta/error refund Hey Banco |
+
+## No implementado / gaps
+
+| Gap | Detalle |
+|-----|---------|
+| PaymentLog | Hey Banco no escribe en payment_logs |
+| Admin LaboratoryPurchases filtro | Falta hey_banco en validation rule |
+| PaymentDetails.jsx | No identificado claramente con sección Hey Banco dedicada |
+| Exportaciones Banregio | No hay export CSV/Excel en BanregioMonitor |
+| Badges en PaymentMethodStep | No distingue Efevoo vs Banregio en checkout |
+| config_monitor.php | No mapea variables HEYBANCO_* (sí mapea EFEVOO_*) |
+| Alertas/métricas | Sin dashboard de tasas de rechazo/timeout |
+
+## Columnas/filtros sugeridos pendientes
+
+- Filtro payment_method=hey_banco en admin laboratory purchases
+- Label hey_banco en gráficas BuildLaboratoryPurchaseChartsDataAction
+- Badge proveedor en listado checkout (provider field ya existe en payload)
+
+
+# Errores y excepciones
+
+## HeyBancoPaymentException
+
+- **Archivo:** app/Exceptions/HeyBancoPaymentException.php
+- **Campos:** message, processorCode (BNRG_CODIGO_RECHAZO), processorMessage (BNRG_TEXTO)
+
+## Mensajes identificados
+
+| Contexto | Mensaje |
+|----------|---------|
+| Tokenización fallida | "No se pudo tokenizar la tarjeta con Hey Banco." o BNRG_TEXTO |
+| Método inválido | "Método de pago Hey Banco inválido." |
+| Método no disponible | "El método de pago seleccionado no está disponible o ha expirado." |
+| Tarjeta expirada | "El método de pago ha expirado. Por favor selecciona otro." |
+| Sin token | "El token de tarjeta no está disponible. La tarjeta necesita ser tokenizada nuevamente." |
+| Pago rechazado | BNRG_TEXTO o "El pago fue rechazado por Hey Banco." |
+| Error genérico cobro | "Error al procesar el pago con Hey Banco: {exception}" |
+| Sin referencia cancelación | "No hay referencia Banregio asociada a esta transacción para cancelar." |
+| Verificación fallida | "La verificación de la transacción falló." |
+| API disabled | 403 "Hey Banco no está habilitado." |
+| Verify API | "Debes enviar reference o folio." |
+
+## Códigos BNRG_CODIGO_PROC (HeyBancoResponse)
+
+| Código | statusLabel | Significado |
+|--------|-------------|-------------|
+| A | approved | Aprobado |
+| D | declined | Declinado |
+| R | rejected | Rechazado |
+| T | timeout | Timeout — dispara verificación |
+| X | failed | Fallido |
+| otro | unknown | Desconocido |
+
+## Errores HTTP
+
+- Http facade puede lanzar ConnectionException — capturado en ChargeHeyBancoTokenAction como HeyBancoPaymentException genérica
+- Timeout HTTP: config heybanco.timeout (30s default)
+
+## Configuración faltante
+
+- Si HEYBANCO_ENABLED=false: abort 403 en API; UI de selector oculta; paymentMethods() no incluye hey_banco
+
+
+# Comparación con EfevooPay actual
+
+| Aspecto | EfevooPay | Hey Banco / Banregio |
+|---------|-----------|----------------------|
+| Proveedor key | efevoopay | hey_banco |
+| Token storage | efevoo_tokens (EfevooToken) | payment_methods (PaymentMethod) |
+| ID público | dígito (token id) | hey_banco:{id} |
+| Tokenización | Con 3DS (producción) o mock | Directa ADQ sin 3DS |
+| API externa | REST JSON Efevoo API | Form POST Colecto ADQ, respuesta en headers |
+| 3DS | Efevoo3dsSession + flujo completo | Solo config, sin implementar |
+| Webhook | efevoo/webhook | No existe |
+| TX gateway específica | efevoo_transactions (opcional) | payment_transactions (obligatoria) |
+| PaymentAttempt | Sí (gateway efevoopay) | Sí (gateway hey_banco) |
+| PaymentLog | No claro para Efevoo | No usado |
+| Reembolso | EfevooPayService::refundTransaction | Cancelación Colecto CANCELACION |
+| Verify | No en gateway adapter | Sí — VERIFICACION Colecto |
+| Simulación/mock | MockEfevooPayGateway completo | Solo tarjetas test en config + Http::fake en tests |
+| Admin monitor | admin/efevoo-tokens | admin/banregio |
+| Checkout lab | Sí | Sí (mismo ChargePaymentMethodAction) |
+| Farmacia | No (Stripe) | No |
+| Membresía | Sí | Sí |
+| Habilitación | Siempre activo | HEYBANCO_ENABLED flag |
+
+## Qué reemplazaría Hey Banco de EfevooPay
+
+- Tokenización y cobro con tarjeta en flujos ChargePaymentMethodAction
+- Potencialmente el proveedor por defecto si PAYMENT_PROVIDER=hey_banco
+
+## Qué reutiliza
+
+- Transaction (negocio)
+- PaymentAttempt
+- PaymentGatewayInterface / PaymentGatewayManager
+- ChargePaymentMethodAction
+- RefundTransactionAction (patrón switch gateway)
+- UI checkout PaymentMethodStep
+- Flujos OrderAction / PurchaseRegularSubscriptionAction
+
+## Paridad funcional faltante
+
+1. 3DS
+2. Webhooks
+3. Mock/simulator integrado en app
+4. API documentada tipo EfevooPayController (/api/efevoopay/*)
+5. Migraciones versionadas payment_methods/payment_transactions
+6. PaymentLog / auditoría unificada
+7. Filtros y reportes admin completos
+8. Eliminación remota de token
+9. Reembolso parcial
+
+
+# Riesgos técnicos detectados
+
+1. **Tokens no portables:** provider_token Colecto atado a afiliación/media_id; no interoperable con Efevoo
+2. **Checkout parcialmente conectado:** funciona pero flag off por defecto; UI checkout no distingue proveedor
+3. **Falta idempotencia:** referencia FM-{customer}-{time}-{rand} sin deduplicación explícita
+4. **Falta webhook:** estados finales dependen de respuesta síncrona o verify manual
+5. **Timeout handling limitado:** verify automático solo en ChargeHeyBancoTokenAction, no en otros flujos
+6. **Migraciones faltantes:** payment_methods/payment_transactions pueden no existir en BD nueva
+7. **gateway_token en Transaction:** guarda hash referencial, no token real — puede confundir debugging
+8. **Nombres inconsistentes:** hey_banco vs Banregio vs Hey Banco en UI
+9. **Admin filtros:** laboratory purchases no filtran hey_banco
+10. **Impacto GDA:** cobro antes de fulfillment; rollback depende de cancelación Banregio exitosa
+11. **3DS obligatorio en producción:** sin implementar, puede bloquear go-live bancario
+12. **HEYBANCO_MODE=AUT:** aprobar siempre en sandbox; riesgo si se despliega a prod sin cambiar a PRD
+13. **Affiliation/media IDs en .env.example:** valores de sandbox expuestos como ejemplo (no secretos pero sensibles operativamente)
+14. **PaymentAttempt.token_id:** FK lógica a PaymentMethod.id para Hey Banco pero FK a efevoo_tokens para Efevoo — semántica mixta
+15. **EfevooPaymentGateway.refundOrCancel:** retorna supported=true sin ejecutar reembolso real — deuda técnica paralela
+
+
+# Pendientes para terminar la integración
+
+## Críticos
+
+| Pendiente | Archivo(s) | Por qué | Riesgo si no se hace |
+|-----------|-------------|---------|----------------------|
+| Crear migraciones payment_methods y payment_transactions | database/migrations/ | Modelos asumen tablas existentes | Fallo total en tokenización/cobro en BD limpia |
+| Implementar 3DS Hey Banco | Nuevo servicio + JS + rutas | Requisito bancario producción | No go-live; rechazos/fraude |
+| Activar y validar en staging con HEYBANCO_MODE=PRD | .env, config/heybanco.php | AUT solo sandbox | Cobros ficticios o incorrectos en prod |
+| Webhook o polling robusto post-timeout | Nuevo controller/job | Pagos en estado T indeterminado | Cobros perdidos o duplicados |
+| Idempotencia de cobros | ChargeHeyBancoTokenAction | Reintentos pueden duplicar cargo | Doble cobro al cliente |
+
+## Importantes
+
+| Pendiente | Archivo(s) | Por qué | Riesgo |
+|-----------|-------------|---------|--------|
+| Filtro hey_banco en admin lab purchases | IndexLaboratoryPurchaseRequest, LaboratoryPurchases.jsx | Operaciones no ven compras Banregio | Soporte ciego |
+| Labels hey_banco en reportes | BuildLaboratoryPurchaseChartsDataAction, LaboratoryPurchaseConfirmationViewData | Reportes incompletos | Métricas incorrectas |
+| Distinción visual Banregio en checkout | PaymentMethodStep.jsx | UX confusa vs Efevoo | Errores de selección |
+| Tests integración OrderAction + Hey Banco | tests/Feature/ | Sin cobertura E2E | Regresiones |
+| Integrar PaymentLog | HeyBancoClient o Actions | Auditoría fragmentada | Debugging difícil |
+| Mapear HEYBANCO_* en config_monitor | config/config_monitor.php | Monitoreo config incompleto | Misconfiguración silenciosa |
+| Eliminar token remoto en Colecto | Nuevo método client + destroy | Tokens activos en Banregio tras "eliminar" | Seguridad/compliance |
+
+## Deseables
+
+| Pendiente | Archivo(s) | Por qué | Riesgo |
+|-----------|-------------|---------|--------|
+| Integrar farmacia | OnlinePharmacy OrderAction | Paridad producto | Limitación comercial |
+| Reembolso parcial | CancelHeyBancoTransactionAction | Casos soporte | Manual vía Banregio |
+| Export CSV BanregioMonitor | BanregioMonitorController | Operaciones | Bajo |
+| Documentación API interna Swagger | HeyBancoPaymentController | DX | Bajo |
+| isHeyBanco() en Transaction model | Transaction.php | Consistencia con isEfevooPay() | Bajo |
+| Feature tests browser tokenización | tests/Browser/ | QA manual repetitiva | Bajo |
+
+
+# Mapa técnico para ChatGPT
+
+## ¿Qué necesito saber para entender esta integración?
+
+1. El proveedor interno se llama **hey_banco** (no "banregio" en código de pagos).
+2. La API externa es **Banregio Colecto ADQ** — POST form, respuesta en headers BNRG_*.
+3. Todo pasa por **PaymentGatewayManager** para cobros con tarjeta en lab y membresía.
+4. Hay **dos capas de transacciones:** PaymentTransaction (ADQ) y Transaction (negocio).
+5. **HEYBANCO_ENABLED** controla si la integración está activa.
+6. **No hay 3DS ni webhooks** para Hey Banco aún.
+7. IDs de método de pago: **hey_banco:{payment_method_id}**.
+
+## Archivos más importantes (leer primero)
+
+1. config/heybanco.php
+2. app/Services/Payments/HeyBanco/HeyBancoClient.php
+3. app/Actions/Payments/HeyBanco/ChargeHeyBancoTokenAction.php
+4. app/Actions/Payments/HeyBanco/CreateHeyBancoTokenAction.php
+5. app/Services/Payments/PaymentGatewayManager.php
+6. app/Services/Payments/HeyBancoPaymentGateway.php
+7. app/Actions/Payments/ChargePaymentMethodAction.php
+8. app/Actions/Laboratories/OrderAction.php
+
+## Flujo a revisar primero
+
+Tokenización: PaymentMethods/Create → PaymentMethodController::storeHeyBancoCard → CreateHeyBancoTokenAction
+
+Cobro lab: LaboratoryPurchaseController::store → OrderAction → ChargePaymentMethodAction →
+ChargeHeyBancoTokenAction → HeyBancoClient::chargeToken
+
+## Clases núcleo
+
+- HeyBancoClient (comunicación Colecto)
+- HeyBancoPaymentGateway (adaptador)
+- PaymentGatewayManager (routing)
+- ChargeHeyBancoTokenAction / CreateHeyBancoTokenAction (orquestación)
+- HeyBancoResponse (parseo)
+
+## Modelos que guardan información de pago
+
+- **PaymentMethod** — token Colecto (provider_token)
+- **PaymentTransaction** — cada llamada ADQ
+- **PaymentAttempt** — cada intento de cobro
+- **Transaction** — registro de negocio unificado
+
+## Frontend involucrado
+
+- PaymentMethods/Create.jsx (alta tarjeta)
+- PaymentMethodStep + LaboratoryCheckout.jsx (selección)
+- BanregioBadge, PaymentMethodBadge, heyBancoTransactionDetails.js (visualización)
+- Admin/BanregioMonitor.jsx (ops)
+
+## Partes que siguen usando otros proveedores
+
+| Módulo | Proveedor actual |
+|--------|------------------|
+| Lab (alternativa) | EfevooPay, Odessa, PayPal, coupon_balance |
+| Farmacia | Stripe, Odessa |
+| Membresía (alternativa) | EfevooPay, Odessa |
+| Tokenización default | EfevooPay (si HEYBANCO_ENABLED=false o PAYMENT_PROVIDER=efevoopay) |
+
+## ¿Qué falta para reemplazar completamente EfevooPay?
+
+1. HEYBANCO_ENABLED=true + credenciales producción + MODE=PRD
+2. Implementar 3DS Hey Banco
+3. Migraciones BD completas
+4. Webhooks o reconciliación automática
+5. Paridad admin/reportes (filtros, labels, export)
+6. Tests E2E checkout completo
+7. Conectar farmacia si se requiere un solo proveedor de tarjeta
+8. Plan de migración tokens Efevoo → re-tokenización Hey Banco (no portable)
+9. Desactivar/default cambiar PAYMENT_PROVIDER a hey_banco
+
+
+# Resumen ejecutivo final
+
+1. Famedic integra Hey Banco vía **Banregio Colecto ADQ** bajo el proveedor `hey_banco`.
+2. Está implementada la **tokenización directa** y el **cobro con token** (VENTA).
+3. Existen **verificación** y **cancelación** para timeout y reembolsos.
+4. La arquitectura usa **PaymentGatewayManager** compartido con EfevooPay.
+5. El **checkout de laboratorio y membresía médica** ya enrutan cobros hey_banco:* correctamente.
+6. La **farmacia NO** usa Hey Banco.
+7. **3D Secure y webhooks NO están implementados** para Hey Banco.
+8. La integración está **desactivada por defecto** (HEYBANCO_ENABLED=false).
+9. Hay **monitoreo admin dedicado** (Banregio Monitor) con permiso banregio.manage.
+10. Faltan **migraciones versionadas** para payment_methods y payment_transactions.
+11. Tests unitarios cubren cliente HTTP y cancelación; **faltan tests de integración**.
+12. Para producción: activar flag, modo PRD, 3DS, migraciones, pruebas E2E y reconciliación.
+13. Reemplazar EfevooPay requiere **re-tokenización** de tarjetas (tokens no portables).
+14. Revisar antes de continuar: estado BD, credenciales sandbox vs prod, y flujo GDA+cobro+rollback.
+
+================================================================================
+FIN DEL DOCUMENTO
+================================================================================

@@ -1,0 +1,177 @@
+================================================================================
+FAMEDIC — CORRECCIÓN migrate:fresh (migración legacy pregenerated certificates)
+================================================================================
+Fecha: 2026-06-09
+================================================================================
+
+
+# Causa exacta del fallo
+
+La migración `database/migrations/2025_07_16_090353_migrate_pregenerated_certificates_from_old_db.php`
+consultaba inmediatamente la conexión `mysqlold` sin validar si la base legacy existe:
+
+    DB::connection('mysqlold')
+        ->table('pregenerated_medical_attention_ids')
+        ->chunk(...)
+
+En ambientes sin `famedic_old` (Docker local, testing, CI, migrate:fresh):
+
+    SQLSTATE[HY000] [1049] Unknown database 'famedic_old'
+    (Connection: mysqlold, SQL: select * from `pregenerated_medical_attention_ids` ...)
+
+
+# Archivo corregido
+
+| Archivo | Cambio |
+|---------|--------|
+| `database/migrations/2025_07_16_090353_migrate_pregenerated_certificates_from_old_db.php` | Guard `legacySourceIsAvailable()` antes del chunk; no-op seguro si legacy no existe |
+
+
+# Análisis de la migración original
+
+| Aspecto | Detalle |
+|---------|---------|
+| Conexión legacy | `mysqlold` (`config/database.php`, BD `famedic_old`) |
+| Tabla legacy leída | `pregenerated_medical_attention_ids` |
+| Tablas/modelos destino | `OdessaAfiliatedCompany`, `CertificateAccount`, `Customer` (Eloquent) |
+| Operación | **Crea** empresas afiliadas, cuentas certificado y clientes; registra skips en log |
+| Rollback (`down`) | No-op documentado (migración de datos sin reversa) |
+
+Flujo cuando el origen existe:
+1. Lee certificados pregenerados en chunks de 100.
+2. Crea o reutiliza `OdessaAfiliatedCompany` por `company_number`.
+3. Crea `CertificateAccount` con metadata del empleado.
+4. Crea `Customer` si no existe uno con el mismo `medical_attention_identifier`.
+5. Omite clientes duplicados y genera reporte JSON en `storage/logs/`.
+
+
+# Cómo se validó la conexión legacy
+
+Método privado `legacySourceIsAvailable()` (mismo patrón que
+`2025_06_27_205929_migrate_subscription_invoices_from_old_db.php`):
+
+1. **Configuración:** `config('database.connections.mysqlold')` debe existir.
+2. **Conexión PDO:** `DB::connection('mysqlold')->getPdo()` dentro de try/catch.
+3. **Base inexistente:** error MySQL **1049** o mensaje `Unknown database` → no-op + `Log::warning()`.
+4. **Otros errores de conexión** con BD existente: se **re-lanzan**.
+
+
+# Cómo se validó la tabla legacy
+
+Tras conectar exitosamente:
+
+    Schema::connection('mysqlold')->hasTable('pregenerated_medical_attention_ids')
+
+Si la tabla no existe → `Log::warning()` y no-op.
+
+
+# Qué pasa si `famedic_old` no existe
+
+- La migración termina con **éxito** (sin excepción).
+- Registra warning: `Skipping pregenerated certificates legacy migration: legacy database is not available.`
+- No inserta datos en la BD nueva.
+- `migrate:fresh` continúa con migraciones posteriores.
+- Tests con `RefreshDatabase` no fallan por esta migración.
+
+
+# Qué pasa si `famedic_old` sí existe
+
+- Se valida conexión y tabla.
+- Se ejecuta el **mismo comportamiento original** (chunk, creación de empresas,
+  cuentas certificado, clientes, logs y reporte JSON).
+- Errores reales de datos (FK, columnas, inserts con BD accesible) **no se silencian**.
+
+
+# Criterio: errores que NO se ocultan
+
+| Situación | Comportamiento |
+|-----------|----------------|
+| BD `famedic_old` no existe (1049) | No-op + warning |
+| Tabla `pregenerated_medical_attention_ids` ausente | No-op + warning |
+| Conexión `mysqlold` no configurada | No-op + warning |
+| BD legacy accesible pero fallo en INSERT/Eloquent | **Excepción** (comportamiento original) |
+| Cliente ya existente | Skip + log (comportamiento original) |
+
+
+# Impacto en producción
+
+- Entornos con `famedic_old` provisionada: **sin cambio funcional**.
+- Entornos nuevos sin legacy: dejan de fallar; no se crean datos ficticios.
+- No se borran datos históricos ni se elimina la migración.
+
+
+# Impacto en testing/CI
+
+- `RefreshDatabase` ya no falla en `2025_07_16_090353_...` por `Unknown database`.
+- La migración hace no-op en ~5 ms cuando no hay legacy.
+
+
+# Comandos ejecutados
+
+```bash
+docker compose exec -T app php artisan migrate:fresh --seed --no-interaction
+docker compose exec -T app php artisan test --filter=HeyBancoPaymentTablesSmokeTest
+docker compose exec -T app php artisan test --filter=HeyBanco
+```
+
+
+# Resultado de migrate:fresh --seed
+
+**Parcialmente exitoso respecto a este fix.**
+
+Migración corregida:
+
+    2025_07_16_090353_migrate_pregenerated_certificates_from_old_db ... 4.91ms DONE
+
+**migrate:fresh --seed completo: FALLA** en migración posterior (no modificada):
+
+    2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test ... FAIL
+
+    SQLSTATE[23000] Integrity constraint violation: 1452
+    laboratory_test_category_id = 9 no existe en laboratory_test_categories
+
+Archivo: `database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14`
+
+El seed no completa.
+
+
+# Migraciones Hey Banco Fase 1 (2026_06_08_*)
+
+**NO ejecutadas** — el batch se detiene en `2026_05_15_120000_...` (anterior a `2026_06_08_*`).
+
+Archivos pendientes:
+- `2026_06_08_100000_create_payment_methods_table.php`
+- `2026_06_08_100001_create_payment_transactions_table.php`
+- `2026_06_08_100002_add_hey_banco_idempotency_to_payment_attempts_table.php`
+
+
+# Resultado de tests HeyBanco
+
+| Comando | Exit code | Resultado |
+|---------|-----------|-----------|
+| `--filter=HeyBancoPaymentTablesSmokeTest` | 2 | 1 failed, 0 assertions |
+| `--filter=HeyBanco` | 2 | 14 failed, 0 assertions |
+
+**Causa actual:** `RefreshDatabase` falla en `2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test`
+por FK `laboratory_test_category_id = 9` (mismo patrón que el fix anterior de `laboratory_tests`).
+
+**Fase 1 Hey Banco en runtime: NO validada.**
+
+
+# Nuevo bloqueador documentado (sin cambios en este trabajo)
+
+| Migración | Error |
+|-----------|-------|
+| `2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php` | `laboratory_test_category_id = 9` hardcodeado sin categoría en BD fresh |
+
+
+# Resumen ejecutivo
+
+| Item | Estado |
+|------|--------|
+| Fix pregenerated certificates / famedic_old | **Hecho** |
+| migrate:fresh --seed completo | **Falla** (bloqueador: Azteca RMN categoría ID 9) |
+| Tests HeyBanco | **Fallan** (mismo bloqueador) |
+| Hey Banco Fase 1 validada en runtime | **No** |
+
+================================================================================

@@ -1,0 +1,184 @@
+================================================================================
+FAMEDIC — CORRECCIÓN migrate:fresh (migración legacy subscription_invoices)
+================================================================================
+Fecha: 2026-06-08
+================================================================================
+
+
+# Causa exacta del fallo
+
+La migración `database/migrations/2025_06_27_205929_migrate_subscription_invoices_from_old_db.php`
+consultaba inmediatamente la conexión `mysqlold` sin validar si la base legacy existe:
+
+    DB::connection('mysqlold')->table('subscription_invoices')->chunk(...)
+
+En ambientes sin `famedic_old` (Docker local, testing, CI, migrate:fresh):
+
+    SQLSTATE[HY000] [1049] Unknown database 'famedic_old'
+    (Connection: mysqlold, SQL: select * from `subscription_invoices` ...)
+
+La conexión `mysqlold` está definida en `config/database.php` con `database => 'famedic_old'`
+hardcodeado; el host/credenciales son los mismos que `mysql`, pero la base antigua no se
+provisiona en entornos nuevos.
+
+
+# Archivo corregido
+
+| Archivo | Cambio |
+|---------|--------|
+| `database/migrations/2025_06_27_205929_migrate_subscription_invoices_from_old_db.php` | Guard `legacySourceIsAvailable()` antes del chunk; no-op seguro si legacy no existe |
+
+
+# Análisis de la migración original
+
+| Aspecto | Detalle |
+|---------|---------|
+| Conexión legacy | `mysqlold` (`config/database.php`, BD `famedic_old`) |
+| Tabla legacy leída | `subscription_invoices` (+ `transactionables`, `transactions` por factura) |
+| Tablas destino (conexión `mysql`) | `medical_attention_subscriptions`, `transactions`, `transactionables` |
+| Modelos Eloquent | Ninguno (usa `DB::table` directamente) |
+| Operación | **Crea** suscripciones nuevas y transacciones nuevas a partir de datos legacy |
+| Rollback (`down`) | No-op documentado (migración de datos sin reversa) |
+
+Flujo cuando el origen existe:
+1. Lee `subscription_invoices` de `famedic_old` en chunks de 100.
+2. Por cada factura, verifica que el `customer_id` exista en la BD nueva.
+3. Inserta en `medical_attention_subscriptions`.
+4. Migra transacciones asociadas (`transactionables` + `transactions`) con metadata en `details`.
+5. Omite facturas cuyo cliente no existe (warning en log).
+
+
+# Cómo se validó la conexión legacy
+
+Método privado `legacySourceIsAvailable()`:
+
+1. **Configuración:** `config('database.connections.mysqlold')` debe existir.
+2. **Conexión PDO:** `DB::connection('mysqlold')->getPdo()` dentro de try/catch.
+3. **Base inexistente:** si el error es código MySQL **1049** o mensaje `Unknown database`,
+   se considera origen no disponible → no-op con `Log::warning()`.
+4. **Otros errores de conexión** (credenciales inválidas con BD existente, timeouts, etc.):
+   se **re-lanzan** para no ocultar fallos reales en producción.
+
+
+# Cómo se validó la tabla legacy
+
+Tras conectar exitosamente:
+
+    Schema::connection('mysqlold')->hasTable('subscription_invoices')
+
+Si la tabla no existe → `Log::warning()` y no-op.
+
+
+# Qué pasa si `famedic_old` no existe
+
+- La migración termina con **éxito** (no lanza excepción).
+- Registra warning: `Skipping subscription invoices legacy migration: legacy database is not available.`
+- No inserta datos en la BD nueva.
+- `migrate:fresh` puede continuar con migraciones posteriores.
+- Tests con `RefreshDatabase` no fallan por esta migración.
+
+
+# Qué pasa si `famedic_old` sí existe
+
+- Se valida conexión y tabla.
+- Se ejecuta el **mismo comportamiento original** (chunk + creación de suscripciones y transacciones).
+- Errores de datos reales (FK, columnas, permisos con BD accesible) **no se silencian**.
+
+
+# Criterio: errores que NO se ocultan
+
+| Situación | Comportamiento |
+|-----------|----------------|
+| BD `famedic_old` no existe (1049) | No-op + warning |
+| Tabla `subscription_invoices` ausente en legacy | No-op + warning |
+| Conexión `mysqlold` no configurada | No-op + warning |
+| BD legacy accesible pero fallo en INSERT/SELECT de datos | **Excepción** (comportamiento original) |
+| Cliente no encontrado en BD nueva | Warning + skip de esa factura (comportamiento original) |
+
+
+# Impacto en producción
+
+- Entornos con `famedic_old` provisionada: **sin cambio funcional**; migración de datos intacta.
+- Entornos nuevos sin legacy: dejan de fallar; no se crean datos ficticios.
+- No se borran datos históricos ni se elimina la migración.
+- No se requiere crear `famedic_old` en local/testing/CI.
+
+
+# Impacto en testing/CI
+
+- `RefreshDatabase` ya no falla en `2025_06_27_205929_...` por `Unknown database`.
+- La migración hace no-op en ~10 ms cuando no hay legacy.
+
+
+# Comandos ejecutados
+
+```bash
+docker compose exec -T app php artisan migrate:fresh --seed --no-interaction
+docker compose exec -T app php artisan test --filter=HeyBancoPaymentTablesSmokeTest
+docker compose exec -T app php artisan test --filter=HeyBanco
+```
+
+
+# Resultado de migrate:fresh --seed
+
+**Parcialmente exitoso respecto a este fix.**
+
+Migración corregida:
+
+    2025_06_27_205929_migrate_subscription_invoices_from_old_db ... 10.61ms DONE
+
+**migrate:fresh --seed completo: FALLA** en migración posterior (no modificada en este trabajo):
+
+    2025_07_10_add_export_permissions ... FAIL
+
+    Spatie\Permission\Exceptions\PermissionAlreadyExists:
+    A `laboratory-purchases.manage.export` permission already exists for guard `web`.
+
+Archivo: `database/migrations/2025_07_10_add_export_permissions.php:16`
+
+El seed no completa porque las migraciones se detienen antes del final.
+
+
+# Migraciones Hey Banco Fase 1 (2026_06_08_*)
+
+**NO ejecutadas** en `migrate:fresh --seed` porque el batch se detiene en
+`2025_07_10_add_export_permissions` (anterior a `2026_06_08_*`).
+
+Pendientes de alcanzar:
+
+- `2026_06_08_100000_create_payment_methods_table.php`
+- `2026_06_08_100001_create_payment_transactions_table.php`
+- `2026_06_08_100002_add_hey_banco_idempotency_to_payment_attempts_table.php`
+
+
+# Resultado de tests HeyBanco
+
+| Comando | Exit code | Resultado |
+|---------|-----------|-----------|
+| `--filter=HeyBancoPaymentTablesSmokeTest` | 2 | 1 failed, 0 assertions |
+| `--filter=HeyBanco` | 2 | 14 failed, 0 assertions |
+
+**Causa actual:** `PermissionAlreadyExists` en `2025_07_10_add_export_permissions.php`
+durante migraciones de `RefreshDatabase` (no relacionado con legacy `famedic_old`).
+
+**Fase 1 Hey Banco en runtime: NO validada** (bloqueada por migración de permisos).
+
+
+# Nuevos bloqueadores documentados (sin cambios en este trabajo)
+
+| Migración | Error | Notas |
+|-----------|-------|-------|
+| `2025_07_10_add_export_permissions.php` | Permiso duplicado `laboratory-purchases.manage.export` | Probable conflicto con permiso creado en migración anterior en fresh |
+| `2025_07_16_090353_migrate_pregenerated_certificates_from_old_db.php` | **No alcanzada aún** | Misma dependencia `mysqlold`; requerirá guard similar si no se corrige antes |
+
+
+# Resumen ejecutivo
+
+| Item | Estado |
+|------|--------|
+| Fix subscription_invoices / famedic_old | **Hecho** |
+| migrate:fresh --seed completo | **Falla** (bloqueador: export permissions) |
+| Tests HeyBanco | **Fallan** (mismo bloqueador de permisos) |
+| Hey Banco Fase 1 validada en runtime | **No** |
+
+================================================================================

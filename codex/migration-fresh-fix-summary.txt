@@ -1,0 +1,160 @@
+================================================================================
+FAMEDIC — CORRECCIÓN migrate:fresh (tax_profiles)
+================================================================================
+Fecha: corrección post validación Hey Banco Fase 1
+================================================================================
+
+
+# Causa exacta del fallo original
+
+La migración `database/migrations/2025_01_08_140518_create_tax_profiles_table.php`
+estaba **mal implementada**:
+
+- El nombre sugiere `CREATE tax_profiles`.
+- El código ejecutaba `Schema::table('tax_profiles', ...)` (ALTER).
+- **No existía** ninguna otra migración con `Schema::create('tax_profiles')`.
+- En `migrate:fresh`, la tabla no existe → error:
+  `SQLSTATE[42S02]: Table 'tax_profiles' doesn't exist` (MySQL)
+  o `no such table: tax_profiles` (SQLite en tests).
+
+Además, `database/migrations/2025_12_09_002225_add_columns_tax_profiles_table.php`
+duplicaba el mismo ALTER (mismas columnas), lo que habría causado error de
+columna duplicada tras corregir el create.
+
+
+# Archivos corregidos
+
+| Archivo | Cambio |
+|---------|--------|
+| `database/migrations/2025_01_08_140518_create_tax_profiles_table.php` | Reescrita: `Schema::create('tax_profiles')` con todas las columnas; `hasTable` guard para bases que ya tengan la tabla |
+| `database/migrations/2025_12_09_002225_add_columns_tax_profiles_table.php` | Reescrita: ALTER idempotente con `hasColumn` por columna (compatibilidad bases existentes) |
+
+
+# Criterio de corrección
+
+- La migración `2025_01_08` nunca creó la tabla en repos limpios → **seguro reemplazar
+  el contenido** por un `create` completo (no es alteración de producción ya aplicada
+  de forma exitosa en BD vacías).
+- `if (Schema::hasTable('tax_profiles')) return;` protege entornos donde la tabla ya
+  fue creada manualmente o por despliegues previos.
+- La migración `2025_12_09` se conserva como **parche histórico idempotente** para
+  BD que tengan solo columnas base sin las de extracción automática.
+
+
+# Columnas de tax_profiles (estado final tras create)
+
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id | bigint PK | |
+| customer_id | FK → customers.id cascade | Usado en requests `exists:tax_profiles,id,customer_id,...` |
+| name | string | StoreTaxProfileRequest required |
+| razon_social | string nullable | CreateTaxProfileAction, extracción |
+| rfc | string nullable | CreateTaxProfileAction |
+| zipcode | string | required |
+| codigo_postal_original | string nullable | |
+| tax_regime | string | required |
+| regimen_fiscal_original | string nullable | |
+| cfdi_use | string nullable | default G03 en action |
+| fiscal_certificate | string nullable | ruta PDF |
+| tipo_persona | string nullable | fisica / moral |
+| fecha_emision_constancia | string nullable | |
+| fecha_inscripcion | date nullable | |
+| estatus_sat | string nullable | |
+| domicilio_fiscal | text nullable | |
+| actividades_economicas | string nullable | |
+| tipo_persona_confianza | integer default 0 | |
+| tipo_persona_detectado_por | string nullable | |
+| hash_constancia | string nullable | |
+| verificado_automaticamente | boolean default false | |
+| fecha_verificacion | timestamp nullable | |
+| created_at / updated_at | timestamps | |
+| deleted_at | softDeletes | TaxProfile usa SoftDeletes |
+
+Índices: `customer_id`, `rfc`.
+
+Alineado con: `TaxProfile::$fillable`, `CreateTaxProfileAction`, `TaxProfileFactory`.
+
+
+# Impacto en bases existentes
+
+| Escenario | Comportamiento |
+|-----------|----------------|
+| BD nueva (`migrate:fresh`) | `2025_01_08` crea tabla completa; `2025_12_09` no añade columnas (ya existen) |
+| BD con `tax_profiles` ya creada | `2025_01_08` sale temprano (`hasTable`); `2025_12_09` solo añade columnas faltantes |
+| BD donde `2025_01_08` falló antes | Re-ejecutar migración requiere `migrate` pendiente o refresh; no borra datos históricos |
+| Registro en tabla `migrations` | Si `2025_01_08` ya consta como ejecutada, Laravel no la re-corre; columnas faltantes las cubre `2025_12_09` |
+
+No se eliminaron tablas ni datos. No se renombraron columnas usadas por modelos/controllers.
+
+
+# Comandos ejecutados
+
+```bash
+docker compose exec -T app php artisan migrate:fresh --seed --no-interaction
+docker compose exec -T app php artisan test --filter=HeyBancoPaymentTablesSmokeTest
+docker compose exec -T app php artisan test --filter=HeyBanco
+```
+
+Nota: `php artisan test` no acepta `--no-interaction`.
+
+
+# Resultado de validación
+
+## migrate:fresh --seed
+
+| Estado | Detalle |
+|--------|---------|
+| tax_profiles | **CORREGIDO — pasa** |
+| migrate:fresh completo | **AÚN FALLA** (exit 1) |
+
+**Nuevo bloqueador** (posterior a tax_profiles):
+
+`database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325`
+
+Inserta en `laboratory_tests` con `laboratory_test_category_id = 12` cuando
+`app()->environment() !== 'testing'`, pero la categoría 12 no existe en
+`laboratory_test_categories`.
+
+Error: `SQLSTATE[23000] Integrity constraint violation: 1452`.
+
+El seed **no se ejecutó** porque el pipeline de migraciones se detuvo antes.
+
+
+## Tests Hey Banco
+
+| Test | Estado | Causa |
+|------|--------|-------|
+| `HeyBancoPaymentTablesSmokeTest` | **FALLA** | `RefreshDatabase` no completa migraciones (mismo error laboratory_tests) |
+| `--filter=HeyBanco` (14 tests) | **FALLA** | Idem |
+
+Los tests Hey Banco **no llegaron a ejecutar assertions**; fallan en setup de BD.
+
+
+## ¿Migraciones Hey Banco Fase 1 ejecutadas?
+
+**NO** en `migrate:fresh` completo.
+
+Orden cronológico:
+- `2025_04_21_...` falla **antes** de
+- `2026_06_08_100000_create_payment_methods_table.php`
+- `2026_06_08_100001_create_payment_transactions_table.php`
+- `2026_06_08_100002_add_hey_banco_idempotency_to_payment_attempts_table.php`
+
+La corrección de `tax_profiles` **desbloquea** el pipeline hasta la siguiente
+migración problemática.
+
+
+# Pendientes detectados
+
+1. **Crítico para migrate:fresh / tests Hey Banco:** corregir
+   `2025_04_21_161348_modify_laboratory_tests_table.php` (categoría 12 inexistente
+   o crear categoría antes del insert).
+2. Ejecutar `migrate:fresh --seed` hasta el final y confirmar migraciones
+   `2026_06_08_*` aplicadas.
+3. Re-ejecutar `php artisan test --filter=HeyBanco` tras migrate completo.
+4. Opcional: revisar otras migraciones con `DB::table()->insert()` y FKs hardcodeadas.
+
+
+================================================================================
+FIN
+================================================================================

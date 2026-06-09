@@ -1,0 +1,905 @@
+================================================================================
+FAMEDIC — AUDITORÍA DE PRODUCTION READINESS
+Hey Banco / Banregio Colecto
+================================================================================
+Referencia: codex/hey-banco-implementation-summary.txt
+Alcance: código actual del repositorio (Laravel + React + Inertia)
+Fecha de auditoría: basada en revisión estática del código
+================================================================================
+
+
+# Auditoría de readiness para producción — Hey Banco / Banregio
+
+## Veredicto general
+
+**NO LISTA PARA PRODUCCIÓN.**
+
+La integración tiene una base técnica sólida para sandbox (cliente ADQ, actions, gateway
+manager, checkout cableado, monitor admin, cancelación básica), pero presenta **bloqueadores
+críticos** que impiden un go-live seguro con dinero real:
+
+- Infraestructura de BD incompleta (migraciones faltantes).
+- Sin 3D Secure Hey Banco implementado.
+- Sin webhooks ni reconciliación automática robusta.
+- Idempotencia insuficiente ante doble submit, reintentos y timeouts de red.
+- Riesgo operativo alto en flujo **cobro → GDA → rollback** (laboratorio).
+- Feature flag y modo sandbox activos por defecto.
+
+**Estado recomendado hoy:** pruebas internas controladas con `HEYBANCO_ENABLED=true` en
+staging, usando URLs y credenciales sandbox de Banregio Colecto. No activar en producción
+hasta cerrar bloqueadores de Fase 1 y Fase 2 del plan de acción.
+
+
+# Bloqueadores críticos para producción
+
+---
+
+## B1 — Migraciones faltantes para payment_methods y payment_transactions
+
+| Campo | Detalle |
+|-------|---------|
+| **Descripción** | Los modelos `PaymentMethod` y `PaymentTransaction` se usan en tokenización, cobro, verificación y cancelación, pero **no existe** `Schema::create('payment_methods')` ni `Schema::create('payment_transactions')` en `database/migrations/`. |
+| **Archivos** | `app/Models/PaymentMethod.php`, `app/Models/PaymentTransaction.php`, `CreateHeyBancoTokenAction.php`, `ChargeHeyBancoTokenAction.php`, `CancelHeyBancoTransactionAction.php`, `VerifyHeyBancoTransactionAction.php`, `BanregioMonitorController.php` |
+| **Riesgo** | Fallo fatal en deploy limpio: `SQLSTATE[42S02] table doesn't exist` al tokenizar o cobrar. |
+| **Impacto cliente** | Imposible registrar tarjeta o pagar. Checkout laboratorio/membresía falla. |
+| **Impacto operativo/admin** | Monitor Banregio vacío o con error 500. Sin trazabilidad ADQ. |
+| **Recomendación** | Crear migraciones con esquema derivado de `$fillable` de ambos modelos, FKs, índices en `provider`, `reference`, `folio`, `user_id`, `payment_method_id`. Ejecutar en staging y producción antes de activar flag. |
+| **Prioridad** | P0 — CRÍTICA |
+
+---
+
+## B2 — 3D Secure Hey Banco no implementado
+
+| Campo | Detalle |
+|-------|---------|
+| **Descripción** | Variables `HEYBANCO_3DS_*` y `3ds_url` existen en `config/heybanco.php`, pero no hay servicio, modelo, rutas, callbacks ni páginas React para 3DS Banregio. La tokenización actual es directa (`CREACION_TOKEN`). `PaymentMethods/Create.jsx` indica explícitamente: "Tokenización directa sin 3D Secure (fase actual)". |
+| **Archivos** | `config/heybanco.php`, `PaymentMethodController.php` (solo 3DS Efevoo), `Efevoo3dsSession`, `ThreeDSRedirect.jsx`, `ThreeDSResult.jsx`, `PaymentMethods/Create.jsx` |
+| **Riesgo** | Rechazo regulatorio/bancario; tarjetas bloqueadas por emisor; fraude elevado; incumplimiento de requisitos del procesador en producción. |
+| **Impacto cliente** | Tokenización o cobro rechazado en tarjetas que exigen autenticación fuerte. |
+| **Impacto operativo/admin** | No hay sesiones 3DS que monitorear; soporte sin visibilidad del challenge. |
+| **Recomendación** | Implementar flujo 3DS Colecto completo antes de go-live si Banregio/Hey Banco lo exige (confirmar con documentación comercial del procesador — requisito exacto: **No identificado claramente en el código**, solo inferido por variables preparadas). |
+| **Prioridad** | P0 — CRÍTICA (si el procesador exige 3DS en producción) |
+
+---
+
+## B3 — Sin webhooks ni reconciliación automática
+
+| Campo | Detalle |
+|-------|---------|
+| **Descripción** | No hay ruta webhook/callback para Banregio. Solo existe API síncrona ADQ y endpoint autenticado `POST payments/hey-banco/verify`. EfevooPay sí tiene `POST efevoo/webhook`. |
+| **Archivos** | `routes/settings.php`, `HeyBancoPaymentController.php`, `HeyBancoClient.php`, ausencia de `BanregioWebhookController` o similar |
+| **Riesgo** | Pagos en estado indeterminado (timeout HTTP, `BNRG_CODIGO_PROC=T`, excepción de red) sin recuperación garantizada. |
+| **Impacto cliente** | Cobro realizado en banco pero pedido no creado; o pedido fallido pero dinero retenido. |
+| **Impacto operativo/admin** | Soporte manual; sin cola de pagos pendientes; BanregioMonitor no distingue "requiere reconciliación". |
+| **Recomendación** | Job programado de reconciliación (verify por referencia/folio) + cola de estados `pending_reconciliation`. Evaluar con Banregio si existe notificación asíncrona obligatoria. |
+| **Prioridad** | P0 — CRÍTICA |
+
+---
+
+## B4 — Idempotencia insuficiente (riesgo de doble cargo)
+
+| Campo | Detalle |
+|-------|---------|
+| **Descripción** | La referencia de cobro se genera con `FM-{customerId}-{time()}-{rand(1000,9999)}` sin constraint único en BD. No hay deduplicación por idempotency key. `PaymentAttempt` se crea siempre antes del cobro sin verificar intentos previos exitosos con la misma referencia de negocio. Reintento tras timeout o doble submit puede generar segundo `VENTA` en Banregio. |
+| **Archivos** | `ChargeHeyBancoTokenAction.php` (línea ~61), `PaymentAttempt.php`, `database/migrations/2026_03_11_233958_create_payment_attempts_table.php`, `LaboratoryCheckout.jsx` (solo guard `checkoutProcessing`) |
+| **Riesgo** | Doble cargo al mismo cliente por refresh, doble clic o reintento tras error transitorio. |
+| **Impacto cliente** | Cargo duplicado; disputa; pérdida de confianza. |
+| **Impacto operativo/admin** | Reembolso manual; dos `PaymentTransaction` + dos `Transaction` sin vínculo de idempotencia. |
+| **Recomendación** | `UNIQUE(reference)` en `payment_attempts` o tabla `payment_idempotency_keys`; generar referencia determinística por checkout session; antes de cobrar, buscar attempt/transaction existente approved con misma clave. |
+| **Prioridad** | P0 — CRÍTICA |
+
+---
+
+## B5 — HEYBANCO_MODE=AUT por defecto (sandbox hardcoded en config)
+
+| Campo | Detalle |
+|-------|---------|
+| **Descripción** | `config/heybanco.php` documenta: "En sandbox usar mode=AUT para aprobar siempre; en producción usar PRD." El default de `HEYBANCO_MODE` es `AUT`. |
+| **Archivos** | `config/heybanco.php`, `HeyBancoClient.php` (`BNRG_MODO_TRANS`) |
+| **Riesgo** | Despliegue a producción con AUT podría auto-aprobar transacciones sin validación real del emisor. |
+| **Impacto cliente** | Pagos "aprobados" que no reflejan decisión bancaria real, o comportamiento incorrecto según contrato Banregio. |
+| **Impacto operativo/admin** | Reportes y conciliación incoherentes con estado real bancario. |
+| **Recomendación** | Validación en boot/AppServiceProvider: si `HEYBANCO_ENV=production` y `MODE!=PRD`, abortar o log crítico. Checklist de deploy obligatorio. |
+| **Prioridad** | P0 — CRÍTICA |
+
+---
+
+## B6 — HEYBANCO_ENABLED=false y PAYMENT_PROVIDER=efevoopay por defecto
+
+| Campo | Detalle |
+|-------|---------|
+| **Descripción** | Integración desactivada por defecto. `PaymentGatewayManager::defaultProvider()` hace fallback a `efevoopay` si `hey_banco` configurado pero no enabled. |
+| **Archivos** | `config/heybanco.php`, `config/payments.php`, `.env.example`, `Customer::paymentMethods()`, `HeyBancoPaymentController.php` |
+| **Riesgo** | Activación accidental parcial (flag on en un servidor, off en otro); confusión operativa. |
+| **Impacto cliente** | Sin tarjetas Hey Banco visibles si flag off; si flag on sin credenciales prod, errores de pago. |
+| **Impacto operativo/admin** | Monitor Banregio muestra `enabled: false` en summary. |
+| **Recomendación** | Proceso de release documentado; validar flag + credenciales + URL prod en pipeline de deploy. |
+| **Prioridad** | P1 — Alta (bloqueador de activación, no de código en sí) |
+
+---
+
+## B7 — Cobro antes de GDA sin transacción atómica (laboratorio)
+
+| Campo | Detalle |
+|-------|---------|
+| **Descripción** | `OrderAction` cobra primero (`chargeAndCreateTransaction`), luego ejecuta `FulfillLaboratoryCartOrderAction` (incluye `CreateGDAQuotationAction`). No hay transacción DB única que englobe cobro + fulfillment. Si GDA falla, se invoca `RefundTransactionAction` en catch. |
+| **Archivos** | `OrderAction.php`, `FulfillLaboratoryCartOrderAction.php`, `RefundTransactionAction.php`, `CreateGDAQuotationAction.php` |
+| **Riesgo** | Cobro exitoso en Banregio + GDA fallido + cancelación Banregio fallida = cliente cobrado sin pedido. `RefundTransactionAction::__invoke` elimina `Transaction` si refund OK, pero si refund falla la TX queda huérfana. |
+| **Impacto cliente** | Cargo sin orden de laboratorio; sin acceso a estudios. |
+| **Impacto operativo/admin** | Intervención manual; posible pedido duplicado si cliente reintenta. |
+| **Recomendación** | Cola de compensación; estado `payment_captured_pending_fulfillment`; reintento GDA antes de cancelar; alertas si refund falla. Considerar patrón authorize-then-capture si Colecto lo soporta — **No identificado claramente en el código**. |
+| **Prioridad** | P0 — CRÍTICA (para checkout laboratorio) |
+
+---
+
+## B8 — Manejo incompleto de timeout y fallos de conexión
+
+| Campo | Detalle |
+|-------|---------|
+| **Descripción** | Solo si `BNRG_CODIGO_PROC=T` se llama `handleTimeout()` con verify por referencia/folio. Si `VerifyHeyBancoTransactionAction` lanza excepción (verify no approved), no se marca estado `pending_reconciliation`. Si falla conexión HTTP (timeout Laravel, DNS, 5xx), se captura como `\Throwable` genérico sin verify posterior. |
+| **Archivos** | `ChargeHeyBancoTokenAction.php`, `VerifyHeyBancoTransactionAction.php`, `HeyBancoClient.php` |
+| **Riesgo** | Banco cobró pero sistema reporta error; o sistema reporta timeout pero verify no se ejecutó por excepción. |
+| **Impacto cliente** | Mensaje "pago rechazado" con cargo real. |
+| **Impacto operativo/admin** | `PaymentTransaction` en estado inconsistente; sin tab de "pendientes". |
+| **Recomendación** | En catch de red/timeout: persistir `pending_verification`, encolar job verify; no lanzar error al usuario hasta agotar reintentos; pantalla admin de reconciliación. |
+| **Prioridad** | P0 — CRÍTICA |
+
+---
+
+## B9 — Reembolso sin garantía fuerte ni reembolso parcial
+
+| Campo | Detalle |
+|-------|---------|
+| **Descripción** | Reembolso = `CANCELACION` por referencia con monto total. Sin reintento. Sin verificación post-cancelación. `refunded_at` check evita doble refund en `refund()`, pero `__invoke` hace soft-delete de Transaction si refund OK — si cancelación falla silenciosamente, estado inconsistente. |
+| **Archivos** | `RefundTransactionAction.php`, `CancelHeyBancoTransactionAction.php`, `HeyBancoPaymentGateway.php` |
+| **Riesgo** | Admin cancela compra, cancelación Banregio falla, cliente sin reembolso; soporte sin visibilidad clara. |
+| **Impacto cliente** | Dinero no devuelto tras cancelación aparente. |
+| **Impacto operativo/admin** | Sin alerta de "cancelación fallida"; sin cola de reintentos. |
+| **Recomendación** | No borrar Transaction hasta confirmar cancelación; estado `refund_pending`; job reintento; verificación post-cancel. |
+| **Prioridad** | P1 — Alta |
+
+---
+
+## B10 — Cobertura de pruebas insuficiente para producción
+
+| Campo | Detalle |
+|-------|---------|
+| **Descripción** | Solo 2 tests unitarios (`HeyBancoClientTest`, `CancelHeyBancoTransactionActionTest`). Sin feature tests de OrderAction, sin browser tests, sin test de timeout→verify, sin test GDA falla→refund. |
+| **Archivos** | `tests/Unit/Payments/HeyBancoClientTest.php`, `tests/Unit/Payments/CancelHeyBancoTransactionActionTest.php` |
+| **Riesgo** | Regresiones no detectadas antes de producción. |
+| **Impacto cliente** | Fallos en flujos reales no cubiertos por CI. |
+| **Impacto operativo/admin** | — |
+| **Recomendación** | Suite mínima de feature + integración (ver sección Pruebas). |
+| **Prioridad** | P1 — Alta |
+
+
+# Revisión de migraciones y base de datos
+
+## Qué existe en el repositorio
+
+| Elemento | Migración / evidencia | Estado |
+|----------|----------------------|--------|
+| `transactions` (tabla base) | `2024_12_05_110319_create_transactions_table.php` | EXISTE |
+| Campos `gateway`, `gateway_transaction_id`, `gateway_status`, `gateway_response`, `gateway_token`, `gateway_processed_at`, `details` | `2026_02_17_052522_add_gateway_fields_to_transactions_table.php` | EXISTE |
+| `gateway_authorization_code` | `2026_02_04_160604_add_gateway_authorization_code_to_transactions_table.php` | EXISTE |
+| `refunded_at` | `2026_02_03_051558_add_refunded_at_to_transactions_table.php` | EXISTE |
+| `payment_attempts` | `2026_03_11_233958_create_payment_attempts_table.php` | EXISTE |
+| `payment_logs` | `2026_04_04_120000_add_paypal_fields_to_transactions_and_create_payment_logs_table.php` | EXISTE (no usado por Hey Banco) |
+| Permiso `banregio.manage` | `2026_06_05_120000_add_banregio_manage_permission.php` | EXISTE |
+| `efevoo_tokens` | `2026_01_27_194333_create_efevoo_tokens_table.php` | EXISTE (paralelo Efevoo) |
+
+## Qué falta
+
+| Elemento | Estado | Impacto |
+|----------|--------|---------|
+| `payment_methods` | **NO EXISTE migración** | `PaymentMethod::create()` falla en BD limpia |
+| `payment_transactions` | **NO EXISTE migración** | Todo flujo ADQ falla en BD limpia |
+| Índice único `payment_attempts.reference` | NO EXISTE | Doble cargo posible |
+| Índice único `payment_transactions.reference` + `provider` | NO EXISTE | Duplicados ADQ |
+| FK `payment_attempts.token_id` → `payment_methods.id` | NO EXISTE (columna nullable sin FK en migración) | Integridad débil |
+| FK `payment_methods.created_from_transaction_id` | NO EXISTE | Integridad débil |
+| Columnas Banregio en `transactions` | No dedicadas; se usa JSON `details` + campos `gateway_*` | Funcional pero sin columnas bnrg_* en transactions de negocio |
+| Estado `pending_reconciliation` / `pending_refund` | NO EXISTE como enum/constraint | Operación manual |
+
+## Modelos que dependen de tablas potencialmente inexistentes
+
+| Modelo | Tabla asumida | Falla en BD limpia |
+|--------|---------------|-------------------|
+| `PaymentMethod` | `payment_methods` | SÍ — tokenización, listado checkout, monitor tokens |
+| `PaymentTransaction` | `payment_transactions` | SÍ — cobro, verify, cancel, monitor transacciones |
+| `PaymentAttempt` | `payment_attempts` | NO (migración existe) |
+| `Transaction` | `transactions` | NO |
+
+## Qué fallaría en una base limpia (migrate:fresh)
+
+1. `php artisan migrate` → tablas `payment_methods` y `payment_transactions` **no se crean**.
+2. Usuario intenta agregar tarjeta Hey Banco → error SQL al `PaymentMethod::create()`.
+3. Cualquier cobro → error al `PaymentTransaction::create()` y `PaymentAttempt::create()` (attempt sí existe, pero TX ADQ no).
+4. Tests `HeyBancoClientTest::test_folio_uniqueness_considers_existing_transactions` crean `PaymentTransaction` — **pasan solo si la tabla existe** (puede depender de BD preexistente o fallar en CI limpio).
+
+## Migraciones que deberían crearse
+
+### create_payment_methods_table
+
+Columnas mínimas según modelo:
+- `id`, `user_id` (FK users), `provider`, `provider_token` (text), `brand`, `last4`,
+  `exp_month`, `exp_year`, `affiliation_id`, `media_id`, `status`, `alias`, `card_holder`,
+  `created_from_transaction_id` (nullable FK), `last_used_at`, `timestamps`
+- Índices: `(user_id, provider, status)`, unique opcional `(user_id, provider, last4, exp_month, exp_year)` si negocio lo permite
+
+### create_payment_transactions_table
+
+Columnas mínimas según modelo:
+- `id`, `user_id` (FK), `payment_method_id` (nullable FK), `related_type`, `related_id` (morph nullable),
+  `provider`, `flow`, `folio`, `reference`, `previous_reference`, `auth_code`, `amount`, `currency`,
+  `mode`, `status`, campos `bnrg_*`, `raw_request` (json), `raw_response_headers` (json), `timestamps`
+- Índices: `(provider, reference)`, `(provider, folio)`, `(flow, status)`
+
+### Alteraciones recomendadas a payment_attempts
+
+- `UNIQUE(reference)` donde `gateway='hey_banco'`
+- FK `customer_id` → customers
+- FK `token_id` → payment_methods (nullable)
+- Columna `idempotency_key` o `checkout_session_id` nullable
+
+
+# Revisión de variables de entorno
+
+| Variable | Propósito | Sandbox (conceptual) | Producción (conceptual) | Riesgo si mal configurada | Dónde se usa |
+|----------|-----------|----------------------|-------------------------|---------------------------|--------------|
+| `HEYBANCO_ENABLED` | Feature flag master | `true` en staging | `true` solo cuando listo | Integración inactiva o activa sin credenciales | `config/heybanco.php`, `PaymentMethodController`, `Customer::paymentMethods()`, `HeyBancoPaymentController`, `HeyBancoPaymentGateway::isEnabled()`, `PaymentGatewayManager` |
+| `HEYBANCO_ENV` | Etiqueta entorno (UI/metadata) | `sandbox` | `production` | Confusión operativa; badges incorrectos | `config/heybanco.php`, props Inertia, metadata checkout |
+| `HEYBANCO_ADQ_URL` | URL base ADQ Colecto | Host testcolecto (sandbox) | Host producción Colecto | Cobros a entorno equivocado | `HeyBancoClient::post()` |
+| `HEYBANCO_3DS_URL` | URL recepción 3DS | URL test TDS | URL prod TDS | Sin efecto hoy (no implementado) | Solo `config/heybanco.php` |
+| `HEYBANCO_TOKEN_AFFILIATION` | BNRG_ID_AFILIACION token/cobro | Afiliación sandbox | Afiliación producción | Rechazo total de operaciones | `HeyBancoClient` createToken, chargeToken, cancelByReference |
+| `HEYBANCO_TOKEN_MEDIA_ID` | BNRG_ID_MEDIO token/cobro | Media ID sandbox | Media ID producción | Rechazo o medición incorrecta | `HeyBancoClient`, `PaymentMethod.media_id`, verify/cancel |
+| `HEYBANCO_3DS_AFFILIATION` | Afiliación 3DS | Sandbox | Producción | Sin efecto hasta implementar 3DS | Solo config |
+| `HEYBANCO_3DS_MEDIA_ID` | Media ID 3DS | Sandbox | Producción | Sin efecto hasta implementar 3DS | Solo config |
+| `HEYBANCO_3DS_MEDIA_ID_ALT` | Media ID 3DS alternativo | Sandbox | Producción | Sin efecto hasta implementar 3DS | Solo config |
+| `HEYBANCO_3DS_SECRET_KEY` | Secreto 3DS | Vacío o sandbox | Secreto prod | Sin efecto hasta implementar 3DS | Solo config |
+| `HEYBANCO_MODE` | BNRG_MODO_TRANS (AUT/PRD) | `AUT` (auto-approve sandbox) | `PRD` (obligatorio) | Cobros ficticios o inválidos en prod | `HeyBancoClient` chargeToken, cancelByReference; persistido en PaymentTransaction.mode |
+| `HEYBANCO_TIMEOUT` | Timeout HTTP segundos | 30 | 30–60 según SLA | Timeout prematuro o esperas largas | `HeyBancoClient::post()` |
+| `PAYMENT_PROVIDER` | Proveedor default al agregar tarjeta | `efevoopay` o `hey_banco` | `hey_banco` cuando migrado | Usuarios tokenizan en proveedor equivocado | `config/payments.php`, `PaymentGatewayManager::defaultProvider()`, `PaymentMethods/Create.jsx` |
+
+**Nota:** `config/config_monitor.php` **no mapea** variables `HEYBANCO_*` (sí mapea `EFEVOO_*`). Riesgo de misconfiguración no detectada en monitor de config.
+
+
+# Revisión de idempotencia
+
+## Análisis del flujo actual
+
+### Generación de referencia
+
+```php
+// ChargeHeyBancoTokenAction.php ~61
+$reference = $reference ?? ('FM-' . $customer->id . '-' . time() . '-' . rand(1000, 9999));
+```
+
+- Nueva referencia en cada invocación si no se pasa explícitamente.
+- `OrderAction` y `ChargePaymentMethodAction` **no pasan** referencia determinística.
+- Colisión improbable pero **no imposible**; sin constraint UNIQUE.
+
+### PaymentAttempt
+
+- Se crea con `status=processing` antes de llamar a Banregio.
+- No verifica si ya existe attempt `approved` para el mismo checkout/pedido.
+- `token_id` apunta a `PaymentMethod.id` (correcto para Hey Banco).
+
+### PaymentTransaction
+
+- Se crea por cada llamada ADQ sin deduplicación.
+- Folio generado con unicidad parcial (`HeyBancoClient::generateFolio` consulta `payment_transactions`).
+
+### Transaction (negocio)
+
+- Se crea solo si cobro approved.
+- Sin unique en `reference_id` o `gateway_transaction_id`.
+
+### Verify by reference / folio
+
+- Solo en `handleTimeout()` cuando `BNRG_CODIGO_PROC=T`.
+- No se usa como guardia idempotente antes de un segundo cobro.
+
+### Retry en timeout
+
+- Un solo intento de verify por referencia, luego por folio.
+- Si ambos fallan → status `timeout` → excepción al usuario.
+- No hay job de reintento.
+
+### Frontend doble submit
+
+- `LaboratoryCheckout.jsx`: `if (checkoutProcessing) return;` y botones deshabilitados con `checkoutProcessing`.
+- Protección **parcial** (Inertia `processing`); no hay token anti-replay server-side.
+- Refresh de página tras error puede reenviar formulario.
+
+### FulfillLaboratoryCartOrderAction / OrderAction
+
+- Si cobro OK y fulfillment falla → `RefundTransactionAction` en catch.
+- Si usuario reintenta checkout completo → **nuevo cobro** con nueva referencia (doble cargo posible si refund no corrió).
+
+## ¿Hay idempotencia suficiente?
+
+**NO.**
+
+## Dónde falta
+
+1. Clave idempotente por sesión de checkout / intento de compra.
+2. Constraint UNIQUE en referencia de cobro.
+3. Verificación "ya cobrado" antes de segundo VENTA.
+4. Reintento seguro tras timeout (verify-first, charge-never).
+5. Backend idempotency middleware para `laboratory.checkout.store`.
+
+## Cómo debería implementarse
+
+1. Generar `idempotency_key` al entrar a confirmación checkout (UUID en `LaboratoryCheckoutDraft` o sesión).
+2. Pasar esa clave como `BNRG_REF_CLIENTE1` o campo dedicado.
+3. `UNIQUE(gateway, reference)` en `payment_attempts`.
+4. En `ChargeHeyBancoTokenAction`: si existe attempt/transaction approved con misma key → retornar Transaction existente.
+5. En timeout/error red: estado `pending_verification`, no re-cobrar; job verify.
+
+## Constraints recomendados
+
+- `payment_attempts`: UNIQUE(`reference`), INDEX(`customer_id`, `status`, `created_at`)
+- `payment_transactions`: UNIQUE(`provider`, `reference`) WHERE reference IS NOT NULL
+- `transactions`: INDEX(`gateway`, `gateway_transaction_id`)
+
+## Pruebas a agregar
+
+- Doble POST mismo checkout → un solo cargo Banregio (Http::fake assertSentCount 1).
+- Timeout + verify approved → no segundo cargo en reintento.
+- Timeout + verify failed → estado pending, no Transaction de negocio.
+
+
+# Revisión de timeout y verificación
+
+## Qué hace actualmente
+
+1. `HeyBancoClient::post()` usa `Http::asForm()->timeout(HEYBANCO_TIMEOUT)`.
+2. Si respuesta tiene `BNRG_CODIGO_PROC=T` → `handleTimeout()`.
+3. `handleTimeout()`:
+   - Si hay `referencia` en respuesta → `verifyAction->byReference()`.
+   - Si no approved y hay `folio` → `verifyAction->byFolio()`.
+   - Si verify approved → continúa flujo exitoso.
+   - Si no → `paymentTransaction.status=timeout` → lanza `HeyBancoPaymentException`.
+
+## VerifyHeyBancoTransactionAction
+
+- Exige `$response->isApproved()` (codigo_proc=A).
+- Para considerar verificación de venta exitosa usa `isVerificationApproved()` (A + proc_trans=A + estado_trans=C).
+- Si verify no cumple → lanza excepción (no persiste estado intermedio útil para reconciliación).
+
+## Si verify falla
+
+- Excepción burbujea a `ChargeHeyBancoTokenAction` catch.
+- `PaymentAttempt` → `status=error`.
+- Usuario ve error de pago.
+- **Si Banregio sí cobró:** dinero capturado sin `Transaction` de negocio ni pedido.
+
+## Si falla conexión HTTP (no BNRG T)
+
+- `\Throwable` en catch genérico.
+- Mismo resultado: attempt error, sin verify automático.
+- **Riesgo máximo de desincronización.**
+
+## Si el banco cobró pero el sistema no lo sabe
+
+- No hay job de reconciliación.
+- Admin puede usar manualmente `POST payments/hey-banco/verify` (requiere auth usuario).
+- BanregioMonitor muestra transacciones si se persistieron parcialmente.
+
+## ¿Se necesita job de reconciliación?
+
+**SÍ** — para producción.
+
+Propuesta:
+- Job `ReconcileHeyBancoPaymentJob` cada N minutos.
+- Buscar `payment_transactions` con status `timeout`, `pending_verification`, o attempts `processing` > 5 min.
+- Ejecutar verify; si approved, crear/recuperar `Transaction` y continuar fulfillment si aplica.
+
+## ¿Pantalla admin de pagos pendientes?
+
+**Falta.** BanregioMonitor tiene filtros por status pero no flujo operativo de resolución.
+
+## Estados que deberían existir
+
+| Estado | Uso propuesto |
+|--------|---------------|
+| `processing` | Intento en curso (existe en PaymentAttempt) |
+| `approved` | Cobro confirmado (existe) |
+| `declined` / `rejected` | Rechazo bancario (existe vía statusLabel) |
+| `timeout` | Existe en PaymentTransaction |
+| `pending_verification` | **FALTA** — timeout/red sin confirmación |
+| `pending_reconciliation` | **FALTA** — requiere intervención/job |
+| `unknown` | Existe en HeyBancoResponse::statusLabel |
+
+
+# Revisión de reembolsos y cancelaciones
+
+## Qué está implementado
+
+| Componente | Comportamiento |
+|------------|----------------|
+| `RefundTransactionAction::refund()` | Detecta gateway `hey_banco`; verifica `refunded_at` |
+| `refundHeyBancoTransaction()` | Llama `HeyBancoPaymentGateway::refundOrCancel()` |
+| `CancelHeyBancoTransactionAction` | Resuelve referencia desde `details.payment_details.banregio_reference`, `gateway_transaction_id`; `cancelByReference()` con monto total |
+| Persistencia | Nueva `PaymentTransaction` flow=cancellation; actualiza `Transaction.refunded_at`, `gateway_status=refunded`, `details.cancellation` |
+| `RefundTransactionAction::__invoke` | Si refund OK → `$transaction->delete()` (soft delete) |
+
+## Referencia Banregio
+
+Resolución en orden:
+1. `details.payment_details.banregio_reference`
+2. `gateway_transaction_id`
+3. `details.payment_details.reference` (referencia cliente FM-*, no referencia Banregio — fallback débil)
+
+## Reembolso total vs parcial
+
+- Solo **cancelación total** (`amountCents / 100` completo).
+- Reembolso parcial: **no implementado**.
+
+## Si cancelación falla
+
+- `refundHeyBancoTransaction` retorna `false`.
+- `Transaction` **no** se marca `refunded_at`.
+- `__invoke` no elimina Transaction.
+- Log error; sin notificación a ops.
+
+## Si admin cancela compra
+
+- Depende de que el flujo admin invoque `RefundTransactionAction` con Transaction que tenga `gateway=hey_banco` y referencia Banregio válida.
+- Si `gateway_transaction_id` es folio en lugar de referencia Banregio, cancelación puede fallar.
+
+## Si GDA falla después del cobro (laboratorio)
+
+- `OrderAction` catch → `RefundTransactionAction($transaction)`.
+- Si cancelación Banregio exitosa → Transaction eliminada.
+- Si cancelación falla → cliente cobrado, sin pedido, Transaction persiste.
+
+## Si se intenta reembolsar dos veces
+
+- Segunda llamada: `refunded_at` ya seteado → `refund()` retorna `false` (log warning).
+- Protección **suficiente** a nivel aplicación si `refunded_at` se setea correctamente en primer éxito.
+
+## Riesgos
+
+1. Cancelación fallida silenciosa post-GDA.
+2. `__invoke` borra Transaction tras refund — dificulta auditoría histórica (soft delete mitiga parcialmente).
+3. Sin verify post-cancelación.
+4. Sin reintento automático.
+
+## Recomendaciones
+
+1. Estado `refund_pending` / `refund_failed` en Transaction.
+2. No soft-delete hasta confirmar cancelación + verify.
+3. Cola de reintentos cancelación.
+4. Alerta admin si refund falla tras fallo GDA.
+
+
+# Revisión de 3D Secure
+
+## Variables disponibles (sin implementación)
+
+- `HEYBANCO_3DS_URL`
+- `HEYBANCO_3DS_AFFILIATION`
+- `HEYBANCO_3DS_MEDIA_ID`
+- `HEYBANCO_3DS_MEDIA_ID_ALT`
+- `HEYBANCO_3DS_SECRET_KEY`
+
+## Referencia Efevoo 3DS (patrón existente)
+
+| Componente | Archivo |
+|------------|---------|
+| Modelo sesión | `Efevoo3dsSession`, migración `efevoo_3ds_sessions` |
+| Controller | `PaymentMethodController` (show3dsRedirect, check3dsStatus, show3dsResult) |
+| Rutas | `payment-methods.3ds-redirect`, `3ds-callback`, `3ds-result`, `3ds-status` |
+| React | `ThreeDSRedirect.jsx`, `ThreeDSResult.jsx`, `MockThreeDS.jsx` |
+| Servicio | `EfevooPayService::initiate3DS`, `complete3DS` |
+
+## Qué falta para Hey Banco 3DS
+
+| Pieza | Estado |
+|-------|--------|
+| Modelo `HeyBanco3dsSession` o similar | NO EXISTE |
+| Servicio iniciar/completar 3DS Colecto | NO EXISTE |
+| Rutas callback sin auth (como Efevoo) | NO EXISTE |
+| Páginas React redirect/result Banregio | NO EXISTE |
+| Integración PaymentMethods/Create (rama hey_banco → 3DS) | NO — va directo a tokenize |
+| Integración checkout cobro con 3DS | NO EXISTE |
+| Uso de `3ds_secret_key` | NO EXISTE |
+
+## Impacto si producción exige 3DS
+
+- **Bloqueo total** de tokenización y/o cobros para tarjetas que requieran challenge.
+- Incumplimiento de política del procesador.
+- No hay fallback implementado.
+
+**Requisito obligatorio de 3DS en prod según contrato Banregio:** No identificado claramente en el código — debe confirmarse con documentación comercial del procesador.
+
+
+# Revisión de webhooks/callbacks
+
+## Rutas actuales Hey Banco
+
+| Ruta | Tipo |
+|------|------|
+| POST `payments/hey-banco/tokenize` | API autenticada |
+| POST `payments/hey-banco/charge` | API autenticada |
+| POST `payments/hey-banco/verify` | API autenticada |
+
+Todas bajo middleware `auth, verified, customer`. **Ninguna es webhook público.**
+
+## Controllers
+
+- `HeyBancoPaymentController` — solo operaciones iniciadas por usuario autenticado.
+
+## Ausencia de webhook
+
+- No hay `BanregioWebhookController`.
+- No hay ruta `withoutMiddleware(['auth'])` para Banregio (Efevoo sí: `efevoo/webhook`).
+
+## ¿Se puede operar solo con verificación?
+
+**Parcialmente, según código actual:**
+
+- El diseño asume modelo **síncrono** ADQ (request/response inmediato).
+- Verify es **complemento** para timeout, no sustituto completo de webhook sin jobs.
+
+Para producción segura se requiere al menos:
+- Jobs de reconciliación periódica con `VERIFICACION`.
+- Procedimiento operativo manual en BanregioMonitor.
+
+Si Banregio envía notificaciones asíncronas: **No identificado claramente en el código** — no hay handler.
+
+## Diseño recomendado si se requiere webhook
+
+1. Ruta `POST /webhooks/banregio` sin auth, con validación HMAC/`HEYBANCO_WEBHOOK_SECRET` (variable nueva).
+2. Controller idempotente por `BNRG_REFERENCIA` o event_id.
+3. Actualizar `PaymentTransaction` y, si aplica, crear/completar `Transaction`.
+4. Registrar en `PaymentLog` o tabla `webhook_events`.
+5. Responder HTTP 200 rápido; procesar en queue.
+
+## Validación firma
+
+- No implementada.
+- `HEYBANCO_3DS_SECRET_KEY` existe pero no se usa — podría servir de referencia para patrón de secreto.
+
+
+# Revisión del checkout de laboratorio
+
+## Archivo por archivo
+
+| Archivo | ¿Funciona con Hey Banco? | Notas |
+|---------|--------------------------|-------|
+| `LaboratoryCheckout.jsx` | SÍ (condicional) | Usa `paymentMethods` del controller; `checkoutProcessing` anti doble submit parcial |
+| `PaymentMethodStep.jsx` | SÍ | Renderiza tarjetas genéricas; `hey_banco:*` aparece si enabled; sin badge Banregio específico |
+| `ConfirmationStep.jsx` | SÍ | Muestra método seleccionado (agnóstico) |
+| `LaboratoryCheckoutController` | SÍ | `resolveCheckoutPaymentMethods()` → `customer.paymentMethods()` incluye hey_banco |
+| `LaboratoryPurchaseController` | SÍ | Captura `HeyBancoPaymentException`; redirect back con error |
+| `StoreLaboratoryPurchaseRequest` | SÍ | Valida contra `paymentMethods()` dinámico |
+| `OrderAction` | SÍ | `ChargePaymentMethodAction` para hey_banco:* |
+| `ChargePaymentMethodAction` | SÍ | Delega a `HeyBancoPaymentGateway` |
+| `FulfillLaboratoryCartOrderAction` | SÍ (post-cobro) | GDA después del cobro; rollback vía refund en OrderAction catch |
+| `Transaction` | SÍ | Persiste hey_banco con details completos |
+| `RefundTransactionAction` | SÍ | Cancelación Banregio en rollback |
+| GDA (`CreateGDAQuotationAction`) | RIESGO | Fallo post-cobro dispara refund; no atómico |
+
+## Qué falta
+
+- Idempotency key de checkout.
+- Distinción visual Banregio vs Efevoo en `PaymentMethodStep`.
+- Mensaje sandbox Hey Banco (solo hay mensaje Efevoo mock en checkout).
+- Estado intermedio "pago en verificación".
+- E2E tests completos.
+
+## Qué podría romperse
+
+1. Tablas `payment_methods`/`payment_transactions` inexistentes.
+2. GDA falla + cancelación Banregio falla.
+3. Timeout con cobro real sin reconciliación.
+4. Doble submit tras error → doble cargo.
+5. `HEYBANCO_ENABLED=false` → tarjetas hey_banco no listadas pero usuario con tarjeta previa en draft podría tener payment_method inválido en validación.
+
+## Pruebas E2E necesarias
+
+1. Checkout completo lab con tarjeta hey_banco sandbox aprobada.
+2. Tarjeta rechazada → error UI, sin LaboratoryPurchase.
+3. Simular timeout → verify → pedido creado o estado pending.
+4. GDA falla → refund exitoso → sin pedido, sin cargo final.
+5. GDA falla → refund falla → alerta ops, Transaction huérfana.
+6. Doble clic confirmar → un solo cargo.
+7. Cupón + hey_banco monto reducido.
+8. Cancelación admin compra lab pagada con hey_banco.
+
+
+# Revisión de membresía médica
+
+## Conexión técnica
+
+| Archivo | Estado |
+|---------|--------|
+| `MedicalAttentionSubscriptionController` | Usa `PurchaseRegularSubscriptionAction`; captura `\Throwable` genérico (no `HeyBancoPaymentException` específico) |
+| `PurchaseRegularSubscriptionAction` | SÍ — `ChargePaymentMethodAction` para no-odessa |
+| `MedicalAttentionSubscriptionRequest` | SÍ — `getAllowedPaymentMethods()` incluye `customer.paymentMethods()` (hey_banco:* si enabled) |
+| `Transaction` | SÍ — misma estructura que lab |
+| Odessa | Alternativa vía `payment_method=odessa` |
+| EfevooPay | Alternativa vía id numérico |
+
+## Seguridad / UX
+
+- Error Hey Banco se muestra como: "Ocurrió un error durante la suscripción." (genérico) — **pierde mensaje processor**.
+- Log en `PurchaseRegularSubscriptionAction` línea ~74 dice `gateway: efevoopay` hardcodeado en un log cuando no es odessa — **log engañoso** para hey_banco.
+- Rollback: si creación suscripción falla post-cobro → `RefundTransactionAction` automático (similar a lab).
+
+## Riesgos específicos
+
+- Mismos riesgos de idempotencia y timeout que laboratorio.
+- Sin E2E tests de suscripción con hey_banco.
+
+
+# Revisión de farmacia
+
+## Confirmación: fuera de alcance actual
+
+| Archivo | Gateway usado |
+|---------|---------------|
+| `OnlinePharmacy/OrderAction` | `ChargeStripePaymentMethodAction` o `ChargeOdessaAction` |
+| `OnlinePharmacyPurchaseController` | Delega a OrderAction farmacia |
+| `ChargeStripePaymentMethodAction` | Stripe únicamente |
+| `RefundTransactionAction` | Soporta hey_banco pero no se invoca desde farmacia |
+
+**Hey Banco NO está conectado a farmacia en línea.**
+
+## Qué habría que cambiar para migrar farmacia a Hey Banco
+
+1. `OnlinePharmacy/OrderAction::chargeAndCreateTransaction()` — reemplazar Stripe por `ChargePaymentMethodAction`.
+2. Checkout farmacia frontend — exponer `paymentMethods()` con hey_banco (similar `LaboratoryCheckoutController`).
+3. Request de validación — incluir hey_banco:* en métodos permitidos.
+4. `PaymentMethodStep` o equivalente farmacia — listar tarjetas hey_banco.
+5. Controller errores — capturar `HeyBancoPaymentException`.
+6. Flujo Vitau post-cobro — mismo patrón riesgo cobro→fulfillment que lab (refund si Vitau falla).
+7. Admin farmacia — filtros y badges hey_banco.
+8. Pruebas E2E farmacia.
+
+
+# Revisión de admin y monitoreo
+
+## Qué está listo
+
+| Herramienta | Listo para prod ops |
+|-------------|---------------------|
+| `BanregioMonitor.jsx` + `BanregioMonitorController` | Parcial — listados, filtros search/status/flow, summary entorno/modo/enabled |
+| `BanregioToken.jsx` | Parcial — detalle token, token enmascarado, últimas TX e intentos |
+| `BanregioTransaction.jsx` | Parcial — campos BNRG, raw request/response |
+| `PaymentAttemptController` | Sí — filtro `gateway=hey_banco` funciona |
+| `PaymentMethodBadge` / `BanregioBadge` | Sí — visualización paciente/admin básica |
+| Permiso `banregio.manage` | Sí — migración y menú admin |
+
+## Qué falta
+
+| Gap | Detalle |
+|-----|---------|
+| `LaboratoryPurchases` admin filtro | `IndexLaboratoryPurchaseRequest` solo permite `odessa,stripe,efevoopay,paypal` — **hey_banco excluido** |
+| `BuildLaboratoryPurchaseChartsDataAction` | Sin label hey_banco |
+| `LaboratoryPurchaseConfirmationViewData` | Sin label hey_banco |
+| `PaymentDetails.jsx` | Solo botón "Consultar transacción en Efevoo" — **sin verify Banregio** |
+| `config_monitor.php` | Sin variables HEYBANCO_* |
+| Exportaciones CSV/Excel Banregio | No existen |
+| Tab "pagos pendientes reconciliación" | No existe |
+| Alertas automáticas timeout/refund failed | No existen |
+| Runbook operativo | No en código |
+
+## Filtros/columnas a agregar
+
+- Admin lab purchases: `payment_method=hey_banco`
+- PaymentDetails: botón verify usando `payments.hey-banco.verify` o enlace a BanregioTransaction
+- BanregioMonitor: tab `pending_reconciliation`, filtro `mode`, export
+- Dashboard: contador timeouts últimas 24h
+
+## Necesidades soporte producción
+
+1. Procedimiento: cliente cobrado sin pedido → buscar por referencia FM-* y Banregio ref en monitor.
+2. Acceso permiso `banregio.manage` a equipo ops.
+3. Credenciales portal Banregio fuera de app (no en código).
+
+
+# Revisión de pruebas
+
+## Tests existentes
+
+| Test | Tipo | Cubre |
+|------|------|-------|
+| `tests/Unit/Payments/HeyBancoClientTest.php` | Unit + Http::fake | Folio, fechas, headers, createToken, charge approved/rejected/declined/timeout, verify, cancel, folio uniqueness |
+| `tests/Unit/Payments/CancelHeyBancoTransactionActionTest.php` | Unit + Http::fake | Persistencia cancellation en payment_transactions |
+
+## Tests faltantes (críticos)
+
+| Caso | Tipo recomendado |
+|------|------------------|
+| `ChargeHeyBancoTokenAction` integración completa | Feature |
+| `CreateHeyBancoTokenAction` → PaymentMethod | Feature |
+| Timeout → verify approved → Transaction negocio | Feature |
+| Timeout → verify failed → pending state | Feature |
+| `OrderAction` lab con hey_banco mock → LaboratoryPurchase | Feature |
+| GDA falla → refund hey_banco invocado | Feature |
+| GDA falla → refund falla → Transaction persiste | Feature |
+| Doble submit checkout | Feature / Browser |
+| `RefundTransactionAction` hey_banco éxito/fallo | Feature |
+| Doble refund (refunded_at) | Unit |
+| `PaymentGatewayManager` routing hey_banco:* | Unit |
+| `StoreLaboratoryPurchaseRequest` acepta hey_banco:* | Feature |
+| Medical subscription con hey_banco | Feature |
+| Browser: tokenizar tarjeta sandbox UI | Browser (Dusk) |
+| Browser: checkout lab completo | Browser |
+| Admin BanregioMonitor carga | Feature |
+| BD limpia migrate + tokenize (smoke) | Integration |
+
+## Mocks HTTP
+
+- Existe patrón `Http::fake` en tests unitarios — **reutilizable** para feature tests.
+- No hay mock gateway completo tipo `MockEfevooPayGateway` para Hey Banco.
+
+
+# Plan de acción recomendado
+
+## Fase 1 — Estabilizar infraestructura
+
+| Tarea | Archivos | Prioridad | Resultado esperado |
+|-------|----------|-----------|-------------------|
+| Crear migración `payment_methods` | `database/migrations/` | P0 | Tokenización funciona en BD limpia |
+| Crear migración `payment_transactions` | `database/migrations/` | P0 | Cobros ADQ persisten |
+| Agregar FKs e índices | migraciones payment_* | P0 | Integridad referencial |
+| UNIQUE reference en payment_attempts | migración alter | P0 | Base para idempotencia |
+| Smoke test migrate:fresh + tokenize | tests/Feature/ | P0 | CI valida esquema |
+| Mapear HEYBANCO_* en config_monitor | `config/config_monitor.php` | P1 | Misconfig detectada |
+
+## Fase 2 — Completar seguridad bancaria
+
+| Tarea | Archivos | Prioridad | Resultado esperado |
+|-------|----------|-----------|-------------------|
+| Implementar idempotency key checkout | `ChargeHeyBancoTokenAction`, `OrderAction`, `LaboratoryCheckout.jsx` | P0 | Sin doble cargo |
+| Job reconciliación timeout | Nuevo Job + Command | P0 | Pagos T/red recuperados |
+| Estados pending_verification | Models + migrations | P0 | Ops visibilidad |
+| Validación HEYBANCO_MODE=PRD en prod | ServiceProvider o middleware config | P0 | Sin AUT en prod |
+| Implementar 3DS Hey Banco (si requerido) | Nuevos modelos, rutas, React | P0/P1 | Tokenización prod compliant |
+| Webhook o polling robusto | Nuevo controller/job | P1 | Sincronización async |
+
+## Fase 3 — Integrar producción controlada
+
+| Tarea | Archivos | Prioridad | Resultado esperado |
+|-------|----------|-----------|-------------------|
+| Credenciales prod en .env staging/prod | `.env` (ops) | P0 | Conexión Colecto prod |
+| HEYBANCO_ADQ_URL producción | config | P0 | Endpoint correcto |
+| HEYBANCO_ENABLED=true en staging | config deploy | P0 | Pruebas integrales |
+| Feature tests E2E lab + membresía | tests/Feature/ | P0 | Regresión controlada |
+| Captura HeyBancoPaymentException en MedicalAttentionSubscriptionController | controller | P1 | Mensajes claros al usuario |
+| Prueba manual checklist go-live | docs/ops | P0 | Sign-off formal |
+
+## Fase 4 — Operación y monitoreo
+
+| Tarea | Archivos | Prioridad | Resultado esperado |
+|-------|----------|-----------|-------------------|
+| Filtro hey_banco admin lab purchases | `IndexLaboratoryPurchaseRequest`, `LaboratoryPurchases.jsx` | P1 | Ops filtra compras |
+| Verify button en PaymentDetails | `PaymentDetails.jsx` | P1 | Soporte consulta rápida |
+| Tab reconciliación BanregioMonitor | `BanregioMonitorController.jsx` | P1 | Cola pagos pendientes |
+| Alertas refund failed / timeout | Notifications o logging | P1 | Respuesta proactiva |
+| Export CSV transacciones | BanregioMonitor | P2 | Reportes |
+| Runbook operativo | docs | P1 | Soporte capacitado |
+
+## Fase 5 — Migración final desde EfevooPay
+
+| Tarea | Archivos | Prioridad | Resultado esperado |
+|-------|----------|-----------|-------------------|
+| PAYMENT_PROVIDER=hey_banco por defecto | `config/payments.php` | P2 | Nuevas tarjetas en Banregio |
+| Comunicación re-tokenización usuarios | marketing/email | P2 | Usuarios agregan tarjeta nueva |
+| Paridad farmacia (si aplica) | `OnlinePharmacy/OrderAction` | P2 | Un solo procesador tarjeta |
+| Deprecar cobros Efevoo nuevos | config + UI | P3 | Solo mantenimiento histórico |
+| Métricas comparativas Efevoo vs Banregio | admin charts | P3 | Decisión data-driven |
+
+
+# Checklist final go-live
+
+## Configuración
+
+- [ ] `HEYBANCO_ENABLED=true` en producción
+- [ ] `HEYBANCO_ENV=production`
+- [ ] `HEYBANCO_ADQ_URL` apunta a host **producción** Colecto (no testcolecto)
+- [ ] `HEYBANCO_MODE=PRD` (NO `AUT`)
+- [ ] `HEYBANCO_TOKEN_AFFILIATION` y `HEYBANCO_TOKEN_MEDIA_ID` de producción
+- [ ] `HEYBANCO_TIMEOUT` validado con SLA Banregio
+- [ ] `PAYMENT_PROVIDER` alineado con estrategia de migración
+- [ ] Variables 3DS prod configuradas (si 3DS implementado)
+- [ ] Validación automática config prod en deploy
+
+## Migraciones
+
+- [ ] `payment_methods` creada y migrada
+- [ ] `payment_transactions` creada y migrada
+- [ ] Índices y FKs aplicados
+- [ ] UNIQUE idempotencia en `payment_attempts.reference`
+- [ ] `migrate:fresh` + smoke test en CI
+
+## 3DS
+
+- [ ] Requisito 3DS confirmado con Banregio/Hey Banco
+- [ ] Flujo 3DS implementado y probado (si obligatorio)
+- [ ] Callbacks seguros (firma/secreto)
+- [ ] UI redirect/result probada en mobile
+
+## Webhooks / verificación
+
+- [ ] Job reconciliación programado (cron/queue)
+- [ ] Procedimiento manual verify documentado
+- [ ] Webhook implementado (si Banregio lo provee)
+- [ ] Estados `pending_verification` operativos
+
+## Idempotencia
+
+- [ ] Idempotency key en checkout lab y membresía
+- [ ] Reintento seguro sin segundo VENTA
+- [ ] Tests doble submit pasando
+
+## Logs
+
+- [ ] Logs `[HeyBanco]` centralizados (CloudWatch/Datadog/etc.)
+- [ ] PaymentLog o equivalente para auditoría ADQ
+- [ ] Alertas en Log::error refund/timeout
+
+## Admin
+
+- [ ] Permiso `banregio.manage` asignado a ops
+- [ ] Filtro hey_banco en compras lab
+- [ ] PaymentDetails con verify Banregio
+- [ ] Runbook entregado a soporte
+
+## Pruebas
+
+- [ ] Unit tests CI verdes
+- [ ] Feature tests lab + membresía + refund
+- [ ] Browser test checkout sandbox
+- [ ] Prueba tarjeta aprobada prod (monto mínimo)
+- [ ] Prueba tarjeta rechazada
+- [ ] Prueba timeout simulado + reconciliación
+- [ ] Prueba cancelación admin
+
+## Rollback
+
+- [ ] `HEYBANCO_ENABLED=false` revierte a EfevooPay sin deploy código
+- [ ] `PAYMENT_PROVIDER=efevoopay` restaura tokenización default
+- [ ] Tarjetas hey_banco existentes no rompen checkout (quedan invisibles o marcadas)
+- [ ] Plan comunicación si rollback post-incidente
+
+## Soporte operativo
+
+- [ ] Contacto escalamiento Banregio definido
+- [ ] Acceso portal conciliación Banregio
+- [ ] Plantillas respuesta cliente (cobro duplicado, timeout, refund demorado)
+
+## Monitoreo
+
+- [ ] Dashboard tasa aprobación/rechazo/timeout
+- [ ] Alerta umbral timeout > X%
+- [ ] Alerta refund_failed
+- [ ] Revisión diaria BanregioMonitor primera semana post-go-live
+
+
+# Resumen ejecutivo
+
+1. La integración Hey Banco / Banregio Colecto **NO está lista para producción** en su estado actual.
+2. Existe una base funcional en sandbox: cliente ADQ, tokenización, cobro, verify, cancelación y checkout lab/membresía cableados.
+3. Los **bloqueadores críticos** son: migraciones BD faltantes, ausencia de 3DS, sin reconciliación robusta, idempotencia insuficiente y riesgo cobro→GDA→refund.
+4. Activar hoy en producción con dinero real sería **altamente riesgoso** (fallos BD, doble cargo, cobros huérfanos, cancelaciones fallidas).
+5. `HEYBANCO_ENABLED=false` y `HEYBANCO_MODE=AUT` por defecto confirman que el proyecto no contempla prod aún.
+6. La farmacia **no** usa Hey Banco; solo laboratorio y membresía médica.
+7. Admin tiene monitor Banregio útil pero incompleto para operar incidentes de producción.
+8. Solo 2 tests unitarios cubren Hey Banco; faltan feature, integración y E2E.
+9. **Primero:** crear migraciones `payment_methods` y `payment_transactions` y validar en BD limpia.
+10. **Segundo:** idempotencia + job reconciliación + manejo timeout/red.
+11. **Tercero:** confirmar requisito 3DS con Banregio e implementar si es obligatorio.
+12. **Cuarto:** pruebas E2E lab/membresía/refund/GDA-fail en staging con credenciales sandbox.
+13. **Quinto:** cerrar gaps admin (filtros, PaymentDetails verify) y checklist go-live.
+14. Solo después de Fases 1–3 con sign-off QA/Ops considerar `HEYBANCO_ENABLED=true` en producción con `MODE=PRD`.
+15. Migración total desde EfevooPay (Fase 5) requiere re-tokenización de tarjetas y plan de comunicación a usuarios.
+
+================================================================================
+FIN DE AUDITORÍA
+================================================================================
