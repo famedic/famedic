@@ -22,8 +22,12 @@ class PaymentGatewayManager
             return 'hey_banco';
         }
 
+        if (! config('payments.efevoopay_enabled', true) && $this->heyBancoGateway->isEnabled()) {
+            return 'hey_banco';
+        }
+
         if ($configured === 'hey_banco' && ! $this->heyBancoGateway->isEnabled()) {
-            return 'efevoopay';
+            return $this->efevooGateway->isEnabled() ? 'efevoopay' : 'hey_banco';
         }
 
         return $configured;
@@ -51,6 +55,12 @@ class PaymentGatewayManager
         }
 
         if (ctype_digit($paymentMethodId)) {
+            if (! $this->efevooGateway->isEnabled()) {
+                throw new InvalidPaymentMethodException(
+                    (string) config('payments.legacy_efevoo_rejection_message')
+                );
+            }
+
             return $this->efevooGateway;
         }
 
@@ -62,7 +72,11 @@ class PaymentGatewayManager
      */
     public function enabledGateways(): array
     {
-        $gateways = [$this->efevooGateway];
+        $gateways = [];
+
+        if ($this->efevooGateway->isEnabled()) {
+            $gateways[] = $this->efevooGateway;
+        }
 
         if ($this->heyBancoGateway->isEnabled()) {
             $gateways[] = $this->heyBancoGateway;

@@ -5,7 +5,10 @@ namespace App\Http\Requests\Laboratories\LaboratoryPurchases;
 use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
 use App\Exceptions\CouponApplicationException;
 use App\Models\Coupon;
+use App\Models\PaymentMethod;
 use App\Services\CouponApplicationService;
+use App\Support\PaymentMethodIdentifier;
+use App\Support\PaymentMethodResolver;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -102,8 +105,15 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
 
             $allowed = $this->paymentMethodsForAmount($amountToCharge, $couponId !== null);
 
-            if (! in_array((string) $this->input('payment_method'), $allowed, true)) {
-                $validator->errors()->add('payment_method', 'El método de pago seleccionado no es válido o ha expirado.');
+            $paymentMethod = (string) $this->input('payment_method');
+
+            if (! in_array($paymentMethod, $allowed, true)) {
+                $message = PaymentMethodResolver::detectProvider($paymentMethod) === 'legacy_numeric'
+                    && ! config('payments.efevoopay_enabled', true)
+                    ? (string) config('payments.legacy_efevoo_rejection_message')
+                    : 'El método de pago seleccionado no es válido o ha expirado.';
+
+                $validator->errors()->add('payment_method', $message);
             }
         });
     }
@@ -134,15 +144,44 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
 
     private function normalizePaymentMethod(): void
     {
-        if ($this->has('payment_method')) {
-            $value = $this->input('payment_method');
-
-            if (is_numeric($value)) {
-                $this->merge([
-                    'payment_method' => (string) $value,
-                ]);
-            }
+        if (! $this->has('payment_method')) {
+            return;
         }
+
+        $value = (string) $this->input('payment_method');
+
+        if (in_array($value, ['odessa', 'paypal', 'coupon_balance'], true)) {
+            return;
+        }
+
+        if (PaymentMethodIdentifier::isHeyBanco($value)) {
+            return;
+        }
+
+        if (! ctype_digit($value)) {
+            return;
+        }
+
+        $customer = auth()->user()->customer;
+
+        $heyBancoMethod = PaymentMethod::query()
+            ->active()
+            ->forProvider(config('heybanco.provider_key'))
+            ->where('user_id', $customer->user_id)
+            ->where('id', (int) $value)
+            ->first();
+
+        if ($heyBancoMethod) {
+            $this->merge([
+                'payment_method' => $heyBancoMethod->publicId(),
+            ]);
+
+            return;
+        }
+
+        $this->merge([
+            'payment_method' => $value,
+        ]);
     }
 
     public function messages(): array

@@ -6,6 +6,8 @@ use App\Actions\Odessa\ChargeOdessaAction;
 use App\Actions\Payments\ChargePaymentMethodAction;
 use App\Actions\Payments\HeyBanco\InitiateHeyBanco3dsLaboratoryCheckoutAction;
 use App\Support\PaymentMethodIdentifier;
+use App\Support\PaymentMethodResolver;
+use Illuminate\Support\Facades\Log;
 use App\Actions\Transactions\CreateCouponBalanceTransactionAction;
 use App\Actions\Transactions\RefundTransactionAction;
 use App\Enums\LaboratoryBrand;
@@ -208,11 +210,15 @@ class OrderAction
         int $discountCents,
         $laboratoryAppointment = null,
     ): Transaction {
+        $paymentMethodInput = $paymentMethod;
+        $paymentMethod = PaymentMethodResolver::normalizeForCustomer($customer, $paymentMethod);
+        PaymentMethodResolver::logSelection($paymentMethodInput, $amountCents);
+
         if ($paymentMethod === 'odessa') {
             return ($this->chargeOdessaAction)($customer->customerable, $amountCents);
         }
 
-        if ($this->shouldUseHeyBanco3ds($paymentMethod)) {
+        if ($this->shouldUseHeyBanco3ds($paymentMethod, $amountCents, $paymentMethodInput)) {
             ($this->initiateHeyBanco3dsLaboratoryCheckoutAction)(
                 customer: $customer,
                 address: $address,
@@ -234,9 +240,31 @@ class OrderAction
         );
     }
 
-    private function shouldUseHeyBanco3ds(string $paymentMethod): bool
-    {
-        return config('heybanco.3ds_enabled', false)
-            && PaymentMethodIdentifier::isHeyBanco($paymentMethod);
+    private function shouldUseHeyBanco3ds(
+        string $paymentMethod,
+        int $amountCents,
+        ?string $paymentMethodInput = null,
+    ): bool {
+        $enabled = (bool) config('heybanco.3ds_enabled', false);
+        $isHeyBancoMethod = PaymentMethodIdentifier::isHeyBanco($paymentMethod);
+
+        $reason = match (true) {
+            $amountCents <= 0 => 'amount_not_positive',
+            ! $enabled => '3ds_disabled_in_config',
+            ! $isHeyBancoMethod => 'payment_method_not_hey_banco_prefix',
+            default => 'will_use_3ds',
+        };
+
+        Log::info('[HeyBanco3DS] shouldUseHeyBanco3ds decision', [
+            'enabled' => $enabled,
+            'payment_method_input' => $paymentMethodInput ?? $paymentMethod,
+            'payment_method_normalized' => $paymentMethod,
+            'amount_cents' => $amountCents,
+            'is_hey_banco_method' => $isHeyBancoMethod,
+            'reason' => $reason,
+            'will_use_3ds' => $enabled && $isHeyBancoMethod && $amountCents > 0,
+        ]);
+
+        return $enabled && $isHeyBancoMethod && $amountCents > 0;
     }
 }

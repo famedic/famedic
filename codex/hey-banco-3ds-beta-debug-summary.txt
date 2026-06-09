@@ -1,0 +1,184 @@
+Hey Banco 3DS — Diagnóstico beta + desactivación EfevooPay visible
+===================================================================
+Fecha: 2026-06-09
+
+RESUMEN EJECUTIVO
+-----------------
+El checkout NO entraba a 3DS por dos causas combinadas:
+
+1. **payment_method llegaba como ID numérico legacy** (ej. `428`) en lugar de `hey_banco:{id}`.
+   - `PaymentMethodIdentifier::isHeyBanco()` exige prefijo `hey_banco:`.
+   - IDs numéricos se enrutan a `EfevooPaymentGateway` → `ChargeEfevooPaymentMethodAction`.
+   - Si el ID numérico coincidía con `payment_methods.id` de Hey Banco, podía caer en cobro ADQ directo (`token_charge`) sin 3DS.
+
+2. **EfevooPay seguía mezclado en listados** aunque beta apuntara a Banregio.
+   - `Customer::paymentMethods()` devolvía tokens Efevoo + Hey Banco.
+   - El usuario podía seleccionar tarjeta Efevoo (ID `428`) sin darse cuenta.
+
+Config key correcta para 3DS:
+- `config('heybanco.3ds_enabled')` ← mapea `HEYBANCO_3DS_ENABLED` en `config/heybanco.php`
+- NO existe `config('heybanco.3ds.enabled')`
+
+Si `.env` cambió pero beta usa `php artisan config:cache`, el valor cacheado puede quedar en `false`.
+**Siempre ejecutar tras cambiar .env en beta:**
+
+```bash
+php artisan config:clear
+php artisan cache:clear
+php artisan route:clear
+php artisan config:cache   # solo si beta usa config cache en deploy
+```
+
+Validar en tinker:
+
+```bash
+php artisan tinker --execute="dump(config('heybanco.3ds_enabled'), config('heybanco.enabled'), config('payments.default_provider'), config('payments.efevoopay_enabled'));"
+```
+
+DIAGNÓSTICO shouldUseHeyBanco3ds()
+----------------------------------
+Regresa `true` solo si TODAS se cumplen:
+- `config('heybanco.3ds_enabled') === true`
+- `PaymentMethodIdentifier::isHeyBanco($paymentMethod)` → prefijo `hey_banco:`
+- `amount_cents > 0`
+
+Si llegaba `428` → `is_hey_banco_method=false` → reason=`payment_method_not_hey_banco_prefix`
+→ flujo caía en `ChargePaymentMethodAction` → Efevoo o Hey Banco ADQ directo.
+
+PANTALLA ESPERADA SI 3DS SÍ SE ACTIVA
+-------------------------------------
+1. POST checkout → `HeyBanco3dsRedirectRequiredException`
+2. `LaboratoryPurchaseController` → `redirect()->route('payments.hey-banco.3ds.redirect', $session)`
+3. Inertia renderiza `HeyBanco3dsRedirect.jsx`
+4. `window.location.href` → URL Banregio (`testcolecto`)
+5. Callback POST → `payments.hey-banco.3ds.callback`
+6. Resultado → `HeyBanco3dsResult.jsx`
+
+BD esperada tras iniciar 3DS:
+
+```sql
+select id, folio, status, amount, redirect_url, created_at
+from payment_3ds_sessions order by id desc limit 10;
+
+-- status = redirect_required
+-- payment_transactions.flow = token_3ds_charge
+-- payment_attempts.status = pending_3ds
+```
+
+CAMBIOS IMPLEMENTADOS
+---------------------
+
+### Tarea A — Fix routing 3DS
+- `app/Support/PaymentMethodResolver.php` (NUEVO)
+  - Normaliza ID numérico `payment_methods.id` → `hey_banco:{id}`
+  - Rechaza IDs legacy Efevoo si `EFEVOOPAY_ENABLED=false`
+  - Log `[Payments] selected payment method`
+- `app/Actions/Laboratories/OrderAction.php`
+  - Normaliza payment_method antes de cobrar
+  - Log detallado `[HeyBanco3DS] shouldUseHeyBanco3ds decision`
+- `app/Http/Requests/.../StoreLaboratoryPurchaseRequest.php`
+  - Normaliza `payment_method` numérico Hey Banco a `hey_banco:{id}` en `prepareForValidation`
+  - Mensaje claro si Efevoo legacy rechazado
+- `app/Http/Controllers/LaboratoryPurchaseController.php`
+  - Log al redirigir a sesión 3DS
+
+### Tarea B — Desactivar EfevooPay visible
+- `config/payments.php` (NUEVO)
+  - `EFEVOOPAY_ENABLED` → `payments.efevoopay_enabled`
+  - `PAYMENT_PROVIDER` → `payments.default_provider`
+- `app/Models/Customer.php`
+  - `paymentMethods()` omite Efevoo si `efevoopay_enabled=false`
+- `app/Services/Payments/PaymentGatewayManager.php`
+  - Rechaza IDs numéricos si Efevoo deshabilitado
+  - `defaultProvider()` prioriza Hey Banco si Efevoo off
+- `app/Services/Payments/EfevooPaymentGateway.php`
+  - `isEnabled()` lee `payments.efevoopay_enabled`
+- `app/Http/Controllers/PaymentMethodController.php`
+  - Index/create sin tokens Efevoo si deshabilitado
+  - Store rechaza tokenización Efevoo si deshabilitado
+- `app/Http/Controllers/LaboratoryCheckoutController.php`
+  - Props: `heyBancoEnabled`, `efevoopayEnabled`, `defaultPaymentProvider`
+- `resources/js/Pages/PaymentMethods/Create.jsx`
+  - Sin radio Efevoo si `efevoopayEnabled=false`
+  - Default `hey_banco` cuando solo Banregio
+- `resources/js/Components/Checkout/PaymentMethodStep.jsx`
+  - Badge "Banregio / Hey Banco" en tarjetas `provider=hey_banco`
+
+VARIABLES .env RECOMENDADAS EN BETA
+-----------------------------------
+```env
+EFEVOOPAY_ENABLED=false
+PAYMENT_PROVIDER=hey_banco
+HEYBANCO_ENABLED=true
+HEYBANCO_3DS_ENABLED=true
+HEYBANCO_3DS_URL=https://testcolecto.banregio.com/tds/vistas/recepcion3ds.zul
+HEYBANCO_3DS_MEDIA_ID=...
+HEYBANCO_3DS_SECRET_KEY=...
+HEYBANCO_3DS_SECURE_API=true
+HEYBANCO_MODE=AUT
+```
+
+LOGS ESPERADOS TRAS FIX (checkout 3DS)
+--------------------------------------
+```text
+[Payments] selected payment method input=hey_banco:3 provider_detected=hey_banco heybanco_3ds_enabled=true
+[HeyBanco3DS] shouldUseHeyBanco3ds decision enabled=true is_hey_banco_method=true reason=will_use_3ds will_use_3ds=true
+[HeyBanco3DS] Checkout redirecting to 3DS session session_id=... folio=...
+```
+
+NO deberían aparecer en nuevos pagos Banregio+3DS:
+- `ChargeEfevooPaymentMethodAction`
+- `flow=token_charge` antes del callback
+- `BNRG_CMD_TRANS=VENTA` antes del callback 3DS
+
+TESTS AGREGADOS
+---------------
+`tests/Feature/Payments/HeyBanco3dsBetaRoutingTest.php`
+1. Efevoo disabled oculta tokens del customer
+2. Efevoo disabled rechaza ID numérico legacy
+3. ID numérico payment_methods normaliza a hey_banco:{id}
+4. 3DS enabled dispara InitiateHeyBanco3ds (no ChargeHeyBancoTokenAction)
+5. 3DS disabled → shouldUseHeyBanco3ds false
+
+Ejecutar:
+```bash
+php artisan test --filter=HeyBanco3dsBetaRouting
+php artisan test --filter=HeyBanco3ds
+```
+
+COMANDOS POST-DEPLOY EN BETA
+----------------------------
+```bash
+php artisan config:clear
+php artisan cache:clear
+php artisan route:clear
+php artisan config:cache
+php artisan route:list | grep 3ds
+php artisan migrate
+```
+
+VALIDACIÓN BD
+-------------
+```sql
+select id, provider, last4, status, created_at
+from payment_methods where provider='hey_banco' order by id desc limit 10;
+
+select id, folio, status, amount, redirect_url, created_at
+from payment_3ds_sessions order by id desc limit 10;
+```
+
+SIGUIENTE ACCIÓN EN BETA
+------------------------
+1. Aplicar variables .env arriba
+2. `config:clear` + `config:cache`
+3. Agregar tarjeta nueva vía Payment Methods (solo Banregio)
+4. En checkout seleccionar tarjeta con badge "Banregio / Hey Banco"
+5. Confirmar en logs `payment_method_normalized=hey_banco:{id}`
+6. Verificar creación de `payment_3ds_sessions` y pantalla HeyBanco3dsRedirect
+7. Completar challenge sandbox Banregio
+
+DATOS HISTÓRICOS
+----------------
+- Tablas/modelos EfevooPay intactos
+- Admin/reportes de transacciones antiguas no modificados
+- Solo se ocultó Efevoo del flujo visible de nuevos pagos

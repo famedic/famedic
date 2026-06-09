@@ -35,6 +35,12 @@ class LaboratoryPurchaseController extends Controller
                 couponId: $request->filled('coupon_id') ? (int) $request->input('coupon_id') : null,
             );
         } catch (HeyBanco3dsRedirectRequiredException $e) {
+            Log::info('[HeyBanco3DS] Checkout redirecting to 3DS session', [
+                'session_id' => $e->session->id,
+                'folio' => $e->session->folio,
+                'redirect_url' => $e->redirectUrl,
+            ]);
+
             return redirect()->route('payments.hey-banco.3ds.redirect', [
                 'session' => $e->session->id,
             ]);

@@ -24,6 +24,7 @@ export default function Create({
     paymentUsesMock = false,
     mockTestCards = [],
     heyBancoEnabled = false,
+    efevoopayEnabled = true,
     defaultPaymentProvider = "efevoopay",
     heyBancoTestCards = [],
     returnUrl = null,
@@ -37,7 +38,11 @@ export default function Create({
         card_holder: "",
         alias: "",
         terms_accepted: false,
-        payment_provider: heyBancoEnabled ? defaultPaymentProvider : "efevoopay",
+        payment_provider: heyBancoEnabled && !efevoopayEnabled
+            ? "hey_banco"
+            : heyBancoEnabled
+              ? defaultPaymentProvider
+              : "efevoopay",
     });
 
     const [cardType, setCardType] = useState("");
@@ -139,7 +144,7 @@ export default function Create({
                 </div>
             </div>
 
-            {heyBancoEnabled && (
+            {heyBancoEnabled && efevoopayEnabled && (
                 <div className="mb-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
                     <Text className="text-sm font-medium mb-3">
                         Procesador de pago
@@ -166,11 +171,14 @@ export default function Create({
                             Hey Banco / Banregio Colecto
                         </label>
                     </div>
-                    {data.payment_provider === "hey_banco" && (
-                        <Text className="mt-2 text-xs text-zinc-500">
-                            Tokenización directa sin 3D Secure (fase actual).
-                        </Text>
-                    )}
+                </div>
+            )}
+
+            {heyBancoEnabled && !efevoopayEnabled && (
+                <div className="mb-6 rounded-lg border border-emerald-200/80 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800/50 dark:bg-emerald-950/30">
+                    <Text className="text-sm text-emerald-900 dark:text-emerald-100">
+                        Las tarjetas se tokenizan con Banregio / Hey Banco Colecto.
+                    </Text>
                 </div>
             )}
 

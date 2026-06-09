@@ -87,6 +87,6 @@ class EfevooPaymentGateway implements PaymentGatewayInterface
 
     public function isEnabled(): bool
     {
-        return true;
+        return (bool) config('payments.efevoopay_enabled', true);
     }
 }

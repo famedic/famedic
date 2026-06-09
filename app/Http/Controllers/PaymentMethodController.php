@@ -38,16 +38,19 @@ class PaymentMethodController extends Controller
 
         $balanceCents = $couponService->getUserBalance($request->user()->id);
 
-        $tokens = EfevooToken::where('customer_id', $customer->id)
-            ->active()
-            ->excludeMockInProduction()
-            ->orderByDesc('created_at')
-            ->get();
+        $paymentMethods = [];
 
-        // Evitar mostrar duplicados: una tarjeta por combinación últimos 4 dígitos + expiración
-        $paymentMethods = $tokens->unique(function (EfevooToken $t) {
-            return $t->card_last_four . '-' . ($t->card_expiration ?? '');
-        })->values()->all();
+        if (config('payments.efevoopay_enabled', true)) {
+            $tokens = EfevooToken::where('customer_id', $customer->id)
+                ->active()
+                ->excludeMockInProduction()
+                ->orderByDesc('created_at')
+                ->get();
+
+            $paymentMethods = $tokens->unique(function (EfevooToken $t) {
+                return $t->card_last_four . '-' . ($t->card_expiration ?? '');
+            })->values()->all();
+        }
 
         if (config('heybanco.enabled')) {
             $heyBancoMethods = StoredPaymentMethod::query()
@@ -76,6 +79,7 @@ class PaymentMethodController extends Controller
         return Inertia::render('PaymentMethods', [
             'paymentMethods' => $paymentMethods,
             'heyBancoEnabled' => (bool) config('heybanco.enabled'),
+            'efevoopayEnabled' => (bool) config('payments.efevoopay_enabled', true),
             'defaultPaymentProvider' => $this->gatewayManager->defaultProvider(),
             'environment' => config('efevoopay.environment'),
             'paymentUsesMock' => MockEfevooPaymentSupport::isMockMode(),
@@ -95,6 +99,7 @@ class PaymentMethodController extends Controller
         return Inertia::render('PaymentMethods/Create', [
             'returnUrl' => $request->query('return_url'),
             'heyBancoEnabled' => (bool) config('heybanco.enabled'),
+            'efevoopayEnabled' => (bool) config('payments.efevoopay_enabled', true),
             'defaultPaymentProvider' => $this->gatewayManager->defaultProvider(),
             'heyBancoTestCards' => config('heybanco.enabled') ? config('heybanco.test_cards') : [],
             'efevooConfig' => [
@@ -134,6 +139,12 @@ class PaymentMethodController extends Controller
 
         if ($paymentProvider === 'hey_banco' && config('heybanco.enabled')) {
             return $this->storeHeyBancoCard($request, $customer, $validated);
+        }
+
+        if (! config('payments.efevoopay_enabled', true)) {
+            return back()->withErrors([
+                'payment_provider' => (string) config('payments.legacy_efevoo_rejection_message'),
+            ]);
         }
 
         $month = str_pad($validated['exp_month'], 2, '0', STR_PAD_LEFT);

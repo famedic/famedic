@@ -248,6 +248,13 @@ function PaymentMethodSelectionInner({
         onSelected?.();
     };
 
+    const paymentMethodLabel = (paymentMethod) => {
+        if (paymentMethod.provider === "hey_banco") {
+            return "Banregio / Hey Banco";
+        }
+        return null;
+    };
+
     const addCardUrl = useMemo(() => {
         return route("payment-methods.create", {
             return_url: addCardReturnUrl,
@@ -374,11 +381,18 @@ function PaymentMethodSelectionInner({
                                         </Badge>
                                     )}
                                 </div>
-                                {paymentMethod.alias && (
-                                    <Badge color="blue" size="sm">
-                                        {paymentMethod.alias}
-                                    </Badge>
-                                )}
+                                <div className="flex flex-col items-end gap-1">
+                                    {paymentMethodLabel(paymentMethod) && (
+                                        <Badge color="green" size="xs">
+                                            {paymentMethodLabel(paymentMethod)}
+                                        </Badge>
+                                    )}
+                                    {paymentMethod.alias && (
+                                        <Badge color="blue" size="sm">
+                                            {paymentMethod.alias}
+                                        </Badge>
+                                    )}
+                                </div>
                             </div>
                             <div className="mt-3 space-y-1">
                                 <Text className="font-medium">

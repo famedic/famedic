@@ -365,36 +365,40 @@ class Customer extends Model
 
     public function paymentMethods()
     {
-        $efevooMethods = $this->efevooTokens()
-            ->active()
-            ->excludeMockInProduction()
-            ->get()
-            ->map(function ($token) {
-                $paymentMethod = new \stdClass();
-                $paymentMethod->id = (string) $token->id;
-                $paymentMethod->provider = 'efevoopay';
-                $paymentMethod->object = 'efevoo_token';
-                $paymentMethod->card = (object) [
-                    'brand' => strtolower($token->card_brand),
-                    'last4' => $token->card_last_four,
-                    'exp_month' => substr($token->card_expiration, 0, 2),
-                    'exp_year' => '20' . substr($token->card_expiration, 2, 2),
-                    'exp_year_short' => substr($token->card_expiration, 2, 2),
-                ];
-                $paymentMethod->billing_details = (object) [
-                    'name' => $token->card_holder,
-                ];
-                $paymentMethod->alias = $token->alias ?? $token->generateAlias();
-                $paymentMethod->metadata = (object) [
-                    'environment' => $token->environment,
-                    'expires_at' => $token->expires_at?->toISOString(),
-                ];
+        $efevooMethods = collect();
 
-                return $paymentMethod;
-            });
+        if (config('payments.efevoopay_enabled', true)) {
+            $efevooMethods = $this->efevooTokens()
+                ->active()
+                ->excludeMockInProduction()
+                ->get()
+                ->map(function ($token) {
+                    $paymentMethod = new \stdClass();
+                    $paymentMethod->id = (string) $token->id;
+                    $paymentMethod->provider = 'efevoopay';
+                    $paymentMethod->object = 'efevoo_token';
+                    $paymentMethod->card = (object) [
+                        'brand' => strtolower($token->card_brand),
+                        'last4' => $token->card_last_four,
+                        'exp_month' => substr($token->card_expiration, 0, 2),
+                        'exp_year' => '20' . substr($token->card_expiration, 2, 2),
+                        'exp_year_short' => substr($token->card_expiration, 2, 2),
+                    ];
+                    $paymentMethod->billing_details = (object) [
+                        'name' => $token->card_holder,
+                    ];
+                    $paymentMethod->alias = $token->alias ?? $token->generateAlias();
+                    $paymentMethod->metadata = (object) [
+                        'environment' => $token->environment,
+                        'expires_at' => $token->expires_at?->toISOString(),
+                    ];
+
+                    return $paymentMethod;
+                });
+        }
 
         if (! config('heybanco.enabled')) {
-            return $efevooMethods;
+            return $efevooMethods->values();
         }
 
         $heyBancoMethods = PaymentMethod::query()

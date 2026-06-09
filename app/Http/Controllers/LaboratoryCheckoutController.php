@@ -33,7 +33,7 @@ class LaboratoryCheckoutController extends Controller
         $customer = $request->user()->customer;
         $balanceCents = $couponService->getUserBalance($userId);
         $availableCoupons = $couponService->getAvailableCoupons($userId);
-        $mockTokens = MockEfevooPaymentSupport::isMockMode()
+        $mockTokens = MockEfevooPaymentSupport::isMockMode() && config('payments.efevoopay_enabled', true)
             ? MockEfevooPaymentSupport::ensureTestTokensForCustomer($customer)
             : [];
         $paymentMethods = $this->resolveCheckoutPaymentMethods($customer, $mockTokens);
@@ -113,7 +113,10 @@ class LaboratoryCheckoutController extends Controller
             'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
             'appEnvLabel' => AppEnvironmentLabel::current(),
             'hasOdessaPay' => $request->user()->customer->has_odessa_afiliate_account,
+            'heyBancoEnabled' => (bool) config('heybanco.enabled', false),
             'heyBanco3dsEnabled' => (bool) config('heybanco.3ds_enabled', false),
+            'efevoopayEnabled' => (bool) config('payments.efevoopay_enabled', true),
+            'defaultPaymentProvider' => app(\App\Services\Payments\PaymentGatewayManager::class)->defaultProvider(),
             'mexicanStates' => config('mexicanstates'),
         ]);
     }
