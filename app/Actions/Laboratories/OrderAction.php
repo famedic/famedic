@@ -4,6 +4,8 @@ namespace App\Actions\Laboratories;
 
 use App\Actions\Odessa\ChargeOdessaAction;
 use App\Actions\Payments\ChargePaymentMethodAction;
+use App\Actions\Payments\HeyBanco\InitiateHeyBanco3dsLaboratoryCheckoutAction;
+use App\Support\PaymentMethodIdentifier;
 use App\Actions\Transactions\CreateCouponBalanceTransactionAction;
 use App\Actions\Transactions\RefundTransactionAction;
 use App\Enums\LaboratoryBrand;
@@ -32,6 +34,7 @@ class OrderAction
     private CouponApplicationService $couponApplicationService;
     private CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction;
     private FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction;
+    private InitiateHeyBanco3dsLaboratoryCheckoutAction $initiateHeyBanco3dsLaboratoryCheckoutAction;
 
     private Collection $laboratoryCartItems;
 
@@ -43,7 +46,8 @@ class OrderAction
         RefundTransactionAction $refundTransactionAction,
         CouponApplicationService $couponApplicationService,
         CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction,
-        FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction
+        FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction,
+        InitiateHeyBanco3dsLaboratoryCheckoutAction $initiateHeyBanco3dsLaboratoryCheckoutAction,
     ) {
         $this->calculateTotalsAndDiscountAction = $calculateTotalsAndDiscountAction;
         $this->chargePaymentMethodAction = $chargePaymentMethodAction;
@@ -53,6 +57,7 @@ class OrderAction
         $this->couponApplicationService = $couponApplicationService;
         $this->createCouponBalanceTransactionAction = $createCouponBalanceTransactionAction;
         $this->fulfillLaboratoryCartOrderAction = $fulfillLaboratoryCartOrderAction;
+        $this->initiateHeyBanco3dsLaboratoryCheckoutAction = $initiateHeyBanco3dsLaboratoryCheckoutAction;
     }
 
     public function __invoke(
@@ -120,7 +125,18 @@ class OrderAction
 
         try {
             if ($amountToChargeCents > 0) {
-                $transaction = $this->chargeAndCreateTransaction($amountToChargeCents, $paymentMethod, $customer);
+                $transaction = $this->chargeAndCreateTransaction(
+                    amountCents: $amountToChargeCents,
+                    paymentMethod: $paymentMethod,
+                    customer: $customer,
+                    address: $address,
+                    contact: $patient,
+                    laboratoryBrand: $laboratoryBrand,
+                    totalCents: $calculatedTotalCents,
+                    couponId: $couponId,
+                    discountCents: $discountCents,
+                    laboratoryAppointment: $laboratoryAppointment,
+                );
             } else {
                 $transaction = ($this->createCouponBalanceTransactionAction)(
                     $customer,
@@ -180,10 +196,35 @@ class OrderAction
         ]);
     }
 
-    private function chargeAndCreateTransaction(int $amountCents, string $paymentMethod, Customer $customer): Transaction
-    {
+    private function chargeAndCreateTransaction(
+        int $amountCents,
+        string $paymentMethod,
+        Customer $customer,
+        Address $address,
+        ?Contact $contact,
+        LaboratoryBrand $laboratoryBrand,
+        int $totalCents,
+        ?int $couponId,
+        int $discountCents,
+        $laboratoryAppointment = null,
+    ): Transaction {
         if ($paymentMethod === 'odessa') {
             return ($this->chargeOdessaAction)($customer->customerable, $amountCents);
+        }
+
+        if ($this->shouldUseHeyBanco3ds($paymentMethod)) {
+            ($this->initiateHeyBanco3dsLaboratoryCheckoutAction)(
+                customer: $customer,
+                address: $address,
+                contact: $contact,
+                paymentMethodId: $paymentMethod,
+                laboratoryBrand: $laboratoryBrand,
+                amountCents: $amountCents,
+                totalCents: $totalCents,
+                couponId: $couponId,
+                discountCents: $discountCents,
+                laboratoryAppointment: $laboratoryAppointment,
+            );
         }
 
         return ($this->chargePaymentMethodAction)(
@@ -191,5 +232,11 @@ class OrderAction
             $amountCents,
             $paymentMethod
         );
+    }
+
+    private function shouldUseHeyBanco3ds(string $paymentMethod): bool
+    {
+        return config('heybanco.3ds_enabled', false)
+            && PaymentMethodIdentifier::isHeyBanco($paymentMethod);
     }
 }

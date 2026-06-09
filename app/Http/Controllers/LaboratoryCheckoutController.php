@@ -113,6 +113,7 @@ class LaboratoryCheckoutController extends Controller
             'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
             'appEnvLabel' => AppEnvironmentLabel::current(),
             'hasOdessaPay' => $request->user()->customer->has_odessa_afiliate_account,
+            'heyBanco3dsEnabled' => (bool) config('heybanco.3ds_enabled', false),
             'mexicanStates' => config('mexicanstates'),
         ]);
     }

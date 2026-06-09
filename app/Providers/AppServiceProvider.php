@@ -22,6 +22,7 @@ use App\Actions\Efevoo\ChargeEfevooTokenAction;
 use App\Actions\Efevoo\RefundEfevooTransactionAction;
 use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction;
 */
+use App\Support\HeyBanco3dsConfigValidator;
 use Inertia\Inertia;
 
 class AppServiceProvider extends ServiceProvider
@@ -76,6 +77,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        if (! $this->app->runningUnitTests()) {
+            HeyBanco3dsConfigValidator::validate();
+        }
+
         Gate::define('assign-autorizador-role', function ($user): bool {
             return (bool) $user->administrator?->hasRole('superadmin');
         });

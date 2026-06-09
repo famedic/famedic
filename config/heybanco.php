@@ -32,6 +32,39 @@ return [
 
     '3ds_secret_key' => env('HEYBANCO_3DS_SECRET_KEY', ''),
 
+    '3ds_enabled' => env('HEYBANCO_3DS_ENABLED', false),
+
+    '3ds_secure_api' => env('HEYBANCO_3DS_SECURE_API', true),
+
+    '3ds_timeout' => (int) env('HEYBANCO_3DS_TIMEOUT', 30),
+
+    /*
+    | TODO: Confirmar orden exacto con Manual Colecto 3DS V1.2.
+    */
+    '3ds_request_sign_fields' => [
+        'BNRG_ID_MEDIO',
+        'BNRG_ID_AFILIACION',
+        'BNRG_MONTO_TRANS',
+        'BNRG_TOKEN',
+        'BNRG_FOLIO',
+        'BNRG_REF_CLIENTE1',
+        'BNRG_MODO_TRANS',
+        'BNRG_FECHA_LOCAL',
+        'BNRG_HORA_LOCAL',
+    ],
+
+    '3ds_response_sign_fields' => [
+        'BNRG_CODIGO_PROC',
+        'BNRG_CODIGO_AUT',
+        'BNRG_CODIGO_EMISOR',
+        'BNRG_REFERENCIA',
+        'BNRG_FOLIO',
+        'BNRG_MONTO_TRANS',
+        'BNRG_3DS_ECI',
+        'BNRG_3DS_UCAF',
+        'BNRG_3DS_XID',
+    ],
+
     'mode' => env('HEYBANCO_MODE', 'AUT'),
 
     'timeout' => (int) env('HEYBANCO_TIMEOUT', 30),

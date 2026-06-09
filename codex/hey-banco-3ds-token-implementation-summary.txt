@@ -1,0 +1,130 @@
+Hey Banco / Banregio — 3D Secure con token guardado (Camino B)
+================================================================
+Fecha: 2026-06-09
+
+QUÉ SE IMPLEMENTÓ
+-----------------
+Flujo 3DS para cobros con tarjeta tokenizada (BNRG_TOKEN) sin enviar PAN/exp/CVV.
+Detrás de HEYBANCO_3DS_ENABLED=false por defecto. No modifica EfevooPay, Stripe,
+PayPal ni Odessa. No llama ChargeHeyBancoTokenAction tras callback aprobado.
+
+ARCHIVOS CREADOS
+----------------
+database/migrations/2026_06_09_100000_create_payment_3ds_sessions_table.php
+app/Models/Payment3dsSession.php
+app/Data/Payments/HeyBanco/HeyBanco3dsStartResult.php
+app/Exceptions/HeyBanco3dsRedirectRequiredException.php
+app/Services/Payments/HeyBanco/HeyBanco3dsSignatureService.php
+app/Services/Payments/HeyBanco/HeyBanco3dsClient.php
+app/Support/HeyBanco3dsConfigValidator.php
+app/Actions/Payments/HeyBanco/CreateHeyBanco3dsTokenChargeSessionAction.php
+app/Actions/Payments/HeyBanco/StartHeyBanco3dsTokenChargeAction.php
+app/Actions/Payments/HeyBanco/HandleHeyBanco3dsCallbackAction.php
+app/Actions/Payments/HeyBanco/FulfillLaboratoryHeyBanco3dsPaymentAction.php
+app/Actions/Payments/HeyBanco/InitiateHeyBanco3dsLaboratoryCheckoutAction.php
+app/Http/Controllers/Payments/HeyBanco3dsController.php
+resources/js/Pages/Payments/HeyBanco3dsRedirect.jsx
+resources/js/Pages/Payments/HeyBanco3dsResult.jsx
+tests/Feature/Payments/HeyBanco3dsTest.php
+
+ARCHIVOS MODIFICADOS
+--------------------
+config/heybanco.php
+app/Providers/AppServiceProvider.php
+app/Actions/Laboratories/OrderAction.php
+app/Http/Controllers/LaboratoryPurchaseController.php
+app/Http/Controllers/LaboratoryCheckoutController.php
+routes/settings.php
+
+RUTAS
+-----
+POST  payments/hey-banco/3ds/start      → payments.hey-banco.3ds.start (auth)
+GET   payments/hey-banco/3ds/redirect/{session} → payments.hey-banco.3ds.redirect (auth)
+GET   payments/hey-banco/3ds/result/{session}   → payments.hey-banco.3ds.result (auth)
+GET   payments/hey-banco/3ds/status/{session}   → payments.hey-banco.3ds.status (auth)
+POST  payments/hey-banco/3ds/callback → payments.hey-banco.3ds.callback (público, sin auth)
+
+VARIABLES .env
+--------------
+HEYBANCO_3DS_ENABLED=false
+HEYBANCO_3DS_URL=https://testcolecto.banregio.com/tds/vistas/recepcion3ds.zul
+HEYBANCO_3DS_AFFILIATION=
+HEYBANCO_3DS_MEDIA_ID=
+HEYBANCO_3DS_SECRET_KEY=
+HEYBANCO_3DS_SECURE_API=true
+HEYBANCO_3DS_TIMEOUT=30
+HEYBANCO_MODE=AUT
+
+Producción:
+HEYBANCO_3DS_URL=https://colecto.banregio.com/tds/vistas/recepcion3ds.zul
+HEYBANCO_MODE=PRD
+
+FLUJO FINAL
+-----------
+1. Checkout laboratorio con hey_banco:{id} y HEYBANCO_3DS_ENABLED=true
+2. OrderAction → InitiateHeyBanco3dsLaboratoryCheckoutAction
+3. Crea PaymentAttempt (pending_3ds), PaymentTransaction (token_3ds_charge), Payment3dsSession
+4. POST a HEYBANCO_3DS_URL con BNRG_TOKEN (sin datos de tarjeta)
+5. Redirect interno → HeyBanco3dsRedirect → URL Banregio
+6. Usuario completa challenge
+7. Banregio POST a BNRG_URL_RESPUESTA (callback)
+8. Valida BNRG_HASH si HEYBANCO_3DS_SECURE_API=true
+9. Si BNRG_CODIGO_PROC=A: crea Transaction, fulfillment laboratorio (sin chargeToken)
+10. Usuario ve HeyBanco3dsResult / redirección al pedido
+
+FIRMA REQUEST
+-------------
+HMAC-SHA256 + Base64 con HEYBANCO_3DS_SECRET_KEY.
+Campos concatenados en orden de config('heybanco.3ds_request_sign_fields').
+TODO: confirmar orden exacto con Manual Colecto 3DS V1.2 (no disponible en repo).
+
+VALIDACIÓN RESPONSE
+---------------------
+Mismo algoritmo con config('heybanco.3ds_response_sign_fields').
+Valores URL-decoded antes de concatenar.
+
+EVITAR DOBLE CARGO
+------------------
+- 3DS aprobado NO invoca ChargeHeyBancoTokenAction / chargeToken ADQ.
+- El cargo lo realiza el motor Colecto durante el flujo 3DS.
+
+EVITAR DOBLE FULFILLMENT
+------------------------
+- Callback con lockForUpdate en payment_3ds_sessions.
+- Si sesión ya approved → already_processed=true, no re-ejecuta fulfillment.
+- Transaction idempotente por payment_3ds_session_id en details.
+
+INTEGRACIÓN CHECKOUT
+--------------------
+OrderAction.chargeAndCreateTransaction detecta hey_banco + 3ds_enabled.
+Lanza HeyBanco3dsRedirectRequiredException → LaboratoryPurchaseController
+redirige a payments.hey-banco.3ds.redirect.
+
+PENDIENTE
+---------
+- Confirmar orden BNRG_HASH con manual Banregio PDF
+- Prueba sandbox real con credenciales Colecto 3DS
+- Extender a membresía si aplica
+- HEYBANCO_MODE=PRD obligatorio en producción (hoy solo warning en log)
+
+CÓMO PROBAR EN SANDBOX
+----------------------
+1. HEYBANCO_ENABLED=true, HEYBANCO_3DS_ENABLED=true, credenciales sandbox
+2. Tokenizar tarjeta Hey Banco
+3. Checkout laboratorio con tarjeta guardada
+4. Completar challenge 3DS
+5. Verificar payment_3ds_sessions.status=approved, Transaction creada, pedido GDA
+
+COMANDOS
+--------
+php artisan migrate --pretend
+php artisan migrate
+php artisan route:list | grep 3ds
+php artisan test --filter=HeyBanco3ds
+
+RIESGOS ANTES DE PRODUCCIÓN
+---------------------------
+- Orden de firma BNRG_HASH no validado contra manual oficial
+- URL callback debe ser HTTPS pública accesible para Banregio
+- Validar HEYBANCO_MODE=PRD y URL producción 3DS
+- Monitorear fulfillment fallido post-pago (refund_pending)

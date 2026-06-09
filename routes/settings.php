@@ -15,6 +15,7 @@ use App\Http\Controllers\EfevooWebhookController;
 use App\Http\Controllers\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\InAppNotificationController;
 use App\Http\Controllers\PaymentMethodController;
+use App\Http\Controllers\Payments\HeyBanco3dsController;
 use App\Http\Controllers\Payments\HeyBancoPaymentController;
 use App\Http\Controllers\TaxProfileController;
 use App\Http\Controllers\TaxProfiles\FiscalCertificateController;
@@ -54,7 +55,16 @@ Route::middleware([
         Route::post('tokenize', [HeyBancoPaymentController::class, 'tokenize'])->name('tokenize');
         Route::post('charge', [HeyBancoPaymentController::class, 'charge'])->name('charge');
         Route::post('verify', [HeyBancoPaymentController::class, 'verify'])->name('verify');
+
+        Route::post('3ds/start', [HeyBanco3dsController::class, 'start'])->name('3ds.start');
+        Route::get('3ds/redirect/{session}', [HeyBanco3dsController::class, 'redirectPage'])->name('3ds.redirect');
+        Route::get('3ds/result/{session}', [HeyBanco3dsController::class, 'result'])->name('3ds.result');
+        Route::get('3ds/status/{session}', [HeyBanco3dsController::class, 'status'])->name('3ds.status');
     });
+
+    Route::post('payments/hey-banco/3ds/callback', [HeyBanco3dsController::class, 'callback'])
+        ->name('payments.hey-banco.3ds.callback')
+        ->withoutMiddleware(['auth', 'customer']);
 
     Route::post('in-app-notifications/{in_app_notification}/read', [InAppNotificationController::class, 'markRead'])
         ->name('in-app-notifications.read');

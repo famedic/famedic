@@ -1,0 +1,194 @@
+================================================================================
+FAMEDIC — CORRECCIÓN ENTORNO SQLITE PARA TESTS (Hey Banco)
+================================================================================
+Fecha: 2026-06-09
+================================================================================
+
+
+# Síntoma original
+
+```text
+SQLSTATE[HY000]: General error: 11 database disk image is malformed
+Connection: sqlite
+SQL: select exists (select 1 from sqlite_master where name = 'migrations' ...)
+```
+
+Al ejecutar:
+
+```bash
+php artisan test --filter=HeyBancoPaymentTablesSmokeTest
+php artisan test --filter=HeyBanco
+```
+
+
+# Causa probable del fallo
+
+**Archivo SQLite de tests corrupto**, no un defecto en las migraciones Hey Banco
+ni en el código staged de Hey Banco.
+
+El proyecto usa un archivo persistente en disco (no `:memory:`). Un archivo
+corrupto (interrupción, escrituras concurrentes, montaje Docker/WSL inconsistente)
+provoca el error `database disk image is malformed` al leer `sqlite_master`.
+
+
+# Configuración de testing detectada
+
+| Fuente | Valor |
+|--------|-------|
+| `phpunit.xml` | `DB_CONNECTION=sqlite` |
+| `phpunit.xml` | `DB_DATABASE=test_db.sqlite` |
+| `config/database.php` | `database_path(env('DB_DATABASE', 'database.sqlite'))` |
+| **Ruta efectiva** | **`database/test_db.sqlite`** (absoluta: `{project}/database/test_db.sqlite`) |
+| `.env.testing` | **No existe** en el repo (PHPUnit define las variables directamente) |
+| `.gitignore` | `/database/test_db.sqlite` y `database/*.sqlite*` ignorados |
+
+`RefreshDatabase` en tests recrea el esquema en cada clase; el archivo persiste
+entre ejecuciones y puede quedar en mal estado si una corrida anterior falló a medias.
+
+
+# Archivo SQLite detectado (antes del fix)
+
+```
+-rw-r--r-- 1 developer developer 200704  database/test_db.sqlite
+```
+
+Tipo: SQLite 3.x válido según `file`, pero PHPUnit reportaba **malformed**
+(alta probabilidad de corrupción lógica interna).
+
+`sqlite3` CLI no estaba instalado en WSL ni en el contenedor `app`, por lo que
+no se pudo ejecutar `PRAGMA integrity_check` en el host.
+
+
+# Comandos ejecutados (Docker)
+
+```bash
+docker compose exec -T app php artisan config:clear
+docker compose exec -T app php artisan cache:clear
+docker compose exec -T app rm -f database/test_db.sqlite
+docker compose exec -T app touch database/test_db.sqlite
+docker compose exec -T app chmod 664 database/test_db.sqlite
+
+docker compose exec -T app php artisan test --filter=HeyBancoPaymentTablesSmokeTest
+docker compose exec -T app php artisan test --filter=HeyBanco
+```
+
+Equivalente en host WSL (sin Docker):
+
+```bash
+php artisan config:clear
+php artisan cache:clear
+rm -f database/test_db.sqlite
+touch database/test_db.sqlite
+chmod 664 database/test_db.sqlite
+php artisan test --filter=HeyBancoPaymentTablesSmokeTest
+php artisan test --filter=HeyBanco
+```
+
+
+# ¿Se borró/recreó SQLite?
+
+**Sí.**
+
+- Archivo eliminado y recreado vacío (0 bytes inicial).
+- Permisos: `664`.
+- Tras intentar tests, el archivo creció (~283 KB) por migraciones parciales en
+  `RefreshDatabase` — comportamiento esperado con archivo nuevo.
+
+
+# Cambios de código realizados
+
+**Ninguno.** No fue necesario modificar:
+
+- `phpunit.xml`
+- `config/database.php`
+- migraciones Hey Banco
+- lógica de negocio
+
+Solo limpieza del archivo SQLite y cache de configuración.
+
+
+# Resultado tras recrear SQLite
+
+El error **`database disk image is malformed` desapareció**.
+
+Los tests Hey Banco **siguen fallando** por otra causa (migraciones históricas en
+`RefreshDatabase`, no por corrupción SQLite):
+
+```text
+SQLSTATE[HY000]: General error: 1 no such table: tax_profiles
+SQL: alter table "tax_profiles" add column "razon_social" varchar
+database/migrations/2025_01_08_140518_create_tax_profiles_table.php:12
+```
+
+| Comando | Resultado tras fix SQLite |
+|---------|---------------------------|
+| `HeyBancoPaymentTablesSmokeTest` | **1 failed**, 0 assertions (~4 s) |
+| `--filter=HeyBanco` | **14 failed**, 0 assertions (~44 s) |
+
+**Conclusión:** el problema original era del **entorno SQLite**; el bloqueo actual
+en tests es la migración `tax_profiles` en entorno SQLite fresh (fuera del scope
+de los 5 archivos staged de Hey Banco).
+
+
+# ¿Era problema del entorno y no de Hey Banco?
+
+**Sí** para el error `malformed`.
+
+Las migraciones `2026_06_08_*` ya corrieron bien con `php artisan migrate` en
+MySQL de desarrollo/staging. Los tests fallan al migrar SQLite en PHPUnit, no al
+ejecutar lógica Hey Banco.
+
+
+# Configuración mínima opcional (`.env.testing`)
+
+No es obligatoria porque `phpunit.xml` ya define SQLite. Si se desea alinear
+`artisan` con `APP_ENV=testing` fuera de PHPUnit:
+
+```env
+APP_ENV=testing
+DB_CONNECTION=sqlite
+DB_DATABASE=test_db.sqlite
+```
+
+No se recomienda cambiar a `DB_DATABASE=:memory:` sin validar todo el suite:
+el proyecto eligió archivo persistente en `phpunit.xml`.
+
+
+# Procedimiento si vuelve a aparecer `malformed`
+
+```bash
+docker compose exec -T app php artisan config:clear
+docker compose exec -T app rm -f database/test_db.sqlite
+docker compose exec -T app touch database/test_db.sqlite
+docker compose exec -T app php artisan test --filter=HeyBanco
+```
+
+Opcional: instalar `sqlite3` en WSL para diagnóstico:
+
+```bash
+sudo apt install sqlite3
+sqlite3 database/test_db.sqlite "PRAGMA integrity_check;"
+```
+
+
+# Pendientes
+
+1. **Tests Hey Banco en SQLite:** corregir migración `2025_01_08_140518_create_tax_profiles_table.php`
+   (usa `Schema::table` sin tabla previa en fresh) — **no incluido en el staged
+   Hey Banco**; requiere fix aparte o asegurar que el fix `Schema::create` esté
+   guardado y sincronizado en WSL/Docker.
+2. Verificar que el workspace en WSL tenga el mismo contenido que el IDE (el
+   contenedor Docker lee el árbol de `/home/developer/projects/famedic`).
+3. Re-ejecutar smoke tests tras resolver `tax_profiles` en el árbol que usa Docker.
+
+
+# Resumen ejecutivo
+
+| Pregunta | Respuesta |
+|----------|-----------|
+| ¿Qué SQLite usa Laravel en tests? | `database/test_db.sqlite` |
+| ¿Qué se corrigió? | Archivo corrupto borrado y recreado + `config:clear` |
+| ¿Tests Hey Banco pasan ya? | **No** — bloqueo en migración `tax_profiles` (no malformed) |
+| ¿Los 5 archivos staged Hey Banco son el problema? | **No** — migraciones Hey Banco OK en `migrate` MySQL |
+
+================================================================================
