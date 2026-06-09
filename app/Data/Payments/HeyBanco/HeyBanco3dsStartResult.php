@@ -12,6 +12,7 @@ class HeyBanco3dsStartResult
         public ?string $errorMessage = null,
         public ?string $codigoProc = null,
         public ?string $texto = null,
+        public ?string $codigoRechazo = null,
         public array $sanitizedRequest = [],
     ) {}
 

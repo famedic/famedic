@@ -24,6 +24,7 @@ class StartHeyBanco3dsTokenChargeAction
         }
 
         $result = $this->client->startTokenCharge($session, $paymentMethod);
+        $failureStatus = $this->mapStartFailureStatus($result->codigoProc);
 
         $session->update([
             'raw_request' => $result->sanitizedRequest,
@@ -32,23 +33,25 @@ class StartHeyBanco3dsTokenChargeAction
                 'body' => $result->rawBody,
             ],
             'request_hash' => $result->sanitizedRequest['BNRG_HASH'] ?? null,
-            'status' => $result->success ? 'redirect_required' : 'failed',
+            'status' => $result->success ? 'redirect_required' : $failureStatus,
             'redirect_url' => $result->redirectUrl,
             'bnrg_text' => $result->texto,
             'bnrg_codigo_proc' => $result->codigoProc,
+            'bnrg_codigo_rechazo' => $result->codigoRechazo,
             'failed_at' => $result->success ? null : now(),
         ]);
 
         $session->paymentAttempt?->update([
-            'status' => $result->success ? 'pending_3ds' : 'error',
+            'status' => $result->success ? 'pending_3ds' : $failureStatus,
             'processor_message' => $result->errorMessage ?? $result->texto,
             'processor_code' => $result->codigoProc,
         ]);
 
         $session->paymentTransaction?->update([
-            'status' => $result->success ? 'pending_3ds' : 'failed',
+            'status' => $result->success ? 'pending_3ds' : $failureStatus,
             'bnrg_text' => $result->texto,
             'bnrg_codigo_proc' => $result->codigoProc,
+            'bnrg_codigo_rechazo' => $result->codigoRechazo,
         ]);
 
         if (! $result->success) {
@@ -58,5 +61,16 @@ class StartHeyBanco3dsTokenChargeAction
         }
 
         return $result;
+    }
+
+    private function mapStartFailureStatus(?string $codigoProc): string
+    {
+        return match (strtoupper((string) $codigoProc)) {
+            'R' => 'rejected',
+            'D' => 'declined',
+            'T' => 'timeout',
+            'X' => 'failed',
+            default => 'failed',
+        };
     }
 }

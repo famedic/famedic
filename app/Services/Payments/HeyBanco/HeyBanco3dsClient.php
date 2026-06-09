@@ -17,9 +17,11 @@ class HeyBanco3dsClient
 
     public function startTokenCharge(Payment3dsSession $session, PaymentMethod $paymentMethod): HeyBanco3dsStartResult
     {
+        $mediaContext = $this->resolveTokenMediaContext($paymentMethod);
+
         $payload = [
-            'BNRG_ID_MEDIO' => config('heybanco.3ds_media_id'),
-            'BNRG_ID_AFILIACION' => config('heybanco.3ds_affiliation'),
+            'BNRG_ID_MEDIO' => $mediaContext['media_id'],
+            'BNRG_ID_AFILIACION' => $mediaContext['affiliation_id'],
             'BNRG_MONTO_TRANS' => $this->formatAmount($session->amount),
             'BNRG_TOKEN' => $paymentMethod->provider_token,
             'BNRG_URL_RESPUESTA' => $session->response_url,
@@ -66,14 +68,16 @@ class HeyBanco3dsClient
 
             $codigoProc = $normalized['BNRG_CODIGO_PROC'] ?? null;
             $texto = $normalized['BNRG_TEXTO'] ?? null;
+            $codigoRechazo = $normalized['BNRG_CODIGO_RECHAZO'] ?? null;
 
             return new HeyBanco3dsStartResult(
                 success: false,
                 rawHeaders: $headers,
                 rawBody: $body,
-                errorMessage: $texto ?? 'No se recibió URL de redirección 3DS.',
+                errorMessage: $this->userFacingStartErrorMessage($codigoProc, $texto),
                 codigoProc: $codigoProc,
                 texto: $texto,
+                codigoRechazo: $codigoRechazo,
                 sanitizedRequest: $sanitized,
             );
         } catch (\Throwable $e) {
@@ -113,6 +117,62 @@ class HeyBanco3dsClient
      * @param  array<string, array<int, string>|string>  $headers
      * @return array<string, string>
      */
+    /**
+     * @return array{media_id: string, affiliation_id: string, media_source: string, affiliation_source: string}
+     */
+    private function resolveTokenMediaContext(PaymentMethod $paymentMethod): array
+    {
+        $configMediaId = (string) config('heybanco.3ds_media_id');
+        $configAffiliationId = (string) config('heybanco.3ds_affiliation');
+
+        $mediaId = $paymentMethod->media_id ?: $configMediaId;
+        $affiliationId = $paymentMethod->affiliation_id ?: $configAffiliationId;
+
+        $mediaSource = $paymentMethod->media_id ? 'payment_method' : 'config';
+        $affiliationSource = $paymentMethod->affiliation_id ? 'payment_method' : 'config';
+
+        Log::info('[HeyBanco3DS] token media context', [
+            'payment_method_id' => $paymentMethod->id,
+            'token_media_id' => $paymentMethod->media_id,
+            'token_affiliation_id' => $paymentMethod->affiliation_id,
+            'config_3ds_media_id' => $configMediaId,
+            'config_3ds_affiliation' => $configAffiliationId,
+            'media_source' => $mediaSource,
+            'affiliation_source' => $affiliationSource,
+            'resolved_media_id' => $mediaId,
+            'resolved_affiliation_id' => $affiliationId,
+        ]);
+
+        if ($paymentMethod->media_id && $paymentMethod->media_id !== $configMediaId) {
+            Log::warning('[HeyBanco3DS] token_media_differs_from_3ds_config_using_payment_method_media', [
+                'payment_method_id' => $paymentMethod->id,
+                'token_media_id' => $paymentMethod->media_id,
+                'config_3ds_media_id' => $configMediaId,
+            ]);
+        }
+
+        if (! $paymentMethod->media_id) {
+            Log::warning('[HeyBanco3DS] payment_method_media_missing_using_3ds_config_fallback', [
+                'payment_method_id' => $paymentMethod->id,
+                'config_3ds_media_id' => $configMediaId,
+            ]);
+        }
+
+        if (! $paymentMethod->affiliation_id) {
+            Log::warning('[HeyBanco3DS] payment_method_affiliation_missing_using_3ds_config_fallback', [
+                'payment_method_id' => $paymentMethod->id,
+                'config_3ds_affiliation' => $configAffiliationId,
+            ]);
+        }
+
+        return [
+            'media_id' => $mediaId,
+            'affiliation_id' => $affiliationId,
+            'media_source' => $mediaSource,
+            'affiliation_source' => $affiliationSource,
+        ];
+    }
+
     private function normalizeResponse(array $headers, string $body): array
     {
         $normalized = [];
@@ -129,21 +189,71 @@ class HeyBanco3dsClient
             }
         }
 
+        if (preg_match_all('/[?&](BNRG_[A-Z0-9_]+)=([^&"\'\s<>]+)/', $body, $queryMatches, PREG_SET_ORDER)) {
+            foreach ($queryMatches as $match) {
+                $normalized[strtoupper($match[1])] = rawurldecode($match[2]);
+            }
+        }
+
         return $normalized;
     }
 
     private function extractRedirectUrl(array $normalized, string $body): ?string
     {
+        $codigoProc = strtoupper((string) ($normalized['BNRG_CODIGO_PROC'] ?? ''));
+
+        if (in_array($codigoProc, ['R', 'D', 'T', 'X'], true)) {
+            return null;
+        }
+
         foreach (['BNRG_URL_REDIRECCION', 'BNRG_REDIRECT_URL', 'URL_REDIRECCION'] as $key) {
-            if (! empty($normalized[$key])) {
+            if (! empty($normalized[$key]) && $this->isChallengeRedirectUrl((string) $normalized[$key])) {
                 return (string) $normalized[$key];
             }
         }
 
-        if (preg_match('/https?:\/\/[^\s"\'<>]+/i', $body, $match)) {
-            return $match[0];
+        if (preg_match_all('/https?:\/\/[^\s"\'<>]+/i', $body, $urlMatches)) {
+            foreach ($urlMatches[0] as $url) {
+                if ($this->isChallengeRedirectUrl($url)) {
+                    return $url;
+                }
+            }
         }
 
         return null;
+    }
+
+    private function isChallengeRedirectUrl(string $url): bool
+    {
+        $lower = strtolower($url);
+
+        if (str_contains($lower, 'muestraresultado')) {
+            return false;
+        }
+
+        if (preg_match('/bnrg_codigo_proc=(r|d|t|x)/i', $lower)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function userFacingStartErrorMessage(?string $codigoProc, ?string $texto): string
+    {
+        $proc = strtoupper((string) $codigoProc);
+        $text = (string) ($texto ?? '');
+
+        if ($proc === 'R' && (
+            str_contains(strtolower($text), 'id medio')
+            || str_contains(strtolower($text), 'token proporcionado')
+        )) {
+            return 'No pudimos iniciar la autenticación bancaria de esta tarjeta. Por favor elimina y vuelve a agregar tu tarjeta Banregio.';
+        }
+
+        if ($text !== '') {
+            return 'El banco rechazó el inicio de autenticación 3DS: ' . $text;
+        }
+
+        return 'No se recibió URL de redirección 3DS.';
     }
 }

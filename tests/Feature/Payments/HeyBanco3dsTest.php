@@ -85,6 +85,130 @@ class HeyBanco3dsTest extends TestCase
         $this->assertTrue($service->validateResponse($payload));
     }
 
+    public function test_start_3ds_uses_payment_method_media_and_affiliation_over_config(): void
+    {
+        config([
+            'heybanco.3ds_media_id' => 'AW1XCK1J',
+            'heybanco.3ds_affiliation' => '8379507',
+        ]);
+
+        Http::fake([
+            '*' => Http::response('', 200, [
+                'BNRG_URL_REDIRECCION' => 'https://challenge.banregio.test/3ds',
+            ]),
+        ]);
+
+        [$session] = $this->createSessionFixtures();
+
+        app(StartHeyBanco3dsTokenChargeAction::class)($session);
+
+        Http::assertSent(function ($request) {
+            $data = $request->data();
+
+            return ($data['BNRG_ID_MEDIO'] ?? null) === 'TEST-MEDIA'
+                && ($data['BNRG_ID_AFILIACION'] ?? null) === 'TEST-AFF';
+        });
+    }
+
+    public function test_start_3ds_signature_uses_resolved_media_values(): void
+    {
+        config([
+            'heybanco.3ds_media_id' => 'AW1XCK1J',
+            'heybanco.3ds_affiliation' => '8379507',
+        ]);
+
+        Http::fake([
+            '*' => Http::response('', 200, [
+                'BNRG_URL_REDIRECCION' => 'https://challenge.banregio.test/3ds',
+            ]),
+        ]);
+
+        [$session, $paymentMethod] = $this->createSessionFixtures();
+
+        app(StartHeyBanco3dsTokenChargeAction::class)($session);
+
+        $service = app(HeyBanco3dsSignatureService::class);
+
+        Http::assertSent(function ($request) use ($service, $paymentMethod) {
+            $data = $request->data();
+            $expectedHash = $service->signRequest($data);
+
+            return $data['BNRG_ID_MEDIO'] === $paymentMethod->media_id
+                && $data['BNRG_ID_AFILIACION'] === $paymentMethod->affiliation_id
+                && ($data['BNRG_HASH'] ?? null) === $expectedHash;
+        });
+    }
+
+    public function test_start_3ds_falls_back_to_config_when_payment_method_media_missing(): void
+    {
+        config([
+            'heybanco.3ds_media_id' => 'AW1XCK1J',
+            'heybanco.3ds_affiliation' => '8379507',
+        ]);
+
+        Http::fake([
+            '*' => Http::response('', 200, [
+                'BNRG_URL_REDIRECCION' => 'https://challenge.banregio.test/3ds',
+            ]),
+        ]);
+
+        $user = User::factory()->withRegularCustomer()->create();
+
+        $paymentMethod = PaymentMethod::create([
+            'user_id' => $user->id,
+            'provider' => 'hey_banco',
+            'provider_token' => 'token-no-media',
+            'brand' => 'visa',
+            'last4' => '1096',
+            'exp_month' => '12',
+            'exp_year' => '2028',
+            'status' => 'active',
+            'alias' => 'visa-1096',
+            'card_holder' => 'Titular Test',
+        ]);
+
+        $session = app(CreateHeyBanco3dsTokenChargeSessionAction::class)(
+            customer: $user->customer,
+            paymentMethodId: 'hey_banco:' . $paymentMethod->id,
+            amountCents: 15000,
+        );
+
+        app(StartHeyBanco3dsTokenChargeAction::class)($session);
+
+        Http::assertSent(function ($request) {
+            $data = $request->data();
+
+            return ($data['BNRG_ID_MEDIO'] ?? null) === 'AW1XCK1J'
+                && ($data['BNRG_ID_AFILIACION'] ?? null) === '8379507';
+        });
+    }
+
+    public function test_start_3ds_parses_html_rejection_and_marks_session_rejected(): void
+    {
+        $html = '<html><body>'
+            . '<a href="https://testcolecto.banregio.com/tds/vistas/muestraResultado.zul?BNRG_CODIGO_PROC=R'
+            . '&BNRG_TEXTO=El+token+proporcionado+no+corresponde+al+ID+Medio+proporcionado.'
+            . '&BNRG_CODIGO_RECHAZO=99">resultado</a>'
+            . '</body></html>';
+
+        Http::fake([
+            '*' => Http::response($html, 200),
+        ]);
+
+        [$session] = $this->createSessionFixtures();
+
+        try {
+            app(StartHeyBanco3dsTokenChargeAction::class)($session);
+            $this->fail('Se esperaba HeyBancoPaymentException');
+        } catch (\App\Exceptions\HeyBancoPaymentException $e) {
+            $this->assertStringContainsString('autenticación bancaria', $e->getMessage());
+        }
+
+        $session = $session->fresh();
+        $this->assertSame('rejected', $session->status);
+        $this->assertSame('R', $session->bnrg_codigo_proc);
+    }
+
     public function test_start_3ds_does_not_send_pan_exp_or_cvv(): void
     {
         Http::fake([

@@ -1,0 +1,120 @@
+Hey Banco 3DS — Fix mismatch token / ID Medio
+==============================================
+Fecha: 2026-06-09
+
+CAUSA RAÍZ
+----------
+El token se tokenizó con credenciales ADQ (creación de token):
+
+  BNRG_ID_MEDIO      = JCZSH8TV   (heybanco.token_media_id)
+  BNRG_ID_AFILIACION = 8379502    (heybanco.token_affiliation)
+
+El inicio 3DS enviaba siempre credenciales globales 3DS:
+
+  BNRG_ID_MEDIO      = AW1XCK1J   (heybanco.3ds_media_id)
+  BNRG_ID_AFILIACION = 8379507    (heybanco.3ds_affiliation)
+
+Banregio rechazó con:
+
+  BNRG_CODIGO_PROC = R
+  BNRG_TEXTO = El token proporcionado no corresponde al ID Medio proporcionado.
+
+Los valores correctos ya estaban guardados en payment_methods al tokenizar
+(CreateHeyBancoTokenAction guarda media_id y affiliation_id del flujo ADQ).
+
+RESPUESTA EXACTA DE BANREGIO (beta)
+-----------------------------------
+BNRG_CODIGO_PROC=R
+BNRG_TEXTO=El token proporcionado no corresponde al ID Medio proporcionado.
+
+CAMBIO IMPLEMENTADO
+-------------------
+El payload 3DS ahora resuelve medio/afiliación desde PaymentMethod primero:
+
+  $mediaId = $paymentMethod->media_id ?: config('heybanco.3ds_media_id');
+  $affiliationId = $paymentMethod->affiliation_id ?: config('heybanco.3ds_affiliation');
+
+La firma BNRG_HASH se calcula con los mismos valores finales del payload.
+
+ARCHIVOS MODIFICADOS
+--------------------
+app/Services/Payments/HeyBanco/HeyBanco3dsClient.php
+  - resolveTokenMediaContext()
+  - logs [HeyBanco3DS] token media context
+  - warnings: token_media_differs_from_3ds_config_using_payment_method_media
+  - warnings: payment_method_media_missing_using_3ds_config_fallback
+  - parser HTML: query params BNRG_* en URLs (muestraResultado.zul)
+  - no trata muestraResultado como redirect de challenge
+  - mensaje amigable para mismatch de medio
+
+app/Actions/Payments/HeyBanco/StartHeyBanco3dsTokenChargeAction.php
+  - status rejected/declined/timeout/failed según BNRG_CODIGO_PROC
+  - guarda bnrg_codigo_rechazo
+
+app/Data/Payments/HeyBanco/HeyBanco3dsStartResult.php
+  - campo codigoRechazo
+
+tests/Feature/Payments/HeyBanco3dsTest.php
+  - tests de media/affiliation, firma, fallback, HTML rejected
+
+CÓMO SE DECIDE BNRG_ID_MEDIO
+----------------------------
+1. payment_methods.media_id (del token ADQ que creó la tarjeta)
+2. Si vacío → config('heybanco.3ds_media_id') + warning fallback
+
+CÓMO SE DECIDE BNRG_ID_AFILIACION
+---------------------------------
+1. payment_methods.affiliation_id (del token ADQ)
+2. Si vacío → config('heybanco.3ds_affiliation') + warning fallback
+
+SI FALTAN EN PaymentMethod
+--------------------------
+Se usa config 3DS como fallback y se loguea warning.
+Tarjetas nuevas creadas con CreateHeyBancoTokenAction ya persisten ambos campos.
+
+VALIDACIÓN SQL EN BETA
+----------------------
+select id, provider, provider_token, media_id, affiliation_id, last4, status
+from payment_methods
+where id = 1;
+
+select id, folio, status, raw_request, raw_response
+from payment_3ds_sessions
+order by id desc
+limit 1;
+
+Esperado en raw_request (sanitizado):
+  BNRG_ID_MEDIO = payment_methods.media_id (ej. JCZSH8TV)
+  BNRG_ID_AFILIACION = payment_methods.affiliation_id (ej. 8379502)
+
+PRUEBAS
+-------
+php artisan test --filter=HeyBanco3ds
+
+Casos nuevos:
+1. 3DS usa paymentMethod.media_id sobre config
+2. 3DS usa paymentMethod.affiliation_id sobre config
+3. Firma usa valores finales del payload
+4. Fallback a config si media_id falta
+5. HTML con BNRG_CODIGO_PROC=R marca sesión rejected
+6. No ejecuta ChargeHeyBancoTokenAction (tests previos)
+
+COMANDOS POST-DEPLOY BETA
+-------------------------
+php artisan config:clear
+php artisan cache:clear
+php artisan route:clear
+php artisan config:cache
+
+SIGUIENTE ACCIÓN EN BETA
+------------------------
+1. Desplegar fix
+2. Verificar payment_methods.media_id / affiliation_id de la tarjeta en uso
+3. Reintentar checkout 3DS
+4. Confirmar raw_request con JCZSH8TV / 8379502 (o los del PaymentMethod)
+5. Si Banregio responde redirect URL → HeyBanco3dsRedirect → challenge
+
+NOTA: Tarjetas tokenizadas ANTES de guardar media_id/affiliation_id en BD
+pueden tener esos campos vacíos. En ese caso:
+  - eliminar y volver a agregar la tarjeta, o
+  - actualizar manualmente payment_methods con los valores ADQ correctos
