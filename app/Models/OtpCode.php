@@ -22,21 +22,44 @@ class OtpCode extends Model
 
     public const CHANNEL_EMAIL = 'email';
 
+    public const PURPOSE_AKUBICA_LOGIN = 'akubica_login';
+
+    public const PURPOSE_AKUBICA_REGISTER = 'akubica_register';
+
     protected $fillable = [
         'user_id',
         'laboratory_purchase_id',
+        'email',
+        'purpose',
+        'payload',
         'channel',
         'code',
         'expires_at',
         'attempts',
+        'max_attempts',
         'status',
         'verified_at',
+        'used_at',
+        'ip_address',
+        'user_agent',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
         'verified_at' => 'datetime',
+        'used_at' => 'datetime',
+        'payload' => 'array',
     ];
+
+    public function scopeActiveAuthFor($query, string $email, string $purpose)
+    {
+        return $query
+            ->where('email', $email)
+            ->where('purpose', $purpose)
+            ->where('status', self::STATUS_PENDING)
+            ->whereNull('used_at')
+            ->where('expires_at', '>', now());
+    }
 
     public function user(): BelongsTo
     {

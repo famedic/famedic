@@ -16,11 +16,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Notifications\Notification;
+use Laravel\Sanctum\HasApiTokens;
 use Propaganistas\LaravelPhone\Casts\RawPhoneNumberCast;
 
 class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
 {
-    use HasFactory, Notifiable, TraitsMustVerifyPhone;
+    use HasApiTokens, HasFactory, Notifiable, TraitsMustVerifyPhone;
 
     protected $guarded = [];
 
