@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\AkubicaApiExceptionHandler;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -36,9 +37,14 @@ return Application::configure(basePath: dirname(__DIR__))
             'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
             'bypass.password.confirm' => \App\Http\Middleware\BypassPasswordConfirm::class,
             'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
+            'force.json' => \App\Http\Middleware\ForceJsonResponse::class,
+            'api.customer' => \App\Http\Middleware\EnsureApiCustomer::class,
+            'api.token.guard' => \App\Http\Middleware\UseApiTokenGuard::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        AkubicaApiExceptionHandler::register($exceptions);
+
         $exceptions->respond(function (Response $response) {
             if ($response->getStatusCode() === 419) {
                 return redirect()->route('home');
