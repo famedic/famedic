@@ -49,3 +49,8 @@ Route::prefix('efevoopay')->group(function () {
     // Consultas
     Route::post('transactions/search', [EfevooPayController::class, 'searchTransactions']);
 });
+
+// API v1 — Integración Akubica
+Route::prefix('v1')->group(function () {
+    require __DIR__.'/api/v1.php';
+});
