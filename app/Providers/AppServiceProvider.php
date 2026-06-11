@@ -7,10 +7,13 @@ use App\Models\LaboratoryPurchase;
 use App\Models\OnlinePharmacyPurchase;
 use App\Services\Tracking\Tracking;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Redirector;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Cache\RateLimiting\Limit;
 use Laravel\Cashier\Cashier;
 use Stripe\StripeClient;
 use App\Services\ConstanciaFiscalService;
@@ -75,6 +78,12 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        RateLimiter::for('akubica-otp', function (Request $request) {
+            $key = $request->ip().'|'.(string) $request->input('email');
+
+            return Limit::perMinute(5)->by($key);
+        });
+
         Gate::define('assign-autorizador-role', function ($user): bool {
             return (bool) $user->administrator?->hasRole('superadmin');
         });
