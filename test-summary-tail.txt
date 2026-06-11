@@ -1,0 +1,40 @@
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogT…  PermissionAlreadyExists   
+  A `laboratory-purchases.manage.export` permission already exists for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/PermissionAlreadyExists.php:11
+      7▕ class PermissionAlreadyExists extends InvalidArgumentException
+      8▕ {
+      9▕     public static function create(string $permissionName, string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('A `:permission` permission already exists for guard `:guard`.', [
+     12▕             'permission' => $permissionName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+2 vendor frames [22m
+  3   database/migrations/2025_07_10_add_export_permissions.php:16
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogT…  PermissionAlreadyExists   
+  A `laboratory-purchases.manage.export` permission already exists for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/PermissionAlreadyExists.php:11
+      7▕ class PermissionAlreadyExists extends InvalidArgumentException
+      8▕ {
+      9▕     public static function create(string $permissionName, string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('A `:permission` permission already exists for guard `:guard`.', [
+     12▕             'permission' => $permissionName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+2 vendor frames [22m
+  3   database/migrations/2025_07_10_add_export_permissions.php:16
+
+
+  Tests:    41 failed (0 assertions)
+  Duration: 184.52s
+

@@ -1,0 +1,711 @@
+﻿
+   FAIL  Tests\Feature\Api\V1\AkubicaApiInfrastructureTest
+  Ô¿» GET /api/v1/cart without token returns 401 JSON
+  Ô¿» unknown /api/v1 route returns 404 JSON
+  Ô¿» POST /api/v1/auth/login/request-code returns verification response for valid email
+  Ô¿» POST /api/v1/auth/login/request-code validates email
+  Ô¿» protected endpoint with invalid token returns 401 JSON
+  Ô¿» DELETE /api/v1/auth/token revokes current token
+  Ô¿» authenticated user without customer receives 403 on protected routes
+
+   FAIL  Tests\Feature\Api\V1\AkubicaAuthTest
+  Ô¿» login request-code rejects invalid email with 422
+  Ô¿» login request-code returns generic 200 for nonexistent email without sending mail
+  Ô¿» login request-code creates OTP and sends notification for existing user
+  Ô¿» login verify-code returns NO_ACTIVE_CODE when no active OTP exists
+  Ô¿» login verify-code returns INVALID_CODE for wrong code
+  Ô¿» login verify-code returns CODE_EXPIRED for expired OTP
+  Ô¿» login verify-code returns ATTEMPTS_EXHAUSTED after max failed attempts
+  Ô¿» login verify-code returns Bearer token for valid code
+  Ô¿» register rejects invalid data with 422
+  Ô¿» register returns 409 EMAIL_ALREADY_REGISTERED for duplicate email
+  Ô¿» register returns 409 PHONE_ALREADY_REGISTERED for duplicate phone
+  Ô¿» register creates registration OTP for valid data
+  Ô¿» register verify-code creates user and customer with Bearer token
+  Ô¿» register verify-code does not reuse consumed OTP
+  Ô¿» registered user can access GET /api/v1/cart with token
+  Ô¿» DELETE /api/v1/auth/token revokes token without requiring customer
+  Ô¿» auth OTP is stored hashed not in plain text
+
+   FAIL  Tests\Feature\Api\V1\AkubicaCartCatalogTest
+  Ô¿» GET /cart without token returns 401 UNAUTHENTICATED
+  Ô¿» GET /cart with user without customer returns 403 FORBIDDEN
+  Ô¿» GET /cart without brand returns 422 VALIDATION_ERROR
+  Ô¿» GET /cart with valid token and empty cart returns empty items
+  Ô¿» GET /cart returns items and correct totals
+  Ô¿» GET /cart filters items by brand
+  Ô¿» POST /cart/items with invalid body returns 422 VALIDATION_ERROR
+  Ô¿» POST /cart/items with nonexistent laboratory_test_id returns 404 LAB_TEST_NOT_FOUND
+  Ô¿» POST /cart/items with brand mismatch returns 404 LAB_TEST_NOT_FOUND
+  Ô¿» POST /cart/items with valid laboratory_test_id adds item and returns cart summary
+  Ô¿» POST /cart/items duplicate returns 409 ITEM_ALREADY_IN_CART
+  Ô¿» DELETE /cart/items/{id} for nonexistent item returns 404 CART_ITEM_NOT_FOUND
+  Ô¿» DELETE /cart/items/{id} for another customer returns 403 FORBIDDEN
+  Ô¿» DELETE /cart/items/{id} removes own item and returns updated cart
+  Ô¿» GET /catalog/laboratory-tests/{id} for nonexistent test returns 404 LAB_TEST_NOT_FOUND
+  Ô¿» GET /catalog/laboratory-tests/{id} returns laboratory test data
+  Ô¿» GET /catalog/medications/{id} remains 501 NOT_IMPLEMENTED
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 8 attempt to write a readonly database (Connection: sqlite, SQL: create table "model_has_permissions" ("permission_id" integer not null, "model_type" varchar not null, "model_id" integer not null, foreign key("permission_id") references "permissions"("id") on delete cascade, primary key ("permission_id", "model_id", "model_type")))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+8 vendor frames [22m
+  9   database/migrations/2024_11_15_024936_create_permission_tables.php:57
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select * from "permissions" where "name" = laboratory-purchases.manage limit 2)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:412
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò 
+  Ô×£ 412Ôûò             $statement->execute();
+    413Ôûò 
+    414Ôûò             return $statement->fetchAll();
+    415Ôûò         });
+    416Ôûò     }
+
+      [2m+12 vendor frames [22m
+  13  database/migrations/2024_11_15_024936_create_permission_tables.php:146
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login requÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login requÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login requÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login veriÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login veriÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login veriÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login veriÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login veriÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > register rÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > register rÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > register rÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > register cÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > register vÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > register vÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > registeredÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > DELETE /apÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > auth OTP iÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > POSÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > POSÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > POSÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > POSÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > POSÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > DELÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > DELÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > DELÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[HY000]: General error: 11 database disk image is malformed (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403Ôûò             // For select statements, we'll simply execute the query and return an array
+    404Ôûò             // of the database result set. Each element in the array will be a single
+    405Ôûò             // row from the database table, and will either be an array or objects.
+    406Ôûò             $statement = $this->prepared(
+  Ô×£ 407Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408Ôûò             );
+    409Ôûò 
+    410Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411Ôûò
+
+
+
+  Tests:    41 failed (0 assertions)
+  Duration: 7.16s
+

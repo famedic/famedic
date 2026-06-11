@@ -1,0 +1,789 @@
+﻿
+   FAIL  Tests\Feature\Api\V1\AkubicaApiInfrastructureTest
+  Ô¿» GET /api/v1/cart without token returns 401 JSON
+  Ô¿» unknown /api/v1 route returns 404 JSON
+  Ô¿» POST /api/v1/auth/login/request-code returns verification response for valid email
+  Ô¿» POST /api/v1/auth/login/request-code validates email
+  Ô¿» protected endpoint with invalid token returns 401 JSON
+  Ô¿» DELETE /api/v1/auth/token revokes current token
+  Ô¿» authenticated user without customer receives 403 on protected routes
+
+   FAIL  Tests\Feature\Api\V1\AkubicaAuthTest
+  Ô¿» login request-code rejects invalid email with 422
+  Ô¿» login request-code returns generic 200 for nonexistent email without sending mail
+  Ô¿» login request-code creates OTP and sends notification for existing user
+  Ô¿» login verify-code returns NO_ACTIVE_CODE when no active OTP exists
+  Ô¿» login verify-code returns INVALID_CODE for wrong code
+  Ô¿» login verify-code returns CODE_EXPIRED for expired OTP
+  Ô¿» login verify-code returns ATTEMPTS_EXHAUSTED after max failed attempts
+  Ô¿» login verify-code returns Bearer token for valid code
+  Ô¿» register rejects invalid data with 422
+  Ô¿» register returns 409 EMAIL_ALREADY_REGISTERED for duplicate email
+  Ô¿» register returns 409 PHONE_ALREADY_REGISTERED for duplicate phone
+  Ô¿» register creates registration OTP for valid data
+  Ô¿» register verify-code creates user and customer with Bearer token
+  Ô¿» register verify-code does not reuse consumed OTP
+  Ô¿» registered user can access GET /api/v1/cart with token
+  Ô¿» DELETE /api/v1/auth/token revokes token without requiring customer
+  Ô¿» auth OTP is stored hashed not in plain text
+
+   FAIL  Tests\Feature\Api\V1\AkubicaCartCatalogTest
+  Ô¿» GET /cart without token returns 401 UNAUTHENTICATED
+  Ô¿» GET /cart with user without customer returns 403 FORBIDDEN
+  Ô¿» GET /cart without brand returns 422 VALIDATION_ERROR
+  Ô¿» GET /cart with valid token and empty cart returns empty items
+  Ô¿» GET /cart returns items and correct totals
+  Ô¿» GET /cart filters items by brand
+  Ô¿» POST /cart/items with invalid body returns 422 VALIDATION_ERROR
+  Ô¿» POST /cart/items with nonexistent laboratory_test_id returns 404 LAB_TEST_NOT_FOUND
+  Ô¿» POST /cart/items with brand mismatch returns 404 LAB_TEST_NOT_FOUND
+  Ô¿» POST /cart/items with valid laboratory_test_id adds item and returns cart summary
+  Ô¿» POST /cart/items duplicate returns 409 ITEM_ALREADY_IN_CART
+  Ô¿» DELETE /cart/items/{id} for nonexistent item returns 404 CART_ITEM_NOT_FOUND
+  Ô¿» DELETE /cart/items/{id} for another customer returns 403 FORBIDDEN
+  Ô¿» DELETE /cart/items/{id} removes own item and returns updated cart
+  Ô¿» GET /catalog/laboratory-tests/{id} for nonexistent test returns 404 LAB_TEST_NOT_FOUND
+  Ô¿» GET /catalog/laboratory-tests/{id} returns laboratory test data
+  Ô¿» GET /catalog/medications/{id} remains 501 NOT_IMPLEMENTED
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:13:45, 2026-06-11 10:13:45))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:13:49, 2026-06-11 10:13:49))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:13:52, 2026-06-11 10:13:52))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:13:55, 2026-06-11 10:13:55))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:13:58, 2026-06-11 10:13:58))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:02, 2026-06-11 10:14:02))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaApiInfrastructureTestÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:06, 2026-06-11 10:14:06))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login requÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:09, 2026-06-11 10:14:09))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login requÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:12, 2026-06-11 10:14:12))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login requÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:16, 2026-06-11 10:14:16))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login veriÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:19, 2026-06-11 10:14:19))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login veriÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:22, 2026-06-11 10:14:22))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login veriÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:26, 2026-06-11 10:14:26))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login veriÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:30, 2026-06-11 10:14:30))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > login veriÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:33, 2026-06-11 10:14:33))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > register rÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:38, 2026-06-11 10:14:38))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > register rÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:42, 2026-06-11 10:14:42))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > register rÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:46, 2026-06-11 10:14:46))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > register cÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:49, 2026-06-11 10:14:49))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > register vÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:52, 2026-06-11 10:14:52))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > register vÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:55, 2026-06-11 10:14:55))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > registeredÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:14:58, 2026-06-11 10:14:58))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > DELETE /apÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:02, 2026-06-11 10:15:02))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaAuthTest > auth OTP iÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:06, 2026-06-11 10:15:06))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:09, 2026-06-11 10:15:09))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:12, 2026-06-11 10:15:12))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:16, 2026-06-11 10:15:16))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:19, 2026-06-11 10:15:19))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:22, 2026-06-11 10:15:22))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:25, 2026-06-11 10:15:25))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > POSÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:28, 2026-06-11 10:15:28))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > POSÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:32, 2026-06-11 10:15:32))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > POSÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:35, 2026-06-11 10:15:35))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > POSÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:38, 2026-06-11 10:15:38))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > POSÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:41, 2026-06-11 10:15:41))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > DELÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:44, 2026-06-11 10:15:44))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > DELÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:49, 2026-06-11 10:15:49))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > DELÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:52, 2026-06-11 10:15:52))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:55, 2026-06-11 10:15:55))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:15:58, 2026-06-11 10:15:58))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCatalogTest > GETÔÇª  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-11 10:16:01, 2026-06-11 10:16:01))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568Ôûò 
+    569Ôûò             $this->recordsHaveBeenModified();
+    570Ôûò 
+  Ô×£ 571Ôûò             return $statement->execute();
+    572Ôûò         });
+    573Ôûò     }
+    574Ôûò 
+    575Ôûò     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+
+  Tests:    41 failed (0 assertions)
+  Duration: 139.48s
+
