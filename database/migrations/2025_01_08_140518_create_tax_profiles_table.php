@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Customer;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -9,46 +8,121 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('tax_profiles', function (Blueprint $table) {
-            // Campos para datos extraídos automáticamente
+        if (! Schema::hasTable('tax_profiles')) {
+            Schema::create('tax_profiles', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
+                $table->string('name');
+                $table->string('rfc')->nullable();
+                $table->string('zipcode')->nullable();
+                $table->string('tax_regime')->nullable();
+                $table->string('cfdi_use')->nullable();
+                $table->string('fiscal_certificate')->nullable();
+                $table->string('razon_social')->nullable();
+                $table->string('tipo_persona')->nullable();
+                $table->string('fecha_emision_constancia')->nullable();
+                $table->date('fecha_inscripcion')->nullable();
+                $table->string('estatus_sat')->nullable();
+                $table->text('domicilio_fiscal')->nullable();
+                $table->string('actividades_economicas')->nullable();
+                $table->integer('tipo_persona_confianza')->default(0);
+                $table->string('tipo_persona_detectado_por')->nullable();
+                $table->string('hash_constancia')->nullable();
+                $table->boolean('verificado_automaticamente')->default(false);
+                $table->timestamp('fecha_verificacion')->nullable();
+                $table->string('regimen_fiscal_original')->nullable();
+                $table->string('codigo_postal_original')->nullable();
+                $table->timestamps();
+                $table->softDeletes();
+            });
+
+            return;
+        }
+
+        $this->addColumnIfMissing('razon_social', function (Blueprint $table) {
             $table->string('razon_social')->nullable()->after('name');
-            $table->string('tipo_persona')->nullable()->after('razon_social'); // 'fisica' o 'moral'
+        });
+        $this->addColumnIfMissing('tipo_persona', function (Blueprint $table) {
+            $table->string('tipo_persona')->nullable()->after('razon_social');
+        });
+        $this->addColumnIfMissing('fecha_emision_constancia', function (Blueprint $table) {
             $table->string('fecha_emision_constancia')->nullable()->after('fiscal_certificate');
+        });
+        $this->addColumnIfMissing('fecha_inscripcion', function (Blueprint $table) {
             $table->date('fecha_inscripcion')->nullable();
+        });
+        $this->addColumnIfMissing('estatus_sat', function (Blueprint $table) {
             $table->string('estatus_sat')->nullable();
+        });
+        $this->addColumnIfMissing('domicilio_fiscal', function (Blueprint $table) {
             $table->text('domicilio_fiscal')->nullable();
+        });
+        $this->addColumnIfMissing('actividades_economicas', function (Blueprint $table) {
             $table->string('actividades_economicas')->nullable();
-            $table->integer('tipo_persona_confianza')->default(0); // 0-100%
+        });
+        $this->addColumnIfMissing('tipo_persona_confianza', function (Blueprint $table) {
+            $table->integer('tipo_persona_confianza')->default(0);
+        });
+        $this->addColumnIfMissing('tipo_persona_detectado_por', function (Blueprint $table) {
             $table->string('tipo_persona_detectado_por')->nullable();
-            $table->string('hash_constancia')->nullable(); // Para evitar duplicados
+        });
+        $this->addColumnIfMissing('hash_constancia', function (Blueprint $table) {
+            $table->string('hash_constancia')->nullable();
+        });
+        $this->addColumnIfMissing('verificado_automaticamente', function (Blueprint $table) {
             $table->boolean('verificado_automaticamente')->default(false);
+        });
+        $this->addColumnIfMissing('fecha_verificacion', function (Blueprint $table) {
             $table->timestamp('fecha_verificacion')->nullable();
-            
-            // Campos existentes que se llenarán automáticamente
+        });
+        $this->addColumnIfMissing('regimen_fiscal_original', function (Blueprint $table) {
             $table->string('regimen_fiscal_original')->nullable()->after('tax_regime');
+        });
+        $this->addColumnIfMissing('codigo_postal_original', function (Blueprint $table) {
             $table->string('codigo_postal_original')->nullable()->after('zipcode');
         });
     }
 
     public function down(): void
     {
-        Schema::table('tax_profiles', function (Blueprint $table) {
-            $table->dropColumn([
-                'razon_social',
-                'tipo_persona',
-                'fecha_emision_constancia',
-                'fecha_inscripcion',
-                'estatus_sat',
-                'domicilio_fiscal',
-                'actividades_economicas',
-                'tipo_persona_confianza',
-                'tipo_persona_detectado_por',
-                'hash_constancia',
-                'verificado_automaticamente',
-                'fecha_verificacion',
-                'regimen_fiscal_original',
-                'codigo_postal_original',
-            ]);
+        if (! Schema::hasTable('tax_profiles')) {
+            return;
+        }
+
+        $columns = [
+            'razon_social',
+            'tipo_persona',
+            'fecha_emision_constancia',
+            'fecha_inscripcion',
+            'estatus_sat',
+            'domicilio_fiscal',
+            'actividades_economicas',
+            'tipo_persona_confianza',
+            'tipo_persona_detectado_por',
+            'hash_constancia',
+            'verificado_automaticamente',
+            'fecha_verificacion',
+            'regimen_fiscal_original',
+            'codigo_postal_original',
+        ];
+
+        $existingColumns = array_filter($columns, fn (string $column) => Schema::hasColumn('tax_profiles', $column));
+
+        if ($existingColumns === []) {
+            return;
+        }
+
+        Schema::table('tax_profiles', function (Blueprint $table) use ($existingColumns) {
+            $table->dropColumn($existingColumns);
         });
+    }
+
+    private function addColumnIfMissing(string $column, callable $definition): void
+    {
+        if (Schema::hasColumn('tax_profiles', $column)) {
+            return;
+        }
+
+        Schema::table('tax_profiles', $definition);
     }
 };

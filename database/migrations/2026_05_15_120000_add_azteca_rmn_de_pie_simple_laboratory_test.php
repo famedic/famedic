@@ -3,11 +3,20 @@
 use App\Enums\LaboratoryBrand;
 use App\Models\LaboratoryTest;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        $categoryExists = Schema::hasTable('laboratory_test_categories')
+            && DB::table('laboratory_test_categories')->where('id', 9)->exists();
+
+        if (! $categoryExists) {
+            return;
+        }
+
         $scoutQueue = config('scout.queue');
         config(['scout.queue' => false]);
 

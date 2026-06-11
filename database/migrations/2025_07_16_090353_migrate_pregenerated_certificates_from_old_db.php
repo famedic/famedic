@@ -15,6 +15,20 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (app()->environment('testing')) {
+            return;
+        }
+
+        try {
+            DB::connection('mysqlold')->getPdo();
+        } catch (\Throwable $e) {
+            Log::info('Skipping pregenerated certificates migration: mysqlold unavailable', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
         Log::info('Starting pregenerated certificates migration...');
 
         $totalProcessed = 0;

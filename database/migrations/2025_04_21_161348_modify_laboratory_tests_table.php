@@ -319,9 +319,16 @@ return new class extends Migration
         }
 
         // 4. Create new laboratory_tests records for newPackages (one per brand)
-        if (app()->environment() !== 'testing') {
+        $categoryExists = Schema::hasTable('laboratory_test_categories')
+            && DB::table('laboratory_test_categories')->where('id', 12)->exists();
+
+        if ($categoryExists && app()->environment() !== 'testing') {
             foreach ($this->newPackages as $pkg) {
                 foreach ($pkg['brand_codes'] as $brand => $gda_id) {
+                    if (DB::table('laboratory_tests')->where('gda_id', $gda_id)->exists()) {
+                        continue;
+                    }
+
                     DB::table('laboratory_tests')->insert([
                         'name' => $pkg['name'],
                         'feature_list' => json_encode($pkg['feature_list']),

@@ -12,7 +12,7 @@ return new class extends Migration
     {
         // Add export permissions for laboratory purchases
         $laboratoryManagePermission = Permission::where('name', 'laboratory-purchases.manage')->first();
-        if ($laboratoryManagePermission) {
+        if ($laboratoryManagePermission && ! Permission::where('name', 'laboratory-purchases.manage.export')->where('guard_name', 'web')->exists()) {
             Permission::create([
                 'name' => 'laboratory-purchases.manage.export',
                 'description' => 'Descargar compras de laboratorio',
@@ -23,7 +23,7 @@ return new class extends Migration
 
         // Add export permissions for online pharmacy purchases
         $pharmacyManagePermission = Permission::where('name', 'online-pharmacy-purchases.manage')->first();
-        if ($pharmacyManagePermission) {
+        if ($pharmacyManagePermission && ! Permission::where('name', 'online-pharmacy-purchases.manage.export')->where('guard_name', 'web')->exists()) {
             Permission::create([
                 'name' => 'online-pharmacy-purchases.manage.export',
                 'description' => 'Descargar compras de farmacia en línea',
@@ -34,7 +34,7 @@ return new class extends Migration
 
         // Add export permissions for medical attention subscriptions
         $medicalManagePermission = Permission::where('name', 'medical-attention-subscriptions.manage')->first();
-        if ($medicalManagePermission) {
+        if ($medicalManagePermission && ! Permission::where('name', 'medical-attention-subscriptions.manage.export')->where('guard_name', 'web')->exists()) {
             Permission::create([
                 'name' => 'medical-attention-subscriptions.manage.export',
                 'description' => 'Descargar membresías médicas',
@@ -45,7 +45,7 @@ return new class extends Migration
 
         // Add export permissions for customers
         $customersManagePermission = Permission::where('name', 'customers.manage')->first();
-        if ($customersManagePermission) {
+        if ($customersManagePermission && ! Permission::where('name', 'customers.manage.export')->where('guard_name', 'web')->exists()) {
             Permission::create([
                 'name' => 'customers.manage.export',
                 'description' => 'Descargar clientes',

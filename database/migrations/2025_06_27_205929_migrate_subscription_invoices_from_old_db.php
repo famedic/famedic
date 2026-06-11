@@ -11,6 +11,20 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (app()->environment('testing')) {
+            return;
+        }
+
+        try {
+            DB::connection('mysqlold')->getPdo();
+        } catch (\Throwable $e) {
+            Log::info('Skipping subscription invoices migration: mysqlold unavailable', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
         Log::info('Migrating missing subscription invoices from old database...');
 
         DB::connection('mysqlold')
