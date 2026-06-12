@@ -2,17 +2,22 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Api\V1\ClearAkubicaCartAction;
 use App\Actions\Laboratories\AddItemToCartAction;
 use App\Actions\Laboratories\DeleteItemFromCartAction;
 use App\Enums\LaboratoryBrand;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Cart\AddCartItemRequest;
+use App\Http\Requests\Api\V1\Cart\ClearCartRequest;
 use App\Http\Requests\Api\V1\Cart\GetCartRequest;
+use App\Http\Requests\Api\V1\Cart\GetCartTotalsRequest;
 use App\Http\Resources\Api\V1\CartItemResource;
 use App\Http\Resources\Api\V1\CartResource;
 use App\Http\Responses\ApiResponse;
 use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryTest;
+use App\Support\Api\V1\CartCouponSupport;
+use App\Support\Api\V1\CheckoutPreparation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -113,6 +118,31 @@ class CartController extends Controller
         return ApiResponse::success([
             'removed_item_id' => $removedItemId,
             'cart' => CartResource::forBrand($brand, $items)->resolve($request),
+        ]);
+    }
+
+    public function totals(
+        GetCartTotalsRequest $request,
+        CheckoutPreparation $checkoutPreparation,
+        CartCouponSupport $cartCouponSupport,
+    ): JsonResponse {
+        $brand = LaboratoryBrand::from($request->validated('brand'));
+
+        return ApiResponse::success(
+            $checkoutPreparation->cartTotals($request->user()->customer, $brand, $cartCouponSupport),
+        );
+    }
+
+    public function clear(
+        ClearCartRequest $request,
+        ClearAkubicaCartAction $clearAkubicaCartAction,
+    ): JsonResponse {
+        $brand = LaboratoryBrand::from($request->validated('brand'));
+        $deletedCount = $clearAkubicaCartAction($request->user()->customer, $brand);
+
+        return ApiResponse::success([
+            'deleted' => true,
+            'deleted_count' => $deletedCount,
         ]);
     }
 }
