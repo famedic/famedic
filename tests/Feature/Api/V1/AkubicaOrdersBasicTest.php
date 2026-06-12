@@ -8,7 +8,7 @@ use App\Models\LaboratoryPurchaseItem;
 use App\Models\LaboratoryTest;
 use App\Models\User;
 
-function createAkubicaLaboratoryPurchase(Customer $customer, array $attributes = []): LaboratoryPurchase
+function createLaboratoryPurchaseForCustomer(Customer $customer, array $attributes = []): LaboratoryPurchase
 {
     return LaboratoryPurchase::query()->create(array_merge([
         'customer_id' => $customer->id,
@@ -72,7 +72,7 @@ test('GET /orders with customer and no orders returns empty array', function () 
 test('GET /orders returns orders with expected structure', function () {
     [$user, $token] = akubicaCustomerToken();
 
-    $purchase = createAkubicaLaboratoryPurchase($user->customer, [
+    $purchase = createLaboratoryPurchaseForCustomer($user->customer, [
         'total_cents' => 35000,
     ]);
 
@@ -118,8 +118,8 @@ test('GET /orders only returns orders of authenticated customer', function () {
     [$owner, $ownerToken] = akubicaCustomerToken();
     [$other] = akubicaCustomerToken();
 
-    createAkubicaLaboratoryPurchase($owner->customer);
-    createAkubicaLaboratoryPurchase($other->customer);
+    createLaboratoryPurchaseForCustomer($owner->customer);
+    createLaboratoryPurchaseForCustomer($other->customer);
 
     $this->getJson('/api/v1/orders', authHeaders($ownerToken))
         ->assertOk()
@@ -130,7 +130,7 @@ test('GET /orders paginates correctly', function () {
     [$user, $token] = akubicaCustomerToken();
 
     for ($i = 0; $i < 3; $i++) {
-        createAkubicaLaboratoryPurchase($user->customer);
+        createLaboratoryPurchaseForCustomer($user->customer);
     }
 
     $this->getJson('/api/v1/orders?per_page=2&page=2', authHeaders($token))
@@ -144,8 +144,8 @@ test('GET /orders paginates correctly', function () {
 test('GET /orders filters by status in_progress', function () {
     [$user, $token] = akubicaCustomerToken();
 
-    $inProgress = createAkubicaLaboratoryPurchase($user->customer);
-    $cancelled = createAkubicaLaboratoryPurchase($user->customer);
+    $inProgress = createLaboratoryPurchaseForCustomer($user->customer);
+    $cancelled = createLaboratoryPurchaseForCustomer($user->customer);
     $cancelled->delete();
 
     $this->getJson('/api/v1/orders?status=in_progress', authHeaders($token))
@@ -157,8 +157,8 @@ test('GET /orders filters by status in_progress', function () {
 test('GET /orders filters by brand', function () {
     [$user, $token] = akubicaCustomerToken();
 
-    $olab = createAkubicaLaboratoryPurchase($user->customer, ['brand' => LaboratoryBrand::OLAB]);
-    createAkubicaLaboratoryPurchase($user->customer, ['brand' => LaboratoryBrand::SWISSLAB]);
+    $olab = createLaboratoryPurchaseForCustomer($user->customer, ['brand' => LaboratoryBrand::OLAB]);
+    createLaboratoryPurchaseForCustomer($user->customer, ['brand' => LaboratoryBrand::SWISSLAB]);
 
     $this->getJson('/api/v1/orders?brand=olab', authHeaders($token))
         ->assertOk()
@@ -180,7 +180,7 @@ test('GET /orders/{id}/products for another customer order returns 404 ORDER_NOT
     [$owner, $ownerToken] = akubicaCustomerToken();
     [$other] = akubicaCustomerToken();
 
-    $otherOrder = createAkubicaLaboratoryPurchase($other->customer);
+    $otherOrder = createLaboratoryPurchaseForCustomer($other->customer);
 
     $this->getJson("/api/v1/orders/{$otherOrder->id}/products", authHeaders($ownerToken))
         ->assertNotFound()
@@ -190,7 +190,7 @@ test('GET /orders/{id}/products for another customer order returns 404 ORDER_NOT
 test('GET /orders/{id}/products for own order without items returns empty products', function () {
     [$user, $token] = akubicaCustomerToken();
 
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
+    $purchase = createLaboratoryPurchaseForCustomer($user->customer);
 
     $this->getJson("/api/v1/orders/{$purchase->id}/products", authHeaders($token))
         ->assertOk()
@@ -206,7 +206,7 @@ test('GET /orders/{id}/products for own order without items returns empty produc
 test('GET /orders/{id}/products returns products with expected structure', function () {
     [$user, $token] = akubicaCustomerToken();
 
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
+    $purchase = createLaboratoryPurchaseForCustomer($user->customer);
     $test = createOlabTest([
         'gda_id' => 'TEST-GDA-001',
         'requires_appointment' => true,
@@ -246,7 +246,7 @@ test('GET /orders/{id}/status for nonexistent order returns 404 ORDER_NOT_FOUND'
 test('GET /orders/{id}/status returns status data for own order', function () {
     [$user, $token] = akubicaCustomerToken();
 
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
+    $purchase = createLaboratoryPurchaseForCustomer($user->customer);
 
     $this->getJson("/api/v1/orders/{$purchase->id}/status", authHeaders($token))
         ->assertOk()
@@ -262,7 +262,7 @@ test('GET /orders/{id}/status returns status data for own order', function () {
 test('GET /orders/{id}/status returns cancelled for soft-deleted order', function () {
     [$user, $token] = akubicaCustomerToken();
 
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
+    $purchase = createLaboratoryPurchaseForCustomer($user->customer);
     $purchase->delete();
 
     $this->getJson("/api/v1/orders/{$purchase->id}/status", authHeaders($token))
@@ -276,7 +276,7 @@ test('GET /orders/{id}/status returns cancelled for soft-deleted order', functio
 
 test('PUT /orders/{id}/cancel returns 503 FEATURE_DISABLED', function () {
     [$user, $token] = akubicaCustomerToken();
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
+    $purchase = createLaboratoryPurchaseForCustomer($user->customer);
 
     $this->putJson("/api/v1/orders/{$purchase->id}/cancel", [], authHeaders($token))
         ->assertStatus(503)

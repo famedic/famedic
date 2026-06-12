@@ -5,28 +5,6 @@ use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryTest;
 use App\Models\User;
 
-function akubicaCustomerToken(?User $user = null): array
-{
-    $user ??= User::factory()->withRegularCustomer()->create();
-    $token = $user->createToken('akubica-test')->plainTextToken;
-
-    return [$user, $token];
-}
-
-function authHeaders(string $token): array
-{
-    return ['Authorization' => 'Bearer '.$token];
-}
-
-function createOlabTest(array $attributes = []): LaboratoryTest
-{
-    return LaboratoryTest::factory()->create(array_merge([
-        'brand' => LaboratoryBrand::OLAB,
-        'famedic_price_cents' => 35000,
-        'public_price_cents' => 40000,
-    ], $attributes));
-}
-
 // ── Auth ──────────────────────────────────────────────────────────────
 
 test('GET /cart without token returns 401 UNAUTHENTICATED', function () {

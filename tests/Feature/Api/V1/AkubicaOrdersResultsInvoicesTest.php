@@ -1,34 +1,9 @@
 <?php
 
-use App\Models\Invoice;
 use App\Models\InvoiceRequest;
-use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryPurchaseItem;
 use App\Models\User;
-
-function createAkubicaResultsNotification(LaboratoryPurchase $purchase, array $attributes = []): LaboratoryNotification
-{
-    return LaboratoryNotification::query()->create(array_merge([
-        'laboratory_purchase_id' => $purchase->id,
-        'gda_order_id' => $purchase->gda_order_id,
-        'gda_consecutivo' => $purchase->gda_consecutivo,
-        'notification_type' => LaboratoryNotification::TYPE_RESULTS,
-        'status' => LaboratoryNotification::STATUS_RECEIVED,
-        'payload' => [],
-        'results_received_at' => now(),
-        'results_pdf_base64' => 'cached-pdf-content',
-    ], $attributes));
-}
-
-function createAkubicaInvoice(LaboratoryPurchase $purchase, array $attributes = []): Invoice
-{
-    return Invoice::query()->create(array_merge([
-        'invoiceable_type' => LaboratoryPurchase::class,
-        'invoiceable_id' => $purchase->id,
-        'invoice' => 'invoices/test-invoice.pdf',
-    ], $attributes));
-}
 
 function createAkubicaInvoiceRequest(LaboratoryPurchase $purchase, array $attributes = []): InvoiceRequest
 {
@@ -72,7 +47,7 @@ test('GET /orders/results with user without customer returns 403 FORBIDDEN', fun
 test('GET /orders/results with no results returns empty array', function () {
     [$user, $token] = akubicaCustomerToken();
 
-    createAkubicaLaboratoryPurchase($user->customer);
+    createAkubicaLaboratoryPurchase($user);
 
     $this->getJson('/api/v1/orders/results', authHeaders($token))
         ->assertOk()
@@ -91,7 +66,7 @@ test('GET /orders/results with no results returns empty array', function () {
 test('GET /orders/results returns results with expected structure', function () {
     [$user, $token] = akubicaCustomerToken();
 
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
+    $purchase = createAkubicaLaboratoryPurchase($user);
     LaboratoryPurchaseItem::query()->create([
         'laboratory_purchase_id' => $purchase->id,
         'gda_id' => 'GDA-001',
@@ -118,10 +93,10 @@ test('GET /orders/results only returns results of authenticated customer', funct
     [$owner, $ownerToken] = akubicaCustomerToken();
     [$other] = akubicaCustomerToken();
 
-    $ownerPurchase = createAkubicaLaboratoryPurchase($owner->customer);
+    $ownerPurchase = createAkubicaLaboratoryPurchase($owner);
     createAkubicaResultsNotification($ownerPurchase);
 
-    $otherPurchase = createAkubicaLaboratoryPurchase($other->customer);
+    $otherPurchase = createAkubicaLaboratoryPurchase($other);
     createAkubicaResultsNotification($otherPurchase);
 
     $this->getJson('/api/v1/orders/results', authHeaders($ownerToken))
@@ -134,7 +109,7 @@ test('GET /orders/results paginates correctly', function () {
     [$user, $token] = akubicaCustomerToken();
 
     for ($i = 0; $i < 3; $i++) {
-        $purchase = createAkubicaLaboratoryPurchase($user->customer);
+        $purchase = createAkubicaLaboratoryPurchase($user);
         createAkubicaResultsNotification($purchase);
     }
 
@@ -160,7 +135,7 @@ test('GET /orders/{id}/results for another customer order returns 404 ORDER_NOT_
     [$owner, $ownerToken] = akubicaCustomerToken();
     [$other] = akubicaCustomerToken();
 
-    $otherPurchase = createAkubicaLaboratoryPurchase($other->customer);
+    $otherPurchase = createAkubicaLaboratoryPurchase($other);
     createAkubicaResultsNotification($otherPurchase);
 
     $this->getJson("/api/v1/orders/{$otherPurchase->id}/results", authHeaders($ownerToken))
@@ -170,7 +145,7 @@ test('GET /orders/{id}/results for another customer order returns 404 ORDER_NOT_
 
 test('GET /orders/{id}/results without results returns 404 RESULTS_NOT_AVAILABLE', function () {
     [$user, $token] = akubicaCustomerToken();
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
+    $purchase = createAkubicaLaboratoryPurchase($user);
 
     $this->getJson("/api/v1/orders/{$purchase->id}/results", authHeaders($token))
         ->assertNotFound()
@@ -180,7 +155,7 @@ test('GET /orders/{id}/results without results returns 404 RESULTS_NOT_AVAILABLE
 test('GET /orders/{id}/results with manual results returns expected structure', function () {
     [$user, $token] = akubicaCustomerToken();
 
-    $purchase = createAkubicaLaboratoryPurchase($user->customer, [
+    $purchase = createAkubicaLaboratoryPurchase($user, [
         'results' => 'laboratory-results/manual.pdf',
     ]);
 
@@ -197,7 +172,7 @@ test('GET /orders/{id}/results with manual results returns expected structure', 
 test('GET /orders/{id}/results with API notification returns expected structure', function () {
     [$user, $token] = akubicaCustomerToken();
 
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
+    $purchase = createAkubicaLaboratoryPurchase($user);
     createAkubicaResultsNotification($purchase);
 
     $this->getJson("/api/v1/orders/{$purchase->id}/results", authHeaders($token))
@@ -243,7 +218,7 @@ test('GET /orders/invoices with no invoices returns empty array', function () {
 test('GET /orders/invoices returns issued invoices with expected structure', function () {
     [$user, $token] = akubicaCustomerToken();
 
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
+    $purchase = createAkubicaLaboratoryPurchase($user);
     LaboratoryPurchaseItem::query()->create([
         'laboratory_purchase_id' => $purchase->id,
         'gda_id' => 'GDA-002',
@@ -251,7 +226,7 @@ test('GET /orders/invoices returns issued invoices with expected structure', fun
         'indications' => 'Ayuno',
         'price_cents' => 35000,
     ]);
-    $invoice = createAkubicaInvoice($purchase);
+    $invoice = createAkubicaLaboratoryInvoice($purchase);
 
     $this->getJson('/api/v1/orders/invoices', authHeaders($token))
         ->assertOk()
@@ -268,11 +243,11 @@ test('GET /orders/invoices only returns invoices of authenticated customer', fun
     [$owner, $ownerToken] = akubicaCustomerToken();
     [$other] = akubicaCustomerToken();
 
-    $ownerPurchase = createAkubicaLaboratoryPurchase($owner->customer);
-    createAkubicaInvoice($ownerPurchase);
+    $ownerPurchase = createAkubicaLaboratoryPurchase($owner);
+    createAkubicaLaboratoryInvoice($ownerPurchase);
 
-    $otherPurchase = createAkubicaLaboratoryPurchase($other->customer);
-    createAkubicaInvoice($otherPurchase);
+    $otherPurchase = createAkubicaLaboratoryPurchase($other);
+    createAkubicaLaboratoryInvoice($otherPurchase);
 
     $this->getJson('/api/v1/orders/invoices', authHeaders($ownerToken))
         ->assertOk()
@@ -284,8 +259,8 @@ test('GET /orders/invoices paginates correctly', function () {
     [$user, $token] = akubicaCustomerToken();
 
     for ($i = 0; $i < 3; $i++) {
-        $purchase = createAkubicaLaboratoryPurchase($user->customer);
-        createAkubicaInvoice($purchase);
+        $purchase = createAkubicaLaboratoryPurchase($user);
+        createAkubicaLaboratoryInvoice($purchase);
     }
 
     $this->getJson('/api/v1/orders/invoices?per_page=2&page=2', authHeaders($token))
@@ -309,8 +284,8 @@ test('GET /orders/{id}/invoices for another customer order returns 404 ORDER_NOT
     [$owner, $ownerToken] = akubicaCustomerToken();
     [$other] = akubicaCustomerToken();
 
-    $otherPurchase = createAkubicaLaboratoryPurchase($other->customer);
-    createAkubicaInvoice($otherPurchase);
+    $otherPurchase = createAkubicaLaboratoryPurchase($other);
+    createAkubicaLaboratoryInvoice($otherPurchase);
 
     $this->getJson("/api/v1/orders/{$otherPurchase->id}/invoices", authHeaders($ownerToken))
         ->assertNotFound()
@@ -319,7 +294,7 @@ test('GET /orders/{id}/invoices for another customer order returns 404 ORDER_NOT
 
 test('GET /orders/{id}/invoices without invoices returns empty array', function () {
     [$user, $token] = akubicaCustomerToken();
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
+    $purchase = createAkubicaLaboratoryPurchase($user);
 
     $this->getJson("/api/v1/orders/{$purchase->id}/invoices", authHeaders($token))
         ->assertOk()
@@ -334,8 +309,8 @@ test('GET /orders/{id}/invoices without invoices returns empty array', function 
 
 test('GET /orders/{id}/invoices returns invoice with expected structure', function () {
     [$user, $token] = akubicaCustomerToken();
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
-    $invoice = createAkubicaInvoice($purchase);
+    $purchase = createAkubicaLaboratoryPurchase($user);
+    $invoice = createAkubicaLaboratoryInvoice($purchase);
 
     $this->getJson("/api/v1/orders/{$purchase->id}/invoices", authHeaders($token))
         ->assertOk()
@@ -349,7 +324,7 @@ test('GET /orders/{id}/invoices returns invoice with expected structure', functi
 
 test('GET /orders/{id}/invoices returns pending invoice request', function () {
     [$user, $token] = akubicaCustomerToken();
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
+    $purchase = createAkubicaLaboratoryPurchase($user);
     $request = createAkubicaInvoiceRequest($purchase);
 
     $this->getJson("/api/v1/orders/{$purchase->id}/invoices", authHeaders($token))
@@ -364,7 +339,7 @@ test('GET /orders/{id}/invoices returns pending invoice request', function () {
 
 test('PUT /orders/{id}/cancel returns 503 FEATURE_DISABLED', function () {
     [$user, $token] = akubicaCustomerToken();
-    $purchase = createAkubicaLaboratoryPurchase($user->customer);
+    $purchase = createAkubicaLaboratoryPurchase($user);
 
     $this->putJson("/api/v1/orders/{$purchase->id}/cancel", [], authHeaders($token))
         ->assertStatus(503)
