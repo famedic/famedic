@@ -60,6 +60,7 @@ class LaboratoryOrderResults
     public static function buildDetailPayload(LaboratoryPurchase $purchase): array
     {
         $status = LaboratoryOrderStatus::resolve($purchase);
+        $downloadSupport = app(OrderDocumentDownloadSupport::class);
 
         $payload = [
             'order_id' => $purchase->id,
@@ -70,6 +71,10 @@ class LaboratoryOrderResults
         if (! empty($purchase->results)) {
             $payload['has_pdf'] = true;
             $payload['download_url'] = self::manualDownloadUrl($purchase);
+            $payload['download'] = [
+                'type' => 'bearer',
+                'url' => $downloadSupport->resultBearerDownloadUrl($purchase),
+            ];
 
             return $payload;
         }
@@ -86,11 +91,16 @@ class LaboratoryOrderResults
             'available_at' => $notification->results_received_at?->toIso8601String(),
             'download_url' => self::apiDownloadUrl($purchase),
             'has_pdf' => ! empty($notification->results_pdf_base64),
+            'download' => [
+                'type' => 'bearer',
+                'url' => $downloadSupport->resultBearerDownloadUrl($purchase),
+            ],
         ];
 
         $payload['results'] = [$resultEntry];
         $payload['has_pdf'] = $resultEntry['has_pdf'];
         $payload['download_url'] = $resultEntry['download_url'];
+        $payload['download'] = $resultEntry['download'];
 
         return $payload;
     }
