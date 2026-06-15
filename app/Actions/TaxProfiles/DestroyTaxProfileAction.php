@@ -16,7 +16,7 @@ class DestroyTaxProfileAction
         $taxProfile->delete();
 
         dispatch(function () use ($fiscalCertificate) {
-            if (Storage::exists($fiscalCertificate)) {
+            if ($fiscalCertificate && Storage::exists($fiscalCertificate)) {
                 Storage::delete($fiscalCertificate);
             }
         })->afterResponse();

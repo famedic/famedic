@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AkubicaCheckoutLinkController;
 use App\Http\Controllers\DocumentationAcceptController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InvoiceController;
@@ -18,6 +19,11 @@ use App\Http\Middleware\EnsureLabResultsOtpVerified;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', WelcomeController::class)->name('welcome');
+
+Route::get('/akubica/checkout/{token}', AkubicaCheckoutLinkController::class)
+    ->middleware('throttle:30,1')
+    ->name('akubica.checkout.link');
+
 #Route::get('/terms-of-service', TermsOfServiceController::class)->name('terms-of-service');
 #Route::get('/privacy-policy', PrivacyPolicyController::class)->name('privacy-policy');
 Route::get('/documentation-accept', [DocumentationAcceptController::class, 'index'])->name('documentation.accept');
