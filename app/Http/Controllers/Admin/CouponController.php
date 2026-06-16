@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\CouponApprovalStatus;
 use App\Http\Controllers\Controller;
+use App\Enums\CouponBeneficiarySource;
+use App\Imports\CouponBeneficiariesRowsImport;
+use App\Services\CouponBeneficiaryService;
 use App\Imports\CouponCampaignEmailsImport;
 use App\Imports\CouponsExcelImport;
 use App\Mail\CouponAuthorizationRequestedMail;
@@ -16,6 +19,7 @@ use App\Models\CouponBeneficiaryApprovalRule;
 use App\Models\Administrator;
 use App\Models\Coupon;
 use App\Models\CouponAdminSettings;
+use App\Models\CouponBeneficiary;
 use App\Models\CouponConcept;
 use App\Models\CouponUser;
 use App\Models\Customer;
@@ -38,7 +42,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class CouponController extends Controller
 {
     public function __construct(
-        private CouponService $couponService
+        private CouponService $couponService,
+        private CouponBeneficiaryService $couponBeneficiaryService,
     ) {}
 
     public function index(Request $request): InertiaResponse
@@ -397,7 +402,7 @@ class CouponController extends Controller
     {
         $this->authorize('create', Coupon::class);
 
-        $data = $request->validate([
+        $data = $request->validate(array_merge([
             'amount_cents' => ['required', 'integer', 'min:1'],
             'code' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
@@ -405,7 +410,7 @@ class CouponController extends Controller
             'is_active' => ['boolean'],
             'coupon_concept_id' => ['nullable', 'integer', Rule::exists('coupon_concepts', 'id')],
             'concept_other' => ['nullable', 'string', 'max:255'],
-        ]);
+        ], $this->couponEligibilityValidationRules()));
 
         $adminSettings = CouponAdminSettings::singleton();
 
@@ -427,7 +432,7 @@ class CouponController extends Controller
 
         $this->couponService->assertAssignmentRules($data['amount_cents']);
 
-        $coupon = Coupon::create([
+        $coupon = Coupon::create(array_merge([
             'code' => $data['code'] ?? null,
             'description' => $data['description'] ?? null,
             'coupon_concept_id' => $data['coupon_concept_id'] ?? null,
@@ -442,7 +447,7 @@ class CouponController extends Controller
             'approval_status' => $pending ? CouponApprovalStatus::PendingAuthorization : CouponApprovalStatus::Active,
             'created_by_user_id' => $request->user()->id,
             'updated_by_user_id' => $request->user()->id,
-        ]);
+        ], $this->couponEligibilityAttributesFromRequest($data)));
 
         if ($pending) {
             $plain = (string) random_int(100000, 999999);
@@ -479,31 +484,37 @@ class CouponController extends Controller
             'updatedByUser:id,name,paternal_lastname,maternal_lastname,email',
             'authorizedByUser:id,name,paternal_lastname,maternal_lastname,email',
             'concept:id,title,description',
-            'transactions',
+            'transactions.reversedByUser:id,name,paternal_lastname,maternal_lastname,email',
             'couponUsers' => fn ($q) => $q->orderBy('assigned_at'),
             'couponUsers.user:id,name,paternal_lastname,maternal_lastname,email',
             'childCoupons.couponUsers.user:id,name,paternal_lastname,maternal_lastname,email',
-            'childCoupons.transactions',
+            'childCoupons.transactions.reversedByUser:id,name,paternal_lastname,maternal_lastname,email',
+            'beneficiaries' => fn ($q) => $q->whereNull('cancelled_at')->orderBy('id'),
         ]);
 
         $beneficiaryRows = [];
+        $beneficiariesByChildId = $coupon->beneficiaries
+            ->filter(fn ($b) => $b->child_coupon_id !== null)
+            ->keyBy('child_coupon_id');
 
         foreach ($coupon->childCoupons->sortBy('id') as $child) {
             $assignment = $child->couponUsers->first();
             $user = $assignment?->user;
             $tx = $child->transactions->first();
+            $trackedBeneficiary = $beneficiariesByChildId->get($child->id);
             $beneficiaryRows[] = [
                 'assignment_id' => $assignment?->id,
                 'coupon_id' => $child->id,
                 'user' => $user,
                 'assigned_at' => $assignment?->assigned_at,
+                'claimed_at' => $trackedBeneficiary?->claimed_at?->toIso8601String(),
                 'used_at' => $assignment?->used_at,
                 'remaining_cents' => $child->remaining_cents,
-                'transaction' => $tx ? [
-                    'amount_used_cents' => $tx->amount_used_cents,
-                    'purchase_type' => $tx->purchase_type->value,
-                    'purchase_url' => $this->purchaseAdminUrl($tx),
-                ] : null,
+                'valid_from' => $child->valid_from?->toIso8601String(),
+                'expires_at' => $child->expires_at?->toIso8601String(),
+                'formatted_min_purchase' => $child->formatted_min_purchase,
+                'validity_status' => $child->validity_status,
+                'transaction' => $this->couponTransactionForBeneficiaryUi($tx),
             ];
         }
 
@@ -517,11 +528,44 @@ class CouponController extends Controller
                 'assigned_at' => $assignment->assigned_at,
                 'used_at' => $assignment->used_at,
                 'remaining_cents' => $coupon->remaining_cents,
-                'transaction' => $tx ? [
-                    'amount_used_cents' => $tx->amount_used_cents,
-                    'purchase_type' => $tx->purchase_type->value,
-                    'purchase_url' => $this->purchaseAdminUrl($tx),
-                ] : null,
+                'valid_from' => $coupon->valid_from?->toIso8601String(),
+                'expires_at' => $coupon->expires_at?->toIso8601String(),
+                'formatted_min_purchase' => $coupon->formatted_min_purchase,
+                'validity_status' => $coupon->validity_status,
+                'transaction' => $this->couponTransactionForBeneficiaryUi($tx),
+            ];
+        }
+
+        foreach ($coupon->beneficiaries as $pending) {
+            if ($pending->status->value !== 'pending_user') {
+                continue;
+            }
+
+            $beneficiaryRows[] = [
+                'assignment_id' => null,
+                'coupon_id' => null,
+                'beneficiary_id' => $pending->id,
+                'user' => null,
+                'pending_email' => $pending->email,
+                'pending_name' => trim(implode(' ', array_filter([
+                    $pending->first_name,
+                    $pending->paternal_lastname,
+                    $pending->maternal_lastname,
+                ]))) ?: null,
+                'assigned_at' => $pending->created_at,
+                'used_at' => null,
+                'remaining_cents' => $coupon->amount_cents,
+                'valid_from' => $coupon->valid_from?->toIso8601String(),
+                'expires_at' => $coupon->expires_at?->toIso8601String(),
+                'formatted_min_purchase' => $coupon->formatted_min_purchase,
+                'validity_status' => $coupon->validity_status,
+                'transaction' => null,
+                'is_pending_user' => true,
+                'invitation_sent_at' => $pending->invitation_sent_at?->toIso8601String(),
+                'last_invitation_sent_at' => $pending->last_invitation_sent_at?->toIso8601String(),
+                'invitation_count' => (int) $pending->invitation_count,
+                'can_resend_invitation' => $pending->canResendInvitation(),
+                'resend_invitation_available_at' => $pending->resendInvitationAvailableAt()?->toIso8601String(),
             ];
         }
 
@@ -571,6 +615,32 @@ class CouponController extends Controller
             'pharmacy' => route('admin.online-pharmacy-purchases.show', ['online_pharmacy_purchase' => $t->purchase_id], absolute: false),
             default => '#',
         };
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function couponTransactionForBeneficiaryUi(?\App\Models\CouponTransaction $tx): ?array
+    {
+        if ($tx === null) {
+            return null;
+        }
+
+        $reversedBy = $tx->reversedByUser;
+
+        return [
+            'amount_used_cents' => (int) $tx->amount_used_cents,
+            'purchase_type' => $tx->purchase_type->value,
+            'purchase_url' => $this->purchaseAdminUrl($tx),
+            'is_reversed' => $tx->isReversed(),
+            'reversed_at' => $tx->reversed_at?->toIso8601String(),
+            'reversal_reason' => $tx->reversal_reason,
+            'reversed_by_user' => $reversedBy ? [
+                'id' => $reversedBy->id,
+                'full_name' => $reversedBy->full_name,
+                'email' => $reversedBy->email,
+            ] : null,
+        ];
     }
 
     public function authorizeCoupon(Request $request, Coupon $coupon): RedirectResponse
@@ -654,17 +724,18 @@ class CouponController extends Controller
             );
         }
 
-        $data = $request->validate([
+        $data = $request->validate(array_merge([
             'code' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'max_beneficiaries' => ['nullable', 'integer', 'min:1'],
             'is_active' => ['boolean'],
-        ]);
+        ], $this->couponEligibilityValidationRules()));
 
         $coupon->code = $data['code'] ?? null;
         $coupon->description = $data['description'] ?? null;
         $coupon->max_beneficiaries = $data['max_beneficiaries'] ?? null;
         $coupon->is_active = $data['is_active'] ?? $coupon->is_active;
+        $coupon->fill($this->couponEligibilityAttributesFromRequest($data));
         $coupon->updated_by_user_id = $request->user()->id;
         $coupon->save();
 
@@ -846,9 +917,136 @@ class CouponController extends Controller
         return response()->streamDownload(function () use ($path) {
             echo "\xEF\xBB\xBF";
             readfile($path);
-        }, 'plantilla_carga_beneficiarios_cupones.csv', [
+        ], 'plantilla_carga_beneficiarios_cupones.csv', [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    public function previewBeneficiaries(Request $request, Coupon $coupon): JsonResponse
+    {
+        $this->authorize('create', Coupon::class);
+        $this->assertAssignableMasterCoupon($coupon);
+
+        $data = $request->validate([
+            'rows' => ['required', 'array', 'max:5000'],
+            'rows.*.email' => ['required', 'string', 'max:255'],
+            'rows.*.first_name' => ['nullable', 'string', 'max:255'],
+            'rows.*.paternal_lastname' => ['nullable', 'string', 'max:255'],
+            'rows.*.maternal_lastname' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $rows = $this->couponBeneficiaryService->validateInputRows($data['rows']);
+        $preview = $this->couponBeneficiaryService->previewRows($coupon, $rows);
+
+        CouponAuditLog::create([
+            'type' => 'assignment',
+            'action' => 'coupon_beneficiaries_previewed',
+            'status' => 'completed',
+            'actor_user_id' => $request->user()->id,
+            'coupon_id' => $coupon->id,
+            'context' => [
+                'parent_coupon_id' => $coupon->id,
+                'row_count' => count($preview['rows']),
+                'summary' => $preview['summary'],
+            ],
+        ]);
+
+        return response()->json($preview);
+    }
+
+    public function previewBeneficiariesFile(Request $request, Coupon $coupon): JsonResponse
+    {
+        $this->authorize('create', Coupon::class);
+        $this->assertAssignableMasterCoupon($coupon);
+
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+        ]);
+
+        $import = new CouponBeneficiariesRowsImport;
+        Excel::import($import, $request->file('file'));
+        $rows = $import->getRows();
+
+        if ($rows === []) {
+            return response()->json([
+                'message' => 'No se encontraron filas válidas. Usa columnas email/correo (obligatorio) y nombre/apellidos opcionales.',
+                'rows' => [],
+                'summary' => [],
+            ], 422);
+        }
+
+        $preview = $this->couponBeneficiaryService->previewRows($coupon, $rows);
+
+        CouponAuditLog::create([
+            'type' => 'assignment',
+            'action' => 'coupon_beneficiaries_previewed',
+            'status' => 'completed',
+            'actor_user_id' => $request->user()->id,
+            'coupon_id' => $coupon->id,
+            'context' => [
+                'parent_coupon_id' => $coupon->id,
+                'source' => 'excel',
+                'row_count' => count($preview['rows']),
+                'summary' => $preview['summary'],
+            ],
+        ]);
+
+        return response()->json($preview);
+    }
+
+    public function resendBeneficiaryInvitation(Request $request, Coupon $coupon, CouponBeneficiary $beneficiary): RedirectResponse
+    {
+        $this->authorize('create', Coupon::class);
+        $this->assertAssignableMasterCoupon($coupon);
+
+        if ((int) $beneficiary->parent_coupon_id !== (int) $coupon->id) {
+            abort(404);
+        }
+
+        try {
+            $this->couponBeneficiaryService->resendPendingInvitation($beneficiary, $request->user());
+        } catch (\DomainException $e) {
+            return redirect()->back()->flashMessage($e->getMessage(), 'error');
+        }
+
+        return redirect()->back()->flashMessage('Invitación reenviada correctamente.');
+    }
+
+    public function confirmBeneficiaries(Request $request, Coupon $coupon): RedirectResponse
+    {
+        $this->authorize('create', Coupon::class);
+        $this->assertAssignableMasterCoupon($coupon);
+
+        if ($this->couponHasPendingPreApprovalLock((int) $coupon->id)) {
+            return redirect()->back()->flashMessage(
+                'Este cupón está bloqueado para asignaciones hasta completar las aprobaciones requeridas.',
+                'error'
+            );
+        }
+
+        $data = $request->validate([
+            'rows' => ['required', 'array', 'max:5000'],
+            'rows.*.email' => ['required', 'string', 'max:255'],
+            'rows.*.first_name' => ['nullable', 'string', 'max:255'],
+            'rows.*.paternal_lastname' => ['nullable', 'string', 'max:255'],
+            'rows.*.maternal_lastname' => ['nullable', 'string', 'max:255'],
+            'source' => ['nullable', Rule::in(['manual', 'excel'])],
+            'send_notifications' => ['boolean'],
+            'authorizer_ids' => ['nullable', 'array'],
+            'authorizer_ids.*' => ['integer', Rule::exists('administrators', 'id')],
+        ]);
+
+        $rows = $this->couponBeneficiaryService->validateInputRows($data['rows']);
+        $source = CouponBeneficiarySource::from($data['source'] ?? 'manual');
+        $sendNotifications = $data['send_notifications'] ?? true;
+
+        return $this->finishBeneficiaryAssignment(
+            $request,
+            $coupon,
+            $rows,
+            $source,
+            $sendNotifications
+        );
     }
 
     public function assign(Request $request): RedirectResponse
@@ -857,7 +1055,7 @@ class CouponController extends Controller
 
         $assignmentMode = (string) $request->input('assignment_mode');
 
-        $data = $request->validate([
+        $data = $request->validate(array_merge([
             'coupon_mode' => ['required', Rule::in(['existing', 'new'])],
             'assignment_mode' => ['required', Rule::in(['none', 'individual', 'bulk'])],
             'coupon_id' => ['required_if:coupon_mode,existing', 'nullable', 'integer', Rule::exists('coupons', 'id')],
@@ -869,16 +1067,18 @@ class CouponController extends Controller
                     && empty($request->input('bulk_emails'))),
             ],
             'bulk_emails' => [
-                Rule::requiredIf(fn () => $assignmentMode === 'individual'),
+                Rule::requiredIf(fn () => $assignmentMode === 'individual' && empty($request->input('beneficiary_rows'))),
                 'nullable',
                 'array',
-                Rule::when($assignmentMode === 'individual', ['min:1']),
+                Rule::when($assignmentMode === 'individual' && empty($request->input('beneficiary_rows')), ['min:1']),
                 'max:5000',
             ],
             'bulk_emails.*' => array_values(array_filter([
                 'email',
                 'max:255',
-                $assignmentMode === 'individual' ? Rule::exists('users', 'email') : null,
+                $assignmentMode === 'individual' && empty($request->input('beneficiary_rows'))
+                    ? Rule::exists('users', 'email')
+                    : null,
             ])),
             'send_notification' => ['boolean'],
             'send_notifications' => ['boolean'],
@@ -891,7 +1091,13 @@ class CouponController extends Controller
             'authorizer_ids.*' => ['integer', Rule::exists('administrators', 'id')],
             'coupon_concept_id' => ['nullable', 'integer', Rule::exists('coupon_concepts', 'id')],
             'concept_other' => ['nullable', 'string', 'max:255'],
-        ]);
+            'beneficiary_rows' => ['nullable', 'array', 'max:5000'],
+            'beneficiary_rows.*.email' => ['required_with:beneficiary_rows', 'string', 'max:255'],
+            'beneficiary_rows.*.first_name' => ['nullable', 'string', 'max:255'],
+            'beneficiary_rows.*.paternal_lastname' => ['nullable', 'string', 'max:255'],
+            'beneficiary_rows.*.maternal_lastname' => ['nullable', 'string', 'max:255'],
+            'beneficiary_source' => ['nullable', Rule::in(['manual', 'excel'])],
+        ], $this->couponEligibilityValidationRules()));
 
         $sendForIndividual = $data['send_notification'] ?? true;
         $sendForBulk = $data['send_notifications'] ?? $data['send_notification'] ?? true;
@@ -984,6 +1190,23 @@ class CouponController extends Controller
             );
         }
 
+        if (in_array($data['assignment_mode'], ['individual', 'bulk'], true)
+            && ! empty($data['beneficiary_rows'])) {
+            $rows = $this->couponBeneficiaryService->validateInputRows($data['beneficiary_rows']);
+            $source = CouponBeneficiarySource::from(
+                $data['beneficiary_source'] ?? ($data['assignment_mode'] === 'bulk' ? 'excel' : 'manual')
+            );
+            $sendNotifications = $data['assignment_mode'] === 'individual' ? $sendForIndividual : $sendForBulk;
+
+            return $this->finishBeneficiaryAssignment(
+                $request,
+                $parent,
+                $rows,
+                $source,
+                $sendNotifications
+            );
+        }
+
         if ($data['assignment_mode'] === 'individual') {
             $emails = collect($data['bulk_emails'] ?? [])
                 ->map(fn ($e) => strtolower(trim((string) $e)))
@@ -999,7 +1222,7 @@ class CouponController extends Controller
                 );
             }
 
-            $assigned = (int) $parent->childCoupons()->count();
+            $assigned = $this->couponBeneficiaryService->countActiveBeneficiarySlots($parent);
             if ($parent->max_beneficiaries !== null && $assigned + count($emails) > (int) $parent->max_beneficiaries) {
                 $remaining = max(0, (int) $parent->max_beneficiaries - $assigned);
 
@@ -1164,7 +1387,9 @@ class CouponController extends Controller
                 $sendNotification = (bool) ($payload['send_notification'] ?? true);
                 $requestedBy = (int) $approvalRequest->requested_by_user_id;
 
-                if (! empty($payload['pre_approval_only']) && empty($payload['emails'])) {
+                if (! empty($payload['pre_approval_only'])
+                    && empty($payload['emails'])
+                    && empty($payload['beneficiary_rows'])) {
                     $approvalRequest->status = 'executed';
                     $approvalRequest->executed_at = now();
                     $approvalRequest->save();
@@ -1177,7 +1402,16 @@ class CouponController extends Controller
                     $coupon = $coupon->fresh();
                 }
 
-                if (! empty($payload['emails']) && is_array($payload['emails'])) {
+                if (! empty($payload['beneficiary_rows']) && is_array($payload['beneficiary_rows'])) {
+                    $this->couponBeneficiaryService->confirmRows(
+                        $coupon,
+                        $payload['beneficiary_rows'],
+                        $request->user(),
+                        CouponBeneficiarySource::from($payload['source'] ?? 'manual'),
+                        $sendNotification,
+                        enforceMaxAssignmentAmount: false
+                    );
+                } elseif (! empty($payload['emails']) && is_array($payload['emails'])) {
                     foreach ($payload['emails'] as $email) {
                         $user = User::query()->where('email', (string) $email)->first();
                         if (! $user) {
@@ -1726,7 +1960,7 @@ class CouponController extends Controller
 
         $this->couponService->assertAssignmentRules((int) $data['amount_cents'], ! $relaxMaxAmountForPreApproval);
 
-        $coupon = Coupon::create([
+        $coupon = Coupon::create(array_merge([
             'code' => $data['code'] ?? null,
             'description' => $data['description'] ?? null,
             'coupon_concept_id' => $data['coupon_concept_id'] ?? null,
@@ -1741,7 +1975,7 @@ class CouponController extends Controller
             'approval_status' => $pending ? CouponApprovalStatus::PendingAuthorization : CouponApprovalStatus::Active,
             'created_by_user_id' => $request->user()->id,
             'updated_by_user_id' => $request->user()->id,
-        ]);
+        ], $this->couponEligibilityAttributesFromRequest($data)));
 
         if ($pending) {
             $plain = (string) random_int(100000, 999999);
@@ -2099,5 +2333,143 @@ class CouponController extends Controller
                 ]);
             }
         }
+    }
+
+    private function assertAssignableMasterCoupon(Coupon $coupon): void
+    {
+        if ($coupon->parent_coupon_id !== null) {
+            abort(404);
+        }
+
+        if ($coupon->approval_status !== CouponApprovalStatus::Active || ! $coupon->is_active) {
+            abort(422, 'El cupón no está disponible para asignaciones.');
+        }
+    }
+
+    /**
+     * @param  list<array{email: string, first_name: ?string, paternal_lastname: ?string, maternal_lastname: ?string}>  $rows
+     */
+    private function finishBeneficiaryAssignment(
+        Request $request,
+        Coupon $parent,
+        array $rows,
+        CouponBeneficiarySource $source,
+        bool $sendNotifications,
+    ): RedirectResponse {
+        $preview = $this->couponBeneficiaryService->previewRows($parent, $rows);
+        $confirmableCount = (int) ($preview['summary']['confirmable'] ?? 0);
+
+        if ($confirmableCount === 0) {
+            return redirect()->back()->flashMessage(
+                'No hay beneficiarios válidos para confirmar.',
+                'error'
+            );
+        }
+
+        $bypassAssignmentApprovals = $this->couponIsLockedAfterApproval($parent);
+        $rulesApprovals = $this->couponService->resolveRequiredApprovals((int) $parent->amount_cents, $confirmableCount);
+        $isSuperadmin = (bool) $request->user()->administrator?->hasRole('superadmin');
+        $settings = CouponAdminSettings::singleton();
+
+        if (! $bypassAssignmentApprovals
+            && $rulesApprovals > 0
+            && ! ($isSuperadmin && $settings->superadmin_bypass_approvals)) {
+            $authorizerIds = collect($request->input('authorizer_ids', []))->map(fn ($v) => (int) $v)->filter()->values()->all();
+            if ($authorizerIds === []) {
+                $authorizerIds = $this->defaultAuthorizerAdministratorIds();
+            }
+            if ($authorizerIds === []) {
+                return redirect()->back()->flashMessage(
+                    'Esta operación requiere aprobación según las reglas, pero no hay autorizadores configurados.',
+                    'error'
+                );
+            }
+
+            $approvalRequest = $this->couponService->createApprovalRequest(
+                type: 'assignment',
+                requestedByUserId: (int) $request->user()->id,
+                requiredApprovals: min($rulesApprovals, count($authorizerIds)),
+                authorizerAdministratorIds: $authorizerIds,
+                payload: [
+                    'beneficiary_rows' => $rows,
+                    'coupon_id' => $parent->id,
+                    'send_notification' => $sendNotifications,
+                    'source' => $source->value,
+                ],
+                couponId: (int) $parent->id
+            );
+
+            $this->sendApprovalRequestMails($approvalRequest);
+
+            return redirect()->route('admin.coupons.show', $parent)->flashMessage(
+                "Se creó la solicitud #{$approvalRequest->id} ({$confirmableCount} beneficiario(s)). Al completarse las aprobaciones se procesarán asignaciones y pendientes."
+            );
+        }
+
+        try {
+            $result = $this->couponBeneficiaryService->confirmRows(
+                $parent,
+                $rows,
+                $request->user(),
+                $source,
+                $sendNotifications,
+                enforceMaxAssignmentAmount: ! $bypassAssignmentApprovals
+            );
+        } catch (\DomainException $e) {
+            return redirect()->back()->flashMessage($e->getMessage(), 'error');
+        }
+
+        $msg = "Asignados: {$result['assigned_count']}. Pendientes de registro: {$result['pending_count']}.";
+        if (($result['invitations_sent_count'] ?? 0) > 0) {
+            $msg .= " Invitaciones enviadas: {$result['invitations_sent_count']}.";
+        }
+        if ($result['skipped_count'] > 0) {
+            $msg .= " Omitidos: {$result['skipped_count']}.";
+        }
+        if (($result['invitation_warnings'] ?? []) !== []) {
+            $msg .= ' Avisos de invitación: '.implode('; ', array_slice($result['invitation_warnings'], 0, 3));
+            if (count($result['invitation_warnings']) > 3) {
+                $msg .= '…';
+            }
+        }
+        if ($result['errors'] !== []) {
+            $msg .= ' Detalle: '.implode('; ', array_slice($result['errors'], 0, 3));
+            if (count($result['errors']) > 3) {
+                $msg .= '…';
+            }
+        }
+
+        return redirect()->route('admin.coupons.show', $parent)->flashMessage($msg);
+    }
+
+    /**
+     * @return array<string, list<string|\Illuminate\Validation\Rules\Date>>
+     */
+    private function couponEligibilityValidationRules(): array
+    {
+        return [
+            'valid_from' => ['nullable', 'date'],
+            'expires_at' => ['nullable', 'date', 'after_or_equal:valid_from'],
+            'min_purchase_cents' => ['nullable', 'integer', 'min:0'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{valid_from: ?Carbon, expires_at: ?Carbon, min_purchase_cents: ?int}
+     */
+    private function couponEligibilityAttributesFromRequest(array $data): array
+    {
+        return [
+            'valid_from' => isset($data['valid_from']) && $data['valid_from'] !== null && $data['valid_from'] !== ''
+                ? Carbon::parse($data['valid_from'])
+                : null,
+            'expires_at' => isset($data['expires_at']) && $data['expires_at'] !== null && $data['expires_at'] !== ''
+                ? Carbon::parse($data['expires_at'])
+                : null,
+            'min_purchase_cents' => isset($data['min_purchase_cents']) && $data['min_purchase_cents'] !== null && $data['min_purchase_cents'] !== ''
+                ? (int) $data['min_purchase_cents']
+                : null,
+        ];
     }
 }

@@ -42,6 +42,7 @@ import DevAssistanceButton from "@/Components/DevAssistance/DevAssistanceButton"
 import DevAssistanceDropdown from "@/Components/DevAssistance/DevAssistanceDropdown";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import PaymentDetails from "@/Components/PaymentDetails";
+import CouponReversalNotice from "@/Components/Admin/CouponReversalNotice";
 
 function normalizePackageFeatureLabels(raw) {
 	if (raw == null) return [];
@@ -72,6 +73,7 @@ function normalizePackageFeatureLabels(raw) {
 
 export default function LaboratoryPurchase({
 	laboratoryPurchase,
+	couponReversal = null,
 	showDeleteButton,
 	canResendConfirmationEmail,
 	hasSampleCollected,
@@ -107,6 +109,8 @@ export default function LaboratoryPurchase({
 					purchase={laboratoryPurchase}
 				/>
 			)}
+
+			<CouponReversalNotice couponReversal={couponReversal} />
 
 		</AdminLayout>
 	);

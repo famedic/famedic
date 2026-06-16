@@ -12,6 +12,7 @@ use App\Models\CouponAmountApprovalRule;
 use App\Models\CouponBeneficiaryApprovalRule;
 use App\Models\Coupon;
 use App\Models\CouponAdminSettings;
+use App\Models\CouponBeneficiary;
 use App\Models\CouponUser;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +35,8 @@ class CouponService
             ->where('coupons.is_active', true)
             ->where('coupons.remaining_cents', '>', 0)
             ->where('coupons.type', CouponType::Balance)
+            ->where('coupons.approval_status', CouponApprovalStatus::Active)
+            ->withinValidityWindow()
             ->join('coupon_user', 'coupon_user.coupon_id', '=', 'coupons.id')
             ->where('coupon_user.user_id', $userId)
             ->whereNull('coupon_user.used_at')
@@ -41,21 +44,67 @@ class CouponService
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, array{id:int, remaining_cents:int, code:?string}>
+     * @return \Illuminate\Support\Collection<int, array{
+     *     id: int,
+     *     remaining_cents: int,
+     *     code: ?string,
+     *     valid_from: ?string,
+     *     expires_at: ?string,
+     *     min_purchase_cents: ?int,
+     *     formatted_min_purchase: ?string,
+     *     validity_status: string
+     * }>
      */
     public function getAvailableCoupons(int $userId): \Illuminate\Support\Collection
     {
         return Coupon::query()
-            ->select(['coupons.id', 'coupons.remaining_cents', 'coupons.code'])
+            ->select([
+                'coupons.id',
+                'coupons.remaining_cents',
+                'coupons.code',
+                'coupons.valid_from',
+                'coupons.expires_at',
+                'coupons.min_purchase_cents',
+            ])
             ->where('coupons.is_active', true)
             ->where('coupons.remaining_cents', '>', 0)
             ->where('coupons.type', CouponType::Balance)
             ->where('coupons.approval_status', CouponApprovalStatus::Active)
+            ->withinValidityWindow()
             ->join('coupon_user', 'coupon_user.coupon_id', '=', 'coupons.id')
             ->where('coupon_user.user_id', $userId)
             ->whereNull('coupon_user.used_at')
             ->orderBy('coupons.id')
-            ->get();
+            ->get()
+            ->map(fn (Coupon $coupon) => $this->mapCouponForCheckout($coupon));
+    }
+
+    /**
+     * @return array{
+     *     id: int,
+     *     remaining_cents: int,
+     *     code: ?string,
+     *     valid_from: ?string,
+     *     expires_at: ?string,
+     *     min_purchase_cents: ?int,
+     *     formatted_min_purchase: ?string,
+     *     validity_status: string
+     * }
+     */
+    public function mapCouponForCheckout(Coupon $coupon): array
+    {
+        return [
+            'id' => (int) $coupon->id,
+            'remaining_cents' => (int) $coupon->remaining_cents,
+            'code' => $coupon->code,
+            'valid_from' => $coupon->valid_from?->toIso8601String(),
+            'expires_at' => $coupon->expires_at?->toIso8601String(),
+            'min_purchase_cents' => $coupon->min_purchase_cents !== null
+                ? (int) $coupon->min_purchase_cents
+                : null,
+            'formatted_min_purchase' => $coupon->formatted_min_purchase,
+            'validity_status' => $coupon->validity_status,
+        ];
     }
 
     public function resolveRequiredApprovals(int $amountCents, int $beneficiariesCount): int
@@ -282,8 +331,8 @@ class CouponService
             throw new \DomainException('El cupón no está activo.');
         }
 
-        $assignedCount = Coupon::query()->where('parent_coupon_id', $parent->id)->count();
-        if ($parent->max_beneficiaries !== null && $assignedCount >= $parent->max_beneficiaries) {
+        $beneficiaryService = app(CouponBeneficiaryService::class);
+        if ($parent->max_beneficiaries !== null && $beneficiaryService->remainingBeneficiarySlots($parent) <= 0) {
             throw new \DomainException('Se alcanzó el máximo de beneficiarios para este cupón.');
         }
 
@@ -298,47 +347,80 @@ class CouponService
             throw new \DomainException('Este usuario ya tiene una asignación de este cupón.');
         }
 
+        $normalizedEmail = CouponBeneficiary::normalizeEmail($user->email);
+        $pendingDuplicate = CouponBeneficiary::query()
+            ->activeForParent($parent->id)
+            ->where('email_normalized', $normalizedEmail)
+            ->exists();
+
+        if ($pendingDuplicate) {
+            throw new \DomainException('Este correo ya está registrado como beneficiario de la campaña.');
+        }
+
         $this->assertAssignmentRules($parent->amount_cents, $enforceMaxAssignmentAmount);
 
-        return DB::transaction(function () use ($user, $parent, $sendNotification, $createdByUserId) {
-            $child = Coupon::create([
+        return DB::transaction(fn () => $this->createCampaignChildAssignment(
+            $user,
+            $parent,
+            $sendNotification,
+            $createdByUserId,
+        ));
+    }
+
+    /**
+     * Crea cupón hijo de campaña y fila coupon_user sin validaciones de cupo/duplicado en beneficiarios.
+     * Usado por assignUserToCampaignCoupon y por vinculación de pendientes (B2a).
+     * El caller debe envolver en transacción si lo requiere.
+     */
+    public function createCampaignChildAssignment(
+        User $user,
+        Coupon $parent,
+        bool $sendNotification = true,
+        ?int $createdByUserId = null,
+    ): Coupon {
+        $child = Coupon::create([
+            'parent_coupon_id' => $parent->id,
+            'code' => $parent->code,
+            'description' => $parent->description,
+            'amount_cents' => $parent->amount_cents,
+            'remaining_cents' => $parent->amount_cents,
+            'valid_from' => $parent->valid_from,
+            'expires_at' => $parent->expires_at,
+            'min_purchase_cents' => $parent->min_purchase_cents,
+            'type' => CouponType::Balance,
+            'is_active' => true,
+            'approval_status' => CouponApprovalStatus::Active,
+            'created_by_user_id' => $createdByUserId,
+            'updated_by_user_id' => $createdByUserId,
+        ]);
+
+        CouponUser::create([
+            'coupon_id' => $child->id,
+            'user_id' => $user->id,
+            'assigned_at' => now(),
+        ]);
+
+        if ($sendNotification) {
+            $this->notifyUserAssigned($user, $parent->amount_cents);
+        }
+
+        $this->logAssignment(
+            actorUserId: $createdByUserId,
+            couponId: $parent->id,
+            context: [
+                'mode' => 'campaign',
                 'parent_coupon_id' => $parent->id,
-                'code' => $parent->code,
-                'description' => $parent->description,
+                'child_coupon_id' => $child->id,
+                'assigned_user_id' => $user->id,
+                'assigned_user_email' => $user->email,
                 'amount_cents' => $parent->amount_cents,
-                'remaining_cents' => $parent->amount_cents,
-                'type' => CouponType::Balance,
-                'is_active' => true,
-                'approval_status' => CouponApprovalStatus::Active,
-                'created_by_user_id' => $createdByUserId,
-                'updated_by_user_id' => $createdByUserId,
-            ]);
+                'valid_from' => $parent->valid_from?->toIso8601String(),
+                'expires_at' => $parent->expires_at?->toIso8601String(),
+                'min_purchase_cents' => $parent->min_purchase_cents,
+            ]
+        );
 
-            CouponUser::create([
-                'coupon_id' => $child->id,
-                'user_id' => $user->id,
-                'assigned_at' => now(),
-            ]);
-
-            if ($sendNotification) {
-                $this->notifyUserAssigned($user, $parent->amount_cents);
-            }
-
-            $this->logAssignment(
-                actorUserId: $createdByUserId,
-                couponId: $parent->id,
-                context: [
-                    'mode' => 'campaign',
-                    'parent_coupon_id' => $parent->id,
-                    'child_coupon_id' => $child->id,
-                    'assigned_user_id' => $user->id,
-                    'assigned_user_email' => $user->email,
-                    'amount_cents' => $parent->amount_cents,
-                ]
-            );
-
-            return $child;
-        });
+        return $child;
     }
 
     private function notifyUserAssigned(User $user, int $amountCents): void

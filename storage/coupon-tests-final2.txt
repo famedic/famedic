@@ -1,0 +1,369 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   FAIL  Tests\Feature\Coupons\LaboratoryPurchaseCouponReversalTest
+  ⨯ cancelación con cupón 100% coupon_balance restaura saldo y marca reverso
+  ⨯ cancelación mixta cupón y pago real restaura cupón sin alterar coupon_discount_cents
+  ⨯ cancelación sin cupón continúa normalmente
+  ⨯ doble reverso es idempotente y no duplica saldo
+  ⨯ refund monetario fallido no revierte cupón ni elimina pedido
+  ⨯ inconsistencia coupon_discount sin coupon_transaction aborta reverso
+  ⨯ reverso fallido aborta cancelación del pedido
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   FAIL  Tests\Feature\Coupons\LaboratoryPurchaseCouponReversalPhase3Test
+  ⨯ getCouponReversalSummary expone datos del reverso en pedido cancelado
+  ⨯ pedido sin reverso no expone couponReversal summary
+  ⨯ transacción revertida permanece en historial del cupón
+  ⨯ notificación al cliente incluye saldo restaurado cuando aplica
+  ⨯ notificación al cliente sin cupón no menciona saldo restaurado
+  ⨯ notificación GDA incluye saldo restaurado cuando aplica
+  ⨯ cancelación con cupón envía notificación con monto restaurado
+  ⨯ auditoría reverse_coupon_application queda disponible para logs
+  ⨯ admin puede ver detalle de cupón con transacción revertida en props
+  ⨯ admin pedido cancelado recibe prop couponReversal
+  ⨯ admin pedido sin cupón no recibe couponReversal
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:00:21, 2026-06-16 13:00:21))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:00:36, 2026-06-16 13:00:36))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:00:49, 2026-06-16 13:00:49))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:01:02, 2026-06-16 13:01:02))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:01:15, 2026-06-16 13:01:15))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:01:26, 2026-06-16 13:01:26))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:01:39, 2026-06-16 13:01:39))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:01:50, 2026-06-16 13:01:50))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:02:02, 2026-06-16 13:02:02))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:02:14, 2026-06-16 13:02:14))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:02:26, 2026-06-16 13:02:26))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:02:41, 2026-06-16 13:02:41))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:02:55, 2026-06-16 13:02:55))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:03:07, 2026-06-16 13:03:07))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:03:18, 2026-06-16 13:03:18))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:03:31, 2026-06-16 13:03:31))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:03:42, 2026-06-16 13:03:42))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\LaboratoryPurchaseCouponRev…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("gda_id", "brand", "name", "indications", "other_name", "elements", "common_use", "requires_appointment", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "updated_at", "created_at") values (445052, azteca, RMN DE PIE SIMPLE, -Realizar previa cita., Resonancia magnética de pie simple, Huesos, articulaciones, tejidos blandos del pie, Evaluación básica de dolor o trauma en el pie, 1, 250900, 223522, 9, 2026-06-16 13:03:54, 2026-06-16 13:03:54))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+22 vendor frames [22m
+  23  database/migrations/2026_05_15_120000_add_azteca_rmn_de_pie_simple_laboratory_test.php:14
+
+
+  Tests:    18 failed (0 assertions)
+  Duration: 227.97s
+
+EXIT:0

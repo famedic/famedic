@@ -183,6 +183,10 @@ Route::prefix('admin')->middleware([
         Route::get('coupons/assign/bulk-template', [CouponController::class, 'downloadBulkAssignTemplate'])->name('coupons.assign.bulk-template');
         Route::get('coupons/users/lookup', [CouponController::class, 'lookupAssignableUser'])->name('coupons.users.lookup');
         Route::post('coupons/assign/preview-bulk', [CouponController::class, 'previewBulkAssignEmails'])->name('coupons.assign.preview-bulk');
+        Route::post('coupons/{coupon}/beneficiaries/preview', [CouponController::class, 'previewBeneficiaries'])->name('coupons.beneficiaries.preview');
+        Route::post('coupons/{coupon}/beneficiaries/preview-file', [CouponController::class, 'previewBeneficiariesFile'])->name('coupons.beneficiaries.preview-file');
+        Route::post('coupons/{coupon}/beneficiaries/confirm', [CouponController::class, 'confirmBeneficiaries'])->name('coupons.beneficiaries.confirm');
+        Route::post('coupons/{coupon}/beneficiaries/{beneficiary}/resend-invitation', [CouponController::class, 'resendBeneficiaryInvitation'])->name('coupons.beneficiaries.resend-invitation');
         Route::post('coupons/assign', [CouponController::class, 'assign'])->name('coupons.assign.store');
         Route::get('coupons/import', [CouponController::class, 'importForm'])->name('coupons.import');
         Route::post('coupons/import', [CouponController::class, 'import'])->name('coupons.import.store');

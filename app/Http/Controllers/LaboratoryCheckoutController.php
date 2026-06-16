@@ -76,6 +76,13 @@ class LaboratoryCheckoutController extends Controller
             ->first()
             ?->forCheckout();
 
+        if (is_array($savedCheckout) && ! empty($savedCheckout['coupon_id'])) {
+            $availableCouponIds = $availableCoupons->pluck('id');
+            if (! $availableCouponIds->contains((int) $savedCheckout['coupon_id'])) {
+                $savedCheckout['coupon_id'] = null;
+            }
+        }
+
         if ($requiresAppointment && ! $laboratoryAppointment && ! $pendingLaboratoryAppointment) {
             $pendingLaboratoryAppointment = $this->ensurePendingLaboratoryAppointment(
                 $customer,

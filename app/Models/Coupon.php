@@ -22,6 +22,9 @@ class Coupon extends Model
         'concept_other',
         'amount_cents',
         'remaining_cents',
+        'valid_from',
+        'expires_at',
+        'min_purchase_cents',
         'max_beneficiaries',
         'type',
         'is_active',
@@ -34,15 +37,91 @@ class Coupon extends Model
         'updated_by_user_id',
     ];
 
+    protected $appends = [
+        'formatted_min_purchase',
+        'validity_status',
+    ];
+
     protected function casts(): array
     {
         return [
             'type' => CouponType::class,
             'is_active' => 'boolean',
             'approval_status' => CouponApprovalStatus::class,
+            'valid_from' => 'datetime',
+            'expires_at' => 'datetime',
+            'min_purchase_cents' => 'integer',
             'authorization_code_expires_at' => 'datetime',
             'authorized_at' => 'datetime',
         ];
+    }
+
+    public function isNotYetValid(): bool
+    {
+        return $this->valid_from !== null && now()->lt($this->valid_from);
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->expires_at !== null && now()->gt($this->expires_at);
+    }
+
+    public function isWithinValidityWindow(): bool
+    {
+        return ! $this->isNotYetValid() && ! $this->isExpired();
+    }
+
+    public function hasMinimumPurchaseRequirement(): bool
+    {
+        return $this->min_purchase_cents !== null && $this->min_purchase_cents > 0;
+    }
+
+    public function meetsMinimumPurchase(int $purchaseTotalCents): bool
+    {
+        if (! $this->hasMinimumPurchaseRequirement()) {
+            return true;
+        }
+
+        return $purchaseTotalCents >= (int) $this->min_purchase_cents;
+    }
+
+    public function getFormattedMinPurchaseAttribute(): ?string
+    {
+        if (! $this->hasMinimumPurchaseRequirement()) {
+            return null;
+        }
+
+        return formattedCentsPrice((int) $this->min_purchase_cents);
+    }
+
+    public function getValidityStatusAttribute(): string
+    {
+        if ($this->valid_from === null && $this->expires_at === null) {
+            return 'sin_vigencia';
+        }
+
+        if ($this->isNotYetValid()) {
+            return 'programado';
+        }
+
+        if ($this->isExpired()) {
+            return 'vencido';
+        }
+
+        return 'vigente';
+    }
+
+    public function scopeWithinValidityWindow(Builder $query): Builder
+    {
+        $now = now();
+
+        return $query
+            ->where(function (Builder $q) use ($now) {
+                $q->whereNull('valid_from')->orWhere('valid_from', '<=', $now);
+            })
+            ->where(function (Builder $q) use ($now) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>=', $now);
+            });
     }
 
     public function parentCoupon(): BelongsTo
@@ -53,6 +132,11 @@ class Coupon extends Model
     public function childCoupons(): HasMany
     {
         return $this->hasMany(Coupon::class, 'parent_coupon_id');
+    }
+
+    public function beneficiaries(): HasMany
+    {
+        return $this->hasMany(CouponBeneficiary::class, 'parent_coupon_id');
     }
 
     public function couponUsers(): HasMany

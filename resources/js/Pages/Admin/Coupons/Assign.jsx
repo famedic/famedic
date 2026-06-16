@@ -20,6 +20,12 @@ import {
 } from "@/Components/Catalyst/table";
 import { Badge } from "@/Components/Catalyst/badge";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
+import { appendCouponEligibilityToPayload } from "@/lib/couponEligibilityUi";
+import {
+	BENEFICIARY_PREVIEW_STATUS,
+	beneficiaryRowFromMatrix,
+	isConfirmableBeneficiaryStatus,
+} from "@/lib/couponBeneficiaryAssign";
 
 function csrfTokenFromMeta() {
 	if (typeof document === "undefined") return "";
@@ -120,7 +126,7 @@ const ASSIGNMENT_LABELS = {
 };
 
 /** Oculto temporalmente en la UI; el flujo masivo permanece en el código por si se reactiva. */
-const SHOW_BULK_ASSIGNMENT_UI = false;
+const SHOW_BULK_ASSIGNMENT_UI = true;
 
 function createMatrixRow() {
 	const id =
@@ -130,6 +136,9 @@ function createMatrixRow() {
 	return {
 		id,
 		email: "",
+		first_name: "",
+		paternal_lastname: "",
+		maternal_lastname: "",
 		lookup: {
 			status: "idle",
 			exists: null,
@@ -202,8 +211,12 @@ export default function CouponsAssign({
 	const [bulkRows, setBulkRows] = useState([]);
 	const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
 	const [bulkPreviewError, setBulkPreviewError] = useState("");
+	const [beneficiaryPreviewRows, setBeneficiaryPreviewRows] = useState([]);
+	const [beneficiaryPreviewLoading, setBeneficiaryPreviewLoading] = useState(false);
+	const [beneficiaryPreviewError, setBeneficiaryPreviewError] = useState("");
 	const [rulesSidebarExpanded, setRulesSidebarExpanded] = useState(false);
 	const bulkRowsRef = useRef([]);
+	const beneficiaryPreviewRowsRef = useRef([]);
 	const [matrixRows, setMatrixRows] = useState(() => [createMatrixRow()]);
 	const matrixRowsRef = useRef(matrixRows);
 	const matrixLookupTimersRef = useRef({});
@@ -228,9 +241,13 @@ export default function CouponsAssign({
 		authorizer_ids: [],
 		coupon_concept_id: "",
 		concept_other: "",
+		valid_from: "",
+		expires_at: "",
+		min_purchase_mxn: "",
 	});
 
 	bulkRowsRef.current = bulkRows;
+	beneficiaryPreviewRowsRef.current = beneficiaryPreviewRows;
 	matrixRowsRef.current = matrixRows;
 
 	useEffect(() => {
@@ -270,8 +287,32 @@ export default function CouponsAssign({
 				out.coupon_concept_id = null;
 				out.concept_other = null;
 			}
+			appendCouponEligibilityToPayload(out, d);
 		}
-		if (d.assignment_mode === "individual") {
+		if (d.assignment_mode === "individual" || d.assignment_mode === "bulk") {
+			const previewSource =
+				beneficiaryPreviewRowsRef.current.length > 0
+					? beneficiaryPreviewRowsRef.current
+					: matrixRowsRef.current.map(beneficiaryRowFromMatrix);
+			const rows = previewSource
+				.filter((r) => {
+					if (r.status) {
+						return isConfirmableBeneficiaryStatus(r.status);
+					}
+					return String(r.email ?? "").trim() !== "";
+				})
+				.map((r) => ({
+					email: r.email,
+					first_name: r.first_name ?? null,
+					paternal_lastname: r.paternal_lastname ?? null,
+					maternal_lastname: r.maternal_lastname ?? null,
+				}));
+			if (rows.length > 0) {
+				out.beneficiary_rows = rows;
+				out.beneficiary_source = d.assignment_mode === "bulk" ? "excel" : "manual";
+			}
+		}
+		if (d.assignment_mode === "individual" && !out.beneficiary_rows) {
 			const emails = [];
 			const seen = new Set();
 			const counts = {};
@@ -292,7 +333,7 @@ export default function CouponsAssign({
 				out.bulk_emails = emails;
 			}
 		}
-		if (d.assignment_mode === "bulk") {
+		if (d.assignment_mode === "bulk" && !out.beneficiary_rows) {
 			const confirmed = bulkRowsRef.current
 				.filter((r) => r.include)
 				.map((r) => r.email);
@@ -387,7 +428,7 @@ export default function CouponsAssign({
 					status: "missing",
 					exists: false,
 					user: null,
-					message: "No existe un usuario con ese correo.",
+					message: "Pendiente de registro: se guardará como beneficiario pendiente.",
 				});
 			} catch {
 				const row = matrixRowsRef.current.find((r) => r.id === rowId);
@@ -445,30 +486,36 @@ export default function CouponsAssign({
 		return m;
 	}, [matrixRows]);
 
-	const individualReadyEmails = useMemo(() => {
-		if (data.assignment_mode !== "individual") return [];
+	const confirmableBeneficiaryRows = useMemo(() => {
+		if (beneficiaryPreviewRows.length > 0) {
+			return beneficiaryPreviewRows.filter((r) =>
+				isConfirmableBeneficiaryStatus(r.status),
+			);
+		}
 		const out = [];
 		const seen = new Set();
 		for (const r of matrixRows) {
 			const k = r.email.trim().toLowerCase();
-			if (!k || r.lookup.status !== "found") continue;
+			if (!k || !k.includes("@")) continue;
 			if ((emailLowerCounts[k] ?? 0) > 1) continue;
 			if (seen.has(k)) continue;
 			seen.add(k);
-			out.push(k);
+			out.push(beneficiaryRowFromMatrix(r));
 		}
 		return out;
-	}, [data.assignment_mode, matrixRows, emailLowerCounts]);
+	}, [beneficiaryPreviewRows, matrixRows, emailLowerCounts]);
+
+	const individualReadyEmails = useMemo(() => {
+		return confirmableBeneficiaryRows.map((r) => r.email.trim().toLowerCase());
+	}, [confirmableBeneficiaryRows]);
 
 	const beneficiaryCountPreview = useMemo(() => {
-		if (data.assignment_mode === "individual") return individualReadyEmails.length;
-		if (data.assignment_mode === "none") return 0;
-		if (data.assignment_mode === "bulk") {
-			const n = bulkRows.filter((r) => r.include).length;
-			return n > 0 ? n : 0;
+		if (data.assignment_mode === "individual" || data.assignment_mode === "bulk") {
+			return confirmableBeneficiaryRows.length;
 		}
+		if (data.assignment_mode === "none") return 0;
 		return 0;
-	}, [data.assignment_mode, bulkRows, individualReadyEmails.length]);
+	}, [data.assignment_mode, confirmableBeneficiaryRows.length]);
 
 	const beneficiariesForPreApprovalDraft = useMemo(() => {
 		const parsed = parseInt(String(data.max_beneficiaries ?? "").trim(), 10);
@@ -507,17 +554,73 @@ export default function CouponsAssign({
 		}
 	}, [data.assignment_mode]);
 
+	const runBeneficiaryPreviewFromMatrix = useCallback(async () => {
+		const parentId =
+			data.coupon_mode === "existing" && data.coupon_id
+				? Number(data.coupon_id)
+				: null;
+		if (!parentId) {
+			setBeneficiaryPreviewError(
+				"Para generar vista previa con validación de campaña, elige un cupón existente o confirma en el resumen (se validará al enviar).",
+			);
+			return;
+		}
+		const rows = matrixRowsRef.current
+			.map(beneficiaryRowFromMatrix)
+			.filter((r) => r.email.trim() !== "");
+		if (rows.length === 0) {
+			setBeneficiaryPreviewError("Agrega al menos un correo en la lista.");
+			return;
+		}
+		setBeneficiaryPreviewLoading(true);
+		setBeneficiaryPreviewError("");
+		try {
+			const res = await fetch(
+				route("admin.coupons.beneficiaries.preview", parentId),
+				{
+					method: "POST",
+					headers: {
+						Accept: "application/json",
+						"Content-Type": "application/json",
+						"X-Requested-With": "XMLHttpRequest",
+						"X-CSRF-TOKEN": csrfTokenFromMeta(),
+					},
+					body: JSON.stringify({ rows }),
+				},
+			);
+			const json = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				setBeneficiaryPreviewError(json.message ?? "No se pudo generar la vista previa.");
+				setBeneficiaryPreviewRows([]);
+				return;
+			}
+			setBeneficiaryPreviewRows(json.rows ?? []);
+		} catch {
+			setBeneficiaryPreviewError("Error de red al generar la vista previa.");
+		} finally {
+			setBeneficiaryPreviewLoading(false);
+		}
+	}, [data.coupon_mode, data.coupon_id]);
+
 	const runBulkPreview = useCallback(async () => {
 		if (!data.file) {
 			setBulkPreviewError("Selecciona un archivo primero.");
 			return;
 		}
+		const parentId =
+			data.coupon_mode === "existing" && data.coupon_id
+				? Number(data.coupon_id)
+				: null;
 		setBulkPreviewLoading(true);
 		setBulkPreviewError("");
+		setBeneficiaryPreviewError("");
 		try {
 			const fd = new FormData();
 			fd.append("file", data.file);
-			const res = await fetch(route("admin.coupons.assign.preview-bulk"), {
+			const url = parentId
+				? route("admin.coupons.beneficiaries.preview-file", parentId)
+				: route("admin.coupons.assign.preview-bulk");
+			const res = await fetch(url, {
 				method: "POST",
 				headers: {
 					Accept: "application/json",
@@ -530,6 +633,22 @@ export default function CouponsAssign({
 			if (!res.ok) {
 				setBulkPreviewError(json.message ?? "No se pudo leer el archivo.");
 				setBulkRows([]);
+				setBeneficiaryPreviewRows([]);
+				return;
+			}
+			if (parentId && json.rows) {
+				setBeneficiaryPreviewRows(json.rows);
+				setBulkRows(
+					json.rows.map((r) => ({
+						email: r.email,
+						first_name: r.first_name,
+						paternal_lastname: r.paternal_lastname,
+						maternal_lastname: r.maternal_lastname,
+						status: r.status,
+						messages: r.messages,
+						include: isConfirmableBeneficiaryStatus(r.status),
+					})),
+				);
 				return;
 			}
 			setBulkRows(
@@ -546,7 +665,7 @@ export default function CouponsAssign({
 		} finally {
 			setBulkPreviewLoading(false);
 		}
-	}, [data.file]);
+	}, [data.file, data.coupon_mode, data.coupon_id]);
 
 	const beneficiarySlotsLimit = useMemo(() => {
 		const maxB = String(data.max_beneficiaries ?? "").trim();
@@ -931,6 +1050,59 @@ export default function CouponsAssign({
 															</div>
 														)}
 													</Field>
+													<Field className="col-span-12 md:col-span-6">
+														<Label>Disponible desde</Label>
+														<Input
+															type="datetime-local"
+															value={data.valid_from}
+															onChange={(e) => setData("valid_from", e.target.value)}
+														/>
+														<p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+															Déjalo vacío si el saldo está disponible inmediatamente.
+														</p>
+														{errors.valid_from && (
+															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+																{errors.valid_from}
+															</p>
+														)}
+													</Field>
+													<Field className="col-span-12 md:col-span-6">
+														<Label>Vence el</Label>
+														<Input
+															type="datetime-local"
+															value={data.expires_at}
+															onChange={(e) => setData("expires_at", e.target.value)}
+														/>
+														<p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+															Déjalo vacío si el saldo no vence.
+														</p>
+														{errors.expires_at && (
+															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+																{errors.expires_at}
+															</p>
+														)}
+													</Field>
+													<Field className="col-span-12 md:col-span-6">
+														<Label>Compra mínima requerida (MXN)</Label>
+														<Input
+															type="number"
+															step="0.01"
+															min="0"
+															placeholder="Sin mínimo"
+															value={data.min_purchase_mxn}
+															onChange={(e) =>
+																setData("min_purchase_mxn", e.target.value)
+															}
+														/>
+														<p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+															Déjalo vacío si no quieres exigir una compra mínima.
+														</p>
+														{errors.min_purchase_cents && (
+															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+																{errors.min_purchase_cents}
+															</p>
+														)}
+													</Field>
 													<Field className="col-span-12">
 														<Label>Descripción del crédito a otorgar (opcional)</Label>
 														<Textarea
@@ -1015,6 +1187,9 @@ export default function CouponsAssign({
 														<Table dense>
 															<TableHead>
 																<TableRow>
+																	<TableHeader>Nombre</TableHeader>
+																	<TableHeader>Ap. paterno</TableHeader>
+																	<TableHeader>Ap. materno</TableHeader>
 																	<TableHeader>Correo</TableHeader>
 																	<TableHeader>Usuario</TableHeader>
 																	<TableHeader>Estado</TableHeader>
@@ -1029,6 +1204,49 @@ export default function CouponsAssign({
 																	const lk = row.lookup;
 																	return (
 																		<TableRow key={row.id}>
+																			<TableCell className="align-top">
+																				<Input
+																					value={row.first_name}
+																					placeholder="Nombre"
+																					onChange={(e) =>
+																						setMatrixRows((rows) =>
+																							rows.map((r) =>
+																								r.id === row.id
+																									? { ...r, first_name: e.target.value }
+																									: r,
+																							),
+																						)
+																					}
+																				/>
+																			</TableCell>
+																			<TableCell className="align-top">
+																				<Input
+																					value={row.paternal_lastname}
+																					onChange={(e) =>
+																						setMatrixRows((rows) =>
+																							rows.map((r) =>
+																								r.id === row.id
+																									? { ...r, paternal_lastname: e.target.value }
+																									: r,
+																							),
+																						)
+																					}
+																				/>
+																			</TableCell>
+																			<TableCell className="align-top">
+																				<Input
+																					value={row.maternal_lastname}
+																					onChange={(e) =>
+																						setMatrixRows((rows) =>
+																							rows.map((r) =>
+																								r.id === row.id
+																									? { ...r, maternal_lastname: e.target.value }
+																									: r,
+																							),
+																						)
+																					}
+																				/>
+																			</TableCell>
 																			<TableCell className="max-w-[16rem] align-top">
 																				<Input
 																					type="email"
@@ -1092,12 +1310,15 @@ export default function CouponsAssign({
 																					<Badge color="emerald">
 																						Registrado
 																					</Badge>
+																				) : lk.status === "missing" ? (
+																					<Badge color="amber">
+																						Pendiente de registro
+																					</Badge>
 																				) : lk.status === "checking" ? (
 																					<Badge color="zinc">
 																						Validando…
 																					</Badge>
-																				) : lk.status === "missing" ||
-																					  lk.status === "invalid" ||
+																				) : lk.status === "invalid" ||
 																					  lk.status === "error" ||
 																					  (lk.status === "found" && isDup) ? (
 																					<Badge color="red">
@@ -1154,21 +1375,73 @@ export default function CouponsAssign({
 																			Agregar fila
 																		</Button>
 																	</TableCell>
-																	<TableCell colSpan={3} className="py-3" />
+																	<TableCell colSpan={7} className="py-3" />
 																</TableRow>
 															</TableBody>
 														</Table>
 													</div>
-													<p className="text-sm text-zinc-600 dark:text-zinc-400">
-														Listos para enviar:{" "}
-														<strong>{individualReadyEmails.length}</strong> correo(s)
-														único(s) validado(s).
-													</p>
-													{errors.bulk_emails && (
+													<div className="flex flex-wrap items-center gap-3">
+														<Button
+															type="button"
+															outline
+															disabled={beneficiaryPreviewLoading}
+															onClick={() => void runBeneficiaryPreviewFromMatrix()}
+														>
+															{beneficiaryPreviewLoading
+																? "Generando preview…"
+																: "Generar preview"}
+														</Button>
+														<p className="text-sm text-zinc-600 dark:text-zinc-400">
+															Listos para confirmar:{" "}
+															<strong>{confirmableBeneficiaryRows.length}</strong>{" "}
+															beneficiario(s).
+														</p>
+													</div>
+													{beneficiaryPreviewError && (
+														<p className="text-sm text-amber-700 dark:text-amber-300">
+															{beneficiaryPreviewError}
+														</p>
+													)}
+													{beneficiaryPreviewRows.length > 0 && (
+														<div className="overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+															<Table dense>
+																<TableHead>
+																	<TableRow>
+																		<TableHeader>Correo</TableHeader>
+																		<TableHeader>Estado</TableHeader>
+																		<TableHeader>Mensajes</TableHeader>
+																	</TableRow>
+																</TableHead>
+																<TableBody>
+																	{beneficiaryPreviewRows.map((row) => {
+																		const meta =
+																			BENEFICIARY_PREVIEW_STATUS[row.status] ?? {
+																				label: row.status,
+																				color: "zinc",
+																			};
+																		return (
+																			<TableRow key={`${row.row_number}-${row.email}`}>
+																				<TableCell>{row.email}</TableCell>
+																				<TableCell>
+																					<Badge color={meta.color}>
+																						{meta.label}
+																					</Badge>
+																				</TableCell>
+																				<TableCell className="text-xs text-zinc-600 dark:text-zinc-400">
+																					{(row.messages ?? []).join(" ")}
+																				</TableCell>
+																			</TableRow>
+																		);
+																	})}
+																</TableBody>
+															</Table>
+														</div>
+													)}
+													{errors.beneficiary_rows && (
 														<p className="text-sm text-red-600 dark:text-red-400">
-															{Array.isArray(errors.bulk_emails)
-																? errors.bulk_emails[0]
-																: errors.bulk_emails}
+															{Array.isArray(errors.beneficiary_rows)
+																? errors.beneficiary_rows[0]
+																: errors.beneficiary_rows}
 														</p>
 													)}
 												</div>
@@ -1179,9 +1452,10 @@ export default function CouponsAssign({
 													<Field>
 														<Label>Archivo (.xlsx, .xls, .csv)</Label>
 														<Text className="mb-2 text-sm text-zinc-500 dark:text-zinc-400">
-															Columna <strong>email</strong> o <strong>correo</strong>. Se
-															asignará el mismo monto del cupón maestro a cada fila con
-															cuenta registrada que incluyas abajo.
+															Columnas: <strong>email/correo</strong> (obligatorio),{" "}
+															<strong>nombre</strong>, <strong>apellido_paterno</strong>,{" "}
+															<strong>apellido_materno</strong> (opcionales). Revisa el
+															preview antes de confirmar en el resumen.
 														</Text>
 														<div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
 															<Button

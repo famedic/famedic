@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CouponPurchaseType;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -16,6 +17,9 @@ class CouponTransaction extends Model
         'purchase_type',
         'purchase_id',
         'amount_used_cents',
+        'reversed_at',
+        'reversed_by_user_id',
+        'reversal_reason',
     ];
 
     protected function casts(): array
@@ -23,6 +27,7 @@ class CouponTransaction extends Model
         return [
             'purchase_type' => CouponPurchaseType::class,
             'created_at' => 'datetime',
+            'reversed_at' => 'datetime',
         ];
     }
 
@@ -43,5 +48,25 @@ class CouponTransaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function reversedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reversed_by_user_id');
+    }
+
+    public function isReversed(): bool
+    {
+        return $this->reversed_at !== null;
+    }
+
+    public function scopeNotReversed(Builder $query): Builder
+    {
+        return $query->whereNull('reversed_at');
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->notReversed();
     }
 }

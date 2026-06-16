@@ -7,6 +7,10 @@ import { Textarea } from "@/Components/Catalyst/textarea";
 import { Switch, SwitchField } from "@/Components/Catalyst/switch";
 import { useForm } from "@inertiajs/react";
 import { Badge } from "@/Components/Catalyst/badge";
+import {
+	appendCouponEligibilityToPayload,
+	toDatetimeLocalValue,
+} from "@/lib/couponEligibilityUi";
 
 export default function CouponsEdit({ coupon }) {
 	const { data, setData, put, processing, errors, transform } = useForm({
@@ -14,18 +18,29 @@ export default function CouponsEdit({ coupon }) {
 		description: coupon.description || "",
 		max_beneficiaries:
 			coupon.max_beneficiaries != null ? String(coupon.max_beneficiaries) : "",
+		valid_from: toDatetimeLocalValue(coupon.valid_from),
+		expires_at: toDatetimeLocalValue(coupon.expires_at),
+		min_purchase_mxn:
+			coupon.min_purchase_cents != null
+				? String(coupon.min_purchase_cents / 100)
+				: "",
 		is_active: coupon.is_active,
 	});
 
-	transform((d) => ({
-		code: d.code || null,
-		description: d.description || null,
-		max_beneficiaries:
-			String(d.max_beneficiaries ?? "").trim() === ""
-				? null
-				: parseInt(String(d.max_beneficiaries), 10),
-		is_active: d.is_active,
-	}));
+	transform((d) =>
+		appendCouponEligibilityToPayload(
+			{
+				code: d.code || null,
+				description: d.description || null,
+				max_beneficiaries:
+					String(d.max_beneficiaries ?? "").trim() === ""
+						? null
+						: parseInt(String(d.max_beneficiaries), 10),
+				is_active: d.is_active,
+			},
+			d,
+		),
+	);
 
 	const submit = (e) => {
 		e.preventDefault();
@@ -87,6 +102,51 @@ export default function CouponsEdit({ coupon }) {
 						value={data.code}
 						onChange={(e) => setData("code", e.target.value)}
 					/>
+				</Field>
+				<Field>
+					<Label>Disponible desde</Label>
+					<Input
+						type="datetime-local"
+						value={data.valid_from}
+						onChange={(e) => setData("valid_from", e.target.value)}
+					/>
+					<p className="mt-1 text-xs text-zinc-500">
+						Déjalo vacío si el saldo está disponible inmediatamente.
+					</p>
+					{errors.valid_from && (
+						<p className="text-sm text-red-600">{errors.valid_from}</p>
+					)}
+				</Field>
+				<Field>
+					<Label>Vence el</Label>
+					<Input
+						type="datetime-local"
+						value={data.expires_at}
+						onChange={(e) => setData("expires_at", e.target.value)}
+					/>
+					<p className="mt-1 text-xs text-zinc-500">
+						Déjalo vacío si el saldo no vence.
+					</p>
+					{errors.expires_at && (
+						<p className="text-sm text-red-600">{errors.expires_at}</p>
+					)}
+				</Field>
+				<Field>
+					<Label>Compra mínima requerida (MXN)</Label>
+					<Input
+						type="number"
+						step="0.01"
+						min="0"
+						placeholder="Sin mínimo"
+						value={data.min_purchase_mxn}
+						onChange={(e) => setData("min_purchase_mxn", e.target.value)}
+					/>
+					<p className="mt-1 text-xs text-zinc-500">
+						Déjalo vacío si no quieres exigir una compra mínima.
+					</p>
+					{errors.min_purchase_cents && (
+						<p className="text-sm text-red-600">{errors.min_purchase_cents}</p>
+					)}
 				</Field>
 				<SwitchField>
 					<Label>Activo</Label>

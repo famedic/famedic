@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CouponPurchaseType;
 use App\Enums\Gender;
 use App\Enums\LaboratoryBrand;
 use Carbon\Carbon;
@@ -202,6 +203,40 @@ class LaboratoryPurchase extends Model
     public function laboratoryPurchaseItems()
     {
         return $this->hasMany(LaboratoryPurchaseItem::class)->withTrashed();
+    }
+
+    /**
+     * Resumen del reverso de saldo a favor, si el pedido tuvo cupón restaurado al cancelarse.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getCouponReversalSummary(): ?array
+    {
+        $transaction = CouponTransaction::query()
+            ->where('purchase_type', CouponPurchaseType::Lab)
+            ->where('purchase_id', $this->id)
+            ->whereNotNull('reversed_at')
+            ->with('reversedByUser:id,name,paternal_lastname,maternal_lastname,email')
+            ->first();
+
+        if ($transaction === null) {
+            return null;
+        }
+
+        $amountCents = (int) $transaction->amount_used_cents;
+
+        return [
+            'coupon_transaction_id' => $transaction->id,
+            'coupon_id' => $transaction->coupon_id,
+            'amount_restored_cents' => $amountCents,
+            'formatted_amount_restored' => formattedCentsPrice($amountCents),
+            'reversed_at' => $transaction->reversed_at?->toIso8601String(),
+            'formatted_reversed_at' => $transaction->reversed_at
+                ? localizedDate($transaction->reversed_at)->isoFormat('D MMM Y h:mm a')
+                : null,
+            'reversal_reason' => $transaction->reversal_reason,
+            'reversed_by_user' => $transaction->reversedByUser,
+        ];
     }
 
     /**

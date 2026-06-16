@@ -6,7 +6,9 @@ use App\Enums\CouponApprovalStatus;
 use App\Enums\CouponPurchaseType;
 use App\Enums\CouponType;
 use App\Exceptions\CouponApplicationException;
+use App\Exceptions\CouponReversalException;
 use App\Models\Coupon;
+use App\Models\CouponAuditLog;
 use App\Models\CouponTransaction;
 use App\Models\CouponUser;
 use App\Models\LaboratoryPurchase;
@@ -140,5 +142,139 @@ class CouponApplicationService
                 'Tu saldo es mayor al total de la compra, no puede aplicarse en esta compra.'
             );
         }
+
+        if ($coupon->isNotYetValid()) {
+            $fecha = localizedDate($coupon->valid_from)?->isoFormat('D [de] MMMM [de] YYYY');
+
+            throw new CouponApplicationException(
+                "Tu saldo a favor estará disponible a partir del {$fecha}."
+            );
+        }
+
+        if ($coupon->isExpired()) {
+            $fecha = localizedDate($coupon->expires_at)?->isoFormat('D [de] MMMM [de] YYYY');
+
+            throw new CouponApplicationException(
+                "Tu saldo a favor venció el {$fecha}."
+            );
+        }
+
+        if (! $coupon->meetsMinimumPurchase($purchaseTotalCents)) {
+            throw new CouponApplicationException(
+                'Para usar tu saldo a favor necesitas una compra mínima de '.$coupon->formatted_min_purchase.'.'
+            );
+        }
+    }
+
+    /**
+     * Revierte el saldo a favor aplicado a un pedido de laboratorio cancelado.
+     *
+     * @return int Monto restaurado en centavos (0 si no había cupón activo o ya fue revertido)
+     *
+     * @throws CouponReversalException
+     */
+    public function reverseForLaboratoryPurchase(
+        LaboratoryPurchase $purchase,
+        ?User $actor = null,
+        string $reason = 'laboratory_purchase_cancelled'
+    ): int {
+        return DB::transaction(function () use ($purchase, $actor, $reason) {
+            $couponTransaction = CouponTransaction::query()
+                ->where('purchase_type', CouponPurchaseType::Lab)
+                ->where('purchase_id', $purchase->id)
+                ->notReversed()
+                ->lockForUpdate()
+                ->first();
+
+            if ($couponTransaction === null) {
+                $alreadyReversed = CouponTransaction::query()
+                    ->where('purchase_type', CouponPurchaseType::Lab)
+                    ->where('purchase_id', $purchase->id)
+                    ->whereNotNull('reversed_at')
+                    ->exists();
+
+                if ($alreadyReversed) {
+                    return 0;
+                }
+
+                if ((int) ($purchase->coupon_discount_cents ?? 0) > 0) {
+                    throw new CouponReversalException(
+                        'El pedido tiene descuento por cupón registrado pero no existe una transacción de cupón activa.'
+                    );
+                }
+
+                return 0;
+            }
+
+            $amountUsedCents = (int) $couponTransaction->amount_used_cents;
+            if ($amountUsedCents <= 0) {
+                throw new CouponReversalException('El monto usado del cupón debe ser mayor a cero.');
+            }
+
+            $coupon = Coupon::query()
+                ->whereKey($couponTransaction->coupon_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($coupon->type !== CouponType::Balance) {
+                throw new CouponReversalException('Solo se pueden revertir cupones de tipo saldo a favor.');
+            }
+
+            $assignment = CouponUser::query()
+                ->where('coupon_id', $coupon->id)
+                ->where('user_id', $couponTransaction->user_id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($assignment === null) {
+                throw new CouponReversalException('No se encontró la asignación del cupón al usuario.');
+            }
+
+            $purchase->loadMissing('customer.user');
+            $purchaseUserId = $purchase->customer?->user?->id;
+
+            if ($purchaseUserId === null || (int) $purchaseUserId !== (int) $couponTransaction->user_id) {
+                throw new CouponReversalException(
+                    'La asignación del cupón no corresponde al usuario del pedido.'
+                );
+            }
+
+            if ($assignment->used_at === null) {
+                throw new CouponReversalException(
+                    'El cupón no está marcado como utilizado para este pedido.'
+                );
+            }
+
+            $coupon->remaining_cents = $amountUsedCents;
+            $coupon->save();
+
+            $assignment->used_at = null;
+            $assignment->save();
+
+            $couponTransaction->reversed_at = now();
+            $couponTransaction->reversed_by_user_id = $actor?->id;
+            $couponTransaction->reversal_reason = $reason;
+            $couponTransaction->save();
+
+            CouponAuditLog::create([
+                'type' => 'application',
+                'action' => 'reverse_coupon_application',
+                'status' => 'completed',
+                'actor_user_id' => $actor?->id,
+                'coupon_id' => $coupon->id,
+                'context' => [
+                    'purchase_type' => CouponPurchaseType::Lab->value,
+                    'purchase_id' => $purchase->id,
+                    'coupon_id' => $coupon->id,
+                    'coupon_transaction_id' => $couponTransaction->id,
+                    'user_id' => $couponTransaction->user_id,
+                    'amount_restored_cents' => $amountUsedCents,
+                    'reason' => $reason,
+                    'actor_user_id' => $actor?->id,
+                ],
+            ]);
+
+            return $amountUsedCents;
+        });
     }
 }

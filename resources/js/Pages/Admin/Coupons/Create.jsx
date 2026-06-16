@@ -7,6 +7,9 @@ import { Input } from "@/Components/Catalyst/input";
 import { Textarea } from "@/Components/Catalyst/textarea";
 import { Switch, SwitchField } from "@/Components/Catalyst/switch";
 import { useForm } from "@inertiajs/react";
+import {
+	appendCouponEligibilityToPayload,
+} from "@/lib/couponEligibilityUi";
 
 export default function CouponsCreate({ settings }) {
 	const requireAuth = !!settings?.require_authorization;
@@ -16,6 +19,9 @@ export default function CouponsCreate({ settings }) {
 		code: "",
 		description: "",
 		max_beneficiaries: "",
+		valid_from: "",
+		expires_at: "",
+		min_purchase_mxn: "",
 		is_active: true,
 	});
 
@@ -24,13 +30,16 @@ export default function CouponsCreate({ settings }) {
 			parseFloat(String(d.amount_mxn).replace(",", "")) * 100,
 		);
 		const maxB = String(d.max_beneficiaries ?? "").trim();
-		return {
-			amount_cents: cents,
-			code: d.code || null,
-			description: d.description || null,
-			max_beneficiaries: maxB === "" ? null : parseInt(maxB, 10),
-			is_active: d.is_active,
-		};
+		return appendCouponEligibilityToPayload(
+			{
+				amount_cents: cents,
+				code: d.code || null,
+				description: d.description || null,
+				max_beneficiaries: maxB === "" ? null : parseInt(maxB, 10),
+				is_active: d.is_active,
+			},
+			d,
+		);
 	});
 
 	const submit = (e) => {
@@ -90,6 +99,51 @@ export default function CouponsCreate({ settings }) {
 						value={data.code}
 						onChange={(e) => setData("code", e.target.value)}
 					/>
+				</Field>
+				<Field>
+					<Label>Disponible desde</Label>
+					<Input
+						type="datetime-local"
+						value={data.valid_from}
+						onChange={(e) => setData("valid_from", e.target.value)}
+					/>
+					<p className="mt-1 text-xs text-zinc-500">
+						Déjalo vacío si el saldo está disponible inmediatamente.
+					</p>
+					{errors.valid_from && (
+						<p className="text-sm text-red-600">{errors.valid_from}</p>
+					)}
+				</Field>
+				<Field>
+					<Label>Vence el</Label>
+					<Input
+						type="datetime-local"
+						value={data.expires_at}
+						onChange={(e) => setData("expires_at", e.target.value)}
+					/>
+					<p className="mt-1 text-xs text-zinc-500">
+						Déjalo vacío si el saldo no vence.
+					</p>
+					{errors.expires_at && (
+						<p className="text-sm text-red-600">{errors.expires_at}</p>
+					)}
+				</Field>
+				<Field>
+					<Label>Compra mínima requerida (MXN)</Label>
+					<Input
+						type="number"
+						step="0.01"
+						min="0"
+						placeholder="Sin mínimo"
+						value={data.min_purchase_mxn}
+						onChange={(e) => setData("min_purchase_mxn", e.target.value)}
+					/>
+					<p className="mt-1 text-xs text-zinc-500">
+						Déjalo vacío si no quieres exigir una compra mínima.
+					</p>
+					{errors.min_purchase_cents && (
+						<p className="text-sm text-red-600">{errors.min_purchase_cents}</p>
+					)}
 				</Field>
 				{!requireAuth && (
 					<SwitchField>

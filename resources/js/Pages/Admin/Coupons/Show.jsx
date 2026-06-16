@@ -59,6 +59,34 @@ function participantStatusBadge(status) {
 	return { color: "zinc", label: "Pendiente" };
 }
 
+function couponUsageStatusBadge(row) {
+	if (row.transaction?.is_reversed) {
+		return { color: "amber", label: "Revertido" };
+	}
+	if (row.transaction?.amount_used_cents > 0 || row.used_at) {
+		return { color: "blue", label: "Aplicado" };
+	}
+	return { color: "zinc", label: "Pendiente" };
+}
+
+function reversalReasonLabel(reason) {
+	if (!reason) return "—";
+	if (reason === "laboratory_purchase_cancelled") {
+		return "Cancelación de pedido de laboratorio";
+	}
+	return reason.replaceAll("_", " ");
+}
+
+function formatMxFromCents(cents) {
+	if (cents == null || cents === "") return "—";
+	const n = Number(cents);
+	if (Number.isNaN(n)) return "—";
+	return (n / 100).toLocaleString("es-MX", {
+		style: "currency",
+		currency: "MXN",
+	});
+}
+
 function CollapsiblePanel({
 	open,
 	onToggle,
@@ -133,6 +161,8 @@ export default function CouponsShow({
 		processing: authProcessing,
 	} = useForm({ code: "" });
 	const { post: postResend, processing: resendProcessing } = useForm({});
+	const [resendInvitationBeneficiaryId, setResendInvitationBeneficiaryId] = useState(null);
+	const { post: postResendInvitation, processing: resendInvitationProcessing } = useForm({});
 	const [revokeTarget, setRevokeTarget] = useState(null);
 	const { delete: destroy, processing: revoking } = useForm({});
 	const [assignOpen, setAssignOpen] = useState(false);
@@ -205,6 +235,21 @@ export default function CouponsShow({
 
 	const resendCode = () => {
 		postResend(route("admin.coupons.resend-authorization", coupon.id));
+	};
+
+	const resendBeneficiaryInvitation = (beneficiaryId) => {
+		if (resendInvitationProcessing) return;
+		setResendInvitationBeneficiaryId(beneficiaryId);
+		postResendInvitation(
+			route("admin.coupons.beneficiaries.resend-invitation", {
+				coupon: coupon.id,
+				beneficiary: beneficiaryId,
+			}),
+			{
+				preserveScroll: true,
+				onFinish: () => setResendInvitationBeneficiaryId(null),
+			},
+		);
 	};
 
 	const confirmRevoke = () => {
@@ -802,6 +847,35 @@ export default function CouponsShow({
 									{coupon.max_beneficiaries != null ? coupon.max_beneficiaries : "Sin límite"}
 								</dd>
 							</div>
+							<div className="flex justify-between gap-3">
+								<dt className="text-zinc-500 dark:text-zinc-400">Estado de vigencia</dt>
+								<dd className="font-medium text-zinc-900 dark:text-zinc-100">
+									{{
+										sin_vigencia: "Sin vigencia",
+										programado: "Programado",
+										vigente: "Vigente",
+										vencido: "Vencido",
+									}[coupon.validity_status] ?? coupon.validity_status}
+								</dd>
+							</div>
+							<div className="flex justify-between gap-3">
+								<dt className="text-zinc-500 dark:text-zinc-400">Disponible desde</dt>
+								<dd className="font-medium text-zinc-900 dark:text-zinc-100">
+									{formatShortDateTime(coupon.valid_from)}
+								</dd>
+							</div>
+							<div className="flex justify-between gap-3">
+								<dt className="text-zinc-500 dark:text-zinc-400">Vence el</dt>
+								<dd className="font-medium text-zinc-900 dark:text-zinc-100">
+									{formatShortDateTime(coupon.expires_at)}
+								</dd>
+							</div>
+							<div className="flex justify-between gap-3">
+								<dt className="text-zinc-500 dark:text-zinc-400">Compra mínima</dt>
+								<dd className="font-medium text-zinc-900 dark:text-zinc-100">
+									{coupon.formatted_min_purchase ?? "—"}
+								</dd>
+							</div>
 						</dl>
 					</CollapsiblePanel>
 
@@ -1049,28 +1123,35 @@ export default function CouponsShow({
 								<TableHeader>Usuario</TableHeader>
 								<TableHeader>Correo</TableHeader>
 								<TableHeader>Cliente</TableHeader>
-								<TableHeader>Estado</TableHeader>
+								<TableHeader>Uso del cupón</TableHeader>
 								<TableHeader>Asignado</TableHeader>
 								<TableHeader>Usado</TableHeader>
 								<TableHeader>Compra</TableHeader>
+								<TableHeader>Reverso</TableHeader>
 								<TableHeader />
 							</TableRow>
 						</TableHead>
 						<TableBody>
 							{beneficiaryRows.length === 0 ? (
 								<TableRow>
-									<TableCell colSpan={8} className="text-zinc-500 dark:text-zinc-400">
+									<TableCell colSpan={9} className="text-zinc-500 dark:text-zinc-400">
 										Aún no hay beneficiarios.
 									</TableCell>
 								</TableRow>
 							) : (
-								beneficiaryRows.map((row, idx) => (
-									<TableRow key={`${row.coupon_id}-${row.assignment_id ?? idx}`}>
+								beneficiaryRows.map((row, idx) => {
+									const usageBadge = couponUsageStatusBadge(row);
+									return (
+										<TableRow key={`${row.coupon_id}-${row.assignment_id ?? idx}`}>
 										<TableCell className="text-zinc-900 dark:text-zinc-100">
-											{row.user?.full_name?.trim() || "—"}
+											{row.is_pending_user
+												? row.pending_name || row.pending_email || "—"
+												: row.user?.full_name?.trim() || "—"}
 										</TableCell>
 										<TableCell className="max-w-[12rem] break-all text-sm text-zinc-800 dark:text-zinc-200">
-											{row.user?.email || "—"}
+											{row.is_pending_user
+												? row.pending_email
+												: row.user?.email || "—"}
 										</TableCell>
 										<TableCell>
 											{row.customer_admin_url ? (
@@ -1082,10 +1163,52 @@ export default function CouponsShow({
 											)}
 										</TableCell>
 										<TableCell>
-											{row.used_at ? <Badge color="blue">Usado</Badge> : <Badge color="amber">Pendiente</Badge>}
+											<div className="flex flex-col gap-1">
+												<Badge color={usageBadge.color}>{usageBadge.label}</Badge>
+												{row.is_pending_user && (
+													<Badge color="amber">Pendiente de registro</Badge>
+												)}
+												{row.is_pending_user && (
+													<span className="text-xs text-zinc-600 dark:text-zinc-400">
+														{row.invitation_sent_at
+															? `Invitación enviada: ${formatShortDateTime(row.invitation_sent_at)}${
+																	row.invitation_count > 1
+																		? ` (${row.invitation_count} envíos)`
+																		: ""
+																}`
+															: "Invitación: no enviada"}
+													</span>
+												)}
+												{row.validity_status && row.validity_status !== "sin_vigencia" && (
+													<span className="text-xs text-zinc-600 dark:text-zinc-400">
+														{{
+															programado: "Programado",
+															vigente: row.expires_at
+																? `Vigente hasta ${formatShortDateTime(row.expires_at)}`
+																: "Vigente",
+															vencido: "Vencido",
+														}[row.validity_status] ?? row.validity_status}
+													</span>
+												)}
+												{row.formatted_min_purchase && (
+													<span className="text-xs text-zinc-600 dark:text-zinc-400">
+														Mín. {row.formatted_min_purchase}
+													</span>
+												)}
+												{row.transaction?.amount_used_cents > 0 && (
+													<span className="text-xs text-zinc-600 dark:text-zinc-400">
+														{formatMxFromCents(row.transaction.amount_used_cents)}
+													</span>
+												)}
+											</div>
 										</TableCell>
 										<TableCell className="text-xs text-zinc-600 dark:text-zinc-400">
 											{formatShortDateTime(row.assigned_at)}
+											{row.claimed_at && (
+												<div className="text-zinc-500 dark:text-zinc-500">
+													Reclamado: {formatShortDateTime(row.claimed_at)}
+												</div>
+											)}
 										</TableCell>
 										<TableCell className="text-xs text-zinc-600 dark:text-zinc-400">
 											{formatShortDateTime(row.used_at)}
@@ -1099,8 +1222,42 @@ export default function CouponsShow({
 												<span className="text-zinc-500 dark:text-zinc-400">—</span>
 											)}
 										</TableCell>
+										<TableCell className="max-w-[14rem] text-xs text-zinc-700 dark:text-zinc-300">
+											{row.transaction?.is_reversed ? (
+												<div className="space-y-1">
+													<div>{formatShortDateTime(row.transaction.reversed_at)}</div>
+													<div>{reversalReasonLabel(row.transaction.reversal_reason)}</div>
+													{row.transaction.reversed_by_user && (
+														<div className="break-all text-zinc-500 dark:text-zinc-400">
+															{row.transaction.reversed_by_user.full_name ||
+																row.transaction.reversed_by_user.email}
+														</div>
+													)}
+												</div>
+											) : (
+												<span className="text-zinc-500 dark:text-zinc-400">—</span>
+											)}
+										</TableCell>
 										<TableCell className="text-right">
-											{!row.used_at && row.assignment_id ? (
+											{row.is_pending_user && row.beneficiary_id ? (
+												<Button
+													plain
+													disabled={
+														!row.can_resend_invitation ||
+														(resendInvitationProcessing &&
+															resendInvitationBeneficiaryId === row.beneficiary_id)
+													}
+													onClick={() =>
+														resendBeneficiaryInvitation(row.beneficiary_id)
+													}
+												>
+													{resendInvitationProcessing &&
+													resendInvitationBeneficiaryId === row.beneficiary_id
+														? "Enviando…"
+														: "Reenviar invitación"}
+												</Button>
+											) : null}
+											{!row.used_at && !row.transaction?.is_reversed && row.assignment_id ? (
 												<Button
 													plain
 													className="text-red-600 dark:text-red-400"
@@ -1117,7 +1274,8 @@ export default function CouponsShow({
 											) : null}
 										</TableCell>
 									</TableRow>
-								))
+									);
+								})
 							)}
 						</TableBody>
 					</Table>

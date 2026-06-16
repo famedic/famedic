@@ -25,6 +25,7 @@ import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Select } from "@/Components/Catalyst/select";
+import { couponValiditySummary } from "@/lib/couponEligibilityUi";
 function formatShortDateTime(iso) {
 	if (!iso) return "—";
 	return new Date(iso).toLocaleString("es-MX", {
@@ -790,11 +791,22 @@ export default function CouponsIndex({
 													</>
 												)}
 											</p>
+											{c.formatted_min_purchase && (
+												<p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
+													Compra mínima: {c.formatted_min_purchase}
+												</p>
+											)}
 										</TableCell>
 										<TableCell className="align-top">
 											<div className="flex flex-col gap-2">
 												<div className="flex flex-wrap gap-1.5">
 													<Badge color={usage.color}>{usage.label}</Badge>
+													{(() => {
+														const validity = couponValiditySummary(c);
+														return (
+															<Badge color={validity.color}>{validity.label}</Badge>
+														);
+													})()}
 													{c.is_active ? (
 														<Badge color="emerald">Activo</Badge>
 													) : (

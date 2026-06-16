@@ -41,6 +41,99 @@ function actorDisplayName(row) {
 	return parts.join(" ").trim() || user.email || `Usuario #${row.actor_user_id}`;
 }
 
+function actionLabel(action) {
+	const labels = {
+		reverse_coupon_application: "Reverso de saldo a favor",
+		assign_coupon: "Asignación de cupón",
+		coupon_beneficiaries_previewed: "Preview de beneficiarios",
+		coupon_beneficiaries_confirmed: "Confirmación de beneficiarios",
+		coupon_beneficiary_assigned: "Beneficiario asignado",
+		coupon_beneficiary_pending_user: "Beneficiario pendiente de registro",
+		coupon_beneficiary_linked: "Beneficiario vinculado al registrarse",
+		coupon_beneficiary_link_skipped: "Vinculación de beneficiario omitida",
+		coupon_beneficiary_invitation_sent: "Invitación de saldo pendiente enviada",
+		coupon_beneficiary_invitation_resent: "Invitación de saldo pendiente reenviada",
+		coupon_beneficiary_invitation_failed: "Error al enviar invitación",
+		coupon_beneficiary_activation_notified: "Activación de saldo notificada",
+		coupon_beneficiary_activation_notify_failed: "Error al notificar activación",
+		approval_request_created: "Solicitud de aprobación",
+		update_coupon_settings: "Actualización de reglas",
+	};
+	return labels[action] ?? action ?? "—";
+}
+
+function typeLabel(type) {
+	const labels = {
+		application: "Uso / reverso",
+		assignment: "Asignación",
+		configuration: "Configuración",
+	};
+	return labels[type] ?? type ?? "—";
+}
+
+function formatMxFromCents(cents) {
+	if (cents == null || cents === "") return "—";
+	const n = Number(cents);
+	if (Number.isNaN(n)) return "—";
+	return (n / 100).toLocaleString("es-MX", {
+		style: "currency",
+		currency: "MXN",
+	});
+}
+
+function reversalReasonLabel(reason) {
+	if (!reason) return "—";
+	if (reason === "laboratory_purchase_cancelled") {
+		return "Cancelación de pedido de laboratorio";
+	}
+	return String(reason).replaceAll("_", " ");
+}
+
+function renderLogDetail(row) {
+	const context = row.context ?? {};
+
+	if (row.action === "reverse_coupon_application") {
+		return (
+			<dl className="space-y-1 text-xs text-zinc-700 dark:text-zinc-200">
+				<div>
+					<dt className="inline font-medium">Pedido: </dt>
+					<dd className="inline">
+						{context.purchase_type ?? "—"} #{context.purchase_id ?? "—"}
+					</dd>
+				</div>
+				<div>
+					<dt className="inline font-medium">Cupón: </dt>
+					<dd className="inline">#{context.coupon_id ?? "—"}</dd>
+				</div>
+				<div>
+					<dt className="inline font-medium">Usuario: </dt>
+					<dd className="inline">#{context.user_id ?? "—"}</dd>
+				</div>
+				<div>
+					<dt className="inline font-medium">Monto restaurado: </dt>
+					<dd className="inline">
+						{formatMxFromCents(context.amount_restored_cents)}
+					</dd>
+				</div>
+				<div>
+					<dt className="inline font-medium">Motivo: </dt>
+					<dd className="inline">{reversalReasonLabel(context.reason)}</dd>
+				</div>
+				<div>
+					<dt className="inline font-medium">Actor: </dt>
+					<dd className="inline">{actorDisplayName(row)}</dd>
+				</div>
+			</dl>
+		);
+	}
+
+	return (
+		<pre className="max-w-xl overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-100 p-2 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+			{JSON.stringify(context, null, 2)}
+		</pre>
+	);
+}
+
 export default function CouponLogs({ logs, filters }) {
 	const { data, setData, get, processing } = useForm({
 		type: filters?.type ?? "",
@@ -129,10 +222,10 @@ export default function CouponLogs({ logs, filters }) {
 											{formatShortDateTime(row.created_at)}
 										</TableCell>
 										<TableCell className="text-zinc-900 dark:text-zinc-100">
-											{row.type || "—"}
+											{typeLabel(row.type)}
 										</TableCell>
 										<TableCell className="text-zinc-900 dark:text-zinc-100">
-											{row.action || "—"}
+											{actionLabel(row.action)}
 										</TableCell>
 										<TableCell>
 											<Badge color={statusBadgeColor(row.status)}>{row.status || "—"}</Badge>
@@ -147,9 +240,7 @@ export default function CouponLogs({ logs, filters }) {
 										</TableCell>
 										<TableCell>
 											{expandedRows[row.id] ? (
-												<pre className="max-w-xl overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-100 p-2 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-													{JSON.stringify(row.context ?? {}, null, 2)}
-												</pre>
+												renderLogDetail(row)
 											) : (
 												<span className="text-xs text-zinc-500 dark:text-zinc-400">
 													Detalle oculto

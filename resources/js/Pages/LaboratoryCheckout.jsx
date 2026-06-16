@@ -33,6 +33,11 @@ import EnvironmentBadge from "@/Components/EnvironmentBadge";
 import { ChevronLeftIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import clsx from "clsx";
+import {
+    couponMeetsMinPurchase,
+    isCouponApplicableForCheckout,
+    isCouponWithinValidity,
+} from "@/lib/couponEligibilityUi";
 
 const BASE_WIZARD_STEPS = [
     { id: "patient", number: 1, label: "Paciente" },
@@ -338,17 +343,39 @@ export default function LaboratoryCheckout({
         return selectedCoupon.remaining_cents > total;
     }, [selectedCoupon, total]);
 
+    const couponNotYetValid = useMemo(() => {
+        if (!selectedCoupon) return false;
+        return (
+            !isCouponWithinValidity(selectedCoupon) &&
+            selectedCoupon.validity_status === "programado"
+        );
+    }, [selectedCoupon]);
+
+    const couponBelowMinPurchase = useMemo(() => {
+        if (!selectedCoupon) return false;
+        return !couponMeetsMinPurchase(selectedCoupon, total);
+    }, [selectedCoupon, total]);
+
+    const minPurchaseShortfallCents = useMemo(() => {
+        if (!selectedCoupon?.min_purchase_cents || couponMeetsMinPurchase(selectedCoupon, total)) {
+            return 0;
+        }
+        return Math.max(0, selectedCoupon.min_purchase_cents - total);
+    }, [selectedCoupon, total]);
+
+    const couponBlocked = couponTooLarge || couponNotYetValid || couponBelowMinPurchase;
+
     const amountAfterCoupon = useMemo(() => {
-        if (!selectedCoupon || couponTooLarge) return total;
+        if (!selectedCoupon || couponBlocked) return total;
         return Math.max(0, total - selectedCoupon.remaining_cents);
-    }, [selectedCoupon, couponTooLarge, total]);
+    }, [selectedCoupon, couponBlocked, total]);
 
     const summaryDetails = useMemo(() => {
         const rows = [
             { value: formattedSubtotal, label: "Subtotal" },
             { value: "-" + formattedDiscount, label: "Descuento" },
         ];
-        if (selectedCoupon && !couponTooLarge) {
+        if (selectedCoupon && !couponBlocked) {
             rows.push({
                 value:
                     "-" +
@@ -361,7 +388,7 @@ export default function LaboratoryCheckout({
         }
         rows.push({
             value:
-                !selectedCoupon || couponTooLarge
+                !selectedCoupon || couponBlocked
                     ? formattedTotal
                     : (amountAfterCoupon / 100).toLocaleString("es-MX", {
                           style: "currency",
@@ -375,7 +402,7 @@ export default function LaboratoryCheckout({
         formattedDiscount,
         formattedTotal,
         selectedCoupon,
-        couponTooLarge,
+        couponBlocked,
         amountAfterCoupon,
     ]);
 
@@ -384,7 +411,7 @@ export default function LaboratoryCheckout({
             return !!data.payment_method;
         }
         if (!selectedCoupon) return false;
-        if (couponTooLarge) return false;
+        if (couponBlocked) return false;
         if (amountAfterCoupon === 0) {
             return data.payment_method === "coupon_balance";
         }
@@ -393,13 +420,24 @@ export default function LaboratoryCheckout({
         data.coupon_id,
         data.payment_method,
         selectedCoupon,
-        couponTooLarge,
+        couponBlocked,
         amountAfterCoupon,
     ]);
 
+    useEffect(() => {
+        if (!data.coupon_id) return;
+        const c = availableBalanceCoupons.find((x) => x.id === data.coupon_id);
+        if (!c || !isCouponApplicableForCheckout(c, total)) {
+            setData("coupon_id", null);
+            if (data.payment_method === "coupon_balance") {
+                setData("payment_method", null);
+            }
+        }
+    }, [data.coupon_id, data.payment_method, availableBalanceCoupons, total, setData]);
+
     const applyBalanceCoupon = () => {
-        const applicable = availableBalanceCoupons.find(
-            (c) => c.remaining_cents <= total,
+        const applicable = availableBalanceCoupons.find((c) =>
+            isCouponApplicableForCheckout(c, total),
         );
         if (!applicable) return;
         setData("coupon_id", applicable.id);
@@ -420,7 +458,9 @@ export default function LaboratoryCheckout({
     const noCouponApplicable =
         balanceCouponsCents > 0 &&
         availableBalanceCoupons.length > 0 &&
-        !availableBalanceCoupons.some((c) => c.remaining_cents <= total);
+        !availableBalanceCoupons.some((c) => isCouponApplicableForCheckout(c, total));
+
+    const displayCoupon = selectedCoupon ?? availableBalanceCoupons[0] ?? null;
 
     // Condiciones para habilitar/deshabilitar botones
     const onlinePaymentDisabled = checkoutProcessing ||
@@ -811,7 +851,48 @@ export default function LaboratoryCheckout({
             <Text className="mt-1 text-sm">
                 Tienes <Strong>{formattedBalanceCoupons}</Strong> disponibles.
             </Text>
-            {noCouponApplicable && (
+            {displayCoupon?.expires_at && (
+                <Text className="mt-2 text-xs text-zinc-700 dark:text-zinc-300">
+                    Vence el{" "}
+                    {new Date(displayCoupon.expires_at).toLocaleString("es-MX", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                    })}
+                </Text>
+            )}
+            {displayCoupon?.formatted_min_purchase && (
+                <Text className="mt-1 text-xs text-zinc-700 dark:text-zinc-300">
+                    Compra mínima: {displayCoupon.formatted_min_purchase}
+                </Text>
+            )}
+            {couponNotYetValid && selectedCoupon?.valid_from && (
+                <Text className="mt-2 text-xs text-amber-800 dark:text-amber-200">
+                    Tu saldo estará disponible a partir del{" "}
+                    {new Date(selectedCoupon.valid_from).toLocaleString("es-MX", {
+                        dateStyle: "long",
+                        timeStyle: "short",
+                    })}
+                    .
+                </Text>
+            )}
+            {couponBelowMinPurchase && selectedCoupon?.formatted_min_purchase && (
+                <Text className="mt-2 text-xs text-amber-800 dark:text-amber-200">
+                    Para usar este saldo necesitas una compra mínima de{" "}
+                    {selectedCoupon.formatted_min_purchase}.
+                    {minPurchaseShortfallCents > 0 && (
+                        <>
+                            {" "}
+                            Te faltan{" "}
+                            {(minPurchaseShortfallCents / 100).toLocaleString("es-MX", {
+                                style: "currency",
+                                currency: "MXN",
+                            })}{" "}
+                            para poder usarlo.
+                        </>
+                    )}
+                </Text>
+            )}
+            {noCouponApplicable && !couponBelowMinPurchase && !couponNotYetValid && (
                 <Text className="mt-2 text-xs text-amber-800 dark:text-amber-200">
                     Tu saldo es mayor al total de la compra, no puede aplicarse
                     en esta compra.
