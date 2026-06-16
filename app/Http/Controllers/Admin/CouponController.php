@@ -917,7 +917,7 @@ class CouponController extends Controller
         return response()->streamDownload(function () use ($path) {
             echo "\xEF\xBB\xBF";
             readfile($path);
-        ], 'plantilla_carga_beneficiarios_cupones.csv', [
+        }, 'plantilla_carga_beneficiarios_cupones.csv', [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
