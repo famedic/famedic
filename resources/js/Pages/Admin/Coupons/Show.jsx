@@ -1386,9 +1386,14 @@ export default function CouponsShow({
 								</p>
 								<div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
 									<Button
-										href={route("admin.coupons.assign.bulk-template")}
+										type="button"
 										outline
 										className="text-sm"
+										onClick={() => {
+											window.location.assign(
+												route("admin.coupons.assign.bulk-template"),
+											);
+										}}
 									>
 										Descargar plantilla CSV de ejemplo
 									</Button>

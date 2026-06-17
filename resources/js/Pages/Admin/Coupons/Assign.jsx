@@ -25,6 +25,7 @@ import {
 	BENEFICIARY_PREVIEW_STATUS,
 	beneficiaryRowFromMatrix,
 	isConfirmableBeneficiaryStatus,
+	isMatrixRowLookupConfirmable,
 } from "@/lib/couponBeneficiaryAssign";
 
 function csrfTokenFromMeta() {
@@ -323,7 +324,7 @@ export default function CouponsAssign({
 			}
 			for (const r of matrixRowsRef.current) {
 				const k = r.email.trim().toLowerCase();
-				if (!k || r.lookup.status !== "found") continue;
+				if (!k || !isMatrixRowLookupConfirmable(r.lookup)) continue;
 				if ((counts[k] ?? 0) > 1) continue;
 				if (seen.has(k)) continue;
 				seen.add(k);
@@ -498,6 +499,7 @@ export default function CouponsAssign({
 			const k = r.email.trim().toLowerCase();
 			if (!k || !k.includes("@")) continue;
 			if ((emailLowerCounts[k] ?? 0) > 1) continue;
+			if (!isMatrixRowLookupConfirmable(r.lookup)) continue;
 			if (seen.has(k)) continue;
 			seen.add(k);
 			out.push(beneficiaryRowFromMatrix(r));
@@ -688,7 +690,7 @@ export default function CouponsAssign({
 			for (const r of filled) {
 				const k = r.email.trim().toLowerCase();
 				if ((emailLowerCounts[k] ?? 0) > 1) return false;
-				if (r.lookup.status !== "found") return false;
+				if (!isMatrixRowLookupConfirmable(r.lookup)) return false;
 			}
 			return individualReadyEmails.length >= 1;
 		}
@@ -1459,9 +1461,14 @@ export default function CouponsAssign({
 														</Text>
 														<div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
 															<Button
-																href={route("admin.coupons.assign.bulk-template")}
+																type="button"
 																outline
 																className="text-sm"
+																onClick={() => {
+																	window.location.assign(
+																		route("admin.coupons.assign.bulk-template"),
+																	);
+																}}
 															>
 																Descargar plantilla CSV de ejemplo
 															</Button>
@@ -1956,7 +1963,7 @@ export default function CouponsAssign({
 							{activeTab === "summary" && !canSubmit && !processing && (
 								<p className="w-full text-sm text-amber-800 dark:text-amber-200">
 									Revisa el resumen: faltan datos o no se cumplen las reglas (por ejemplo,
-									beneficiarios no registrados o sin autorizadores en el sistema si hiciera
+									correos inválidos, duplicados o sin autorizadores en el sistema si hiciera
 									falta aprobación).
 								</p>
 							)}

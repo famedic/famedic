@@ -219,6 +219,60 @@ class CouponBeneficiaryIsolatedTest extends TestCase
     }
 
     #[Test]
+    public function confirm_mezcla_usuario_registrado_y_pendiente(): void
+    {
+        $service = app(CouponBeneficiaryService::class);
+        $parent = $this->seedMasterCoupon(['max_beneficiaries' => 2]);
+        $user = $this->createUser('mixto-registrado@test.local');
+
+        $result = $service->confirmRows($parent, [
+            ['email' => $user->email, 'first_name' => 'Ana'],
+            ['email' => 'mixto-pendiente@test.local', 'first_name' => 'Luis'],
+        ], sendNotifications: false);
+
+        $this->assertSame(1, $result['assigned_count']);
+        $this->assertSame(1, $result['pending_count']);
+        $this->assertTrue(
+            CouponUser::query()->where('user_id', $user->id)->whereHas('coupon', fn ($q) => $q->where('parent_coupon_id', $parent->id))->exists()
+        );
+        $this->assertSame(1, CouponUser::query()->count());
+
+        $pending = CouponBeneficiary::query()
+            ->where('email_normalized', 'mixto-pendiente@test.local')
+            ->first();
+        $this->assertNotNull($pending);
+        $this->assertSame(CouponBeneficiaryStatus::PendingUser, $pending->status);
+        $this->assertNull($pending->child_coupon_id);
+    }
+
+    #[Test]
+    public function plantilla_csv_existe_con_encabezados_esperados(): void
+    {
+        $path = resource_path('templates/coupon_bulk_assign_example.csv');
+
+        $this->assertFileIsReadable($path);
+
+        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $this->assertNotEmpty($lines);
+
+        $headers = str_getcsv((string) $lines[0]);
+        $this->assertSame(
+            ['email', 'nombre', 'apellido_paterno', 'apellido_materno'],
+            $headers
+        );
+        $this->assertGreaterThanOrEqual(2, count($lines));
+
+        ob_start();
+        echo "\xEF\xBB\xBF";
+        readfile($path);
+        $streamed = (string) ob_get_clean();
+
+        $this->assertStringStartsWith("\xEF\xBB\xBF", $streamed);
+        $this->assertStringContainsString('email,nombre,apellido_paterno,apellido_materno', $streamed);
+        $this->assertStringContainsString('beneficiario.ejemplo1@tuempresa.com', $streamed);
+    }
+
+    #[Test]
     public function get_user_balance_no_cuenta_pendientes_sin_usuario(): void
     {
         $couponService = app(CouponService::class);

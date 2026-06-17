@@ -37,3 +37,12 @@ export function beneficiaryRowFromMatrix(row) {
 export function isConfirmableBeneficiaryStatus(status) {
 	return status === "valid_registered_user" || status === "valid_pending_user";
 }
+
+/** Lookup de asignación manual: registrado o pendiente de registro. */
+export function isMatrixRowLookupConfirmable(lookup) {
+	if (!lookup) {
+		return false;
+	}
+
+	return lookup.status === "found" || lookup.status === "missing";
+}
