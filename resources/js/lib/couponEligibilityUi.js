@@ -13,10 +13,56 @@ export function parseMinPurchaseMxnToCents(value) {
 	return Math.round(parsed * 100);
 }
 
+export function inferValidityMode(validFrom, expiresAt) {
+	return String(validFrom ?? "").trim() || String(expiresAt ?? "").trim()
+		? "configured"
+		: "open";
+}
+
+export function inferMinimumPurchaseMode(minPurchaseMxn) {
+	return String(minPurchaseMxn ?? "").trim() !== "" ? "required" : "none";
+}
+
+export function isCouponEligibilityFormComplete(data) {
+	if (data.validity_mode === "configured") {
+		const hasFrom = String(data.valid_from ?? "").trim() !== "";
+		const hasExpires = String(data.expires_at ?? "").trim() !== "";
+		if (!hasFrom && !hasExpires) return false;
+		if (hasFrom && hasExpires) {
+			const from = new Date(data.valid_from).getTime();
+			const expires = new Date(data.expires_at).getTime();
+			if (!Number.isNaN(from) && !Number.isNaN(expires) && expires < from) {
+				return false;
+			}
+		}
+	}
+
+	if (data.minimum_purchase_mode === "required") {
+		const cents = parseMinPurchaseMxnToCents(data.min_purchase_mxn);
+		if (cents === null || cents <= 0) return false;
+	}
+
+	return true;
+}
+
 export function appendCouponEligibilityToPayload(out, d) {
-	out.valid_from = d.valid_from?.trim() ? d.valid_from : null;
-	out.expires_at = d.expires_at?.trim() ? d.expires_at : null;
-	out.min_purchase_cents = parseMinPurchaseMxnToCents(d.min_purchase_mxn);
+	out.validity_mode = d.validity_mode;
+	out.minimum_purchase_mode = d.minimum_purchase_mode;
+
+	if (d.validity_mode === "open") {
+		out.valid_from = null;
+		out.expires_at = null;
+	} else {
+		out.valid_from = d.valid_from?.trim() ? d.valid_from : null;
+		out.expires_at = d.expires_at?.trim() ? d.expires_at : null;
+	}
+
+	if (d.minimum_purchase_mode === "none") {
+		out.min_purchase_cents = null;
+	} else {
+		out.min_purchase_cents = parseMinPurchaseMxnToCents(d.min_purchase_mxn);
+	}
+
 	return out;
 }
 

@@ -22,11 +22,20 @@ function bootstrapIsolatedCouponModuleSchema(): void
         $table->timestamps();
     });
 
+    Schema::create('coupon_concepts', function (Blueprint $table) {
+        $table->id();
+        $table->string('title');
+        $table->text('description')->nullable();
+        $table->timestamps();
+    });
+
     Schema::create('coupons', function (Blueprint $table) {
         $table->id();
         $table->unsignedBigInteger('parent_coupon_id')->nullable();
         $table->string('code')->nullable();
         $table->text('description')->nullable();
+        $table->unsignedBigInteger('coupon_concept_id')->nullable();
+        $table->string('concept_other')->nullable();
         $table->unsignedInteger('amount_cents');
         $table->unsignedInteger('remaining_cents')->default(0);
         $table->timestamp('valid_from')->nullable();
@@ -124,6 +133,7 @@ function tearDownIsolatedCouponModuleSchema(): void
     Schema::dropIfExists('notifications');
     Schema::dropIfExists('coupon_user');
     Schema::dropIfExists('coupons');
+    Schema::dropIfExists('coupon_concepts');
     Schema::dropIfExists('users');
     Schema::enableForeignKeyConstraints();
 }

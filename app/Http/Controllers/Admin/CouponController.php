@@ -25,6 +25,8 @@ use App\Models\CouponUser;
 use App\Models\Customer;
 use App\Models\User;
 use App\Services\CouponService;
+use App\Services\CouponConceptService;
+use App\Services\CouponEligibilityFormService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -44,6 +46,8 @@ class CouponController extends Controller
     public function __construct(
         private CouponService $couponService,
         private CouponBeneficiaryService $couponBeneficiaryService,
+        private CouponConceptService $couponConceptService,
+        private CouponEligibilityFormService $couponEligibilityFormService,
     ) {}
 
     public function index(Request $request): InertiaResponse
@@ -408,9 +412,7 @@ class CouponController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'max_beneficiaries' => ['nullable', 'integer', 'min:1'],
             'is_active' => ['boolean'],
-            'coupon_concept_id' => ['nullable', 'integer', Rule::exists('coupon_concepts', 'id')],
-            'concept_other' => ['nullable', 'string', 'max:255'],
-        ], $this->couponEligibilityValidationRules()));
+        ], $this->couponConceptService->validationRules(), $this->couponEligibilityFormService->validationRules()));
 
         $adminSettings = CouponAdminSettings::singleton();
 
@@ -432,13 +434,14 @@ class CouponController extends Controller
 
         $this->couponService->assertAssignmentRules($data['amount_cents']);
 
+        $conceptPayload = $this->couponConceptService->resolveConceptPayload($data);
+        $eligibilityAttributes = $this->couponEligibilityFormService->resolveAttributes($data);
+
         $coupon = Coupon::create(array_merge([
             'code' => $data['code'] ?? null,
             'description' => $data['description'] ?? null,
-            'coupon_concept_id' => $data['coupon_concept_id'] ?? null,
-            'concept_other' => isset($data['concept_other']) && trim((string) $data['concept_other']) !== ''
-                ? trim((string) $data['concept_other'])
-                : null,
+            'coupon_concept_id' => $conceptPayload['coupon_concept_id'],
+            'concept_other' => $conceptPayload['concept_other'],
             'amount_cents' => $data['amount_cents'],
             'remaining_cents' => $pending ? 0 : $data['amount_cents'],
             'max_beneficiaries' => $data['max_beneficiaries'] ?? null,
@@ -447,7 +450,7 @@ class CouponController extends Controller
             'approval_status' => $pending ? CouponApprovalStatus::PendingAuthorization : CouponApprovalStatus::Active,
             'created_by_user_id' => $request->user()->id,
             'updated_by_user_id' => $request->user()->id,
-        ], $this->couponEligibilityAttributesFromRequest($data)));
+        ], $eligibilityAttributes));
 
         if ($pending) {
             $plain = (string) random_int(100000, 999999);
@@ -729,13 +732,15 @@ class CouponController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'max_beneficiaries' => ['nullable', 'integer', 'min:1'],
             'is_active' => ['boolean'],
-        ], $this->couponEligibilityValidationRules()));
+        ], $this->couponEligibilityFormService->validationRules()));
+
+        $eligibilityAttributes = $this->couponEligibilityFormService->resolveAttributes($data);
 
         $coupon->code = $data['code'] ?? null;
         $coupon->description = $data['description'] ?? null;
         $coupon->max_beneficiaries = $data['max_beneficiaries'] ?? null;
         $coupon->is_active = $data['is_active'] ?? $coupon->is_active;
-        $coupon->fill($this->couponEligibilityAttributesFromRequest($data));
+        $coupon->fill($eligibilityAttributes);
         $coupon->updated_by_user_id = $request->user()->id;
         $coupon->save();
 
@@ -1089,15 +1094,13 @@ class CouponController extends Controller
             'is_active' => ['boolean'],
             'authorizer_ids' => ['nullable', 'array'],
             'authorizer_ids.*' => ['integer', Rule::exists('administrators', 'id')],
-            'coupon_concept_id' => ['nullable', 'integer', Rule::exists('coupon_concepts', 'id')],
-            'concept_other' => ['nullable', 'string', 'max:255'],
             'beneficiary_rows' => ['nullable', 'array', 'max:5000'],
             'beneficiary_rows.*.email' => ['required_with:beneficiary_rows', 'string', 'max:255'],
             'beneficiary_rows.*.first_name' => ['nullable', 'string', 'max:255'],
             'beneficiary_rows.*.paternal_lastname' => ['nullable', 'string', 'max:255'],
             'beneficiary_rows.*.maternal_lastname' => ['nullable', 'string', 'max:255'],
             'beneficiary_source' => ['nullable', Rule::in(['manual', 'excel'])],
-        ], $this->couponEligibilityValidationRules()));
+        ], $this->couponConceptService->validationRules(), $this->couponEligibilityFormService->validationRules()));
 
         $sendForIndividual = $data['send_notification'] ?? true;
         $sendForBulk = $data['send_notifications'] ?? $data['send_notification'] ?? true;
@@ -1960,13 +1963,14 @@ class CouponController extends Controller
 
         $this->couponService->assertAssignmentRules((int) $data['amount_cents'], ! $relaxMaxAmountForPreApproval);
 
+        $conceptPayload = $this->couponConceptService->resolveConceptPayload($data);
+        $eligibilityAttributes = $this->couponEligibilityFormService->resolveAttributes($data);
+
         $coupon = Coupon::create(array_merge([
             'code' => $data['code'] ?? null,
             'description' => $data['description'] ?? null,
-            'coupon_concept_id' => $data['coupon_concept_id'] ?? null,
-            'concept_other' => isset($data['concept_other']) && trim((string) $data['concept_other']) !== ''
-                ? trim((string) $data['concept_other'])
-                : null,
+            'coupon_concept_id' => $conceptPayload['coupon_concept_id'],
+            'concept_other' => $conceptPayload['concept_other'],
             'amount_cents' => (int) $data['amount_cents'],
             'remaining_cents' => $pending ? 0 : (int) $data['amount_cents'],
             'max_beneficiaries' => $data['max_beneficiaries'] ?? null,
@@ -1975,7 +1979,7 @@ class CouponController extends Controller
             'approval_status' => $pending ? CouponApprovalStatus::PendingAuthorization : CouponApprovalStatus::Active,
             'created_by_user_id' => $request->user()->id,
             'updated_by_user_id' => $request->user()->id,
-        ], $this->couponEligibilityAttributesFromRequest($data)));
+        ], $eligibilityAttributes));
 
         if ($pending) {
             $plain = (string) random_int(100000, 999999);
@@ -2440,36 +2444,5 @@ class CouponController extends Controller
         }
 
         return redirect()->route('admin.coupons.show', $parent)->flashMessage($msg);
-    }
-
-    /**
-     * @return array<string, list<string|\Illuminate\Validation\Rules\Date>>
-     */
-    private function couponEligibilityValidationRules(): array
-    {
-        return [
-            'valid_from' => ['nullable', 'date'],
-            'expires_at' => ['nullable', 'date', 'after_or_equal:valid_from'],
-            'min_purchase_cents' => ['nullable', 'integer', 'min:0'],
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     * @return array{valid_from: ?Carbon, expires_at: ?Carbon, min_purchase_cents: ?int}
-     */
-    private function couponEligibilityAttributesFromRequest(array $data): array
-    {
-        return [
-            'valid_from' => isset($data['valid_from']) && $data['valid_from'] !== null && $data['valid_from'] !== ''
-                ? Carbon::parse($data['valid_from'])
-                : null,
-            'expires_at' => isset($data['expires_at']) && $data['expires_at'] !== null && $data['expires_at'] !== ''
-                ? Carbon::parse($data['expires_at'])
-                : null,
-            'min_purchase_cents' => isset($data['min_purchase_cents']) && $data['min_purchase_cents'] !== null && $data['min_purchase_cents'] !== ''
-                ? (int) $data['min_purchase_cents']
-                : null,
-        ];
     }
 }

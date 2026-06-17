@@ -5,25 +5,34 @@ import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Textarea } from "@/Components/Catalyst/textarea";
 import { Switch, SwitchField } from "@/Components/Catalyst/switch";
+import CouponEligibilityFields from "@/Components/Admin/CouponEligibilityFields";
 import { useForm } from "@inertiajs/react";
 import { Badge } from "@/Components/Catalyst/badge";
 import {
 	appendCouponEligibilityToPayload,
+	inferMinimumPurchaseMode,
+	inferValidityMode,
 	toDatetimeLocalValue,
 } from "@/lib/couponEligibilityUi";
 
 export default function CouponsEdit({ coupon }) {
+	const initialValidFrom = toDatetimeLocalValue(coupon.valid_from);
+	const initialExpiresAt = toDatetimeLocalValue(coupon.expires_at);
+	const initialMinPurchaseMxn =
+		coupon.min_purchase_cents != null
+			? String(coupon.min_purchase_cents / 100)
+			: "";
+
 	const { data, setData, put, processing, errors, transform } = useForm({
 		code: coupon.code || "",
 		description: coupon.description || "",
 		max_beneficiaries:
 			coupon.max_beneficiaries != null ? String(coupon.max_beneficiaries) : "",
-		valid_from: toDatetimeLocalValue(coupon.valid_from),
-		expires_at: toDatetimeLocalValue(coupon.expires_at),
-		min_purchase_mxn:
-			coupon.min_purchase_cents != null
-				? String(coupon.min_purchase_cents / 100)
-				: "",
+		validity_mode: inferValidityMode(initialValidFrom, initialExpiresAt),
+		valid_from: initialValidFrom,
+		expires_at: initialExpiresAt,
+		minimum_purchase_mode: inferMinimumPurchaseMode(initialMinPurchaseMxn),
+		min_purchase_mxn: initialMinPurchaseMxn,
 		is_active: coupon.is_active,
 	});
 
@@ -103,51 +112,12 @@ export default function CouponsEdit({ coupon }) {
 						onChange={(e) => setData("code", e.target.value)}
 					/>
 				</Field>
-				<Field>
-					<Label>Disponible desde</Label>
-					<Input
-						type="datetime-local"
-						value={data.valid_from}
-						onChange={(e) => setData("valid_from", e.target.value)}
-					/>
-					<p className="mt-1 text-xs text-zinc-500">
-						Déjalo vacío si el saldo está disponible inmediatamente.
-					</p>
-					{errors.valid_from && (
-						<p className="text-sm text-red-600">{errors.valid_from}</p>
-					)}
-				</Field>
-				<Field>
-					<Label>Vence el</Label>
-					<Input
-						type="datetime-local"
-						value={data.expires_at}
-						onChange={(e) => setData("expires_at", e.target.value)}
-					/>
-					<p className="mt-1 text-xs text-zinc-500">
-						Déjalo vacío si el saldo no vence.
-					</p>
-					{errors.expires_at && (
-						<p className="text-sm text-red-600">{errors.expires_at}</p>
-					)}
-				</Field>
-				<Field>
-					<Label>Compra mínima requerida (MXN)</Label>
-					<Input
-						type="number"
-						step="0.01"
-						min="0"
-						placeholder="Sin mínimo"
-						value={data.min_purchase_mxn}
-						onChange={(e) => setData("min_purchase_mxn", e.target.value)}
-					/>
-					<p className="mt-1 text-xs text-zinc-500">
-						Déjalo vacío si no quieres exigir una compra mínima.
-					</p>
-					{errors.min_purchase_cents && (
-						<p className="text-sm text-red-600">{errors.min_purchase_cents}</p>
-					)}
-				</Field>
+				<CouponEligibilityFields
+					data={data}
+					setData={setData}
+					errors={errors}
+					fieldClassName=""
+				/>
 				<SwitchField>
 					<Label>Activo</Label>
 					<Switch

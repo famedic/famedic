@@ -20,7 +20,8 @@ import {
 } from "@/Components/Catalyst/table";
 import { Badge } from "@/Components/Catalyst/badge";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
-import { appendCouponEligibilityToPayload } from "@/lib/couponEligibilityUi";
+import { appendCouponEligibilityToPayload, isCouponEligibilityFormComplete } from "@/lib/couponEligibilityUi";
+import CouponEligibilityFields from "@/Components/Admin/CouponEligibilityFields";
 import {
 	BENEFICIARY_PREVIEW_STATUS,
 	beneficiaryRowFromMatrix,
@@ -103,7 +104,13 @@ function errorsForTab(errs, tabId) {
 				match("max_beneficiaries") ||
 				match("is_active") ||
 				match("coupon_concept_id") ||
-				match("concept_other")
+				match("concept_other") ||
+				match("concept_is_other") ||
+				match("validity_mode") ||
+				match("minimum_purchase_mode") ||
+				match("valid_from") ||
+				match("expires_at") ||
+				match("min_purchase_cents")
 			);
 		case "assignment":
 			return (
@@ -242,8 +249,10 @@ export default function CouponsAssign({
 		authorizer_ids: [],
 		coupon_concept_id: "",
 		concept_other: "",
+		validity_mode: "open",
 		valid_from: "",
 		expires_at: "",
+		minimum_purchase_mode: "none",
 		min_purchase_mxn: "",
 	});
 
@@ -279,6 +288,7 @@ export default function CouponsAssign({
 			out.max_beneficiaries = maxB === "" ? null : parseInt(maxB, 10);
 			out.is_active = d.is_active;
 			if (d.coupon_concept_id === "other") {
+				out.concept_is_other = true;
 				out.coupon_concept_id = null;
 				out.concept_other = d.concept_other?.trim() || null;
 			} else if (d.coupon_concept_id !== "" && d.coupon_concept_id != null) {
@@ -745,6 +755,7 @@ export default function CouponsAssign({
 	const couponStepComplete = useMemo(() => {
 		if (!amountOk) return false;
 		if (!conceptStepOk) return false;
+		if (!isCouponEligibilityFormComplete(data)) return false;
 		if (data.assignment_mode === "none") {
 			return true;
 		}
@@ -752,7 +763,7 @@ export default function CouponsAssign({
 		if (maxB === "") return false;
 		const n = parseInt(maxB, 10);
 		return !Number.isNaN(n) && n >= 1;
-	}, [data.max_beneficiaries, data.assignment_mode, amountOk, conceptStepOk]);
+	}, [data.max_beneficiaries, data.assignment_mode, data, amountOk, conceptStepOk]);
 
 	const assignmentStepComplete = useMemo(() => {
 		if (data.assignment_mode === "none") return true;
@@ -1052,59 +1063,13 @@ export default function CouponsAssign({
 															</div>
 														)}
 													</Field>
-													<Field className="col-span-12 md:col-span-6">
-														<Label>Disponible desde</Label>
-														<Input
-															type="datetime-local"
-															value={data.valid_from}
-															onChange={(e) => setData("valid_from", e.target.value)}
-														/>
-														<p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-															Déjalo vacío si el saldo está disponible inmediatamente.
-														</p>
-														{errors.valid_from && (
-															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																{errors.valid_from}
-															</p>
-														)}
-													</Field>
-													<Field className="col-span-12 md:col-span-6">
-														<Label>Vence el</Label>
-														<Input
-															type="datetime-local"
-															value={data.expires_at}
-															onChange={(e) => setData("expires_at", e.target.value)}
-														/>
-														<p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-															Déjalo vacío si el saldo no vence.
-														</p>
-														{errors.expires_at && (
-															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																{errors.expires_at}
-															</p>
-														)}
-													</Field>
-													<Field className="col-span-12 md:col-span-6">
-														<Label>Compra mínima requerida (MXN)</Label>
-														<Input
-															type="number"
-															step="0.01"
-															min="0"
-															placeholder="Sin mínimo"
-															value={data.min_purchase_mxn}
-															onChange={(e) =>
-																setData("min_purchase_mxn", e.target.value)
-															}
-														/>
-														<p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-															Déjalo vacío si no quieres exigir una compra mínima.
-														</p>
-														{errors.min_purchase_cents && (
-															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																{errors.min_purchase_cents}
-															</p>
-														)}
-													</Field>
+													<CouponEligibilityFields
+														data={data}
+														setData={setData}
+														errors={errors}
+														className="col-span-12 grid grid-cols-12 gap-4"
+														fieldClassName="col-span-12"
+													/>
 													<Field className="col-span-12">
 														<Label>Descripción del crédito a otorgar (opcional)</Label>
 														<Textarea
