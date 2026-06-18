@@ -608,7 +608,7 @@ function CartSummary({
 			<Button
 				href={checkoutUrl}
 				onClick={handleCheckout}
-				className="w-full animate-pulse !py-3 hover:animate-none"
+				className="w-full !py-3"
 			>
 				<ChevronDoubleRightIcon />
 				Continuar

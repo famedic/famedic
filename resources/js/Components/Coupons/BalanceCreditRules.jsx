@@ -1,67 +1,133 @@
+import {
+	CalendarDaysIcon,
+	ShoppingCartIcon,
+	ExclamationTriangleIcon,
+	CheckCircleIcon,
+	InformationCircleIcon,
+} from "@heroicons/react/24/outline";
 import { Text } from "@/Components/Catalyst/text";
 import {
+	buildBalanceCreditTermsRows,
 	formatCouponMoney,
-	formatCouponDate,
-	formatCouponDateLong,
 	getAmountMissingForMinimum,
 } from "@/lib/couponPatientUi";
+
+const toneClasses = {
+	default: "text-zinc-800 dark:text-zinc-200",
+	warning: "font-semibold text-amber-700 dark:text-amber-300",
+	success: "font-medium text-emerald-700 dark:text-emerald-300",
+	info: "text-sky-700 dark:text-sky-300",
+};
+
+const iconForRow = (key) => {
+	switch (key) {
+		case "expires_at":
+		case "valid_from":
+		case "no_expiry":
+			return CalendarDaysIcon;
+		case "min_purchase":
+		case "no_min":
+			return ShoppingCartIcon;
+		case "shortfall":
+		case "too_large":
+			return ExclamationTriangleIcon;
+		case "applicable":
+			return CheckCircleIcon;
+		default:
+			return InformationCircleIcon;
+	}
+};
+
+function TermsRow({ row }) {
+	const Icon = iconForRow(row.key);
+	const valueClass = toneClasses[row.tone ?? "default"];
+
+	return (
+		<div className="flex items-center justify-between gap-3 py-2.5">
+			<div className="flex min-w-0 items-center gap-2">
+				<Icon
+					className="size-4 shrink-0 text-violet-400 dark:text-violet-500"
+					aria-hidden="true"
+				/>
+				<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+					{row.label}
+				</Text>
+			</div>
+			<Text
+				className={["shrink-0 text-right text-xs sm:text-sm", valueClass].join(
+					" ",
+				)}
+			>
+				{row.value}
+			</Text>
+		</div>
+	);
+}
+
+function TermsAlert({ reason, coupon, cartTotalCents }) {
+	if (reason !== "below_minimum" && reason !== "balance_too_large") {
+		return null;
+	}
+
+	const shortfall = getAmountMissingForMinimum(coupon, cartTotalCents);
+	const message =
+		reason === "below_minimum" && shortfall > 0
+			? `Te faltan ${formatCouponMoney(shortfall)} para usar tu saldo en esta compra.`
+			: reason === "balance_too_large"
+				? "El saldo es mayor que el total de esta compra."
+				: null;
+
+	if (!message) return null;
+
+	return (
+		<div className="mb-2 flex items-start gap-2 rounded-md border border-amber-200/80 bg-amber-50/80 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-950/30">
+			<ExclamationTriangleIcon
+				className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400"
+				aria-hidden="true"
+			/>
+			<Text className="text-xs leading-snug text-amber-800 dark:text-amber-200">
+				{message}
+			</Text>
+		</div>
+	);
+}
 
 export default function BalanceCreditRules({
 	coupon,
 	cartTotalCents,
 	primaryReason,
-	selectedCoupon = null,
+	applied = false,
+	expanded = false,
 	className = "",
 }) {
-	if (!coupon) return null;
+	if (!coupon || !expanded) return null;
 
-	const reason = primaryReason;
-	const displaySelected = selectedCoupon ?? coupon;
-	const shortfall = getAmountMissingForMinimum(displaySelected, cartTotalCents);
+	const rows = buildBalanceCreditTermsRows(
+		coupon,
+		cartTotalCents,
+		primaryReason,
+		applied,
+	);
+
+	if (rows.length === 0) return null;
 
 	return (
-		<div className={["space-y-1.5 text-xs text-zinc-700 dark:text-zinc-300", className].join(" ")}>
-			{coupon.expires_at && (
-				<Text>
-					Disponible hasta: {formatCouponDate(coupon.expires_at)}
-				</Text>
-			)}
-			{coupon.formatted_min_purchase && (
-				<Text>Compra mínima: {coupon.formatted_min_purchase}</Text>
-			)}
-
-			{reason === "scheduled" && coupon.valid_from && (
-				<Text className="text-amber-800 dark:text-amber-200">
-					Tienes un crédito programado disponible a partir del{" "}
-					{formatCouponDateLong(coupon.valid_from)}.
-				</Text>
-			)}
-
-			{reason === "below_minimum" && coupon.formatted_min_purchase && (
-				<Text className="text-amber-800 dark:text-amber-200">
-					Tienes saldo a favor, pero esta compra no alcanza el mínimo requerido.
-					Compra mínima: {coupon.formatted_min_purchase}.
-					{shortfall > 0 && (
-						<>
-							{" "}
-							Te faltan {formatCouponMoney(shortfall)} para poder usarlo.
-						</>
-					)}
-				</Text>
-			)}
-
-			{reason === "balance_too_large" && (
-				<Text className="text-amber-800 dark:text-amber-200">
-					Tu saldo a favor es mayor que el total de esta compra. Por ahora solo
-					puede usarse en compras iguales o mayores al saldo disponible.
-				</Text>
-			)}
-
-			{reason === "applicable" && (
-				<Text className="text-emerald-800 dark:text-emerald-200">
-					Puedes aplicarlo a esta compra.
-				</Text>
-			)}
+		<div
+			className={[
+				"rounded-lg border border-violet-100/90 bg-white/70 px-3 py-1 dark:border-violet-900/30 dark:bg-zinc-900/50",
+				className,
+			].join(" ")}
+		>
+			<TermsAlert
+				reason={primaryReason}
+				coupon={coupon}
+				cartTotalCents={cartTotalCents}
+			/>
+			<div className="divide-y divide-violet-100/70 dark:divide-violet-900/30">
+				{rows.map((row) => (
+					<TermsRow key={row.key} row={row} />
+				))}
+			</div>
 		</div>
 	);
 }

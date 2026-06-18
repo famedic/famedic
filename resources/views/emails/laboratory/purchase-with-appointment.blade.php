@@ -33,9 +33,8 @@ Gracias por confiar en FAMEDIC.<br>
     💳 Método de pago: <b>{{ $metodo_pago }}</b>
 </p>
 
-<p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
-    💰 Total pagado: <b>{{ $total }}</b>
-</p>
+@include('emails.laboratory.components.order-totals')
+
 <p style="margin:0 0 20px;color:#3d4852;font-size:16px;line-height:1.5;">
     🛒 Fecha de compra: <b>{{ $fecha_compra }}</b>
 </p>

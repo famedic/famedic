@@ -1,21 +1,41 @@
-import { GiftIcon } from "@heroicons/react/24/outline";
-import { Subheading } from "@/Components/Catalyst/heading";
-import { Text } from "@/Components/Catalyst/text";
+import { useState } from "react";
+import { GiftIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import BalanceCreditRules from "@/Components/Coupons/BalanceCreditRules";
+import BalanceCreditStatusBadge from "@/Components/Coupons/BalanceCreditStatusBadge";
 import BalanceCreditApplyButton from "@/Components/Coupons/BalanceCreditApplyButton";
 import {
 	buildBalanceCreditSummary,
 	formatCouponMoney,
+	getBalanceCreditMessage,
+	getBalanceCreditMessageTone,
+	canApplyBalanceCredit,
 } from "@/lib/couponPatientUi";
+
+const messageToneClasses = {
+	success:
+		"text-emerald-700 dark:text-emerald-300",
+	warning:
+		"text-amber-700 dark:text-amber-300",
+	info:
+		"text-sky-700 dark:text-sky-300",
+	applied:
+		"text-violet-700 dark:text-violet-300",
+	neutral:
+		"text-zinc-600 dark:text-zinc-400",
+};
 
 export default function BalanceCreditCard({
 	balanceCouponsCents = 0,
 	availableBalanceCoupons = [],
 	cartTotalCents = 0,
+	variant = "checkout",
+	defaultExpanded = false,
 	selectedCouponId = null,
 	onApply,
 	onClear,
 }) {
+	const [expanded, setExpanded] = useState(defaultExpanded);
+
 	const summary = buildBalanceCreditSummary(
 		availableBalanceCoupons,
 		cartTotalCents,
@@ -29,9 +49,7 @@ export default function BalanceCreditCard({
 		bestCoupon,
 		primaryReason,
 		balanceCents,
-		applicableCount,
-		totalCredits,
-		canApply,
+		amountMissingForMinimum,
 	} = summary;
 
 	const applied =
@@ -40,58 +58,102 @@ export default function BalanceCreditCard({
 	const appliedCoupon =
 		availableBalanceCoupons.find((c) => c.id === selectedCouponId) ?? null;
 	const couponForRules = appliedCoupon ?? displayCoupon;
+	const rulesReason = applied ? "applicable" : primaryReason;
+	const compactMessage = getBalanceCreditMessage(summary, applied);
+	const messageTone = getBalanceCreditMessageTone(summary, applied);
+	const showApplyActions = variant === "checkout" && (onApply || onClear);
+	const isCart = variant === "cart";
 
 	const handleApply = () => {
-		if (!canApply || !bestCoupon) return;
+		if (!canApplyBalanceCredit(summary, applied) || !bestCoupon) return;
 		onApply?.(bestCoupon.id);
 	};
 
 	return (
-		<div className="rounded-xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4 shadow-sm dark:border-emerald-700/50 dark:from-emerald-950/30 dark:via-zinc-900 dark:to-teal-950/20">
+		<div
+			className={[
+				"rounded-lg border border-violet-100/90 bg-violet-50/35 px-4 py-3.5 shadow-sm",
+				"dark:border-violet-900/35 dark:bg-violet-950/15",
+				isCart ? "-mx-1" : "",
+			].join(" ")}
+		>
 			<div className="flex gap-3">
-				<div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
-					<GiftIcon className="size-6" aria-hidden="true" />
+				<div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/45 dark:text-violet-300">
+					<GiftIcon className="size-5" aria-hidden="true" />
 				</div>
-				<div className="min-w-0 flex-1 space-y-3">
-					<div>
-						<Subheading className="text-emerald-900 dark:text-emerald-100">
-							Saldo a favor
-						</Subheading>
-						<Text className="mt-1 text-sm font-medium text-emerald-800 dark:text-emerald-200">
-							Tienes {formatCouponMoney(balanceCents)} de saldo a favor
-							{totalCredits > 1 && (
-								<span className="font-normal text-zinc-600 dark:text-zinc-400">
-									{" "}
-									({applicableCount > 0
-										? `${applicableCount} aplicable${applicableCount !== 1 ? "s" : ""} de ${totalCredits}`
-										: `${totalCredits} créditos`})
-								</span>
-							)}
-						</Text>
-						{applied && appliedCoupon && (
-							<Text className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">
-								Aplicado: {formatCouponMoney(appliedCoupon.remaining_cents)} de
-								descuento
-							</Text>
-						)}
+
+				<div className="min-w-0 flex-1 space-y-2">
+					<div className="flex items-start justify-between gap-2">
+						<h3 className="text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-100">
+							Saldo a favor disponible
+						</h3>
+						<BalanceCreditStatusBadge
+							primaryReason={rulesReason}
+							applied={applied}
+						/>
 					</div>
 
-					<BalanceCreditRules
-						coupon={couponForRules}
-						cartTotalCents={cartTotalCents}
-						primaryReason={applied ? "applicable" : primaryReason}
-						selectedCoupon={appliedCoupon}
-					/>
+					<p className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
+						{formatCouponMoney(balanceCents)}
+					</p>
 
-					{(onApply || onClear) && (
-						<BalanceCreditApplyButton
+					<p
+						className={[
+							"text-sm leading-snug",
+							messageToneClasses[messageTone] ?? messageToneClasses.neutral,
+						].join(" ")}
+					>
+						{rulesReason === "below_minimum" &&
+						amountMissingForMinimum > 0 &&
+						!applied ? (
+							<>
+								Te faltan{" "}
+								<span className="font-semibold">
+									{formatCouponMoney(amountMissingForMinimum)}
+								</span>{" "}
+								para poder usarlo.
+							</>
+						) : (
+							compactMessage
+						)}
+					</p>
+
+					<div className="pt-0.5">
+						<button
+							type="button"
+							className="inline-flex w-full items-center justify-center gap-1 text-xs font-medium text-violet-700 hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-200 sm:justify-start sm:text-sm"
+							onClick={() => setExpanded((v) => !v)}
+							aria-expanded={expanded}
+						>
+							{expanded ? "Ocultar términos de uso" : "Ver términos de uso"}
+							<ChevronDownIcon
+								className={[
+									"size-3.5 transition-transform sm:size-4",
+									expanded ? "rotate-180" : "",
+								].join(" ")}
+								aria-hidden="true"
+							/>
+						</button>
+
+						<BalanceCreditRules
+							coupon={couponForRules}
+							cartTotalCents={cartTotalCents}
+							primaryReason={rulesReason}
 							applied={applied}
-							canApply={canApply && !applied}
-							onApply={handleApply}
-							onClear={onClear}
-							applyLabel="Aplicar saldo a favor"
-							clearLabel="Quitar saldo aplicado"
+							expanded={expanded}
+							className="mt-2"
 						/>
+					</div>
+
+					{showApplyActions && (
+						<div className="pt-1">
+							<BalanceCreditApplyButton
+								applied={applied}
+								canApply={canApplyBalanceCredit(summary, applied)}
+								onApply={handleApply}
+								onClear={onClear}
+							/>
+						</div>
 					)}
 				</div>
 			</div>

@@ -12,6 +12,7 @@ use App\Enums\CouponType;
 use App\Exceptions\CouponApplicationException;
 use App\Models\Coupon;
 use App\Models\CouponUser;
+use App\Models\LaboratoryPurchase;
 use App\Models\User;
 use App\Services\CouponApplicationService;
 use App\Services\CouponBeneficiaryService;
@@ -168,6 +169,29 @@ class CouponPatientBalancePresentationIsolatedTest extends TestCase
         app(CouponApplicationService::class)->validateApplication($user, $coupon->id, 50_000);
 
         $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function net_total_resta_credito_a_favor_del_total_bruto(): void
+    {
+        $purchase = new LaboratoryPurchase([
+            'total_cents' => 259_729,
+            'coupon_discount_cents' => 20_000,
+        ]);
+
+        $this->assertSame(239_729, $purchase->netTotalCents());
+        $this->assertSame('$2,397.29 MXN', $purchase->formatted_net_total);
+    }
+
+    #[Test]
+    public function net_total_no_es_negativo_si_credito_supera_total(): void
+    {
+        $purchase = new LaboratoryPurchase([
+            'total_cents' => 15_000,
+            'coupon_discount_cents' => 20_000,
+        ]);
+
+        $this->assertSame(0, $purchase->netTotalCents());
     }
 
     private function createUser(?string $email = null): User

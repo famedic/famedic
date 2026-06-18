@@ -17,6 +17,7 @@ import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
 import Card from "@/Components/Card";
 import { navigateToLabResults, openLabResultsInNewTabOrSame } from "@/Utils/openLabResultsUrl";
 import { isLabResultsOtpRequired } from "@/Utils/labResultsOtp";
+import { buildLaboratoryPurchaseTotals } from "@/lib/laboratoryPurchaseTotals";
 
 function onlyDateLabel(value = "") {
 	const raw = String(value || "").trim();
@@ -309,16 +310,7 @@ export default function LaboratoryOrderDetail({
 	]);
 
 	const totals = useMemo(() => {
-		const subtotalCents = (laboratoryPurchase?.laboratory_purchase_items || []).reduce(
-			(acc, item) => acc + Number(item.price_cents || 0),
-			0,
-		);
-		const totalCents = Number(laboratoryPurchase?.total_cents || subtotalCents);
-		const otherDiscountCents = Math.max(subtotalCents - totalCents, 0);
-		const formatter = new Intl.NumberFormat("es-MX", {
-			style: "currency",
-			currency: "MXN",
-		});
+		const orderTotals = buildLaboratoryPurchaseTotals(laboratoryPurchase);
 
 		const paymentMethodMap = {
 			stripe: "Tarjeta",
@@ -332,28 +324,21 @@ export default function LaboratoryOrderDetail({
 		const paymentMethodKey =
 			laboratoryPurchase?.payment_method || firstTx?.payment_method || "";
 
-		const couponDiscountCents = Number(laboratoryPurchase?.coupon_discount_cents || 0);
-		const couponFromTxCents = Number(firstTx?.details?.coupon_amount_cents || 0);
-		let creditAppliedCents = Math.max(couponDiscountCents, couponFromTxCents);
-		if (creditAppliedCents === 0 && paymentMethodKey === "coupon_balance") {
-			creditAppliedCents = subtotalCents;
-		}
-		const hasAppliedCreditBalance =
-			creditAppliedCents > 0 || paymentMethodKey === "coupon_balance";
-		const discountDisplayCents = hasAppliedCreditBalance ? creditAppliedCents : otherDiscountCents;
-
 		return {
-			subtotal: formatter.format(subtotalCents / 100),
-			discount: formatter.format(discountDisplayCents / 100),
-			hasAppliedCreditBalance,
-			creditAppliedCents,
-			total: formatter.format(totalCents / 100),
+			...orderTotals,
 			paymentMethodLabel: paymentMethodMap[paymentMethodKey] || "No disponible",
 			paymentMethodKey,
-			cardBrand: firstTx?.details?.card_brand || firstTx?.details?.token_info?.card_brand,
-			cardLastFour: firstTx?.details?.card_last_four || firstTx?.details?.token_info?.card_last_four,
-			paymentStatusLabel: laboratoryPurchase?.transactions?.length ? "Pagado" : "Pendiente",
-			paymentStatusColor: laboratoryPurchase?.transactions?.length ? "green" : "amber",
+			cardBrand:
+				firstTx?.details?.card_brand || firstTx?.details?.token_info?.card_brand,
+			cardLastFour:
+				firstTx?.details?.card_last_four ||
+				firstTx?.details?.token_info?.card_last_four,
+			paymentStatusLabel: laboratoryPurchase?.transactions?.length
+				? "Pagado"
+				: "Pendiente",
+			paymentStatusColor: laboratoryPurchase?.transactions?.length
+				? "green"
+				: "amber",
 		};
 	}, [laboratoryPurchase]);
 

@@ -847,6 +847,7 @@ export default function LaboratoryCheckout({
     const couponSection = balanceCouponsCents > 0 && (
         <div className="space-y-2">
             <BalanceCreditCard
+                variant="checkout"
                 balanceCouponsCents={balanceCouponsCents}
                 availableBalanceCoupons={availableBalanceCoupons}
                 cartTotalCents={total}

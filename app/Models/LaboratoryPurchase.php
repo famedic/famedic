@@ -35,6 +35,7 @@ class LaboratoryPurchase extends Model
         'formatted_sample_collection_at',
         'formatted_results_at',
         'formatted_coupon_discount',
+        'formatted_net_total',
     ];
 
     protected function casts(): array
@@ -323,6 +324,51 @@ class LaboratoryPurchase extends Model
             get: fn() => $this->coupon_discount_cents
                 ? formattedCentsPrice($this->coupon_discount_cents)
                 : null,
+        );
+    }
+
+    /**
+     * Total cobrado al cliente (bruto de ítems menos crédito a favor aplicado).
+     */
+    public function netTotalCents(): int
+    {
+        return max(0, (int) $this->total_cents - (int) ($this->coupon_discount_cents ?? 0));
+    }
+
+    /**
+     * Suma de price_cents de ítems (puede coincidir con total_cents si no hay ajustes).
+     */
+    public function itemsSubtotalCents(): int
+    {
+        if ($this->relationLoaded('laboratoryPurchaseItems')) {
+            return (int) $this->laboratoryPurchaseItems->sum(fn ($item) => (int) $item->price_cents);
+        }
+
+        return (int) $this->laboratoryPurchaseItems()->sum('price_cents');
+    }
+
+    /**
+     * Descuento de catálogo (diferencia entre suma de ítems y total bruto del pedido).
+     */
+    public function catalogDiscountCents(): int
+    {
+        return max(0, $this->itemsSubtotalCents() - (int) $this->total_cents);
+    }
+
+    public function appliedCouponDiscountCents(): int
+    {
+        return max(0, (int) ($this->coupon_discount_cents ?? 0));
+    }
+
+    public function hasAppliedCouponCredit(): bool
+    {
+        return $this->appliedCouponDiscountCents() > 0;
+    }
+
+    protected function formattedNetTotal(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => formattedCentsPrice($this->netTotalCents()),
         );
     }
 

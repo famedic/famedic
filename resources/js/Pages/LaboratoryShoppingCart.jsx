@@ -12,7 +12,7 @@ import {
 	QueueListIcon,
 } from "@heroicons/react/24/solid";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
-import BalanceCreditBanner from "@/Components/Coupons/BalanceCreditBanner";
+import BalanceCreditCard from "@/Components/Coupons/BalanceCreditCard";
 import { useEffect, useState } from "react";
 
 // ==================== FUNCIÓN DEBUG GA4 ACTUALIZADA ====================
@@ -536,14 +536,11 @@ export default function LaboratoryShoppingCart({
 				})}
 				onCheckoutClick={handleCheckoutClick}
 				summaryExtra={
-					<BalanceCreditBanner
+					<BalanceCreditCard
+						variant="cart"
 						balanceCouponsCents={balanceCouponsCents}
 						availableBalanceCoupons={availableBalanceCoupons}
 						cartTotalCents={cartTotalCents || total}
-						checkoutUrl={route("laboratory.checkout", {
-							laboratory_brand: laboratoryBrand.value,
-						})}
-						onCheckoutClick={handleCheckoutClick}
 					/>
 				}
 				// =========== NUEVAS PROPS PARA GA4 ===========

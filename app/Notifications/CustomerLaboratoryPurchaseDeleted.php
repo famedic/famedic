@@ -30,7 +30,7 @@ class CustomerLaboratoryPurchaseDeleted extends Notification
             ->line('Te informamos que tu orden de laboratorio ha sido cancelada. Los detalles de la orden cancelada son:')
             ->line('Folio: **' . $this->laboratoryPurchase->gda_order_id . '**')
             ->line('Paciente: **' . $this->laboratoryPurchase->full_name . '**')
-            ->line('Total: **' . $this->laboratoryPurchase->formatted_total . '**')
+            ->line('Total pagado: **' . $this->laboratoryPurchase->formatted_net_total . '**')
             ->line('Hemos iniciado el proceso de reembolso por el monto total de tu compra. El reembolso se verá reflejado en tu cuenta en los próximos días hábiles.');
 
         if ($this->couponBalanceRestoredCents > 0) {
