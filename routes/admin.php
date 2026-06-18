@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdministratorController;
 use App\Http\Controllers\Admin\CouponConceptController;
+use App\Http\Controllers\Admin\CouponBeneficiaryController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CartController;
 use App\Http\Controllers\Admin\ConfigMonitorController;
@@ -175,6 +176,8 @@ Route::prefix('admin')->middleware([
         Route::get('laboratory-notifications-monitor/{gdaOrderId}', [LaboratoryNotificationMonitorController::class, 'show'])
             ->name('laboratory-notifications-monitor.show');
 
+        Route::get('coupons/beneficiaries/export', [CouponBeneficiaryController::class, 'export'])->name('coupons.beneficiaries.export');
+        Route::get('coupons/beneficiaries', [CouponBeneficiaryController::class, 'index'])->name('coupons.beneficiaries.index');
         Route::get('coupons/export', [CouponController::class, 'export'])->name('coupons.export');
         Route::get('coupons/settings', [CouponController::class, 'settings'])->name('coupons.settings');
         Route::put('coupons/settings', [CouponController::class, 'updateSettings'])->name('coupons.settings.update');

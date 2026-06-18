@@ -159,6 +159,9 @@ export default function CouponsIndex({
 					</Text>
 				</div>
 				<div className="flex flex-wrap items-center justify-end gap-2">
+					<Button href={route("admin.coupons.beneficiaries.index")} outline>
+						Beneficiarios
+					</Button>
 					<Button href={route("admin.coupons.logs")} outline>
 						Historial
 					</Button>

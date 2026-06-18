@@ -124,8 +124,53 @@ function bootstrapIsolatedCouponModuleSchema(): void
     Schema::enableForeignKeyConstraints();
 }
 
+function bootstrapIsolatedCouponBeneficiaryReportSchema(): void
+{
+    if (Schema::hasTable('coupon_transactions')) {
+        return;
+    }
+
+    Schema::table('users', function (Blueprint $table) {
+        if (! Schema::hasColumn('users', 'paternal_lastname')) {
+            $table->string('paternal_lastname')->nullable();
+        }
+        if (! Schema::hasColumn('users', 'maternal_lastname')) {
+            $table->string('maternal_lastname')->nullable();
+        }
+    });
+
+    Schema::create('customers', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('user_id')->constrained();
+        $table->timestamps();
+        $table->softDeletes();
+    });
+
+    Schema::create('coupon_transactions', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('coupon_id')->constrained();
+        $table->foreignId('user_id')->constrained();
+        $table->string('purchase_type')->default('lab');
+        $table->unsignedBigInteger('purchase_id')->default(0);
+        $table->unsignedInteger('amount_used_cents');
+        $table->timestamp('reversed_at')->nullable();
+        $table->foreignId('reversed_by_user_id')->nullable()->constrained('users');
+        $table->string('reversal_reason')->nullable();
+        $table->timestamp('created_at')->nullable();
+    });
+}
+
+function tearDownIsolatedCouponBeneficiaryReportSchema(): void
+{
+    Schema::disableForeignKeyConstraints();
+    Schema::dropIfExists('coupon_transactions');
+    Schema::dropIfExists('customers');
+    Schema::enableForeignKeyConstraints();
+}
+
 function tearDownIsolatedCouponModuleSchema(): void
 {
+    tearDownIsolatedCouponBeneficiaryReportSchema();
     Schema::disableForeignKeyConstraints();
     Schema::dropIfExists('coupon_audit_logs');
     Schema::dropIfExists('coupon_beneficiaries');

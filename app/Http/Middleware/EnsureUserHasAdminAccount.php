@@ -123,6 +123,12 @@ class EnsureUserHasAdminAccount
                     'disabled' => (bool) config('famedic.admin_coupons_navigation_disabled', false),
                     'items' => [
                         [
+                            'label' => 'Beneficiarios',
+                            'url' => route('admin.coupons.beneficiaries.index'),
+                            'current' => Route::currentRouteName() === 'admin.coupons.beneficiaries.index'
+                                || Route::currentRouteName() === 'admin.coupons.beneficiaries.export',
+                        ],
+                        [
                             'label' => 'Créditos',
                             'url' => route('admin.coupons.index'),
                             'current' => Route::currentRouteName() === 'admin.coupons.index'
