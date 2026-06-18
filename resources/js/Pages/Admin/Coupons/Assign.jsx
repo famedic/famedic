@@ -21,7 +21,10 @@ import {
 import { Badge } from "@/Components/Catalyst/badge";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import { appendCouponEligibilityToPayload, isCouponEligibilityFormComplete } from "@/lib/couponEligibilityUi";
-import CouponEligibilityFields from "@/Components/Admin/CouponEligibilityFields";
+import CouponEligibilityControls from "@/Components/Admin/Coupon/CouponEligibilityControls";
+import CouponRuleSummary from "@/Components/Admin/Coupon/CouponRuleSummary";
+import CouponSectionCard from "@/Components/Admin/Coupon/CouponSectionCard";
+import CouponMetricCard from "@/Components/Admin/Coupon/CouponMetricCard";
 import {
 	BENEFICIARY_PREVIEW_STATUS,
 	beneficiaryRowFromMatrix,
@@ -35,10 +38,13 @@ function csrfTokenFromMeta() {
 }
 
 const TABS = [
-	{ id: "coupon", label: "Crédito" },
-	{ id: "assignment", label: "Asignación de beneficiarios" },
+	{ id: "credit", label: "Datos del crédito" },
+	{ id: "rules", label: "Reglas de uso" },
+	{ id: "assignment", label: "Beneficiarios" },
 	{ id: "summary", label: "Resumen" },
 ];
+
+const TAB_ALIASES = { coupon: "credit" };
 
 function formatMxFromCents(cents) {
 	if (cents == null || cents === "") return "—";
@@ -94,18 +100,20 @@ function errorsForTab(errs, tabId) {
 		keys.some((k) => k === prefix || k.startsWith(`${prefix}.`));
 
 	switch (tabId) {
-		case "coupon":
+		case "credit":
 			return (
 				match("coupon_mode") ||
 				match("coupon_id") ||
 				match("amount_cents") ||
 				match("code") ||
 				match("description") ||
-				match("max_beneficiaries") ||
 				match("is_active") ||
 				match("coupon_concept_id") ||
 				match("concept_other") ||
-				match("concept_is_other") ||
+				match("concept_is_other")
+			);
+		case "rules":
+			return (
 				match("validity_mode") ||
 				match("minimum_purchase_mode") ||
 				match("valid_from") ||
@@ -171,7 +179,8 @@ export default function CouponsAssign({
 	const allowedTabs = new Set(TABS.map((t) => t.id));
 	const normalizedInitialTab = useMemo(() => {
 		if (focus === "bulk") return "assignment";
-		return allowedTabs.has(initialTab) ? initialTab : "coupon";
+		const tab = TAB_ALIASES[initialTab] ?? initialTab;
+		return allowedTabs.has(tab) ? tab : "credit";
 	}, [focus, initialTab]);
 
 	const firstId = assignableCoupons?.[0]?.id ?? "";
@@ -241,8 +250,6 @@ export default function CouponsAssign({
 		amount_mxn: defaultAmount,
 		code: "",
 		description: "",
-		max_beneficiaries: "",
-		is_active: true,
 		file: null,
 		send_notification: true,
 		send_notifications: true,
@@ -254,6 +261,7 @@ export default function CouponsAssign({
 		expires_at: "",
 		minimum_purchase_mode: "none",
 		min_purchase_mxn: "",
+		is_active: true,
 	});
 
 	bulkRowsRef.current = bulkRows;
@@ -284,8 +292,6 @@ export default function CouponsAssign({
 			out.amount_cents = cents;
 			out.code = d.code?.trim() ? d.code.trim() : null;
 			out.description = d.description?.trim() ? d.description.trim() : null;
-			const maxB = String(d.max_beneficiaries ?? "").trim();
-			out.max_beneficiaries = maxB === "" ? null : parseInt(maxB, 10);
 			out.is_active = d.is_active;
 			if (d.coupon_concept_id === "other") {
 				out.concept_is_other = true;
@@ -352,6 +358,16 @@ export default function CouponsAssign({
 				out.bulk_emails = confirmed;
 			} else if (d.file) {
 				out.file = d.file;
+			}
+		}
+		if (d.coupon_mode === "new") {
+			const beneficiaryCount = out.beneficiary_rows?.length ?? 0;
+			if (d.assignment_mode === "none") {
+				out.max_beneficiaries = null;
+			} else if (beneficiaryCount > 0) {
+				out.max_beneficiaries = beneficiaryCount;
+			} else {
+				out.max_beneficiaries = null;
 			}
 		}
 		return out;
@@ -529,10 +545,57 @@ export default function CouponsAssign({
 		return 0;
 	}, [data.assignment_mode, confirmableBeneficiaryRows.length]);
 
+	const beneficiaryBreakdown = useMemo(() => {
+		if (data.assignment_mode === "none") {
+			return { registered: 0, pending: 0, invalid: 0, duplicate: 0 };
+		}
+		if (beneficiaryPreviewRows.length > 0) {
+			let registered = 0;
+			let pending = 0;
+			let invalid = 0;
+			let duplicate = 0;
+			for (const row of beneficiaryPreviewRows) {
+				if (row.status === "valid_registered_user") registered += 1;
+				else if (row.status === "valid_pending_user") pending += 1;
+				else if (
+					row.status === "duplicate_in_file" ||
+					row.status === "already_beneficiary" ||
+					row.status === "already_assigned"
+				) {
+					duplicate += 1;
+				} else invalid += 1;
+			}
+			return { registered, pending, invalid, duplicate };
+		}
+		let registered = 0;
+		let pending = 0;
+		let invalid = 0;
+		let duplicate = 0;
+		for (const r of matrixRows) {
+			const k = r.email.trim().toLowerCase();
+			if (!k) continue;
+			if ((emailLowerCounts[k] ?? 0) > 1) {
+				duplicate += 1;
+				continue;
+			}
+			if (r.lookup?.status === "found") registered += 1;
+			else if (r.lookup?.status === "missing") pending += 1;
+			else invalid += 1;
+		}
+		return { registered, pending, invalid, duplicate };
+	}, [
+		data.assignment_mode,
+		beneficiaryPreviewRows,
+		matrixRows,
+		emailLowerCounts,
+	]);
+
 	const beneficiariesForPreApprovalDraft = useMemo(() => {
-		const parsed = parseInt(String(data.max_beneficiaries ?? "").trim(), 10);
-		return Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
-	}, [data.max_beneficiaries]);
+		if (data.assignment_mode !== "none") {
+			return Math.max(beneficiaryCountPreview, 1);
+		}
+		return 1;
+	}, [data.assignment_mode, beneficiaryCountPreview]);
 
 	const approvalsPreview = useMemo(
 		() =>
@@ -679,14 +742,35 @@ export default function CouponsAssign({
 		}
 	}, [data.file, data.coupon_mode, data.coupon_id]);
 
-	const beneficiarySlotsLimit = useMemo(() => {
-		const maxB = String(data.max_beneficiaries ?? "").trim();
-		if (maxB === "") return null;
-		const n = parseInt(maxB, 10);
-		return Number.isNaN(n) || n < 1 ? null : n;
-	}, [data.max_beneficiaries]);
+	const matrixCapacity = 5000;
 
-	const matrixCapacity = beneficiarySlotsLimit ?? 5000;
+	const selectedExistingCoupon = useMemo(() => {
+		if (data.coupon_mode !== "existing" || !data.coupon_id) return null;
+		return (
+			assignableCoupons?.find((c) => String(c.id) === String(data.coupon_id)) ?? null
+		);
+	}, [data.coupon_mode, data.coupon_id, assignableCoupons]);
+
+	const existingSlotsRemaining = useMemo(() => {
+		if (!selectedExistingCoupon?.max_beneficiaries) return null;
+		const used = selectedExistingCoupon.child_coupons_count ?? 0;
+		return Math.max(0, selectedExistingCoupon.max_beneficiaries - used);
+	}, [selectedExistingCoupon]);
+
+	const quotaExceeded = useMemo(() => {
+		if (data.assignment_mode === "none" || beneficiaryCountPreview === 0) {
+			return false;
+		}
+		if (data.coupon_mode === "existing" && existingSlotsRemaining != null) {
+			return beneficiaryCountPreview > existingSlotsRemaining;
+		}
+		return false;
+	}, [
+		data.assignment_mode,
+		data.coupon_mode,
+		beneficiaryCountPreview,
+		existingSlotsRemaining,
+	]);
 
 	const amountOk = useMemo(() => {
 		const v = parseFloat(String(data.amount_mxn).replace(",", ""));
@@ -752,18 +836,18 @@ export default function CouponsAssign({
 		return true;
 	}, [data.coupon_concept_id, data.concept_other]);
 
-	const couponStepComplete = useMemo(() => {
+	const creditStepComplete = useMemo(() => {
 		if (!amountOk) return false;
 		if (!conceptStepOk) return false;
-		if (!isCouponEligibilityFormComplete(data)) return false;
-		if (data.assignment_mode === "none") {
-			return true;
-		}
-		const maxB = String(data.max_beneficiaries ?? "").trim();
-		if (maxB === "") return false;
-		const n = parseInt(maxB, 10);
-		return !Number.isNaN(n) && n >= 1;
-	}, [data.max_beneficiaries, data.assignment_mode, data, amountOk, conceptStepOk]);
+		return true;
+	}, [amountOk, conceptStepOk]);
+
+	const rulesStepComplete = useMemo(
+		() => isCouponEligibilityFormComplete(data),
+		[data],
+	);
+
+	const couponStepComplete = creditStepComplete && rulesStepComplete;
 
 	const assignmentStepComplete = useMemo(() => {
 		if (data.assignment_mode === "none") return true;
@@ -777,16 +861,17 @@ export default function CouponsAssign({
 
 	const trySetTab = useCallback(
 		(id) => {
-			if (id === "assignment" && !couponStepComplete) return;
+			if (id === "rules" && !creditStepComplete) return;
+			if (id === "assignment" && !(creditStepComplete && rulesStepComplete)) return;
 			if (
 				id === "summary" &&
-				!(couponStepComplete && assignmentStepComplete)
+				!(creditStepComplete && rulesStepComplete && assignmentStepComplete)
 			) {
 				return;
 			}
 			setActiveTab(id);
 		},
-		[couponStepComplete, assignmentStepComplete, setActiveTab],
+		[creditStepComplete, rulesStepComplete, assignmentStepComplete, setActiveTab],
 	);
 
 	const canSubmit =
@@ -794,7 +879,8 @@ export default function CouponsAssign({
 		summaryUnlocked &&
 		amountOk &&
 		assignmentFieldsOk &&
-		authorizersSelectionOk;
+		authorizersSelectionOk &&
+		!quotaExceeded;
 
 	const approvalRealtime = useMemo(() => {
 		if (data.assignment_mode === "none") {
@@ -925,11 +1011,14 @@ export default function CouponsAssign({
 								aria-label="Pasos del flujo"
 							>
 								{TABS.map((t) => {
+									const lockedToRules = t.id === "rules" && !creditStepComplete;
 									const lockedToAssignment =
-										t.id === "assignment" && !couponStepComplete;
+										t.id === "assignment" &&
+										!(creditStepComplete && rulesStepComplete);
 									const lockedToSummary =
 										t.id === "summary" && !summaryUnlocked;
-									const tabLocked = lockedToAssignment || lockedToSummary;
+									const tabLocked =
+										lockedToRules || lockedToAssignment || lockedToSummary;
 									return (
 									<button
 										key={t.id}
@@ -976,118 +1065,103 @@ export default function CouponsAssign({
 									transition={{ duration: 0.18 }}
 									className="space-y-6"
 								>
-									{activeTab === "coupon" && (
-										<>
-
-											<div className="space-y-4">
-												<div className="grid grid-cols-12 gap-4">
-													<Field className="col-span-12 md:col-span-6">
-														<Label>Monto por beneficiario (MXN)</Label>
-														<Input
-															type="number"
-															step="0.01"
-															min="0.01"
-															value={data.amount_mxn}
-															onChange={(e) => setData("amount_mxn", e.target.value)}
-														/>
-														{errors.amount_cents && (
-															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																{errors.amount_cents}
-															</p>
-														)}
-													</Field>
-													<Field className="col-span-12 md:col-span-6">
-														<Label>Número de beneficiarios</Label>
-														<Input
-															type="number"
-															min="1"
-															placeholder="Sin límite"
-															value={data.max_beneficiaries}
-															onChange={(e) =>
-																setData("max_beneficiaries", e.target.value)
-															}
-														/>
-														{errors.max_beneficiaries && (
-															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																{errors.max_beneficiaries}
-															</p>
-														)}
-													</Field>
-													<Field className="col-span-12 md:col-span-6">
-														<Label>Código (opcional)</Label>
-														<Input
-															value={data.code}
-															onChange={(e) => setData("code", e.target.value)}
-														/>
-													</Field>
-													<Field className="col-span-12 md:col-span-6">
-														<Label>Concepto</Label>
-														<Select
-															value={data.coupon_concept_id ?? ""}
-															onChange={(e) => {
-																const v = e.target.value;
-																setData("coupon_concept_id", v);
-																if (v !== "other") {
-																	setData("concept_other", "");
-																}
-															}}
-														>
-															<option value="">Sin concepto</option>
-															{concepts.map((c) => (
-																<option key={c.id} value={String(c.id)}>
-																	{c.title}
-																</option>
-															))}
-															<option value="other">Otra</option>
-														</Select>
-														{errors.coupon_concept_id && (
-															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																{errors.coupon_concept_id}
-															</p>
-														)}
-														{data.coupon_concept_id === "other" && (
-															<div className="mt-2">
-																<Input
-																	value={data.concept_other ?? ""}
-																	onChange={(e) =>
-																		setData("concept_other", e.target.value)
-																	}
-																	placeholder="Especifica el concepto"
-																	maxLength={255}
-																/>
-																{errors.concept_other && (
-																	<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																		{errors.concept_other}
-																	</p>
-																)}
-															</div>
-														)}
-													</Field>
-													<CouponEligibilityFields
-														data={data}
-														setData={setData}
-														errors={errors}
-														className="col-span-12 grid grid-cols-12 gap-4"
-														fieldClassName="col-span-12"
+									{activeTab === "credit" && (
+										<CouponSectionCard
+											title="Datos del crédito"
+											description="Monto, concepto y descripción del saldo a otorgar."
+											bodyClassName="space-y-4"
+										>
+											<div className="grid grid-cols-12 gap-4">
+												<Field className="col-span-12 md:col-span-6">
+													<Label>Monto por beneficiario (MXN)</Label>
+													<Input
+														type="number"
+														step="0.01"
+														min="0.01"
+														value={data.amount_mxn}
+														onChange={(e) => setData("amount_mxn", e.target.value)}
 													/>
-													<Field className="col-span-12">
-														<Label>Descripción del crédito a otorgar (opcional)</Label>
-														<Textarea
-															rows={2}
-															value={data.description}
-															onChange={(e) => setData("description", e.target.value)}
-														/>
-													</Field>
-												</div>
-												{requireAuth && (
-													<p className="text-sm text-amber-800 dark:text-amber-200">
-														Con la política actual, el cupón nuevo quedará pendiente hasta que
-														el autorizador ingrese el código por correo. Las asignaciones se
-														podrán hacer cuando el cupón esté activo.
-													</p>
-												)}
+													{errors.amount_cents && (
+														<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+															{errors.amount_cents}
+														</p>
+													)}
+												</Field>
+												<Field className="col-span-12 md:col-span-6">
+													<Label>Código (opcional)</Label>
+													<Input
+														value={data.code}
+														onChange={(e) => setData("code", e.target.value)}
+													/>
+												</Field>
+												<Field className="col-span-12 md:col-span-6">
+													<Label>Concepto</Label>
+													<Select
+														value={data.coupon_concept_id ?? ""}
+														onChange={(e) => {
+															const v = e.target.value;
+															setData("coupon_concept_id", v);
+															if (v !== "other") {
+																setData("concept_other", "");
+															}
+														}}
+													>
+														<option value="">Sin concepto</option>
+														{concepts.map((c) => (
+															<option key={c.id} value={String(c.id)}>
+																{c.title}
+															</option>
+														))}
+														<option value="other">Otra</option>
+													</Select>
+													{errors.coupon_concept_id && (
+														<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+															{errors.coupon_concept_id}
+														</p>
+													)}
+													{data.coupon_concept_id === "other" && (
+														<div className="mt-2">
+															<Input
+																value={data.concept_other ?? ""}
+																onChange={(e) =>
+																	setData("concept_other", e.target.value)
+																}
+																placeholder="Especifica el concepto"
+																maxLength={255}
+															/>
+															{errors.concept_other && (
+																<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+																	{errors.concept_other}
+																</p>
+															)}
+														</div>
+													)}
+												</Field>
+												<Field className="col-span-12">
+													<Label>Descripción del crédito a otorgar (opcional)</Label>
+													<Textarea
+														rows={2}
+														value={data.description}
+														onChange={(e) => setData("description", e.target.value)}
+													/>
+												</Field>
 											</div>
-										</>
+											{requireAuth && (
+												<p className="text-sm text-amber-800 dark:text-amber-200">
+													Con la política actual, el cupón nuevo quedará pendiente hasta que
+													el autorizador ingrese el código por correo. Las asignaciones se
+													podrán hacer cuando el cupón esté activo.
+												</p>
+											)}
+										</CouponSectionCard>
+									)}
+
+									{activeTab === "rules" && (
+										<CouponEligibilityControls
+											data={data}
+											setData={setData}
+											errors={errors}
+										/>
 									)}
 
 									{activeTab === "assignment" && (
@@ -1690,8 +1764,32 @@ export default function CouponsAssign({
 									{activeTab === "summary" && (
 										<>
 											<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-												Comprueba los datos antes de continuar.
+												Comprueba los datos antes de confirmar la asignación.
 											</Text>
+											{data.assignment_mode !== "none" && (
+												<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+													<CouponMetricCard
+														label="Registrados"
+														value={beneficiaryBreakdown.registered}
+														tone="lime"
+													/>
+													<CouponMetricCard
+														label="Pend. registro"
+														value={beneficiaryBreakdown.pending}
+														tone="amber"
+													/>
+													<CouponMetricCard
+														label="Inválidos"
+														value={beneficiaryBreakdown.invalid}
+														tone="red"
+													/>
+													<CouponMetricCard
+														label="Duplicados"
+														value={beneficiaryBreakdown.duplicate}
+														tone="zinc"
+													/>
+												</div>
+											)}
 											<dl className="space-y-3 text-sm text-zinc-800 dark:text-zinc-200">
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
@@ -1707,12 +1805,33 @@ export default function CouponsAssign({
 												</div>
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
-														Máximo de beneficiarios
+														Beneficiarios a asignar
 													</dt>
 													<dd>
-														{String(data.max_beneficiaries || "").trim() || "Sin límite"}
+														{data.assignment_mode === "none"
+															? "Ninguno (solo guardar cupón)"
+															: beneficiaryCountPreview}
 													</dd>
 												</div>
+												{data.assignment_mode !== "none" && (
+													<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+														<dt className="font-medium text-zinc-500 dark:text-zinc-400">
+															Cupo del cupón
+														</dt>
+														<dd>
+															{data.coupon_mode === "existing" &&
+															existingSlotsRemaining != null
+																? `${beneficiaryCountPreview} de ${existingSlotsRemaining} cupo(s) disponible(s)`
+																: `${beneficiaryCountPreview} (se definirá al confirmar)`}
+														</dd>
+													</div>
+												)}
+												{quotaExceeded && (
+													<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+														La cantidad de beneficiarios supera los cupos disponibles del
+														cupón seleccionado. Quita filas o elige otro cupón.
+													</div>
+												)}
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Código
@@ -1867,15 +1986,35 @@ export default function CouponsAssign({
 						</div>
 
 						<div className="mt-auto flex flex-col gap-3 border-t border-zinc-200 px-4 py-4 dark:border-zinc-700 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
-							{activeTab === "coupon" && (
+							{activeTab === "credit" && (
 								<div className="flex w-full justify-end">
 									<Button
 										type="button"
 										className="w-full sm:w-auto"
-										disabled={!couponStepComplete}
+										disabled={!creditStepComplete}
+										onClick={() => trySetTab("rules")}
+									>
+										Siguiente: reglas de uso
+									</Button>
+								</div>
+							)}
+							{activeTab === "rules" && (
+								<div className="flex w-full flex-row flex-wrap items-center justify-between gap-3">
+									<Button
+										type="button"
+										outline
+										className="shrink-0"
+										onClick={() => setActiveTab("credit")}
+									>
+										Anterior: datos del crédito
+									</Button>
+									<Button
+										type="button"
+										className="shrink-0"
+										disabled={!rulesStepComplete}
 										onClick={() => trySetTab("assignment")}
 									>
-										Siguiente: asignación
+										Siguiente: beneficiarios
 									</Button>
 								</div>
 							)}
@@ -1885,9 +2024,9 @@ export default function CouponsAssign({
 										type="button"
 										outline
 										className="shrink-0"
-										onClick={() => setActiveTab("coupon")}
+										onClick={() => setActiveTab("rules")}
 									>
-										Anterior: cupón
+										Anterior: reglas
 									</Button>
 									<Button
 										type="button"
@@ -1921,15 +2060,14 @@ export default function CouponsAssign({
 												? "Guardar cupón"
 												: mustPreApproveCouponBeforeAssignment
 													? "Confirmar: solicitud con asignaciones"
-													: "Confirmar y enviar"}
+													: "Asignar créditos"}
 									</Button>
 								</>
 							)}
 							{activeTab === "summary" && !canSubmit && !processing && (
 								<p className="w-full text-sm text-amber-800 dark:text-amber-200">
-									Revisa el resumen: faltan datos o no se cumplen las reglas (por ejemplo,
-									correos inválidos, duplicados o sin autorizadores en el sistema si hiciera
-									falta aprobación).
+									Revisa el resumen: faltan datos, hay cupos excedidos, correos inválidos,
+									duplicados o falta configuración de autorizadores si aplica.
 								</p>
 							)}
 						</div>

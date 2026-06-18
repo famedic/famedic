@@ -18,6 +18,15 @@ import {
 import { Badge } from "@/Components/Catalyst/badge";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import Modal from "@/Components/Catalyst/modal";
+import CouponMetricCard from "@/Components/Admin/Coupon/CouponMetricCard";
+import CouponSectionCard from "@/Components/Admin/Coupon/CouponSectionCard";
+import CouponStatusBadge from "@/Components/Admin/Coupon/CouponStatusBadge";
+import CouponValidityBadge from "@/Components/Admin/Coupon/CouponValidityBadge";
+import CouponBeneficiaryStatusBadge from "@/Components/Admin/Coupon/CouponBeneficiaryStatusBadge";
+import CouponActionMenu from "@/Components/Admin/Coupon/CouponActionMenu";
+import CouponEmptyState from "@/Components/Admin/Coupon/CouponEmptyState";
+import { couponActiveBadge } from "@/lib/couponAdminUi";
+import { UsersIcon } from "@heroicons/react/24/outline";
 
 function formatShortDateTime(iso) {
 	if (!iso) return "—";
@@ -518,31 +527,102 @@ export default function CouponsShow({
 	};
 
 	return (
-		<AdminLayout title={`Cupón #${coupon.id}`}>
+		<AdminLayout title={`Crédito #${coupon.id}`}>
 			<div className="space-y-6">
 				<div className="flex flex-wrap items-start justify-between gap-4">
-					<div>
-						<Heading>Cupón #{coupon.id}</Heading>
+					<div className="min-w-0 max-w-3xl">
+						<div className="flex flex-wrap items-center gap-2">
+							<span className="font-mono text-sm text-zinc-500 dark:text-zinc-400">
+								#{coupon.id}
+							</span>
+							<CouponStatusBadge {...couponActiveBadge(coupon)} />
+							{coupon.approval_status === "pending_authorization" && (
+								<CouponStatusBadge label="Pendiente autorización" color="purple" />
+							)}
+							<CouponValidityBadge coupon={coupon} />
+						</div>
+						<Heading className="mt-2">
+							{coupon.code || coupon.concept?.title || coupon.concept_other || "Crédito"}
+						</Heading>
 						<p className="mt-1 text-base/6 text-zinc-700 dark:text-zinc-300 sm:text-sm/6">
 							{coupon.description || "Sin descripción"}
 						</p>
+						<p className="mt-2 text-lg font-semibold text-famedic-dark dark:text-famedic-lime">
+							{formatMxFromCents(coupon.amount_cents)}
+							<span className="ml-2 text-sm font-normal text-zinc-500 dark:text-zinc-400">
+								por beneficiario
+							</span>
+						</p>
 					</div>
-					<div className="flex flex-wrap gap-2">
-						<Button href={route("admin.coupons.index")} plain>
-							Ir a créditos
-						</Button>
-						<Button
-							type="button"
-							outline
-							onClick={openAssignModal}
-							disabled={!canAssignInPlace}
-						>
-							Agregar beneficiario
-						</Button>
-						<Button href={route("admin.coupons.edit", coupon.id)} outline>
-							Editar
-						</Button>
-					</div>
+					<CouponActionMenu
+						items={[
+							{
+								key: "back",
+								label: "Ir a créditos",
+								href: route("admin.coupons.index"),
+							},
+							{
+								key: "edit",
+								label: "Editar",
+								href: route("admin.coupons.edit", coupon.id),
+							},
+							{
+								key: "assign",
+								label: "Agregar beneficiario",
+								disabled: !canAssignInPlace,
+								onClick: openAssignModal,
+							},
+							{
+								key: "assign-page",
+								label: "Asignar en flujo completo",
+								href: route("admin.coupons.assign", { coupon_id: coupon.id }),
+							},
+							{
+								key: "logs",
+								label: "Historial",
+								href: route("admin.coupons.logs", { coupon_id: coupon.id }),
+							},
+						]}
+					/>
+				</div>
+
+				<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+					<CouponMetricCard
+						label="Monto"
+						value={formatMxFromCents(coupon.amount_cents)}
+						tone="lime"
+					/>
+					<CouponMetricCard
+						label="Beneficiarios"
+						value={
+							coupon.max_beneficiaries != null
+								? `${assignedCount} / ${coupon.max_beneficiaries}`
+								: assignedCount
+						}
+						tone="sky"
+						hint={
+							availableSlots != null
+								? `${availableSlots} cupo(s) disponible(s)`
+								: undefined
+						}
+					/>
+					<CouponMetricCard
+						label="Vigencia"
+						value={
+							{
+								sin_vigencia: "Sin vigencia",
+								programado: "Programado",
+								vigente: "Vigente",
+								vencido: "Vencido",
+							}[coupon.validity_status] ?? coupon.validity_status ?? "—"
+						}
+						tone={coupon.validity_status === "vencido" ? "red" : "zinc"}
+					/>
+					<CouponMetricCard
+						label="Compra mínima"
+						value={coupon.formatted_min_purchase ?? "Sin mínimo"}
+						tone="zinc"
+					/>
 				</div>
 
 				{false && assignmentMultiSig && (
@@ -1109,14 +1189,12 @@ export default function CouponsShow({
 					</form>
 				)}
 
-				<Subheading className="text-famedic-darker dark:text-white">
-					Beneficiarios y uso
-				</Subheading>
-				<Text className="!text-zinc-600 dark:!text-zinc-400">
-					Cada fila corresponde a un cupón hijo asignado a un usuario.
-				</Text>
-
-				<div className="overflow-x-auto">
+				<CouponSectionCard
+					title="Beneficiarios y uso"
+					description="Cada fila corresponde a un cupón hijo asignado a un usuario o pendiente de registro."
+				>
+				<div className="overflow-x-auto -mx-4 sm:-mx-6">
+					<div className="min-w-full px-4 sm:px-6">
 					<Table>
 						<TableHead>
 							<TableRow>
@@ -1134,8 +1212,21 @@ export default function CouponsShow({
 						<TableBody>
 							{beneficiaryRows.length === 0 ? (
 								<TableRow>
-									<TableCell colSpan={9} className="text-zinc-500 dark:text-zinc-400">
-										Aún no hay beneficiarios.
+									<TableCell colSpan={9} className="!p-0">
+										<CouponEmptyState
+											icon={UsersIcon}
+											title="Sin beneficiarios"
+											description="Agrega beneficiarios manualmente o desde un archivo CSV."
+											action={
+												<Button
+													type="button"
+													onClick={openAssignModal}
+													disabled={!canAssignInPlace}
+												>
+													Agregar beneficiario
+												</Button>
+											}
+										/>
 									</TableCell>
 								</TableRow>
 							) : (
@@ -1164,10 +1255,8 @@ export default function CouponsShow({
 										</TableCell>
 										<TableCell>
 											<div className="flex flex-col gap-1">
+												<CouponBeneficiaryStatusBadge row={row} />
 												<Badge color={usageBadge.color}>{usageBadge.label}</Badge>
-												{row.is_pending_user && (
-													<Badge color="amber">Pendiente de registro</Badge>
-												)}
 												{row.is_pending_user && (
 													<span className="text-xs text-zinc-600 dark:text-zinc-400">
 														{row.invitation_sent_at
@@ -1280,6 +1369,9 @@ export default function CouponsShow({
 						</TableBody>
 					</Table>
 				</div>
+			</div>
+				</CouponSectionCard>
+
 			</div>
 
 			<Modal

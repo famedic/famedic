@@ -5,7 +5,7 @@ import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Textarea } from "@/Components/Catalyst/textarea";
 import { Switch, SwitchField } from "@/Components/Catalyst/switch";
-import CouponEligibilityFields from "@/Components/Admin/CouponEligibilityFields";
+import CouponEligibilityControls from "@/Components/Admin/Coupon/CouponEligibilityControls";
 import { useForm } from "@inertiajs/react";
 import { Badge } from "@/Components/Catalyst/badge";
 import {
@@ -112,11 +112,11 @@ export default function CouponsEdit({ coupon }) {
 						onChange={(e) => setData("code", e.target.value)}
 					/>
 				</Field>
-				<CouponEligibilityFields
+				<CouponEligibilityControls
 					data={data}
 					setData={setData}
 					errors={errors}
-					fieldClassName=""
+					embedded
 				/>
 				<SwitchField>
 					<Label>Activo</Label>

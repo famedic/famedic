@@ -26,45 +26,23 @@ import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Select } from "@/Components/Catalyst/select";
 import { couponValiditySummary } from "@/lib/couponEligibilityUi";
-function formatShortDateTime(iso) {
-	if (!iso) return "—";
-	return new Date(iso).toLocaleString("es-MX", {
-		dateStyle: "short",
-		timeStyle: "short",
-	});
-}
-
-function couponUsageSummary(c) {
-	if (c.approval_status === "pending_authorization") {
-		return { label: "Pendiente autorización", color: "purple" };
-	}
-	const direct = c.coupon_users ?? c.couponUsers ?? [];
-	const childCount = c.child_coupons_count ?? 0;
-	if (direct.length === 0 && childCount === 0) {
-		return { label: "Sin asignar", color: "zinc" };
-	}
-	if (childCount > 0) {
-		return { label: `Campaña (${childCount})`, color: "cyan" };
-	}
-	const pending = direct.filter((a) => !a.used_at);
-	const used = direct.filter((a) => a.used_at);
-	if (pending.length > 0 && used.length === 0) {
-		return { label: "Pendiente de usar", color: "amber" };
-	}
-	if (used.length > 0 && pending.length === 0) {
-		return { label: "Usado", color: "blue" };
-	}
-	return { label: "Mixto", color: "orange" };
-}
-
-function creatorDisplayName(user) {
-	if (!user) return "Sistema";
-	if (user.full_name) return user.full_name;
-	const parts = [user.name, user.paternal_lastname, user.maternal_lastname].filter(
-		Boolean,
-	);
-	return parts.join(" ").trim() || user.email || "Sistema";
-}
+import {
+	computeIndexMetrics,
+	couponActiveBadge,
+	couponUsageSummary,
+} from "@/lib/couponAdminUi";
+import {
+	creatorDisplayName,
+	formatMxnFromNumber,
+	formatShortDateTime,
+} from "@/lib/couponFormat";
+import CouponMetricCard from "@/Components/Admin/Coupon/CouponMetricCard";
+import CouponSectionCard from "@/Components/Admin/Coupon/CouponSectionCard";
+import CouponStatusBadge from "@/Components/Admin/Coupon/CouponStatusBadge";
+import CouponValidityBadge from "@/Components/Admin/Coupon/CouponValidityBadge";
+import CouponActionMenu from "@/Components/Admin/Coupon/CouponActionMenu";
+import CouponEmptyState from "@/Components/Admin/Coupon/CouponEmptyState";
+import { CreditCardIcon } from "@heroicons/react/24/outline";
 
 function approvalStatusPlainLabel(value) {
 	switch (value) {
@@ -79,20 +57,13 @@ function approvalStatusPlainLabel(value) {
 	}
 }
 
-function formatMxnFromNumber(n) {
-	if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
-	return Number(n).toLocaleString("es-MX", {
-		style: "currency",
-		currency: "MXN",
-	});
-}
-
 export default function CouponsIndex({
 	coupons,
 	filters,
 	authorizerContext = {},
 	approvalsOverview = { pending_assignment_requests: 0 },
 }) {
+	const metrics = computeIndexMetrics(coupons?.data ?? []);
 	const pendingCouponIds = new Set(authorizerContext.pending_my_action_coupon_ids ?? []);
 	const pendingMultisigTotal = approvalsOverview.pending_assignment_requests ?? 0;
 	const pendingSettingsRequests = authorizerContext.pending_settings_requests ?? [];
@@ -180,16 +151,42 @@ export default function CouponsIndex({
 		<AdminLayout title="Créditos a favor">
 			<div className="space-y-8">
 			<div className="flex flex-wrap items-end justify-between gap-8">
-				<Heading>Créditos a favor</Heading>
+				<div className="max-w-2xl">
+					<Heading>Créditos a favor</Heading>
+					<Text className="mt-2 text-zinc-600 dark:text-zinc-400">
+						Administra campañas de saldo, beneficiarios, vigencia y aprobaciones desde un
+						solo lugar.
+					</Text>
+				</div>
 				<div className="flex flex-wrap items-center justify-end gap-2">
+					<Button href={route("admin.coupons.logs")} outline>
+						Historial
+					</Button>
 					<Button href={route("admin.coupons.settings")} outline>
 						Configuración
 					</Button>
-					<Button href={route("admin.coupons.assign")}>
+					<Button href={route("admin.coupons.assign", { focus: "new" })}>
 						<PlusIcon />
-						Crear y asignar créditos
+						Crear crédito
 					</Button>
 				</div>
+			</div>
+
+			<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+				<CouponMetricCard label="En esta página" value={metrics.total} />
+				<CouponMetricCard label="Activos" value={metrics.active} tone="lime" />
+				<CouponMetricCard
+					label="Pend. autorización"
+					value={metrics.pendingAuth}
+					tone="amber"
+				/>
+				<CouponMetricCard label="Vencidos" value={metrics.expired} tone="red" />
+				<CouponMetricCard
+					label="Beneficiarios"
+					value={metrics.totalAssigned}
+					tone="sky"
+					hint="Suma de hijos en la página actual"
+				/>
 			</div>
 			<div className="space-y-4">
 				{isAuthorizer ? (
@@ -659,6 +656,19 @@ export default function CouponsIndex({
 			)}
 
 			<div className="mt-6">
+				{coupons.data.length === 0 ? (
+					<CouponEmptyState
+						icon={CreditCardIcon}
+						title="No hay créditos"
+						description="Crea un crédito nuevo o ajusta los filtros para ver resultados."
+						action={
+							<Button href={route("admin.coupons.assign", { focus: "new" })}>
+								<PlusIcon />
+								Crear crédito
+							</Button>
+						}
+					/>
+				) : (
 				<PaginatedTable paginatedData={coupons}>
 					<Table>
 						<TableHead>
@@ -844,39 +854,48 @@ export default function CouponsIndex({
 												)}
 											</div>
 										</TableCell>
-										<TableCell className="text-right">
-											<div className="flex flex-col items-end gap-2">
-												<Button
-													href={route("admin.coupons.show", c.id)}
-													plain
-												>
-													Ver
-												</Button>
-												{/* <Button
-													href={route("admin.coupons.edit", c.id)}
-													plain
-												>
-													Editar
-												</Button> */}
-												{assignments.map((a) =>
-													!a.used_at ? (
-														<Button
-															key={`r-${a.id}`}
-															plain
-															className="text-red-600 hover:text-red-700 dark:text-red-400"
-															onClick={() =>
+										<TableCell className="text-right align-top">
+											<CouponActionMenu
+												items={[
+													{
+														key: "view",
+														label: "Ver ficha",
+														href: route("admin.coupons.show", c.id),
+													},
+													{
+														key: "edit",
+														label: "Editar",
+														href: route("admin.coupons.edit", c.id),
+													},
+													{
+														key: "assign",
+														label: "Asignar",
+														href: route("admin.coupons.assign", {
+															coupon_id: c.id,
+														}),
+													},
+													{
+														key: "logs",
+														label: "Historial",
+														href: route("admin.coupons.logs", {
+															coupon_id: c.id,
+														}),
+													},
+													...assignments
+														.filter((a) => !a.used_at)
+														.map((a) => ({
+															key: `revoke-${a.id}`,
+															label: `Quitar: ${a.user?.email ?? "asignación"}`,
+															danger: true,
+															onClick: () =>
 																setRevokeTarget({
 																	couponId: c.id,
 																	assignmentId: a.id,
 																	email: a.user?.email,
-																})
-															}
-														>
-															Quitar asignación
-														</Button>
-													) : null,
-												)}
-											</div>
+																}),
+														})),
+												]}
+											/>
 										</TableCell>
 									</TableRow>
 								);
@@ -884,6 +903,7 @@ export default function CouponsIndex({
 						</TableBody>
 					</Table>
 				</PaginatedTable>
+				)}
 			</div>
 			</div>
 
