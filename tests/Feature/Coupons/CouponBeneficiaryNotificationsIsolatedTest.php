@@ -13,6 +13,7 @@ use App\Enums\CouponType;
 use App\Listeners\LinkPendingCouponBeneficiaries;
 use App\Mail\CouponBalanceActivatedMail;
 use App\Mail\CouponPendingBalanceInvitationMail;
+use App\Mail\CouponAssignedMail;
 use App\Models\Coupon;
 use App\Models\CouponBeneficiary;
 use App\Models\CouponUser;
@@ -23,6 +24,7 @@ use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
 use App\Services\NotificationService;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -49,6 +51,14 @@ class CouponBeneficiaryNotificationsIsolatedTest extends TestCase
     }
 
     #[Test]
+    public function mailables_criticos_implementan_should_queue(): void
+    {
+        $this->assertContains(ShouldQueue::class, class_implements(CouponPendingBalanceInvitationMail::class));
+        $this->assertContains(ShouldQueue::class, class_implements(CouponBalanceActivatedMail::class));
+        $this->assertContains(ShouldQueue::class, class_implements(CouponAssignedMail::class));
+    }
+
+    #[Test]
     public function confirm_pendiente_envia_invitacion(): void
     {
         Mail::fake();
@@ -60,7 +70,7 @@ class CouponBeneficiaryNotificationsIsolatedTest extends TestCase
             ['email' => 'pendiente@test.local', 'first_name' => 'Ana'],
         ]);
 
-        Mail::assertSent(CouponPendingBalanceInvitationMail::class, function (CouponPendingBalanceInvitationMail $mail) {
+        Mail::assertQueued(CouponPendingBalanceInvitationMail::class, function (CouponPendingBalanceInvitationMail $mail) {
             return $mail->beneficiary->email === 'pendiente@test.local';
         });
     }
@@ -99,7 +109,7 @@ class CouponBeneficiaryNotificationsIsolatedTest extends TestCase
 
         $service->resendPendingInvitation($beneficiary->fresh(), actor: null);
 
-        Mail::assertSent(CouponPendingBalanceInvitationMail::class, 1);
+        Mail::assertQueued(CouponPendingBalanceInvitationMail::class, 1);
         $this->assertSame(2, $beneficiary->fresh()->invitation_count);
     }
 
@@ -171,7 +181,7 @@ class CouponBeneficiaryNotificationsIsolatedTest extends TestCase
 
         app(LinkPendingCouponBeneficiaries::class)->handle(new Verified($user));
 
-        Mail::assertSent(CouponBalanceActivatedMail::class, function (CouponBalanceActivatedMail $mail) use ($user) {
+        Mail::assertQueued(CouponBalanceActivatedMail::class, function (CouponBalanceActivatedMail $mail) use ($user) {
             return $mail->user->id === $user->id;
         });
     }
@@ -206,7 +216,7 @@ class CouponBeneficiaryNotificationsIsolatedTest extends TestCase
         $service->linkPendingBeneficiariesForUser($user);
         $service->linkPendingBeneficiariesForUser($user);
 
-        Mail::assertSent(CouponBalanceActivatedMail::class, 1);
+        Mail::assertQueued(CouponBalanceActivatedMail::class, 1);
     }
 
     #[Test]
@@ -228,7 +238,7 @@ class CouponBeneficiaryNotificationsIsolatedTest extends TestCase
         $this->assertSame(CouponBeneficiaryStatus::Assigned, $beneficiary->status);
         $this->assertNotNull($beneficiary->child_coupon_id);
         $this->assertNull($beneficiary->activation_notified_at);
-        Mail::assertSent(CouponBalanceActivatedMail::class, 1);
+        Mail::assertQueued(CouponBalanceActivatedMail::class, 1);
     }
 
     #[Test]
@@ -246,7 +256,7 @@ class CouponBeneficiaryNotificationsIsolatedTest extends TestCase
         $beneficiary = $this->seedPendingBeneficiary($parent, 'detalle@test.local');
         $service->sendPendingInvitation($beneficiary, actor: null);
 
-        Mail::assertSent(CouponPendingBalanceInvitationMail::class, function (CouponPendingBalanceInvitationMail $mail) {
+        Mail::assertQueued(CouponPendingBalanceInvitationMail::class, function (CouponPendingBalanceInvitationMail $mail) {
             return $mail->parentCoupon->min_purchase_cents === 50_000
                 && $mail->parentCoupon->expires_at !== null;
         });
@@ -265,8 +275,79 @@ class CouponBeneficiaryNotificationsIsolatedTest extends TestCase
             ['email' => $user->email],
         ], sendNotifications: true);
 
-        Mail::assertNotSent(CouponPendingBalanceInvitationMail::class);
-        Mail::assertSent(\App\Mail\CouponAssignedMail::class, 1);
+        Mail::assertNotQueued(CouponPendingBalanceInvitationMail::class);
+        Mail::assertQueued(CouponAssignedMail::class, 1);
+    }
+
+    #[Test]
+    public function confirm_masiva_encola_invitaciones_para_pendientes(): void
+    {
+        Mail::fake();
+
+        $service = app(CouponBeneficiaryService::class);
+        $parent = $this->seedMasterCoupon();
+
+        $result = $service->confirmRows($parent, [
+            ['email' => 'pendiente1@test.local'],
+            ['email' => 'pendiente2@test.local'],
+            ['email' => 'pendiente3@test.local'],
+        ]);
+
+        $this->assertSame(3, $result['pending_count']);
+        $this->assertSame(3, $result['invitations_sent_count']);
+        Mail::assertQueued(CouponPendingBalanceInvitationMail::class, 3);
+    }
+
+    #[Test]
+    public function confirm_pendiente_crea_beneficiario_aunque_notificaciones_esten_desactivadas(): void
+    {
+        Mail::fake();
+
+        $service = app(CouponBeneficiaryService::class);
+        $parent = $this->seedMasterCoupon();
+
+        $result = $service->confirmRows($parent, [
+            ['email' => 'sin-mail@test.local'],
+        ], sendNotifications: false);
+
+        $this->assertSame(1, $result['pending_count']);
+        $beneficiary = CouponBeneficiary::query()->where('email_normalized', 'sin-mail@test.local')->first();
+        $this->assertNotNull($beneficiary);
+        $this->assertSame(CouponBeneficiaryStatus::PendingUser, $beneficiary->status);
+        Mail::assertNothingQueued();
+    }
+
+    #[Test]
+    public function confirm_registrado_encola_asignacion(): void
+    {
+        Mail::fake();
+
+        $service = app(CouponBeneficiaryService::class);
+        $parent = $this->seedMasterCoupon();
+        $user = $this->createVerifiedUser('registrado-masivo@test.local');
+
+        $service->confirmRows($parent, [
+            ['email' => $user->email],
+        ], sendNotifications: true);
+
+        Mail::assertQueued(CouponAssignedMail::class, 1);
+        Mail::assertNotQueued(CouponPendingBalanceInvitationMail::class);
+    }
+
+    #[Test]
+    public function colas_funcionan_con_queue_connection_sync(): void
+    {
+        config(['queue.default' => 'sync']);
+        Mail::fake();
+
+        $service = app(CouponBeneficiaryService::class);
+        $parent = $this->seedMasterCoupon();
+
+        $service->confirmRows($parent, [
+            ['email' => 'sync-queue@test.local'],
+        ]);
+
+        Mail::assertQueued(CouponPendingBalanceInvitationMail::class, 1);
     }
 
     #[Test]
@@ -279,7 +360,7 @@ class CouponBeneficiaryNotificationsIsolatedTest extends TestCase
 
         Artisan::call('coupons:send-pending-beneficiary-invitations');
 
-        Mail::assertSent(CouponPendingBalanceInvitationMail::class, 1);
+        Mail::assertQueued(CouponPendingBalanceInvitationMail::class, 1);
         $this->assertSame(1, CouponBeneficiary::query()->first()->invitation_count);
     }
 

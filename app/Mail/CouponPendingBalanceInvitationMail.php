@@ -5,19 +5,22 @@ namespace App\Mail;
 use App\Models\Coupon;
 use App\Models\CouponBeneficiary;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class CouponPendingBalanceInvitationMail extends Mailable
+class CouponPendingBalanceInvitationMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
     public function __construct(
         public CouponBeneficiary $beneficiary,
         public Coupon $parentCoupon,
-    ) {}
+    ) {
+        $this->afterCommit();
+    }
 
     public function envelope(): Envelope
     {
