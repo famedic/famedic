@@ -1,14 +1,14 @@
 export const BENEFICIARY_PREVIEW_STATUS = {
 	valid_registered_user: {
-		label: "Usuario registrado: se asignará saldo",
+		label: "Registrado",
 		color: "emerald",
 	},
 	valid_pending_user: {
-		label: "Pendiente de registro: se guardará como beneficiario pendiente",
+		label: "Pendiente de registro",
 		color: "amber",
 	},
 	invalid_email: {
-		label: "Error: correo inválido",
+		label: "Inválido",
 		color: "red",
 	},
 	duplicate_in_file: {
@@ -16,12 +16,16 @@ export const BENEFICIARY_PREVIEW_STATUS = {
 		color: "orange",
 	},
 	already_beneficiary: {
-		label: "Ya asignado",
+		label: "Omitido",
 		color: "zinc",
 	},
 	already_assigned: {
-		label: "Ya asignado",
+		label: "Omitido",
 		color: "zinc",
+	},
+	no_account: {
+		label: "Sin cuenta",
+		color: "red",
 	},
 };
 

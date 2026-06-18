@@ -24,12 +24,20 @@ class CouponBeneficiariesRowsImport implements ToCollection, WithHeadingRow
 
             $this->rows[] = [
                 'email' => trim((string) $email),
-                'first_name' => $this->optionalString($row->get('nombre') ?? $row->get('first_name')),
+                'first_name' => $this->optionalString(
+                    $row->get('nombre') ?? $row->get('name') ?? $row->get('first_name') ?? $row->get('nombres')
+                ),
                 'paternal_lastname' => $this->optionalString(
-                    $row->get('apellido_paterno') ?? $row->get('paternal_lastname')
+                    $row->get('apellido_paterno')
+                        ?? $row->get('paternal_lastname')
+                        ?? $row->get('apellido_paterno_')
+                        ?? $row->get('paterno')
                 ),
                 'maternal_lastname' => $this->optionalString(
-                    $row->get('apellido_materno') ?? $row->get('maternal_lastname')
+                    $row->get('apellido_materno')
+                        ?? $row->get('maternal_lastname')
+                        ?? $row->get('apellido_materno_')
+                        ?? $row->get('materno')
                 ),
             ];
         }

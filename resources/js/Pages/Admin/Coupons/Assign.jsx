@@ -25,12 +25,13 @@ import CouponEligibilityControls from "@/Components/Admin/Coupon/CouponEligibili
 import CouponRuleSummary from "@/Components/Admin/Coupon/CouponRuleSummary";
 import CouponSectionCard from "@/Components/Admin/Coupon/CouponSectionCard";
 import CouponMetricCard from "@/Components/Admin/Coupon/CouponMetricCard";
+import CouponBulkImportPreview from "@/Components/Admin/Coupon/CouponBulkImportPreview";
 import {
-	BENEFICIARY_PREVIEW_STATUS,
 	beneficiaryRowFromMatrix,
 	isConfirmableBeneficiaryStatus,
 	isMatrixRowLookupConfirmable,
 } from "@/lib/couponBeneficiaryAssign";
+import { resolveBulkRowStatus } from "@/lib/couponBulkImportPreview";
 
 function csrfTokenFromMeta() {
 	if (typeof document === "undefined") return "";
@@ -228,12 +229,15 @@ export default function CouponsAssign({
 	const [bulkRows, setBulkRows] = useState([]);
 	const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
 	const [bulkPreviewError, setBulkPreviewError] = useState("");
+	const [bulkPreviewSummary, setBulkPreviewSummary] = useState(null);
 	const [beneficiaryPreviewRows, setBeneficiaryPreviewRows] = useState([]);
 	const [beneficiaryPreviewLoading, setBeneficiaryPreviewLoading] = useState(false);
 	const [beneficiaryPreviewError, setBeneficiaryPreviewError] = useState("");
 	const [rulesSidebarExpanded, setRulesSidebarExpanded] = useState(false);
 	const bulkRowsRef = useRef([]);
 	const beneficiaryPreviewRowsRef = useRef([]);
+	const bulkUploadFileRef = useRef(null);
+	const [bulkUploadFile, setBulkUploadFile] = useState(null);
 	const [matrixRows, setMatrixRows] = useState(() => [createMatrixRow()]);
 	const matrixRowsRef = useRef(matrixRows);
 	const matrixLookupTimersRef = useRef({});
@@ -267,6 +271,10 @@ export default function CouponsAssign({
 	bulkRowsRef.current = bulkRows;
 	beneficiaryPreviewRowsRef.current = beneficiaryPreviewRows;
 	matrixRowsRef.current = matrixRows;
+
+	const handleBulkRowsChange = useCallback((updater) => {
+		setBulkRows((prev) => (typeof updater === "function" ? updater(prev) : updater));
+	}, []);
 
 	useEffect(() => {
 		if (!SHOW_BULK_ASSIGNMENT_UI && data.assignment_mode === "bulk") {
@@ -307,26 +315,39 @@ export default function CouponsAssign({
 			appendCouponEligibilityToPayload(out, d);
 		}
 		if (d.assignment_mode === "individual" || d.assignment_mode === "bulk") {
-			const previewSource =
-				beneficiaryPreviewRowsRef.current.length > 0
-					? beneficiaryPreviewRowsRef.current
-					: matrixRowsRef.current.map(beneficiaryRowFromMatrix);
-			const rows = previewSource
-				.filter((r) => {
-					if (r.status) {
-						return isConfirmableBeneficiaryStatus(r.status);
-					}
-					return String(r.email ?? "").trim() !== "";
-				})
-				.map((r) => ({
+			const selectedBulkRows = bulkRowsRef.current.filter(
+				(r) => r.include && isConfirmableBeneficiaryStatus(resolveBulkRowStatus(r)),
+			);
+			if (selectedBulkRows.length > 0) {
+				out.beneficiary_rows = selectedBulkRows.map((r) => ({
 					email: r.email,
 					first_name: r.first_name ?? null,
 					paternal_lastname: r.paternal_lastname ?? null,
 					maternal_lastname: r.maternal_lastname ?? null,
 				}));
-			if (rows.length > 0) {
-				out.beneficiary_rows = rows;
 				out.beneficiary_source = d.assignment_mode === "bulk" ? "excel" : "manual";
+			} else {
+				const previewSource =
+					beneficiaryPreviewRowsRef.current.length > 0
+						? beneficiaryPreviewRowsRef.current
+						: matrixRowsRef.current.map(beneficiaryRowFromMatrix);
+				const rows = previewSource
+					.filter((r) => {
+						if (r.status) {
+							return isConfirmableBeneficiaryStatus(r.status);
+						}
+						return String(r.email ?? "").trim() !== "";
+					})
+					.map((r) => ({
+						email: r.email,
+						first_name: r.first_name ?? null,
+						paternal_lastname: r.paternal_lastname ?? null,
+						maternal_lastname: r.maternal_lastname ?? null,
+					}));
+				if (rows.length > 0) {
+					out.beneficiary_rows = rows;
+					out.beneficiary_source = d.assignment_mode === "bulk" ? "excel" : "manual";
+				}
 			}
 		}
 		if (d.assignment_mode === "individual" && !out.beneficiary_rows) {
@@ -356,6 +377,8 @@ export default function CouponsAssign({
 				.map((r) => r.email);
 			if (confirmed.length > 0) {
 				out.bulk_emails = confirmed;
+			} else if (bulkUploadFileRef.current) {
+				out.file = bulkUploadFileRef.current;
 			} else if (d.file) {
 				out.file = d.file;
 			}
@@ -514,10 +537,28 @@ export default function CouponsAssign({
 	}, [matrixRows]);
 
 	const confirmableBeneficiaryRows = useMemo(() => {
+		if (bulkRows.length > 0) {
+			return bulkRows
+				.filter(
+					(r) =>
+						r.include && isConfirmableBeneficiaryStatus(resolveBulkRowStatus(r)),
+				)
+				.map((r) => ({
+					email: r.email,
+					first_name: r.first_name ?? null,
+					paternal_lastname: r.paternal_lastname ?? null,
+					maternal_lastname: r.maternal_lastname ?? null,
+				}));
+		}
 		if (beneficiaryPreviewRows.length > 0) {
-			return beneficiaryPreviewRows.filter((r) =>
-				isConfirmableBeneficiaryStatus(r.status),
-			);
+			return beneficiaryPreviewRows
+				.filter((r) => isConfirmableBeneficiaryStatus(r.status))
+				.map((r) => ({
+					email: r.email,
+					first_name: r.first_name ?? null,
+					paternal_lastname: r.paternal_lastname ?? null,
+					maternal_lastname: r.maternal_lastname ?? null,
+				}));
 		}
 		const out = [];
 		const seen = new Set();
@@ -531,7 +572,7 @@ export default function CouponsAssign({
 			out.push(beneficiaryRowFromMatrix(r));
 		}
 		return out;
-	}, [beneficiaryPreviewRows, matrixRows, emailLowerCounts]);
+	}, [bulkRows, beneficiaryPreviewRows, matrixRows, emailLowerCounts]);
 
 	const individualReadyEmails = useMemo(() => {
 		return confirmableBeneficiaryRows.map((r) => r.email.trim().toLowerCase());
@@ -548,6 +589,25 @@ export default function CouponsAssign({
 	const beneficiaryBreakdown = useMemo(() => {
 		if (data.assignment_mode === "none") {
 			return { registered: 0, pending: 0, invalid: 0, duplicate: 0 };
+		}
+		if (bulkRows.length > 0) {
+			let registered = 0;
+			let pending = 0;
+			let invalid = 0;
+			let duplicate = 0;
+			for (const row of bulkRows) {
+				const status = resolveBulkRowStatus(row);
+				if (status === "valid_registered_user") registered += 1;
+				else if (status === "valid_pending_user") pending += 1;
+				else if (
+					status === "duplicate_in_file" ||
+					status === "already_beneficiary" ||
+					status === "already_assigned"
+				) {
+					duplicate += 1;
+				} else invalid += 1;
+			}
+			return { registered, pending, invalid, duplicate };
 		}
 		if (beneficiaryPreviewRows.length > 0) {
 			let registered = 0;
@@ -585,6 +645,7 @@ export default function CouponsAssign({
 		return { registered, pending, invalid, duplicate };
 	}, [
 		data.assignment_mode,
+		bulkRows,
 		beneficiaryPreviewRows,
 		matrixRows,
 		emailLowerCounts,
@@ -622,10 +683,19 @@ export default function CouponsAssign({
 		!(isSuperadmin && rulesForUi?.superadmin_bypass_approvals);
 
 	useEffect(() => {
-		if (data.assignment_mode !== "bulk") {
-			setBulkRows([]);
-			setBulkPreviewError("");
-			setBulkPreviewLoading(false);
+		if (data.assignment_mode === "bulk") {
+			setBeneficiaryPreviewRows([]);
+			setBeneficiaryPreviewError("");
+			return;
+		}
+		setBulkRows([]);
+		setBulkPreviewError("");
+		setBulkPreviewLoading(false);
+		setBulkPreviewSummary(null);
+		setBulkUploadFile(null);
+		bulkUploadFileRef.current = null;
+		if (data.assignment_mode === "none") {
+			setBeneficiaryPreviewRows([]);
 		}
 	}, [data.assignment_mode]);
 
@@ -670,6 +740,20 @@ export default function CouponsAssign({
 				return;
 			}
 			setBeneficiaryPreviewRows(json.rows ?? []);
+			setBulkRows(
+				(json.rows ?? []).map((r) => ({
+					email: r.email,
+					first_name: r.first_name,
+					paternal_lastname: r.paternal_lastname,
+					maternal_lastname: r.maternal_lastname,
+					status: r.status,
+					messages: r.messages,
+					editable: r.editable,
+					user_name: null,
+					include: isConfirmableBeneficiaryStatus(r.status),
+				})),
+			);
+			setBulkPreviewSummary(json.summary ?? null);
 		} catch {
 			setBeneficiaryPreviewError("Error de red al generar la vista previa.");
 		} finally {
@@ -678,7 +762,8 @@ export default function CouponsAssign({
 	}, [data.coupon_mode, data.coupon_id]);
 
 	const runBulkPreview = useCallback(async () => {
-		if (!data.file) {
+		const file = bulkUploadFileRef.current;
+		if (!file) {
 			setBulkPreviewError("Selecciona un archivo primero.");
 			return;
 		}
@@ -691,7 +776,7 @@ export default function CouponsAssign({
 		setBeneficiaryPreviewError("");
 		try {
 			const fd = new FormData();
-			fd.append("file", data.file);
+			fd.append("file", file);
 			const url = parentId
 				? route("admin.coupons.beneficiaries.preview-file", parentId)
 				: route("admin.coupons.assign.preview-bulk");
@@ -706,9 +791,16 @@ export default function CouponsAssign({
 			});
 			const json = await res.json().catch(() => ({}));
 			if (!res.ok) {
-				setBulkPreviewError(json.message ?? "No se pudo leer el archivo.");
+				setBulkPreviewError(
+					json.message ??
+						(typeof json.errors === "object"
+							? Object.values(json.errors).flat().join(" ")
+							: null) ??
+						"No se pudo leer el archivo.",
+				);
 				setBulkRows([]);
 				setBeneficiaryPreviewRows([]);
+				setBulkPreviewSummary(null);
 				return;
 			}
 			if (parentId && json.rows) {
@@ -721,26 +813,46 @@ export default function CouponsAssign({
 						maternal_lastname: r.maternal_lastname,
 						status: r.status,
 						messages: r.messages,
+						editable: r.editable,
+						user_name: r.user_name ?? null,
 						include: isConfirmableBeneficiaryStatus(r.status),
 					})),
 				);
+				setBulkPreviewSummary(json.summary ?? null);
 				return;
 			}
+			setBeneficiaryPreviewRows([]);
 			setBulkRows(
-				(json.rows ?? []).map((r) => ({
-					email: r.email,
-					exists: !!r.exists,
-					user_name: r.user_name ?? null,
-					include: !!r.exists,
-				})),
+				(json.rows ?? []).map((r) => {
+					const status =
+						r.status ??
+						(r.exists ? "valid_registered_user" : "valid_pending_user");
+
+					return {
+						email: r.email,
+						first_name: r.first_name ?? null,
+						paternal_lastname: r.paternal_lastname ?? null,
+						maternal_lastname: r.maternal_lastname ?? null,
+						status,
+						exists: !!r.exists,
+						user_name: r.user_name ?? null,
+						include: isConfirmableBeneficiaryStatus(status),
+						editable: true,
+					};
+				}),
 			);
+			setBulkPreviewSummary({
+				total: json.total ?? (json.rows ?? []).length,
+				valid_registered_user: json.matched ?? 0,
+				valid_pending_user: json.unmatched ?? 0,
+			});
 		} catch {
 			setBulkPreviewError("Error de red al analizar el archivo.");
 			setBulkRows([]);
 		} finally {
 			setBulkPreviewLoading(false);
 		}
-	}, [data.file, data.coupon_mode, data.coupon_id]);
+	}, [data.coupon_mode, data.coupon_id]);
 
 	const matrixCapacity = 5000;
 
@@ -789,7 +901,10 @@ export default function CouponsAssign({
 			return individualReadyEmails.length >= 1;
 		}
 		if (data.assignment_mode === "bulk") {
-			const selected = bulkRows.filter((r) => r.include).length;
+			const selected = bulkRows.filter(
+				(r) =>
+					r.include && isConfirmableBeneficiaryStatus(resolveBulkRowStatus(r)),
+			).length;
 			return bulkRows.length > 0 && selected > 0;
 		}
 		return true;
@@ -956,11 +1071,6 @@ export default function CouponsAssign({
 				? "bg-famedic-lime/15 text-famedic-dark ring-1 ring-famedic-lime/60 dark:bg-famedic-lime/10 dark:text-famedic-lime dark:ring-famedic-lime/50"
 				: "text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:text-zinc-400 dark:ring-zinc-600 dark:hover:bg-zinc-800",
 		].join(" ");
-
-	const summaryBulkEmails = useMemo(
-		() => bulkRows.filter((r) => r.include).map((r) => r.email),
-		[bulkRows],
-	);
 
 	const summaryApprovalsRequired = useMemo(() => {
 		if (data.assignment_mode === "none") return 0;
@@ -1443,40 +1553,12 @@ export default function CouponsAssign({
 															{beneficiaryPreviewError}
 														</p>
 													)}
-													{beneficiaryPreviewRows.length > 0 && (
-														<div className="overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
-															<Table dense>
-																<TableHead>
-																	<TableRow>
-																		<TableHeader>Correo</TableHeader>
-																		<TableHeader>Estado</TableHeader>
-																		<TableHeader>Mensajes</TableHeader>
-																	</TableRow>
-																</TableHead>
-																<TableBody>
-																	{beneficiaryPreviewRows.map((row) => {
-																		const meta =
-																			BENEFICIARY_PREVIEW_STATUS[row.status] ?? {
-																				label: row.status,
-																				color: "zinc",
-																			};
-																		return (
-																			<TableRow key={`${row.row_number}-${row.email}`}>
-																				<TableCell>{row.email}</TableCell>
-																				<TableCell>
-																					<Badge color={meta.color}>
-																						{meta.label}
-																					</Badge>
-																				</TableCell>
-																				<TableCell className="text-xs text-zinc-600 dark:text-zinc-400">
-																					{(row.messages ?? []).join(" ")}
-																				</TableCell>
-																			</TableRow>
-																		);
-																	})}
-																</TableBody>
-															</Table>
-														</div>
+													{beneficiaryPreviewRows.length > 0 && bulkRows.length > 0 && (
+														<CouponBulkImportPreview
+															rows={bulkRows}
+															onChangeRows={handleBulkRowsChange}
+															apiSummary={bulkPreviewSummary}
+														/>
 													)}
 													{errors.beneficiary_rows && (
 														<p className="text-sm text-red-600 dark:text-red-400">
@@ -1491,12 +1573,17 @@ export default function CouponsAssign({
 											{SHOW_BULK_ASSIGNMENT_UI && data.assignment_mode === "bulk" && (
 												<div className="space-y-4">
 													<Field>
-														<Label>Archivo (.xlsx, .xls, .csv)</Label>
+														<Label>Sube tu archivo de Excel</Label>
+														<Text className="mb-2 text-sm text-zinc-500 dark:text-zinc-400">
+															<strong>Formatos compatibles:</strong> Excel (.xlsx, .xls) y
+															CSV (.csv). Puedes cargar muchos registros. Primero
+															analizaremos tu archivo y te mostraremos un resumen con los
+															resultados detectados.
+														</Text>
 														<Text className="mb-2 text-sm text-zinc-500 dark:text-zinc-400">
 															Columnas: <strong>email/correo</strong> (obligatorio),{" "}
 															<strong>nombre</strong>, <strong>apellido_paterno</strong>,{" "}
-															<strong>apellido_materno</strong> (opcionales). Revisa el
-															preview antes de confirmar en el resumen.
+															<strong>apellido_materno</strong> (opcionales).
 														</Text>
 														<div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
 															<Button
@@ -1509,32 +1596,47 @@ export default function CouponsAssign({
 																	);
 																}}
 															>
-																Descargar plantilla CSV de ejemplo
+																Descargar plantilla de Excel/CSV
 															</Button>
 															<Text className="!text-xs !text-zinc-500 dark:!text-zinc-400">
-																CSV con encabezado <strong>email</strong> y correos de muestra;
-																puedes guardarlo como Excel (.xlsx) si prefieres.
+																Plantilla de ejemplo con encabezados listos para completar
+																en Excel o CSV.
 															</Text>
 														</div>
 														<Input
 															type="file"
 															accept=".xlsx,.xls,.csv"
 															onChange={(e) => {
-																setData("file", e.target.files?.[0] ?? null);
+																const file = e.target.files?.[0] ?? null;
+																bulkUploadFileRef.current = file;
+																setBulkUploadFile(file);
+																setData("file", file);
 																setBulkRows([]);
+																setBeneficiaryPreviewRows([]);
+																setBulkPreviewSummary(null);
 																setBulkPreviewError("");
 															}}
 														/>
+														{bulkUploadFile ? (
+															<p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+																Archivo seleccionado:{" "}
+																<strong>{bulkUploadFile.name}</strong>
+															</p>
+														) : (
+															<p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">
+																Aún no has seleccionado un archivo.
+															</p>
+														)}
 														<div className="mt-3 flex flex-wrap gap-2">
 															<Button
 																type="button"
 																outline
-																disabled={!data.file || bulkPreviewLoading}
-																onClick={() => runBulkPreview()}
+																disabled={!bulkUploadFile || bulkPreviewLoading}
+																onClick={() => void runBulkPreview()}
 															>
 																{bulkPreviewLoading
-																	? "Analizando…"
-																	: "Analizar archivo y validar usuarios"}
+																	? "Analizando archivo…"
+																	: "Analizar archivo"}
 															</Button>
 														</div>
 														{bulkPreviewError && (
@@ -1550,117 +1652,11 @@ export default function CouponsAssign({
 													</Field>
 
 													{bulkRows.length > 0 && (
-														<div className="rounded-lg border border-zinc-200 bg-zinc-50/90 p-4 dark:border-zinc-600 dark:bg-zinc-900/50">
-															<div className="flex flex-wrap items-start justify-between gap-3">
-																<div>
-																	<Subheading className="text-base">
-																		Vista previa de beneficiarios
-																	</Subheading>
-																	<Text className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-																		Marca quién recibirá el cupón. Por defecto solo se
-																		incluyen correos con usuario en la plataforma.
-																	</Text>
-																</div>
-																<div className="flex flex-wrap gap-2">
-																	<Button
-																		type="button"
-																		plain
-																		className="text-sm"
-																		onClick={() =>
-																			setBulkRows((rows) =>
-																				rows.map((r) => ({
-																					...r,
-																					include: r.exists ? r.include : false,
-																				})),
-																			)
-																		}
-																	>
-																		Quitar selección sin cuenta
-																	</Button>
-																	<Button
-																		type="button"
-																		plain
-																		className="text-sm text-red-700 dark:text-red-400"
-																		onClick={() =>
-																			setBulkRows((rows) =>
-																				rows.filter((r) => r.exists),
-																			)
-																		}
-																	>
-																		Eliminar filas sin usuario
-																	</Button>
-																</div>
-															</div>
-															<p className="mt-3 text-sm text-zinc-700 dark:text-zinc-300">
-																Seleccionados para asignar:{" "}
-																<strong>
-																	{bulkRows.filter((r) => r.include).length}
-																</strong>{" "}
-																de {bulkRows.length} en archivo.
-															</p>
-															<div className="mt-3 max-h-[min(24rem,50vh)] overflow-auto rounded-md border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
-																<Table dense>
-																	<TableHead>
-																		<TableRow>
-																			<TableHeader>Incluir</TableHeader>
-																			<TableHeader>Correo</TableHeader>
-																			<TableHeader>Usuario</TableHeader>
-																			<TableHeader>Estado</TableHeader>
-																			<TableHeader />
-																		</TableRow>
-																	</TableHead>
-																	<TableBody>
-																		{bulkRows.map((row, idx) => (
-																			<TableRow key={`${row.email}-${idx}`}>
-																				<TableCell>
-																					<Checkbox
-																						checked={row.include}
-																						onChange={(v) =>
-																							setBulkRows((rows) =>
-																								rows.map((r, i) =>
-																									i === idx ? { ...r, include: v } : r,
-																								),
-																							)
-																						}
-																					/>
-																				</TableCell>
-																				<TableCell className="max-w-[14rem] break-all font-mono text-sm">
-																					{row.email}
-																				</TableCell>
-																				<TableCell className="text-sm text-zinc-700 dark:text-zinc-300">
-																					{row.user_name ?? "—"}
-																				</TableCell>
-																				<TableCell>
-																					{row.exists ? (
-																						<Badge color="emerald">
-																							Registrado
-																						</Badge>
-																					) : (
-																						<Badge color="red">
-																							Sin cuenta
-																						</Badge>
-																					)}
-																				</TableCell>
-																				<TableCell className="text-right">
-																					<Button
-																						type="button"
-																						plain
-																						className="text-red-600 dark:text-red-400"
-																						onClick={() =>
-																							setBulkRows((rows) =>
-																								rows.filter((_, i) => i !== idx),
-																							)
-																						}
-																					>
-																						Quitar fila
-																					</Button>
-																				</TableCell>
-																			</TableRow>
-																		))}
-																	</TableBody>
-																</Table>
-															</div>
-														</div>
+														<CouponBulkImportPreview
+															rows={bulkRows}
+															onChangeRows={handleBulkRowsChange}
+															apiSummary={bulkPreviewSummary}
+														/>
 													)}
 												</div>
 											)}
@@ -1860,47 +1856,6 @@ export default function CouponsAssign({
 													</dt>
 													<dd>{ASSIGNMENT_LABELS[data.assignment_mode]}</dd>
 												</div>
-												{data.assignment_mode === "individual" &&
-													individualReadyEmails.length > 0 && (
-														<div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-start">
-															<dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">
-																Beneficiarios ({individualReadyEmails.length})
-															</dt>
-															<dd className="max-w-full text-right">
-																<ul className="ml-auto max-h-40 max-w-md list-inside list-disc overflow-y-auto break-all text-left font-mono text-xs text-zinc-800 dark:text-zinc-200">
-																	{individualReadyEmails.slice(0, 40).map((em) => (
-																		<li key={em}>{em}</li>
-																	))}
-																</ul>
-																{individualReadyEmails.length > 40 && (
-																	<p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-																		Y {individualReadyEmails.length - 40} correo(s)
-																		más.
-																	</p>
-																)}
-															</dd>
-														</div>
-													)}
-												{data.assignment_mode === "bulk" &&
-													summaryBulkEmails.length > 0 && (
-														<div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-start">
-															<dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">
-																Beneficiarios ({summaryBulkEmails.length})
-															</dt>
-															<dd className="max-w-full text-right">
-																<ul className="ml-auto max-h-40 max-w-md list-inside list-disc overflow-y-auto break-all text-left font-mono text-xs text-zinc-800 dark:text-zinc-200">
-																	{summaryBulkEmails.slice(0, 40).map((em) => (
-																		<li key={em}>{em}</li>
-																	))}
-																</ul>
-																{summaryBulkEmails.length > 40 && (
-																	<p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-																		Y {summaryBulkEmails.length - 40} correo(s) más.
-																	</p>
-																)}
-															</dd>
-														</div>
-													)}
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Notificaciones

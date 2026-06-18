@@ -853,25 +853,36 @@ class CouponController extends Controller
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
         ]);
 
-        $import = new CouponCampaignEmailsImport;
+        $import = new CouponBeneficiariesRowsImport;
         Excel::import($import, $request->file('file'));
-        $emails = $import->getUniqueEmails();
+        $inputRows = $import->getRows();
 
-        if ($emails === []) {
+        if ($inputRows === []) {
             return response()->json([
-                'message' => 'No se encontraron correos válidos. Usa la columna email o correo.',
+                'message' => 'No se encontraron filas válidas. Usa columnas email/correo (obligatorio) y nombre/apellidos opcionales.',
                 'rows' => [],
             ], 422);
         }
 
         $maxRows = 5000;
-        if (count($emails) > $maxRows) {
-            return response()->json([
-                'message' => "El archivo supera el máximo de {$maxRows} correos distintos.",
-                'rows' => [],
-            ], 422);
+        $deduped = [];
+        $seen = [];
+        foreach ($inputRows as $row) {
+            $normalized = strtolower(trim((string) ($row['email'] ?? '')));
+            if ($normalized === '' || isset($seen[$normalized])) {
+                continue;
+            }
+            $seen[$normalized] = true;
+            $deduped[] = array_merge($row, ['email' => $normalized]);
+            if (count($deduped) > $maxRows) {
+                return response()->json([
+                    'message' => "El archivo supera el máximo de {$maxRows} correos distintos.",
+                    'rows' => [],
+                ], 422);
+            }
         }
 
+        $emails = array_column($deduped, 'email');
         $placeholders = implode(',', array_fill(0, count($emails), '?'));
         $users = User::query()
             ->select(['email', 'name', 'paternal_lastname', 'maternal_lastname'])
@@ -884,10 +895,27 @@ class CouponController extends Controller
         }
 
         $rows = [];
-        foreach ($emails as $email) {
+        foreach ($deduped as $row) {
+            $email = (string) $row['email'];
             $user = $byLower[$email] ?? null;
+            $firstName = $row['first_name'] ?? null;
+            $paternalLastname = $row['paternal_lastname'] ?? null;
+            $maternalLastname = $row['maternal_lastname'] ?? null;
+
+            if ($user !== null) {
+                if ($firstName === null && $paternalLastname === null && $maternalLastname === null) {
+                    $firstName = $user->name ?: null;
+                    $paternalLastname = $user->paternal_lastname ?: null;
+                    $maternalLastname = $user->maternal_lastname ?: null;
+                }
+            }
+
             $rows[] = [
                 'email' => $email,
+                'first_name' => $firstName,
+                'paternal_lastname' => $paternalLastname,
+                'maternal_lastname' => $maternalLastname,
+                'status' => $user !== null ? 'valid_registered_user' : 'valid_pending_user',
                 'exists' => $user !== null,
                 'user_name' => $user ? ($user->full_name ?: trim(implode(' ', array_filter([
                     $user->name,
