@@ -80,6 +80,29 @@ class CouponService
     }
 
     /**
+     * Props de presentación para carrito/checkout de laboratorio (sin alterar reglas de aplicación).
+     *
+     * @return array{
+     *     balanceCouponsCents: int,
+     *     formattedBalanceCoupons: ?string,
+     *     availableBalanceCoupons: array<int, array<string, mixed>>,
+     *     cartTotalCents: int
+     * }
+     */
+    public function buildPatientBalancePresentation(int $userId, int $cartTotalCents): array
+    {
+        $balanceCents = $this->getUserBalance($userId);
+        $availableCoupons = $this->getAvailableCoupons($userId)->values()->all();
+
+        return [
+            'balanceCouponsCents' => $balanceCents,
+            'formattedBalanceCoupons' => $balanceCents > 0 ? formattedCentsPrice($balanceCents) : null,
+            'availableBalanceCoupons' => $availableCoupons,
+            'cartTotalCents' => max(0, $cartTotalCents),
+        ];
+    }
+
+    /**
      * @return array{
      *     id: int,
      *     remaining_cents: int,

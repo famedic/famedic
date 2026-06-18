@@ -12,6 +12,7 @@ import {
 	QueueListIcon,
 } from "@heroicons/react/24/solid";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
+import BalanceCreditBanner from "@/Components/Coupons/BalanceCreditBanner";
 import { useEffect, useState } from "react";
 
 // ==================== FUNCIÓN DEBUG GA4 ACTUALIZADA ====================
@@ -130,9 +131,13 @@ if (typeof window !== 'undefined') {
 export default function LaboratoryShoppingCart({
 	laboratoryBrand,
 	laboratoryCarts,
+	total = 0,
 	formattedTotal,
 	formattedSubtotal,
 	formattedDiscount,
+	balanceCouponsCents = 0,
+	availableBalanceCoupons = [],
+	cartTotalCents = 0,
 }) {
 	const {
 		laboratoryCartItemToDelete,
@@ -530,6 +535,17 @@ export default function LaboratoryShoppingCart({
 					laboratory_brand: laboratoryBrand.value,
 				})}
 				onCheckoutClick={handleCheckoutClick}
+				summaryExtra={
+					<BalanceCreditBanner
+						balanceCouponsCents={balanceCouponsCents}
+						availableBalanceCoupons={availableBalanceCoupons}
+						cartTotalCents={cartTotalCents || total}
+						checkoutUrl={route("laboratory.checkout", {
+							laboratory_brand: laboratoryBrand.value,
+						})}
+						onCheckoutClick={handleCheckoutClick}
+					/>
+				}
 				// =========== NUEVAS PROPS PARA GA4 ===========
 				currency="MXN"
 				productDataList={productDataList}

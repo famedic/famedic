@@ -11,7 +11,7 @@ import {
 } from "@/Components/Catalyst/fieldset";
 import { Subheading } from "@/Components/Catalyst/heading";
 import { Switch, SwitchField } from "@/Components/Catalyst/switch";
-import { Text, Strong } from "@/Components/Catalyst/text";
+import { Text } from "@/Components/Catalyst/text";
 import { Divider } from "@/Components/Catalyst/divider";
 import CheckoutLayout from "@/Layouts/CheckoutLayout";
 import { useForm, usePage } from "@inertiajs/react";
@@ -38,6 +38,7 @@ import {
     isCouponApplicableForCheckout,
     isCouponWithinValidity,
 } from "@/lib/couponEligibilityUi";
+import BalanceCreditCard from "@/Components/Coupons/BalanceCreditCard";
 
 const BASE_WIZARD_STEPS = [
     { id: "patient", number: 1, label: "Paciente" },
@@ -179,7 +180,6 @@ export default function LaboratoryCheckout({
     formattedSubtotal,
     formattedDiscount,
     balanceCouponsCents = 0,
-    formattedBalanceCoupons,
     availableBalanceCoupons = [],
     addresses,
     paymentMethods,
@@ -435,10 +435,16 @@ export default function LaboratoryCheckout({
         }
     }, [data.coupon_id, data.payment_method, availableBalanceCoupons, total, setData]);
 
-    const applyBalanceCoupon = () => {
-        const applicable = availableBalanceCoupons.find((c) =>
-            isCouponApplicableForCheckout(c, total),
-        );
+    const applyBalanceCoupon = (couponId = null) => {
+        const applicable = couponId
+            ? availableBalanceCoupons.find(
+                  (c) =>
+                      c.id === couponId &&
+                      isCouponApplicableForCheckout(c, total),
+              )
+            : availableBalanceCoupons.find((c) =>
+                  isCouponApplicableForCheckout(c, total),
+              );
         if (!applicable) return;
         setData("coupon_id", applicable.id);
         const after = total - applicable.remaining_cents;
@@ -454,13 +460,6 @@ export default function LaboratoryCheckout({
             setData("payment_method", null);
         }
     };
-
-    const noCouponApplicable =
-        balanceCouponsCents > 0 &&
-        availableBalanceCoupons.length > 0 &&
-        !availableBalanceCoupons.some((c) => isCouponApplicableForCheckout(c, total));
-
-    const displayCoupon = selectedCoupon ?? availableBalanceCoupons[0] ?? null;
 
     // Condiciones para habilitar/deshabilitar botones
     const onlinePaymentDisabled = checkoutProcessing ||
@@ -846,83 +845,18 @@ export default function LaboratoryCheckout({
     }, [currentStepIndex]);
 
     const couponSection = balanceCouponsCents > 0 && (
-        <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/50 p-4 dark:border-emerald-800/40 dark:bg-emerald-950/20">
-            <Text className="text-sm font-medium">Saldo a favor</Text>
-            <Text className="mt-1 text-sm">
-                Tienes <Strong>{formattedBalanceCoupons}</Strong> disponibles.
-            </Text>
-            {displayCoupon?.expires_at && (
-                <Text className="mt-2 text-xs text-zinc-700 dark:text-zinc-300">
-                    Vence el{" "}
-                    {new Date(displayCoupon.expires_at).toLocaleString("es-MX", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                    })}
-                </Text>
-            )}
-            {displayCoupon?.formatted_min_purchase && (
-                <Text className="mt-1 text-xs text-zinc-700 dark:text-zinc-300">
-                    Compra mínima: {displayCoupon.formatted_min_purchase}
-                </Text>
-            )}
-            {couponNotYetValid && selectedCoupon?.valid_from && (
-                <Text className="mt-2 text-xs text-amber-800 dark:text-amber-200">
-                    Tu saldo estará disponible a partir del{" "}
-                    {new Date(selectedCoupon.valid_from).toLocaleString("es-MX", {
-                        dateStyle: "long",
-                        timeStyle: "short",
-                    })}
-                    .
-                </Text>
-            )}
-            {couponBelowMinPurchase && selectedCoupon?.formatted_min_purchase && (
-                <Text className="mt-2 text-xs text-amber-800 dark:text-amber-200">
-                    Para usar este saldo necesitas una compra mínima de{" "}
-                    {selectedCoupon.formatted_min_purchase}.
-                    {minPurchaseShortfallCents > 0 && (
-                        <>
-                            {" "}
-                            Te faltan{" "}
-                            {(minPurchaseShortfallCents / 100).toLocaleString("es-MX", {
-                                style: "currency",
-                                currency: "MXN",
-                            })}{" "}
-                            para poder usarlo.
-                        </>
-                    )}
-                </Text>
-            )}
-            {noCouponApplicable && !couponBelowMinPurchase && !couponNotYetValid && (
-                <Text className="mt-2 text-xs text-amber-800 dark:text-amber-200">
-                    Tu saldo es mayor al total de la compra, no puede aplicarse
-                    en esta compra.
-                </Text>
-            )}
+        <div className="space-y-2">
+            <BalanceCreditCard
+                balanceCouponsCents={balanceCouponsCents}
+                availableBalanceCoupons={availableBalanceCoupons}
+                cartTotalCents={total}
+                selectedCouponId={data.coupon_id}
+                onApply={applyBalanceCoupon}
+                onClear={clearBalanceCoupon}
+            />
             {errors.coupon_id && (
-                <ErrorMessage className="mt-2">{errors.coupon_id}</ErrorMessage>
+                <ErrorMessage>{errors.coupon_id}</ErrorMessage>
             )}
-            <div className="mt-3">
-                {!data.coupon_id ? (
-                    <Button
-                        type="button"
-                        color="emerald"
-                        className="w-full text-sm"
-                        disabled={noCouponApplicable}
-                        onClick={applyBalanceCoupon}
-                    >
-                        Usar saldo completo
-                    </Button>
-                ) : (
-                    <Button
-                        type="button"
-                        plain
-                        className="w-full text-sm"
-                        onClick={clearBalanceCoupon}
-                    >
-                        Quitar cupón
-                    </Button>
-                )}
-            </div>
         </div>
     );
 
