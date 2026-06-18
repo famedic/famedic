@@ -847,92 +847,152 @@ class CouponController extends Controller
      */
     public function previewBulkAssignEmails(Request $request): JsonResponse
     {
-        $this->authorize('create', Coupon::class);
-
-        $request->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+        Log::info('[coupon_bulk_preview] request_received', [
+            'user_id' => $request->user()?->id,
+            'has_file' => $request->hasFile('file'),
+            'file_name' => $request->file('file')?->getClientOriginalName(),
+            'file_size' => $request->file('file')?->getSize(),
+            'file_mime' => $request->file('file')?->getMimeType(),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
         ]);
 
-        $import = new CouponBeneficiariesRowsImport;
-        Excel::import($import, $request->file('file'));
-        $inputRows = $import->getRows();
+        try {
+            $this->authorize('create', Coupon::class);
 
-        if ($inputRows === []) {
-            return response()->json([
-                'message' => 'No se encontraron filas válidas. Usa columnas email/correo (obligatorio) y nombre/apellidos opcionales.',
-                'rows' => [],
-            ], 422);
-        }
+            $request->validate([
+                'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            ]);
 
-        $maxRows = 5000;
-        $deduped = [];
-        $seen = [];
-        foreach ($inputRows as $row) {
-            $normalized = strtolower(trim((string) ($row['email'] ?? '')));
-            if ($normalized === '' || isset($seen[$normalized])) {
-                continue;
-            }
-            $seen[$normalized] = true;
-            $deduped[] = array_merge($row, ['email' => $normalized]);
-            if (count($deduped) > $maxRows) {
+            Log::info('[coupon_bulk_preview] validation_passed', [
+                'user_id' => $request->user()?->id,
+                'file_name' => $request->file('file')->getClientOriginalName(),
+            ]);
+
+            $import = new CouponBeneficiariesRowsImport;
+            Excel::import($import, $request->file('file'));
+            $inputRows = $import->getRows();
+
+            Log::info('[coupon_bulk_preview] import_finished', [
+                'user_id' => $request->user()?->id,
+                'input_rows' => count($inputRows),
+            ]);
+
+            if ($inputRows === []) {
+                Log::warning('[coupon_bulk_preview] no_valid_rows', [
+                    'user_id' => $request->user()?->id,
+                    'file_name' => $request->file('file')->getClientOriginalName(),
+                ]);
+
                 return response()->json([
-                    'message' => "El archivo supera el máximo de {$maxRows} correos distintos.",
+                    'message' => 'No se encontraron filas válidas. Usa columnas email/correo (obligatorio) y nombre/apellidos opcionales.',
                     'rows' => [],
                 ], 422);
             }
-        }
 
-        $emails = array_column($deduped, 'email');
-        $placeholders = implode(',', array_fill(0, count($emails), '?'));
-        $users = User::query()
-            ->select(['email', 'name', 'paternal_lastname', 'maternal_lastname'])
-            ->whereRaw('LOWER(TRIM(email)) IN ('.$placeholders.')', $emails)
-            ->get();
+            $maxRows = 5000;
+            $deduped = [];
+            $seen = [];
+            foreach ($inputRows as $row) {
+                $normalized = strtolower(trim((string) ($row['email'] ?? '')));
+                if ($normalized === '' || isset($seen[$normalized])) {
+                    continue;
+                }
+                $seen[$normalized] = true;
+                $deduped[] = array_merge($row, ['email' => $normalized]);
+                if (count($deduped) > $maxRows) {
+                    Log::warning('[coupon_bulk_preview] max_rows_exceeded', [
+                        'user_id' => $request->user()?->id,
+                        'deduped_rows' => count($deduped),
+                    ]);
 
-        $byLower = [];
-        foreach ($users as $user) {
-            $byLower[strtolower(trim((string) $user->email))] = $user;
-        }
-
-        $rows = [];
-        foreach ($deduped as $row) {
-            $email = (string) $row['email'];
-            $user = $byLower[$email] ?? null;
-            $firstName = $row['first_name'] ?? null;
-            $paternalLastname = $row['paternal_lastname'] ?? null;
-            $maternalLastname = $row['maternal_lastname'] ?? null;
-
-            if ($user !== null) {
-                if ($firstName === null && $paternalLastname === null && $maternalLastname === null) {
-                    $firstName = $user->name ?: null;
-                    $paternalLastname = $user->paternal_lastname ?: null;
-                    $maternalLastname = $user->maternal_lastname ?: null;
+                    return response()->json([
+                        'message' => "El archivo supera el máximo de {$maxRows} correos distintos.",
+                        'rows' => [],
+                    ], 422);
                 }
             }
 
-            $rows[] = [
-                'email' => $email,
-                'first_name' => $firstName,
-                'paternal_lastname' => $paternalLastname,
-                'maternal_lastname' => $maternalLastname,
-                'status' => $user !== null ? 'valid_registered_user' : 'valid_pending_user',
-                'exists' => $user !== null,
-                'user_name' => $user ? ($user->full_name ?: trim(implode(' ', array_filter([
-                    $user->name,
-                    $user->paternal_lastname,
-                    $user->maternal_lastname,
-                ])))) : null,
-            ];
+            $emails = array_column($deduped, 'email');
+            $placeholders = implode(',', array_fill(0, count($emails), '?'));
+            $users = User::query()
+                ->select(['email', 'name', 'paternal_lastname', 'maternal_lastname'])
+                ->whereRaw('LOWER(TRIM(email)) IN ('.$placeholders.')', $emails)
+                ->get();
+
+            $byLower = [];
+            foreach ($users as $user) {
+                $byLower[strtolower(trim((string) $user->email))] = $user;
+            }
+
+            $rows = [];
+            foreach ($deduped as $row) {
+                $email = (string) $row['email'];
+                $user = $byLower[$email] ?? null;
+                $firstName = $row['first_name'] ?? null;
+                $paternalLastname = $row['paternal_lastname'] ?? null;
+                $maternalLastname = $row['maternal_lastname'] ?? null;
+
+                if ($user !== null) {
+                    if ($firstName === null && $paternalLastname === null && $maternalLastname === null) {
+                        $firstName = $user->name ?: null;
+                        $paternalLastname = $user->paternal_lastname ?: null;
+                        $maternalLastname = $user->maternal_lastname ?: null;
+                    }
+                }
+
+                $rows[] = [
+                    'email' => $email,
+                    'first_name' => $firstName,
+                    'paternal_lastname' => $paternalLastname,
+                    'maternal_lastname' => $maternalLastname,
+                    'status' => $user !== null ? 'valid_registered_user' : 'valid_pending_user',
+                    'exists' => $user !== null,
+                    'user_name' => $user ? ($user->full_name ?: trim(implode(' ', array_filter([
+                        $user->name,
+                        $user->paternal_lastname,
+                        $user->maternal_lastname,
+                    ])))) : null,
+                ];
+            }
+
+            $matched = count(array_filter($rows, fn (array $r) => $r['exists']));
+
+            Log::info('[coupon_bulk_preview] success', [
+                'user_id' => $request->user()?->id,
+                'rows' => count($rows),
+                'matched' => $matched,
+                'unmatched' => count($rows) - $matched,
+            ]);
+
+            return response()->json([
+                'rows' => $rows,
+                'total' => count($rows),
+                'matched' => $matched,
+                'unmatched' => count($rows) - $matched,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::warning('[coupon_bulk_preview] validation_failed', [
+                'user_id' => $request->user()?->id,
+                'errors' => $e->errors(),
+            ]);
+
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('[coupon_bulk_preview] exception', [
+                'user_id' => $request->user()?->id,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'message' => config('app.debug')
+                    ? 'Error al analizar el archivo: '.$e->getMessage()
+                    : 'Error interno al analizar el archivo. Revisa storage/logs/laravel.log',
+            ], 500);
         }
-
-        $matched = count(array_filter($rows, fn (array $r) => $r['exists']));
-
-        return response()->json([
-            'rows' => $rows,
-            'total' => count($rows),
-            'matched' => $matched,
-            'unmatched' => count($rows) - $matched,
-        ]);
     }
 
     /**
@@ -989,42 +1049,94 @@ class CouponController extends Controller
 
     public function previewBeneficiariesFile(Request $request, Coupon $coupon): JsonResponse
     {
-        $this->authorize('create', Coupon::class);
-        $this->assertAssignableMasterCoupon($coupon);
-
-        $request->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
-        ]);
-
-        $import = new CouponBeneficiariesRowsImport;
-        Excel::import($import, $request->file('file'));
-        $rows = $import->getRows();
-
-        if ($rows === []) {
-            return response()->json([
-                'message' => 'No se encontraron filas válidas. Usa columnas email/correo (obligatorio) y nombre/apellidos opcionales.',
-                'rows' => [],
-                'summary' => [],
-            ], 422);
-        }
-
-        $preview = $this->couponBeneficiaryService->previewRows($coupon, $rows);
-
-        CouponAuditLog::create([
-            'type' => 'assignment',
-            'action' => 'coupon_beneficiaries_previewed',
-            'status' => 'completed',
-            'actor_user_id' => $request->user()->id,
+        Log::info('[coupon_bulk_preview] request_received', [
+            'endpoint' => 'preview-file',
             'coupon_id' => $coupon->id,
-            'context' => [
-                'parent_coupon_id' => $coupon->id,
-                'source' => 'excel',
-                'row_count' => count($preview['rows']),
-                'summary' => $preview['summary'],
-            ],
+            'user_id' => $request->user()?->id,
+            'has_file' => $request->hasFile('file'),
+            'file_name' => $request->file('file')?->getClientOriginalName(),
+            'file_size' => $request->file('file')?->getSize(),
+            'file_mime' => $request->file('file')?->getMimeType(),
+            'ip' => $request->ip(),
         ]);
 
-        return response()->json($preview);
+        try {
+            $this->authorize('create', Coupon::class);
+            $this->assertAssignableMasterCoupon($coupon);
+
+            $request->validate([
+                'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            ]);
+
+            $import = new CouponBeneficiariesRowsImport;
+            Excel::import($import, $request->file('file'));
+            $rows = $import->getRows();
+
+            Log::info('[coupon_bulk_preview] import_finished', [
+                'endpoint' => 'preview-file',
+                'coupon_id' => $coupon->id,
+                'user_id' => $request->user()?->id,
+                'input_rows' => count($rows),
+            ]);
+
+            if ($rows === []) {
+                return response()->json([
+                    'message' => 'No se encontraron filas válidas. Usa columnas email/correo (obligatorio) y nombre/apellidos opcionales.',
+                    'rows' => [],
+                    'summary' => [],
+                ], 422);
+            }
+
+            $preview = $this->couponBeneficiaryService->previewRows($coupon, $rows);
+
+            CouponAuditLog::create([
+                'type' => 'assignment',
+                'action' => 'coupon_beneficiaries_previewed',
+                'status' => 'completed',
+                'actor_user_id' => $request->user()->id,
+                'coupon_id' => $coupon->id,
+                'context' => [
+                    'parent_coupon_id' => $coupon->id,
+                    'source' => 'excel',
+                    'row_count' => count($preview['rows']),
+                    'summary' => $preview['summary'],
+                ],
+            ]);
+
+            Log::info('[coupon_bulk_preview] success', [
+                'endpoint' => 'preview-file',
+                'coupon_id' => $coupon->id,
+                'user_id' => $request->user()?->id,
+                'rows' => count($preview['rows'] ?? []),
+            ]);
+
+            return response()->json($preview);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::warning('[coupon_bulk_preview] validation_failed', [
+                'endpoint' => 'preview-file',
+                'coupon_id' => $coupon->id,
+                'user_id' => $request->user()?->id,
+                'errors' => $e->errors(),
+            ]);
+
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('[coupon_bulk_preview] exception', [
+                'endpoint' => 'preview-file',
+                'coupon_id' => $coupon->id,
+                'user_id' => $request->user()?->id,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'message' => config('app.debug')
+                    ? 'Error al analizar el archivo: '.$e->getMessage()
+                    : 'Error interno al analizar el archivo. Revisa storage/logs/laravel.log',
+            ], 500);
+        }
     }
 
     public function resendBeneficiaryInvitation(Request $request, Coupon $coupon, CouponBeneficiary $beneficiary): RedirectResponse

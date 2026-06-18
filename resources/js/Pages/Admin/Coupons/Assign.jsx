@@ -38,6 +38,17 @@ function csrfTokenFromMeta() {
 	return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") ?? "";
 }
 
+function isBulkPreviewDebugEnabled() {
+	if (typeof window === "undefined") return false;
+	return new URLSearchParams(window.location.search).has("debug_bulk");
+}
+
+function logBulkPreviewDebug(step, data = {}) {
+	const entry = { step, at: new Date().toISOString(), ...data };
+	console.info("[coupon-bulk-preview]", entry);
+	return entry;
+}
+
 const TABS = [
 	{ id: "credit", label: "Datos del crédito" },
 	{ id: "rules", label: "Reglas de uso" },
@@ -238,6 +249,7 @@ export default function CouponsAssign({
 	const beneficiaryPreviewRowsRef = useRef([]);
 	const bulkUploadFileRef = useRef(null);
 	const [bulkUploadFile, setBulkUploadFile] = useState(null);
+	const [bulkPreviewDebugLog, setBulkPreviewDebugLog] = useState([]);
 	const [matrixRows, setMatrixRows] = useState(() => [createMatrixRow()]);
 	const matrixRowsRef = useRef(matrixRows);
 	const matrixLookupTimersRef = useRef({});
@@ -274,6 +286,13 @@ export default function CouponsAssign({
 
 	const handleBulkRowsChange = useCallback((updater) => {
 		setBulkRows((prev) => (typeof updater === "function" ? updater(prev) : updater));
+	}, []);
+
+	const pushBulkPreviewDebug = useCallback((step, data = {}) => {
+		const entry = logBulkPreviewDebug(step, data);
+		if (isBulkPreviewDebugEnabled()) {
+			setBulkPreviewDebugLog((prev) => [...prev.slice(-19), entry]);
+		}
 	}, []);
 
 	useEffect(() => {
@@ -763,8 +782,17 @@ export default function CouponsAssign({
 
 	const runBulkPreview = useCallback(async () => {
 		const file = bulkUploadFileRef.current;
+		pushBulkPreviewDebug("run_started", {
+			hasFile: !!file,
+			fileName: file?.name ?? null,
+			fileSize: file?.size ?? null,
+			assignmentMode: data.assignment_mode,
+			couponMode: data.coupon_mode,
+			couponId: data.coupon_id ?? null,
+		});
 		if (!file) {
 			setBulkPreviewError("Selecciona un archivo primero.");
+			pushBulkPreviewDebug("aborted_no_file");
 			return;
 		}
 		const parentId =
@@ -777,26 +805,70 @@ export default function CouponsAssign({
 		try {
 			const fd = new FormData();
 			fd.append("file", file);
-			const url = parentId
-				? route("admin.coupons.beneficiaries.preview-file", parentId)
-				: route("admin.coupons.assign.preview-bulk");
+			let url;
+			try {
+				url = parentId
+					? route("admin.coupons.beneficiaries.preview-file", parentId)
+					: route("admin.coupons.assign.preview-bulk");
+			} catch (routeError) {
+				pushBulkPreviewDebug("route_resolution_failed", {
+					error: routeError instanceof Error ? routeError.message : String(routeError),
+				});
+				setBulkPreviewError(
+					"No se pudo resolver la ruta del servidor para analizar el archivo.",
+				);
+				return;
+			}
+			const csrfToken = csrfTokenFromMeta();
+			pushBulkPreviewDebug("fetch_start", {
+				url,
+				parentId,
+				hasCsrfToken: csrfToken.length > 0,
+			});
 			const res = await fetch(url, {
 				method: "POST",
 				headers: {
 					Accept: "application/json",
 					"X-Requested-With": "XMLHttpRequest",
-					"X-CSRF-TOKEN": csrfTokenFromMeta(),
+					"X-CSRF-TOKEN": csrfToken,
 				},
 				body: fd,
 			});
-			const json = await res.json().catch(() => ({}));
+			const rawBody = await res.text();
+			let json = {};
+			if (rawBody) {
+				try {
+					json = JSON.parse(rawBody);
+				} catch (parseError) {
+					pushBulkPreviewDebug("invalid_json_response", {
+						status: res.status,
+						statusText: res.statusText,
+						bodyPreview: rawBody.slice(0, 500),
+						parseError:
+							parseError instanceof Error ? parseError.message : String(parseError),
+					});
+					setBulkPreviewError(
+						`Respuesta inválida del servidor (HTTP ${res.status}). Revisa la consola del navegador y storage/logs/laravel.log.`,
+					);
+					setBulkRows([]);
+					setBeneficiaryPreviewRows([]);
+					setBulkPreviewSummary(null);
+					return;
+				}
+			}
+			pushBulkPreviewDebug("fetch_finished", {
+				status: res.status,
+				ok: res.ok,
+				rowCount: Array.isArray(json.rows) ? json.rows.length : null,
+				message: json.message ?? null,
+			});
 			if (!res.ok) {
 				setBulkPreviewError(
 					json.message ??
 						(typeof json.errors === "object"
 							? Object.values(json.errors).flat().join(" ")
 							: null) ??
-						"No se pudo leer el archivo.",
+						`No se pudo leer el archivo (HTTP ${res.status}).`,
 				);
 				setBulkRows([]);
 				setBeneficiaryPreviewRows([]);
@@ -819,6 +891,9 @@ export default function CouponsAssign({
 					})),
 				);
 				setBulkPreviewSummary(json.summary ?? null);
+				pushBulkPreviewDebug("preview_applied_existing_coupon", {
+					rowCount: json.rows.length,
+				});
 				return;
 			}
 			setBeneficiaryPreviewRows([]);
@@ -846,13 +921,23 @@ export default function CouponsAssign({
 				valid_registered_user: json.matched ?? 0,
 				valid_pending_user: json.unmatched ?? 0,
 			});
-		} catch {
-			setBulkPreviewError("Error de red al analizar el archivo.");
+			pushBulkPreviewDebug("preview_applied_new_coupon", {
+				rowCount: (json.rows ?? []).length,
+			});
+		} catch (error) {
+			pushBulkPreviewDebug("fetch_exception", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+			setBulkPreviewError(
+				error instanceof Error
+					? `Error de red al analizar el archivo: ${error.message}`
+					: "Error de red al analizar el archivo.",
+			);
 			setBulkRows([]);
 		} finally {
 			setBulkPreviewLoading(false);
 		}
-	}, [data.coupon_mode, data.coupon_id]);
+	}, [data.assignment_mode, data.coupon_mode, data.coupon_id, pushBulkPreviewDebug]);
 
 	const matrixCapacity = 5000;
 
@@ -1615,6 +1700,11 @@ export default function CouponsAssign({
 																setBeneficiaryPreviewRows([]);
 																setBulkPreviewSummary(null);
 																setBulkPreviewError("");
+																pushBulkPreviewDebug("file_selected", {
+																	fileName: file?.name ?? null,
+																	fileSize: file?.size ?? null,
+																	fileType: file?.type ?? null,
+																});
 															}}
 														/>
 														{bulkUploadFile ? (
@@ -1632,7 +1722,13 @@ export default function CouponsAssign({
 																type="button"
 																outline
 																disabled={!bulkUploadFile || bulkPreviewLoading}
-																onClick={() => void runBulkPreview()}
+																onClick={() => {
+																	pushBulkPreviewDebug("button_clicked", {
+																		hasFile: !!bulkUploadFile,
+																		disabled: !bulkUploadFile || bulkPreviewLoading,
+																	});
+																	void runBulkPreview();
+																}}
 															>
 																{bulkPreviewLoading
 																	? "Analizando archivo…"
@@ -1643,6 +1739,18 @@ export default function CouponsAssign({
 															<p className="mt-2 text-sm text-red-600 dark:text-red-400">
 																{bulkPreviewError}
 															</p>
+														)}
+														{isBulkPreviewDebugEnabled() && bulkPreviewDebugLog.length > 0 && (
+															<div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+																<p className="text-xs font-semibold text-amber-900 dark:text-amber-100">
+																	Debug bulk preview (`?debug_bulk=1`)
+																</p>
+																<pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all text-[11px] text-amber-950 dark:text-amber-100">
+																	{bulkPreviewDebugLog
+																		.map((entry) => JSON.stringify(entry))
+																		.join("\n")}
+																</pre>
+															</div>
 														)}
 														{errors.file && (
 															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
