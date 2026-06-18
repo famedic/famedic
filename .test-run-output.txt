@@ -1,0 +1,565 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Api\V1\AkubicaApiInfrastructureTest
+  ✓ GET /api/v1/cart without token returns 401 JSON                     15.62s  
+  ✓ unknown /api/v1 route returns 404 JSON                               0.12s  
+  ✓ POST /api/v1/auth/login/request-code returns verification response…  0.17s  
+  ✓ POST /api/v1/auth/login/request-code validates email                 0.07s  
+  ✓ protected endpoint with invalid token returns 401 JSON               0.09s  
+  ✓ DELETE /api/v1/auth/token revokes current token                      0.11s  
+  ✓ authenticated user without customer receives 403 on protected route… 0.11s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaAuthTest
+  ✓ login request-code rejects invalid email with 422                    0.12s  
+  ✓ login request-code returns generic 200 for nonexistent email withou… 0.14s  
+  ✓ login request-code creates OTP and sends notification for existing…  0.11s  
+  ✓ login verify-code returns NO_ACTIVE_CODE when no active OTP exists   0.18s  
+  ✓ login verify-code returns INVALID_CODE for wrong code                0.12s  
+  ✓ login verify-code returns CODE_EXPIRED for expired OTP               0.12s  
+  ✓ login verify-code returns ATTEMPTS_EXHAUSTED after max failed attem… 0.11s  
+  ✓ login verify-code returns Bearer token for valid code                0.11s  
+  ✓ register rejects invalid data with 422                               0.11s  
+  ✓ register returns 409 EMAIL_ALREADY_REGISTERED for duplicate email    0.13s  
+  ✓ register returns 409 PHONE_ALREADY_REGISTERED for duplicate phone    0.08s  
+  ✓ register creates registration OTP for valid data                     0.12s  
+  ✓ register verify-code creates user and customer with Bearer token     0.14s  
+  ✓ register verify-code does not reuse consumed OTP                     0.14s  
+  ✓ registered user can access GET /api/v1/cart with token               0.12s  
+  ✓ DELETE /api/v1/auth/token revokes token without requiring customer   0.09s  
+  ✓ auth OTP is stored hashed not in plain text                          0.11s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaCartCatalogTest
+  ✓ GET /cart without token returns 401 UNAUTHENTICATED                  0.11s  
+  ✓ GET /cart with user without customer returns 403 FORBIDDEN           0.09s  
+  ✓ GET /cart without brand returns 422 VALIDATION_ERROR                 0.09s  
+  ✓ GET /cart with valid token and empty cart returns empty items        0.11s  
+  ✓ GET /cart returns items and correct totals                           0.91s  
+  ✓ GET /cart filters items by brand                                     1.09s  
+  ✓ POST /cart/items with invalid body returns 422 VALIDATION_ERROR      0.08s  
+  ✓ POST /cart/items with nonexistent laboratory_test_id returns 404 LA… 0.11s  
+  ✓ POST /cart/items with brand mismatch returns 404 LAB_TEST_NOT_FOUND  0.25s  
+  ✓ POST /cart/items with valid laboratory_test_id adds item and return… 0.68s  
+  ✓ POST /cart/items duplicate returns 409 ITEM_ALREADY_IN_CART          0.83s  
+  ✓ DELETE /cart/items/{id} for nonexistent item returns 404 CART_ITEM_… 0.08s  
+  ✓ DELETE /cart/items/{id} for another customer returns 403 FORBIDDEN   0.69s  
+  ✓ DELETE /cart/items/{id} removes own item and returns updated cart    0.91s  
+  ✓ GET /catalog/laboratory-tests/{id} for nonexistent test returns 404… 0.10s  
+  ✓ GET /catalog/laboratory-tests/{id} returns laboratory test data      0.17s  
+  ✓ GET /catalog/medications/{id} returns 503 CATALOG_UNAVAILABLE        0.10s  
+
+   FAIL  Tests\Feature\Api\V1\AkubicaCartCouponTest
+  ✓ GET /cart/coupon without token returns 401                           0.17s  
+  ✓ POST /cart/coupon without token returns 401                          0.09s  
+  ✓ DELETE /cart/coupon without token returns 401                        0.09s  
+  ✓ cart coupon endpoints return 403 for user without customer           0.13s  
+  ✓ GET /cart/coupon without brand returns 422                           0.11s  
+  ✓ POST /cart/coupon without code returns 422                           0.17s  
+  ✓ POST /cart/coupon with invalid brand returns 422                     0.10s  
+  ✓ GET /cart/coupon returns null coupon when none applied               0.66s  
+  ✓ GET /cart/coupon returns applied coupon structure                    0.72s  
+  ✓ POST /cart/coupon with empty cart returns 409 EMPTY_CART             0.07s  
+  ✓ POST /cart/coupon with nonexistent code returns 404 COUPON_NOT_FOUN… 0.61s  
+  ⨯ POST /cart/coupon with used coupon returns 409 COUPON_EXPIRED        0.61s  
+  ✓ POST /cart/coupon with zero balance returns 409 COUPON_EXPIRED       0.56s  
+  ✓ POST /cart/coupon with balance greater than cart total returns 409…  0.49s  
+  ✓ POST /cart/coupon with valid coupon returns coupon and totals        0.57s  
+  ✓ POST /cart/coupon updates GET /cart/totals                           0.47s  
+  ✓ POST /cart/coupon updates GET /checkout/prepare                      0.55s  
+  ✓ applying coupon does not affect another brand cart                   1.09s  
+  ⨯ applying coupon does not affect another customer                     1.00s  
+  ✓ DELETE /cart/coupon without applied coupon returns removed false     0.64s  
+  ✓ DELETE /cart/coupon with applied coupon returns removed true         0.51s  
+  ✓ DELETE /cart/coupon recalculates totals without discount             0.47s  
+  ✓ DELETE /cart/coupon does not affect another brand                    0.57s  
+  ⨯ DELETE /cart/coupon does not affect another customer                 0.52s  
+  ✓ payment link works with applied coupon                               2.13s  
+  ⨯ payment link does not create purchase or payment                     2.04s  
+  ✓ medications catalog endpoint still returns 503                       0.16s  
+  ✓ order cancellation still returns 503                                 0.10s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaCatalogDiscoveryTest
+  ✓ GET /catalog/laboratory-brands without token returns 200             0.13s  
+  ✓ GET /catalog/laboratory-test-categories without token returns 200    0.13s  
+  ✓ GET /catalog/laboratory-tests without token returns 200              0.19s  
+  ✓ GET /catalog/laboratory-tests with search without token returns 200  0.14s  
+  ✓ GET /catalog/laboratory-tests with category_id without token return… 0.16s  
+  ✓ GET /catalog/laboratory-tests with pagination without token returns… 1.00s  
+  ✓ GET /catalog/laboratory-stores without token returns 200             0.06s  
+  ✓ GET /catalog/laboratory-tests/{id} without token returns 200         0.11s  
+  ✓ POST /cart/items without token returns 401 UNAUTHENTICATED           0.09s  
+  ✓ GET /checkout/prepare without token returns 401 UNAUTHENTICATED      0.06s  
+  ✓ GET /orders without token returns 401 UNAUTHENTICATED                0.06s  
+  ✓ GET /catalog/laboratory-brands returns brands structure              0.06s  
+  ✓ GET /catalog/laboratory-tests with no tests returns empty list       0.09s  
+  ✓ GET /catalog/laboratory-tests returns tests with expected structure  0.10s  
+  ✓ GET /catalog/laboratory-tests filters by search text                 0.14s  
+  ✓ GET /catalog/laboratory-tests filters by brand                       0.12s  
+  ✓ GET /catalog/laboratory-tests filters by category_id                 0.13s  
+  ✓ GET /catalog/laboratory-tests with invalid per_page returns 422      0.09s  
+  ✓ GET /catalog/laboratory-tests paginates correctly                    0.17s  
+  ✓ GET /catalog/laboratory-tests filters by requires_appointment        0.13s  
+  ✓ GET /catalog/laboratory-test-categories returns categories structur… 0.15s  
+  ✓ GET /catalog/laboratory-test-categories with no categories returns…  0.07s  
+  ✓ GET /catalog/laboratory-stores returns stores structure              0.09s  
+  ✓ GET /catalog/laboratory-stores filters by brand                      0.07s  
+  ✓ GET /catalog/laboratory-tests/{id} still returns laboratory test de… 0.11s  
+  ✓ GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE  0.05s  
+  ✓ PUT /orders/{order_id}/cancel still returns 503 FEATURE_DISABLED     0.08s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaCheckoutPaymentLinkTest
+  ✓ POST /checkout/payment-link without token returns 401 UNAUTHENTICAT… 0.13s  
+  ✓ POST /checkout/payment-link with user without customer returns 403…  0.07s  
+  ✓ POST /checkout/payment-link without brand returns 422 VALIDATION_ER… 0.06s  
+  ✓ POST /checkout/payment-link with invalid brand returns 422 VALIDATI… 0.07s  
+  ✓ POST /checkout/payment-link with expires_in_minutes below 5 returns… 0.07s  
+  ✓ POST /checkout/payment-link with expires_in_minutes above 1440 retu… 0.08s  
+  ✓ POST /checkout/payment-link with empty cart returns 409 EMPTY_CART   0.06s  
+  ✓ POST /checkout/payment-link with cart but no draft returns 409 CHEC… 0.58s  
+  ✓ POST /checkout/payment-link with draft missing contact_id returns 4… 0.57s  
+  ✓ POST /checkout/payment-link with draft missing address_id returns 4… 2.49s  
+  ✓ POST /checkout/payment-link when appointment required and missing r… 2.21s  
+  ✓ POST /checkout/payment-link with ready checkout returns 200 with pa… 2.37s  
+  ✓ POST /checkout/payment-link does not create LaboratoryPurchase       2.05s  
+  ✓ POST /checkout/payment-link stores token hash not plain token        1.92s  
+  ✓ POST /checkout/payment-link generates unique token hashes            2.02s  
+  ✓ GET akubica checkout link with valid token redirects to laboratory…  2.08s  
+  ✓ GET akubica checkout link with expired token redirects to login      2.09s  
+  ✓ GET akubica checkout link with invalid token redirects to login      0.08s  
+  ✓ GET akubica checkout link does not authenticate another customer     1.97s  
+  ✓ GET akubica checkout link with empty cart redirects to login with e… 2.21s  
+  ✓ GET akubica checkout link with deleted draft redirects to login wit… 2.77s  
+  ✓ GET akubica checkout link with pending appointment allows redirect…  3.72s  
+  ✓ GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE  0.11s  
+  ✓ PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED           0.11s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaCheckoutPreparationTest
+  ✓ GET /cart/totals without token returns 401 UNAUTHENTICATED           0.14s  
+  ✓ DELETE /cart without token returns 401 UNAUTHENTICATED               0.12s  
+  ✓ GET /checkout/prepare without token returns 401 UNAUTHENTICATED      0.09s  
+  ✓ POST /checkout/draft without token returns 401 UNAUTHENTICATED       0.14s  
+  ✓ GET /checkout/prepare with user without customer returns 403 FORBID… 0.07s  
+  ✓ GET /cart/totals with empty cart returns 200 with zero totals        0.09s  
+  ✓ GET /cart/totals with items returns correct totals                   1.07s  
+  ✓ GET /cart/totals without brand returns 422 VALIDATION_ERROR          0.07s  
+  ✓ GET /cart/totals with invalid brand returns 422 VALIDATION_ERROR     0.07s  
+  ✓ DELETE /cart with empty cart returns 200 deleted_count 0             0.08s  
+  ✓ DELETE /cart with items returns correct deleted_count                0.98s  
+  ✓ DELETE /cart does not remove items from another brand                1.62s  
+  ✓ DELETE /cart does not remove items from another customer             1.29s  
+  ✓ GET /checkout/prepare with empty cart returns EMPTY_CART warning     0.08s  
+  ✓ GET /checkout/prepare with items returns cart totals contacts and a… 2.84s  
+  ✓ GET /checkout/prepare sets can_continue_to_payment_platform true wh… 0.53s  
+  ✓ GET /checkout/prepare sets requires_appointment true when cart item… 0.57s  
+  ✓ GET /checkout/prepare payment_methods do not expose sensitive token… 0.49s  
+  ✓ POST /checkout/draft with empty cart returns 409 EMPTY_CART          0.08s  
+  ✓ POST /checkout/draft with foreign contact_id returns 404 CONTACT_NO… 2.01s  
+  ✓ POST /checkout/draft with foreign address_id returns 404 ADDRESS_NO… 0.64s  
+  ✓ POST /checkout/draft with own contact and address returns 200 draft  2.72s  
+  ✓ POST /checkout/draft with foreign tax_profile_id returns 404 TAX_PR… 0.60s  
+  ✓ POST /checkout/draft with notes too long returns 422 VALIDATION_ERR… 0.75s  
+  ✓ POST /checkout/draft does not create a laboratory purchase           2.62s  
+  ✓ POST /checkout/draft does not store payment_method on draft          2.50s  
+  ✓ GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE  0.08s  
+  ✓ PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED           0.08s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaLaboratoryAppointmentsTest
+  ✓ GET /laboratory-appointments/requirements without token returns 401… 0.12s  
+  ✓ GET /laboratory-appointments without token returns 401 UNAUTHENTICA… 0.07s  
+  ✓ POST /laboratory-appointments without token returns 401 UNAUTHENTIC… 0.09s  
+  ✓ DELETE /laboratory-appointments/{id} without token returns 401 UNAU… 0.05s  
+  ✓ GET /laboratory-appointments with user without customer returns 403… 0.08s  
+  ✓ GET /laboratory-appointments/requirements with empty cart returns w… 0.09s  
+  ✓ GET /laboratory-appointments/requirements with cart without appoint… 0.52s  
+  ✓ GET /laboratory-appointments/requirements with appointment study re… 1.98s  
+  ✓ GET /laboratory-appointments/requirements with existing appointment… 2.58s  
+  ✓ GET /laboratory-appointments with no appointments returns empty arr… 0.10s  
+  ✓ GET /laboratory-appointments returns appointments with expected str… 2.37s  
+  ✓ GET /laboratory-appointments only returns appointments of authentic… 0.11s  
+  ✓ GET /laboratory-appointments filters by brand                        0.10s  
+  ✓ GET /laboratory-appointments filters by status pending               0.14s  
+  ✓ POST /laboratory-appointments with empty cart returns 409 EMPTY_CAR… 2.42s  
+  ✓ POST /laboratory-appointments when appointment not required returns… 3.65s  
+  ✓ POST /laboratory-appointments with foreign contact returns 404 CONT… 4.29s  
+  ✓ POST /laboratory-appointments with foreign address returns 404 ADDR… 3.78s  
+  ✓ POST /laboratory-appointments with past scheduled_at returns 422 VA… 2.69s  
+  ✓ POST /laboratory-appointments with valid payload returns 201         2.18s  
+  ✓ POST /laboratory-appointments duplicate pending returns 409 APPOINT… 2.32s  
+  ✓ POST /laboratory-appointments valid allows payment link afterwards   2.22s  
+  ✓ DELETE /laboratory-appointments/{id} deletes own appointment         0.07s  
+  ✓ DELETE /laboratory-appointments/{id} for another customer returns 4… 0.06s  
+  ✓ DELETE /laboratory-appointments/{id} when not exists returns 404 AP… 0.06s  
+  ✓ DELETE required appointment blocks payment link again with APPOINTM… 2.15s  
+  ✓ POST /checkout/payment-link blocks when appointment required and mi… 2.12s  
+  ✓ GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE  0.06s  
+  ✓ PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED           0.06s  
+
+   FAIL  Tests\Feature\Api\V1\AkubicaOrderDocumentDownloadTest
+  ✓ GET result download without token returns 401                        0.14s  
+  ✓ GET invoice download without token returns 401                       0.06s  
+  ✓ document download endpoints return 403 for user without customer     0.06s  
+  ✓ result download for nonexistent order returns 404 ORDER_NOT_FOUND    0.06s  
+  ✓ result download for another customer order returns 404 ORDER_NOT_FO… 0.10s  
+  ✓ result download for order without results returns 409 RESULT_NOT_RE… 0.10s  
+  ✓ result download with manual storage PDF returns 200 application/pdf  0.12s  
+  ⨯ result download with cached GDA notification returns 200 applicatio… 0.09s  
+  ⨯ result download does not expose base64 or internal paths in respons… 0.14s  
+  ✓ result download response includes expected filename in Content-Disp… 0.10s  
+  ⨯ result download response includes secure Cache-Control header        0.11s  
+  ✓ invoice download for nonexistent order returns 404 ORDER_NOT_FOUND   0.09s  
+  ✓ invoice download for another customer order returns 404 ORDER_NOT_F… 0.52s  
+  ✓ invoice download for nonexistent invoice returns 404 INVOICE_NOT_FO… 0.07s  
+  ✓ invoice download for invoice belonging to another order returns 404… 0.55s  
+  ✓ invoice download when PDF file is missing returns 409 INVOICE_NOT_R… 0.51s  
+  ✓ invoice download with available PDF returns 200 application/pdf      0.44s  
+  ✓ invoice download does not expose internal storage paths              0.52s  
+  ✓ invoice download response includes expected filename in Content-Dis… 0.56s  
+  ⨯ invoice download response includes secure Cache-Control header       0.52s  
+  ✓ GET order results includes bearer download metadata                  0.11s  
+  ⨯ GET order results with GDA notification includes bearer download me… 0.13s  
+  ✓ GET order invoices includes bearer download metadata for issued inv… 0.68s  
+  ✓ payment link still works after document download endpoints           2.27s  
+  ✓ cart coupon apply still works after document download endpoints      0.58s  
+  ✓ invoice request status endpoint still responds for owned order       0.12s  
+  ✓ medications catalog endpoint still returns 503                       0.08s  
+  ✓ order cancellation still returns 503                                 0.07s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaOrdersBasicTest
+  ✓ GET /orders without token returns 401 UNAUTHENTICATED                0.13s  
+  ✓ GET /orders with user without customer returns 403 FORBIDDEN         0.07s  
+  ✓ GET /orders with customer and no orders returns empty array          0.10s  
+  ✓ GET /orders returns orders with expected structure                   0.08s  
+  ✓ GET /orders only returns orders of authenticated customer            0.08s  
+  ✓ GET /orders paginates correctly                                      0.11s  
+  ✓ GET /orders filters by status in_progress                            0.11s  
+  ✓ GET /orders filters by brand                                         0.09s  
+  ✓ GET /orders/{id}/products for nonexistent order returns 404 ORDER_N… 0.07s  
+  ✓ GET /orders/{id}/products for another customer order returns 404 OR… 0.08s  
+  ✓ GET /orders/{id}/products for own order without items returns empty… 0.11s  
+  ✓ GET /orders/{id}/products returns products with expected structure   0.10s  
+  ✓ GET /orders/{id}/status for nonexistent order returns 404 ORDER_NOT… 0.07s  
+  ✓ GET /orders/{id}/status returns status data for own order            0.07s  
+  ✓ GET /orders/{id}/status returns cancelled for soft-deleted order     0.08s  
+  ✓ PUT /orders/{id}/cancel returns 503 FEATURE_DISABLED                 0.08s  
+  ✓ GET /catalog/medications/{id} returns 503 CATALOG_UNAVAILABLE        0.12s  
+
+   FAIL  Tests\Feature\Api\V1\AkubicaOrdersResultsInvoicesTest
+  ✓ GET /orders/results without token returns 401 UNAUTHENTICATED        0.09s  
+  ✓ GET /orders/invoices without token returns 401 UNAUTHENTICATED       0.06s  
+  ✓ GET /orders/results with user without customer returns 403 FORBIDDE… 0.17s  
+  ✓ GET /orders/results with no results returns empty array              0.09s  
+  ⨯ GET /orders/results returns results with expected structure          0.08s  
+  ⨯ GET /orders/results only returns results of authenticated customer   0.09s  
+  ⨯ GET /orders/results paginates correctly                              0.08s  
+  ✓ GET /orders/{id}/results for nonexistent order returns 404 ORDER_NO… 0.10s  
+  ✓ GET /orders/{id}/results for another customer order returns 404 ORD… 0.08s  
+  ✓ GET /orders/{id}/results without results returns 404 RESULTS_NOT_AV… 0.11s  
+  ✓ GET /orders/{id}/results with manual results returns expected struc… 0.10s  
+  ⨯ GET /orders/{id}/results with API notification returns expected str… 0.11s  
+  ✓ GET /orders/invoices with no invoices returns empty array            0.13s  
+  ✓ GET /orders/invoices returns issued invoices with expected structur… 0.53s  
+  ✓ GET /orders/invoices only returns invoices of authenticated custome… 0.87s  
+  ✓ GET /orders/invoices paginates correctly                             1.23s  
+  ✓ GET /orders/{id}/invoices for nonexistent order returns 404 ORDER_N… 0.08s  
+  ✓ GET /orders/{id}/invoices for another customer order returns 404 OR… 0.44s  
+  ✓ GET /orders/{id}/invoices without invoices returns empty array       0.08s  
+  ✓ GET /orders/{id}/invoices returns invoice with expected structure    0.52s  
+  ✓ GET /orders/{id}/invoices returns pending invoice request            0.07s  
+  ✓ PUT /orders/{id}/cancel returns 503 FEATURE_DISABLED                 0.10s  
+  ✓ GET /catalog/medications/{id} returns 503 CATALOG_UNAVAILABLE        0.08s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaTaxProfilesInvoiceRequestTest
+  ✓ POST /user/tax-profiles without token returns 401 UNAUTHENTICATED    0.11s  
+  ✓ POST /orders/{id}/invoice-request without token returns 401 UNAUTHE… 0.08s  
+  ✓ POST /user/tax-profiles with user without customer returns 403 FORB… 0.10s  
+  ✓ GET /user/tax-profiles still works after Sprint 12                   0.06s  
+  ✓ POST /user/tax-profiles with valid payload returns 201               0.08s  
+  ✓ POST /user/tax-profiles with invalid payload returns 422 VALIDATION… 0.07s  
+  ✓ PUT /user/tax-profiles/{id} updates own profile                      0.07s  
+  ✓ PUT /user/tax-profiles/{id} for another customer returns 404 TAX_PR… 0.12s  
+  ✓ DELETE /user/tax-profiles/{id} deletes own profile                   0.08s  
+  ✓ DELETE /user/tax-profiles/{id} for another customer returns 404 TAX… 0.08s  
+  ✓ DELETE /user/tax-profiles/{id} when not exists returns 404 TAX_PROF… 0.09s  
+  ✓ POST /orders/{id}/invoice-request for nonexistent order returns 404… 0.09s  
+  ✓ POST /orders/{id}/invoice-request for another customer order return… 0.12s  
+  ✓ POST /orders/{id}/invoice-request with foreign tax profile returns…  0.09s  
+  ✓ POST /orders/{id}/invoice-request for non-invoiceable order returns… 0.09s  
+  ✓ POST /orders/{id}/invoice-request with valid payload returns 201     0.10s  
+  ✓ POST /orders/{id}/invoice-request duplicate returns 409 INVOICE_REQ… 0.08s  
+  ✓ POST /orders/{id}/invoice-request when invoice already exists retur… 0.57s  
+  ✓ GET /orders/{id}/invoice-request/status without request returns not… 0.08s  
+  ✓ GET /orders/{id}/invoice-request/status with pending request return… 0.07s  
+  ✓ GET /orders/{id}/invoice-request/status with issued invoice returns… 0.56s  
+  ✓ GET /orders/{id}/invoice-request/status for another customer order…  0.15s  
+  ✓ GET /orders/{id}/invoices still works after Sprint 12                0.47s  
+  ✓ GET /orders/invoices still works after Sprint 12                     0.50s  
+  ✓ POST /checkout/payment-link still works after Sprint 12              2.58s  
+  ✓ GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE  0.09s  
+  ✓ PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED           0.15s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaUserEditableDataTest
+  ✓ GET /user/contacts without token returns 401 UNAUTHENTICATED         0.11s  
+  ✓ POST /user/addresses without token returns 401 UNAUTHENTICATED       0.08s  
+  ✓ POST /user/contacts with user without customer returns 403 FORBIDDE… 0.08s  
+  ✓ GET /user/contacts with no contacts returns empty array              0.08s  
+  ✓ GET /user/contacts returns contacts with expected structure          1.72s  
+  ✓ GET /user/contacts only returns contacts of authenticated customer   3.46s  
+  ✓ POST /user/contacts with valid payload returns 201                   1.82s  
+  ✓ POST /user/contacts with invalid payload returns 422 VALIDATION_ERR… 0.09s  
+  ✓ PUT /user/contacts/{id} updates own contact                          1.77s  
+  ✓ PUT /user/contacts/{id} for another customer returns 404 CONTACT_NO… 1.53s  
+  ✓ DELETE /user/contacts/{id} deletes own contact                       1.61s  
+  ✓ DELETE /user/contacts/{id} for another customer returns 404 CONTACT… 1.72s  
+  ✓ DELETE /user/contacts/{id} when contact does not exist returns 404…  0.07s  
+  ✓ POST /user/addresses with valid payload returns 201                  0.13s  
+  ✓ POST /user/addresses with invalid payload returns 422 VALIDATION_ER… 0.19s  
+  ✓ PUT /user/addresses/{id} updates own address                         0.22s  
+  ✓ PUT /user/addresses/{id} for another customer returns 404 ADDRESS_N… 0.31s  
+  ✓ DELETE /user/addresses/{id} deletes own address                      0.25s  
+  ✓ DELETE /user/addresses/{id} for another customer returns 404 ADDRES… 0.27s  
+  ✓ DELETE /user/addresses/{id} when address does not exist returns 404… 0.11s  
+  ✓ GET /user/addresses still works and shows created address            0.13s  
+  ✓ GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE  0.13s  
+  ✓ PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED           0.23s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaUserEndpointsTest
+  ✓ GET /user/family without token returns 401 UNAUTHENTICATED           0.38s  
+  ✓ GET /user/family with user without customer returns 403 FORBIDDEN    0.17s  
+  ✓ GET /user/family with customer and no family returns empty array     0.13s  
+  ✓ GET /user/family returns family members with expected structure      0.08s  
+  ✓ GET /user/family only returns family of authenticated customer       0.11s  
+  ✓ GET /user/tax-profiles with no profiles returns empty array          0.07s  
+  ✓ GET /user/tax-profiles returns profiles with expected structure      0.08s  
+  ✓ GET /user/tax-profiles only returns profiles of authenticated custo… 0.10s  
+  ✓ GET /user/addresses with no addresses returns empty array            0.08s  
+  ✓ GET /user/addresses returns addresses with expected structure        0.13s  
+  ✓ GET /user/addresses only returns addresses of authenticated custome… 0.09s  
+  ✓ GET /user/payment-methods with no methods returns empty array        0.09s  
+  ✓ GET /user/payment-methods returns safe payment method structure      0.07s  
+  ✓ GET /user/payment-methods does not expose sensitive fields           0.07s  
+  ✓ GET /user/payment-methods only returns methods of authenticated cus… 0.12s  
+  ✓ GET /catalog/medications/{id} returns 503 CATALOG_UNAVAILABLE        0.07s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCouponTest > POST /cart/coupon wi…   
+  Expected response status code [409] but received 404.
+Failed asserting that 404 is identical to 409.
+
+  at tests/Feature/Api/V1/AkubicaCartCouponTest.php:153
+    149▕     $this->postJson('/api/v1/cart/coupon', [
+    150▕         'brand' => 'olab',
+    151▕         'code' => 'USADO',
+    152▕     ], authHeaders($token))
+  ➜ 153▕         ->assertStatus(409)
+    154▕         ->assertJsonPath('error.code', 'COUPON_EXPIRED');
+    155▕ });
+    156▕ 
+    157▕ test('POST /cart/coupon with zero balance returns 409 COUPON_EXPIRED', function () {
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCouponTest > applying coupon does…   
+  Failed asserting that Array &0 [
+    'code' => 'PROMO10',
+    'type' => 'balance',
+    'value' => 7000,
+    'discount_cents' => 7000,
+    'description' => 'Saldo a favor',
+] is identical to null.
+
+  at tests/Feature/Api/V1/AkubicaCartCouponTest.php:284
+    280▕     ], authHeaders($tokenA))->assertOk();
+    281▕ 
+    282▕     $this->getJson('/api/v1/cart/coupon?brand=olab', authHeaders($tokenB))
+    283▕         ->assertOk()
+  ➜ 284▕         ->assertJsonPath('data.coupon', null);
+    285▕ });
+    286▕ 
+    287▕ // ── Remove ──────────────────────────────────────────────────────────────
+    288▕
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCouponTest > DELETE /cart/coupon…    
+  Failed asserting that true is identical to false.
+
+  at tests/Feature/Api/V1/AkubicaCartCouponTest.php:371
+    367▕     ], authHeaders($tokenA))->assertOk();
+    368▕ 
+    369▕     $this->deleteJson('/api/v1/cart/coupon?brand=olab', [], authHeaders($tokenB))
+    370▕         ->assertOk()
+  ➜ 371▕         ->assertJsonPath('data.removed', false);
+    372▕ 
+    373▕     $this->getJson('/api/v1/cart/coupon?brand=olab', authHeaders($tokenA))
+    374▕         ->assertOk()
+    375▕         ->assertJsonPath('data.coupon.code', 'PROMO10');
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaCartCouponTest > payment link does no…   
+  Expected response status code [200] but received 409.
+Failed asserting that 409 is identical to 200.
+
+  at tests/Feature/Api/V1/AkubicaCartCouponTest.php:418
+    414▕     $purchasesBefore = LaboratoryPurchase::query()->count();
+    415▕ 
+    416▕     $this->postJson('/api/v1/checkout/payment-link', [
+    417▕         'brand' => 'olab',
+  ➜ 418▕     ], authHeaders($token))->assertOk();
+    419▕ 
+    420▕     expect(LaboratoryPurchase::query()->count())->toBe($purchasesBefore);
+    421▕ });
+    422▕
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaOrderDocumentDownloadTest > result do…   
+  Expected response status code [200] but received 409.
+Failed asserting that 409 is identical to 200.
+
+  at tests/Feature/Api/V1/AkubicaOrderDocumentDownloadTest.php:91
+     87▕     createAkubicaResultsNotification($order, '%PDF-1.4 gda cached results');
+     88▕ 
+     89▕     $response = $this->get("/api/v1/orders/{$order->id}/results/download", authHeaders($token));
+     90▕ 
+  ➜  91▕     $response->assertOk()
+     92▕         ->assertHeader('Content-Type', 'application/pdf');
+     93▕ 
+     94▕     expect($response->getContent())->toStartWith('%PDF');
+     95▕ });
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaOrderDocumentDownloadTest > result do…   
+  Failed asserting that two strings are identical.
+  -'application/pdf'
+  +'application/json'
+  
+
+  at tests/Feature/Api/V1/AkubicaOrderDocumentDownloadTest.php:109
+    105▕     $body = $response->getContent();
+    106▕     expect($body)->not->toContain(base64_encode($pdfContent));
+    107▕     expect($body)->not->toContain('results/');
+    108▕     expect($body)->not->toContain('s3://');
+  ➜ 109▕     expect($response->headers->get('Content-Type'))->toBe('application/pdf');
+    110▕ });
+    111▕ 
+    112▕ test('result download response includes expected filename in Content-Disposition', function () {
+    113▕     [$user, $token] = akubicaCustomerToken();
+
+  1   tests/Feature/Api/V1/AkubicaOrderDocumentDownloadTest.php:109
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaOrderDocumentDownloadTest > result do…   
+  Header [Cache-Control] was found, but value [must-revalidate, no-cache, no-store, private] does not match [private, no-store, no-cache, must-revalidate].
+Failed asserting that two strings are equal.
+  -'private, no-store, no-cache, must-revalidate'
+  +'must-revalidate, no-cache, no-store, private'
+  
+
+  at tests/Feature/Api/V1/AkubicaOrderDocumentDownloadTest.php:129
+    125▕     storeFakePdf($path);
+    126▕     $order = createAkubicaLaboratoryPurchase($user, ['results' => $path]);
+    127▕ 
+    128▕     $this->get("/api/v1/orders/{$order->id}/results/download", authHeaders($token))
+  ➜ 129▕         ->assertHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+    130▕ });
+    131▕ 
+    132▕ // ── Invoice download ────────────────────────────────────────────────────
+    133▕
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaOrderDocumentDownloadTest > invoice d…   
+  Header [Cache-Control] was found, but value [must-revalidate, no-cache, no-store, private] does not match [private, no-store, no-cache, must-revalidate].
+Failed asserting that two strings are equal.
+  -'private, no-store, no-cache, must-revalidate'
+  +'must-revalidate, no-cache, no-store, private'
+  
+
+  at tests/Feature/Api/V1/AkubicaOrderDocumentDownloadTest.php:226
+    222▕     $order = createAkubicaLaboratoryPurchase($user);
+    223▕     $invoice = createAkubicaLaboratoryInvoice($order);
+    224▕ 
+    225▕     $this->get("/api/v1/orders/{$order->id}/invoices/{$invoice->id}/download", authHeaders($token))
+  ➜ 226▕         ->assertHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+    227▕ });
+    228▕ 
+    229▕ // ── Integración con resources ───────────────────────────────────────────
+    230▕
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaOrderDocumentDownloadTest > GET order…   
+  Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+  at tests/Feature/Api/V1/AkubicaOrderDocumentDownloadTest.php:249
+    245▕     $order = createAkubicaLaboratoryPurchase($user);
+    246▕     createAkubicaResultsNotification($order);
+    247▕ 
+    248▕     $this->getJson("/api/v1/orders/{$order->id}/results", authHeaders($token))
+  ➜ 249▕         ->assertOk()
+    250▕         ->assertJsonPath('data.download.type', 'bearer')
+    251▕         ->assertJsonPath('data.results.0.download.type', 'bearer');
+    252▕ });
+    253▕
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaOrdersResultsInvoicesTest > GET /orde…   
+  Failed to assert that the response count matched the expected 1
+Failed asserting that actual size 0 matches expected size 1.
+
+  at tests/Feature/Api/V1/AkubicaOrdersResultsInvoicesTest.php:81
+     77▕     createAkubicaResultsNotification($purchase);
+     78▕ 
+     79▕     $this->getJson('/api/v1/orders/results', authHeaders($token))
+     80▕         ->assertOk()
+  ➜  81▕         ->assertJsonCount(1, 'data.results')
+     82▕         ->assertJsonPath('data.results.0.order_id', $purchase->id)
+     83▕         ->assertJsonPath('data.results.0.study_name', 'Biometría hemática')
+     84▕         ->assertJsonPath('data.results.0.brand', 'olab')
+     85▕         ->assertJsonPath('data.results.0.status', 'results_ready')
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaOrdersResultsInvoicesTest > GET /orde…   
+  Failed to assert that the response count matched the expected 1
+Failed asserting that actual size 0 matches expected size 1.
+
+  at tests/Feature/Api/V1/AkubicaOrdersResultsInvoicesTest.php:104
+    100▕     createAkubicaResultsNotification($otherPurchase);
+    101▕ 
+    102▕     $this->getJson('/api/v1/orders/results', authHeaders($ownerToken))
+    103▕         ->assertOk()
+  ➜ 104▕         ->assertJsonCount(1, 'data.results')
+    105▕         ->assertJsonPath('data.results.0.order_id', $ownerPurchase->id);
+    106▕ });
+    107▕ 
+    108▕ test('GET /orders/results paginates correctly', function () {
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaOrdersResultsInvoicesTest > GET /orde…   
+  Failed asserting that 0 is identical to 3.
+
+  at tests/Feature/Api/V1/AkubicaOrdersResultsInvoicesTest.php:120
+    116▕     $this->getJson('/api/v1/orders/results?per_page=2&page=2', authHeaders($token))
+    117▕         ->assertOk()
+    118▕         ->assertJsonPath('data.pagination.current_page', 2)
+    119▕         ->assertJsonPath('data.pagination.per_page', 2)
+  ➜ 120▕         ->assertJsonPath('data.pagination.total', 3)
+    121▕         ->assertJsonCount(1, 'data.results');
+    122▕ });
+    123▕ 
+    124▕ // ── Order results ─────────────────────────────────────────────────────
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Api\V1\AkubicaOrdersResultsInvoicesTest > GET /orde…   
+  Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+  at tests/Feature/Api/V1/AkubicaOrdersResultsInvoicesTest.php:179
+    175▕     $purchase = createAkubicaLaboratoryPurchase($user);
+    176▕     createAkubicaResultsNotification($purchase);
+    177▕ 
+    178▕     $this->getJson("/api/v1/orders/{$purchase->id}/results", authHeaders($token))
+  ➜ 179▕         ->assertOk()
+    180▕         ->assertJsonPath('data.order_id', $purchase->id)
+    181▕         ->assertJsonPath('data.status', 'results_ready')
+    182▕         ->assertJsonPath('data.results_available', true)
+    183▕         ->assertJsonCount(1, 'data.results')
+
+
+  Tests:    13 failed, 298 passed (1005 assertions)
+  Duration: 173.51s
+

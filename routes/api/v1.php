@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Route;
 | API v1 — Integración Akubica
 |--------------------------------------------------------------------------
 | Prefijo final: /api/v1
-| Auth: Laravel Sanctum Bearer Token
+| Auth: Laravel Sanctum Bearer Token (catálogo laboratorio público)
 */
 
 Route::middleware(['force.json', 'api.token.guard'])->name('api.v1.')->group(function () {
@@ -52,28 +52,29 @@ Route::middleware(['force.json', 'api.token.guard'])->name('api.v1.')->group(fun
             ->name('auth.token.revoke');
     });
 
+    // ── Catálogo laboratorio (público, sin Bearer token) ─────────────────
+    Route::prefix('catalog')->name('catalog.')->group(function () {
+        Route::get('laboratory-brands', [CatalogController::class, 'indexLaboratoryBrands'])
+            ->name('laboratory-brands.index');
+
+        Route::get('laboratory-tests', [CatalogController::class, 'indexLaboratoryTests'])
+            ->name('laboratory-tests.index');
+
+        Route::get('laboratory-test-categories', [CatalogController::class, 'indexLaboratoryTestCategories'])
+            ->name('laboratory-test-categories.index');
+
+        Route::get('laboratory-stores', [CatalogController::class, 'indexLaboratoryStores'])
+            ->name('laboratory-stores.index');
+
+        Route::get('laboratory-tests/{laboratory_test_id}', [CatalogController::class, 'showLaboratoryTest'])
+            ->name('laboratory-tests.show');
+
+        Route::get('medications/{medication_id}', [CatalogController::class, 'showMedication'])
+            ->name('medications.show');
+    });
+
     // ── Rutas protegidas ──────────────────────────────────────────────────
     Route::middleware(['auth:sanctum', 'api.customer'])->group(function () {
-
-        Route::prefix('catalog')->name('catalog.')->group(function () {
-            Route::get('laboratory-brands', [CatalogController::class, 'indexLaboratoryBrands'])
-                ->name('laboratory-brands.index');
-
-            Route::get('laboratory-tests', [CatalogController::class, 'indexLaboratoryTests'])
-                ->name('laboratory-tests.index');
-
-            Route::get('laboratory-test-categories', [CatalogController::class, 'indexLaboratoryTestCategories'])
-                ->name('laboratory-test-categories.index');
-
-            Route::get('laboratory-stores', [CatalogController::class, 'indexLaboratoryStores'])
-                ->name('laboratory-stores.index');
-
-            Route::get('laboratory-tests/{laboratory_test_id}', [CatalogController::class, 'showLaboratoryTest'])
-                ->name('laboratory-tests.show');
-
-            Route::get('medications/{medication_id}', [CatalogController::class, 'showMedication'])
-                ->name('medications.show');
-        });
 
         Route::get('cart/totals', [CartController::class, 'totals'])->name('cart.totals');
         Route::get('cart/coupon', [CartCouponController::class, 'show'])->name('cart.coupon.show');

@@ -5,16 +5,122 @@ use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
 use App\Models\LaboratoryTestCategory;
 
-// ── Auth ──────────────────────────────────────────────────────────────
+// ── Catálogo público (sin Bearer token) ───────────────────────────────
 
-test('GET /catalog/laboratory-brands without token returns 401 UNAUTHENTICATED', function () {
+test('GET /catalog/laboratory-brands without token returns 200', function () {
     $this->getJson('/api/v1/catalog/laboratory-brands')
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonCount(count(LaboratoryBrand::cases()), 'data.brands');
+});
+
+test('GET /catalog/laboratory-test-categories without token returns 200', function () {
+    $category = LaboratoryTestCategory::factory()->create(['name' => 'Hematología']);
+    createOlabTest(['laboratory_test_category_id' => $category->id]);
+
+    $this->getJson('/api/v1/catalog/laboratory-test-categories?brand=olab')
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonCount(1, 'data.categories');
+});
+
+test('GET /catalog/laboratory-tests without token returns 200', function () {
+    createOlabTest(['name' => 'Glucosa en ayunas']);
+
+    $this->getJson('/api/v1/catalog/laboratory-tests?brand=olab')
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonCount(1, 'data.laboratory_tests');
+});
+
+test('GET /catalog/laboratory-tests with search without token returns 200', function () {
+    createOlabTest(['name' => 'Glucosa en ayunas']);
+    createOlabTest(['name' => 'Perfil lipídico']);
+
+    $this->getJson('/api/v1/catalog/laboratory-tests?brand=olab&search=glucosa')
+        ->assertOk()
+        ->assertJsonCount(1, 'data.laboratory_tests')
+        ->assertJsonPath('data.laboratory_tests.0.name', 'Glucosa en ayunas');
+});
+
+test('GET /catalog/laboratory-tests with category_id without token returns 200', function () {
+    $hematology = LaboratoryTestCategory::factory()->create(['name' => 'Hematología']);
+    $chemistry = LaboratoryTestCategory::factory()->create(['name' => 'Química']);
+
+    createOlabTest([
+        'name' => 'Biometría',
+        'laboratory_test_category_id' => $hematology->id,
+    ]);
+
+    createOlabTest([
+        'name' => 'Perfil lipídico',
+        'laboratory_test_category_id' => $chemistry->id,
+    ]);
+
+    $this->getJson("/api/v1/catalog/laboratory-tests?brand=olab&category_id={$hematology->id}")
+        ->assertOk()
+        ->assertJsonCount(1, 'data.laboratory_tests')
+        ->assertJsonPath('data.laboratory_tests.0.name', 'Biometría');
+});
+
+test('GET /catalog/laboratory-tests with pagination without token returns 200', function () {
+    for ($i = 0; $i < 25; $i++) {
+        createOlabTest(['name' => "Estudio paginado {$i}"]);
+    }
+
+    $this->getJson('/api/v1/catalog/laboratory-tests?brand=olab&page=2&per_page=20')
+        ->assertOk()
+        ->assertJsonPath('data.pagination.current_page', 2)
+        ->assertJsonPath('data.pagination.per_page', 20)
+        ->assertJsonPath('data.pagination.total', 25)
+        ->assertJsonCount(5, 'data.laboratory_tests');
+});
+
+test('GET /catalog/laboratory-stores without token returns 200', function () {
+    LaboratoryStore::query()->create([
+        'name' => 'Olab San Pedro',
+        'brand' => LaboratoryBrand::OLAB,
+        'state' => 'Nuevo León',
+        'address' => 'Av. Ejemplo 123',
+        'weekly_hours' => 'L-V 8:00-18:00',
+        'saturday_hours' => '8:00-14:00',
+        'sunday_hours' => 'Cerrado',
+        'google_maps_url' => 'https://maps.example.com',
+    ]);
+
+    $this->getJson('/api/v1/catalog/laboratory-stores?brand=olab')
+        ->assertOk()
+        ->assertJsonCount(1, 'data.stores');
+});
+
+test('GET /catalog/laboratory-tests/{id} without token returns 200', function () {
+    $test = createOlabTest(['name' => 'Detalle público']);
+
+    $this->getJson("/api/v1/catalog/laboratory-tests/{$test->id}")
+        ->assertOk()
+        ->assertJsonPath('data.id', $test->id)
+        ->assertJsonPath('data.name', 'Detalle público');
+});
+
+test('POST /cart/items without token returns 401 UNAUTHENTICATED', function () {
+    $test = createOlabTest();
+
+    $this->postJson('/api/v1/cart/items', [
+        'brand' => 'olab',
+        'laboratory_test_id' => $test->id,
+    ])
         ->assertUnauthorized()
         ->assertJsonPath('error.code', 'UNAUTHENTICATED');
 });
 
-test('GET /catalog/laboratory-tests without token returns 401 UNAUTHENTICATED', function () {
-    $this->getJson('/api/v1/catalog/laboratory-tests')
+test('GET /checkout/prepare without token returns 401 UNAUTHENTICATED', function () {
+    $this->getJson('/api/v1/checkout/prepare?brand=olab')
+        ->assertUnauthorized()
+        ->assertJsonPath('error.code', 'UNAUTHENTICATED');
+});
+
+test('GET /orders without token returns 401 UNAUTHENTICATED', function () {
+    $this->getJson('/api/v1/orders')
         ->assertUnauthorized()
         ->assertJsonPath('error.code', 'UNAUTHENTICATED');
 });
@@ -271,9 +377,16 @@ test('GET /catalog/laboratory-tests/{id} still returns laboratory test detail', 
 });
 
 test('GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE', function () {
-    [, $token] = akubicaCustomerToken();
-
-    $this->getJson('/api/v1/catalog/medications/1', authHeaders($token))
+    $this->getJson('/api/v1/catalog/medications/1')
         ->assertStatus(503)
         ->assertJsonPath('error.code', 'CATALOG_UNAVAILABLE');
+});
+
+test('PUT /orders/{order_id}/cancel still returns 503 FEATURE_DISABLED', function () {
+    [$user, $token] = akubicaCustomerToken();
+    $order = createAkubicaLaboratoryPurchase($user);
+
+    $this->putJson("/api/v1/orders/{$order->id}/cancel", [], authHeaders($token))
+        ->assertStatus(503)
+        ->assertJsonPath('error.code', 'FEATURE_DISABLED');
 });
