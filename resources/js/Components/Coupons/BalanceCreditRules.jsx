@@ -41,25 +41,35 @@ const iconForRow = (key) => {
 function TermsRow({ row }) {
 	const Icon = iconForRow(row.key);
 	const valueClass = toneClasses[row.tone ?? "default"];
+	const isFootnote = row.key === "conditions";
 
 	return (
-		<div className="flex items-center justify-between gap-3 py-2.5">
-			<div className="flex min-w-0 items-center gap-2">
-				<Icon
-					className="size-4 shrink-0 text-violet-400 dark:text-violet-500"
-					aria-hidden="true"
-				/>
-				<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-					{row.label}
+		<div
+			className={[
+				"flex min-w-0 items-start gap-2.5 py-2.5",
+				isFootnote ? "pt-1" : "",
+			].join(" ")}
+		>
+			<Icon
+				className="mt-0.5 size-4 shrink-0 text-violet-400 dark:text-violet-500"
+				aria-hidden="true"
+			/>
+			<div className="min-w-0 flex-1">
+				{!isFootnote && (
+					<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+						{row.label}
+					</Text>
+				)}
+				<Text
+					className={[
+						"break-words text-xs leading-snug sm:text-sm",
+						isFootnote ? "text-zinc-600 dark:text-zinc-300" : valueClass,
+						!isFootnote ? "mt-0.5" : "",
+					].join(" ")}
+				>
+					{row.value}
 				</Text>
 			</div>
-			<Text
-				className={["shrink-0 text-right text-xs sm:text-sm", valueClass].join(
-					" ",
-				)}
-			>
-				{row.value}
-			</Text>
 		</div>
 	);
 }
@@ -114,7 +124,7 @@ export default function BalanceCreditRules({
 	return (
 		<div
 			className={[
-				"rounded-lg border border-violet-100/90 bg-white/70 px-3 py-1 dark:border-violet-900/30 dark:bg-zinc-900/50",
+				"min-w-0 overflow-hidden rounded-lg border border-violet-100/90 bg-white/70 px-3 py-1 dark:border-violet-900/30 dark:bg-zinc-900/50",
 				className,
 			].join(" ")}
 		>

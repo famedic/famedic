@@ -256,7 +256,6 @@ export function buildBalanceCreditTermsRows(
 		key: "conditions",
 		label: "Condiciones:",
 		value: "Aplica a compras que cumplan las condiciones del laboratorio.",
-		tone: "info",
 	});
 
 	return rows;

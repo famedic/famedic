@@ -72,7 +72,7 @@ export default function BalanceCreditCard({
 	return (
 		<div
 			className={[
-				"rounded-lg border border-violet-100/90 bg-violet-50/35 px-4 py-3.5 shadow-sm",
+				"min-w-0 overflow-hidden rounded-lg border border-violet-100/90 bg-violet-50/35 px-4 py-3.5 shadow-sm",
 				"dark:border-violet-900/35 dark:bg-violet-950/15",
 				isCart ? "-mx-1" : "",
 			].join(" ")}
