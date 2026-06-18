@@ -1174,8 +1174,14 @@ export default function CouponsAssign({
 	const handleFormSubmit = (e) => {
 		e.preventDefault();
 		if (activeTab !== "summary") return;
+		const hasSelectedBeneficiaryRows = bulkRowsRef.current.some(
+			(r) => r.include && isConfirmableBeneficiaryStatus(resolveBulkRowStatus(r)),
+		);
 		post(route("admin.coupons.assign.store"), {
-			forceFormData: data.assignment_mode === "bulk",
+			forceFormData:
+				data.assignment_mode === "bulk" &&
+				!hasSelectedBeneficiaryRows &&
+				!!bulkUploadFileRef.current,
 		});
 	};
 

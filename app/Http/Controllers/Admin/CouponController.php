@@ -1209,7 +1209,8 @@ class CouponController extends Controller
                 'file',
                 'mimes:xlsx,xls,csv',
                 Rule::requiredIf(fn () => $request->input('assignment_mode') === 'bulk'
-                    && empty($request->input('bulk_emails'))),
+                    && empty($request->input('bulk_emails'))
+                    && empty($request->input('beneficiary_rows'))),
             ],
             'bulk_emails' => [
                 Rule::requiredIf(fn () => $assignmentMode === 'individual' && empty($request->input('beneficiary_rows'))),
