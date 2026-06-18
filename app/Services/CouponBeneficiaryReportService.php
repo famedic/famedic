@@ -25,7 +25,7 @@ class CouponBeneficiaryReportService
     public function paginate(array $filters): array
     {
         $query = $this->buildReportQuery($filters);
-        $summary = $this->buildSummaryMetrics(clone $query);
+        $summary = $this->buildSummaryMetrics($filters);
 
         $paginator = $query
             ->orderByDesc(DB::raw('COALESCE(asg.last_assigned_at, pend.pending_last_assigned_at)'))
@@ -264,6 +264,7 @@ class CouponBeneficiaryReportService
     }
 
     /**
+     * @param  array<string, mixed>  $filters
      * @return array{
      *     total_beneficiaries: int,
      *     registered_count: int,
@@ -273,16 +274,24 @@ class CouponBeneficiaryReportService
      *     total_reversed_balance_cents: int
      * }
      */
-    private function buildSummaryMetrics(Builder $query): array
+    private function buildSummaryMetrics(array $filters): array
     {
-        $summary = (clone $query)
+        $inner = $this->buildReportQuery($filters)->select([
+            'bk.user_id',
+            DB::raw('COALESCE(av.available_balance_cents, 0) as available_balance_cents'),
+            DB::raw('COALESCE(usd.used_balance_cents, 0) as used_balance_cents'),
+            DB::raw('COALESCE(rev.reversed_balance_cents, 0) as reversed_balance_cents'),
+        ]);
+
+        $summary = DB::query()
+            ->fromSub($inner, 'filtered_rows')
             ->selectRaw('
                 COUNT(*) as total_beneficiaries,
-                SUM(CASE WHEN bk.user_id IS NOT NULL THEN 1 ELSE 0 END) as registered_count,
-                SUM(CASE WHEN bk.user_id IS NULL THEN 1 ELSE 0 END) as pending_count,
-                SUM(COALESCE(av.available_balance_cents, 0)) as total_available_balance_cents,
-                SUM(COALESCE(usd.used_balance_cents, 0)) as total_used_balance_cents,
-                SUM(COALESCE(rev.reversed_balance_cents, 0)) as total_reversed_balance_cents
+                SUM(CASE WHEN filtered_rows.user_id IS NOT NULL THEN 1 ELSE 0 END) as registered_count,
+                SUM(CASE WHEN filtered_rows.user_id IS NULL THEN 1 ELSE 0 END) as pending_count,
+                SUM(filtered_rows.available_balance_cents) as total_available_balance_cents,
+                SUM(filtered_rows.used_balance_cents) as total_used_balance_cents,
+                SUM(filtered_rows.reversed_balance_cents) as total_reversed_balance_cents
             ')
             ->first();
 
