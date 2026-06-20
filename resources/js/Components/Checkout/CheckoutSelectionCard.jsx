@@ -10,6 +10,7 @@ export default function CheckoutSelectionCard({
     greenIcon = false,
     selected = false,
     showRadio = false,
+    compact = false,
     ...props
 }) {
     return (
@@ -17,7 +18,9 @@ export default function CheckoutSelectionCard({
             hoverable={!selected}
             className={clsx(
                 "flex w-full flex-col p-4",
-                showRadio ? "h-auto" : "h-full hover:ring-1 md:aspect-[16/9]",
+                showRadio || compact
+                    ? "h-auto"
+                    : "h-full hover:ring-1 md:aspect-[16/9]",
                 selected &&
                     "ring-2 ring-famedic-dark dark:ring-famedic-lime bg-famedic-dark/5 dark:bg-famedic-lime/5",
                 className,
@@ -27,13 +30,13 @@ export default function CheckoutSelectionCard({
             <div
                 className={clsx(
                     "pointer-events-none w-full",
-                    showRadio ? "" : "h-full",
+                    showRadio || compact ? "" : "h-full",
                 )}
             >
                 <div
                     className={clsx(
                         "flex items-start gap-3",
-                        showRadio ? "" : "h-full",
+                        showRadio || compact ? "" : "h-full",
                     )}
                 >
                     {showRadio && (

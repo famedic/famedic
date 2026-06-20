@@ -79,6 +79,7 @@ class HandleInertiaRequests extends Middleware
             'appEnv' => app()->environment(),
             'appEnvLabel' => AppEnvironmentLabel::current(),
             'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
+            'medicalAttentionTrialEnabled' => (bool) config('famedic.medical_attention_trial_enabled'),
             'paymentUsesMock' => MockEfevooPaymentSupport::isMockMode(),
             'labResultsOtpRequired' => (bool) config('laboratory-results.otp_required', false),
             'trackingEvents' => function () {

@@ -1,30 +1,26 @@
 // resources/js/Pages/MedicalAttention/components/SubscribeHero.jsx
 import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
-import { GiftIcon } from "@heroicons/react/24/solid";
-import { useEffect } from "react";
+import { Badge } from "@/Components/Catalyst/badge";
+import { GiftIcon, CalendarDaysIcon } from "@heroicons/react/24/solid";
+import { useForm, usePage } from "@inertiajs/react";
 
 export default function SubscribeHero({
-    setIsOpen,
     formattedMedicalAttentionSubscriptionExpiresAt,
     formattedPrice,
 }) {
-    // Logs de depuración
-    useEffect(() => {
-        if (true) {
-            console.group('🎬 COMPONENTE: SubscribeHero');
-            console.log('📥 Props:');
-            console.log('  - formattedMedicalAttentionSubscriptionExpiresAt:', formattedMedicalAttentionSubscriptionExpiresAt);
-            console.log('  - formattedPrice:', formattedPrice);
-            
-            if (formattedMedicalAttentionSubscriptionExpiresAt) {
-                console.log('ℹ️ Mostrando opción de pago:', formattedPrice);
-            } else {
-                console.log('ℹ️ Mostrando opción de prueba gratuita');
-            }
-            console.groupEnd();
+    const trialEnabled = usePage().props.medicalAttentionTrialEnabled ?? false;
+    const showTrialOffer =
+        trialEnabled && !formattedMedicalAttentionSubscriptionExpiresAt;
+
+    const { post, processing } = useForm({});
+
+    const submitTrial = (e) => {
+        e.preventDefault();
+        if (!processing) {
+            post(route("free-medical-attention.subscription"));
         }
-    }, [formattedMedicalAttentionSubscriptionExpiresAt, formattedPrice]);
+    };
 
     return (
         <div className="relative isolate overflow-hidden rounded-t-2xl bg-gradient-to-b from-zinc-300/10 dark:from-slate-800/20">
@@ -32,16 +28,18 @@ export default function SubscribeHero({
                 <div className="px-6 lg:px-0 lg:pt-4">
                     <div className="mx-auto max-w-2xl">
                         <div className="max-w-2xl">
+                            {!showTrialOffer && (
+                                <Badge
+                                    color="blue"
+                                    className="mb-4 px-3 py-1.5 text-sm"
+                                >
+                                    <CalendarDaysIcon className="size-4" />
+                                    Membresía anual · 12 meses de vigencia
+                                </Badge>
+                            )}
+
                             <h1 className="text-pretty text-5xl font-semibold tracking-tight text-famedic-dark dark:text-white">
-                                {formattedMedicalAttentionSubscriptionExpiresAt ? (
-                                    <>
-                                        Brindamos atención médica a tu
-                                        familia por menos de{" "}
-                                        <span className="text-famedic-light">
-                                            $1mxn al día
-                                        </span>
-                                    </>
-                                ) : (
+                                {showTrialOffer ? (
                                     <>
                                         Prueba{" "}
                                         <span className="text-famedic-light">
@@ -50,33 +48,69 @@ export default function SubscribeHero({
                                         médica para ti y tu familia sin
                                         costo!
                                     </>
+                                ) : (
+                                    <>
+                                        Membresía{" "}
+                                        <span className="text-famedic-light">
+                                            anual
+                                        </span>{" "}
+                                        de atención médica para tu familia
+                                    </>
                                 )}
                             </h1>
 
                             <Text className="mt-6">
-                                Protege a tu familia con acceso ilimitado a
-                                atención médica profesional 24/7 desde
-                                cualquier lugar. Prueba el servicio 1 mes
-                                completamente gratis. Al terminar tu período
-                                de prueba, podrás elegir adquirir una
-                                membresía familiar por menos de $1 peso al
-                                día para todas las consultas médicas,
-                                asistencia psicológica y asesoría
-                                nutricional para tu familia por todo un año.
+                                {showTrialOffer ? (
+                                    <>
+                                        Protege a tu familia con acceso
+                                        ilimitado a atención médica
+                                        profesional 24/7 desde cualquier
+                                        lugar. Prueba el servicio 1 mes
+                                        completamente gratis. Al terminar tu
+                                        período de prueba, podrás elegir
+                                        adquirir una membresía familiar anual
+                                        por menos de $1 peso al día para todas
+                                        las consultas médicas, asistencia
+                                        psicológica y asesoría nutricional
+                                        para tu familia.
+                                    </>
+                                ) : (
+                                    <>
+                                        Protege a tu familia con acceso
+                                        ilimitado a atención médica
+                                        profesional 24/7 durante{" "}
+                                        <strong>todo un año</strong>. Una sola
+                                        suscripción anual de{" "}
+                                        <strong>{formattedPrice}</strong>{" "}
+                                        (menos de $1 peso al día) cubre
+                                        consultas médicas, asistencia
+                                        psicológica y asesoría nutricional
+                                        para tu familia.
+                                    </>
+                                )}
                             </Text>
 
-                            {!formattedMedicalAttentionSubscriptionExpiresAt ? (
-                                <div className="mt-10 flex items-center gap-x-6">
-                                    <Button onClick={() => setIsOpen(true)}>
+                            {showTrialOffer ? (
+                                <form
+                                    onSubmit={submitTrial}
+                                    className="mt-10 flex items-center gap-x-6"
+                                >
+                                    <Button
+                                        type="submit"
+                                        disabled={processing}
+                                    >
                                         <GiftIcon className="text-green-200" />
                                         Activar mi prueba sin costo
                                     </Button>
-                                </div>
+                                </form>
                             ) : (
-                                <div className="mt-10 flex items-center gap-x-6">
-                                    <Button onClick={() => setIsOpen(true)}>
-                                        Suscribirse por {formattedPrice}
+                                <div className="mt-10 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-x-6">
+                                    <Button href={route("medical-attention.checkout")}>
+                                        Suscribirse — {formattedPrice} / año
                                     </Button>
+                                    <Text className="text-sm text-zinc-500 dark:text-zinc-400">
+                                        Pago único · vigencia 12 meses
+                                    </Text>
                                 </div>
                             )}
                         </div>
