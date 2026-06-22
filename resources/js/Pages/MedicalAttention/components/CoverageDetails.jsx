@@ -1,29 +1,225 @@
-// resources/js/Pages/MedicalAttention/components/CoverageDetails.jsx
 import { Subheading } from "@/Components/Catalyst/heading";
 import { Strong, Text } from "@/Components/Catalyst/text";
-import { CheckIcon, StarIcon } from "@heroicons/react/24/solid";
+import {
+    Tab,
+    TabGroup,
+    TabList,
+    TabPanel,
+    TabPanels,
+} from "@/Components/Catalyst/tabs";
+import { CheckIcon, StarIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { usePage } from "@inertiajs/react";
-import { useEffect } from "react";
+import clsx from "clsx";
 
-export default function CoverageDetails() {
-    const hasOdessaAfiliateAccount = usePage().props.hasOdessaAfiliateAccount;
+function OdessaStars({ count = 3, className = "text-yellow-400" }) {
+    return (
+        <span className="flex">
+            {Array.from({ length: count }).map((_, i) => (
+                <StarIcon key={i} className={clsx("size-5", className)} />
+            ))}
+        </span>
+    );
+}
 
-    // Logs de depuración
-    useEffect(() => {
-        if (true) {
-            console.group('📋 COMPONENTE: CoverageDetails');
-            console.log('📥 Datos del usePage:');
-            console.log('  - hasOdessaAfiliateAccount:', hasOdessaAfiliateAccount);
-            
-            if (hasOdessaAfiliateAccount) {
-                console.log('✨ Mostrando beneficios premium (con Odessa)');
-            } else {
-                console.log('🔹 Mostrando beneficios básicos');
-            }
-            console.groupEnd();
-        }
-    }, [hasOdessaAfiliateAccount]);
+function CheckListItem({ children }) {
+    return (
+        <li className="flex items-center gap-x-2">
+            <CheckIcon className="size-4 min-w-4 stroke-green-200" />
+            <Text>{children}</Text>
+        </li>
+    );
+}
 
+function ExcludedListItem({ children }) {
+    return (
+        <li className="flex items-start gap-x-2">
+            <XMarkIcon className="mt-0.5 size-4 min-w-4 text-zinc-400" />
+            <Text className="text-zinc-600 dark:text-zinc-400">{children}</Text>
+        </li>
+    );
+}
+
+function PremiumBenefit({ title, items }) {
+    return (
+        <li className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
+            <Strong>
+                <span className="flex flex-wrap items-center gap-2 text-yellow-600 dark:text-yellow-400">
+                    <StarIcon className="size-5 shrink-0 text-yellow-400" />
+                    {title}
+                    <StarIcon className="size-5 shrink-0 text-yellow-400" />
+                </span>
+            </Strong>
+            <ul className="mt-1 list-inside list-disc marker:!text-yellow-600">
+                {items.map((item) => (
+                    <li key={item}>
+                        <Text>{item}</Text>
+                    </li>
+                ))}
+            </ul>
+        </li>
+    );
+}
+
+function IncludedBenefitsList({ hasOdessaAfiliateAccount }) {
+    return (
+        <ol className="list-inside list-decimal space-y-3 marker:text-famedic-light">
+            <li>
+                <Strong>
+                    <span className="text-famedic-light">
+                        Asistencia telemedicina ilimitadas 24/7
+                    </span>
+                </Strong>
+                <ul className="list-inside list-disc marker:!text-famedic-dark">
+                    <li>
+                        <Text>
+                            Conecta al paciente con médicos generales a través
+                            de Videoconferencia y Chat 24/7
+                        </Text>
+                    </li>
+                </ul>
+            </li>
+
+            {hasOdessaAfiliateAccount && (
+                <>
+                    <PremiumBenefit
+                        title="Médico en casa hasta 3 veces al año"
+                        items={["Consultas médicas a domicilio"]}
+                    />
+                    <PremiumBenefit
+                        title="Ambulancia en emergencia hasta 1 evento al año"
+                        items={["Ambulancia terrestre"]}
+                    />
+                </>
+            )}
+
+            <li>
+                <Strong>
+                    <span className="text-famedic-light">
+                        Asistencias telefónicas ilimitadas
+                    </span>
+                </Strong>
+                <ul className="list-inside list-disc marker:!text-famedic-dark">
+                    <li>
+                        <Text>Psicológica</Text>
+                    </li>
+                    <li>
+                        <Text>Nutricional</Text>
+                    </li>
+                    <li>
+                        <Text>Legal</Text>
+                    </li>
+                </ul>
+            </li>
+
+            {hasOdessaAfiliateAccount && (
+                <PremiumBenefit
+                    title="Reembolso de 3 medicamentos por familia por año"
+                    items={[
+                        "Hasta $350 pesos en cada evento",
+                        "Reembolso derivado de la consulta con el médico general (telemedicina)",
+                    ]}
+                />
+            )}
+        </ol>
+    );
+}
+
+function CoverageAudienceList({ hasOdessaAfiliateAccount }) {
+    return (
+        <ul className="space-y-1">
+            <CheckListItem>Titular</CheckListItem>
+            <CheckListItem>Cónyuge</CheckListItem>
+            <CheckListItem>Hijos</CheckListItem>
+            {hasOdessaAfiliateAccount && (
+                <li className="mt-2 flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-400">
+                    <StarIcon className="size-4 text-yellow-400" />
+                    <Text>Plan premium Odessa</Text>
+                </li>
+            )}
+        </ul>
+    );
+}
+
+function ExcludedBenefitsList({ hasOdessaAfiliateAccount }) {
+    if (hasOdessaAfiliateAccount) {
+        return (
+            <Text className="text-sm text-zinc-600 dark:text-zinc-400">
+                Con tu plan Odessa, médico en casa, ambulancia y reembolso de
+                medicamentos están incluidos. Revisa la pestaña «Qué incluye».
+            </Text>
+        );
+    }
+
+    return (
+        <ul className="space-y-2">
+            <ExcludedListItem>Médico en casa</ExcludedListItem>
+            <ExcludedListItem>Ambulancia en emergencia</ExcludedListItem>
+            <ExcludedListItem>
+                Reembolso de medicamentos (disponible en plan Odessa)
+            </ExcludedListItem>
+        </ul>
+    );
+}
+
+function tabButtonClass(selected) {
+    return clsx(
+        "w-full rounded-md px-2 py-2 text-xs font-medium sm:text-sm",
+        selected
+            ? "bg-famedic-dark text-white dark:bg-zinc-100 dark:text-zinc-900"
+            : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800",
+    );
+}
+
+function CoverageTabs({ hasOdessaAfiliateAccount }) {
+    return (
+        <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <TabGroup>
+                <TabList className="gap-1 border-b border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-slate-800/50">
+                    <Tab className="flex-1">
+                        {(selected) => (
+                            <div className={tabButtonClass(selected)}>
+                                A quién cubre
+                            </div>
+                        )}
+                    </Tab>
+                    <Tab className="flex-1">
+                        {(selected) => (
+                            <div className={tabButtonClass(selected)}>
+                                Qué incluye
+                            </div>
+                        )}
+                    </Tab>
+                    <Tab className="flex-1">
+                        {(selected) => (
+                            <div className={tabButtonClass(selected)}>
+                                No incluye
+                            </div>
+                        )}
+                    </Tab>
+                </TabList>
+                <TabPanels className="p-4">
+                    <TabPanel>
+                        <CoverageAudienceList
+                            hasOdessaAfiliateAccount={hasOdessaAfiliateAccount}
+                        />
+                    </TabPanel>
+                    <TabPanel>
+                        <IncludedBenefitsList
+                            hasOdessaAfiliateAccount={hasOdessaAfiliateAccount}
+                        />
+                    </TabPanel>
+                    <TabPanel>
+                        <ExcludedBenefitsList
+                            hasOdessaAfiliateAccount={hasOdessaAfiliateAccount}
+                        />
+                    </TabPanel>
+                </TabPanels>
+            </TabGroup>
+        </div>
+    );
+}
+
+function CoverageStacked({ hasOdessaAfiliateAccount }) {
     return (
         <div className="space-y-6">
             <div>
@@ -33,31 +229,16 @@ export default function CoverageDetails() {
                         <StarIcon className="size-5 text-yellow-400" />
                     )}
                 </Subheading>
-                <ul>
-                    <li className="flex items-center gap-x-2">
-                        <CheckIcon className="size-4 min-w-4 stroke-green-200" />
-                        <Text>Titular</Text>
-                    </li>
-                    <li className="flex items-center gap-x-2">
-                        <CheckIcon className="size-4 min-w-4 stroke-green-200" />
-                        <Text>Cónyuge</Text>
-                    </li>
-                    <li className="flex items-center gap-x-2">
-                        <CheckIcon className="size-4 min-w-4 stroke-green-200" />
-                        <Text>Hijos</Text>
-                    </li>
-                </ul>
+                <CoverageAudienceList
+                    hasOdessaAfiliateAccount={hasOdessaAfiliateAccount}
+                />
             </div>
-            
+
             <div className="space-y-2">
                 <Subheading className="flex items-center gap-2">
                     QUE INCLUYE
                     {hasOdessaAfiliateAccount ? (
-                        <span className="flex">
-                            <StarIcon className="size-5 text-yellow-400" />
-                            <StarIcon className="size-5 text-yellow-400" />
-                            <StarIcon className="size-5 text-yellow-400" />
-                        </span>
+                        <OdessaStars />
                     ) : (
                         <span className="flex">
                             <StarIcon className="size-5 text-blue-400" />
@@ -66,122 +247,37 @@ export default function CoverageDetails() {
                         </span>
                     )}
                 </Subheading>
-
-                <ol className="list-inside list-decimal space-y-4 marker:text-famedic-light">
-                    <li className={hasOdessaAfiliateAccount ? "opacity-100" : "opacity-100"}>
-                        <Strong>
-                            <span className="text-famedic-light">
-                                Asistencia telemedicina ilimitadas 24/7
-                            </span>
-                        </Strong>
-                        <ul className="list-inside list-disc marker:!text-famedic-dark">
-                            <li>
-                                <Text>
-                                    Conecta al paciente con médicos generales a
-                                    través de Videoconferencia y Chat 24/7
-                                </Text>
-                            </li>
-                        </ul>
-                    </li>
-
-                    {hasOdessaAfiliateAccount ? (
-                        // Beneficios Premium (con estrellas doradas)
-                        <>
-                            <li className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                                <Strong>
-                                    <span className="text-yellow-600 dark:text-yellow-400 flex items-center gap-2">
-                                        <StarIcon className="size-5 text-yellow-400" />
-                                        Médico en casa hasta 3 veces al año
-                                        <StarIcon className="size-5 text-yellow-400" />
-                                    </span>
-                                </Strong>
-                                <ul className="list-inside list-disc marker:!text-yellow-600">
-                                    <li>
-                                        <Text>
-                                            Consultas médicas a domicilio
-                                        </Text>
-                                    </li>
-                                </ul>
-                            </li>
-                            <li className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                                <Strong>
-                                    <span className="text-yellow-600 dark:text-yellow-400 flex items-center gap-2">
-                                        <StarIcon className="size-5 text-yellow-400" />
-                                        Ambulancia en emergencia hasta 1 evento al año
-                                        <StarIcon className="size-5 text-yellow-400" />
-                                    </span>
-                                </Strong>
-                                <ul className="list-inside list-disc marker:!text-yellow-600">
-                                    <li>
-                                        <Text>Ambulancia terrestre</Text>
-                                    </li>
-                                </ul>
-                            </li>
-                        </>
-                    ) : (
-                        // Beneficios Básicos (sin fondo especial)
-                        <>
-                            <li className="opacity-50">
-                                <Strong>
-                                    <span className="text-gray-400">
-                                        Médico en casa (no incluido)
-                                    </span>
-                                </Strong>
-                            </li>
-                            <li className="opacity-50">
-                                <Strong>
-                                    <span className="text-gray-400">
-                                        Ambulancia (no incluido)
-                                    </span>
-                                </Strong>
-                            </li>
-                        </>
-                    )}
-                    
-                    <li>
-                        <Strong>
-                            <span className="text-famedic-light">
-                                Asistencias telefónicas ilimitadas
-                            </span>
-                        </Strong>
-                        <ul className="list-inside list-disc marker:!text-famedic-dark">
-                            <li>
-                                <Text>Psicológica</Text>
-                            </li>
-                            <li>
-                                <Text>Nutricional</Text>
-                            </li>
-                            <li>
-                                <Text>Legal</Text>
-                            </li>
-                        </ul>
-                    </li>
-                    
-                    {hasOdessaAfiliateAccount && (
-                        <li className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                            <Strong>
-                                <span className="text-yellow-600 dark:text-yellow-400 flex items-center gap-2">
-                                    <StarIcon className="size-5 text-yellow-400" />
-                                    Reembolso de 3 medicamentos por familia por año
-                                    <StarIcon className="size-5 text-yellow-400" />
-                                </span>
-                            </Strong>
-                            <ul className="list-inside list-disc marker:!text-yellow-600">
-                                <li>
-                                    <Text>
-                                        Hasta $350 pesos en cada evento
-                                    </Text>
-                                </li>
-                                <li>
-                                    <Text>
-                                        Reembolso derivado de la consulta con el médico general (telemedicina)
-                                    </Text>
-                                </li>
-                            </ul>
-                        </li>
-                    )}
-                </ol>
+                <IncludedBenefitsList
+                    hasOdessaAfiliateAccount={hasOdessaAfiliateAccount}
+                />
             </div>
+
+            {!hasOdessaAfiliateAccount && (
+                <div className="space-y-2">
+                    <Subheading>NO INCLUYE</Subheading>
+                    <ExcludedBenefitsList
+                        hasOdessaAfiliateAccount={hasOdessaAfiliateAccount}
+                    />
+                </div>
+            )}
         </div>
+    );
+}
+
+export default function CoverageDetails({
+    hasOdessaAfiliateAccount: hasOdessaProp,
+    variant = "stacked",
+}) {
+    const pageHasOdessa = usePage().props.hasOdessaAfiliateAccount;
+    const hasOdessaAfiliateAccount = hasOdessaProp ?? pageHasOdessa;
+
+    if (variant === "tabs") {
+        return (
+            <CoverageTabs hasOdessaAfiliateAccount={hasOdessaAfiliateAccount} />
+        );
+    }
+
+    return (
+        <CoverageStacked hasOdessaAfiliateAccount={hasOdessaAfiliateAccount} />
     );
 }

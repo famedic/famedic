@@ -11,6 +11,7 @@ class HandlePayPalWebhookAction
     public function __construct(
         private PayPalService $payPalService,
         private FinalizeLaboratoryPayPalPaymentAction $finalizeLaboratoryPayPalPaymentAction,
+        private FinalizeMedicalAttentionPayPalPaymentAction $finalizeMedicalAttentionPayPalPaymentAction,
     ) {
     }
 
@@ -49,6 +50,16 @@ class HandlePayPalWebhookAction
                 return;
             }
 
+            if ($this->isMedicalAttentionTransaction($transaction)) {
+                if ($transaction->medicalAttentionSubscriptions()->exists()) {
+                    return;
+                }
+
+                ($this->finalizeMedicalAttentionPayPalPaymentAction)($transaction, $resource);
+
+                return;
+            }
+
             if ($transaction->laboratoryPurchases()->exists()) {
                 return;
             }
@@ -82,5 +93,12 @@ class HandlePayPalWebhookAction
 
             return;
         }
+    }
+
+    private function isMedicalAttentionTransaction(Transaction $transaction): bool
+    {
+        $details = is_array($transaction->details) ? $transaction->details : [];
+
+        return ($details['purpose'] ?? null) === CreateMedicalAttentionPayPalOrderAction::DETAILS_PURPOSE;
     }
 }

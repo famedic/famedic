@@ -6,76 +6,78 @@ import {
     DialogActions,
 } from "@/Components/Catalyst/dialog";
 import { Button } from "@/Components/Catalyst/button";
-import { useForm } from "@inertiajs/react";
-import { useEffect } from "react";
+import { Text } from "@/Components/Catalyst/text";
+import { Badge } from "@/Components/Catalyst/badge";
+import { useForm, usePage } from "@inertiajs/react";
+import { CalendarDaysIcon } from "@heroicons/react/24/solid";
 import PaymentMethodStep from "@/Components/Checkout/PaymentMethodStep";
 import CoverageDetails from "./CoverageDetails";
 
 export default function SubscribeModal({
     isOpen,
     setIsOpen,
-    paymentMethods,
+    paymentMethods = [],
     formattedPrice,
     formattedMedicalAttentionSubscriptionExpiresAt,
 }) {
+    const {
+        medicalAttentionTrialEnabled = false,
+        hasOdessaAfiliateAccount = false,
+        paymentUsesMock = false,
+    } = usePage().props;
+
+    const usesPaidSubscription =
+        !medicalAttentionTrialEnabled ||
+        !!formattedMedicalAttentionSubscriptionExpiresAt;
+
     const { data, setData, post, processing, errors, clearErrors } = useForm({
         payment_method: null,
     });
-
-    // Logs de depuración
-    useEffect(() => {
-        if (true) {
-            console.group('📋 COMPONENTE: SubscribeModal');
-            console.log('📥 Props:');
-            console.log('  - isOpen:', isOpen);
-            console.log('  - formattedPrice:', formattedPrice);
-            console.log('  - formattedMedicalAttentionSubscriptionExpiresAt:', formattedMedicalAttentionSubscriptionExpiresAt);
-            
-            if (formattedMedicalAttentionSubscriptionExpiresAt) {
-                console.log('💰 Modo: Pago - Suscripción por', formattedPrice);
-            } else {
-                console.log('🎁 Modo: Prueba gratuita');
-            }
-            
-            console.log('📊 Estado del formulario:');
-            console.log('  - payment_method seleccionado:', data.payment_method);
-            console.groupEnd();
-        }
-    }, [isOpen, formattedPrice, formattedMedicalAttentionSubscriptionExpiresAt, data.payment_method]);
 
     const submit = (e) => {
         e.preventDefault();
 
         if (!processing) {
-            if (formattedMedicalAttentionSubscriptionExpiresAt) {
-                console.log('🚀 Enviando solicitud de suscripción de pago');
+            if (usesPaidSubscription) {
                 post(route("medical-attention.subscription"));
             } else {
-                console.log('🚀 Enviando solicitud de prueba gratuita');
                 post(route("free-medical-attention.subscription"));
             }
         }
     };
 
     return (
-        <Dialog open={isOpen} onClose={setIsOpen}>
+        <Dialog open={isOpen} onClose={() => setIsOpen(false)}>
             <form onSubmit={submit}>
                 <DialogTitle>
-                    {formattedMedicalAttentionSubscriptionExpiresAt
-                        ? "Suscribirse por " + formattedPrice
+                    {usesPaidSubscription
+                        ? "Membresía anual — " + formattedPrice
                         : "Comenzar prueba gratuita"}
                 </DialogTitle>
                 <DialogDescription as="div" className="space-y-4">
-                    {!formattedMedicalAttentionSubscriptionExpiresAt && (
-                        <p>
-                            No se necesita una tarjeta de crédito para el
-                            período de prueba.
-                        </p>
+                    {usesPaidSubscription && (
+                        <Badge color="blue" className="text-sm">
+                            <CalendarDaysIcon className="size-4" />
+                            Plan anual · 12 meses de cobertura
+                        </Badge>
+                    )}
+
+                    {usesPaidSubscription && (
+                        <Text className="text-sm text-zinc-600 dark:text-zinc-400">
+                            Un pago de {formattedPrice} activa tu membresía
+                            familiar por un año completo.
+                        </Text>
+                    )}
+
+                    {errors.general && (
+                        <Text className="text-red-600 dark:text-red-400">
+                            {errors.general}
+                        </Text>
                     )}
 
                     <CoverageDetails />
 
-                    {formattedMedicalAttentionSubscriptionExpiresAt && (
+                    {usesPaidSubscription && (
                         <PaymentMethodStep
                             forceMobile={true}
                             data={data}
@@ -84,7 +86,8 @@ export default function SubscribeModal({
                             error={errors.payment_method}
                             clearErrors={clearErrors}
                             paymentMethods={paymentMethods}
-                            hasOdessaPay={true}
+                            hasOdessaPay={hasOdessaAfiliateAccount}
+                            paymentUsesMock={paymentUsesMock}
                             addCardReturnUrl={route("medical-attention")}
                         />
                     )}
@@ -105,8 +108,8 @@ export default function SubscribeModal({
                         type="submit"
                         className={processing && "opacity-0"}
                     >
-                        {formattedMedicalAttentionSubscriptionExpiresAt
-                            ? "Suscribirse por " + formattedPrice
+                        {usesPaidSubscription
+                            ? "Pagar " + formattedPrice + " — plan anual"
                             : "Comenzar periodo de prueba"}
                     </Button>
                 </DialogActions>

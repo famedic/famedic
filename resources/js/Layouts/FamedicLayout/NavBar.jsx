@@ -1,5 +1,5 @@
 import { usePage } from "@inertiajs/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dropdown, DropdownButton } from "@/Components/Catalyst/dropdown";
 import {
 	Navbar,
@@ -55,11 +55,17 @@ export default function NavBar() {
 			: firstBrandWithItems || laboratoryCartKeys[0],
 	);
 
+	useEffect(() => {
+		if (laboratoryBrand?.value) {
+			setSelectedLaboratoryBrand(laboratoryBrand.value);
+		}
+	}, [laboratoryBrand?.value]);
+
+	const activeLaboratoryBrand =
+		laboratoryBrand?.value ?? selectedLaboratoryBrand;
+
 	const laboratoryItemCount =
-		(laboratoryCarts &&
-			selectedLaboratoryBrand &&
-			(laboratoryCarts[selectedLaboratoryBrand]?.length || 0)) ||
-		0;
+		laboratoryCarts?.[activeLaboratoryBrand]?.length || 0;
 	const pharmacyItemCount = onlinePharmacyCart?.length || 0;
 	const cartCount =
 		selectedIndex === 0 ? laboratoryItemCount : pharmacyItemCount;

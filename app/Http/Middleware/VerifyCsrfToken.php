@@ -13,10 +13,7 @@ class VerifyCsrfToken extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        '*', // ❌ TEMPORAL: Deshabilitar CSRF para TODO
-        // 'apigda/*',
-        // 'test-*',
-        // 'emergency-*',
-        // 'stripe/webhook',
+        'paypal/webhook',
+        'apigda/*',
     ];
 }

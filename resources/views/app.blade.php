@@ -93,9 +93,6 @@
 
     @endenv
 
-    @env('local', 'testing', 'staging')
-        <script>window.$zoho=window.$zoho || {};$zoho.salesiq=$zoho.salesiq||{ready:function(){}}</script><script id="zsiqscript" src="https://salesiq.zohopublic.com/widget?wc=siqa5c1962de4be78bdee6d1289a9999c2f57b865275c57f26970b8bae68fc5e5b4" defer></script>
-    @endenv
 </head>
 
 <body class="font-sans antialiased">
@@ -142,6 +139,9 @@
         </script>
         @endenv
 
+    @unless(app()->environment('production'))
+        <script>window.__FAMEDIC_ZOHO_SALESIQ__ = { enabled: true };</script>
+    @endunless
 
 </body>
 

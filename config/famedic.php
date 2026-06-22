@@ -73,6 +73,10 @@ return [
 
     'medical_attention_subscription_price_cents' => 30000,
     'free_medical_attention_subscription_days' => 30,
+    'medical_attention_trial_enabled' => filter_var(
+        env('MEDICAL_ATTENTION_TRIAL_ENABLED', false),
+        FILTER_VALIDATE_BOOLEAN
+    ),
 
     /** Licencia institucional Odessa (monitor admin / alta manual) */
     'institutional_odessa_subscription_years' => (int) env('INSTITUTIONAL_ODESSA_SUBSCRIPTION_YEARS', 1),
