@@ -74,9 +74,9 @@ function CreditOptionRow({
 						{credit.is_recommended ? (
 							<Badge color="amber">Recomendado</Badge>
 						) : null}
-						{credit.code ? (
+						{credit.concept ? (
 							<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-								Código: {credit.code}
+								Concepto: {credit.concept}
 							</Text>
 						) : null}
 					</div>

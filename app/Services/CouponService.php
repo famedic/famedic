@@ -67,6 +67,11 @@ class CouponService
     public function getAvailableCoupons(int $userId): \Illuminate\Support\Collection
     {
         return $this->assignedCheckoutCouponsQuery($userId)
+            ->with([
+                'concept:id,title',
+                'parentCoupon:id,coupon_concept_id,concept_other',
+                'parentCoupon.concept:id,title',
+            ])
             ->select([
                 'coupons.id',
                 'coupons.type',
@@ -129,6 +134,11 @@ class CouponService
         $cartTotalCents = max(0, $cartTotalCents);
 
         $couponModels = $this->assignedCheckoutCouponsQuery($userId)
+            ->with([
+                'concept:id,title',
+                'parentCoupon:id,coupon_concept_id,concept_other',
+                'parentCoupon.concept:id,title',
+            ])
             ->orderBy('coupons.id')
             ->get(['coupons.*']);
 
@@ -369,6 +379,7 @@ class CouponService
             'type_label' => $coupon->type->label(),
             'remaining_cents' => (int) $coupon->remaining_cents,
             'code' => $coupon->code,
+            'concept' => $this->resolveConceptLabelForCheckout($coupon),
             'valid_from' => $coupon->valid_from?->toIso8601String(),
             'expires_at' => $coupon->expires_at?->toIso8601String(),
             'min_purchase_cents' => $coupon->min_purchase_cents !== null
@@ -377,6 +388,36 @@ class CouponService
             'formatted_min_purchase' => $coupon->formatted_min_purchase,
             'validity_status' => $coupon->validity_status,
         ];
+    }
+
+    private function resolveConceptLabelForCheckout(Coupon $coupon): ?string
+    {
+        $other = trim((string) ($coupon->concept_other ?? ''));
+        if ($other !== '') {
+            return $other;
+        }
+
+        $coupon->loadMissing(
+            'concept:id,title',
+            'parentCoupon:id,coupon_concept_id,concept_other',
+            'parentCoupon.concept:id,title',
+        );
+
+        if ($coupon->concept?->title) {
+            return $coupon->concept->title;
+        }
+
+        $parent = $coupon->parentCoupon;
+        if ($parent === null) {
+            return null;
+        }
+
+        $parentOther = trim((string) ($parent->concept_other ?? ''));
+        if ($parentOther !== '') {
+            return $parentOther;
+        }
+
+        return $parent->concept?->title;
     }
 
     public function resolveRequiredApprovals(int $amountCents, int $beneficiariesCount): int
@@ -654,6 +695,8 @@ class CouponService
             'parent_coupon_id' => $parent->id,
             'code' => $parent->code,
             'description' => $parent->description,
+            'coupon_concept_id' => $parent->coupon_concept_id,
+            'concept_other' => $parent->concept_other,
             'amount_cents' => $parent->amount_cents,
             'remaining_cents' => $parent->amount_cents,
             'valid_from' => $parent->valid_from,
