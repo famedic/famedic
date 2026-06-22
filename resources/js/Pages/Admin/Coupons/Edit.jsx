@@ -8,6 +8,8 @@ import { Switch, SwitchField } from "@/Components/Catalyst/switch";
 import CouponEligibilityControls from "@/Components/Admin/Coupon/CouponEligibilityControls";
 import { useForm } from "@inertiajs/react";
 import { Badge } from "@/Components/Catalyst/badge";
+import { Select } from "@/Components/Catalyst/select";
+import { CREDIT_TYPE_OPTIONS } from "@/lib/couponAdminUi";
 import {
 	appendCouponEligibilityToPayload,
 	inferMinimumPurchaseMode,
@@ -24,6 +26,7 @@ export default function CouponsEdit({ coupon }) {
 			: "";
 
 	const { data, setData, put, processing, errors, transform } = useForm({
+		type: coupon.type ?? "balance",
 		code: coupon.code || "",
 		description: coupon.description || "",
 		max_beneficiaries:
@@ -39,6 +42,7 @@ export default function CouponsEdit({ coupon }) {
 	transform((d) =>
 		appendCouponEligibilityToPayload(
 			{
+				type: d.type,
 				code: d.code || null,
 				description: d.description || null,
 				max_beneficiaries:
@@ -84,6 +88,24 @@ export default function CouponsEdit({ coupon }) {
 				})}
 			</p>
 			<form onSubmit={submit} className="mt-6 max-w-md space-y-6">
+				<Field>
+					<Label>Tipo de crédito</Label>
+					<Select
+						value={data.type ?? "balance"}
+						onChange={(e) => setData("type", e.target.value)}
+					>
+						{CREDIT_TYPE_OPTIONS.map((option) => (
+							<option key={option.value} value={option.value}>
+								{option.label}
+							</option>
+						))}
+					</Select>
+					{errors.type && (
+						<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+							{errors.type}
+						</p>
+					)}
+				</Field>
 				<Field>
 					<Label>Descripción</Label>
 					<Textarea

@@ -735,6 +735,7 @@ class CouponController extends Controller
         }
 
         $data = $request->validate(array_merge([
+            'type' => ['required', Rule::in(['balance', 'coupon'])],
             'code' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'max_beneficiaries' => ['nullable', 'integer', 'min:1'],
@@ -743,6 +744,7 @@ class CouponController extends Controller
 
         $eligibilityAttributes = $this->couponEligibilityFormService->resolveAttributes($data);
 
+        $coupon->type = $data['type'];
         $coupon->code = $data['code'] ?? null;
         $coupon->description = $data['description'] ?? null;
         $coupon->max_beneficiaries = $data['max_beneficiaries'] ?? null;
@@ -750,6 +752,13 @@ class CouponController extends Controller
         $coupon->fill($eligibilityAttributes);
         $coupon->updated_by_user_id = $request->user()->id;
         $coupon->save();
+
+        if ($coupon->parent_coupon_id === null && $coupon->wasChanged('type')) {
+            Coupon::query()
+                ->where('parent_coupon_id', $coupon->id)
+                ->whereDoesntHave('couponUsers', fn ($q) => $q->whereNotNull('used_at'))
+                ->update(['type' => $coupon->type]);
+        }
 
         return redirect()->route('admin.coupons.index')->flashMessage('Cupón actualizado.');
     }
