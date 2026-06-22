@@ -1,0 +1,255 @@
+
+   FAIL  Tests\Feature\MedicalAttention\CheckoutPageTest
+  ⨯ checkout page is reachable for user without active membership
+  ⨯ checkout redirects to medical attention when membership is active
+  ⨯ regular subscription purchase is rejected without payment method
+  ⨯ regular subscription purchase is rejected when membership is already active
+  ⨯ free trial endpoint is forbidden when trial is disabled
+  ⨯ user with active trial keeps active membership view
+  ⨯ medical attention page is reachable for new user without subscription
+
+   FAIL  Tests\Feature\MedicalAttention\TrialSubscriptionTest
+  ⨯ free trial endpoint is forbidden when trial is disabled
+  ⨯ free trial endpoint does not create trial subscriptions when disabled
+  ⨯ user with active trial keeps active membership view
+  ⨯ user with expired trial can access medical attention page for regular purchase
+  ⨯ free trial endpoint works when trial is enabled and user has no subscriptions
+  ⨯ medical attention page is reachable for new user without subscription
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\CheckoutPageTest >…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:02, 2026-06-20 14:57:02))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\CheckoutPageTest >…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:07, 2026-06-20 14:57:07))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\CheckoutPageTest >…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:12, 2026-06-20 14:57:12))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\CheckoutPageTest >…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:16, 2026-06-20 14:57:16))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\CheckoutPageTest >…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:20, 2026-06-20 14:57:20))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\CheckoutPageTest >…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:24, 2026-06-20 14:57:24))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\CheckoutPageTest >…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:28, 2026-06-20 14:57:28))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\TrialSubscriptionT…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:32, 2026-06-20 14:57:32))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\TrialSubscriptionT…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:36, 2026-06-20 14:57:36))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\TrialSubscriptionT…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:40, 2026-06-20 14:57:40))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\TrialSubscriptionT…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:43, 2026-06-20 14:57:43))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\TrialSubscriptionT…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:48, 2026-06-20 14:57:48))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\MedicalAttention\TrialSubscriptionT…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 19 FOREIGN KEY constraint failed (Connection: sqlite, SQL: insert into "laboratory_tests" ("name", "feature_list", "public_price_cents", "famedic_price_cents", "laboratory_test_category_id", "brand", "gda_id", "created_at", "updated_at") values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-06-20 14:57:52, 2026-06-20 14:57:52))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+6 vendor frames [22m
+  7   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+
+
+  Tests:    13 failed (0 assertions)
+  Duration: 54.22s
+
