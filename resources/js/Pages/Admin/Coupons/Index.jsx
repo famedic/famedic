@@ -135,6 +135,10 @@ export default function CouponsIndex({
 
 	const [revokeTarget, setRevokeTarget] = useState(null);
 	const { delete: destroy, processing: revoking } = useForm({});
+	const [deactivateTarget, setDeactivateTarget] = useState(null);
+	const [deleteCampaignTarget, setDeleteCampaignTarget] = useState(null);
+	const { post: postDeactivate, processing: deactivating } = useForm({});
+	const { delete: destroyCampaign, processing: deletingCampaign } = useForm({});
 
 	const confirmRevoke = () => {
 		if (!revokeTarget || revoking) return;
@@ -145,6 +149,21 @@ export default function CouponsIndex({
 			}),
 			{ preserveScroll: true },
 		);
+	};
+
+	const confirmDeactivate = () => {
+		if (!deactivateTarget || deactivating) return;
+		postDeactivate(route("admin.coupons.deactivate", deactivateTarget.id), {
+			preserveScroll: true,
+			onFinish: () => setDeactivateTarget(null),
+		});
+	};
+
+	const confirmDeleteCampaign = () => {
+		if (!deleteCampaignTarget || deletingCampaign) return;
+		destroyCampaign(route("admin.coupons.destroy", deleteCampaignTarget.id), {
+			onFinish: () => setDeleteCampaignTarget(null),
+		});
 	};
 
 	return (
@@ -688,6 +707,7 @@ export default function CouponsIndex({
 								const assignments = c.coupon_users ?? c.couponUsers ?? [];
 								const childCount = c.child_coupons_count ?? 0;
 								const maxB = c.max_beneficiaries;
+								const campaignActions = c.campaign_admin_actions ?? {};
 								return (
 									<TableRow key={c.id}>
 										<TableCell className="max-w-[min(28rem,40vw)] align-top">
@@ -884,6 +904,36 @@ export default function CouponsIndex({
 															coupon_id: c.id,
 														}),
 													},
+													...(campaignActions.can_deactivate
+														? [
+																{
+																	key: "deactivate",
+																	label: "Desactivar campaña",
+																	danger: true,
+																	onClick: () => setDeactivateTarget(c),
+																},
+															]
+														: []),
+													...(campaignActions.can_delete
+														? [
+																{
+																	key: "delete-campaign",
+																	label: "Eliminar campaña",
+																	danger: true,
+																	onClick: () => setDeleteCampaignTarget(c),
+																},
+															]
+														: campaignActions.is_master_campaign &&
+															  campaignActions.activity_summary?.has_activity
+															? [
+																	{
+																		key: "delete-campaign-blocked",
+																		label: "Eliminar campaña",
+																		disabled: true,
+																		title: campaignActions.delete_blocked_message,
+																	},
+																]
+															: []),
 													...assignments
 														.filter((a) => !a.used_at)
 														.map((a) => ({
@@ -921,6 +971,27 @@ export default function CouponsIndex({
 				}
 				processing={revoking}
 				destroy={confirmRevoke}
+			/>
+			<DeleteConfirmationModal
+				isOpen={!!deactivateTarget}
+				close={() => setDeactivateTarget(null)}
+				title="Desactivar campaña"
+				description={
+					deactivateTarget?.campaign_admin_actions?.deactivate_message ??
+					"La campaña se desactivará y ya no permitirá nuevas asignaciones. Los créditos ya asignados conservarán su estado actual."
+				}
+				processing={deactivating}
+				destroy={confirmDeactivate}
+				confirmLabel="Desactivar"
+			/>
+			<DeleteConfirmationModal
+				isOpen={!!deleteCampaignTarget}
+				close={() => setDeleteCampaignTarget(null)}
+				title="Eliminar campaña"
+				description="Se eliminará permanentemente esta campaña sin actividad. Esta acción no se puede deshacer."
+				processing={deletingCampaign}
+				destroy={confirmDeleteCampaign}
+				confirmLabel="Eliminar"
 			/>
 		</AdminLayout>
 	);

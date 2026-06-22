@@ -20,15 +20,10 @@ class LaboratoryShoppingCartController extends Controller
             $request->user()->customer->laboratoryCartItems()->ofBrand($laboratoryBrand)->get()
         );
 
-        $balancePresentation = [
-            'balanceCouponsCents' => 0,
-            'formattedBalanceCoupons' => null,
-            'availableBalanceCoupons' => [],
-            'cartTotalCents' => $totals['total'],
-        ];
+        $balancePresentation = $couponService->emptyCheckoutCreditPresentation($totals['total']);
 
         try {
-            $balancePresentation = $couponService->buildPatientBalancePresentation(
+            $balancePresentation = $couponService->buildCheckoutCreditPresentation(
                 $request->user()->id,
                 $totals['total'],
             );
@@ -40,6 +35,7 @@ class LaboratoryShoppingCartController extends Controller
             'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryBrand),
             ...$totals,
             ...$balancePresentation,
+            'balanceCreditPresentation' => $balancePresentation,
         ]);
     }
 }

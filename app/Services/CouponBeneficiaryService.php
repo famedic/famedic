@@ -151,6 +151,10 @@ class CouponBeneficiaryService
     ): array {
         $this->assertMasterCoupon($parentCoupon);
 
+        if (! $parentCoupon->is_active) {
+            throw new \DomainException('Esta campaña está inactiva y no permite nuevas asignaciones.');
+        }
+
         $preview = $this->previewRows($parentCoupon, $rows);
         $confirmable = array_values(array_filter(
             $preview['rows'],
@@ -347,6 +351,47 @@ class CouponBeneficiaryService
         }
 
         return max(0, (int) $parentCoupon->max_beneficiaries - $this->countActiveBeneficiarySlots($parentCoupon));
+    }
+
+    /**
+     * Cancela un beneficiario pendiente de registro (no borra la fila).
+     */
+    public function cancelPendingBeneficiary(
+        CouponBeneficiary $beneficiary,
+        ?User $actor = null,
+        ?string $reason = null
+    ): void {
+        DB::transaction(function () use ($beneficiary, $actor, $reason) {
+            $locked = CouponBeneficiary::query()
+                ->whereKey($beneficiary->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($locked->isCancelled() || $locked->cancelled_at !== null) {
+                return;
+            }
+
+            if (! $locked->isPendingUser() || $locked->child_coupon_id !== null || $locked->user_id !== null) {
+                throw new \DomainException('Solo se pueden cancelar beneficiarios pendientes de registro.');
+            }
+
+            $locked->status = CouponBeneficiaryStatus::Cancelled;
+            $locked->cancelled_at = now();
+            $locked->updated_by_user_id = $actor?->id;
+            $locked->save();
+
+            $this->auditBeneficiaryEvent(
+                action: 'coupon_beneficiary_cancelled',
+                parentCouponId: (int) $locked->parent_coupon_id,
+                actor: $actor,
+                context: array_merge($this->auditContextFromBeneficiary($locked), [
+                    'beneficiary_id' => $locked->id,
+                    'reason' => $reason ?? 'admin_manual_cancellation',
+                    'actor_user_id' => $actor?->id,
+                    'cancelled_at' => $locked->cancelled_at?->toIso8601String(),
+                ])
+            );
+        });
     }
 
     /**
@@ -561,6 +606,10 @@ class CouponBeneficiaryService
         ?User $actor,
         bool $isResend = false,
     ): array {
+        if ($beneficiary->isCancelled() || $beneficiary->cancelled_at !== null) {
+            throw new \DomainException('Este beneficiario pendiente fue cancelado.');
+        }
+
         if (! $beneficiary->isPendingUser() || $beneficiary->user_id !== null || $beneficiary->child_coupon_id !== null) {
             throw new \DomainException('Solo se pueden invitar beneficiarios pendientes de registro.');
         }
@@ -579,6 +628,10 @@ class CouponBeneficiaryService
                 'sent' => false,
                 'warning' => $beneficiary->email.': no se encontró el cupón maestro para enviar la invitación.',
             ];
+        }
+
+        if (! $parent->is_active) {
+            throw new \DomainException('Esta campaña está inactiva y no permite nuevas asignaciones.');
         }
 
         try {

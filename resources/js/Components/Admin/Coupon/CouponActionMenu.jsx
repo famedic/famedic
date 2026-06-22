@@ -25,6 +25,7 @@ export default function CouponActionMenu({ items = [] }) {
 							item.href ? (
 								<Link
 									href={item.href}
+									title={item.title}
 									className={[
 										"block rounded-md px-3 py-2 text-sm",
 										disabled
@@ -42,6 +43,7 @@ export default function CouponActionMenu({ items = [] }) {
 									type="button"
 									disabled={disabled || item.disabled}
 									onClick={item.onClick}
+									title={item.title}
 									className={[
 										"block w-full rounded-md px-3 py-2 text-left text-sm",
 										disabled || item.disabled

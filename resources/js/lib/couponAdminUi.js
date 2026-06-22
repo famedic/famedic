@@ -67,6 +67,12 @@ export const LOG_ACTION_META = {
 	coupon_beneficiary_activation_notify_failed: { label: "Error de activación", color: "red", group: "activación" },
 	approval_request_created: { label: "Solicitud de aprobación", color: "purple", group: "aprobación" },
 	update_coupon_settings: { label: "Configuración", color: "zinc", group: "configuración" },
+	coupon_assignment_revoked: { label: "Crédito revocado", color: "red", group: "revocación" },
+	coupon_beneficiary_cancelled: { label: "Pendiente cancelado", color: "red", group: "revocación" },
+	coupon_revocation_rejected: { label: "Revocación rechazada", color: "amber", group: "revocación" },
+	coupon_campaign_deactivated: { label: "Campaña desactivada", color: "zinc", group: "campaña" },
+	coupon_campaign_deleted: { label: "Campaña eliminada", color: "red", group: "campaña" },
+	coupon_campaign_delete_rejected: { label: "Eliminación rechazada", color: "amber", group: "campaña" },
 };
 
 export function logActionMeta(action) {

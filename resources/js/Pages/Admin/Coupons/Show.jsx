@@ -153,6 +153,7 @@ function csrfTokenFromMeta() {
 
 export default function CouponsShow({
 	coupon,
+	campaignAdminActions = {},
 	beneficiaryRows,
 	authorizationRecipientEmail,
 	mailSetupHint,
@@ -174,6 +175,12 @@ export default function CouponsShow({
 	const { post: postResendInvitation, processing: resendInvitationProcessing } = useForm({});
 	const [revokeTarget, setRevokeTarget] = useState(null);
 	const { delete: destroy, processing: revoking } = useForm({});
+	const [cancelTarget, setCancelTarget] = useState(null);
+	const { post: postCancelPending, processing: cancellingPending } = useForm({});
+	const [deactivateOpen, setDeactivateOpen] = useState(false);
+	const [deleteCampaignOpen, setDeleteCampaignOpen] = useState(false);
+	const { post: postDeactivate, processing: deactivating } = useForm({});
+	const { delete: destroyCampaign, processing: deletingCampaign } = useForm({});
 	const [assignOpen, setAssignOpen] = useState(false);
 	const [bulkRows, setBulkRows] = useState([]);
 	const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
@@ -268,8 +275,38 @@ export default function CouponsShow({
 				coupon: revokeTarget.couponId,
 				couponUser: revokeTarget.assignmentId,
 			}),
-			{ preserveScroll: true },
+			{
+				preserveScroll: true,
+				onFinish: () => setRevokeTarget(null),
+			},
 		);
+	};
+
+	const confirmCancelPending = () => {
+		if (!cancelTarget || cancellingPending) return;
+		postCancelPending(
+			route("admin.coupons.beneficiaries.cancel", {
+				coupon: coupon.id,
+				beneficiary: cancelTarget.beneficiaryId,
+			}),
+			{
+				preserveScroll: true,
+				onFinish: () => setCancelTarget(null),
+			},
+		);
+	};
+
+	const confirmDeactivate = () => {
+		if (deactivating) return;
+		postDeactivate(route("admin.coupons.deactivate", coupon.id), {
+			preserveScroll: true,
+			onFinish: () => setDeactivateOpen(false),
+		});
+	};
+
+	const confirmDeleteCampaign = () => {
+		if (deletingCampaign) return;
+		destroyCampaign(route("admin.coupons.destroy", coupon.id));
 	};
 
 	const pending = coupon.approval_status === "pending_authorization";
@@ -570,8 +607,31 @@ export default function CouponsShow({
 								key: "assign",
 								label: "Agregar beneficiario",
 								disabled: !canAssignInPlace,
+								title: !coupon.is_active
+									? "Esta campaña está inactiva y no permite nuevas asignaciones."
+									: undefined,
 								onClick: openAssignModal,
 							},
+							...(campaignAdminActions.can_deactivate
+								? [
+										{
+											key: "deactivate",
+											label: "Desactivar campaña",
+											danger: true,
+											onClick: () => setDeactivateOpen(true),
+										},
+									]
+								: []),
+							...(campaignAdminActions.can_delete
+								? [
+										{
+											key: "delete-campaign",
+											label: "Eliminar campaña",
+											danger: true,
+											onClick: () => setDeleteCampaignOpen(true),
+										},
+									]
+								: []),
 							{
 								key: "assign-page",
 								label: "Asignar en flujo completo",
@@ -1049,9 +1109,17 @@ export default function CouponsShow({
 						)}
 						{!canAssignInPlace && (
 							<p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
-								{preApprovalMultisigPending
-									? "No puedes agregar beneficiarios hasta completar las autorizaciones de pre-aprobación indicadas arriba."
-									: "No puedes agregar beneficiarios hasta que el cupón esté activo y con disponibilidad."}
+								{!coupon.is_active
+									? "Esta campaña está inactiva. No permite nuevas asignaciones."
+									: preApprovalMultisigPending
+										? "No puedes agregar beneficiarios hasta completar las autorizaciones de pre-aprobación indicadas arriba."
+										: "No puedes agregar beneficiarios hasta que el cupón esté activo y con disponibilidad."}
+							</p>
+						)}
+						{!coupon.is_active && (
+							<p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+								Los créditos ya asignados y los pendientes existentes conservan su
+								estado actual.
 							</p>
 						)}
 					</CollapsiblePanel>
@@ -1232,6 +1300,7 @@ export default function CouponsShow({
 							) : (
 								beneficiaryRows.map((row, idx) => {
 									const usageBadge = couponUsageStatusBadge(row);
+									const actions = row.admin_actions ?? {};
 									return (
 										<TableRow key={`${row.coupon_id}-${row.assignment_id ?? idx}`}>
 										<TableCell className="text-zinc-900 dark:text-zinc-100">
@@ -1328,39 +1397,65 @@ export default function CouponsShow({
 											)}
 										</TableCell>
 										<TableCell className="text-right">
-											{row.is_pending_user && row.beneficiary_id ? (
-												<Button
-													plain
-													disabled={
-														!row.can_resend_invitation ||
-														(resendInvitationProcessing &&
-															resendInvitationBeneficiaryId === row.beneficiary_id)
-													}
-													onClick={() =>
-														resendBeneficiaryInvitation(row.beneficiary_id)
-													}
-												>
-													{resendInvitationProcessing &&
-													resendInvitationBeneficiaryId === row.beneficiary_id
-														? "Enviando…"
-														: "Reenviar invitación"}
-												</Button>
-											) : null}
-											{!row.used_at && !row.transaction?.is_reversed && row.assignment_id ? (
-												<Button
-													plain
-													className="text-red-600 dark:text-red-400"
-													onClick={() =>
-														setRevokeTarget({
-															couponId: row.coupon_id,
-															assignmentId: row.assignment_id,
-															email: row.user?.email,
-														})
-													}
-												>
-													Quitar
-												</Button>
-											) : null}
+											<div className="flex flex-col items-end gap-1">
+												{actions.can_cancel_pending && row.beneficiary_id ? (
+													<Button
+														plain
+														className="text-red-600 dark:text-red-400"
+														disabled={cancellingPending}
+														onClick={() =>
+															setCancelTarget({
+																beneficiaryId: row.beneficiary_id,
+																email: row.pending_email,
+															})
+														}
+													>
+														Cancelar pendiente
+													</Button>
+												) : null}
+												{actions.can_resend_invitation && row.beneficiary_id ? (
+													<Button
+														plain
+														disabled={
+															resendInvitationProcessing &&
+															resendInvitationBeneficiaryId === row.beneficiary_id
+														}
+														onClick={() =>
+															resendBeneficiaryInvitation(row.beneficiary_id)
+														}
+													>
+														{resendInvitationProcessing &&
+														resendInvitationBeneficiaryId === row.beneficiary_id
+															? "Enviando…"
+															: "Reenviar invitación"}
+													</Button>
+												) : null}
+												{actions.can_revoke_credit && row.assignment_id ? (
+													<Button
+														plain
+														className="text-red-600 dark:text-red-400"
+														onClick={() =>
+															setRevokeTarget({
+																couponId: row.coupon_id,
+																assignmentId: row.assignment_id,
+																email: row.user?.email,
+																requiresStrongConfirmation:
+																	actions.requires_strong_confirmation,
+															})
+														}
+													>
+														Revocar crédito
+													</Button>
+												) : null}
+												{actions.blocked_reason === "used" ? (
+													<span
+														className="max-w-[12rem] text-right text-xs text-zinc-600 dark:text-zinc-400"
+														title={actions.blocked_message ?? undefined}
+													>
+														Crédito utilizado
+													</span>
+												) : null}
+											</div>
 										</TableCell>
 									</TableRow>
 									);
@@ -1716,14 +1811,48 @@ export default function CouponsShow({
 			<DeleteConfirmationModal
 				isOpen={!!revokeTarget}
 				close={() => setRevokeTarget(null)}
-				title="Quitar asignación"
+				title="Revocar crédito"
 				description={
-					revokeTarget
-						? `Se eliminará la asignación para ${revokeTarget.email ?? "el usuario"}.`
-						: ""
+					revokeTarget?.requiresStrongConfirmation
+						? "Este crédito fue restaurado tras cancelar un pedido. Si lo revocas, el beneficiario dejará de verlo definitivamente."
+						: "¿Revocar este crédito? El beneficiario dejará de verlo y no podrá usarlo en checkout. Esta acción no se puede deshacer automáticamente."
 				}
 				processing={revoking}
 				destroy={confirmRevoke}
+				confirmLabel="Revocar crédito"
+			/>
+
+			<DeleteConfirmationModal
+				isOpen={!!cancelTarget}
+				close={() => setCancelTarget(null)}
+				title="¿Cancelar beneficiario pendiente?"
+				description="Este correo ya no recibirá invitaciones y no se vinculará si crea una cuenta después."
+				processing={cancellingPending}
+				destroy={confirmCancelPending}
+				confirmLabel="Cancelar pendiente"
+			/>
+
+			<DeleteConfirmationModal
+				isOpen={deactivateOpen}
+				close={() => setDeactivateOpen(false)}
+				title="Desactivar campaña"
+				description={
+					campaignAdminActions.deactivate_message ??
+					"La campaña se desactivará y ya no permitirá nuevas asignaciones. Los créditos ya asignados conservarán su estado actual."
+				}
+				processing={deactivating}
+				destroy={confirmDeactivate}
+				confirmLabel="Desactivar"
+			/>
+
+			<DeleteConfirmationModal
+				isOpen={deleteCampaignOpen}
+				close={() => setDeleteCampaignOpen(false)}
+				title="Eliminar campaña"
+				description="Se eliminará permanentemente esta campaña sin actividad. Esta acción no se puede deshacer."
+				processing={deletingCampaign}
+				destroy={confirmDeleteCampaign}
+				confirmLabel="Eliminar"
 			/>
 		</AdminLayout>
 	);

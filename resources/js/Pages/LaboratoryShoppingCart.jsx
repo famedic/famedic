@@ -138,6 +138,7 @@ export default function LaboratoryShoppingCart({
 	balanceCouponsCents = 0,
 	availableBalanceCoupons = [],
 	cartTotalCents = 0,
+	balanceCreditPresentation = null,
 }) {
 	const {
 		laboratoryCartItemToDelete,
@@ -538,6 +539,7 @@ export default function LaboratoryShoppingCart({
 				summaryExtra={
 					<BalanceCreditCard
 						variant="cart"
+						balanceCreditPresentation={balanceCreditPresentation}
 						balanceCouponsCents={balanceCouponsCents}
 						availableBalanceCoupons={availableBalanceCoupons}
 						cartTotalCents={cartTotalCents || total}

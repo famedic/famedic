@@ -181,6 +181,7 @@ export default function LaboratoryCheckout({
     formattedDiscount,
     balanceCouponsCents = 0,
     availableBalanceCoupons = [],
+    balanceCreditPresentation = null,
     addresses,
     paymentMethods,
     hasOdessaPay,
@@ -333,10 +334,15 @@ export default function LaboratoryCheckout({
 
     const addressStepIsComplete = useMemo(() => !!data.address, [data.address]);
 
+    const checkoutCoupons =
+        balanceCreditPresentation?.coupons?.length > 0
+            ? balanceCreditPresentation.coupons
+            : availableBalanceCoupons;
+
     const selectedCoupon = useMemo(() => {
         if (!data.coupon_id) return null;
-        return availableBalanceCoupons.find((c) => c.id === data.coupon_id) ?? null;
-    }, [data.coupon_id, availableBalanceCoupons]);
+        return checkoutCoupons.find((c) => c.id === data.coupon_id) ?? null;
+    }, [data.coupon_id, checkoutCoupons]);
 
     const couponTooLarge = useMemo(() => {
         if (!selectedCoupon) return false;
@@ -426,25 +432,20 @@ export default function LaboratoryCheckout({
 
     useEffect(() => {
         if (!data.coupon_id) return;
-        const c = availableBalanceCoupons.find((x) => x.id === data.coupon_id);
+        const c = checkoutCoupons.find((x) => x.id === data.coupon_id);
         if (!c || !isCouponApplicableForCheckout(c, total)) {
             setData("coupon_id", null);
             if (data.payment_method === "coupon_balance") {
                 setData("payment_method", null);
             }
         }
-    }, [data.coupon_id, data.payment_method, availableBalanceCoupons, total, setData]);
+    }, [data.coupon_id, data.payment_method, checkoutCoupons, total, setData]);
 
-    const applyBalanceCoupon = (couponId = null) => {
-        const applicable = couponId
-            ? availableBalanceCoupons.find(
-                  (c) =>
-                      c.id === couponId &&
-                      isCouponApplicableForCheckout(c, total),
-              )
-            : availableBalanceCoupons.find((c) =>
-                  isCouponApplicableForCheckout(c, total),
-              );
+    const applyBalanceCoupon = (couponId) => {
+        if (!couponId) return;
+        const applicable = checkoutCoupons.find(
+            (c) => c.id === couponId && isCouponApplicableForCheckout(c, total),
+        );
         if (!applicable) return;
         setData("coupon_id", applicable.id);
         const after = total - applicable.remaining_cents;
@@ -848,6 +849,7 @@ export default function LaboratoryCheckout({
         <div className="space-y-2">
             <BalanceCreditCard
                 variant="checkout"
+                balanceCreditPresentation={balanceCreditPresentation}
                 balanceCouponsCents={balanceCouponsCents}
                 availableBalanceCoupons={availableBalanceCoupons}
                 cartTotalCents={total}

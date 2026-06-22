@@ -104,6 +104,10 @@ class CouponBeneficiary extends Model
 
     public function canResendInvitation(): bool
     {
+        if ($this->isCancelled() || $this->cancelled_at !== null) {
+            return false;
+        }
+
         if (! $this->isPendingUser() || $this->user_id !== null || $this->child_coupon_id !== null) {
             return false;
         }

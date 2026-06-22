@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\CouponApprovalStatus;
+use App\Enums\CouponBeneficiaryStatus;
 use App\Enums\CouponType;
 use App\Mail\CouponAssignedMail;
 use App\Models\CouponApprovalRequest;
@@ -13,6 +14,7 @@ use App\Models\CouponBeneficiaryApprovalRule;
 use App\Models\Coupon;
 use App\Models\CouponAdminSettings;
 use App\Models\CouponBeneficiary;
+use App\Models\CouponTransaction;
 use App\Models\CouponUser;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -80,8 +82,122 @@ class CouponService
     }
 
     /**
-     * Props de presentación para carrito/checkout de laboratorio (sin alterar reglas de aplicación).
+     * Presentación vacía cuando falla la consulta de saldo (p. ej. carrito).
      *
+     * @return array<string, mixed>
+     */
+    public function emptyCheckoutCreditPresentation(int $cartTotalCents = 0): array
+    {
+        return [
+            'total_balance_cents' => 0,
+            'applicable_balance_cents' => 0,
+            'conditional_balance_cents' => 0,
+            'applicable_coupons_count' => 0,
+            'conditional_coupons_count' => 0,
+            'scheduled_coupons_count' => 0,
+            'best_coupon' => null,
+            'coupons' => [],
+            'balanceCouponsCents' => 0,
+            'formattedBalanceCoupons' => null,
+            'formattedApplicableBalance' => null,
+            'availableBalanceCoupons' => [],
+            'cartTotalCents' => max(0, $cartTotalCents),
+        ];
+    }
+
+    /**
+     * Presentación enriquecida de créditos para carrito/checkout (sin alterar reglas de aplicación).
+     *
+     * @return array{
+     *     total_balance_cents: int,
+     *     applicable_balance_cents: int,
+     *     conditional_balance_cents: int,
+     *     applicable_coupons_count: int,
+     *     conditional_coupons_count: int,
+     *     scheduled_coupons_count: int,
+     *     best_coupon: ?array<string, mixed>,
+     *     coupons: array<int, array<string, mixed>>,
+     *     balanceCouponsCents: int,
+     *     formattedBalanceCoupons: ?string,
+     *     formattedApplicableBalance: ?string,
+     *     availableBalanceCoupons: array<int, array<string, mixed>>,
+     *     cartTotalCents: int
+     * }
+     */
+    public function buildCheckoutCreditPresentation(int $userId, int $cartTotalCents): array
+    {
+        $cartTotalCents = max(0, $cartTotalCents);
+
+        $couponModels = Coupon::query()
+            ->where('coupons.is_active', true)
+            ->where('coupons.remaining_cents', '>', 0)
+            ->where('coupons.type', CouponType::Balance)
+            ->where('coupons.approval_status', CouponApprovalStatus::Active)
+            ->withinValidityWindow()
+            ->join('coupon_user', 'coupon_user.coupon_id', '=', 'coupons.id')
+            ->where('coupon_user.user_id', $userId)
+            ->whereNull('coupon_user.used_at')
+            ->orderBy('coupons.id')
+            ->get(['coupons.*']);
+
+        $coupons = [];
+        foreach ($couponModels as $coupon) {
+            $coupons[] = $this->mapCouponForCheckoutPresentation($coupon, $cartTotalCents);
+        }
+
+        $recommendedId = $this->pickRecommendedCouponId($coupons);
+        $coupons = array_map(function (array $row) use ($recommendedId) {
+            $row['is_recommended'] = $recommendedId !== null && $row['id'] === $recommendedId;
+
+            return $row;
+        }, $coupons);
+        $coupons = $this->sortCouponsForPatientDisplay($coupons);
+
+        $applicableCoupons = array_values(array_filter($coupons, fn (array $c) => $c['is_applicable']));
+        $conditionalCoupons = array_values(array_filter(
+            $coupons,
+            fn (array $c) => in_array($c['reason'], ['below_minimum', 'balance_too_large'], true)
+        ));
+
+        $totalBalanceCents = (int) array_sum(array_column($coupons, 'remaining_cents'));
+        $applicableBalanceCents = (int) array_sum(array_column($applicableCoupons, 'remaining_cents'));
+        $conditionalBalanceCents = (int) array_sum(array_column($conditionalCoupons, 'remaining_cents'));
+
+        $bestCoupon = null;
+        if ($recommendedId !== null) {
+            foreach ($coupons as $coupon) {
+                if ($coupon['id'] === $recommendedId) {
+                    $bestCoupon = $coupon;
+                    break;
+                }
+            }
+        }
+
+        $legacyCoupons = array_map(
+            fn (array $c) => $this->stripPresentationOnlyFields($c),
+            $coupons
+        );
+
+        return [
+            'total_balance_cents' => $totalBalanceCents,
+            'applicable_balance_cents' => $applicableBalanceCents,
+            'conditional_balance_cents' => $conditionalBalanceCents,
+            'applicable_coupons_count' => count($applicableCoupons),
+            'conditional_coupons_count' => count($conditionalCoupons),
+            'scheduled_coupons_count' => 0,
+            'best_coupon' => $bestCoupon,
+            'coupons' => $coupons,
+            'balanceCouponsCents' => $totalBalanceCents,
+            'formattedBalanceCoupons' => $totalBalanceCents > 0 ? formattedCentsPrice($totalBalanceCents) : null,
+            'formattedApplicableBalance' => $applicableBalanceCents > 0
+                ? formattedCentsPrice($applicableBalanceCents)
+                : null,
+            'availableBalanceCoupons' => $legacyCoupons,
+            'cartTotalCents' => $cartTotalCents,
+        ];
+    }
+
+    /**
      * @return array{
      *     balanceCouponsCents: int,
      *     formattedBalanceCoupons: ?string,
@@ -91,15 +207,146 @@ class CouponService
      */
     public function buildPatientBalancePresentation(int $userId, int $cartTotalCents): array
     {
-        $balanceCents = $this->getUserBalance($userId);
-        $availableCoupons = $this->getAvailableCoupons($userId)->values()->all();
+        return $this->buildCheckoutCreditPresentation($userId, $cartTotalCents);
+    }
 
-        return [
-            'balanceCouponsCents' => $balanceCents,
-            'formattedBalanceCoupons' => $balanceCents > 0 ? formattedCentsPrice($balanceCents) : null,
-            'availableBalanceCoupons' => $availableCoupons,
-            'cartTotalCents' => max(0, $cartTotalCents),
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapCouponForCheckoutPresentation(Coupon $coupon, int $cartTotalCents): array
+    {
+        $base = $this->mapCouponForCheckout($coupon);
+        $reason = $this->resolveCouponPresentationReason($coupon, $cartTotalCents);
+        $missingForMinimum = null;
+
+        if ($reason === 'below_minimum' && $coupon->min_purchase_cents !== null) {
+            $missingForMinimum = max(0, (int) $coupon->min_purchase_cents - $cartTotalCents);
+        }
+
+        return array_merge($base, [
+            'formatted_remaining' => formattedCentsPrice((int) $coupon->remaining_cents),
+            'is_applicable' => $reason === 'applicable',
+            'is_recommended' => false,
+            'reason' => $reason,
+            'label' => $this->couponPresentationLabel($reason),
+            'missing_for_minimum_cents' => $missingForMinimum,
+            'formatted_missing_for_minimum' => $missingForMinimum !== null && $missingForMinimum > 0
+                ? formattedCentsPrice($missingForMinimum)
+                : null,
+        ]);
+    }
+
+    private function resolveCouponPresentationReason(Coupon $coupon, int $cartTotalCents): string
+    {
+        if ($coupon->isNotYetValid()) {
+            return 'scheduled';
+        }
+
+        if ($coupon->isExpired()) {
+            return 'expired';
+        }
+
+        if (! $coupon->meetsMinimumPurchase($cartTotalCents)) {
+            return 'below_minimum';
+        }
+
+        if ($coupon->remaining_cents > $cartTotalCents) {
+            return 'balance_too_large';
+        }
+
+        return 'applicable';
+    }
+
+    private function couponPresentationLabel(string $reason): string
+    {
+        return match ($reason) {
+            'applicable' => 'Aplicable ahora',
+            'below_minimum' => 'Requiere compra mínima',
+            'balance_too_large' => 'Saldo mayor al total',
+            'scheduled' => 'Disponible próximamente',
+            'expired' => 'Vencido',
+            default => 'No disponible',
+        };
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $coupons
+     */
+    private function pickRecommendedCouponId(array $coupons): ?int
+    {
+        $applicable = array_values(array_filter($coupons, fn (array $c) => $c['is_applicable']));
+
+        if ($applicable === []) {
+            return null;
+        }
+
+        usort($applicable, function (array $a, array $b) {
+            $aExpires = $a['expires_at'] !== null ? strtotime((string) $a['expires_at']) : PHP_INT_MAX;
+            $bExpires = $b['expires_at'] !== null ? strtotime((string) $b['expires_at']) : PHP_INT_MAX;
+
+            if ($aExpires !== $bExpires) {
+                return $aExpires <=> $bExpires;
+            }
+
+            if ($a['remaining_cents'] !== $b['remaining_cents']) {
+                return $b['remaining_cents'] <=> $a['remaining_cents'];
+            }
+
+            return $a['id'] <=> $b['id'];
+        });
+
+        return (int) $applicable[0]['id'];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $coupons
+     * @return array<int, array<string, mixed>>
+     */
+    private function sortCouponsForPatientDisplay(array $coupons): array
+    {
+        $priority = [
+            'applicable' => 0,
+            'below_minimum' => 1,
+            'balance_too_large' => 2,
+            'scheduled' => 3,
+            'expired' => 4,
         ];
+
+        usort($coupons, function (array $a, array $b) use ($priority) {
+            $aPriority = $priority[$a['reason']] ?? 99;
+            $bPriority = $priority[$b['reason']] ?? 99;
+
+            if ($aPriority !== $bPriority) {
+                return $aPriority <=> $bPriority;
+            }
+
+            if ($a['is_recommended'] !== $b['is_recommended']) {
+                return $a['is_recommended'] ? -1 : 1;
+            }
+
+            return $a['id'] <=> $b['id'];
+        });
+
+        return $coupons;
+    }
+
+    /**
+     * @param  array<string, mixed>  $coupon
+     * @return array<string, mixed>
+     */
+    private function stripPresentationOnlyFields(array $coupon): array
+    {
+        unset(
+            $coupon['is_applicable'],
+            $coupon['is_recommended'],
+            $coupon['reason'],
+            $coupon['label'],
+            $coupon['missing_for_minimum_cents'],
+            $coupon['formatted_missing_for_minimum'],
+            $coupon['formatted_remaining'],
+        );
+
+        return $coupon;
     }
 
     /**
@@ -351,7 +598,7 @@ class CouponService
         }
 
         if (! $parent->is_active) {
-            throw new \DomainException('El cupón no está activo.');
+            throw new \DomainException('Esta campaña está inactiva y no permite nuevas asignaciones.');
         }
 
         $beneficiaryService = app(CouponBeneficiaryService::class);
@@ -460,26 +707,280 @@ class CouponService
     }
 
     /**
-     * Quita la asignación de un cupón a un usuario (solo si aún no fue utilizado).
-     * Si el cupón queda sin asignaciones, se desactiva y el saldo restante pasa a cero.
+     * Revoca un crédito asignado no usado (o restaurado tras reverso de pedido).
+     * Desactiva el cupón hijo, sincroniza beneficiario y audita. Conserva coupon_user e historial.
      */
-    public function revokeAssignment(CouponUser $assignment): void
+    public function revokeAssignment(CouponUser $assignment, ?User $actor = null, ?string $reason = null): void
     {
-        if ($assignment->used_at !== null) {
-            throw new \DomainException('No se puede quitar una asignación que ya fue utilizada.');
-        }
-
-        DB::transaction(function () use ($assignment) {
+        DB::transaction(function () use ($assignment, $actor, $reason) {
+            $assignment = CouponUser::query()->whereKey($assignment->id)->lockForUpdate()->firstOrFail();
+            $assignment->loadMissing('user');
             $coupon = Coupon::query()->whereKey($assignment->coupon_id)->lockForUpdate()->firstOrFail();
 
-            $assignment->delete();
+            $activeTransaction = CouponTransaction::query()
+                ->where('coupon_id', $coupon->id)
+                ->whereNull('reversed_at')
+                ->exists();
 
-            if ($coupon->couponUsers()->count() === 0) {
-                $coupon->remaining_cents = 0;
-                $coupon->is_active = false;
-                $coupon->save();
+            if ($activeTransaction) {
+                $this->logRevocationRejected($coupon, $assignment, $actor, 'active_transaction', $reason);
+
+                throw new \DomainException(
+                    'Este crédito ya fue utilizado. Para restaurarlo, cancela el pedido relacionado.'
+                );
             }
+
+            if ($assignment->used_at !== null) {
+                $this->logRevocationRejected($coupon, $assignment, $actor, 'assignment_used', $reason);
+
+                throw new \DomainException(
+                    'Este crédito ya fue utilizado. Para restaurarlo, cancela el pedido relacionado.'
+                );
+            }
+
+            $hadReversedTransaction = CouponTransaction::query()
+                ->where('coupon_id', $coupon->id)
+                ->whereNotNull('reversed_at')
+                ->exists();
+
+            $remainingBefore = (int) $coupon->remaining_cents;
+
+            $coupon->remaining_cents = 0;
+            $coupon->is_active = false;
+            $coupon->updated_by_user_id = $actor?->id;
+            $coupon->save();
+
+            $beneficiary = $this->cancelBeneficiaryForRevokedChildCoupon($coupon, $actor);
+
+            CouponAuditLog::create([
+                'type' => 'assignment',
+                'action' => 'coupon_assignment_revoked',
+                'status' => 'completed',
+                'actor_user_id' => $actor?->id,
+                'coupon_id' => $coupon->parent_coupon_id ?? $coupon->id,
+                'context' => [
+                    'coupon_id' => $coupon->id,
+                    'parent_coupon_id' => $coupon->parent_coupon_id,
+                    'child_coupon_id' => $coupon->parent_coupon_id !== null ? $coupon->id : null,
+                    'coupon_user_id' => $assignment->id,
+                    'beneficiary_id' => $beneficiary?->id,
+                    'user_id' => $assignment->user_id,
+                    'email' => $assignment->user?->email,
+                    'amount_cents' => (int) $coupon->amount_cents,
+                    'remaining_cents_before' => $remainingBefore,
+                    'reason' => $reason ?? 'admin_manual_revocation',
+                    'actor_user_id' => $actor?->id,
+                    'had_reversed_transaction' => $hadReversedTransaction,
+                ],
+            ]);
         });
+    }
+
+    private function cancelBeneficiaryForRevokedChildCoupon(Coupon $coupon, ?User $actor): ?CouponBeneficiary
+    {
+        if ($coupon->parent_coupon_id === null) {
+            return null;
+        }
+
+        $beneficiary = CouponBeneficiary::query()
+            ->where('child_coupon_id', $coupon->id)
+            ->whereNull('cancelled_at')
+            ->lockForUpdate()
+            ->first();
+
+        if ($beneficiary === null) {
+            return null;
+        }
+
+        if ($beneficiary->status !== CouponBeneficiaryStatus::Cancelled) {
+            $beneficiary->status = CouponBeneficiaryStatus::Cancelled;
+            $beneficiary->cancelled_at = now();
+            $beneficiary->updated_by_user_id = $actor?->id;
+            $beneficiary->save();
+        }
+
+        return $beneficiary;
+    }
+
+    private function logRevocationRejected(
+        Coupon $coupon,
+        CouponUser $assignment,
+        ?User $actor,
+        string $blockedReason,
+        ?string $reason
+    ): void {
+        CouponAuditLog::create([
+            'type' => 'assignment',
+            'action' => 'coupon_revocation_rejected',
+            'status' => 'completed',
+            'actor_user_id' => $actor?->id,
+            'coupon_id' => $coupon->parent_coupon_id ?? $coupon->id,
+            'context' => [
+                'coupon_id' => $coupon->id,
+                'parent_coupon_id' => $coupon->parent_coupon_id,
+                'child_coupon_id' => $coupon->parent_coupon_id !== null ? $coupon->id : null,
+                'coupon_user_id' => $assignment->id,
+                'user_id' => $assignment->user_id,
+                'blocked_reason' => $blockedReason,
+                'reason' => $reason,
+                'actor_user_id' => $actor?->id,
+            ],
+        ]);
+    }
+
+    /**
+     * @return array{
+     *     children_count: int,
+     *     beneficiaries_count: int,
+     *     assignments_count: int,
+     *     transactions_count: int,
+     *     audit_logs_count: int,
+     *     has_activity: bool
+     * }
+     */
+    public function getCampaignActivitySummary(Coupon $coupon): array
+    {
+        $this->assertMasterCampaignCoupon($coupon);
+
+        $couponId = (int) $coupon->id;
+        $childIds = Coupon::query()->where('parent_coupon_id', $couponId)->pluck('id');
+
+        $childrenCount = $childIds->count();
+        $beneficiariesCount = (int) CouponBeneficiary::query()->where('parent_coupon_id', $couponId)->count();
+        $directAssignmentsCount = (int) CouponUser::query()->where('coupon_id', $couponId)->count();
+        $childAssignmentsCount = $childIds->isEmpty()
+            ? 0
+            : (int) CouponUser::query()->whereIn('coupon_id', $childIds)->count();
+        $assignmentsCount = $directAssignmentsCount + $childAssignmentsCount;
+
+        $directTransactionsCount = (int) CouponTransaction::query()->where('coupon_id', $couponId)->count();
+        $childTransactionsCount = $childIds->isEmpty()
+            ? 0
+            : (int) CouponTransaction::query()->whereIn('coupon_id', $childIds)->count();
+        $transactionsCount = $directTransactionsCount + $childTransactionsCount;
+
+        $auditLogsCount = (int) CouponAuditLog::query()->where('coupon_id', $couponId)->count();
+
+        $hasActivity = $childrenCount > 0
+            || $assignmentsCount > 0
+            || $beneficiariesCount > 0
+            || $transactionsCount > 0;
+
+        return [
+            'children_count' => $childrenCount,
+            'beneficiaries_count' => $beneficiariesCount,
+            'assignments_count' => $assignmentsCount,
+            'transactions_count' => $transactionsCount,
+            'audit_logs_count' => $auditLogsCount,
+            'has_activity' => $hasActivity,
+        ];
+    }
+
+    public function campaignHasActivity(Coupon $coupon): bool
+    {
+        return $this->getCampaignActivitySummary($coupon)['has_activity'];
+    }
+
+    public function deactivateCampaign(Coupon $coupon, ?User $actor = null, ?string $reason = null): void
+    {
+        $this->assertMasterCampaignCoupon($coupon);
+
+        if (! $coupon->is_active) {
+            return;
+        }
+
+        DB::transaction(function () use ($coupon, $actor, $reason) {
+            $locked = Coupon::query()->whereKey($coupon->id)->lockForUpdate()->firstOrFail();
+            if (! $locked->is_active) {
+                return;
+            }
+
+            $summary = $this->getCampaignActivitySummary($locked);
+
+            $locked->is_active = false;
+            $locked->updated_by_user_id = $actor?->id;
+            $locked->save();
+
+            CouponAuditLog::create([
+                'type' => 'campaign',
+                'action' => 'coupon_campaign_deactivated',
+                'status' => 'completed',
+                'actor_user_id' => $actor?->id,
+                'coupon_id' => $locked->id,
+                'context' => array_merge($this->campaignAuditContext($locked), $summary, [
+                    'actor_user_id' => $actor?->id,
+                    'reason' => $reason ?? 'admin_manual_deactivation',
+                ]),
+            ]);
+        });
+    }
+
+    public function deleteCampaignIfUnused(Coupon $coupon, ?User $actor = null): void
+    {
+        $this->assertMasterCampaignCoupon($coupon);
+
+        $summary = $this->getCampaignActivitySummary($coupon);
+
+        if ($summary['has_activity']) {
+            $this->logCampaignDeleteRejected($coupon, $actor, $summary);
+
+            throw new \DomainException(
+                'No se puede eliminar esta campaña porque ya tiene actividad. Puedes desactivarla para evitar nuevas asignaciones.'
+            );
+        }
+
+        DB::transaction(function () use ($coupon, $actor, $summary) {
+            $locked = Coupon::query()->whereKey($coupon->id)->lockForUpdate()->firstOrFail();
+
+            CouponAuditLog::create([
+                'type' => 'campaign',
+                'action' => 'coupon_campaign_deleted',
+                'status' => 'completed',
+                'actor_user_id' => $actor?->id,
+                'coupon_id' => $locked->id,
+                'context' => array_merge($this->campaignAuditContext($locked), $summary, [
+                    'actor_user_id' => $actor?->id,
+                ]),
+            ]);
+
+            $locked->delete();
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $summary
+     */
+    private function logCampaignDeleteRejected(Coupon $coupon, ?User $actor, array $summary): void
+    {
+        CouponAuditLog::create([
+            'type' => 'campaign',
+            'action' => 'coupon_campaign_delete_rejected',
+            'status' => 'completed',
+            'actor_user_id' => $actor?->id,
+            'coupon_id' => $coupon->id,
+            'context' => array_merge($this->campaignAuditContext($coupon), $summary, [
+                'actor_user_id' => $actor?->id,
+            ]),
+        ]);
+    }
+
+    /**
+     * @return array{coupon_id: int, name: ?string, amount_cents: int}
+     */
+    private function campaignAuditContext(Coupon $coupon): array
+    {
+        return [
+            'coupon_id' => (int) $coupon->id,
+            'name' => $coupon->code ?? $coupon->description,
+            'amount_cents' => (int) $coupon->amount_cents,
+        ];
+    }
+
+    private function assertMasterCampaignCoupon(Coupon $coupon): void
+    {
+        if ($coupon->parent_coupon_id !== null) {
+            throw new \DomainException('Esta acción solo aplica a cupones maestro (campaña).');
+        }
     }
 
     public function authorizePendingCoupon(Coupon $coupon, string $code, int $authorizedByUserId): void

@@ -65,6 +65,10 @@ class CouponController extends Controller
                 'assignment_approval_summary',
                 $approvalSummaries[$coupon->id] ?? null
             );
+            $coupon->setAttribute(
+                'campaign_admin_actions',
+                $this->campaignAdminActionsForUi($coupon)
+            );
 
             return $coupon;
         });
@@ -507,6 +511,7 @@ class CouponController extends Controller
             $trackedBeneficiary = $beneficiariesByChildId->get($child->id);
             $beneficiaryRows[] = [
                 'assignment_id' => $assignment?->id,
+                'beneficiary_id' => $trackedBeneficiary?->id,
                 'coupon_id' => $child->id,
                 'user' => $user,
                 'assigned_at' => $assignment?->assigned_at,
@@ -567,7 +572,7 @@ class CouponController extends Controller
                 'invitation_sent_at' => $pending->invitation_sent_at?->toIso8601String(),
                 'last_invitation_sent_at' => $pending->last_invitation_sent_at?->toIso8601String(),
                 'invitation_count' => (int) $pending->invitation_count,
-                'can_resend_invitation' => $pending->canResendInvitation(),
+                'can_resend_invitation' => $coupon->is_active && $pending->canResendInvitation(),
                 'resend_invitation_available_at' => $pending->resendInvitationAvailableAt()?->toIso8601String(),
             ];
         }
@@ -583,6 +588,7 @@ class CouponController extends Controller
             $row['customer_admin_url'] = $cid
                 ? route('admin.customers.show', ['customer' => $cid], absolute: false)
                 : null;
+            $row['admin_actions'] = $this->beneficiaryAdminActionsForUi($row, $coupon->is_active);
 
             return $row;
         }, $beneficiaryRows);
@@ -592,6 +598,7 @@ class CouponController extends Controller
 
         return Inertia::render('Admin/Coupons/Show', [
             'coupon' => $coupon,
+            'campaignAdminActions' => $this->campaignAdminActionsForUi($coupon),
             'beneficiaryRows' => $beneficiaryRows,
             'authorizationRecipientEmail' => $settings->authorization_email,
             'mailSetupHint' => $pendingAuth ? $this->mailSetupHintForCouponShow() : null,
@@ -747,15 +754,38 @@ class CouponController extends Controller
         return redirect()->route('admin.coupons.index')->flashMessage('Cupón actualizado.');
     }
 
+    public function deactivate(Request $request, Coupon $coupon): RedirectResponse
+    {
+        $this->authorize('update', $coupon);
+
+        $wasActive = (bool) $coupon->is_active;
+
+        try {
+            $this->couponService->deactivateCampaign($coupon, $request->user());
+        } catch (\DomainException $e) {
+            return redirect()->back()->flashMessage($e->getMessage(), 'error');
+        }
+
+        if (! $wasActive) {
+            return redirect()->back()->flashMessage('La campaña ya estaba inactiva.');
+        }
+
+        return redirect()->back()->flashMessage(
+            'Campaña desactivada. Ya no permite nuevas asignaciones; los créditos existentes conservan su estado.'
+        );
+    }
+
     public function destroy(Coupon $coupon): RedirectResponse
     {
         $this->authorize('delete', $coupon);
 
-        $coupon->is_active = false;
-        $coupon->updated_by_user_id = request()->user()->id;
-        $coupon->save();
+        try {
+            $this->couponService->deleteCampaignIfUnused($coupon, request()->user());
+        } catch (\DomainException $e) {
+            return redirect()->back()->flashMessage($e->getMessage(), 'error');
+        }
 
-        return redirect()->route('admin.coupons.index')->flashMessage('Cupón desactivado.');
+        return redirect()->route('admin.coupons.index')->flashMessage('Campaña eliminada correctamente.');
     }
 
     public function assignForm(Request $request): InertiaResponse
@@ -1018,7 +1048,12 @@ class CouponController extends Controller
     public function previewBeneficiaries(Request $request, Coupon $coupon): JsonResponse
     {
         $this->authorize('create', Coupon::class);
-        $this->assertAssignableMasterCoupon($coupon);
+
+        try {
+            $this->assertAssignableMasterCoupon($coupon);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         $data = $request->validate([
             'rows' => ['required', 'array', 'max:5000'],
@@ -1111,6 +1146,8 @@ class CouponController extends Controller
             ]);
 
             return response()->json($preview);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::warning('[coupon_bulk_preview] validation_failed', [
                 'endpoint' => 'preview-file',
@@ -1142,7 +1179,12 @@ class CouponController extends Controller
     public function resendBeneficiaryInvitation(Request $request, Coupon $coupon, CouponBeneficiary $beneficiary): RedirectResponse
     {
         $this->authorize('create', Coupon::class);
-        $this->assertAssignableMasterCoupon($coupon);
+
+        try {
+            $this->assertAssignableMasterCoupon($coupon);
+        } catch (\DomainException $e) {
+            return redirect()->back()->flashMessage($e->getMessage(), 'error');
+        }
 
         if ((int) $beneficiary->parent_coupon_id !== (int) $coupon->id) {
             abort(404);
@@ -1160,7 +1202,12 @@ class CouponController extends Controller
     public function confirmBeneficiaries(Request $request, Coupon $coupon): RedirectResponse
     {
         $this->authorize('create', Coupon::class);
-        $this->assertAssignableMasterCoupon($coupon);
+
+        try {
+            $this->assertAssignableMasterCoupon($coupon);
+        } catch (\DomainException $e) {
+            return redirect()->back()->flashMessage($e->getMessage(), 'error');
+        }
 
         if ($this->couponHasPendingPreApprovalLock((int) $coupon->id)) {
             return redirect()->back()->flashMessage(
@@ -1625,7 +1672,32 @@ class CouponController extends Controller
         return redirect()->back()->flashMessage('Solicitud rechazada.');
     }
 
-    public function destroyAssignment(Coupon $coupon, CouponUser $couponUser): RedirectResponse
+    public function cancelBeneficiary(Request $request, Coupon $coupon, CouponBeneficiary $beneficiary): RedirectResponse
+    {
+        $this->authorize('update', $coupon);
+
+        if ($coupon->parent_coupon_id !== null) {
+            abort(404);
+        }
+
+        if ((int) $beneficiary->parent_coupon_id !== (int) $coupon->id) {
+            abort(404);
+        }
+
+        try {
+            $this->couponBeneficiaryService->cancelPendingBeneficiary(
+                $beneficiary,
+                $request->user(),
+                'admin_manual_cancellation'
+            );
+        } catch (\DomainException $e) {
+            return redirect()->back()->flashMessage($e->getMessage(), 'error');
+        }
+
+        return redirect()->back()->flashMessage('Beneficiario pendiente cancelado correctamente.');
+    }
+
+    public function destroyAssignment(Request $request, Coupon $coupon, CouponUser $couponUser): RedirectResponse
     {
         $this->authorize('update', $coupon);
 
@@ -1634,14 +1706,96 @@ class CouponController extends Controller
         }
 
         try {
-            $this->couponService->revokeAssignment($couponUser);
+            $this->couponService->revokeAssignment($couponUser, $request->user(), 'admin_manual_revocation');
         } catch (\DomainException $e) {
-            return redirect()
-                ->route('admin.coupons.index')
-                ->flashMessage($e->getMessage(), 'error');
+            return redirect()->back()->flashMessage($e->getMessage(), 'error');
         }
 
-        return redirect()->back()->flashMessage('Asignación eliminada. El cupón quedó desactivado si ya no tenía destinatarios.');
+        return redirect()->back()->flashMessage('Crédito revocado correctamente.');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function campaignAdminActionsForUi(Coupon $coupon): array
+    {
+        if ($coupon->parent_coupon_id !== null) {
+            return [
+                'can_deactivate' => false,
+                'can_delete' => false,
+                'is_master_campaign' => false,
+                'activity_summary' => null,
+            ];
+        }
+
+        $summary = $this->couponService->getCampaignActivitySummary($coupon);
+
+        return [
+            'can_deactivate' => (bool) $coupon->is_active,
+            'can_delete' => ! $summary['has_activity'],
+            'is_master_campaign' => true,
+            'activity_summary' => $summary,
+            'deactivate_message' => 'La campaña se desactivará y ya no permitirá nuevas asignaciones. Los créditos ya asignados conservarán su estado actual.',
+            'delete_blocked_message' => 'No se puede eliminar esta campaña porque ya tiene actividad. Puedes desactivarla para evitar nuevas asignaciones.',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function beneficiaryAdminActionsForUi(array $row, bool $campaignIsActive = true): array
+    {
+        if (! empty($row['is_pending_user'])) {
+            $canResend = $campaignIsActive && (bool) ($row['can_resend_invitation'] ?? false);
+
+            return [
+                'can_cancel_pending' => true,
+                'can_revoke_credit' => false,
+                'can_resend_invitation' => $canResend,
+                'blocked_reason' => $campaignIsActive ? null : 'campaign_inactive',
+                'blocked_message' => $campaignIsActive
+                    ? null
+                    : 'Esta campaña está inactiva y no permite nuevas asignaciones.',
+                'requires_strong_confirmation' => false,
+            ];
+        }
+
+        $transaction = $row['transaction'] ?? null;
+        $hasActiveTransaction = is_array($transaction) && empty($transaction['is_reversed']);
+
+        if ($hasActiveTransaction || ! empty($row['used_at'])) {
+            return [
+                'can_cancel_pending' => false,
+                'can_revoke_credit' => false,
+                'can_resend_invitation' => false,
+                'blocked_reason' => 'used',
+                'blocked_message' => 'Este crédito ya fue utilizado. Para restaurarlo, cancela el pedido relacionado.',
+                'requires_strong_confirmation' => false,
+            ];
+        }
+
+        if (! empty($row['assignment_id'])) {
+            $isRestored = is_array($transaction) && ! empty($transaction['is_reversed']);
+
+            return [
+                'can_cancel_pending' => false,
+                'can_revoke_credit' => true,
+                'can_resend_invitation' => false,
+                'blocked_reason' => null,
+                'blocked_message' => null,
+                'requires_strong_confirmation' => $isRestored,
+            ];
+        }
+
+        return [
+            'can_cancel_pending' => false,
+            'can_revoke_credit' => false,
+            'can_resend_invitation' => false,
+            'blocked_reason' => null,
+            'blocked_message' => null,
+            'requires_strong_confirmation' => false,
+        ];
     }
 
     /**
@@ -2486,8 +2640,12 @@ class CouponController extends Controller
             abort(404);
         }
 
-        if ($coupon->approval_status !== CouponApprovalStatus::Active || ! $coupon->is_active) {
-            abort(422, 'El cupón no está disponible para asignaciones.');
+        if ($coupon->approval_status !== CouponApprovalStatus::Active) {
+            throw new \DomainException('El cupón no está autorizado para asignaciones.');
+        }
+
+        if (! $coupon->is_active) {
+            throw new \DomainException('Esta campaña está inactiva y no permite nuevas asignaciones.');
         }
     }
 

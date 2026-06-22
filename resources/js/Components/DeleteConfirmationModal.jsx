@@ -15,6 +15,7 @@ export default function DeleteConfirmationModal({
 	description,
 	processing,
 	destroy,
+	confirmLabel = "Eliminar",
 }) {
 	const [cachedDescription, setCachedDescription] = useState(description);
 
@@ -58,7 +59,7 @@ export default function DeleteConfirmationModal({
 						disabled={processing}
 					>
 						<TrashIcon />
-						Eliminar
+						{confirmLabel}
 						{processing && (
 							<ArrowPathIcon className="animate-spin" />
 						)}

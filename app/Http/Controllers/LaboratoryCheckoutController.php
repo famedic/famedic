@@ -31,8 +31,8 @@ class LaboratoryCheckoutController extends Controller
 
         $userId = $request->user()->id;
         $customer = $request->user()->customer;
-        $balanceCents = $couponService->getUserBalance($userId);
-        $availableCoupons = $couponService->getAvailableCoupons($userId);
+        $balancePresentation = $couponService->buildCheckoutCreditPresentation($userId, (int) $totals['total']);
+        $availableCoupons = collect($balancePresentation['availableBalanceCoupons']);
         $mockTokens = MockEfevooPaymentSupport::isMockMode()
             ? MockEfevooPaymentSupport::ensureTestTokensForCustomer($customer)
             : [];
@@ -106,9 +106,8 @@ class LaboratoryCheckoutController extends Controller
             'pendingLaboratoryAppointment' => $pendingLaboratoryAppointment,
             'callbackPreferenceSavedAtFormatted' => $callbackPreferenceSavedAtFormatted,
             ...$totals,
-            'balanceCouponsCents' => $balanceCents,
-            'formattedBalanceCoupons' => $balanceCents > 0 ? formattedCentsPrice($balanceCents) : null,
-            'availableBalanceCoupons' => $availableCoupons,
+            ...$balancePresentation,
+            'balanceCreditPresentation' => $balancePresentation,
             'hasPayPal' => (bool) config('services.paypal.client_id'),
             'paypalClientId' => config('services.paypal.client_id'),
             'contacts' => $request->user()->customer->contacts,

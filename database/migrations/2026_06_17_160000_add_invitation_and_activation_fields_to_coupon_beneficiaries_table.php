@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! Schema::hasTable('coupon_beneficiaries')) {
+            return;
+        }
+
         Schema::table('coupon_beneficiaries', function (Blueprint $table) {
             if (! Schema::hasColumn('coupon_beneficiaries', 'invitation_sent_at')) {
                 $table->timestamp('invitation_sent_at')->nullable()->after('claimed_at');
@@ -31,6 +35,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! Schema::hasTable('coupon_beneficiaries')) {
+            return;
+        }
+
         Schema::table('coupon_beneficiaries', function (Blueprint $table) {
             $columns = [
                 'invitation_sent_at',

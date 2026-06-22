@@ -190,6 +190,7 @@ Route::prefix('admin')->middleware([
         Route::post('coupons/{coupon}/beneficiaries/preview-file', [CouponController::class, 'previewBeneficiariesFile'])->name('coupons.beneficiaries.preview-file');
         Route::post('coupons/{coupon}/beneficiaries/confirm', [CouponController::class, 'confirmBeneficiaries'])->name('coupons.beneficiaries.confirm');
         Route::post('coupons/{coupon}/beneficiaries/{beneficiary}/resend-invitation', [CouponController::class, 'resendBeneficiaryInvitation'])->name('coupons.beneficiaries.resend-invitation');
+        Route::post('coupons/{coupon}/beneficiaries/{beneficiary}/cancel', [CouponController::class, 'cancelBeneficiary'])->name('coupons.beneficiaries.cancel');
         Route::post('coupons/assign', [CouponController::class, 'assign'])->name('coupons.assign.store');
         Route::get('coupons/import', [CouponController::class, 'importForm'])->name('coupons.import');
         Route::post('coupons/import', [CouponController::class, 'import'])->name('coupons.import.store');
@@ -200,6 +201,7 @@ Route::prefix('admin')->middleware([
         Route::delete('coupons/concepts/{couponConcept}', [CouponConceptController::class, 'destroy'])->name('coupons.concepts.destroy');
         Route::post('coupons/{coupon}/authorize', [CouponController::class, 'authorizeCoupon'])->name('coupons.authorize');
         Route::post('coupons/{coupon}/resend-authorization', [CouponController::class, 'resendAuthorization'])->name('coupons.resend-authorization');
+        Route::post('coupons/{coupon}/deactivate', [CouponController::class, 'deactivate'])->name('coupons.deactivate');
         Route::delete('coupons/{coupon}/assignments/{couponUser}', [CouponController::class, 'destroyAssignment'])->name('coupons.assignments.destroy');
         Route::resource('coupons', CouponController::class);
         Route::get('simulators', [SimulatorController::class, 'index'])->name('simulators.index');

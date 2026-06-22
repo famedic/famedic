@@ -35,6 +35,7 @@ class SendPendingBeneficiaryInvitations extends Command
                 ->where('status', 'pending_user')
                 ->whereNull('child_coupon_id')
                 ->whereNull('cancelled_at')
+                ->whereHas('parentCoupon', fn ($q) => $q->where('is_active', true))
                 ->when($emailFilter, fn ($q) => $q->where(
                     'email_normalized',
                     CouponBeneficiary::normalizeEmail((string) $emailFilter)
