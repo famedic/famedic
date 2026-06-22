@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\DB;
 class CouponApplicationService
 {
     /**
-     * Aplica el cupón completo a una compra de laboratorio (uso total, sin parcial).
+     * Aplica el crédito completo a una compra de laboratorio (uso total, sin parcial en saldo).
      *
      * @return int Monto descontado en centavos
      */
@@ -36,7 +36,7 @@ class CouponApplicationService
 
             $this->assertCouponApplicable($coupon, $assignment, $purchase->total_cents);
 
-            $discountCents = $coupon->remaining_cents;
+            $discountCents = $this->resolveDiscountCents($coupon, $purchase->total_cents);
 
             $coupon->remaining_cents = 0;
             $coupon->save();
@@ -75,7 +75,7 @@ class CouponApplicationService
 
             $this->assertCouponApplicable($coupon, $assignment, $purchase->total_cents);
 
-            $discountCents = $coupon->remaining_cents;
+            $discountCents = $this->resolveDiscountCents($coupon, $purchase->total_cents);
 
             $coupon->remaining_cents = 0;
             $coupon->save();
@@ -115,29 +115,38 @@ class CouponApplicationService
         $this->assertCouponApplicable($coupon, $assignment, $purchaseTotalCents);
     }
 
+    public function resolveDiscountCents(Coupon $coupon, int $purchaseTotalCents): int
+    {
+        if ($coupon->type === CouponType::Coupon) {
+            return min((int) $coupon->remaining_cents, max(0, $purchaseTotalCents));
+        }
+
+        return (int) $coupon->remaining_cents;
+    }
+
     private function assertCouponApplicable(Coupon $coupon, CouponUser $assignment, int $purchaseTotalCents): void
     {
         if (! $coupon->is_active) {
-            throw new CouponApplicationException('El cupón no está activo.');
+            throw new CouponApplicationException('El crédito no está activo.');
         }
 
         if ($coupon->approval_status !== CouponApprovalStatus::Active) {
-            throw new CouponApplicationException('El cupón no está autorizado.');
+            throw new CouponApplicationException('El crédito no está autorizado.');
         }
 
-        if ($coupon->type !== CouponType::Balance) {
-            throw new CouponApplicationException('Tipo de cupón no soportado.');
+        if (! in_array($coupon->type, [CouponType::Balance, CouponType::Coupon], true)) {
+            throw new CouponApplicationException('Tipo de crédito no soportado.');
         }
 
         if ($assignment->used_at !== null) {
-            throw new CouponApplicationException('Este cupón ya fue utilizado.');
+            throw new CouponApplicationException('Este crédito ya fue utilizado.');
         }
 
         if ($coupon->remaining_cents <= 0) {
-            throw new CouponApplicationException('El cupón no tiene saldo disponible.');
+            throw new CouponApplicationException('El crédito no tiene saldo disponible.');
         }
 
-        if ($coupon->remaining_cents > $purchaseTotalCents) {
+        if ($coupon->type === CouponType::Balance && $coupon->remaining_cents > $purchaseTotalCents) {
             throw new CouponApplicationException(
                 'Tu saldo es mayor al total de la compra, no puede aplicarse en esta compra.'
             );
@@ -145,23 +154,27 @@ class CouponApplicationService
 
         if ($coupon->isNotYetValid()) {
             $fecha = localizedDate($coupon->valid_from)?->isoFormat('D [de] MMMM [de] YYYY');
+            $label = $coupon->type === CouponType::Coupon ? 'cupón' : 'saldo a favor';
 
             throw new CouponApplicationException(
-                "Tu saldo a favor estará disponible a partir del {$fecha}."
+                "Tu {$label} estará disponible a partir del {$fecha}."
             );
         }
 
         if ($coupon->isExpired()) {
             $fecha = localizedDate($coupon->expires_at)?->isoFormat('D [de] MMMM [de] YYYY');
+            $label = $coupon->type === CouponType::Coupon ? 'cupón' : 'saldo a favor';
 
             throw new CouponApplicationException(
-                "Tu saldo a favor venció el {$fecha}."
+                "Tu {$label} venció el {$fecha}."
             );
         }
 
         if (! $coupon->meetsMinimumPurchase($purchaseTotalCents)) {
+            $label = $coupon->type === CouponType::Coupon ? 'cupón' : 'saldo a favor';
+
             throw new CouponApplicationException(
-                'Para usar tu saldo a favor necesitas una compra mínima de '.$coupon->formatted_min_purchase.'.'
+                "Para usar tu {$label} necesitas una compra mínima de ".$coupon->formatted_min_purchase.'.'
             );
         }
     }
@@ -217,7 +230,7 @@ class CouponApplicationService
                 ->firstOrFail();
 
             if ($coupon->type !== CouponType::Balance) {
-                throw new CouponReversalException('Solo se pueden revertir cupones de tipo saldo a favor.');
+                throw new CouponReversalException('Solo se pueden revertir créditos de tipo saldo a favor.');
             }
 
             $assignment = CouponUser::query()

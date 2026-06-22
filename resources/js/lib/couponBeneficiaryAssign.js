@@ -35,6 +35,7 @@ export function beneficiaryRowFromMatrix(row) {
 		first_name: row.first_name?.trim() || null,
 		paternal_lastname: row.paternal_lastname?.trim() || null,
 		maternal_lastname: row.maternal_lastname?.trim() || null,
+		credit_type: row.credit_type ?? "balance",
 	};
 }
 

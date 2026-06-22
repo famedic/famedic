@@ -34,7 +34,10 @@ import { ChevronLeftIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import clsx from "clsx";
 import {
+    couponCreditTypeLabel,
+    couponDiscountCents,
     couponMeetsMinPurchase,
+    isBalanceCreditType,
     isCouponApplicableForCheckout,
     isCouponWithinValidity,
 } from "@/lib/couponEligibilityUi";
@@ -346,6 +349,7 @@ export default function LaboratoryCheckout({
 
     const couponTooLarge = useMemo(() => {
         if (!selectedCoupon) return false;
+        if (!isBalanceCreditType(selectedCoupon)) return false;
         return selectedCoupon.remaining_cents > total;
     }, [selectedCoupon, total]);
 
@@ -371,10 +375,15 @@ export default function LaboratoryCheckout({
 
     const couponBlocked = couponTooLarge || couponNotYetValid || couponBelowMinPurchase;
 
+    const selectedDiscountCents = useMemo(() => {
+        if (!selectedCoupon || couponBlocked) return 0;
+        return couponDiscountCents(selectedCoupon, total);
+    }, [selectedCoupon, couponBlocked, total]);
+
     const amountAfterCoupon = useMemo(() => {
         if (!selectedCoupon || couponBlocked) return total;
-        return Math.max(0, total - selectedCoupon.remaining_cents);
-    }, [selectedCoupon, couponBlocked, total]);
+        return Math.max(0, total - selectedDiscountCents);
+    }, [selectedCoupon, couponBlocked, total, selectedDiscountCents]);
 
     const summaryDetails = useMemo(() => {
         const rows = [
@@ -385,11 +394,11 @@ export default function LaboratoryCheckout({
             rows.push({
                 value:
                     "-" +
-                    (selectedCoupon.remaining_cents / 100).toLocaleString(
-                        "es-MX",
-                        { style: "currency", currency: "MXN" },
-                    ),
-                label: "Cupón saldo",
+                    (selectedDiscountCents / 100).toLocaleString("es-MX", {
+                        style: "currency",
+                        currency: "MXN",
+                    }),
+                label: couponCreditTypeLabel(selectedCoupon),
             });
         }
         rows.push({
@@ -410,6 +419,7 @@ export default function LaboratoryCheckout({
         selectedCoupon,
         couponBlocked,
         amountAfterCoupon,
+        selectedDiscountCents,
     ]);
 
     const paymentMethodStepIsComplete = useMemo(() => {
@@ -448,7 +458,7 @@ export default function LaboratoryCheckout({
         );
         if (!applicable) return;
         setData("coupon_id", applicable.id);
-        const after = total - applicable.remaining_cents;
+        const after = total - couponDiscountCents(applicable, total);
         if (after === 0) {
             setData("payment_method", "coupon_balance");
         }
@@ -845,7 +855,9 @@ export default function LaboratoryCheckout({
         requestAnimationFrame(() => requestAnimationFrame(scrollToStep));
     }, [currentStepIndex]);
 
-    const couponSection = balanceCouponsCents > 0 && (
+    const hasCheckoutCredits = checkoutCoupons.length > 0;
+
+    const couponSection = hasCheckoutCredits && (
         <div className="space-y-2">
             <BalanceCreditCard
                 variant="checkout"
@@ -995,16 +1007,22 @@ export default function LaboratoryCheckout({
                 );
             case "payment":
                 if (amountAfterCoupon === 0 && data.coupon_id) {
+                    const creditLabel = selectedCoupon
+                        ? couponCreditTypeLabel(selectedCoupon).toLowerCase()
+                        : "crédito";
                     return (
                         <CheckoutWizardStep
                             title="Método de pago"
-                            description="Tu saldo a favor cubre el total de la compra."
+                            description={`Tu ${creditLabel} cubre el total de la compra.`}
                         >
                             <div className="flex items-center gap-3 rounded-lg bg-emerald-50 p-4 dark:bg-emerald-950/30">
                                 <CheckCircleIcon className="size-6 fill-green-600 dark:fill-famedic-lime" />
                                 <div>
                                     <Text className="font-medium">
-                                        Pago con saldo a favor
+                                        Pago con{" "}
+                                        {selectedCoupon
+                                            ? couponCreditTypeLabel(selectedCoupon).toLowerCase()
+                                            : "crédito"}
                                     </Text>
                                     <Text className="text-sm text-zinc-600 dark:text-slate-400">
                                         No necesitas seleccionar otro método de

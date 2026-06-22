@@ -32,6 +32,15 @@ export function couponValidityBadge(c) {
 	return couponValiditySummary(c);
 }
 
+export const CREDIT_TYPE_OPTIONS = [
+	{ value: "balance", label: "Saldo a favor" },
+	{ value: "coupon", label: "Cupón" },
+];
+
+export function creditTypeLabel(value) {
+	return CREDIT_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? "—";
+}
+
 export function beneficiaryStatusMeta(row) {
 	if (row.is_pending_user || row.status === "pending_user") {
 		return { label: "Pendiente de registro", color: "amber" };

@@ -84,7 +84,11 @@ class OrderAction
                 $couponId,
                 $calculatedTotalCents
             );
-            $discountCents = (int) Coupon::query()->findOrFail($couponId)->remaining_cents;
+            $coupon = Coupon::query()->findOrFail($couponId);
+            $discountCents = $this->couponApplicationService->resolveDiscountCents(
+                $coupon,
+                $calculatedTotalCents
+            );
         }
 
         $amountToChargeCents = $calculatedTotalCents - $discountCents;

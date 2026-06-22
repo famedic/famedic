@@ -1,273 +1,228 @@
-import { useState } from "react";
-import { GiftIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
-import BalanceCreditRules from "@/Components/Coupons/BalanceCreditRules";
-import BalanceCreditStatusBadge from "@/Components/Coupons/BalanceCreditStatusBadge";
-import BalanceCreditApplyButton from "@/Components/Coupons/BalanceCreditApplyButton";
-import BalanceCreditListItem from "@/Components/Coupons/BalanceCreditListItem";
+import clsx from "clsx";
+import { useEffect, useState } from "react";
+import { Badge } from "@/Components/Catalyst/badge";
+import { Button } from "@/Components/Catalyst/button";
+import { Text } from "@/Components/Catalyst/text";
+import { Subheading } from "@/Components/Catalyst/heading";
+import Card from "@/Components/Card";
 import {
-	buildBalanceCreditSummary,
-	formatCouponMoney,
-	getBalanceCreditMessage,
-	getBalanceCreditMessageTone,
-	canApplyBalanceCredit,
-	getMultiCreditCartHeadline,
-} from "@/lib/couponPatientUi";
+	couponCreditTypeLabel,
+	couponDiscountCents,
+	formatCreditExpiryCountdown,
+	getCreditExpiryCountdown,
+	isCouponApplicableForCheckout,
+} from "@/lib/couponEligibilityUi";
 
-const messageToneClasses = {
-	success: "text-emerald-700 dark:text-emerald-300",
-	warning: "text-amber-700 dark:text-amber-300",
-	info: "text-sky-700 dark:text-sky-300",
-	applied: "text-violet-700 dark:text-violet-300",
-	neutral: "text-zinc-600 dark:text-zinc-400",
-};
+function formatMxnFromCents(cents) {
+	return (cents / 100).toLocaleString("es-MX", {
+		style: "currency",
+		currency: "MXN",
+	});
+}
+
+function CreditExpiryCountdown({ expiresAt }) {
+	const [countdown, setCountdown] = useState(() => getCreditExpiryCountdown(expiresAt));
+
+	useEffect(() => {
+		if (!expiresAt) return undefined;
+		const tick = () => setCountdown(getCreditExpiryCountdown(expiresAt));
+		tick();
+		const intervalId = setInterval(tick, 60_000);
+		return () => clearInterval(intervalId);
+	}, [expiresAt]);
+
+	const formatted = formatCreditExpiryCountdown(countdown);
+	if (!formatted) return null;
+
+	return (
+		<Text className="text-xs font-medium text-sky-800 dark:text-sky-200">
+			Te quedan {formatted} para aprovecharlo.
+		</Text>
+	);
+}
+
+function CreditOptionRow({
+	credit,
+	cartTotalCents,
+	variant,
+	selected,
+	onSelect,
+	onClear,
+}) {
+	const applicable = isCouponApplicableForCheckout(credit, cartTotalCents);
+	const discountCents = couponDiscountCents(credit, cartTotalCents);
+	const typeLabel = couponCreditTypeLabel(credit);
+	const isCheckout = variant === "checkout";
+	const isSelected = selected && selected === credit.id;
+
+	return (
+		<div
+			className={clsx(
+				"rounded-lg border p-3 transition-colors",
+				isSelected
+					? "border-famedic-dark/40 bg-famedic-dark/5 ring-1 ring-famedic-dark/20 dark:border-famedic-lime/40 dark:bg-famedic-lime/5 dark:ring-famedic-lime/30"
+					: "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/40",
+				isCheckout && applicable && !isSelected && "hover:border-zinc-300 dark:hover:border-zinc-600",
+			)}
+		>
+			<div className="flex flex-wrap items-start justify-between gap-3">
+				<div className="min-w-0 space-y-1">
+					<div className="flex flex-wrap items-center gap-2">
+						<Badge color={credit.type === "coupon" ? "cyan" : "emerald"}>
+							{typeLabel}
+						</Badge>
+						{credit.is_recommended ? (
+							<Badge color="amber">Recomendado</Badge>
+						) : null}
+						{credit.code ? (
+							<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+								Código: {credit.code}
+							</Text>
+						) : null}
+					</div>
+					<Text className="font-semibold text-zinc-900 dark:text-white">
+						{credit.formatted_remaining ?? formatMxnFromCents(credit.remaining_cents)}
+					</Text>
+					{credit.expires_at ? (
+						<CreditExpiryCountdown expiresAt={credit.expires_at} />
+					) : null}
+					{credit.label ? (
+						<Text
+							className={clsx(
+								"text-sm",
+								applicable
+									? "text-emerald-700 dark:text-emerald-300"
+									: "text-amber-700 dark:text-amber-300",
+							)}
+						>
+							{credit.label}
+						</Text>
+					) : null}
+					{!applicable && credit.formatted_missing_for_minimum ? (
+						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+							Faltan {credit.formatted_missing_for_minimum} para la compra mínima.
+						</Text>
+					) : null}
+					{applicable && discountCents < credit.remaining_cents ? (
+						<Text className="text-xs text-zinc-600 dark:text-zinc-400">
+							Descuento en esta compra: {formatMxnFromCents(discountCents)}
+						</Text>
+					) : null}
+				</div>
+				{isCheckout ? (
+					<div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+						{isSelected ? (
+							<Button type="button" plain onClick={() => onClear?.()}>
+								Cancelar
+							</Button>
+						) : (
+							<Button
+								type="button"
+								outline
+								disabled={!applicable}
+								onClick={() => onSelect?.(credit.id)}
+							>
+								Usar
+							</Button>
+						)}
+					</div>
+				) : null}
+			</div>
+		</div>
+	);
+}
 
 export default function BalanceCreditCard({
+	variant = "cart",
 	balanceCreditPresentation = null,
 	balanceCouponsCents = 0,
 	availableBalanceCoupons = [],
 	cartTotalCents = 0,
-	variant = "checkout",
-	defaultExpanded = false,
 	selectedCouponId = null,
 	onApply,
 	onClear,
 }) {
-	const [expanded, setExpanded] = useState(defaultExpanded);
+	const credits =
+		balanceCreditPresentation?.coupons?.length > 0
+			? balanceCreditPresentation.coupons
+			: availableBalanceCoupons;
 
-	const summary = buildBalanceCreditSummary(
-		availableBalanceCoupons,
-		cartTotalCents,
-		balanceCouponsCents,
-		balanceCreditPresentation,
-	);
-
-	if (!summary.show) return null;
-
-	const {
-		isMulti,
-		displayCoupon,
-		bestCoupon,
-		primaryReason,
-		balanceCents,
-		coupons,
-		amountMissingForMinimum,
-	} = summary;
-
-	const applied =
-		selectedCouponId != null &&
-		coupons.some((c) => c.id === selectedCouponId);
-	const appliedCoupon =
-		coupons.find((c) => c.id === selectedCouponId) ?? null;
-	const couponForRules = appliedCoupon ?? displayCoupon;
-	const rulesReason = applied ? "applicable" : primaryReason;
-	const compactMessage = getBalanceCreditMessage(summary, applied);
-	const messageTone = getBalanceCreditMessageTone(summary, applied);
-	const showApplyActions = variant === "checkout" && (onApply || onClear);
-	const isCart = variant === "cart";
-	const multiHeadline = isMulti ? getMultiCreditCartHeadline(summary) : null;
-
-	const handleApplyRecommended = () => {
-		if (!canApplyBalanceCredit(summary, applied) || !bestCoupon) return;
-		onApply?.(bestCoupon.id);
-	};
-
-	if (isMulti) {
-		return (
-			<div
-				className={[
-					"min-w-0 overflow-hidden rounded-lg border border-violet-100/90 bg-violet-50/35 px-4 py-3.5 shadow-sm",
-					"dark:border-violet-900/35 dark:bg-violet-950/15",
-					isCart ? "-mx-1" : "",
-				].join(" ")}
-			>
-				<div className="flex gap-3">
-					<div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/45 dark:text-violet-300">
-						<GiftIcon className="size-5" aria-hidden="true" />
-					</div>
-
-					<div className="min-w-0 flex-1 space-y-3">
-						<div>
-							<h3 className="text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-100">
-								Saldo a favor
-							</h3>
-							<p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
-								Tienes {coupons.length} créditos
-							</p>
-						</div>
-
-						<div className="space-y-1">
-							{multiHeadline?.applicableLine && (
-								<p
-									className={[
-										"text-sm font-semibold leading-snug",
-										summary.applicableCount > 0
-											? "text-emerald-700 dark:text-emerald-300"
-											: "text-amber-700 dark:text-amber-300",
-									].join(" ")}
-								>
-									{multiHeadline.applicableLine}
-								</p>
-							)}
-							{multiHeadline?.conditionalLine && (
-								<p className="text-sm text-zinc-700 dark:text-zinc-300">
-									{multiHeadline.conditionalLine}
-								</p>
-							)}
-						</div>
-
-						{variant === "checkout" && (
-							<p className="text-xs text-zinc-600 dark:text-zinc-400">
-								Solo puedes usar un crédito por compra.
-							</p>
-						)}
-
-						<div>
-							<button
-								type="button"
-								className="inline-flex w-full items-center justify-center gap-1 text-xs font-medium text-violet-700 hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-200 sm:justify-start sm:text-sm"
-								onClick={() => setExpanded((v) => !v)}
-								aria-expanded={expanded}
-							>
-								{expanded ? "Ocultar créditos" : "Ver créditos"}
-								<ChevronDownIcon
-									className={[
-										"size-3.5 transition-transform sm:size-4",
-										expanded ? "rotate-180" : "",
-									].join(" ")}
-									aria-hidden="true"
-								/>
-							</button>
-
-							{expanded && (
-								<div className="mt-2 space-y-2">
-									{variant === "checkout" && (
-										<p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-											Elige el crédito que quieres usar
-										</p>
-									)}
-									{coupons.map((coupon) => (
-										<BalanceCreditListItem
-											key={coupon.id}
-											coupon={coupon}
-											cartTotalCents={cartTotalCents}
-											selectedCouponId={selectedCouponId}
-											onApply={onApply}
-											onClear={onClear}
-											showActions={variant === "checkout"}
-											compact={isCart}
-										/>
-									))}
-								</div>
-							)}
-						</div>
-
-						{showApplyActions && !expanded && (
-							<BalanceCreditApplyButton
-								applied={applied}
-								canApply={canApplyBalanceCredit(summary, applied)}
-								onApply={handleApplyRecommended}
-								onClear={onClear}
-								applyLabel={
-									bestCoupon?.is_recommended
-										? "Aplicar crédito recomendado"
-										: "Aplicar saldo a favor"
-								}
-							/>
-						)}
-					</div>
-				</div>
-			</div>
-		);
+	if (!credits?.length) {
+		return null;
 	}
 
+	const balanceCredits = credits.filter((c) => (c.type ?? "balance") === "balance");
+	const couponCredits = credits.filter((c) => c.type === "coupon");
+	const totalCents =
+		balanceCreditPresentation?.total_balance_cents ?? balanceCouponsCents;
+	const applicableCount =
+		balanceCreditPresentation?.applicable_coupons_count ??
+		credits.filter((c) => isCouponApplicableForCheckout(c, cartTotalCents)).length;
+
 	return (
-		<div
-			className={[
-				"min-w-0 overflow-hidden rounded-lg border border-violet-100/90 bg-violet-50/35 px-4 py-3.5 shadow-sm",
-				"dark:border-violet-900/35 dark:bg-violet-950/15",
-				isCart ? "-mx-1" : "",
-			].join(" ")}
-		>
-			<div className="flex gap-3">
-				<div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/45 dark:text-violet-300">
-					<GiftIcon className="size-5" aria-hidden="true" />
+		<Card className="p-4">
+			<div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+				<div>
+					<Subheading>Créditos disponibles</Subheading>
+					<Text className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+						{variant === "checkout"
+							? "Elige un saldo a favor o un cupón para esta compra."
+							: "Tienes créditos que podrás usar en el checkout."}
+					</Text>
 				</div>
+				{totalCents > 0 ? (
+					<Text className="text-sm font-semibold text-zinc-900 dark:text-white">
+						Total: {formatMxnFromCents(totalCents)}
+					</Text>
+				) : null}
+			</div>
 
-				<div className="min-w-0 flex-1 space-y-2">
-					<div className="flex items-start justify-between gap-2">
-						<h3 className="text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-100">
-							Saldo a favor disponible
-						</h3>
-						<BalanceCreditStatusBadge
-							primaryReason={rulesReason}
-							applied={applied}
-						/>
-					</div>
+			{variant === "checkout" && applicableCount === 0 ? (
+				<Text className="mb-3 text-sm text-amber-700 dark:text-amber-300">
+					Ningún crédito aplica con el total actual del carrito. Revisa compra
+					mínima, vigencia o monto del saldo.
+				</Text>
+			) : null}
 
-					<p className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
-						{formatCouponMoney(balanceCents)}
-					</p>
-
-					<p
-						className={[
-							"text-sm leading-snug",
-							messageToneClasses[messageTone] ?? messageToneClasses.neutral,
-						].join(" ")}
-					>
-						{rulesReason === "below_minimum" &&
-						amountMissingForMinimum > 0 &&
-						!applied ? (
-							<>
-								Te faltan{" "}
-								<span className="font-semibold">
-									{formatCouponMoney(amountMissingForMinimum)}
-								</span>{" "}
-								para poder usarlo.
-							</>
-						) : (
-							compactMessage
-						)}
-					</p>
-
-					<div className="pt-0.5">
-						<button
-							type="button"
-							className="inline-flex w-full items-center justify-center gap-1 text-xs font-medium text-violet-700 hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-200 sm:justify-start sm:text-sm"
-							onClick={() => setExpanded((v) => !v)}
-							aria-expanded={expanded}
-						>
-							{expanded ? "Ocultar términos de uso" : "Ver términos de uso"}
-							<ChevronDownIcon
-								className={[
-									"size-3.5 transition-transform sm:size-4",
-									expanded ? "rotate-180" : "",
-								].join(" ")}
-								aria-hidden="true"
-							/>
-						</button>
-
-						<BalanceCreditRules
-							coupon={couponForRules}
-							cartTotalCents={cartTotalCents}
-							primaryReason={rulesReason}
-							applied={applied}
-							expanded={expanded}
-							className="mt-2"
-						/>
-					</div>
-
-					{showApplyActions && (
-						<div className="pt-1">
-							<BalanceCreditApplyButton
-								applied={applied}
-								canApply={canApplyBalanceCredit(summary, applied)}
-								onApply={() => onApply?.(bestCoupon?.id ?? displayCoupon?.id)}
+			<div className="space-y-4">
+				{balanceCredits.length > 0 ? (
+					<div className="space-y-2">
+						<Text className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+							Saldos a favor
+						</Text>
+						{balanceCredits.map((credit) => (
+							<CreditOptionRow
+								key={credit.id}
+								credit={credit}
+								cartTotalCents={cartTotalCents}
+								variant={variant}
+								selected={selectedCouponId}
+								onSelect={onApply}
 								onClear={onClear}
 							/>
-						</div>
-					)}
-				</div>
+						))}
+					</div>
+				) : null}
+
+				{couponCredits.length > 0 ? (
+					<div className="space-y-2">
+						<Text className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+							Cupones
+						</Text>
+						{couponCredits.map((credit) => (
+							<CreditOptionRow
+								key={credit.id}
+								credit={credit}
+								cartTotalCents={cartTotalCents}
+								variant={variant}
+								selected={selectedCouponId}
+								onSelect={onApply}
+								onClear={onClear}
+							/>
+						))}
+					</div>
+				) : null}
 			</div>
-		</div>
+		</Card>
 	);
 }

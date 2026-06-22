@@ -59,7 +59,10 @@ class CreatePayPalOrderAction
                 $couponId,
                 $totalCents
             );
-            $discountCents = (int) Coupon::query()->findOrFail($couponId)->remaining_cents;
+            $discountCents = $this->couponApplicationService->resolveDiscountCents(
+                Coupon::query()->findOrFail($couponId),
+                $totalCents
+            );
         }
 
         $amountToChargeCents = $totalCents - $discountCents;

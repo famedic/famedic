@@ -32,6 +32,7 @@ import {
 	isMatrixRowLookupConfirmable,
 } from "@/lib/couponBeneficiaryAssign";
 import { resolveBulkRowStatus } from "@/lib/couponBulkImportPreview";
+import { CREDIT_TYPE_OPTIONS, creditTypeLabel } from "@/lib/couponAdminUi";
 
 function csrfTokenFromMeta() {
 	if (typeof document === "undefined") return "";
@@ -117,6 +118,8 @@ function errorsForTab(errs, tabId) {
 				match("coupon_mode") ||
 				match("coupon_id") ||
 				match("amount_cents") ||
+				match("type") ||
+				match("credit_type") ||
 				match("code") ||
 				match("description") ||
 				match("is_active") ||
@@ -156,7 +159,7 @@ const ASSIGNMENT_LABELS = {
 /** Oculto temporalmente en la UI; el flujo masivo permanece en el código por si se reactiva. */
 const SHOW_BULK_ASSIGNMENT_UI = true;
 
-function createMatrixRow() {
+function createMatrixRow(creditType = "balance") {
 	const id =
 		typeof crypto !== "undefined" && crypto.randomUUID
 			? crypto.randomUUID()
@@ -167,6 +170,7 @@ function createMatrixRow() {
 		first_name: "",
 		paternal_lastname: "",
 		maternal_lastname: "",
+		credit_type: creditType,
 		lookup: {
 			status: "idle",
 			exists: null,
@@ -263,6 +267,7 @@ export default function CouponsAssign({
 					? "none"
 					: "individual",
 		coupon_id: firstId,
+		credit_type: "balance",
 		amount_mxn: defaultAmount,
 		code: "",
 		description: "",
@@ -317,6 +322,7 @@ export default function CouponsAssign({
 				parseFloat(String(d.amount_mxn).replace(",", "")) * 100,
 			);
 			out.amount_cents = cents;
+			out.type = d.credit_type ?? "balance";
 			out.code = d.code?.trim() ? d.code.trim() : null;
 			out.description = d.description?.trim() ? d.description.trim() : null;
 			out.is_active = d.is_active;
@@ -343,6 +349,7 @@ export default function CouponsAssign({
 					first_name: r.first_name ?? null,
 					paternal_lastname: r.paternal_lastname ?? null,
 					maternal_lastname: r.maternal_lastname ?? null,
+					credit_type: r.credit_type ?? d.credit_type ?? "balance",
 				}));
 				out.beneficiary_source = d.assignment_mode === "bulk" ? "excel" : "manual";
 			} else {
@@ -362,6 +369,7 @@ export default function CouponsAssign({
 						first_name: r.first_name ?? null,
 						paternal_lastname: r.paternal_lastname ?? null,
 						maternal_lastname: r.maternal_lastname ?? null,
+						credit_type: r.credit_type ?? d.credit_type ?? "balance",
 					}));
 				if (rows.length > 0) {
 					out.beneficiary_rows = rows;
@@ -1274,6 +1282,33 @@ export default function CouponsAssign({
 										>
 											<div className="grid grid-cols-12 gap-4">
 												<Field className="col-span-12 md:col-span-6">
+													<Label>Tipo de crédito</Label>
+													<Select
+														value={data.credit_type ?? "balance"}
+														onChange={(e) => {
+															const nextType = e.target.value;
+															setData("credit_type", nextType);
+															setMatrixRows((rows) =>
+																rows.map((r) => ({
+																	...r,
+																	credit_type: nextType,
+																})),
+															);
+														}}
+													>
+														{CREDIT_TYPE_OPTIONS.map((option) => (
+															<option key={option.value} value={option.value}>
+																{option.label}
+															</option>
+														))}
+													</Select>
+													{errors.type && (
+														<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+															{errors.type}
+														</p>
+													)}
+												</Field>
+												<Field className="col-span-12 md:col-span-6">
 													<Label>Monto por beneficiario (MXN)</Label>
 													<Input
 														type="number"
@@ -1429,6 +1464,7 @@ export default function CouponsAssign({
 														<Table dense>
 															<TableHead>
 																<TableRow>
+																	<TableHeader>Tipo</TableHeader>
 																	<TableHeader>Nombre</TableHeader>
 																	<TableHeader>Ap. paterno</TableHeader>
 																	<TableHeader>Ap. materno</TableHeader>
@@ -1446,6 +1482,30 @@ export default function CouponsAssign({
 																	const lk = row.lookup;
 																	return (
 																		<TableRow key={row.id}>
+																			<TableCell className="min-w-[9rem] align-top">
+																				<Select
+																					value={row.credit_type ?? data.credit_type ?? "balance"}
+																					onChange={(e) => {
+																						const nextType = e.target.value;
+																						setMatrixRows((rows) =>
+																							rows.map((r) =>
+																								r.id === row.id
+																									? { ...r, credit_type: nextType }
+																									: r,
+																							),
+																						);
+																					}}
+																				>
+																					{CREDIT_TYPE_OPTIONS.map((option) => (
+																						<option
+																							key={option.value}
+																							value={option.value}
+																						>
+																							{option.label}
+																						</option>
+																					))}
+																				</Select>
+																			</TableCell>
 																			<TableCell className="align-top">
 																				<Input
 																					value={row.first_name}
@@ -1586,7 +1646,11 @@ export default function CouponsAssign({
 																						}
 																						setMatrixRows((rows) => {
 																							if (rows.length <= 1) {
-																								return [createMatrixRow()];
+																								return [
+																									createMatrixRow(
+																										data.credit_type ?? "balance",
+																									),
+																								];
 																							}
 																							return rows.filter(
 																								(r) => r.id !== row.id,
@@ -1610,14 +1674,14 @@ export default function CouponsAssign({
 																				if (matrixRows.length >= matrixCapacity) return;
 																				setMatrixRows((rows) => [
 																					...rows,
-																					createMatrixRow(),
+																					createMatrixRow(data.credit_type ?? "balance"),
 																				]);
 																			}}
 																		>
 																			Agregar fila
 																		</Button>
 																	</TableCell>
-																	<TableCell colSpan={7} className="py-3" />
+																	<TableCell colSpan={8} className="py-3" />
 																</TableRow>
 															</TableBody>
 														</Table>
@@ -1906,6 +1970,12 @@ export default function CouponsAssign({
 														Tipo de cupón
 													</dt>
 													<dd>Nuevo (maestro)</dd>
+												</div>
+												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
+														Tipo de crédito
+													</dt>
+													<dd>{creditTypeLabel(data.credit_type ?? "balance")}</dd>
 												</div>
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">

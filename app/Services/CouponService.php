@@ -33,16 +33,23 @@ class CouponService
 
     public function getUserBalance(int $userId): int
     {
-        return (int) Coupon::query()
+        return (int) $this->assignedCheckoutCouponsQuery($userId)->sum('coupons.remaining_cents');
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Builder<\App\Models\Coupon>
+     */
+    private function assignedCheckoutCouponsQuery(int $userId): \Illuminate\Database\Eloquent\Builder
+    {
+        return Coupon::query()
             ->where('coupons.is_active', true)
             ->where('coupons.remaining_cents', '>', 0)
-            ->where('coupons.type', CouponType::Balance)
+            ->whereIn('coupons.type', [CouponType::Balance, CouponType::Coupon])
             ->where('coupons.approval_status', CouponApprovalStatus::Active)
             ->withinValidityWindow()
             ->join('coupon_user', 'coupon_user.coupon_id', '=', 'coupons.id')
             ->where('coupon_user.user_id', $userId)
-            ->whereNull('coupon_user.used_at')
-            ->sum('coupons.remaining_cents');
+            ->whereNull('coupon_user.used_at');
     }
 
     /**
@@ -59,23 +66,16 @@ class CouponService
      */
     public function getAvailableCoupons(int $userId): \Illuminate\Support\Collection
     {
-        return Coupon::query()
+        return $this->assignedCheckoutCouponsQuery($userId)
             ->select([
                 'coupons.id',
+                'coupons.type',
                 'coupons.remaining_cents',
                 'coupons.code',
                 'coupons.valid_from',
                 'coupons.expires_at',
                 'coupons.min_purchase_cents',
             ])
-            ->where('coupons.is_active', true)
-            ->where('coupons.remaining_cents', '>', 0)
-            ->where('coupons.type', CouponType::Balance)
-            ->where('coupons.approval_status', CouponApprovalStatus::Active)
-            ->withinValidityWindow()
-            ->join('coupon_user', 'coupon_user.coupon_id', '=', 'coupons.id')
-            ->where('coupon_user.user_id', $userId)
-            ->whereNull('coupon_user.used_at')
             ->orderBy('coupons.id')
             ->get()
             ->map(fn (Coupon $coupon) => $this->mapCouponForCheckout($coupon));
@@ -128,15 +128,7 @@ class CouponService
     {
         $cartTotalCents = max(0, $cartTotalCents);
 
-        $couponModels = Coupon::query()
-            ->where('coupons.is_active', true)
-            ->where('coupons.remaining_cents', '>', 0)
-            ->where('coupons.type', CouponType::Balance)
-            ->where('coupons.approval_status', CouponApprovalStatus::Active)
-            ->withinValidityWindow()
-            ->join('coupon_user', 'coupon_user.coupon_id', '=', 'coupons.id')
-            ->where('coupon_user.user_id', $userId)
-            ->whereNull('coupon_user.used_at')
+        $couponModels = $this->assignedCheckoutCouponsQuery($userId)
             ->orderBy('coupons.id')
             ->get(['coupons.*']);
 
@@ -157,6 +149,10 @@ class CouponService
         $conditionalCoupons = array_values(array_filter(
             $coupons,
             fn (array $c) => in_array($c['reason'], ['below_minimum', 'balance_too_large'], true)
+        ));
+        $scheduledCoupons = array_values(array_filter(
+            $coupons,
+            fn (array $c) => $c['reason'] === 'scheduled'
         ));
 
         $totalBalanceCents = (int) array_sum(array_column($coupons, 'remaining_cents'));
@@ -184,7 +180,7 @@ class CouponService
             'conditional_balance_cents' => $conditionalBalanceCents,
             'applicable_coupons_count' => count($applicableCoupons),
             'conditional_coupons_count' => count($conditionalCoupons),
-            'scheduled_coupons_count' => 0,
+            'scheduled_coupons_count' => count($scheduledCoupons),
             'best_coupon' => $bestCoupon,
             'coupons' => $coupons,
             'balanceCouponsCents' => $totalBalanceCents,
@@ -228,7 +224,7 @@ class CouponService
             'is_applicable' => $reason === 'applicable',
             'is_recommended' => false,
             'reason' => $reason,
-            'label' => $this->couponPresentationLabel($reason),
+            'label' => $this->couponPresentationLabel($reason, $coupon->type),
             'missing_for_minimum_cents' => $missingForMinimum,
             'formatted_missing_for_minimum' => $missingForMinimum !== null && $missingForMinimum > 0
                 ? formattedCentsPrice($missingForMinimum)
@@ -250,6 +246,10 @@ class CouponService
             return 'below_minimum';
         }
 
+        if ($coupon->type === CouponType::Coupon) {
+            return 'applicable';
+        }
+
         if ($coupon->remaining_cents > $cartTotalCents) {
             return 'balance_too_large';
         }
@@ -257,10 +257,10 @@ class CouponService
         return 'applicable';
     }
 
-    private function couponPresentationLabel(string $reason): string
+    private function couponPresentationLabel(string $reason, ?CouponType $type = null): string
     {
         return match ($reason) {
-            'applicable' => 'Aplicable ahora',
+            'applicable' => $type === CouponType::Coupon ? 'Cupón aplicable' : 'Aplicable ahora',
             'below_minimum' => 'Requiere compra mínima',
             'balance_too_large' => 'Saldo mayor al total',
             'scheduled' => 'Disponible próximamente',
@@ -365,6 +365,8 @@ class CouponService
     {
         return [
             'id' => (int) $coupon->id,
+            'type' => $coupon->type->value,
+            'type_label' => $coupon->type->label(),
             'remaining_cents' => (int) $coupon->remaining_cents,
             'code' => $coupon->code,
             'valid_from' => $coupon->valid_from?->toIso8601String(),
@@ -657,7 +659,7 @@ class CouponService
             'valid_from' => $parent->valid_from,
             'expires_at' => $parent->expires_at,
             'min_purchase_cents' => $parent->min_purchase_cents,
-            'type' => CouponType::Balance,
+            'type' => $parent->type ?? CouponType::Balance,
             'is_active' => true,
             'approval_status' => CouponApprovalStatus::Active,
             'created_by_user_id' => $createdByUserId,

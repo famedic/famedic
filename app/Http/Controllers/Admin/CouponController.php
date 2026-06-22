@@ -582,7 +582,7 @@ class CouponController extends Controller
         $userIds = collect($beneficiaryRows)->pluck('user')->filter()->pluck('id')->unique()->filter();
         $customerIdsByUserId = Customer::query()->whereIn('user_id', $userIds)->pluck('id', 'user_id');
 
-        $beneficiaryRows = array_map(function (array $row) use ($customerIdsByUserId) {
+        $beneficiaryRows = array_map(function (array $row) use ($customerIdsByUserId, $coupon) {
             $uid = $row['user']['id'] ?? null;
             $cid = $uid ? $customerIdsByUserId->get($uid) : null;
             $row['customer_admin_url'] = $cid
@@ -1276,6 +1276,7 @@ class CouponController extends Controller
             'send_notification' => ['boolean'],
             'send_notifications' => ['boolean'],
             'amount_cents' => ['required_if:coupon_mode,new', 'nullable', 'integer', 'min:1'],
+            'type' => ['required_if:coupon_mode,new', 'nullable', Rule::in(['balance', 'coupon'])],
             'code' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'max_beneficiaries' => ['nullable', 'integer', 'min:1'],
@@ -1287,6 +1288,7 @@ class CouponController extends Controller
             'beneficiary_rows.*.first_name' => ['nullable', 'string', 'max:255'],
             'beneficiary_rows.*.paternal_lastname' => ['nullable', 'string', 'max:255'],
             'beneficiary_rows.*.maternal_lastname' => ['nullable', 'string', 'max:255'],
+            'beneficiary_rows.*.credit_type' => ['nullable', Rule::in(['balance', 'coupon'])],
             'beneficiary_source' => ['nullable', Rule::in(['manual', 'excel'])],
         ], $this->couponConceptService->validationRules(), $this->couponEligibilityFormService->validationRules()));
 
@@ -2269,7 +2271,7 @@ class CouponController extends Controller
             'amount_cents' => (int) $data['amount_cents'],
             'remaining_cents' => $pending ? 0 : (int) $data['amount_cents'],
             'max_beneficiaries' => $data['max_beneficiaries'] ?? null,
-            'type' => 'balance',
+            'type' => $data['type'] ?? 'balance',
             'is_active' => $pending ? false : ($data['is_active'] ?? true),
             'approval_status' => $pending ? CouponApprovalStatus::PendingAuthorization : CouponApprovalStatus::Active,
             'created_by_user_id' => $request->user()->id,

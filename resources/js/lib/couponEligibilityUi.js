@@ -97,10 +97,68 @@ export function couponMeetsMinPurchase(c, totalCents) {
 	return totalCents >= c.min_purchase_cents;
 }
 
+export function couponCreditType(c) {
+	return c?.type ?? c?.credit_type ?? "balance";
+}
+
+export function isCouponCreditType(c) {
+	return couponCreditType(c) === "coupon";
+}
+
+export function isBalanceCreditType(c) {
+	return couponCreditType(c) === "balance";
+}
+
+export function couponDiscountCents(c, totalCents) {
+	if (!c || c.remaining_cents <= 0) return 0;
+	if (!isCouponWithinValidity(c) || !couponMeetsMinPurchase(c, totalCents)) {
+		return 0;
+	}
+	if (isCouponCreditType(c)) {
+		return Math.min(c.remaining_cents, totalCents);
+	}
+	if (c.remaining_cents > totalCents) return 0;
+	return c.remaining_cents;
+}
+
 export function isCouponApplicableForCheckout(c, totalCents) {
-	return (
-		isCouponWithinValidity(c) &&
-		couponMeetsMinPurchase(c, totalCents) &&
-		c.remaining_cents <= totalCents
-	);
+	if (!c || c.remaining_cents <= 0) return false;
+	if (!isCouponWithinValidity(c) || !couponMeetsMinPurchase(c, totalCents)) {
+		return false;
+	}
+	if (isCouponCreditType(c)) {
+		return true;
+	}
+	return c.remaining_cents <= totalCents;
+}
+
+export function couponCreditTypeLabel(c) {
+	if (c?.type_label) return c.type_label;
+	return isCouponCreditType(c) ? "Cupón" : "Saldo a favor";
+}
+
+/**
+ * @param {string|null|undefined} expiresAt ISO date string
+ * @returns {{ expired: true } | { expired: false, days: number, hours: number } | null}
+ */
+export function getCreditExpiryCountdown(expiresAt) {
+	if (!expiresAt) return null;
+	const end = new Date(expiresAt).getTime();
+	if (Number.isNaN(end)) return null;
+	const diff = end - Date.now();
+	if (diff <= 0) return { expired: true };
+	const totalHours = Math.floor(diff / (1000 * 60 * 60));
+	const days = Math.floor(totalHours / 24);
+	const hours = totalHours % 24;
+	return { expired: false, days, hours };
+}
+
+export function formatCreditExpiryCountdown(countdown) {
+	if (!countdown || countdown.expired) return null;
+	const segments = [];
+	if (countdown.days > 0) {
+		segments.push(`${countdown.days} ${countdown.days === 1 ? "día" : "días"}`);
+	}
+	segments.push(`${countdown.hours} ${countdown.hours === 1 ? "hora" : "horas"}`);
+	return segments.join(" y ");
 }

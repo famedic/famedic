@@ -97,7 +97,8 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
                 }
 
                 $coupon = Coupon::query()->findOrFail($couponId);
-                $amountToCharge = $calculatedTotal - $coupon->remaining_cents;
+                $amountToCharge = $calculatedTotal - app(CouponApplicationService::class)
+                    ->resolveDiscountCents($coupon, $calculatedTotal);
             }
 
             $allowed = $this->paymentMethodsForAmount($amountToCharge, $couponId !== null);
