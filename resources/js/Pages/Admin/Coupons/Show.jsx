@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useForm } from "@inertiajs/react";
+import { useForm, usePage } from "@inertiajs/react";
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
 import { Button } from "@/Components/Catalyst/button";
@@ -163,6 +163,7 @@ export default function CouponsShow({
 	assignmentMultiSig = null,
 	executedPreApprovalSummary = null,
 }) {
+	const { couponAuthorizerNav = {} } = usePage().props;
 	const {
 		data: authData,
 		setData: setAuthData,
@@ -598,6 +599,21 @@ export default function CouponsShow({
 								label: "Ir a créditos",
 								href: route("admin.coupons.index"),
 							},
+							...(couponAuthorizerNav?.is_authorizer &&
+							(pending || assignmentMultiSig?.i_can_approve)
+								? [
+										{
+											key: "review-auth",
+											label: "Revisar autorización",
+											href: route("admin.coupons.authorizations.show", {
+												coupon: coupon.id,
+												...(assignmentMultiSig?.id
+													? { request: assignmentMultiSig.id }
+													: {}),
+											}),
+										},
+									]
+								: []),
 							{
 								key: "edit",
 								label: "Editar",

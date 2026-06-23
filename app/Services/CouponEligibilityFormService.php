@@ -96,4 +96,27 @@ class CouponEligibilityFormService
             'min_purchase_cents' => $minPurchaseCents,
         ];
     }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function hasPlatformWideAssignmentRestrictions(array $data): bool
+    {
+        $validityMode = (string) ($data['validity_mode'] ?? 'open');
+        $hasValidity = $validityMode === 'configured'
+            && (filled($data['valid_from'] ?? null) || filled($data['expires_at'] ?? null));
+
+        $minMode = (string) ($data['minimum_purchase_mode'] ?? 'none');
+        $minCents = isset($data['min_purchase_cents']) ? (int) $data['min_purchase_cents'] : 0;
+        $hasMinPurchase = $minMode === 'required' && $minCents > 0;
+
+        return $hasValidity && $hasMinPurchase;
+    }
+
+    public function couponHasPlatformWideAssignmentRestrictions(\App\Models\Coupon $coupon): bool
+    {
+        $hasValidity = $coupon->valid_from !== null || $coupon->expires_at !== null;
+
+        return $hasValidity && $coupon->hasMinimumPurchaseRequirement();
+    }
 }

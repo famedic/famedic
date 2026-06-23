@@ -42,6 +42,7 @@ import {
     isCouponWithinValidity,
 } from "@/lib/couponEligibilityUi";
 import BalanceCreditCard from "@/Components/Coupons/BalanceCreditCard";
+import PromoCodeField from "@/Components/Checkout/PromoCodeField";
 
 const BASE_WIZARD_STEPS = [
     { id: "patient", number: 1, label: "Paciente" },
@@ -147,6 +148,7 @@ function resolveInitialCheckoutData(savedCheckout = null) {
         return {
             ...fromParams,
             coupon_id: fromParams.coupon_id || null,
+            promo_validation_token: null,
         };
     }
 
@@ -167,6 +169,7 @@ function resolveInitialCheckoutData(savedCheckout = null) {
             fromParams.coupon_id ??
             savedCheckout.coupon_id ??
             null,
+        promo_validation_token: savedCheckout?.promo_validation_token ?? null,
     };
 }
 
@@ -216,6 +219,15 @@ export default function LaboratoryCheckout({
         setError,
     } = useForm(initialFormData);
 
+    const [appliedPromo, setAppliedPromo] = useState(() =>
+        initialFormData.promo_validation_token
+            ? {
+                  validation_token: initialFormData.promo_validation_token,
+                  message: "Código promocional guardado. Valídalo de nuevo si cambió tu carrito.",
+              }
+            : null,
+    );
+
     useEffect(() => {
         if (
             paymentUsesMock &&
@@ -232,6 +244,7 @@ export default function LaboratoryCheckout({
         laboratory_appointment: laboratoryAppointment?.id,
         total: total,
         coupon_id: data.coupon_id || null,
+        promo_validation_token: data.promo_validation_token || null,
     }));
 
     const submit = (e, isBranchPayment) => {
@@ -375,22 +388,50 @@ export default function LaboratoryCheckout({
 
     const couponBlocked = couponTooLarge || couponNotYetValid || couponBelowMinPurchase;
 
+    const promoDiscountCents = useMemo(() => {
+        if (!appliedPromo?.validation_token || !appliedPromo?.discount_cents) {
+            return 0;
+        }
+        return Math.min(appliedPromo.discount_cents, total);
+    }, [appliedPromo, total]);
+
+    const hasPromoApplied = Boolean(
+        appliedPromo?.validation_token && promoDiscountCents > 0,
+    );
+
     const selectedDiscountCents = useMemo(() => {
+        if (hasPromoApplied) return promoDiscountCents;
         if (!selectedCoupon || couponBlocked) return 0;
         return couponDiscountCents(selectedCoupon, total);
-    }, [selectedCoupon, couponBlocked, total]);
+    }, [
+        hasPromoApplied,
+        promoDiscountCents,
+        selectedCoupon,
+        couponBlocked,
+        total,
+    ]);
 
     const amountAfterCoupon = useMemo(() => {
+        if (hasPromoApplied) {
+            return Math.max(0, total - promoDiscountCents);
+        }
         if (!selectedCoupon || couponBlocked) return total;
         return Math.max(0, total - selectedDiscountCents);
-    }, [selectedCoupon, couponBlocked, total, selectedDiscountCents]);
+    }, [
+        hasPromoApplied,
+        promoDiscountCents,
+        selectedCoupon,
+        couponBlocked,
+        total,
+        selectedDiscountCents,
+    ]);
 
     const summaryDetails = useMemo(() => {
         const rows = [
             { value: formattedSubtotal, label: "Subtotal" },
             { value: "-" + formattedDiscount, label: "Descuento" },
         ];
-        if (selectedCoupon && !couponBlocked) {
+        if (selectedCoupon && !couponBlocked && !hasPromoApplied) {
             rows.push({
                 value:
                     "-" +
@@ -401,9 +442,21 @@ export default function LaboratoryCheckout({
                 label: couponCreditTypeLabel(selectedCoupon),
             });
         }
+        if (hasPromoApplied) {
+            rows.push({
+                value:
+                    "-" +
+                    (promoDiscountCents / 100).toLocaleString("es-MX", {
+                        style: "currency",
+                        currency: "MXN",
+                    }),
+                label:
+                    appliedPromo?.benefit_label || "Descuento promocional",
+            });
+        }
         rows.push({
             value:
-                !selectedCoupon || couponBlocked
+                selectedDiscountCents === 0 && !hasPromoApplied
                     ? formattedTotal
                     : (amountAfterCoupon / 100).toLocaleString("es-MX", {
                           style: "currency",
@@ -420,10 +473,19 @@ export default function LaboratoryCheckout({
         couponBlocked,
         amountAfterCoupon,
         selectedDiscountCents,
+        hasPromoApplied,
+        promoDiscountCents,
+        appliedPromo,
     ]);
 
     const paymentMethodStepIsComplete = useMemo(() => {
-        if (!data.coupon_id) {
+        if (!data.coupon_id && !hasPromoApplied) {
+            return !!data.payment_method;
+        }
+        if (hasPromoApplied) {
+            if (amountAfterCoupon === 0) {
+                return data.payment_method === "coupon_balance";
+            }
             return !!data.payment_method;
         }
         if (!selectedCoupon) return false;
@@ -438,6 +500,7 @@ export default function LaboratoryCheckout({
         selectedCoupon,
         couponBlocked,
         amountAfterCoupon,
+        hasPromoApplied,
     ]);
 
     useEffect(() => {
@@ -457,16 +520,42 @@ export default function LaboratoryCheckout({
             (c) => c.id === couponId && isCouponApplicableForCheckout(c, total),
         );
         if (!applicable) return;
+        setAppliedPromo(null);
+        setData("promo_validation_token", null);
         setData("coupon_id", applicable.id);
         const after = total - couponDiscountCents(applicable, total);
         if (after === 0) {
             setData("payment_method", "coupon_balance");
         }
         clearErrors("payment_method");
+        clearErrors("promo_validation_token");
     };
 
     const clearBalanceCoupon = () => {
         setData("coupon_id", null);
+        if (data.payment_method === "coupon_balance") {
+            setData("payment_method", null);
+        }
+    };
+
+    const applyPromoCode = (promoResult) => {
+        setData("coupon_id", null);
+        if (data.payment_method === "coupon_balance") {
+            setData("payment_method", null);
+        }
+        setAppliedPromo(promoResult);
+        setData("promo_validation_token", promoResult.validation_token);
+        const after = Math.max(0, total - (promoResult.discount_cents || 0));
+        if (after === 0) {
+            setData("payment_method", "coupon_balance");
+        }
+        clearErrors("coupon_id");
+        clearErrors("promo_validation_token");
+    };
+
+    const clearPromoCode = () => {
+        setAppliedPromo(null);
+        setData("promo_validation_token", null);
         if (data.payment_method === "coupon_balance") {
             setData("payment_method", null);
         }
@@ -700,6 +789,7 @@ export default function LaboratoryCheckout({
                 if (data.coupon_id) {
                     payload.coupon_id = Number(data.coupon_id);
                 }
+                payload.promo_validation_token = data.promo_validation_token;
             }
 
             setSyncingDraft(true);
@@ -857,20 +947,32 @@ export default function LaboratoryCheckout({
 
     const hasCheckoutCredits = checkoutCoupons.length > 0;
 
-    const couponSection = hasCheckoutCredits && (
-        <div className="space-y-2">
-            <BalanceCreditCard
-                variant="checkout"
-                balanceCreditPresentation={balanceCreditPresentation}
-                balanceCouponsCents={balanceCouponsCents}
-                availableBalanceCoupons={availableBalanceCoupons}
-                cartTotalCents={total}
-                selectedCouponId={data.coupon_id}
-                onApply={applyBalanceCoupon}
-                onClear={clearBalanceCoupon}
+    const couponSection = (
+        <div className="space-y-4">
+            <PromoCodeField
+                laboratoryBrand={laboratoryBrand.value}
+                disabled={Boolean(data.coupon_id) || checkoutProcessing}
+                appliedPromo={appliedPromo}
+                onApplied={applyPromoCode}
+                onCleared={clearPromoCode}
+                error={errors.promo_validation_token}
             />
-            {errors.coupon_id && (
-                <ErrorMessage>{errors.coupon_id}</ErrorMessage>
+            {hasCheckoutCredits && (
+                <div className="space-y-2">
+                    <BalanceCreditCard
+                        variant="checkout"
+                        balanceCreditPresentation={balanceCreditPresentation}
+                        balanceCouponsCents={balanceCouponsCents}
+                        availableBalanceCoupons={availableBalanceCoupons}
+                        cartTotalCents={total}
+                        selectedCouponId={data.coupon_id}
+                        onApply={applyBalanceCoupon}
+                        onClear={clearBalanceCoupon}
+                    />
+                    {errors.coupon_id && (
+                        <ErrorMessage>{errors.coupon_id}</ErrorMessage>
+                    )}
+                </div>
             )}
         </div>
     );
@@ -922,6 +1024,7 @@ export default function LaboratoryCheckout({
                             addressId={data.address}
                             totalCents={total}
                             couponId={data.coupon_id}
+                            promoValidationToken={data.promo_validation_token}
                             disabled={onlinePaymentDisabled}
                         />
                     ) : (
@@ -1006,10 +1109,12 @@ export default function LaboratoryCheckout({
                     />
                 );
             case "payment":
-                if (amountAfterCoupon === 0 && data.coupon_id) {
-                    const creditLabel = selectedCoupon
-                        ? couponCreditTypeLabel(selectedCoupon).toLowerCase()
-                        : "crédito";
+                if (amountAfterCoupon === 0 && (data.coupon_id || hasPromoApplied)) {
+                    const creditLabel = hasPromoApplied
+                        ? "código promocional"
+                        : selectedCoupon
+                          ? couponCreditTypeLabel(selectedCoupon).toLowerCase()
+                          : "crédito";
                     return (
                         <CheckoutWizardStep
                             title="Método de pago"
@@ -1046,7 +1151,10 @@ export default function LaboratoryCheckout({
                         hasPayPal={hasPayPal}
                         addCardReturnUrl={addCardReturnUrl}
                         paymentUsesMock={paymentUsesMock}
-                        disabled={amountAfterCoupon === 0 && !!data.coupon_id}
+                        disabled={
+                            amountAfterCoupon === 0 &&
+                            (!!data.coupon_id || hasPromoApplied)
+                        }
                     />
                 );
             case "appointment":

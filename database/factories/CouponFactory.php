@@ -27,4 +27,13 @@ class CouponFactory extends Factory
             'approval_status' => CouponApprovalStatus::Active,
         ];
     }
+
+    public function couponType(int $amountCents = 50000): static
+    {
+        return $this->state(fn () => [
+            'type' => CouponType::Coupon,
+            'amount_cents' => $amountCents,
+            'remaining_cents' => $amountCents,
+        ]);
+    }
 }

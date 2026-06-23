@@ -35,9 +35,11 @@ export function couponValidityBadge(c) {
 export const CREDIT_TYPE_OPTIONS = [
 	{ value: "balance", label: "Saldo a favor" },
 	{ value: "coupon", label: "Cupón" },
+	{ value: "shared_promo", label: "Código promocional" },
 ];
 
 export function creditTypeLabel(value) {
+	if (value === "shared_promo") return "Código promocional";
 	return CREDIT_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? "—";
 }
 

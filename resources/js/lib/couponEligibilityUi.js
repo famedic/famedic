@@ -45,6 +45,29 @@ export function isCouponEligibilityFormComplete(data) {
 	return true;
 }
 
+/** Cupón con vigencia y compra mínima — requisito para asignación masiva a toda la plataforma. */
+export function hasPlatformWideCouponRestrictionsFromForm(data) {
+	const hasValidity =
+		data?.validity_mode === "configured" &&
+		(String(data?.valid_from ?? "").trim() !== "" ||
+			String(data?.expires_at ?? "").trim() !== "");
+	const minCents = parseMinPurchaseMxnToCents(data?.min_purchase_mxn);
+	const hasMinPurchase =
+		data?.minimum_purchase_mode === "required" && minCents !== null && minCents > 0;
+
+	return hasValidity && hasMinPurchase;
+}
+
+export function hasPlatformWideCouponRestrictionsFromCoupon(coupon) {
+	if (!coupon) return false;
+	const hasValidity =
+		String(coupon?.valid_from ?? "").trim() !== "" ||
+		String(coupon?.expires_at ?? "").trim() !== "";
+	const minCents = Number(coupon?.min_purchase_cents ?? 0);
+
+	return hasValidity && minCents > 0;
+}
+
 export function appendCouponEligibilityToPayload(out, d) {
 	out.validity_mode = d.validity_mode;
 	out.minimum_purchase_mode = d.minimum_purchase_mode;

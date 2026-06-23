@@ -13,6 +13,7 @@ use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\Transaction;
 use App\Services\CouponApplicationService;
+use App\Services\PromoCodeService;
 use App\Services\PayPalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -24,6 +25,7 @@ class CreatePayPalOrderAction
         private CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
         private PayPalService $payPalService,
         private CouponApplicationService $couponApplicationService,
+        private PromoCodeService $promoCodeService,
     ) {
     }
 
@@ -37,6 +39,7 @@ class CreatePayPalOrderAction
         LaboratoryBrand|string $laboratoryBrand,
         int $totalCents,
         ?int $couponId = null,
+        ?string $promoValidationToken = null,
     ): array {
         if (!$laboratoryBrand instanceof LaboratoryBrand) {
             $laboratoryBrand = LaboratoryBrand::from($laboratoryBrand);
@@ -52,8 +55,22 @@ class CreatePayPalOrderAction
             throw new UnmatchingTotalPriceException();
         }
 
+        if ($couponId !== null && $promoValidationToken !== null) {
+            throw new PayPalPaymentException('No se puede combinar cupón asignado con código promocional.');
+        }
+
+        $cartHash = $this->promoCodeService->buildLaboratoryCartHash($cartItems, $totalCents);
         $discountCents = 0;
-        if ($couponId !== null) {
+
+        if ($promoValidationToken !== null) {
+            $redemption = $this->promoCodeService->resolveValidatedRedemption(
+                $customer->user,
+                $promoValidationToken,
+                $totalCents,
+                $cartHash,
+            );
+            $discountCents = (int) $redemption->discount_cents;
+        } elseif ($couponId !== null) {
             $this->couponApplicationService->validateApplication(
                 $customer->user,
                 $couponId,
@@ -88,6 +105,8 @@ class CreatePayPalOrderAction
             $laboratoryAppointment,
             $totalCents,
             $couponId,
+            $promoValidationToken,
+            $cartHash,
             $discountCents,
             $amountToChargeCents,
             $amount,
@@ -101,18 +120,21 @@ class CreatePayPalOrderAction
                 'gateway' => 'paypal',
                 'reference_id' => $tempReference,
                 'payment_status' => 'pending',
-                'details' => [
+                'details' => array_filter([
                     'customer_id' => $customer->id,
                     'contact_id' => $contact?->id,
                     'address_id' => $address->id,
                     'laboratory_brand' => $laboratoryBrand->value,
                     'laboratory_appointment_id' => $laboratoryAppointment?->id,
                     'total_cents' => $totalCents,
+                    'cart_hash' => $cartHash,
                     'coupon_id' => $couponId,
+                    'promo_validation_token' => $promoValidationToken,
                     'coupon_amount_cents' => $discountCents,
+                    'promo_discount_cents' => $promoValidationToken !== null ? $discountCents : null,
                     'original_total_cents' => $totalCents,
                     'amount_charged_cents' => $amountToChargeCents,
-                ],
+                ], fn ($value) => $value !== null),
             ]);
 
             $customId = 'fp-' . $transaction->id;

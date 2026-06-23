@@ -33,6 +33,9 @@ class Coupon extends Model
         'authorization_code_expires_at',
         'authorized_at',
         'authorized_by_user_id',
+        'rejected_reason',
+        'rejected_by_user_id',
+        'rejected_at',
         'created_by_user_id',
         'updated_by_user_id',
     ];
@@ -53,6 +56,7 @@ class Coupon extends Model
             'min_purchase_cents' => 'integer',
             'authorization_code_expires_at' => 'datetime',
             'authorized_at' => 'datetime',
+            'rejected_at' => 'datetime',
         ];
     }
 

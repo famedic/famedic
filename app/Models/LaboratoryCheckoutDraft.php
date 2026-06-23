@@ -44,6 +44,7 @@ class LaboratoryCheckoutDraft extends Model
             'address_id' => $this->address_id ? (string) $this->address_id : null,
             'payment_method' => $this->payment_method,
             'coupon_id' => $this->coupon_id,
+            'promo_validation_token' => $this->promo_validation_token,
             'checkout_step' => $this->checkout_step,
         ];
     }

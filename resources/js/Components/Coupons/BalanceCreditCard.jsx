@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { useEffect, useState } from "react";
+import { ChevronDownIcon } from "@heroicons/react/24/outline";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
@@ -142,6 +143,7 @@ export default function BalanceCreditCard({
 	onApply,
 	onClear,
 }) {
+	const [creditsExpanded, setCreditsExpanded] = useState(false);
 	const credits =
 		balanceCreditPresentation?.coupons?.length > 0
 			? balanceCreditPresentation.coupons
@@ -161,30 +163,54 @@ export default function BalanceCreditCard({
 
 	return (
 		<Card className="p-4">
-			<div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-				<div>
-					<Subheading>Créditos disponibles</Subheading>
-					<Text className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-						{variant === "checkout"
-							? "Elige un saldo a favor o un cupón para esta compra."
-							: "Tienes créditos que podrás usar en el checkout."}
-					</Text>
+			<div className="mb-3">
+				<div className="flex flex-wrap items-end justify-between gap-2">
+					<div>
+						<Subheading>Créditos disponibles</Subheading>
+						<Text className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+							{variant === "checkout"
+								? "Elige un saldo a favor o un cupón para esta compra."
+								: "Tienes créditos que podrás usar en el checkout."}
+						</Text>
+					</div>
+					{totalCents > 0 ? (
+						<Text className="text-sm font-semibold text-zinc-900 dark:text-white">
+							Total: {formatMxnFromCents(totalCents)}
+						</Text>
+					) : null}
 				</div>
-				{totalCents > 0 ? (
-					<Text className="text-sm font-semibold text-zinc-900 dark:text-white">
-						Total: {formatMxnFromCents(totalCents)}
-					</Text>
+
+				{variant === "checkout" ? (
+					<div className="mt-2 flex items-center">
+						<button
+							type="button"
+							onClick={() => setCreditsExpanded((open) => !open)}
+							aria-expanded={creditsExpanded}
+							aria-controls="checkout-credits-list"
+							className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+						>
+							<ChevronDownIcon
+								className={clsx(
+									"size-4 shrink-0 transition-transform duration-200",
+									creditsExpanded && "-rotate-180",
+								)}
+								aria-hidden
+							/>
+							{creditsExpanded ? "Ocultar" : "Mostrar"}
+						</button>
+					</div>
 				) : null}
 			</div>
 
-			{variant === "checkout" && applicableCount === 0 ? (
+			{variant === "checkout" && applicableCount === 0 && creditsExpanded ? (
 				<Text className="mb-3 text-sm text-amber-700 dark:text-amber-300">
 					Ningún crédito aplica con el total actual del carrito. Revisa compra
 					mínima, vigencia o monto del saldo.
 				</Text>
 			) : null}
 
-			<div className="space-y-4">
+			{creditsExpanded ? (
+			<div id="checkout-credits-list" className="space-y-4">
 				{balanceCredits.length > 0 ? (
 					<div className="space-y-2">
 						<Text className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
@@ -223,6 +249,7 @@ export default function BalanceCreditCard({
 					</div>
 				) : null}
 			</div>
+			) : null}
 		</Card>
 	);
 }

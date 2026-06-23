@@ -20,12 +20,15 @@ import {
 } from "@/Components/Catalyst/table";
 import { Badge } from "@/Components/Catalyst/badge";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
-import { appendCouponEligibilityToPayload, isCouponEligibilityFormComplete } from "@/lib/couponEligibilityUi";
+import { appendCouponEligibilityToPayload, hasPlatformWideCouponRestrictionsFromCoupon, hasPlatformWideCouponRestrictionsFromForm, isCouponEligibilityFormComplete } from "@/lib/couponEligibilityUi";
 import CouponEligibilityControls from "@/Components/Admin/Coupon/CouponEligibilityControls";
 import CouponRuleSummary from "@/Components/Admin/Coupon/CouponRuleSummary";
 import CouponSectionCard from "@/Components/Admin/Coupon/CouponSectionCard";
 import CouponMetricCard from "@/Components/Admin/Coupon/CouponMetricCard";
 import CouponBulkImportPreview from "@/Components/Admin/Coupon/CouponBulkImportPreview";
+import CouponCreationOtpModal from "@/Components/Admin/Coupon/CouponCreationOtpModal";
+import CouponOtpSecurityNotice from "@/Components/Admin/Coupon/CouponOtpSecurityNotice";
+import AuthorizationInboxLink from "@/Components/Admin/Coupon/AuthorizationInboxLink";
 import {
 	beneficiaryRowFromMatrix,
 	isConfirmableBeneficiaryStatus,
@@ -33,6 +36,16 @@ import {
 } from "@/lib/couponBeneficiaryAssign";
 import { resolveBulkRowStatus } from "@/lib/couponBulkImportPreview";
 import { CREDIT_TYPE_OPTIONS, creditTypeLabel } from "@/lib/couponAdminUi";
+import {
+	buildShareablePreview,
+	defaultFieldsForCreditType,
+	isCreditStepComplete,
+	isRulesStepComplete,
+	visibleTabsForCreditType,
+} from "@/lib/couponAssignCreditTypes";
+import CouponAssignCreditConfig, {
+	CouponAssignPromoUsageRules,
+} from "@/Components/Admin/Coupon/CouponAssignCreditConfig";
 
 function csrfTokenFromMeta() {
 	if (typeof document === "undefined") return "";
@@ -50,8 +63,141 @@ function logBulkPreviewDebug(step, data = {}) {
 	return entry;
 }
 
+function buildCouponAssignPayload(d, refs) {
+	const out = {
+		coupon_mode: d.coupon_mode,
+		assignment_mode: d.assignment_mode,
+		send_notification: d.send_notification,
+		send_notifications: d.send_notifications,
+		authorizer_ids: d.authorizer_ids,
+	};
+	if (d.coupon_mode === "existing") {
+		out.coupon_id = d.coupon_id;
+	}
+	if (d.coupon_mode === "new") {
+		const cents = Math.round(parseFloat(String(d.amount_mxn).replace(",", "")) * 100);
+		out.amount_cents = cents;
+		out.type = d.credit_type ?? "balance";
+		out.description = d.description?.trim() ? d.description.trim() : null;
+		out.is_active = d.is_active;
+
+		if (d.credit_type === "shared_promo") {
+			out.promo_creation = true;
+			out.promo_type = "shared";
+			out.auto_generate_code = d.auto_generate_promo_code ?? false;
+			out.code = d.auto_generate_promo_code
+				? null
+				: (d.promo_code?.trim() ? d.promo_code.trim() : null);
+			out.max_redemptions = parseInt(String(d.max_redemptions), 10);
+			out.max_uses_per_user = parseInt(String(d.max_uses_per_user), 10);
+			appendCouponEligibilityToPayload(out, d);
+			out.assignment_mode = "none";
+		} else {
+			out.code = d.code?.trim() ? d.code.trim() : null;
+			if (d.coupon_concept_id === "other") {
+				out.concept_is_other = true;
+				out.coupon_concept_id = null;
+				out.concept_other = d.concept_other?.trim() || null;
+			} else if (d.coupon_concept_id !== "" && d.coupon_concept_id != null) {
+				out.coupon_concept_id = parseInt(d.coupon_concept_id, 10);
+				out.concept_other = null;
+			} else {
+				out.coupon_concept_id = null;
+				out.concept_other = null;
+			}
+			if (d.credit_type === "balance") {
+				out.validity_mode = "open";
+				out.minimum_purchase_mode = "none";
+				out.valid_from = null;
+				out.expires_at = null;
+				out.min_purchase_cents = null;
+			} else {
+				appendCouponEligibilityToPayload(out, d);
+			}
+		}
+	}
+	if (d.assignment_mode === "individual" || d.assignment_mode === "bulk") {
+		const selectedBulkRows = refs.bulkRowsRef.current.filter(
+			(r) => r.include && isConfirmableBeneficiaryStatus(resolveBulkRowStatus(r)),
+		);
+		if (selectedBulkRows.length > 0) {
+			out.beneficiary_rows = selectedBulkRows.map((r) => ({
+				email: r.email,
+				first_name: r.first_name ?? null,
+				paternal_lastname: r.paternal_lastname ?? null,
+				maternal_lastname: r.maternal_lastname ?? null,
+				credit_type: r.credit_type ?? d.credit_type ?? "balance",
+			}));
+			out.beneficiary_source = d.assignment_mode === "bulk" ? "excel" : "manual";
+		} else {
+			const previewSource =
+				refs.beneficiaryPreviewRowsRef.current.length > 0
+					? refs.beneficiaryPreviewRowsRef.current
+					: refs.matrixRowsRef.current.map(beneficiaryRowFromMatrix);
+			const rows = previewSource
+				.filter((r) => {
+					if (r.status) return isConfirmableBeneficiaryStatus(r.status);
+					return String(r.email ?? "").trim() !== "";
+				})
+				.map((r) => ({
+					email: r.email,
+					first_name: r.first_name ?? null,
+					paternal_lastname: r.paternal_lastname ?? null,
+					maternal_lastname: r.maternal_lastname ?? null,
+					credit_type: r.credit_type ?? d.credit_type ?? "balance",
+				}));
+			if (rows.length > 0) {
+				out.beneficiary_rows = rows;
+				out.beneficiary_source = d.assignment_mode === "bulk" ? "excel" : "manual";
+			}
+		}
+	}
+	if (d.assignment_mode === "individual" && !out.beneficiary_rows) {
+		const emails = [];
+		const seen = new Set();
+		const counts = {};
+		for (const r of refs.matrixRowsRef.current) {
+			const k = r.email.trim().toLowerCase();
+			if (!k) continue;
+			counts[k] = (counts[k] || 0) + 1;
+		}
+		for (const r of refs.matrixRowsRef.current) {
+			const k = r.email.trim().toLowerCase();
+			if (!k || !isMatrixRowLookupConfirmable(r.lookup)) continue;
+			if ((counts[k] ?? 0) > 1) continue;
+			if (seen.has(k)) continue;
+			seen.add(k);
+			emails.push(r.email.trim());
+		}
+		if (emails.length > 0) out.bulk_emails = emails;
+	}
+	if (d.assignment_mode === "bulk" && !out.beneficiary_rows) {
+		const confirmed = refs.bulkRowsRef.current.filter((r) => r.include).map((r) => r.email);
+		if (confirmed.length > 0) {
+			out.bulk_emails = confirmed;
+		} else if (refs.bulkUploadFileRef.current) {
+			out.file = refs.bulkUploadFileRef.current;
+		} else if (d.file) {
+			out.file = d.file;
+		}
+	}
+	if (d.coupon_mode === "new") {
+		const beneficiaryCount = out.beneficiary_rows?.length ?? 0;
+		if (d.assignment_mode === "platform_all") {
+			out.max_beneficiaries = refs.platformUserCount ?? null;
+		} else if (d.assignment_mode === "none") {
+			out.max_beneficiaries = null;
+		} else if (beneficiaryCount > 0) {
+			out.max_beneficiaries = beneficiaryCount;
+		} else {
+			out.max_beneficiaries = null;
+		}
+	}
+	return out;
+}
+
 const TABS = [
-	{ id: "credit", label: "Datos del crédito" },
+	{ id: "credit", label: "Datos del beneficio" },
 	{ id: "rules", label: "Reglas de uso" },
 	{ id: "assignment", label: "Beneficiarios" },
 	{ id: "summary", label: "Resumen" },
@@ -121,6 +267,9 @@ function errorsForTab(errs, tabId) {
 				match("type") ||
 				match("credit_type") ||
 				match("code") ||
+				match("max_redemptions") ||
+				match("max_uses_per_user") ||
+				match("promo_code") ||
 				match("description") ||
 				match("is_active") ||
 				match("coupon_concept_id") ||
@@ -154,6 +303,7 @@ const ASSIGNMENT_LABELS = {
 	none: "Solo guardar",
 	individual: "Asignar ahora",
 	bulk: "Archivo masivo",
+	platform_all: "Aplicar a todos los usuarios",
 };
 
 /** Oculto temporalmente en la UI; el flujo masivo permanece en el código por si se reactiva. */
@@ -188,6 +338,9 @@ export default function CouponsAssign({
 	focus = "",
 	initialTab = "coupon",
 	isSuperadmin = false,
+	creationOtpRequired = true,
+	platformUserCount = 0,
+	promoCodeConfig = {},
 	concepts = [],
 }) {
 	const requireAuth = !!settings?.require_authorization;
@@ -257,6 +410,10 @@ export default function CouponsAssign({
 	const [matrixRows, setMatrixRows] = useState(() => [createMatrixRow()]);
 	const matrixRowsRef = useRef(matrixRows);
 	const matrixLookupTimersRef = useRef({});
+	const otpVerificationTokenRef = useRef(null);
+	const [otpModalOpen, setOtpModalOpen] = useState(false);
+	const platformUserCountRef = useRef(platformUserCount);
+	platformUserCountRef.current = platformUserCount;
 
 	const { data, setData, post, processing, errors, transform } = useForm({
 		coupon_mode: "new",
@@ -283,7 +440,44 @@ export default function CouponsAssign({
 		minimum_purchase_mode: "none",
 		min_purchase_mxn: "",
 		is_active: true,
+		promo_code: "",
+		auto_generate_promo_code: false,
+		max_redemptions: "100",
+		max_uses_per_user: "1",
 	});
+
+	useEffect(() => {
+		if (data.credit_type === "shared_promo" && activeTab === "assignment") {
+			setActiveTab("credit");
+		}
+	}, [data.credit_type, activeTab, setActiveTab]);
+
+	const visibleTabs = useMemo(
+		() => visibleTabsForCreditType(data.credit_type ?? "balance"),
+		[data.credit_type],
+	);
+
+	const handleCreditTypeChange = useCallback(
+		(nextType) => {
+			const defaults = defaultFieldsForCreditType(nextType);
+			setData("credit_type", nextType);
+			for (const [key, value] of Object.entries(defaults)) {
+				if (value !== undefined) {
+					setData(key, value);
+				}
+			}
+			setMatrixRows((rows) =>
+				rows.map((r) => ({
+					...r,
+					credit_type: nextType === "shared_promo" ? "coupon" : nextType,
+				})),
+			);
+			if (nextType === "shared_promo") {
+				setActiveTab("credit");
+			}
+		},
+		[setData, setActiveTab],
+	);
 
 	bulkRowsRef.current = bulkRows;
 	beneficiaryPreviewRowsRef.current = beneficiaryPreviewRows;
@@ -307,118 +501,15 @@ export default function CouponsAssign({
 	}, [data.assignment_mode, setData]);
 
 	transform((d) => {
-		const out = {
-			coupon_mode: d.coupon_mode,
-			assignment_mode: d.assignment_mode,
-			send_notification: d.send_notification,
-			send_notifications: d.send_notifications,
-			authorizer_ids: d.authorizer_ids,
-		};
-		if (d.coupon_mode === "existing") {
-			out.coupon_id = d.coupon_id;
-		}
-		if (d.coupon_mode === "new") {
-			const cents = Math.round(
-				parseFloat(String(d.amount_mxn).replace(",", "")) * 100,
-			);
-			out.amount_cents = cents;
-			out.type = d.credit_type ?? "balance";
-			out.code = d.code?.trim() ? d.code.trim() : null;
-			out.description = d.description?.trim() ? d.description.trim() : null;
-			out.is_active = d.is_active;
-			if (d.coupon_concept_id === "other") {
-				out.concept_is_other = true;
-				out.coupon_concept_id = null;
-				out.concept_other = d.concept_other?.trim() || null;
-			} else if (d.coupon_concept_id !== "" && d.coupon_concept_id != null) {
-				out.coupon_concept_id = parseInt(d.coupon_concept_id, 10);
-				out.concept_other = null;
-			} else {
-				out.coupon_concept_id = null;
-				out.concept_other = null;
-			}
-			appendCouponEligibilityToPayload(out, d);
-		}
-		if (d.assignment_mode === "individual" || d.assignment_mode === "bulk") {
-			const selectedBulkRows = bulkRowsRef.current.filter(
-				(r) => r.include && isConfirmableBeneficiaryStatus(resolveBulkRowStatus(r)),
-			);
-			if (selectedBulkRows.length > 0) {
-				out.beneficiary_rows = selectedBulkRows.map((r) => ({
-					email: r.email,
-					first_name: r.first_name ?? null,
-					paternal_lastname: r.paternal_lastname ?? null,
-					maternal_lastname: r.maternal_lastname ?? null,
-					credit_type: r.credit_type ?? d.credit_type ?? "balance",
-				}));
-				out.beneficiary_source = d.assignment_mode === "bulk" ? "excel" : "manual";
-			} else {
-				const previewSource =
-					beneficiaryPreviewRowsRef.current.length > 0
-						? beneficiaryPreviewRowsRef.current
-						: matrixRowsRef.current.map(beneficiaryRowFromMatrix);
-				const rows = previewSource
-					.filter((r) => {
-						if (r.status) {
-							return isConfirmableBeneficiaryStatus(r.status);
-						}
-						return String(r.email ?? "").trim() !== "";
-					})
-					.map((r) => ({
-						email: r.email,
-						first_name: r.first_name ?? null,
-						paternal_lastname: r.paternal_lastname ?? null,
-						maternal_lastname: r.maternal_lastname ?? null,
-						credit_type: r.credit_type ?? d.credit_type ?? "balance",
-					}));
-				if (rows.length > 0) {
-					out.beneficiary_rows = rows;
-					out.beneficiary_source = d.assignment_mode === "bulk" ? "excel" : "manual";
-				}
-			}
-		}
-		if (d.assignment_mode === "individual" && !out.beneficiary_rows) {
-			const emails = [];
-			const seen = new Set();
-			const counts = {};
-			for (const r of matrixRowsRef.current) {
-				const k = r.email.trim().toLowerCase();
-				if (!k) continue;
-				counts[k] = (counts[k] || 0) + 1;
-			}
-			for (const r of matrixRowsRef.current) {
-				const k = r.email.trim().toLowerCase();
-				if (!k || !isMatrixRowLookupConfirmable(r.lookup)) continue;
-				if ((counts[k] ?? 0) > 1) continue;
-				if (seen.has(k)) continue;
-				seen.add(k);
-				emails.push(r.email.trim());
-			}
-			if (emails.length > 0) {
-				out.bulk_emails = emails;
-			}
-		}
-		if (d.assignment_mode === "bulk" && !out.beneficiary_rows) {
-			const confirmed = bulkRowsRef.current
-				.filter((r) => r.include)
-				.map((r) => r.email);
-			if (confirmed.length > 0) {
-				out.bulk_emails = confirmed;
-			} else if (bulkUploadFileRef.current) {
-				out.file = bulkUploadFileRef.current;
-			} else if (d.file) {
-				out.file = d.file;
-			}
-		}
-		if (d.coupon_mode === "new") {
-			const beneficiaryCount = out.beneficiary_rows?.length ?? 0;
-			if (d.assignment_mode === "none") {
-				out.max_beneficiaries = null;
-			} else if (beneficiaryCount > 0) {
-				out.max_beneficiaries = beneficiaryCount;
-			} else {
-				out.max_beneficiaries = null;
-			}
+		const out = buildCouponAssignPayload(d, {
+			bulkRowsRef,
+			beneficiaryPreviewRowsRef,
+			matrixRowsRef,
+			bulkUploadFileRef,
+			platformUserCount: platformUserCountRef.current,
+		});
+		if (otpVerificationTokenRef.current) {
+			out.otp_verification_token = otpVerificationTokenRef.current;
 		}
 		return out;
 	});
@@ -606,14 +697,25 @@ export default function CouponsAssign({
 	}, [confirmableBeneficiaryRows]);
 
 	const beneficiaryCountPreview = useMemo(() => {
+		if (data.assignment_mode === "platform_all") {
+			return platformUserCount;
+		}
 		if (data.assignment_mode === "individual" || data.assignment_mode === "bulk") {
 			return confirmableBeneficiaryRows.length;
 		}
 		if (data.assignment_mode === "none") return 0;
 		return 0;
-	}, [data.assignment_mode, confirmableBeneficiaryRows.length]);
+	}, [data.assignment_mode, confirmableBeneficiaryRows.length, platformUserCount]);
 
 	const beneficiaryBreakdown = useMemo(() => {
+		if (data.assignment_mode === "platform_all") {
+			return {
+				registered: platformUserCount,
+				pending: 0,
+				invalid: 0,
+				duplicate: 0,
+			};
+		}
 		if (data.assignment_mode === "none") {
 			return { registered: 0, pending: 0, invalid: 0, duplicate: 0 };
 		}
@@ -672,6 +774,7 @@ export default function CouponsAssign({
 		return { registered, pending, invalid, duplicate };
 	}, [
 		data.assignment_mode,
+		platformUserCount,
 		bulkRows,
 		beneficiaryPreviewRows,
 		matrixRows,
@@ -956,6 +1059,19 @@ export default function CouponsAssign({
 		);
 	}, [data.coupon_mode, data.coupon_id, assignableCoupons]);
 
+	const platformAllEligible = useMemo(() => {
+		if (data.coupon_mode === "existing") {
+			return hasPlatformWideCouponRestrictionsFromCoupon(selectedExistingCoupon);
+		}
+		return hasPlatformWideCouponRestrictionsFromForm(data);
+	}, [data, selectedExistingCoupon]);
+
+	useEffect(() => {
+		if (data.assignment_mode === "platform_all" && !platformAllEligible) {
+			setData("assignment_mode", "none");
+		}
+	}, [data.assignment_mode, platformAllEligible, setData]);
+
 	const existingSlotsRemaining = useMemo(() => {
 		if (!selectedExistingCoupon?.max_beneficiaries) return null;
 		const used = selectedExistingCoupon.child_coupons_count ?? 0;
@@ -983,6 +1099,9 @@ export default function CouponsAssign({
 	}, [data.amount_mxn]);
 
 	const assignmentFieldsOk = useMemo(() => {
+		if (data.assignment_mode === "platform_all") {
+			return platformAllEligible && platformUserCount > 0 && !quotaExceeded;
+		}
 		if (data.assignment_mode === "individual") {
 			const filled = matrixRows.filter((r) => r.email.trim() !== "");
 			if (filled.length === 0) return false;
@@ -1003,6 +1122,9 @@ export default function CouponsAssign({
 		return true;
 	}, [
 		data.assignment_mode,
+		platformAllEligible,
+		platformUserCount,
+		quotaExceeded,
 		matrixRows,
 		emailLowerCounts,
 		individualReadyEmails.length,
@@ -1014,7 +1136,9 @@ export default function CouponsAssign({
 			return true;
 		}
 		const beneficiariesForRule =
-			data.assignment_mode === "individual"
+			data.assignment_mode === "platform_all"
+				? platformUserCount
+				: data.assignment_mode === "individual"
 				? beneficiaryCountPreview
 				: data.assignment_mode === "bulk"
 					? Math.max(beneficiaryCountPreview, 1)
@@ -1034,33 +1158,42 @@ export default function CouponsAssign({
 		isSuperadmin,
 		beneficiariesForPreApprovalDraft,
 		beneficiaryCountPreview,
+		platformUserCount,
 		authorizers,
 	]);
 
 	const conceptStepOk = useMemo(() => {
+		if (data.credit_type === "shared_promo") return true;
 		if (data.coupon_concept_id === "other") {
 			return String(data.concept_other ?? "").trim().length > 0;
 		}
 		return true;
-	}, [data.coupon_concept_id, data.concept_other]);
+	}, [data.credit_type, data.coupon_concept_id, data.concept_other]);
 
-	const creditStepComplete = useMemo(() => {
-		if (!amountOk) return false;
-		if (!conceptStepOk) return false;
-		return true;
-	}, [amountOk, conceptStepOk]);
-
-	const rulesStepComplete = useMemo(
-		() => isCouponEligibilityFormComplete(data),
-		[data],
+	const creditStepComplete = useMemo(
+		() => isCreditStepComplete(data, { amountOk, conceptStepOk }),
+		[data, amountOk, conceptStepOk],
 	);
+
+	const rulesStepComplete = useMemo(() => isRulesStepComplete(data), [data]);
 
 	const couponStepComplete = creditStepComplete && rulesStepComplete;
 
 	const assignmentStepComplete = useMemo(() => {
+		if (data.credit_type === "shared_promo") return true;
 		if (data.assignment_mode === "none") return true;
 		return assignmentFieldsOk;
-	}, [data.assignment_mode, assignmentFieldsOk]);
+	}, [data.credit_type, data.assignment_mode, assignmentFieldsOk]);
+
+	const shareablePreview = useMemo(
+		() =>
+			data.credit_type === "shared_promo"
+				? buildShareablePreview(data, (mxn) =>
+						(mxn ?? 0).toLocaleString("es-MX", { style: "currency", currency: "MXN" }),
+					)
+				: "",
+		[data],
+	);
 
 	const summaryUnlocked = useMemo(
 		() => couponStepComplete && assignmentStepComplete,
@@ -1179,9 +1312,7 @@ export default function CouponsAssign({
 		rulesForUi,
 	]);
 
-	const handleFormSubmit = (e) => {
-		e.preventDefault();
-		if (activeTab !== "summary") return;
+	const submitAssign = useCallback(() => {
 		const hasSelectedBeneficiaryRows = bulkRowsRef.current.some(
 			(r) => r.include && isConfirmableBeneficiaryStatus(resolveBulkRowStatus(r)),
 		);
@@ -1191,7 +1322,38 @@ export default function CouponsAssign({
 				!hasSelectedBeneficiaryRows &&
 				!!bulkUploadFileRef.current,
 		});
+	}, [data.assignment_mode, post]);
+
+	const otpAssignPayload = useMemo(
+		() =>
+			buildCouponAssignPayload(data, {
+				bulkRowsRef,
+				beneficiaryPreviewRowsRef,
+				matrixRowsRef,
+				bulkUploadFileRef,
+				platformUserCount,
+			}),
+		[data, platformUserCount],
+	);
+
+	const handleFormSubmit = (e) => {
+		e.preventDefault();
+		if (activeTab !== "summary") return;
+		if (data.coupon_mode === "new" && creationOtpRequired) {
+			setOtpModalOpen(true);
+			return;
+		}
+		submitAssign();
 	};
+
+	const handleOtpVerified = useCallback(
+		(result) => {
+			otpVerificationTokenRef.current = result.verification_token;
+			setOtpModalOpen(false);
+			submitAssign();
+		},
+		[submitAssign],
+	);
 
 	return (
 		<AdminLayout title="Crear y asignar créditos">
@@ -1203,9 +1365,12 @@ export default function CouponsAssign({
 							Define el crédito y la asignación en pasos.
 						</Text>
 					</div>
-					<Button href={route("admin.coupons.index")} outline>
-						Ir a créditos
-					</Button>
+					<div className="flex flex-wrap items-center gap-2">
+						<AuthorizationInboxLink />
+						<Button href={route("admin.coupons.index")} outline>
+							Ir a créditos
+						</Button>
+					</div>
 				</div>
 
 				<div className="space-y-6">
@@ -1219,7 +1384,7 @@ export default function CouponsAssign({
 								role="tablist"
 								aria-label="Pasos del flujo"
 							>
-								{TABS.map((t) => {
+								{visibleTabs.map((t) => {
 									const lockedToRules = t.id === "rules" && !creditStepComplete;
 									const lockedToAssignment =
 										t.id === "assignment" &&
@@ -1275,124 +1440,18 @@ export default function CouponsAssign({
 									className="space-y-6"
 								>
 									{activeTab === "credit" && (
-										<CouponSectionCard
-											title="Datos del crédito"
-											description="Monto, concepto y descripción del saldo a otorgar."
-											bodyClassName="space-y-4"
-										>
-											<div className="grid grid-cols-12 gap-4">
-												<Field className="col-span-12 md:col-span-6">
-													<Label>Tipo de crédito</Label>
-													<Select
-														value={data.credit_type ?? "balance"}
-														onChange={(e) => {
-															const nextType = e.target.value;
-															setData("credit_type", nextType);
-															setMatrixRows((rows) =>
-																rows.map((r) => ({
-																	...r,
-																	credit_type: nextType,
-																})),
-															);
-														}}
-													>
-														{CREDIT_TYPE_OPTIONS.map((option) => (
-															<option key={option.value} value={option.value}>
-																{option.label}
-															</option>
-														))}
-													</Select>
-													{errors.type && (
-														<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-															{errors.type}
-														</p>
-													)}
-												</Field>
-												<Field className="col-span-12 md:col-span-6">
-													<Label>Monto por beneficiario (MXN)</Label>
-													<Input
-														type="number"
-														step="0.01"
-														min="0.01"
-														value={data.amount_mxn}
-														onChange={(e) => setData("amount_mxn", e.target.value)}
-													/>
-													{errors.amount_cents && (
-														<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-															{errors.amount_cents}
-														</p>
-													)}
-												</Field>
-												<Field className="col-span-12 md:col-span-6">
-													<Label>Código (opcional)</Label>
-													<Input
-														value={data.code}
-														onChange={(e) => setData("code", e.target.value)}
-													/>
-												</Field>
-												<Field className="col-span-12 md:col-span-6">
-													<Label>Concepto</Label>
-													<Select
-														value={data.coupon_concept_id ?? ""}
-														onChange={(e) => {
-															const v = e.target.value;
-															setData("coupon_concept_id", v);
-															if (v !== "other") {
-																setData("concept_other", "");
-															}
-														}}
-													>
-														<option value="">Sin concepto</option>
-														{concepts.map((c) => (
-															<option key={c.id} value={String(c.id)}>
-																{c.title}
-															</option>
-														))}
-														<option value="other">Otra</option>
-													</Select>
-													{errors.coupon_concept_id && (
-														<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-															{errors.coupon_concept_id}
-														</p>
-													)}
-													{data.coupon_concept_id === "other" && (
-														<div className="mt-2">
-															<Input
-																value={data.concept_other ?? ""}
-																onChange={(e) =>
-																	setData("concept_other", e.target.value)
-																}
-																placeholder="Especifica el concepto"
-																maxLength={255}
-															/>
-															{errors.concept_other && (
-																<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																	{errors.concept_other}
-																</p>
-															)}
-														</div>
-													)}
-												</Field>
-												<Field className="col-span-12">
-													<Label>Descripción del crédito a otorgar (opcional)</Label>
-													<Textarea
-														rows={2}
-														value={data.description}
-														onChange={(e) => setData("description", e.target.value)}
-													/>
-												</Field>
-											</div>
-											{requireAuth && (
-												<p className="text-sm text-amber-800 dark:text-amber-200">
-													Con la política actual, el cupón nuevo quedará pendiente hasta que
-													el autorizador ingrese el código por correo. Las asignaciones se
-													podrán hacer cuando el cupón esté activo.
-												</p>
-											)}
-										</CouponSectionCard>
+										<CouponAssignCreditConfig
+											data={data}
+											setData={setData}
+											errors={errors}
+											concepts={concepts}
+											requireAuth={requireAuth}
+											promoCodeConfig={promoCodeConfig}
+											onCreditTypeChange={handleCreditTypeChange}
+										/>
 									)}
 
-									{activeTab === "rules" && (
+									{activeTab === "rules" && data.credit_type === "coupon" && (
 										<CouponEligibilityControls
 											data={data}
 											setData={setData}
@@ -1400,7 +1459,32 @@ export default function CouponsAssign({
 										/>
 									)}
 
-									{activeTab === "assignment" && (
+									{activeTab === "rules" && data.credit_type === "shared_promo" && (
+										<div className="space-y-6">
+											<CouponEligibilityControls
+												data={data}
+												setData={setData}
+												errors={errors}
+											/>
+											<CouponAssignPromoUsageRules
+												data={data}
+												setData={setData}
+												errors={errors}
+											/>
+											{shareablePreview && (
+												<CouponSectionCard
+													title="Vista previa del mensaje compartible"
+													bodyClassName="space-y-2"
+												>
+													<Text className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+														{shareablePreview}
+													</Text>
+												</CouponSectionCard>
+											)}
+										</div>
+									)}
+
+									{activeTab === "assignment" && data.credit_type !== "shared_promo" && (
 										<>
 											<div>
 												<p className="mb-2 font-poppins text-base/6 font-medium text-zinc-950 sm:text-sm/6 dark:text-white">
@@ -1430,7 +1514,36 @@ export default function CouponsAssign({
 															Archivo masivo
 														</button>
 													)}
+													<button
+														type="button"
+														className={[
+															pillClass(data.assignment_mode === "platform_all"),
+															!platformAllEligible
+																? "cursor-not-allowed opacity-45"
+																: "",
+														].join(" ")}
+														disabled={!platformAllEligible}
+														title={
+															platformAllEligible
+																? "Asignar a todos los usuarios con cuenta en la plataforma"
+																: "Requiere vigencia y compra mínima en Reglas de uso"
+														}
+														onClick={() => {
+															if (platformAllEligible) {
+																setData("assignment_mode", "platform_all");
+															}
+														}}
+													>
+														{ASSIGNMENT_LABELS.platform_all}
+													</button>
 												</div>
+												{!platformAllEligible && (
+													<p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+														<strong>Aplicar a todos los usuarios</strong> se habilita cuando
+														configuras <strong>vigencia</strong> y <strong>compra mínima</strong>{" "}
+														en la pestaña Reglas de uso.
+													</p>
+												)}
 												{data.assignment_mode === "none" && (
 													<p className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50/90 px-3 py-2.5 text-sm leading-relaxed text-zinc-600 dark:border-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-300">
 														<strong className="font-medium text-zinc-800 dark:text-zinc-100">
@@ -1441,6 +1554,32 @@ export default function CouponsAssign({
 													</p>
 												)}
 											</div>
+
+											{data.assignment_mode === "platform_all" && (
+												<div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50/80 p-4 dark:border-sky-900 dark:bg-sky-950/30">
+													<p className="text-sm font-medium text-sky-950 dark:text-sky-100">
+														Asignación masiva a toda la plataforma
+													</p>
+													<p className="text-sm text-sky-900/90 dark:text-sky-200">
+														Se asignará este cupón a{" "}
+														<strong>{platformUserCount.toLocaleString("es-MX")}</strong>{" "}
+														usuario(s) registrados con cuenta de cliente. Las restricciones de{" "}
+														<strong>vigencia</strong> y <strong>compra mínima</strong> aplican al
+														usar el beneficio en checkout.
+													</p>
+													{quotaExceeded && (
+														<p className="text-sm text-red-700 dark:text-red-300">
+															El cupón no tiene cupo suficiente para todos los usuarios de la
+															plataforma. Ajusta el máximo de beneficiarios o elige otra modalidad.
+														</p>
+													)}
+													{platformUserCount === 0 && (
+														<p className="text-sm text-amber-800 dark:text-amber-200">
+															No hay usuarios con cuenta registrada en la plataforma.
+														</p>
+													)}
+												</div>
+											)}
 
 											{data.assignment_mode === "individual" && (
 												<div className="space-y-3">
@@ -1940,6 +2079,9 @@ export default function CouponsAssign({
 											<Text className="text-sm text-zinc-600 dark:text-zinc-400">
 												Comprueba los datos antes de confirmar la asignación.
 											</Text>
+											{creationOtpRequired && data.coupon_mode === "new" && (
+												<CouponOtpSecurityNotice required={creationOtpRequired} />
+											)}
 											{data.assignment_mode !== "none" && (
 												<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 													<CouponMetricCard
@@ -1990,7 +2132,9 @@ export default function CouponsAssign({
 													<dd>
 														{data.assignment_mode === "none"
 															? "Ninguno (solo guardar cupón)"
-															: beneficiaryCountPreview}
+															: data.assignment_mode === "platform_all"
+																? `Todos los usuarios (${beneficiaryCountPreview.toLocaleString("es-MX")})`
+																: beneficiaryCountPreview}
 													</dd>
 												</div>
 												{data.assignment_mode !== "none" && (
@@ -2016,8 +2160,42 @@ export default function CouponsAssign({
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Código
 													</dt>
-													<dd>{data.code?.trim() || "—"}</dd>
+													<dd>
+														{data.credit_type === "shared_promo"
+															? data.promo_code?.trim() ||
+																(data.auto_generate_promo_code
+																	? "Se generará al guardar"
+																	: "—")
+															: data.code?.trim() || "—"}
+													</dd>
 												</div>
+												{data.credit_type === "shared_promo" && (
+													<>
+														<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+															<dt className="font-medium text-zinc-500 dark:text-zinc-400">
+																Usos totales
+															</dt>
+															<dd>{data.max_redemptions ?? "—"}</dd>
+														</div>
+														<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+															<dt className="font-medium text-zinc-500 dark:text-zinc-400">
+																Usos por usuario
+															</dt>
+															<dd>{data.max_uses_per_user ?? "—"}</dd>
+														</div>
+														{shareablePreview && (
+															<div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800/50">
+																<p className="font-medium text-zinc-700 dark:text-zinc-300">
+																	Mensaje compartible
+																</p>
+																<p className="mt-1 text-zinc-600 dark:text-zinc-400">
+																	{shareablePreview}
+																</p>
+															</div>
+														)}
+													</>
+												)}
+												{data.credit_type !== "shared_promo" && (
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Concepto
@@ -2034,6 +2212,7 @@ export default function CouponsAssign({
 																: "—"}
 													</dd>
 												</div>
+												)}
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Tipo de asignación
@@ -2131,9 +2310,17 @@ export default function CouponsAssign({
 										type="button"
 										className="w-full sm:w-auto"
 										disabled={!creditStepComplete}
-										onClick={() => trySetTab("rules")}
+										onClick={() =>
+											trySetTab(
+												data.credit_type === "balance" ? "assignment" : "rules",
+											)
+										}
 									>
-										Siguiente: reglas de uso
+										{data.credit_type === "balance"
+											? "Siguiente: beneficiarios"
+											: data.credit_type === "shared_promo"
+												? "Siguiente: vigencia y uso"
+												: "Siguiente: reglas de uso"}
 									</Button>
 								</div>
 							)}
@@ -2145,27 +2332,37 @@ export default function CouponsAssign({
 										className="shrink-0"
 										onClick={() => setActiveTab("credit")}
 									>
-										Anterior: datos del crédito
+										Anterior: datos del beneficio
 									</Button>
 									<Button
 										type="button"
 										className="shrink-0"
 										disabled={!rulesStepComplete}
-										onClick={() => trySetTab("assignment")}
+										onClick={() =>
+											trySetTab(
+												data.credit_type === "shared_promo" ? "summary" : "assignment",
+											)
+										}
 									>
-										Siguiente: beneficiarios
+										{data.credit_type === "shared_promo"
+											? "Siguiente: resumen"
+											: "Siguiente: beneficiarios"}
 									</Button>
 								</div>
 							)}
-							{activeTab === "assignment" && (
+							{activeTab === "assignment" && data.credit_type !== "shared_promo" && (
 								<div className="flex w-full flex-row flex-wrap items-center justify-between gap-3">
 									<Button
 										type="button"
 										outline
 										className="shrink-0"
-										onClick={() => setActiveTab("rules")}
+										onClick={() =>
+											setActiveTab(data.credit_type === "balance" ? "credit" : "rules")
+										}
 									>
-										Anterior: reglas
+										{data.credit_type === "balance"
+											? "Anterior: datos del beneficio"
+											: "Anterior: reglas"}
 									</Button>
 									<Button
 										type="button"
@@ -2179,13 +2376,30 @@ export default function CouponsAssign({
 							)}
 							{activeTab === "summary" && (
 								<>
+									{creationOtpRequired && data.coupon_mode === "new" && (
+										<CouponOtpSecurityNotice
+											required={creationOtpRequired}
+											compact
+											className="w-full basis-full"
+										/>
+									)}
 									<Button
 										type="button"
 										outline
 										className="w-full sm:w-auto"
-										onClick={() => setActiveTab("assignment")}
+										onClick={() =>
+											setActiveTab(
+												data.credit_type === "shared_promo"
+													? "rules"
+													: data.credit_type === "balance"
+														? "assignment"
+														: "assignment",
+											)
+										}
 									>
-										Anterior: asignación
+										{data.credit_type === "shared_promo"
+											? "Anterior: vigencia y uso"
+											: "Anterior: beneficiarios"}
 									</Button>
 									<Button
 										type="submit"
@@ -2345,6 +2559,13 @@ export default function CouponsAssign({
 					</aside>
 				</div>
 			</div>
+
+			<CouponCreationOtpModal
+				isOpen={otpModalOpen}
+				assignPayload={otpAssignPayload}
+				onSuccess={handleOtpVerified}
+				onClose={() => setOtpModalOpen(false)}
+			/>
 		</AdminLayout>
 	);
 }

@@ -24,6 +24,8 @@ class OtpCode extends Model
 
     protected $fillable = [
         'user_id',
+        'purpose',
+        'challenge_id',
         'laboratory_purchase_id',
         'channel',
         'code',

@@ -13,10 +13,15 @@ class VerifyCsrfToken extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        '*', // ❌ TEMPORAL: Deshabilitar CSRF para TODO
-        // 'apigda/*',
-        // 'test-*',
-        // 'emergency-*',
-        // 'stripe/webhook',
+        // Rutas excluidas explícitamente (no usar '*' — no coincide con todas las rutas).
     ];
+
+    public function handle($request, \Closure $next)
+    {
+        if ($this->app->environment('testing') || $this->app->runningUnitTests() || defined('PHPUNIT_COMPOSER_INSTALL')) {
+            return $next($request);
+        }
+
+        return parent::handle($request, $next);
+    }
 }

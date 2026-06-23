@@ -990,4 +990,24 @@ class CouponBeneficiaryService
             'context' => $context,
         ]);
     }
+
+    /**
+     * Correos de usuarios con cuenta de cliente registrada en la plataforma.
+     *
+     * @return list<string>
+     */
+    public function registeredCustomerUserEmails(): array
+    {
+        return User::query()
+            ->whereHas('customer')
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->orderBy('id')
+            ->pluck('email')
+            ->map(fn (string $email) => $this->normalizeEmail($email))
+            ->filter(fn (string $email) => filter_var($email, FILTER_VALIDATE_EMAIL) !== false)
+            ->unique()
+            ->values()
+            ->all();
+    }
 }

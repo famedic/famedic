@@ -37,6 +37,7 @@ import {
 	formatShortDateTime,
 } from "@/lib/couponFormat";
 import CouponMetricCard from "@/Components/Admin/Coupon/CouponMetricCard";
+import AuthorizationInboxLink from "@/Components/Admin/Coupon/AuthorizationInboxLink";
 import CouponSectionCard from "@/Components/Admin/Coupon/CouponSectionCard";
 import CouponStatusBadge from "@/Components/Admin/Coupon/CouponStatusBadge";
 import CouponValidityBadge from "@/Components/Admin/Coupon/CouponValidityBadge";
@@ -178,6 +179,7 @@ export default function CouponsIndex({
 					</Text>
 				</div>
 				<div className="flex flex-wrap items-center justify-end gap-2">
+					<AuthorizationInboxLink />
 					<Button href={route("admin.coupons.beneficiaries.index")} outline>
 						Beneficiarios
 					</Button>
@@ -885,6 +887,17 @@ export default function CouponsIndex({
 														label: "Ver ficha",
 														href: route("admin.coupons.show", c.id),
 													},
+													...(isAuthorizer &&
+													(c.approval_status === "pending_authorization" ||
+														pendingCouponIds.has(c.id))
+														? [
+																{
+																	key: "review-auth",
+																	label: "Revisar autorización",
+																	href: route("admin.coupons.authorizations.show", c.id),
+																},
+															]
+														: []),
 													{
 														key: "edit",
 														label: "Editar",
