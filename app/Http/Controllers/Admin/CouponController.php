@@ -22,6 +22,7 @@ use App\Models\CouponAdminSettings;
 use App\Models\CouponBeneficiary;
 use App\Models\CouponConcept;
 use App\Models\CouponUser;
+use App\Models\Customer;
 use App\Exceptions\PromoCodeException;
 use App\Models\PromoCode;
 use App\Models\User;
