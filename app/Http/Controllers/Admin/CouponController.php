@@ -890,6 +890,9 @@ class CouponController extends Controller
                     $user->paternal_lastname,
                     $user->maternal_lastname,
                 ]))),
+                'first_name' => $user->name,
+                'paternal_lastname' => $user->paternal_lastname,
+                'maternal_lastname' => $user->maternal_lastname,
                 'email' => $user->email,
             ] : null,
         ]);
@@ -1399,7 +1402,7 @@ class CouponController extends Controller
                     $this->couponAssignOtpService->assertVerified(
                         $request->user(),
                         (string) $data['otp_verification_token'],
-                        $data,
+                        $this->couponAssignOtpService->assignPayloadFromRequest($request),
                     );
                 } catch (\DomainException $e) {
                     return redirect()->back()->flashMessage($e->getMessage(), 'error');
@@ -2499,10 +2502,7 @@ class CouponController extends Controller
                 $this->couponAssignOtpService->assertVerified(
                     $request->user(),
                     (string) $data['otp_verification_token'],
-                    array_merge($data, [
-                        'promo_creation' => true,
-                        'promo_type' => 'shared',
-                    ]),
+                    $this->couponAssignOtpService->assignPayloadFromRequest($request),
                 );
             } catch (\DomainException $e) {
                 return redirect()->back()->flashMessage($e->getMessage(), 'error');

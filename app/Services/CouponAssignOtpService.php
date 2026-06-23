@@ -220,16 +220,134 @@ class CouponAssignOtpService
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function assignPayloadFromRequest(\Illuminate\Http\Request $request): array
+    {
+        return $this->normalizePayload($request->only([
+            'coupon_mode',
+            'assignment_mode',
+            'send_notification',
+            'send_notifications',
+            'authorizer_ids',
+            'coupon_id',
+            'amount_cents',
+            'type',
+            'description',
+            'is_active',
+            'code',
+            'auto_generate_code',
+            'max_redemptions',
+            'max_uses_per_user',
+            'coupon_concept_id',
+            'concept_other',
+            'concept_is_other',
+            'validity_mode',
+            'minimum_purchase_mode',
+            'valid_from',
+            'expires_at',
+            'min_purchase_cents',
+            'max_beneficiaries',
+            'beneficiary_rows',
+            'beneficiary_source',
+            'bulk_emails',
+            'promo_creation',
+            'promo_type',
+        ]));
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
     public function normalizePayload(array $payload): array
     {
-        $copy = $payload;
-        ksort($copy);
-        unset($copy['file'], $copy['otp_verification_token']);
+        unset($payload['file'], $payload['otp_verification_token']);
 
-        return $copy;
+        foreach ([
+            'is_active',
+            'send_notification',
+            'send_notifications',
+            'auto_generate_code',
+            'concept_is_other',
+            'promo_creation',
+        ] as $booleanKey) {
+            if (array_key_exists($booleanKey, $payload)) {
+                $payload[$booleanKey] = filter_var($payload[$booleanKey], FILTER_VALIDATE_BOOLEAN);
+            }
+        }
+
+        foreach ([
+            'amount_cents',
+            'coupon_id',
+            'max_beneficiaries',
+            'max_redemptions',
+            'max_uses_per_user',
+            'min_purchase_cents',
+        ] as $intKey) {
+            if (! array_key_exists($intKey, $payload)) {
+                continue;
+            }
+
+            if ($payload[$intKey] === null || $payload[$intKey] === '') {
+                unset($payload[$intKey]);
+
+                continue;
+            }
+
+            $payload[$intKey] = (int) $payload[$intKey];
+        }
+
+        if (array_key_exists('coupon_concept_id', $payload)
+            && $payload['coupon_concept_id'] !== null
+            && $payload['coupon_concept_id'] !== '') {
+            $payload['coupon_concept_id'] = (int) $payload['coupon_concept_id'];
+        }
+
+        if (isset($payload['authorizer_ids']) && is_array($payload['authorizer_ids'])) {
+            $payload['authorizer_ids'] = array_values(array_map(
+                static fn ($id) => (int) $id,
+                $payload['authorizer_ids'],
+            ));
+            sort($payload['authorizer_ids']);
+        }
+
+        if (isset($payload['beneficiary_rows']) && is_array($payload['beneficiary_rows'])) {
+            $payload['beneficiary_rows'] = $this->normalizeBeneficiaryRows($payload['beneficiary_rows']);
+        }
+
+        if (isset($payload['bulk_emails']) && is_array($payload['bulk_emails'])) {
+            $emails = array_values(array_unique(array_filter(array_map(
+                static fn ($email) => strtolower(trim((string) $email)),
+                $payload['bulk_emails'],
+            ))));
+            sort($emails);
+            $payload['bulk_emails'] = $emails;
+        }
+
+        foreach ([
+            'code',
+            'description',
+            'concept_other',
+            'valid_from',
+            'expires_at',
+            'promo_type',
+            'type',
+            'coupon_mode',
+            'assignment_mode',
+            'validity_mode',
+            'minimum_purchase_mode',
+            'beneficiary_source',
+        ] as $stringKey) {
+            if (array_key_exists($stringKey, $payload) && $payload[$stringKey] === '') {
+                unset($payload[$stringKey]);
+            }
+        }
+
+        $payload = $this->removeNullValues($payload);
+        ksort($payload);
+
+        return $payload;
     }
 
     /**
@@ -238,5 +356,72 @@ class CouponAssignOtpService
     public function hashPayload(array $payload): string
     {
         return hash('sha256', json_encode($this->normalizePayload($payload), JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @param  array<int, mixed>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeBeneficiaryRows(array $rows): array
+    {
+        $normalized = [];
+
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $email = strtolower(trim((string) ($row['email'] ?? '')));
+            if ($email === '') {
+                continue;
+            }
+
+            $normalized[] = array_filter([
+                'email' => $email,
+                'first_name' => $this->nullableTrimmedString($row['first_name'] ?? null),
+                'paternal_lastname' => $this->nullableTrimmedString($row['paternal_lastname'] ?? null),
+                'maternal_lastname' => $this->nullableTrimmedString($row['maternal_lastname'] ?? null),
+                'credit_type' => $this->nullableTrimmedString($row['credit_type'] ?? null) ?? 'balance',
+            ], static fn ($value) => $value !== null);
+        }
+
+        usort($normalized, static fn (array $a, array $b) => strcmp($a['email'], $b['email']));
+
+        return $normalized;
+    }
+
+    private function nullableTrimmedString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $trimmed = trim((string) $value);
+
+        return $trimmed === '' ? null : $trimmed;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function removeNullValues(array $payload): array
+    {
+        foreach ($payload as $key => $value) {
+            if (is_array($value)) {
+                $payload[$key] = $this->removeNullValues($value);
+                if ($payload[$key] === []) {
+                    unset($payload[$key]);
+                }
+
+                continue;
+            }
+
+            if ($value === null) {
+                unset($payload[$key]);
+            }
+        }
+
+        return $payload;
     }
 }

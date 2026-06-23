@@ -29,6 +29,18 @@ export const BENEFICIARY_PREVIEW_STATUS = {
 	},
 };
 
+export function nameFieldsFromLookupUser(user) {
+	if (!user) {
+		return null;
+	}
+
+	return {
+		first_name: user.first_name ?? user.name ?? "",
+		paternal_lastname: user.paternal_lastname ?? "",
+		maternal_lastname: user.maternal_lastname ?? "",
+	};
+}
+
 export function beneficiaryRowFromMatrix(row) {
 	return {
 		email: row.email?.trim() ?? "",

@@ -33,6 +33,7 @@ import {
 	beneficiaryRowFromMatrix,
 	isConfirmableBeneficiaryStatus,
 	isMatrixRowLookupConfirmable,
+	nameFieldsFromLookupUser,
 } from "@/lib/couponBeneficiaryAssign";
 import { resolveBulkRowStatus } from "@/lib/couponBulkImportPreview";
 import { CREDIT_TYPE_OPTIONS, creditTypeLabel } from "@/lib/couponAdminUi";
@@ -412,6 +413,7 @@ export default function CouponsAssign({
 	const matrixLookupTimersRef = useRef({});
 	const otpVerificationTokenRef = useRef(null);
 	const [otpModalOpen, setOtpModalOpen] = useState(false);
+	const [otpAssignPayload, setOtpAssignPayload] = useState(null);
 	const platformUserCountRef = useRef(platformUserCount);
 	platformUserCountRef.current = platformUserCount;
 
@@ -528,9 +530,22 @@ export default function CouponsAssign({
 		}
 	}, [errors]);
 
-	const applyMatrixLookup = useCallback((rowId, nextLookup) => {
+	const applyMatrixLookup = useCallback((rowId, nextLookup, nameFields = null) => {
 		setMatrixRows((rows) =>
-			rows.map((r) => (r.id === rowId ? { ...r, lookup: nextLookup } : r)),
+			rows.map((r) => {
+				if (r.id !== rowId) {
+					return r;
+				}
+
+				const updated = { ...r, lookup: nextLookup };
+				if (nameFields) {
+					updated.first_name = nameFields.first_name ?? "";
+					updated.paternal_lastname = nameFields.paternal_lastname ?? "";
+					updated.maternal_lastname = nameFields.maternal_lastname ?? "";
+				}
+
+				return updated;
+			}),
 		);
 	}, []);
 
@@ -581,15 +596,20 @@ export default function CouponsAssign({
 					return;
 				}
 				if (payload.exists) {
-					applyMatrixLookup(rowId, {
-						status: "found",
-						exists: true,
-						user: payload.user,
-						message:
-							payload.user?.name || payload.user?.email
-								? `Registrado: ${payload.user?.name || payload.user?.email}`
-								: "Usuario registrado.",
-					});
+					const nameFields = nameFieldsFromLookupUser(payload.user);
+					applyMatrixLookup(
+						rowId,
+						{
+							status: "found",
+							exists: true,
+							user: payload.user,
+							message:
+								payload.user?.name || payload.user?.email
+									? `Registrado: ${payload.user?.name || payload.user?.email}`
+									: "Usuario registrado.",
+						},
+						nameFields,
+					);
 					return;
 				}
 				applyMatrixLookup(rowId, {
@@ -1324,7 +1344,7 @@ export default function CouponsAssign({
 		});
 	}, [data.assignment_mode, post]);
 
-	const otpAssignPayload = useMemo(
+	const buildOtpAssignPayload = useCallback(
 		() =>
 			buildCouponAssignPayload(data, {
 				bulkRowsRef,
@@ -1340,6 +1360,7 @@ export default function CouponsAssign({
 		e.preventDefault();
 		if (activeTab !== "summary") return;
 		if (data.coupon_mode === "new" && creationOtpRequired) {
+			setOtpAssignPayload(buildOtpAssignPayload());
 			setOtpModalOpen(true);
 			return;
 		}
@@ -2564,7 +2585,10 @@ export default function CouponsAssign({
 				isOpen={otpModalOpen}
 				assignPayload={otpAssignPayload}
 				onSuccess={handleOtpVerified}
-				onClose={() => setOtpModalOpen(false)}
+				onClose={() => {
+					setOtpModalOpen(false);
+					setOtpAssignPayload(null);
+				}}
 			/>
 		</AdminLayout>
 	);

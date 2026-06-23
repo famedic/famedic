@@ -185,7 +185,68 @@ test('OTP verificado no puede reutilizarse para crear otro cupón', function () 
     expect(Coupon::query()->count())->toBe(1);
 });
 
-test('OTP de otro propósito no valida creación de cupón', function () {
+test('hash OTP coincide con beneficiarios y tipos mixtos del request', function () {
+    $service = app(CouponAssignOtpService::class);
+
+    $otpPayload = [
+        'coupon_mode' => 'new',
+        'assignment_mode' => 'individual',
+        'amount_cents' => 10000,
+        'type' => 'balance',
+        'description' => 'Crédito prueba',
+        'is_active' => true,
+        'send_notification' => true,
+        'send_notifications' => true,
+        'authorizer_ids' => ['2', '1'],
+        'validity_mode' => 'open',
+        'minimum_purchase_mode' => 'none',
+        'max_beneficiaries' => 1,
+        'beneficiary_rows' => [
+            [
+                'email' => 'Paciente@Example.com',
+                'first_name' => 'María',
+                'paternal_lastname' => 'López',
+                'maternal_lastname' => 'García',
+                'credit_type' => 'balance',
+            ],
+        ],
+        'beneficiary_source' => 'manual',
+        'bulk_emails' => ['paciente@example.com'],
+    ];
+
+    $requestPayload = [
+        'coupon_mode' => 'new',
+        'assignment_mode' => 'individual',
+        'amount_cents' => '10000',
+        'type' => 'balance',
+        'description' => 'Crédito prueba',
+        'is_active' => '1',
+        'send_notification' => '1',
+        'send_notifications' => '1',
+        'authorizer_ids' => [1, 2],
+        'validity_mode' => 'open',
+        'minimum_purchase_mode' => 'none',
+        'max_beneficiaries' => '1',
+        'beneficiary_rows' => [
+            [
+                'email' => 'paciente@example.com',
+                'first_name' => 'María',
+                'paternal_lastname' => 'López',
+                'maternal_lastname' => 'García',
+                'credit_type' => 'balance',
+            ],
+        ],
+        'beneficiary_source' => 'manual',
+        'bulk_emails' => ['Paciente@Example.com'],
+    ];
+
+    expect($service->hashPayload($otpPayload))->toBe($service->hashPayload($requestPayload));
+
+    $request = \Illuminate\Http\Request::create('/admin/coupons/assign', 'POST', $requestPayload);
+    expect($service->hashPayload($otpPayload))->toBe(
+        $service->hashPayload($service->assignPayloadFromRequest($request)),
+    );
+});
     $creator = makeCouponCreatorUser();
 
     $labOtp = app(AdminOtpService::class)->issue(
