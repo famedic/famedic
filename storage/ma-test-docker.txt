@@ -1,4 +1,0 @@
-
-  [41;1m ERROR [49;22m Fatal error: Cannot redeclare medicalAttentionUser() (previously declared in /var/www/html/tests/Feature/MedicalAttention/CheckoutPageTest.php:21) in /var/www/html/tests/Feature/MedicalAttention/TrialSubscriptionTest.php on line 21.
-
-EXIT_CODE=
