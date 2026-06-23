@@ -14,6 +14,7 @@ import CouponCreationOtpModal from "@/Components/Admin/Coupon/CouponCreationOtpM
 import CouponOtpSecurityNotice from "@/Components/Admin/Coupon/CouponOtpSecurityNotice";
 import {
 	appendCouponEligibilityToPayload,
+	currentDatetimeLocalValue,
 	isCouponEligibilityFormComplete,
 } from "@/lib/couponEligibilityUi";
 
@@ -23,7 +24,7 @@ function buildPromoPayload(d) {
 		promo_creation: true,
 		promo_type: "shared",
 		auto_generate_code: d.auto_generate_code,
-		code: d.auto_generate_code ? null : (d.code?.trim() ?? ""),
+		code: d.auto_generate_code ? null : (d.code?.trim().toUpperCase() ?? ""),
 		description: d.description?.trim() ? d.description.trim() : null,
 		amount_cents: Number.isNaN(amountMxn) ? 0 : Math.round(amountMxn * 100),
 		max_redemptions: parseInt(String(d.max_redemptions), 10),
@@ -35,13 +36,9 @@ function buildPromoPayload(d) {
 }
 
 export default function PromoCodesCreate({
-	settings,
 	creationOtpRequired = true,
 	rulesForUi = {},
 }) {
-	const defaultAmount =
-		settings?.base_amount_cents != null ? String(settings.base_amount_cents / 100) : "500";
-
 	const otpVerificationTokenRef = useRef(null);
 	const [otpModalOpen, setOtpModalOpen] = useState(false);
 
@@ -49,15 +46,15 @@ export default function PromoCodesCreate({
 		code: "",
 		auto_generate_code: false,
 		description: "",
-		amount_mxn: defaultAmount,
-		max_redemptions: "100",
+		amount_mxn: "1000",
+		max_redemptions: "1",
 		max_uses_per_user: "1",
 		is_active: true,
-		validity_mode: "open",
-		minimum_purchase_mode: "none",
-		valid_from: "",
-		expires_at: "",
-		min_purchase_mxn: "",
+		validity_mode: "configured",
+		minimum_purchase_mode: "required",
+		valid_from: currentDatetimeLocalValue(),
+		expires_at: currentDatetimeLocalValue(30),
+		min_purchase_mxn: "1000",
 	});
 
 	transform((d) => {
@@ -75,9 +72,7 @@ export default function PromoCodesCreate({
 		if (Number.isNaN(amount) || amount <= 0) return false;
 		if (!data.auto_generate_code && !String(data.code ?? "").trim()) return false;
 		const maxRedemptions = parseInt(String(data.max_redemptions), 10);
-		const maxPerUser = parseInt(String(data.max_uses_per_user), 10);
 		if (!maxRedemptions || maxRedemptions < 1) return false;
-		if (!maxPerUser || maxPerUser < 1) return false;
 		return isCouponEligibilityFormComplete(data);
 	}, [data]);
 
@@ -144,7 +139,16 @@ export default function PromoCodesCreate({
 									<Label>Código promocional</Label>
 									<Input
 										value={data.code}
+										className="uppercase"
+										autoCapitalize="characters"
+										autoCorrect="off"
+										spellCheck={false}
 										onChange={(e) => setData("code", e.target.value.toUpperCase())}
+										onPaste={(e) => {
+											e.preventDefault();
+											const pasted = (e.clipboardData.getData("text") || "").toUpperCase();
+											setData("code", pasted);
+										}}
 										placeholder="EVENTO10"
 									/>
 									{errors.code && (
@@ -183,32 +187,19 @@ export default function PromoCodesCreate({
 								)}
 							</Field>
 
-							<div className="grid gap-4 sm:grid-cols-2">
-								<Field>
-									<Label>Máximo total de redenciones</Label>
-									<Input
-										type="number"
-										min="1"
-										value={data.max_redemptions}
-										onChange={(e) => setData("max_redemptions", e.target.value)}
-									/>
-									{errors.max_redemptions && (
-										<p className="mt-1 text-sm text-red-600">{errors.max_redemptions}</p>
-									)}
-								</Field>
-								<Field>
-									<Label>Máximo por usuario</Label>
-									<Input
-										type="number"
-										min="1"
-										value={data.max_uses_per_user}
-										onChange={(e) => setData("max_uses_per_user", e.target.value)}
-									/>
-									{errors.max_uses_per_user && (
-										<p className="mt-1 text-sm text-red-600">{errors.max_uses_per_user}</p>
-									)}
-								</Field>
-							</div>
+							<Field className="max-w-xs">
+								<Label>Número de usos (beneficiarios)</Label>
+								<Input
+									type="number"
+									min="1"
+									step="1"
+									value={data.max_redemptions}
+									onChange={(e) => setData("max_redemptions", e.target.value)}
+								/>
+								{errors.max_redemptions && (
+									<p className="mt-1 text-sm text-red-600">{errors.max_redemptions}</p>
+								)}
+							</Field>
 
 							<CheckboxField>
 								<Checkbox

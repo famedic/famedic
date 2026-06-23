@@ -108,7 +108,12 @@ export default function PromoCodesShow({ promoCode }) {
 							</div>
 							<div className="flex justify-between gap-4">
 								<dt className="text-zinc-500">Vigencia</dt>
-								<dd>{couponValiditySummary(promoCode.coupon ?? promoCode)}</dd>
+								<dd>
+									{(() => {
+										const validity = couponValiditySummary(promoCode.coupon ?? promoCode);
+										return <Badge color={validity.color}>{validity.label}</Badge>;
+									})()}
+								</dd>
 							</div>
 							<div className="flex justify-between gap-4">
 								<dt className="text-zinc-500">Usos</dt>

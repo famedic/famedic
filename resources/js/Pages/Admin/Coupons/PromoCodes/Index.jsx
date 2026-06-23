@@ -113,10 +113,14 @@ export default function PromoCodesIndex({ promoCodes, filters = {} }) {
 										<TableCell>{promo.description || "—"}</TableCell>
 										<TableCell>{promo.formatted_amount}</TableCell>
 										<TableCell className="text-sm">
-											{couponValiditySummary({
-												valid_from: promo.valid_from,
-												expires_at: promo.expires_at,
-											})}
+											{(() => {
+												const validity = couponValiditySummary({
+													valid_from: promo.valid_from,
+													expires_at: promo.expires_at,
+													validity_status: promo.validity_status,
+												});
+												return <Badge color={validity.color}>{validity.label}</Badge>;
+											})()}
 										</TableCell>
 										<TableCell>
 											{promo.redemptions_count} / {promo.max_redemptions ?? "∞"}

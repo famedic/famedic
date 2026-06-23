@@ -5,6 +5,15 @@ export function toDatetimeLocalValue(iso) {
 	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+export function currentDatetimeLocalValue(offsetDays = 0) {
+	const d = new Date();
+	if (offsetDays !== 0) {
+		d.setDate(d.getDate() + offsetDays);
+	}
+	const pad = (n) => String(n).padStart(2, "0");
+	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function parseMinPurchaseMxnToCents(value) {
 	const trimmed = String(value ?? "").trim();
 	if (trimmed === "") return null;
