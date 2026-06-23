@@ -3,13 +3,16 @@
 use App\Enums\CouponType;
 use App\Enums\PromoRedemptionStatus;
 use App\Enums\PromoType;
+use App\Mail\CouponCreatedAuthorizerMail;
 use App\Models\Administrator;
 use App\Models\Coupon;
 use App\Models\PromoCode;
 use App\Models\Permission;
 use App\Models\PromoRedemption;
 use App\Models\User;
+use App\Services\CouponCreatedAuthorizerNotifier;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 beforeEach(function () {
@@ -261,4 +264,38 @@ test('creación consume OTP verificado cuando está habilitado', function () {
 
     expect(PromoCode::query()->where('code', 'OTPTEST1')->exists())->toBeTrue();
     expect(Cache::has('coupon_assign_verified:'.$token))->toBeFalse();
+});
+
+test('correo a autorizadores incluye código promocional y máx usos', function () {
+    Mail::fake();
+
+    $creator = makeCouponAdminUser();
+    $authorizer = User::factory()->create();
+    Administrator::factory()->withRole('autorizador')->create(['user_id' => $authorizer->id]);
+
+    $master = Coupon::factory()->couponType(10000)->create([
+        'code' => null,
+        'description' => 'Campaña evento madre',
+        'max_beneficiaries' => null,
+        'created_by_user_id' => $creator->id,
+        'updated_by_user_id' => $creator->id,
+    ]);
+    $promo = PromoCode::factory()->create([
+        'coupon_id' => $master->id,
+        'code' => 'EVENTOMADRE',
+        'max_redemptions' => 1,
+        'max_uses_per_user' => 1,
+        'created_by_user_id' => $creator->id,
+    ]);
+
+    app(CouponCreatedAuthorizerNotifier::class)->notify($master, $creator, $promo);
+
+    Mail::assertSent(CouponCreatedAuthorizerMail::class, function (CouponCreatedAuthorizerMail $mail) use ($promo) {
+        return $mail->summary['is_promo_code'] === true
+            && $mail->summary['code'] === 'EVENTOMADRE'
+            && $mail->summary['promo_code'] === 'EVENTOMADRE'
+            && $mail->summary['max_beneficiaries'] === '1'
+            && $mail->summary['max_uses_per_user'] === '1'
+            && str_contains($mail->detailUrl, '/admin/coupons/promo-codes/'.$promo->id);
+    });
 });

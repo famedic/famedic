@@ -5,18 +5,24 @@ namespace App\Services;
 use App\Mail\CouponCreatedAuthorizerMail;
 use App\Models\Administrator;
 use App\Models\Coupon;
+use App\Models\PromoCode;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class CouponCreatedAuthorizerNotifier
 {
-    public function notify(Coupon $coupon, User $creator): void
+    public function notify(Coupon $coupon, User $creator, ?PromoCode $promoCode = null): void
     {
         $coupon->loadMissing(['concept', 'createdByUser.administrator.roles']);
+        if ($promoCode !== null) {
+            $promoCode->loadMissing('coupon');
+        }
 
-        $summary = $this->buildSummary($coupon, $creator);
-        $detailUrl = route('admin.coupons.authorizations.show', $coupon);
+        $summary = $this->buildSummary($coupon, $creator, $promoCode);
+        $detailUrl = $promoCode !== null
+            ? route('admin.coupons.promo-codes.show', $promoCode)
+            : route('admin.coupons.authorizations.show', $coupon);
 
         $authorizers = Administrator::role('autorizador')
             ->with('user:id,name,paternal_lastname,maternal_lastname,email')
@@ -56,7 +62,7 @@ class CouponCreatedAuthorizerNotifier
     /**
      * @return array<string, mixed>
      */
-    private function buildSummary(Coupon $coupon, User $creator): array
+    private function buildSummary(Coupon $coupon, User $creator, ?PromoCode $promoCode = null): array
     {
         $concept = $coupon->concept_other
             ?: ($coupon->concept?->title ?? '—');
@@ -80,9 +86,15 @@ class CouponCreatedAuthorizerNotifier
 
         $creatorRole = $creator->administrator?->roles->pluck('name')->join(', ') ?: '—';
 
+        $isPromoCode = $promoCode !== null;
+        $promoCodeValue = $isPromoCode ? ($promoCode->code ?: '—') : null;
+        $couponCode = $coupon->code ?: '—';
+
         return [
-            'code' => $coupon->code ?: '—',
-            'type_label' => $coupon->type?->label() ?? '—',
+            'is_promo_code' => $isPromoCode,
+            'code' => $promoCodeValue ?? $couponCode,
+            'promo_code' => $promoCodeValue,
+            'type_label' => $isPromoCode ? 'Código promocional compartido' : ($coupon->type?->label() ?? '—'),
             'amount' => formattedCentsPrice((int) $coupon->amount_cents),
             'concept' => $concept,
             'description' => $coupon->description ?: '—',
@@ -90,9 +102,10 @@ class CouponCreatedAuthorizerNotifier
             'is_active' => (bool) $coupon->is_active,
             'validity' => $validity,
             'min_purchase' => $coupon->formatted_min_purchase ?? 'Sin requisito',
-            'max_beneficiaries' => $coupon->max_beneficiaries !== null
-                ? (string) $coupon->max_beneficiaries
-                : 'Sin límite',
+            'max_beneficiaries' => $isPromoCode
+                ? ($promoCode->max_redemptions !== null ? (string) $promoCode->max_redemptions : 'Sin límite')
+                : ($coupon->max_beneficiaries !== null ? (string) $coupon->max_beneficiaries : 'Sin límite'),
+            'max_uses_per_user' => $isPromoCode ? (string) $promoCode->max_uses_per_user : null,
             'creator_name' => $creator->full_name ?: $creator->name,
             'creator_role' => $creatorRole,
             'created_at' => $coupon->created_at?->timezone(config('app.timezone'))->format('d/m/Y H:i') ?? now()->format('d/m/Y H:i'),

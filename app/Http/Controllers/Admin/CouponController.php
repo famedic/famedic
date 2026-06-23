@@ -2544,7 +2544,7 @@ class CouponController extends Controller
                 ]);
             }
 
-            $this->couponCreatedAuthorizerNotifier->notify($promo->coupon, $request->user());
+            $this->couponCreatedAuthorizerNotifier->notify($promo->coupon, $request->user(), $promo);
         }
 
         return redirect()

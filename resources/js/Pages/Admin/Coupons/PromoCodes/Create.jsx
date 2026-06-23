@@ -46,7 +46,7 @@ export default function PromoCodesCreate({
 		code: "",
 		auto_generate_code: false,
 		description: "",
-		amount_mxn: "1000",
+		amount_mxn: "100",
 		max_redemptions: "1",
 		max_uses_per_user: "1",
 		is_active: true,

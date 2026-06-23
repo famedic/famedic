@@ -122,7 +122,7 @@ class PromoCodeController extends Controller
                 ]);
             }
 
-            $this->couponCreatedAuthorizerNotifier->notify($promoCode->coupon, $request->user());
+            $this->couponCreatedAuthorizerNotifier->notify($promoCode->coupon, $request->user(), $promoCode);
         }
 
         return redirect()
