@@ -23,7 +23,11 @@ class LaboratoryCheckoutController extends Controller
 {
     public function __invoke(Request $request, LaboratoryBrand $laboratoryBrand, CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction, CouponService $couponService)
     {
-        $laboratoryCartItems = $request->user()->customer->laboratoryCartItems()->ofBrand($laboratoryBrand)->get();
+        $laboratoryCartItems = $request->user()->customer
+            ->laboratoryCartItems()
+            ->ofBrand($laboratoryBrand)
+            ->with('laboratoryTest')
+            ->get();
 
         $totals = $calculateTotalsAndDiscountAction(
             $laboratoryCartItems
@@ -40,12 +44,15 @@ class LaboratoryCheckoutController extends Controller
 
         InitiateCheckout::track(
             contents: [
-                ...$laboratoryCartItems->map(function ($item) {
-                    return [
-                        'id' => (string) $item->laboratoryTest->gda_id,
-                        'quantity' => 1
-                    ];
-                })->all(),
+                ...$laboratoryCartItems
+                    ->filter(fn ($item) => $item->laboratoryTest !== null)
+                    ->map(function ($item) {
+                        return [
+                            'id' => (string) $item->laboratoryTest->gda_id,
+                            'quantity' => 1,
+                        ];
+                    })
+                    ->all(),
             ],
             value: floatval(str_replace(',', '', formattedCents($totals['total']))),
             source: 'laboratory',

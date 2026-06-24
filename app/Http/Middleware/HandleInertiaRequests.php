@@ -94,8 +94,9 @@ class HandleInertiaRequests extends Middleware
                     config('services.facebook.pixel_id') &&
                     config('services.facebook.capi_token')
                 ) {
-                    $tracking = app(Tracking::class);
-                    $tracking->propagateEvents($trackingEvents);
+                    dispatch(function () use ($trackingEvents) {
+                        app(Tracking::class)->propagateEvents($trackingEvents);
+                    })->afterResponse();
 
                     return collect($trackingEvents)
                         ->filter(fn ($e) => $e->sendToBrowser)
