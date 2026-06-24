@@ -17,6 +17,8 @@ use App\Support\AppEnvironmentLabel;
 use App\Support\MockEfevooPaymentSupport;
 use Illuminate\Http\Request;
 use App\Services\Tracking\InitiateCheckout;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
 class LaboratoryCheckoutController extends Controller
@@ -36,30 +38,45 @@ class LaboratoryCheckoutController extends Controller
         $userId = $request->user()->id;
         $customer = $request->user()->customer;
         $balanceCents = $couponService->getUserBalance($userId);
-        $availableCoupons = $couponService->getAvailableCoupons($userId);
+        try {
+            $availableCoupons = $couponService->getAvailableCoupons($userId);
+        } catch (\Throwable $e) {
+            Log::error('Checkout: getAvailableCoupons failed', [
+                'user_id' => $userId,
+                'message' => $e->getMessage(),
+            ]);
+            $availableCoupons = collect();
+        }
         $mockTokens = MockEfevooPaymentSupport::isMockMode()
             ? MockEfevooPaymentSupport::ensureTestTokensForCustomer($customer)
             : [];
         $paymentMethods = $this->resolveCheckoutPaymentMethods($customer, $mockTokens);
 
-        InitiateCheckout::track(
-            contents: [
-                ...$laboratoryCartItems
-                    ->filter(fn ($item) => $item->laboratoryTest !== null)
-                    ->map(function ($item) {
-                        return [
-                            'id' => (string) $item->laboratoryTest->gda_id,
-                            'quantity' => 1,
-                        ];
-                    })
-                    ->all(),
-            ],
-            value: floatval(str_replace(',', '', formattedCents($totals['total']))),
-            source: 'laboratory',
-            customProperties: [
+        try {
+            InitiateCheckout::track(
+                contents: [
+                    ...$laboratoryCartItems
+                        ->filter(fn ($item) => $item->laboratoryTest !== null)
+                        ->map(function ($item) {
+                            return [
+                                'id' => (string) $item->laboratoryTest->gda_id,
+                                'quantity' => 1,
+                            ];
+                        })
+                        ->all(),
+                ],
+                value: floatval(str_replace(',', '', formattedCents($totals['total']))),
+                source: 'laboratory',
+                customProperties: [
+                    'brand' => $laboratoryBrand->value,
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::warning('InitiateCheckout tracking failed', [
+                'message' => $e->getMessage(),
                 'brand' => $laboratoryBrand->value,
-            ]
-        );
+            ]);
+        }
 
         $requiresAppointment = $customer->getHasLaboratoryCartItemRequiringAppointment($laboratoryBrand);
         $laboratoryAppointment = null;
@@ -77,11 +94,16 @@ class LaboratoryCheckoutController extends Controller
             }
         }
 
-        $savedCheckout = LaboratoryCheckoutDraft::query()
-            ->where('customer_id', $customer->id)
-            ->where('laboratory_brand', $laboratoryBrand)
-            ->first()
-            ?->forCheckout();
+        $savedCheckout = null;
+        if (Schema::hasTable('laboratory_checkout_drafts')) {
+            $savedCheckout = LaboratoryCheckoutDraft::query()
+                ->where('customer_id', $customer->id)
+                ->where('laboratory_brand', $laboratoryBrand)
+                ->first()
+                ?->forCheckout();
+        } else {
+            Log::error('Checkout: laboratory_checkout_drafts table is missing');
+        }
 
         if ($requiresAppointment && ! $laboratoryAppointment && ! $pendingLaboratoryAppointment) {
             $pendingLaboratoryAppointment = $this->ensurePendingLaboratoryAppointment(

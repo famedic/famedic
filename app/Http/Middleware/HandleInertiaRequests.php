@@ -8,6 +8,7 @@ use App\Support\MockEfevooPaymentSupport;
 use App\Services\NotificationService;
 use App\Services\Tracking\Tracking;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Inertia\Middleware;
 use Tighten\Ziggy\Ziggy;
@@ -94,9 +95,19 @@ class HandleInertiaRequests extends Middleware
                     config('services.facebook.pixel_id') &&
                     config('services.facebook.capi_token')
                 ) {
+                    $queueConnection = config('queue.default') === 'sync'
+                        ? 'database'
+                        : config('queue.default');
+
                     dispatch(function () use ($trackingEvents) {
-                        app(Tracking::class)->propagateEvents($trackingEvents);
-                    })->afterResponse();
+                        try {
+                            app(Tracking::class)->propagateEvents($trackingEvents);
+                        } catch (\Throwable $e) {
+                            Log::warning('Facebook CAPI request failed', [
+                                'message' => $e->getMessage(),
+                            ]);
+                        }
+                    })->onConnection($queueConnection)->afterResponse();
 
                     return collect($trackingEvents)
                         ->filter(fn ($e) => $e->sendToBrowser)
