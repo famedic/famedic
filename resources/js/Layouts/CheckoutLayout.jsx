@@ -28,6 +28,30 @@ const emptyItemsContent = (
   </div>
 );
 
+export function scrollToCheckoutSummaryTotals() {
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const el = document.getElementById("checkout-summary-totals");
+      if (!el) return;
+
+      el.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "nearest",
+      });
+
+      el.classList.add("checkout-summary-totals-highlight");
+      window.setTimeout(
+        () => el.classList.remove("checkout-summary-totals-highlight"),
+        1600,
+      );
+    });
+  });
+}
+
 export default function CheckoutLayout({
   title,
   summaryDetails = [],
@@ -236,6 +260,10 @@ function CheckoutSummary({ summaryDetails, items, couponSection = null }) {
 
                 {couponSection}
 
+                <div
+                    id="checkout-summary-totals"
+                    className="scroll-mt-24 rounded-lg transition-[box-shadow] duration-300"
+                >
                 <Subheading>Resumen</Subheading>
 
                 <dl className="[&>:first-child]:pt-0 [&>:last-child]:pb-6">
@@ -247,6 +275,7 @@ function CheckoutSummary({ summaryDetails, items, couponSection = null }) {
                         />
                     ))}
                 </dl>
+                </div>
             </section>
         </div>
     );

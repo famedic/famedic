@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { useEffect, useState } from "react";
-import { ChevronDownIcon } from "@heroicons/react/24/outline";
+import { ChevronDownIcon, ClockIcon, CheckIcon } from "@heroicons/react/24/outline";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
@@ -9,7 +9,6 @@ import Card from "@/Components/Card";
 import {
 	couponCreditTypeLabel,
 	couponDiscountCents,
-	formatCreditExpiryCountdown,
 	getCreditExpiryCountdown,
 	isCouponApplicableForCheckout,
 } from "@/lib/couponEligibilityUi";
@@ -20,6 +19,48 @@ function formatMxnFromCents(cents) {
 		currency: "MXN",
 	});
 }
+
+function formatMinPurchaseLabel(credit) {
+	if (credit?.formatted_min_purchase) {
+		return credit.formatted_min_purchase;
+	}
+	if (credit?.min_purchase_cents > 0) {
+		return formatMxnFromCents(credit.min_purchase_cents);
+	}
+	return null;
+}
+
+function countdownUrgency(countdown) {
+	if (!countdown || countdown.expired) return "calm";
+	const totalHours = countdown.days * 24 + countdown.hours;
+	if (totalHours <= 24) return "urgent";
+	if (countdown.days <= 3) return "soon";
+	return "calm";
+}
+
+const countdownStyles = {
+	calm: {
+		wrap: "border-sky-200/90 bg-gradient-to-r from-sky-50 to-cyan-50 dark:border-sky-700/60 dark:from-sky-950/50 dark:to-cyan-950/30",
+		icon: "text-sky-600 dark:text-sky-300",
+		label: "text-sky-900 dark:text-sky-100",
+		pill: "border-sky-200/80 bg-white/90 text-sky-900 dark:border-sky-600/50 dark:bg-sky-950/60 dark:text-sky-100",
+		hint: "text-sky-800/80 dark:text-sky-200/80",
+	},
+	soon: {
+		wrap: "border-amber-200/90 bg-gradient-to-r from-amber-50 to-orange-50 dark:border-amber-700/60 dark:from-amber-950/40 dark:to-orange-950/30",
+		icon: "text-amber-600 dark:text-amber-300",
+		label: "text-amber-950 dark:text-amber-100",
+		pill: "border-amber-200/80 bg-white/90 text-amber-950 dark:border-amber-600/50 dark:bg-amber-950/60 dark:text-amber-100",
+		hint: "text-amber-900/80 dark:text-amber-200/80",
+	},
+	urgent: {
+		wrap: "border-rose-200/90 bg-gradient-to-r from-rose-50 to-orange-50 dark:border-rose-700/60 dark:from-rose-950/40 dark:to-orange-950/30",
+		icon: "text-rose-600 dark:text-rose-300",
+		label: "text-rose-950 dark:text-rose-100",
+		pill: "border-rose-200/80 bg-white/90 text-rose-950 dark:border-rose-600/50 dark:bg-rose-950/60 dark:text-rose-100",
+		hint: "text-rose-900/80 dark:text-rose-200/80",
+	},
+};
 
 function CreditExpiryCountdown({ expiresAt }) {
 	const [countdown, setCountdown] = useState(() => getCreditExpiryCountdown(expiresAt));
@@ -32,13 +73,61 @@ function CreditExpiryCountdown({ expiresAt }) {
 		return () => clearInterval(intervalId);
 	}, [expiresAt]);
 
-	const formatted = formatCreditExpiryCountdown(countdown);
-	if (!formatted) return null;
+	if (!countdown || countdown.expired) return null;
+
+	const urgency = countdownUrgency(countdown);
+	const styles = countdownStyles[urgency];
+	const segments = [];
+
+	if (countdown.days > 0) {
+		segments.push({
+			value: countdown.days,
+			label: countdown.days === 1 ? "día" : "días",
+		});
+	}
+
+	segments.push({
+		value: countdown.hours,
+		label: countdown.hours === 1 ? "hora" : "horas",
+	});
 
 	return (
-		<Text className="text-xs font-medium text-sky-800 dark:text-sky-200">
-			Te quedan {formatted} para aprovecharlo.
-		</Text>
+		<div
+			className={clsx(
+				"mt-1 rounded-lg border px-3 py-2.5 shadow-sm",
+				styles.wrap,
+			)}
+			role="status"
+			aria-live="polite"
+		>
+			<div className="flex items-center gap-2">
+				<ClockIcon className={clsx("size-4 shrink-0", styles.icon)} aria-hidden />
+				<Text className={clsx("text-xs font-semibold uppercase tracking-wide", styles.label)}>
+					Tiempo restante
+				</Text>
+			</div>
+			<div className="mt-2 flex flex-wrap items-center gap-2">
+				{segments.map((segment) => (
+					<span
+						key={segment.label}
+						className={clsx(
+							"inline-flex min-w-[4.5rem] flex-col items-center rounded-md border px-2.5 py-1.5 text-center shadow-sm",
+							styles.pill,
+						)}
+					>
+						<span className="text-lg font-bold leading-none tabular-nums">
+							{segment.value}
+						</span>
+						<span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide opacity-80">
+							{segment.label}
+						</span>
+					</span>
+				))}
+			</div>
+			<Text className={clsx("mt-2 text-xs font-medium", styles.hint)}>
+				Para aprovechar este crédito antes de que venza.
+			</Text>
+		</div>
 	);
 }
 
@@ -55,6 +144,8 @@ function CreditOptionRow({
 	const typeLabel = couponCreditTypeLabel(credit);
 	const isCheckout = variant === "checkout";
 	const isSelected = selected && selected === credit.id;
+	const minPurchaseLabel = formatMinPurchaseLabel(credit);
+	const hasMinPurchase = Boolean(minPurchaseLabel);
 
 	return (
 		<div
@@ -99,10 +190,18 @@ function CreditOptionRow({
 							{credit.label}
 						</Text>
 					) : null}
-					{!applicable && credit.formatted_missing_for_minimum ? (
-						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-							Faltan {credit.formatted_missing_for_minimum} para la compra mínima.
-						</Text>
+					{hasMinPurchase ? (
+						<div className="rounded-md border border-amber-200/80 bg-amber-50/70 px-2.5 py-2 dark:border-amber-800/50 dark:bg-amber-950/25">
+							<Text className="text-xs font-semibold text-amber-950 dark:text-amber-100">
+								Compra mínima requerida: {minPurchaseLabel}
+							</Text>
+							{!applicable && credit.formatted_missing_for_minimum ? (
+								<Text className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+									Te faltan {credit.formatted_missing_for_minimum} en tu carrito
+									para poder usarlo.
+								</Text>
+							) : null}
+						</div>
 					) : null}
 					{applicable && discountCents < credit.remaining_cents ? (
 						<Text className="text-xs text-zinc-600 dark:text-zinc-400">
@@ -111,7 +210,7 @@ function CreditOptionRow({
 					) : null}
 				</div>
 				{isCheckout ? (
-					<div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+					<div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:min-w-[7.5rem]">
 						{isSelected ? (
 							<Button type="button" plain onClick={() => onClear?.()}>
 								Cancelar
@@ -119,10 +218,12 @@ function CreditOptionRow({
 						) : (
 							<Button
 								type="button"
-								outline
+								color="sky"
 								disabled={!applicable}
+								className="w-full shadow-md sm:min-w-[7.5rem]"
 								onClick={() => onSelect?.(credit.id)}
 							>
+								<CheckIcon className="size-4" data-slot="icon" aria-hidden />
 								Usar
 							</Button>
 						)}
@@ -166,7 +267,7 @@ export default function BalanceCreditCard({
 			<div className="mb-3">
 				<div className="flex flex-wrap items-end justify-between gap-2">
 					<div>
-						<Subheading>Créditos disponibles</Subheading>
+						<Subheading>Tienes créditos disponibles</Subheading>
 						<Text className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
 							{variant === "checkout"
 								? "Elige un saldo a favor o un cupón para esta compra."

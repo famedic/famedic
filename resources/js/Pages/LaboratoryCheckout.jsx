@@ -13,7 +13,9 @@ import { Subheading } from "@/Components/Catalyst/heading";
 import { Switch, SwitchField } from "@/Components/Catalyst/switch";
 import { Text } from "@/Components/Catalyst/text";
 import { Divider } from "@/Components/Catalyst/divider";
-import CheckoutLayout from "@/Layouts/CheckoutLayout";
+import CheckoutLayout, {
+    scrollToCheckoutSummaryTotals,
+} from "@/Layouts/CheckoutLayout";
 import { useForm, usePage } from "@inertiajs/react";
 import { GradientHeading } from "@/Components/Catalyst/heading";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
@@ -529,6 +531,7 @@ export default function LaboratoryCheckout({
         }
         clearErrors("payment_method");
         clearErrors("promo_validation_token");
+        scrollToSummaryAfterApplyRef.current = true;
     };
 
     const clearBalanceCoupon = () => {
@@ -593,6 +596,7 @@ export default function LaboratoryCheckout({
     const stepContentRef = useRef(null);
     const skipStepScrollRef = useRef(true);
     const appointmentAutoSyncRef = useRef(false);
+    const scrollToSummaryAfterApplyRef = useRef(false);
 
     const currentStep = wizardSteps[currentStepIndex];
 
@@ -944,6 +948,15 @@ export default function LaboratoryCheckout({
 
         requestAnimationFrame(() => requestAnimationFrame(scrollToStep));
     }, [currentStepIndex]);
+
+    useEffect(() => {
+        if (!scrollToSummaryAfterApplyRef.current || !data.coupon_id) {
+            return;
+        }
+
+        scrollToSummaryAfterApplyRef.current = false;
+        scrollToCheckoutSummaryTotals();
+    }, [data.coupon_id, summaryDetails]);
 
     const hasCheckoutCredits = checkoutCoupons.length > 0;
 
