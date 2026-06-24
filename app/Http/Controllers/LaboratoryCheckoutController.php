@@ -25,6 +25,11 @@ class LaboratoryCheckoutController extends Controller
 {
     public function __invoke(Request $request, LaboratoryBrand $laboratoryBrand, CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction, CouponService $couponService)
     {
+        Log::info('Laboratory checkout: request started', [
+            'user_id' => $request->user()?->id,
+            'brand' => $laboratoryBrand->value,
+        ]);
+
         $laboratoryCartItems = $request->user()->customer
             ->laboratoryCartItems()
             ->ofBrand($laboratoryBrand)
@@ -120,7 +125,8 @@ class LaboratoryCheckoutController extends Controller
             }
         }
 
-        return Inertia::render('LaboratoryCheckout', [
+        try {
+            return Inertia::render('LaboratoryCheckout', [
             'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryBrand),
             'savedCheckout' => $savedCheckout,
             'requiresAppointment' => $requiresAppointment,
@@ -143,7 +149,17 @@ class LaboratoryCheckoutController extends Controller
             'appEnvLabel' => AppEnvironmentLabel::current(),
             'hasOdessaPay' => $request->user()->customer->has_odessa_afiliate_account,
             'mexicanStates' => config('mexicanstates'),
-        ]);
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Laboratory checkout: render failed', [
+                'user_id' => $request->user()?->id,
+                'brand' => $laboratoryBrand->value,
+                'message' => $e->getMessage(),
+                'exception' => $e::class,
+            ]);
+
+            throw $e;
+        }
     }
 
     /**
