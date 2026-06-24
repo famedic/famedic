@@ -52,7 +52,7 @@ class LaboratoryPurchasesSheet implements FromQuery, ShouldAutoSize, WithColumnF
             'Paciente',
             'Cantidad de pruebas',
             'Subtotal',
-            'Comisión',
+            'Comisión total EfevooPay',
             'Total',
             'Método de pago',
             'Referencia de pago',
@@ -76,7 +76,7 @@ class LaboratoryPurchasesSheet implements FromQuery, ShouldAutoSize, WithColumnF
         $totalCents = $laboratoryPurchase->total_cents;
 
         if ($transaction) {
-            $feeCents = $transaction->commission_cents;
+            $feeCents = $transaction->exportCommissionCents();
             $totalCents = $laboratoryPurchase->total_cents - $feeCents;
         }
 

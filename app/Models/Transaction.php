@@ -205,6 +205,21 @@ class Transaction extends Model
         return $this->payment_method === 'efevoopay' || $this->gateway === 'efevoopay';
     }
 
+    /**
+     * Comisión para exportaciones (Excel). EfevooPay usa el cálculo manual 2.9% + IVA;
+     * otros procesadores conservan su lógica existente.
+     */
+    public function exportCommissionCents(): int
+    {
+        if ($this->isEfevooPay() && $this->transaction_amount_cents !== null) {
+            return EfevooPayCommissionCalculator::calculate(
+                (int) $this->transaction_amount_cents
+            )['total_cents'];
+        }
+
+        return $this->commission_cents;
+    }
+
     public function isPayPal(): bool
     {
         return $this->payment_method === 'paypal' || $this->gateway === 'paypal';
