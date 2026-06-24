@@ -173,6 +173,9 @@ export default function MurguiaMonitor({
 				<div className="flex flex-wrap items-center justify-between gap-4">
 					<Heading>Monitor de asegurados (Murguía)</Heading>
 					<div className="flex flex-wrap gap-2">
+						<Button href={route("admin.murguia-dashboard.index")} outline>
+							Dashboard
+						</Button>
 						<Button outline onClick={openCreditModal}>
 							Consultar por no. crédito
 						</Button>
