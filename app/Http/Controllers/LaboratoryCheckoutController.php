@@ -36,11 +36,15 @@ class LaboratoryCheckoutController extends Controller
             ->with('laboratoryTest')
             ->get();
 
+        Log::info('Laboratory checkout: cart loaded', [
+            'user_id' => $userId = $request->user()->id,
+            'items' => $laboratoryCartItems->count(),
+        ]);
+
         $totals = $calculateTotalsAndDiscountAction(
             $laboratoryCartItems
         );
 
-        $userId = $request->user()->id;
         $customer = $request->user()->customer;
         $balanceCents = $couponService->getUserBalance($userId);
         try {
@@ -56,6 +60,11 @@ class LaboratoryCheckoutController extends Controller
             ? MockEfevooPaymentSupport::ensureTestTokensForCustomer($customer)
             : [];
         $paymentMethods = $this->resolveCheckoutPaymentMethods($customer, $mockTokens);
+
+        Log::info('Laboratory checkout: payment methods resolved', [
+            'user_id' => $userId,
+            'methods' => count($paymentMethods),
+        ]);
 
         try {
             InitiateCheckout::track(
@@ -99,6 +108,13 @@ class LaboratoryCheckoutController extends Controller
             }
         }
 
+        Log::info('Laboratory checkout: appointment state resolved', [
+            'user_id' => $userId,
+            'requires_appointment' => $requiresAppointment,
+            'has_confirmed_appointment' => $laboratoryAppointment !== null,
+            'has_pending_appointment' => $pendingLaboratoryAppointment !== null,
+        ]);
+
         $savedCheckout = null;
         if (Schema::hasTable('laboratory_checkout_drafts')) {
             $savedCheckout = LaboratoryCheckoutDraft::query()
@@ -125,13 +141,15 @@ class LaboratoryCheckoutController extends Controller
             }
         }
 
+        Log::info('Laboratory checkout: building inertia response', ['user_id' => $userId]);
+
         try {
             return Inertia::render('LaboratoryCheckout', [
             'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryBrand),
             'savedCheckout' => $savedCheckout,
             'requiresAppointment' => $requiresAppointment,
-            'laboratoryAppointment' => $laboratoryAppointment,
-            'pendingLaboratoryAppointment' => $pendingLaboratoryAppointment,
+            'laboratoryAppointment' => $this->appointmentForCheckout($laboratoryAppointment),
+            'pendingLaboratoryAppointment' => $this->appointmentForCheckout($pendingLaboratoryAppointment),
             'callbackPreferenceSavedAtFormatted' => $callbackPreferenceSavedAtFormatted,
             ...$totals,
             'balanceCouponsCents' => $balanceCents,
@@ -280,6 +298,35 @@ class LaboratoryCheckoutController extends Controller
             'laboratory_brand' => $laboratoryBrand,
             ...$query,
         ]);
+    }
+
+    private function appointmentForCheckout(?\App\Models\LaboratoryAppointment $appointment): ?array
+    {
+        if (! $appointment) {
+            return null;
+        }
+
+        $appointment->loadMissing('laboratoryStore');
+
+        return [
+            'id' => $appointment->id,
+            'brand' => $appointment->brand?->value ?? $appointment->brand,
+            'patient_full_name' => $appointment->patient_full_name,
+            'formatted_patient_gender' => $appointment->formatted_patient_gender,
+            'formatted_patient_birth_date' => $appointment->formatted_patient_birth_date,
+            'patient_phone' => $appointment->patient_phone,
+            'formatted_appointment_date' => $appointment->formatted_appointment_date,
+            'callback_availability_starts_at' => $appointment->callback_availability_starts_at?->toIso8601String(),
+            'callback_availability_ends_at' => $appointment->callback_availability_ends_at?->toIso8601String(),
+            'patient_callback_comment' => $appointment->patient_callback_comment,
+            'has_left_callback_info' => $appointment->has_left_callback_info,
+            'formatted_request_saved_at' => $appointment->formatted_request_saved_at,
+            'formatted_callback_availability_range' => $appointment->formatted_callback_availability_range,
+            'laboratory_store' => $appointment->laboratoryStore ? [
+                'name' => $appointment->laboratoryStore->name,
+                'address' => $appointment->laboratoryStore->address,
+            ] : null,
+        ];
     }
 
     private function formatCallbackPreferenceSavedAt($appointment): ?string
