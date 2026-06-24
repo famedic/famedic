@@ -311,6 +311,7 @@ class LaboratoryCheckoutController extends Controller
         return [
             'id' => $appointment->id,
             'brand' => $appointment->brand?->value ?? $appointment->brand,
+            'confirmed_at' => $appointment->confirmed_at?->toIso8601String(),
             'patient_full_name' => $appointment->patient_full_name,
             'formatted_patient_gender' => $appointment->formatted_patient_gender,
             'formatted_patient_birth_date' => $appointment->formatted_patient_birth_date,
@@ -361,6 +362,10 @@ class LaboratoryCheckoutController extends Controller
             || in_array($savedCheckout['checkout_step'] ?? null, ['appointment', 'confirmation'], true);
 
         if (! $shouldEnsure) {
+            return null;
+        }
+
+        if ($customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand)) {
             return null;
         }
 
