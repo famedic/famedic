@@ -76,7 +76,7 @@ class LaboratoryPurchasesSheet implements FromQuery, ShouldAutoSize, WithColumnF
         $totalCents = $laboratoryPurchase->total_cents;
 
         if ($transaction) {
-            $feeCents = $transaction->exportCommissionCents();
+            $feeCents = $transaction->exportCommissionCents($laboratoryPurchase->total_cents);
             $totalCents = $laboratoryPurchase->total_cents - $feeCents;
         }
 

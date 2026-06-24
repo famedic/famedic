@@ -61,10 +61,11 @@ class Transaction extends Model
                     return (int) $cachedCommission;
                 }
 
-                if ($this->isEfevooPay() && $this->transaction_amount_cents !== null) {
-                    return EfevooPayCommissionCalculator::calculate(
-                        (int) $this->transaction_amount_cents
-                    )['total_cents'];
+                if ($this->isEfevooPay()) {
+                    $charged = EfevooPayCommissionCalculator::resolveChargedAmountCents($this);
+                    if ($charged > 0) {
+                        return EfevooPayCommissionCalculator::calculate($charged)['total_cents'];
+                    }
                 }
 
                 if ($this->payment_method === 'stripe' && $this->reference_id) {
@@ -80,11 +81,16 @@ class Transaction extends Model
     {
         return Attribute::make(
             get: function () {
-                if (! $this->isEfevooPay() || $this->transaction_amount_cents === null) {
+                if (! $this->isEfevooPay()) {
                     return null;
                 }
 
-                return EfevooPayCommissionCalculator::present((int) $this->transaction_amount_cents);
+                $charged = EfevooPayCommissionCalculator::resolveChargedAmountCents($this);
+                if ($charged <= 0) {
+                    return null;
+                }
+
+                return EfevooPayCommissionCalculator::present($charged);
             }
         );
     }
@@ -209,12 +215,15 @@ class Transaction extends Model
      * Comisión para exportaciones (Excel). EfevooPay usa el cálculo manual 2.9% + IVA;
      * otros procesadores conservan su lógica existente.
      */
-    public function exportCommissionCents(): int
+    public function exportCommissionCents(?int $fallbackChargedAmountCents = null): int
     {
-        if ($this->isEfevooPay() && $this->transaction_amount_cents !== null) {
-            return EfevooPayCommissionCalculator::calculate(
-                (int) $this->transaction_amount_cents
-            )['total_cents'];
+        $efevooCommission = EfevooPayCommissionCalculator::commissionCentsForTransaction(
+            $this,
+            $fallbackChargedAmountCents,
+        );
+
+        if ($efevooCommission !== null) {
+            return $efevooCommission;
         }
 
         return $this->commission_cents;
