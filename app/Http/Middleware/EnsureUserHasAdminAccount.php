@@ -239,6 +239,11 @@ class EnsureUserHasAdminAccount
                             'url' => route('admin.config-monitor.index'),
                             'current' => str_starts_with((string) Route::currentRouteName(), 'admin.config-monitor'),
                         ] : null,
+                        $request->user()->administrator->hasPermissionTo('monitoring-ai.manage') ? [
+                            'label' => 'Asistente IA',
+                            'url' => route('admin.monitoring-ai.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.monitoring-ai'),
+                        ] : null,
                         $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
                             'label' => 'Murguía — asegurados',
                             'url' => route('admin.murguia-monitor.index'),

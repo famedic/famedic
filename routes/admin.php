@@ -27,6 +27,7 @@ use App\Http\Controllers\Admin\LaboratoryTestController;
 use App\Http\Controllers\Admin\LogsGeneralController;
 use App\Http\Controllers\Admin\MedicalAttentionSubscriptionController;
 use App\Http\Controllers\Admin\MurguiaMonitorController;
+use App\Http\Controllers\Admin\MonitoringAiController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\DevAssistanceRequestController as OnlinePharmacyDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\InvoiceController as OnlinePharmacyPurchasesInvoiceController;
@@ -148,6 +149,10 @@ Route::prefix('admin')->middleware([
         // Route::resource('laboratory-quotes', LaboratoryQuoteController::class)->only(['index', 'show']);
         Route::get('logs-general/manage', [LogsGeneralController::class, 'index'])->name('logs-general.manage');
         Route::get('logs-general/download', [LogsGeneralController::class, 'download'])->name('logs-general.download');
+
+        // Asistente IA de monitoreo
+        Route::get('monitoring-ai', [MonitoringAiController::class, 'index'])->name('monitoring-ai.index');
+        Route::post('monitoring-ai/ask', [MonitoringAiController::class, 'ask'])->name('monitoring-ai.ask');
 
         // Tokens de Efevoo
         Route::resource('efevoo-tokens', EfevooTokenController::class)->only(['index', 'show']);
