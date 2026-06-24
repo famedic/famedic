@@ -125,6 +125,8 @@ return [
 
     'odessa' => [
         'url' => env('ODESSA_URL'),
+        'public_key' => env('ODESSA_PUBLIC_KEY'),
+        'famedic_public_key' => env('FAMEDIC_PUBLIC_KEY'),
         'refund_report_emails' => env('ODESSA_REFUND_REPORT_EMAILS') ? explode(',', env('ODESSA_REFUND_REPORT_EMAILS')) : [],
     ],
 
