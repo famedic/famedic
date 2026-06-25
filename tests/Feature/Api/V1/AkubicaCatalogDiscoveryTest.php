@@ -5,6 +5,20 @@ use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
 use App\Models\LaboratoryTestCategory;
 
+function createLaboratoryStore(array $attributes = []): LaboratoryStore
+{
+    return LaboratoryStore::query()->create(array_merge([
+        'name' => 'Sucursal Test',
+        'brand' => LaboratoryBrand::SWISSLAB,
+        'state' => 'Nuevo León',
+        'address' => 'Blvd. Acapulco No. 800',
+        'weekly_hours' => '7:00-15:00',
+        'saturday_hours' => '7:00-13:00',
+        'sunday_hours' => 'Cerrado',
+        'google_maps_url' => 'https://goo.gl/maps/example',
+    ], $attributes));
+}
+
 // ── Catálogo público (sin Bearer token) ───────────────────────────────
 
 test('GET /catalog/laboratory-brands without token returns 200', function () {
@@ -143,11 +157,119 @@ test('GET /catalog/laboratory-brands returns brands structure', function () {
                     'name',
                     'label',
                     'is_active',
+                    'available_states',
+                    'stores_count',
                 ]],
             ],
         ])
         ->assertJsonPath('data.brands.0.id', 'olab')
         ->assertJsonPath('data.brands.0.is_active', true);
+});
+
+test('each laboratory brand includes available_states from laboratory_stores', function () {
+    createLaboratoryStore([
+        'name' => 'ACAPULCO',
+        'brand' => LaboratoryBrand::SWISSLAB,
+        'state' => 'Nuevo León',
+    ]);
+
+    createLaboratoryStore([
+        'name' => 'CHIHUAHUA CENTRO',
+        'brand' => LaboratoryBrand::LIACSA,
+        'state' => 'Chihuahua',
+    ]);
+
+    $response = $this->getJson('/api/v1/catalog/laboratory-brands')->assertOk();
+
+    $swisslab = collect($response->json('data.brands'))->firstWhere('id', 'swisslab');
+    $liacsa = collect($response->json('data.brands'))->firstWhere('id', 'liacsa');
+
+    expect($swisslab['available_states'])->toBe(['Nuevo León']);
+    expect($liacsa['available_states'])->toBe(['Chihuahua']);
+});
+
+test('each laboratory brand includes stores_count from active stores', function () {
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'name' => 'Sucursal 1']);
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'name' => 'Sucursal 2']);
+
+    $response = $this->getJson('/api/v1/catalog/laboratory-brands')->assertOk();
+
+    $swisslab = collect($response->json('data.brands'))->firstWhere('id', 'swisslab');
+
+    expect($swisslab['stores_count'])->toBe(2);
+});
+
+test('laboratory brand available_states are unique and sorted alphabetically', function () {
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'state' => 'Nuevo León', 'name' => 'NL 1']);
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'state' => 'Nuevo León', 'name' => 'NL 2']);
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'state' => 'Chihuahua', 'name' => 'CH 1']);
+
+    $response = $this->getJson('/api/v1/catalog/laboratory-brands')->assertOk();
+
+    $swisslab = collect($response->json('data.brands'))->firstWhere('id', 'swisslab');
+
+    expect($swisslab['available_states'])->toBe(['Chihuahua', 'Nuevo León']);
+});
+
+test('soft-deleted laboratory stores do not count toward brand coverage', function () {
+    $active = createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'name' => 'Activa']);
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'name' => 'Eliminada'])->delete();
+
+    $response = $this->getJson('/api/v1/catalog/laboratory-brands')->assertOk();
+
+    $swisslab = collect($response->json('data.brands'))->firstWhere('id', 'swisslab');
+
+    expect($swisslab['stores_count'])->toBe(1)
+        ->and($swisslab['available_states'])->toBe(['Nuevo León'])
+        ->and($active->trashed())->toBeFalse();
+});
+
+test('laboratory stores with empty state do not appear in available_states but still count in stores_count', function () {
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'state' => 'Nuevo León', 'name' => 'Con estado']);
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'state' => '', 'name' => 'Sin estado']);
+
+    $response = $this->getJson('/api/v1/catalog/laboratory-brands')->assertOk();
+
+    $swisslab = collect($response->json('data.brands'))->firstWhere('id', 'swisslab');
+
+    expect($swisslab['available_states'])->toBe(['Nuevo León'])
+        ->and($swisslab['stores_count'])->toBe(2);
+});
+
+test('laboratory brand without stores returns empty available_states and stores_count zero', function () {
+    $response = $this->getJson('/api/v1/catalog/laboratory-brands')->assertOk();
+
+    $olab = collect($response->json('data.brands'))->firstWhere('id', 'olab');
+
+    expect($olab['available_states'])->toBe([])
+        ->and($olab['stores_count'])->toBe(0);
+});
+
+test('GET /catalog/laboratory-brands?state filters brands with coverage in that state', function () {
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'state' => 'Nuevo León']);
+    createLaboratoryStore(['brand' => LaboratoryBrand::LIACSA, 'state' => 'Chihuahua']);
+
+    $this->getJson('/api/v1/catalog/laboratory-brands?state='.urlencode('Nuevo León'))
+        ->assertOk()
+        ->assertJsonCount(1, 'data.brands')
+        ->assertJsonPath('data.brands.0.id', 'swisslab');
+});
+
+test('GET /catalog/laboratory-brands?state is case-insensitive', function () {
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'state' => 'Nuevo León']);
+
+    $this->getJson('/api/v1/catalog/laboratory-brands?state='.urlencode('nuevo león'))
+        ->assertOk()
+        ->assertJsonCount(1, 'data.brands')
+        ->assertJsonPath('data.brands.0.id', 'swisslab');
+});
+
+test('GET /catalog/laboratory-brands?state with unknown state returns empty list', function () {
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'state' => 'Nuevo León']);
+
+    $this->getJson('/api/v1/catalog/laboratory-brands?state='.urlencode('Yucatán'))
+        ->assertOk()
+        ->assertJsonPath('data.brands', []);
 });
 
 // ── Laboratory tests index ────────────────────────────────────────────
@@ -308,6 +430,59 @@ test('GET /catalog/laboratory-test-categories with no categories returns empty a
 });
 
 // ── Stores ────────────────────────────────────────────────────────────
+
+test('GET /catalog/laboratory-stores returns store fields for assistant discovery', function () {
+    createLaboratoryStore([
+        'name' => 'ACAPULCO',
+        'brand' => LaboratoryBrand::SWISSLAB,
+        'state' => 'Nuevo León',
+        'address' => 'Blvd. Acapulco No. 800',
+        'weekly_hours' => '7:00-15:00',
+        'saturday_hours' => '7:00-13:00',
+        'sunday_hours' => 'Cerrado',
+        'google_maps_url' => 'https://goo.gl/maps/acapulco',
+    ]);
+
+    $this->getJson('/api/v1/catalog/laboratory-stores?brand=swisslab')
+        ->assertOk()
+        ->assertJsonPath('data.stores.0.state', 'Nuevo León')
+        ->assertJsonPath('data.stores.0.address', 'Blvd. Acapulco No. 800')
+        ->assertJsonPath('data.stores.0.weekly_hours', '7:00-15:00')
+        ->assertJsonPath('data.stores.0.saturday_hours', '7:00-13:00')
+        ->assertJsonPath('data.stores.0.sunday_hours', 'Cerrado')
+        ->assertJsonPath('data.stores.0.google_maps_url', 'https://goo.gl/maps/acapulco')
+        ->assertJsonMissingPath('data.stores.0.created_at')
+        ->assertJsonMissingPath('data.stores.0.deleted_at');
+});
+
+test('GET /catalog/laboratory-stores filters by state', function () {
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'state' => 'Nuevo León', 'name' => 'NL']);
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'state' => 'Chihuahua', 'name' => 'CH']);
+
+    $this->getJson('/api/v1/catalog/laboratory-stores?brand=swisslab&state='.urlencode('Nuevo León'))
+        ->assertOk()
+        ->assertJsonCount(1, 'data.stores')
+        ->assertJsonPath('data.stores.0.name', 'NL');
+});
+
+test('GET /catalog/laboratory-stores state filter is case-insensitive', function () {
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'state' => 'Nuevo León', 'name' => 'NL']);
+
+    $this->getJson('/api/v1/catalog/laboratory-stores?state='.urlencode('nuevo león'))
+        ->assertOk()
+        ->assertJsonCount(1, 'data.stores')
+        ->assertJsonPath('data.stores.0.name', 'NL');
+});
+
+test('soft-deleted laboratory stores are excluded from catalog stores endpoint', function () {
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'name' => 'Activa']);
+    createLaboratoryStore(['brand' => LaboratoryBrand::SWISSLAB, 'name' => 'Eliminada'])->delete();
+
+    $this->getJson('/api/v1/catalog/laboratory-stores?brand=swisslab')
+        ->assertOk()
+        ->assertJsonCount(1, 'data.stores')
+        ->assertJsonPath('data.stores.0.name', 'Activa');
+});
 
 test('GET /catalog/laboratory-stores returns stores structure', function () {
     [, $token] = akubicaCustomerToken();

@@ -23,12 +23,12 @@ class LaboratoryStore extends Model
         $query->where('brand', $brand->value);
     }
 
-    function scopeFilter(Builder $query, array $filters): Builder
+    public function scopeFilter(Builder $query, array $filters): Builder
     {
         return $query->when($filters['brand'] ?? null, function ($query, $brand) {
             $query->ofBrand(LaboratoryBrand::from($brand));
         })->when($filters['state'] ?? null, function ($query, $state) {
-            $query->where('state', $state);
+            $query->whereRaw('LOWER(state) = ?', [mb_strtolower($state)]);
         });
     }
 }
