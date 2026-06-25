@@ -1,5 +1,5 @@
 import { usePage } from "@inertiajs/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dropdown, DropdownButton } from "@/Components/Catalyst/dropdown";
 import {
 	Navbar,
@@ -50,25 +50,39 @@ export default function NavBar() {
 		(brand) => (laboratoryCarts?.[brand]?.length || 0) > 0,
 	);
 	const [selectedLaboratoryBrand, setSelectedLaboratoryBrand] = useState(
-		laboratoryBrand
-			? laboratoryBrand.value
-			: firstBrandWithItems || laboratoryCartKeys[0],
+		() =>
+			laboratoryBrand?.value ||
+			firstBrandWithItems ||
+			laboratoryCartKeys[0],
+	);
+
+	const totalLaboratoryItemCount = useMemo(
+		() =>
+			Object.values(laboratoryCarts || {}).reduce(
+				(sum, items) => sum + (items?.length || 0),
+				0,
+			),
+		[laboratoryCarts],
 	);
 
 	useEffect(() => {
 		if (laboratoryBrand?.value) {
 			setSelectedLaboratoryBrand(laboratoryBrand.value);
+			return;
 		}
-	}, [laboratoryBrand?.value]);
 
-	const activeLaboratoryBrand =
-		laboratoryBrand?.value ?? selectedLaboratoryBrand;
+		setSelectedLaboratoryBrand((current) => {
+			if ((laboratoryCarts?.[current]?.length || 0) > 0) {
+				return current;
+			}
 
-	const laboratoryItemCount =
-		laboratoryCarts?.[activeLaboratoryBrand]?.length || 0;
+			return firstBrandWithItems || current;
+		});
+	}, [laboratoryBrand?.value, laboratoryCarts, firstBrandWithItems]);
+
 	const pharmacyItemCount = onlinePharmacyCart?.length || 0;
 	const cartCount =
-		selectedIndex === 0 ? laboratoryItemCount : pharmacyItemCount;
+		selectedIndex === 0 ? totalLaboratoryItemCount : pharmacyItemCount;
 
 	return (
 		<Navbar>
