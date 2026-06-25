@@ -20,6 +20,11 @@ export function purchaseIsCancelled(purchase) {
 	return purchase.is_cancelled === true || purchase.study_status === "cancelled";
 }
 
+export function studiesExtraCount(purchase) {
+	const n = typeof purchase.studies_count === "number" ? purchase.studies_count : purchase.items_count ?? 0;
+	return n > 1 ? n - 1 : 0;
+}
+
 /**
  * Badge principal: Facturado (azul) > Completado (verde) > En proceso (amarillo).
  */
@@ -29,7 +34,7 @@ export function getOrderBadgePresentation(purchase) {
 			key: "cancelled",
 			label: "Cancelado",
 			className:
-				"bg-red-500/15 text-red-200 ring-1 ring-red-400/30 dark:bg-red-950/50 dark:text-red-100",
+				"bg-red-100 text-red-900 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-100 dark:ring-red-800",
 		};
 	}
 	if (purchaseIsInvoicedPipeline(purchase)) {
@@ -37,7 +42,7 @@ export function getOrderBadgePresentation(purchase) {
 			key: "invoiced",
 			label: "Facturado",
 			className:
-				"bg-sky-500/15 text-sky-100 ring-1 ring-sky-400/35 dark:bg-sky-950/40 dark:text-sky-100",
+				"bg-sky-100 text-sky-900 ring-1 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-100 dark:ring-sky-800",
 		};
 	}
 	if (purchaseHasResults(purchase)) {
@@ -45,14 +50,14 @@ export function getOrderBadgePresentation(purchase) {
 			key: "completed",
 			label: "Completado",
 			className:
-				"bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-400/35 dark:bg-emerald-950/40 dark:text-emerald-100",
+				"bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-100 dark:ring-emerald-800",
 		};
 	}
 	return {
 		key: "processing",
 		label: "En proceso",
 		className:
-			"bg-amber-500/15 text-amber-100 ring-1 ring-amber-400/35 dark:bg-amber-950/40 dark:text-amber-100",
+			"bg-amber-100 text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-100 dark:ring-amber-800",
 	};
 }
 

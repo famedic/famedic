@@ -3,13 +3,14 @@ import { LockClosedIcon } from "@heroicons/react/24/solid";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import NewResultBadge from "@/Components/Laboratory/NewResultBadge";
 import OrderRowActions from "@/Components/LaboratoryPurchases/OrderRowActions";
-import { getOrderBadgePresentation, purchaseHasResults } from "@/lib/laboratoryPurchaseOrderUi";
+import { getOrderBadgePresentation, purchaseHasResults, studiesExtraCount } from "@/lib/laboratoryPurchaseOrderUi";
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
+import OrderFolioBadges from "@/Components/LaboratoryPurchases/OrderFolioBadges";
 import { GiftIcon } from "@heroicons/react/16/solid";
 
 export default function OrderCardMobile({ purchase, beginProtectedUrl }) {
 	const badge = getOrderBadgePresentation(purchase);
-	const showFolio = !purchase.temporarly_hide_gda_order_id && Boolean(purchase.gda_order_id);
+	const extraStudies = studiesExtraCount(purchase);
 	const hasProtectedResults = purchaseHasResults(purchase);
 
 	return (
@@ -21,7 +22,19 @@ export default function OrderCardMobile({ purchase, beginProtectedUrl }) {
 		>
 			<div className="flex items-start justify-between gap-3">
 				<div className="min-w-0 flex-1">
-					<Text className="text-base font-semibold leading-snug text-zinc-900 dark:text-white">{purchase.study_name}</Text>
+					<div className="flex items-start gap-2">
+						<Text className="min-w-0 flex-1 text-base font-semibold leading-snug text-zinc-900 dark:text-white">
+							{purchase.study_name}
+						</Text>
+						{extraStudies > 0 && (
+							<span
+								className="shrink-0 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600 ring-1 ring-zinc-200/80 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-600"
+								title={`${(purchase.studies_count ?? purchase.items_count) || 0} estudios en el pedido`}
+							>
+								+{extraStudies}
+							</span>
+						)}
+					</div>
 					<Text className="mt-1 text-sm text-zinc-600 dark:text-slate-400">
 						<Strong className="font-medium text-zinc-800 dark:text-slate-200">{purchase.patient_name}</Strong>
 					</Text>
@@ -57,17 +70,10 @@ export default function OrderCardMobile({ purchase, beginProtectedUrl }) {
 			)}
 
 			<dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm text-zinc-600 dark:text-slate-400">
-				<div className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-zinc-100 pt-3 dark:border-slate-800">
-					<dt className="sr-only">Folio</dt>
+				<div className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-zinc-100 pt-3 dark:border-slate-800">
+					<dt className="sr-only">Folio y consecutivo</dt>
 					<dd>
-						{showFolio ? (
-							<span>
-								<span className="text-xs uppercase tracking-wide text-zinc-400 dark:text-slate-500">Folio </span>
-								<span className="font-mono font-semibold text-zinc-900 dark:text-white">{purchase.gda_order_id}</span>
-							</span>
-						) : (
-							<span className="text-zinc-400 dark:text-slate-500">Sin folio</span>
-						)}
+						<OrderFolioBadges purchase={purchase} emptyLabel="Sin folio" />
 					</dd>
 					<span className="hidden text-zinc-300 sm:inline dark:text-slate-600" aria-hidden>
 						·

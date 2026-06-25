@@ -307,11 +307,15 @@ class LaboratoryPurchaseController extends Controller
                 ? localizedDate($latestSampleCollection->created_at)->isoFormat('D MMM Y h:mm a')
                 : null;
 
-            $latestResultsAt = $latestResultsNotification?->created_at
-                ? localizedDate($latestResultsNotification->created_at)->isoFormat('D MMM Y h:mm a')
-                : null;
-
             $hasResultsPdfCached = (bool) $latestResultsNotification?->hasResults();
+        }
+
+        if ($hasManualResults) {
+            $hasResultsAvailable = true;
+        }
+
+        if ($hasManualResults || $hasResultsAvailable) {
+            $latestResultsAt = $laboratoryPurchase->formatLatestResultsAt();
         }
 
         $isNewResult = ! $hasManualResults && LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(

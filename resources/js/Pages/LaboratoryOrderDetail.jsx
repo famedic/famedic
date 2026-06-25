@@ -491,6 +491,25 @@ export default function LaboratoryOrderDetail({
 		})();
 	};
 
+	const resultsSection = (
+		<ResultsSection
+			hasResults={Boolean(hasResultsAvailable || laboratoryPurchase?.results)}
+			resultsUploadedAt={
+				latestResultsAt ||
+				laboratoryPurchase?.formatted_results_uploaded_at ||
+				laboratoryPurchase?.formatted_results_at
+			}
+			onViewResults={openResultsFromSidebar}
+			isProcessing={isProcessingResults}
+			otpRequired={labResultsOtpRequired}
+			otpVerified={otpStatus.verified}
+			otpExpiresIn={otpStatus.expiresIn}
+			isNewResult={isNewResult}
+		/>
+	);
+
+	const resultsSidebar = <Sidebar title="Resultados">{resultsSection}</Sidebar>;
+
 	const main = (
 		<>
 			{activeTab === "patient" && (
@@ -526,18 +545,7 @@ export default function LaboratoryOrderDetail({
 
 	const sidebar = (
 		<>
-			<Sidebar title="Resultados">
-				<ResultsSection
-					hasResults={Boolean(hasResultsAvailable || laboratoryPurchase?.results)}
-					resultsUploadedAt={latestResultsAt || laboratoryPurchase?.formatted_results_uploaded_at}
-					onViewResults={openResultsFromSidebar}
-					isProcessing={isProcessingResults}
-					otpRequired={labResultsOtpRequired}
-					otpVerified={otpStatus.verified}
-					otpExpiresIn={otpStatus.expiresIn}
-					isNewResult={isNewResult}
-				/>
-			</Sidebar>
+			<div className="hidden xl:block">{resultsSidebar}</div>
 			{activeTab !== "invoice" && <Sidebar title="Facturas"><InvoiceSection purchase={laboratoryPurchase} /></Sidebar>}
 			<Sidebar title="Timeline inteligente">
 				<OrderTimeline steps={timelineSteps} />
@@ -556,7 +564,13 @@ export default function LaboratoryOrderDetail({
 						{pageErrors.pdf}
 					</p>
 				)}
-				<Layout header={header} tabs={tabs} main={main} sidebar={sidebar} />
+				<Layout
+					header={header}
+					tabs={tabs}
+					main={main}
+					sidebar={sidebar}
+					priorityAside={resultsSidebar}
+				/>
 			</div>
 			{labResultsOtpRequired && showOtpModal && otpPurchaseId != null && (
 				<SecurityVerificationModal

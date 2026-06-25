@@ -1,7 +1,8 @@
-export default function Layout({ header, tabs, main, sidebar }) {
+export default function Layout({ header, tabs, main, sidebar, priorityAside }) {
 	return (
 		<div className="w-full min-w-0 max-w-full space-y-6 lg:space-y-8">
 			<div className="min-w-0 max-w-full">{header}</div>
+			{priorityAside ? <div className="min-w-0 max-w-full xl:hidden">{priorityAside}</div> : null}
 			<div
 				id="laboratory-order-tabs"
 				className="sticky top-16 z-30 scroll-mt-16 min-w-0 max-w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white/95 p-3 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/95 sm:p-5"

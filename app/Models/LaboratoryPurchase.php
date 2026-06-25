@@ -47,6 +47,9 @@ class LaboratoryPurchase extends Model
             'phone' => RawPhoneNumberCast::class.':country_field',
             'temporarily_hide_gda_order_id' => 'boolean',
             'gda_consecutivo' => 'integer',
+            'ready_at' => 'datetime',
+            'results_downloaded_at' => 'datetime',
+            'completed_at' => 'datetime',
         ];
     }
 
@@ -532,6 +535,87 @@ class LaboratoryPurchase extends Model
     public function latestResultsNotification()
     {
         return $this->resultsNotification()->first();
+    }
+
+    /**
+     * Última notificación de resultados buscando por compra, folio o consecutivo GDA.
+     */
+    public function findLatestResultsNotification(): ?LaboratoryNotification
+    {
+        return LaboratoryNotification::query()
+            ->where(function ($query) {
+                $query->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
+            })
+            ->where(function ($query) {
+                $query->where('laboratory_purchase_id', $this->id);
+
+                if ($this->gda_order_id) {
+                    $query->orWhere('gda_order_id', $this->gda_order_id);
+                }
+
+                if ($this->gda_consecutivo) {
+                    $query->orWhere('gda_consecutivo', $this->gda_consecutivo);
+                }
+            })
+            ->orderByDesc('results_received_at')
+            ->orderByDesc('created_at')
+            ->first();
+    }
+
+    /**
+     * Fecha formateada de disponibilidad de resultados para el panel del paciente.
+     */
+    public function formatLatestResultsAt(): ?string
+    {
+        $format = function ($date): ?string {
+            if ($date === null) {
+                return null;
+            }
+
+            try {
+                $parsed = $date instanceof Carbon ? $date : Carbon::parse($date);
+
+                return localizedDate($parsed)->isoFormat('D MMM Y h:mm a');
+            } catch (\Throwable) {
+                return null;
+            }
+        };
+
+        if (! empty($this->results)) {
+            $fromStorage = $this->formatted_results_uploaded_at;
+            if ($fromStorage) {
+                return $fromStorage;
+            }
+        }
+
+        $notification = $this->findLatestResultsNotification() ?? $this->latestResultsNotification();
+
+        if ($notification?->results_received_at) {
+            return $format($notification->results_received_at);
+        }
+
+        $receivedAt = LaboratoryNotification::latestResultsReceivedAtForOrder(
+            $this->id,
+            $this->gda_order_id,
+            $this->gda_consecutivo
+        );
+
+        if ($receivedAt) {
+            return $format($receivedAt);
+        }
+
+        if ($notification?->created_at) {
+            return $format($notification->created_at);
+        }
+
+        foreach (['results_downloaded_at', 'ready_at', 'completed_at'] as $column) {
+            if ($this->{$column}) {
+                return $format($this->{$column});
+            }
+        }
+
+        return null;
     }
 
     public function scopeWithNotificationStatus($query)

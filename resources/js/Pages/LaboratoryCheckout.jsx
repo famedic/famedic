@@ -990,39 +990,35 @@ export default function LaboratoryCheckout({
         </div>
     );
 
-    const footerActions = (
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            {currentStepIndex > 0 && currentStep.id !== "confirmation" ? (
-                <Button type="button" plain onClick={handlePrevStep}>
-                    <ChevronLeftIcon className="size-4" />
-                    Volver
-                </Button>
-            ) : (
-                <div />
-            )}
-
-            {currentStep.id !== "confirmation" ? (
-                <Button
-                    type="button"
-                    className="w-full sm:ml-auto sm:w-auto"
-                    disabled={
-                        !canProceedFromStep || syncingAppointment || syncingDraft
-                    }
-                    onClick={handleNextStep}
+    const confirmationLegalText =
+        currentStep.id === "confirmation" ? (
+            <Text className="text-sm text-zinc-600 dark:text-slate-400">
+                Al confirmar tu compra, aceptas los{" "}
+                <a
+                    href="/terminos-y-condiciones"
+                    target="_blank"
+                    className="underline"
                 >
-                    {syncingDraft
-                        ? "Guardando…"
-                        : syncingAppointment
-                          ? "Guardando cita…"
-                          : currentStep.id === "appointment" &&
-                              !wizardLaboratoryAppointment?.confirmed_at
-                            ? "Esperando confirmación…"
-                            : "Continuar"}
-                </Button>
-            ) : (
+                    Términos y condiciones
+                </a>{" "}
+                y la{" "}
+                <a
+                    href="/politica-de-privacidad"
+                    target="_blank"
+                    className="underline"
+                >
+                    Política de privacidad
+                </a>
+                .
+            </Text>
+        ) : null;
+
+    const confirmationPaymentActions =
+        currentStep.id === "confirmation" ? (
+            <>
                 <div
                     className={clsx(
-                        "w-full sm:ml-auto sm:max-w-md",
+                        "w-full",
                         onlinePaymentDisabled &&
                             "pointer-events-none opacity-50",
                     )}
@@ -1057,39 +1053,41 @@ export default function LaboratoryCheckout({
                         </Button>
                     )}
                 </div>
-            )}
-        </div>
-    );
-
-    const confirmationLegalText =
-        currentStep.id === "confirmation" ? (
-            <Text className="mt-4 text-sm text-zinc-600 dark:text-slate-400">
-                Al confirmar tu compra, aceptas los{" "}
-                <a
-                    href="/terminos-y-condiciones"
-                    target="_blank"
-                    className="underline"
-                >
-                    Términos y condiciones
-                </a>{" "}
-                y la{" "}
-                <a
-                    href="/politica-de-privacidad"
-                    target="_blank"
-                    className="underline"
-                >
-                    Política de privacidad
-                </a>
-                .
-            </Text>
+                {confirmationLegalText}
+            </>
         ) : null;
 
-    const footerWithLegal = (
-        <>
-            {footerActions}
-            {confirmationLegalText}
-        </>
-    );
+    const wizardFooterActions =
+        currentStep.id !== "confirmation" ? (
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                {currentStepIndex > 0 ? (
+                    <Button type="button" plain onClick={handlePrevStep}>
+                        <ChevronLeftIcon className="size-4" />
+                        Volver
+                    </Button>
+                ) : (
+                    <div />
+                )}
+
+                <Button
+                    type="button"
+                    className="w-full sm:ml-auto sm:w-auto"
+                    disabled={
+                        !canProceedFromStep || syncingAppointment || syncingDraft
+                    }
+                    onClick={handleNextStep}
+                >
+                    {syncingDraft
+                        ? "Guardando…"
+                        : syncingAppointment
+                          ? "Guardando cita…"
+                          : currentStep.id === "appointment" &&
+                              !wizardLaboratoryAppointment?.confirmed_at
+                            ? "Esperando confirmación…"
+                            : "Continuar"}
+                </Button>
+            </div>
+        ) : null;
 
     const renderStepContent = () => {
         switch (currentStep.id) {
@@ -1293,7 +1291,8 @@ export default function LaboratoryCheckout({
                         currentStep={currentStepIndex}
                     />
                 }
-                footerActions={footerWithLegal}
+                footerActions={wizardFooterActions}
+                summaryActions={confirmationPaymentActions}
                 couponSection={couponSection}
                 hideDefaultSubmit
                 stepContentRef={stepContentRef}

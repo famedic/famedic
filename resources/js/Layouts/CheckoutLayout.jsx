@@ -76,6 +76,8 @@ export default function CheckoutLayout({
   stepContentRef = null,
   /** Footer Continuar/Volver pegado al fondo en pasos con listas largas */
   floatingWizardFooter = false,
+  /** Acciones debajo de los totales del resumen (p. ej. confirmar pago) */
+  summaryActions = null,
 }) {
   const [isOnlineProcessing, setIsOnlineProcessing] = useState(false);
   const [isBranchProcessing, setIsBranchProcessing] = useState(false);
@@ -94,26 +96,26 @@ export default function CheckoutLayout({
     <FocusedLayout title={title} hideHelpBubble={true}>
       {header}
 
-      <div className="mx-auto mt-8 grid grid-cols-1 gap-8 lg:max-w-none lg:grid-cols-5">
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const isBranch = e.nativeEvent.submitter?.name === "branch_payment";
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const isBranch = e.nativeEvent.submitter?.name === "branch_payment";
 
-            if (isBranch ? isBranchProcessing : isOnlineProcessing) return;
+          if (isBranch ? isBranchProcessing : isOnlineProcessing) return;
 
-            if (isBranch) setIsBranchProcessing(true);
-            else setIsOnlineProcessing(true);
+          if (isBranch) setIsBranchProcessing(true);
+          else setIsOnlineProcessing(true);
 
-            try {
-              await submit(e, isBranch);
-            } finally {
-              setIsOnlineProcessing(false);
-              setIsBranchProcessing(false);
-            }
-          }}
-          className="flex w-full flex-col gap-6 lg:col-span-3"
-        >
+          try {
+            await submit(e, isBranch);
+          } finally {
+            setIsOnlineProcessing(false);
+            setIsBranchProcessing(false);
+          }
+        }}
+        className="mx-auto mt-8 grid grid-cols-1 gap-8 lg:max-w-none lg:grid-cols-5"
+      >
+        <div className="flex w-full flex-col gap-6 lg:col-span-3">
           <div
             ref={stepContentRef}
             id="checkout-wizard-step"
@@ -125,6 +127,18 @@ export default function CheckoutLayout({
             {stepper}
             {children}
           </div>
+
+          {summaryActions && (
+            <div className="lg:hidden">
+              <CheckoutSummaryCard>
+                <CheckoutTotalsPanel
+                  summaryDetails={summaryDetails}
+                  couponSection={couponSection}
+                  summaryActions={summaryActions}
+                />
+              </CheckoutSummaryCard>
+            </div>
+          )}
 
           {floatingWizardFooter && (
             <div className="h-20 shrink-0" aria-hidden="true" />
@@ -204,14 +218,15 @@ export default function CheckoutLayout({
           </Text>
             </>
           )}
-        </form>
+        </div>
 
         <CheckoutSummary
           summaryDetails={summaryDetails}
           items={items}
           couponSection={couponSection}
+          summaryActions={summaryActions}
         />
-      </div>
+      </form>
 
       <Footer />
       <CheckoutWhatsAppHelp />
@@ -219,54 +234,121 @@ export default function CheckoutLayout({
   );
 }
 
-function CheckoutSummary({ summaryDetails, items, couponSection = null }) {
+function CheckoutSummary({
+    summaryDetails,
+    items,
+    couponSection = null,
+    summaryActions = null,
+}) {
+    const splitMobileCheckout = Boolean(summaryActions);
+
+    const orderItems = <CheckoutOrderItems items={items} />;
+
+    const totalsPanel = (
+        <CheckoutTotalsPanel
+            summaryDetails={summaryDetails}
+            couponSection={couponSection}
+            summaryActions={summaryActions}
+        />
+    );
+
+    if (splitMobileCheckout) {
+        return (
+            <>
+                <div className="order-first mx-auto w-full lg:hidden">
+                    <CheckoutSummaryCard>{orderItems}</CheckoutSummaryCard>
+                </div>
+
+                <div className="order-last mx-auto hidden w-full lg:col-span-2 lg:block">
+                    <CheckoutSummaryCard sticky>
+                        {orderItems}
+                        {totalsPanel}
+                    </CheckoutSummaryCard>
+                </div>
+            </>
+        );
+    }
+
     return (
         <div className="order-first mx-auto w-full lg:order-last lg:col-span-2">
-            <section className="sticky top-8 space-y-6 overflow-hidden rounded-lg bg-white px-4 py-6 shadow sm:p-6 lg:col-span-5 lg:p-8 dark:bg-slate-900">
-                <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-slate-400">
-                    <LockClosedIcon className="size-4" />
-                    <Text>Pago 100% seguro</Text>
-                </div>
+            <CheckoutSummaryCard sticky>
+                {orderItems}
+                {totalsPanel}
+            </CheckoutSummaryCard>
+        </div>
+    );
+}
 
-                <Subheading>Resumen del pedido</Subheading>
+function CheckoutSummaryCard({ children, sticky = false }) {
+    return (
+        <section
+            className={clsx(
+                "space-y-6 overflow-hidden rounded-lg bg-white px-4 py-6 shadow sm:p-6 lg:p-8 dark:bg-slate-900",
+                sticky && "sticky top-8",
+            )}
+        >
+            {children}
+        </section>
+    );
+}
 
-                <div className="flow-root max-h-64 overflow-x-hidden overflow-y-auto lg:max-h-80">
-                    <ul role="list" className="[&>*:last-child]:hidden">
-                        {items.length > 0 ? (
-                            items.map((item, index) => (
-                                <CartItem
-                                    key={index}
-                                    imgSrc={item.imgSrc}
-                                    showDefaultImage={item.showDefaultImage}
-                                    heading={item.heading}
-                                    description={item.description}
-                                    indications={item.indications}
-                                    features={item.features || []}
-                                    price={item.price}
-                                    discountedPrice={item.discountedPrice}
-                                    discountPercentage={item.discountPercentage}
-                                    infoMessage={item.infoMessage}
-                                    quantity={item.quantity}
-                                    destroyCartItem={item.onDestroy}
-                                />
-                            ))
-                        ) : (
-                            <li className="py-6 sm:py-10">
-                                {emptyItemsContent}
-                            </li>
-                        )}
-                    </ul>
-                </div>
+function CheckoutOrderItems({ items }) {
+    return (
+        <>
+            <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-slate-400">
+                <LockClosedIcon className="size-4" />
+                <Text>Pago 100% seguro</Text>
+            </div>
 
-                {couponSection}
+            <Subheading>Resumen del pedido</Subheading>
 
-                <div
-                    id="checkout-summary-totals"
-                    className="scroll-mt-24 rounded-lg transition-[box-shadow] duration-300"
-                >
+            <div className="flow-root max-h-64 overflow-x-hidden overflow-y-auto lg:max-h-80">
+                <ul role="list" className="[&>*:last-child]:hidden">
+                    {items.length > 0 ? (
+                        items.map((item, index) => (
+                            <CartItem
+                                key={index}
+                                imgSrc={item.imgSrc}
+                                showDefaultImage={item.showDefaultImage}
+                                heading={item.heading}
+                                description={item.description}
+                                indications={item.indications}
+                                features={item.features || []}
+                                price={item.price}
+                                discountedPrice={item.discountedPrice}
+                                discountPercentage={item.discountPercentage}
+                                infoMessage={item.infoMessage}
+                                quantity={item.quantity}
+                                destroyCartItem={item.onDestroy}
+                            />
+                        ))
+                    ) : (
+                        <li className="py-6 sm:py-10">
+                            {emptyItemsContent}
+                        </li>
+                    )}
+                </ul>
+            </div>
+        </>
+    );
+}
+
+function CheckoutTotalsPanel({
+    summaryDetails,
+    couponSection = null,
+    summaryActions = null,
+}) {
+    return (
+        <>
+            {couponSection}
+
+            <div
+                id="checkout-summary-totals"
+                className="scroll-mt-24 rounded-lg transition-[box-shadow] duration-300"
+            >
                 <Subheading>Resumen</Subheading>
 
-                <dl className="[&>:first-child]:pt-0 [&>:last-child]:pb-6">
+                <dl className="[&>:first-child]:pt-0 [&>:last-child]:pb-0">
                     {summaryDetails.map((cartDetail, index) => (
                         <CartDetail
                             key={cartDetail.label}
@@ -275,9 +357,17 @@ function CheckoutSummary({ summaryDetails, items, couponSection = null }) {
                         />
                     ))}
                 </dl>
-                </div>
-            </section>
-        </div>
+
+                {summaryActions && (
+                    <div
+                        id="checkout-summary-payment"
+                        className="mt-4 space-y-3 border-t border-zinc-200 pt-4 dark:border-slate-700"
+                    >
+                        {summaryActions}
+                    </div>
+                )}
+            </div>
+        </>
     );
 }
 
