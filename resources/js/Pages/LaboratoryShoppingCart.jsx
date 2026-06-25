@@ -424,6 +424,7 @@ export default function LaboratoryShoppingCart({
 			console.log(`📍 Navegando a checkout...`);
 			window.location.href = route("laboratory.checkout", {
 				laboratory_brand: laboratoryBrand.value,
+				step: "patient",
 			});
 		}, 300);
 	};
@@ -534,8 +535,13 @@ export default function LaboratoryShoppingCart({
 				}
 				checkoutUrl={route("laboratory.checkout", {
 					laboratory_brand: laboratoryBrand.value,
+					step: "patient",
 				})}
 				onCheckoutClick={handleCheckoutClick}
+				addMoreHref={route("laboratory-tests", {
+					laboratory_brand: laboratoryBrand.value,
+				})}
+				addMoreLabel="Agregar más estudios"
 				summaryExtra={
 					<BalanceCreditCard
 						variant="cart"

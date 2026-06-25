@@ -76,14 +76,26 @@ function resolveActiveStepId(
     laboratoryAppointment,
     savedCheckout = null,
 ) {
+    const params = new URLSearchParams(window.location.search);
+    let stepId = params.get("step");
+
+    if (stepId) {
+        if (
+            stepId === "confirmation" &&
+            requiresAppointment &&
+            !laboratoryAppointment?.confirmed_at
+        ) {
+            stepId = "appointment";
+        }
+
+        return stepId;
+    }
+
     if (requiresAppointment && laboratoryAppointment?.confirmed_at) {
         return "confirmation";
     }
 
-    const params = new URLSearchParams(window.location.search);
-    let stepId = params.get("step");
-
-    if (!stepId && savedCheckout?.checkout_step) {
+    if (savedCheckout?.checkout_step) {
         stepId = savedCheckout.checkout_step;
     }
 
@@ -221,6 +233,21 @@ export default function LaboratoryCheckout({
         setError,
     } = useForm(initialFormData);
 
+    const checkoutSubmittedRef = useRef(false);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("step") !== "patient") {
+            return;
+        }
+
+        try {
+            sessionStorage.removeItem(checkoutStorageKey(laboratoryBrand.value));
+        } catch {
+            // ignore quota errors
+        }
+    }, [laboratoryBrand.value]);
+
     const [appliedPromo, setAppliedPromo] = useState(() =>
         initialFormData.promo_validation_token
             ? {
@@ -252,7 +279,7 @@ export default function LaboratoryCheckout({
     const submit = (e, isBranchPayment) => {
         e.preventDefault();
 
-        if (checkoutProcessing) return;
+        if (checkoutProcessing || checkoutSubmittedRef.current) return;
 
         // Validaciones adicionales
         if (!data.address) {
@@ -296,10 +323,13 @@ export default function LaboratoryCheckout({
                 }
             );
         } else {
+            checkoutSubmittedRef.current = true;
+
             post(route("laboratory.checkout.store", {
                 laboratory_brand: laboratoryBrand.value
             }), {
                 onError: (errors) => {
+                    checkoutSubmittedRef.current = false;
                     console.error('Errores del backend:', errors);
 
                     // Manejar errores específicos

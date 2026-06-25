@@ -6,8 +6,9 @@ import { Button } from "@/Components/Catalyst/button";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
-import { XMarkIcon, InformationCircleIcon } from "@heroicons/react/20/solid";
+import { InformationCircleIcon } from "@heroicons/react/20/solid";
 import { ChevronDoubleRightIcon } from "@heroicons/react/16/solid";
+import { TrashIcon } from "@heroicons/react/24/outline";
 import { CheckIcon, PhotoIcon } from "@heroicons/react/24/solid";
 import Card from "@/Components/Card";
 import { useEffect } from "react"; // Importar useEffect
@@ -122,6 +123,8 @@ export default function ShoppingCartLayout({
 	currency = 'MXN', // Moneda por defecto
 	productDataList = [], // Lista de datos de productos para GA4
 	summaryExtra = null,
+	addMoreHref = null,
+	addMoreLabel = null,
 	// =============================================
 }) {
 	
@@ -316,6 +319,8 @@ export default function ShoppingCartLayout({
 							totalValue={calculateTotalValue()}
 							currency={currency}
 							summaryExtra={summaryExtra}
+							addMoreHref={addMoreHref}
+							addMoreLabel={addMoreLabel}
 						/>
 					)}
 				</div>
@@ -509,11 +514,12 @@ function CartItem({
 								type="button"
 								onClick={handleRemoveClick}
 								className="-m-2 inline-flex p-2 text-gray-400 hover:text-red-500"
-								aria-label={`Eliminar ${heading} del carrito`}
+								aria-label={`Quitar ${heading} del carrito`}
+								title="Quitar del carrito"
 							>
-								<XMarkIcon
+								<TrashIcon
 									aria-hidden="true"
-									className="h-6 w-6"
+									className="h-6 w-6 stroke-current"
 								/>
 							</button>
 						</div>
@@ -543,6 +549,8 @@ function CartSummary({
 	totalValue = 0,
 	currency = 'MXN',
 	summaryExtra = null,
+	addMoreHref = null,
+	addMoreLabel = null,
 	// ====================================
 }) {
 	
@@ -604,6 +612,16 @@ function CartSummary({
 					/>
 				))}
 			</dl>
+
+			{addMoreHref && addMoreLabel && (
+				<Button
+					href={addMoreHref}
+					outline
+					className="w-full !py-3"
+				>
+					{addMoreLabel}
+				</Button>
+			)}
 
 			<Button
 				href={checkoutUrl}
