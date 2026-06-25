@@ -13,6 +13,7 @@ use App\Http\Controllers\LaboratoryResultsController;
 use App\Http\Controllers\LaboratoryShoppingCartController;
 use App\Http\Controllers\LaboratoryStoreController;
 use App\Http\Controllers\PayPalController;
+use App\Http\Controllers\PromoCodeCheckoutController;
 use App\Http\Controllers\LabResultsAccessController;
 use App\Http\Controllers\LaboratoryResultsOtpController;
 use App\Http\Middleware\EnsureLabResultsOtpVerified;
@@ -75,6 +76,14 @@ Route::middleware([
 
     Route::post('/laboratory/{laboratory_brand}/checkout/appointment', [LaboratoryCheckoutController::class, 'syncAppointment'])
         ->name('laboratory.checkout.appointment.sync')
+        ->middleware('redirect-if-empty-laboratory-cart-items');
+
+    Route::post('/laboratory/{laboratory_brand}/checkout/promo-codes/validate', [PromoCodeCheckoutController::class, 'validateCode'])
+        ->name('laboratory.checkout.promo-codes.validate')
+        ->middleware('redirect-if-empty-laboratory-cart-items');
+
+    Route::delete('/laboratory/{laboratory_brand}/checkout/promo-codes', [PromoCodeCheckoutController::class, 'destroy'])
+        ->name('laboratory.checkout.promo-codes.destroy')
         ->middleware('redirect-if-empty-laboratory-cart-items');
 
     Route::post('/laboratory/{laboratory_brand}/checkout', [LaboratoryPurchaseController::class, 'store'])

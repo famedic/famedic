@@ -4,21 +4,16 @@ import {
 	CheckCircleIcon,
 	ClockIcon,
 	NoSymbolIcon,
-	QrCodeIcon,
 } from "@heroicons/react/24/solid";
 import { Table, TableHead, TableHeader, TableBody, TableRow, TableCell } from "@/Components/Catalyst/table";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import NewResultBadge from "@/Components/Laboratory/NewResultBadge";
 import OrderRowActions from "@/Components/LaboratoryPurchases/OrderRowActions";
-import { getOrderBadgePresentation, purchaseHasResults, purchaseIsCancelled } from "@/lib/laboratoryPurchaseOrderUi";
+import { getOrderBadgePresentation, purchaseHasResults, purchaseIsCancelled, studiesExtraCount } from "@/lib/laboratoryPurchaseOrderUi";
+import OrderFolioBadges from "@/Components/LaboratoryPurchases/OrderFolioBadges";
 import PaymentMethodDisplayIcon from "@/Components/PaymentMethodDisplayIcon";
 import { GiftIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
-
-function studiesExtraCount(purchase) {
-	const n = typeof purchase.studies_count === "number" ? purchase.studies_count : purchase.items_count ?? 0;
-	return n > 1 ? n - 1 : 0;
-}
 
 function toTitleCase(value = "") {
 	return String(value)
@@ -131,14 +126,9 @@ export default function OrdersTable({ purchases, beginProtectedUrl }) {
 					</TableHead>
 					<TableBody>
 						{purchases.map((purchase) => {
-							const showFolio = !purchase.temporarly_hide_gda_order_id && Boolean(purchase.gda_order_id);
 							const extraStudies = studiesExtraCount(purchase);
 							const statusMap = getStatusMap(purchase);
 							const patientName = toTitleCase(purchase.patient_name);
-							const gdaConsecutivo =
-								purchase.gda_consecutivo != null && purchase.gda_consecutivo !== ""
-									? String(purchase.gda_consecutivo)
-									: null;
 							const isLoading = loadingRowId === purchase.id;
 							const isCancelled = purchaseIsCancelled(purchase);
 							const statusBadge = getOrderBadgePresentation(purchase);
@@ -220,30 +210,7 @@ export default function OrdersTable({ purchases, beginProtectedUrl }) {
 												<Text className="text-xs font-medium uppercase tracking-wide text-zinc-500">
 													{onlyDateLabel(purchase.purchased_at_formatted)}
 												</Text>
-												<div>
-													{showFolio ? (
-														<span className="inline-flex items-center gap-1.5 rounded-full bg-lime-500/15 px-2 py-0.5 font-mono text-sm font-semibold text-lime-500">
-															<QrCodeIcon
-																className="size-3.5 shrink-0"
-																aria-hidden
-															/>
-															<span>{purchase.gda_order_id}</span>
-														</span>
-													) : null}
-													{showFolio && gdaConsecutivo ? <br /> : null}
-													{gdaConsecutivo ? (
-														<span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-2 py-0.5 font-mono text-sm font-semibold text-blue-500">
-															<QrCodeIcon
-																className="size-3.5 shrink-0"
-																aria-hidden
-															/>
-															<span>{gdaConsecutivo}</span>
-														</span>
-													) : null}
-												</div>
-												{!showFolio && !gdaConsecutivo ? (
-													<Text className="text-sm text-zinc-400 dark:text-slate-500">—</Text>
-												) : null}
+												<OrderFolioBadges purchase={purchase} />
 											</div>
 										</div>
 									</TableCell>

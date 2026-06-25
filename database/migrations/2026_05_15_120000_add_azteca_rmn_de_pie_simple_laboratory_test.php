@@ -2,6 +2,7 @@
 
 use App\Enums\LaboratoryBrand;
 use App\Models\LaboratoryTest;
+use App\Models\LaboratoryTestCategory;
 use Illuminate\Database\Migrations\Migration;
 
 return new class extends Migration
@@ -10,6 +11,21 @@ return new class extends Migration
     {
         $scoutQueue = config('scout.queue');
         config(['scout.queue' => false]);
+
+        $category = LaboratoryTestCategory::query()->find(9)
+            ?? LaboratoryTestCategory::query()->first();
+
+        if ($category === null) {
+            if (app()->environment('testing') || config('database.default') === 'sqlite') {
+                config(['scout.queue' => $scoutQueue]);
+
+                return;
+            }
+
+            $category = LaboratoryTestCategory::query()->create([
+                'name' => 'Resonancia magnética',
+            ]);
+        }
 
         $laboratoryTest = LaboratoryTest::updateOrCreate(
             ['gda_id' => '445052'],
@@ -23,7 +39,7 @@ return new class extends Migration
                 'requires_appointment' => true,
                 'public_price_cents' => 250900,
                 'famedic_price_cents' => 223522,
-                'laboratory_test_category_id' => 9,
+                'laboratory_test_category_id' => $category->id,
             ]
         );
 

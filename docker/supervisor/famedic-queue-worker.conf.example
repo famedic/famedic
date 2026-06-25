@@ -1,0 +1,23 @@
+; Ejemplo Supervisor — worker de colas Laravel (producción/staging)
+;
+; Copiar a /etc/supervisor/conf.d/famedic-queue-worker.conf
+; Ajustar user, directory y rutas de log según el servidor.
+;
+;   sudo supervisorctl reread
+;   sudo supervisorctl update
+;   sudo supervisorctl status famedic-queue-worker:*
+
+[program:famedic-queue-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/famedic/artisan queue:work database --queue=default --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=www-data
+numprocs=1
+redirect_stderr=true
+stdout_logfile=/var/log/famedic/queue-worker.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=5
+stopwaitsecs=3600

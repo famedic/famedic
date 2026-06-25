@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useForm } from "@inertiajs/react";
+import { useForm, usePage } from "@inertiajs/react";
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
 import { Button } from "@/Components/Catalyst/button";
@@ -18,6 +18,15 @@ import {
 import { Badge } from "@/Components/Catalyst/badge";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import Modal from "@/Components/Catalyst/modal";
+import CouponMetricCard from "@/Components/Admin/Coupon/CouponMetricCard";
+import CouponSectionCard from "@/Components/Admin/Coupon/CouponSectionCard";
+import CouponStatusBadge from "@/Components/Admin/Coupon/CouponStatusBadge";
+import CouponValidityBadge from "@/Components/Admin/Coupon/CouponValidityBadge";
+import CouponBeneficiaryStatusBadge from "@/Components/Admin/Coupon/CouponBeneficiaryStatusBadge";
+import CouponActionMenu from "@/Components/Admin/Coupon/CouponActionMenu";
+import CouponEmptyState from "@/Components/Admin/Coupon/CouponEmptyState";
+import { couponActiveBadge } from "@/lib/couponAdminUi";
+import { UsersIcon } from "@heroicons/react/24/outline";
 
 function formatShortDateTime(iso) {
 	if (!iso) return "—";
@@ -57,6 +66,34 @@ function participantStatusBadge(status) {
 	if (status === "approved") return { color: "emerald", label: "Aprobó" };
 	if (status === "rejected") return { color: "red", label: "Rechazó" };
 	return { color: "zinc", label: "Pendiente" };
+}
+
+function couponUsageStatusBadge(row) {
+	if (row.transaction?.is_reversed) {
+		return { color: "amber", label: "Revertido" };
+	}
+	if (row.transaction?.amount_used_cents > 0 || row.used_at) {
+		return { color: "blue", label: "Aplicado" };
+	}
+	return { color: "zinc", label: "Pendiente" };
+}
+
+function reversalReasonLabel(reason) {
+	if (!reason) return "—";
+	if (reason === "laboratory_purchase_cancelled") {
+		return "Cancelación de pedido de laboratorio";
+	}
+	return reason.replaceAll("_", " ");
+}
+
+function formatMxFromCents(cents) {
+	if (cents == null || cents === "") return "—";
+	const n = Number(cents);
+	if (Number.isNaN(n)) return "—";
+	return (n / 100).toLocaleString("es-MX", {
+		style: "currency",
+		currency: "MXN",
+	});
 }
 
 function CollapsiblePanel({
@@ -116,6 +153,7 @@ function csrfTokenFromMeta() {
 
 export default function CouponsShow({
 	coupon,
+	campaignAdminActions = {},
 	beneficiaryRows,
 	authorizationRecipientEmail,
 	mailSetupHint,
@@ -125,6 +163,7 @@ export default function CouponsShow({
 	assignmentMultiSig = null,
 	executedPreApprovalSummary = null,
 }) {
+	const { couponAuthorizerNav = {} } = usePage().props;
 	const {
 		data: authData,
 		setData: setAuthData,
@@ -133,8 +172,16 @@ export default function CouponsShow({
 		processing: authProcessing,
 	} = useForm({ code: "" });
 	const { post: postResend, processing: resendProcessing } = useForm({});
+	const [resendInvitationBeneficiaryId, setResendInvitationBeneficiaryId] = useState(null);
+	const { post: postResendInvitation, processing: resendInvitationProcessing } = useForm({});
 	const [revokeTarget, setRevokeTarget] = useState(null);
 	const { delete: destroy, processing: revoking } = useForm({});
+	const [cancelTarget, setCancelTarget] = useState(null);
+	const { post: postCancelPending, processing: cancellingPending } = useForm({});
+	const [deactivateOpen, setDeactivateOpen] = useState(false);
+	const [deleteCampaignOpen, setDeleteCampaignOpen] = useState(false);
+	const { post: postDeactivate, processing: deactivating } = useForm({});
+	const { delete: destroyCampaign, processing: deletingCampaign } = useForm({});
 	const [assignOpen, setAssignOpen] = useState(false);
 	const [bulkRows, setBulkRows] = useState([]);
 	const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
@@ -207,6 +254,21 @@ export default function CouponsShow({
 		postResend(route("admin.coupons.resend-authorization", coupon.id));
 	};
 
+	const resendBeneficiaryInvitation = (beneficiaryId) => {
+		if (resendInvitationProcessing) return;
+		setResendInvitationBeneficiaryId(beneficiaryId);
+		postResendInvitation(
+			route("admin.coupons.beneficiaries.resend-invitation", {
+				coupon: coupon.id,
+				beneficiary: beneficiaryId,
+			}),
+			{
+				preserveScroll: true,
+				onFinish: () => setResendInvitationBeneficiaryId(null),
+			},
+		);
+	};
+
 	const confirmRevoke = () => {
 		if (!revokeTarget || revoking) return;
 		destroy(
@@ -214,8 +276,38 @@ export default function CouponsShow({
 				coupon: revokeTarget.couponId,
 				couponUser: revokeTarget.assignmentId,
 			}),
-			{ preserveScroll: true },
+			{
+				preserveScroll: true,
+				onFinish: () => setRevokeTarget(null),
+			},
 		);
+	};
+
+	const confirmCancelPending = () => {
+		if (!cancelTarget || cancellingPending) return;
+		postCancelPending(
+			route("admin.coupons.beneficiaries.cancel", {
+				coupon: coupon.id,
+				beneficiary: cancelTarget.beneficiaryId,
+			}),
+			{
+				preserveScroll: true,
+				onFinish: () => setCancelTarget(null),
+			},
+		);
+	};
+
+	const confirmDeactivate = () => {
+		if (deactivating) return;
+		postDeactivate(route("admin.coupons.deactivate", coupon.id), {
+			preserveScroll: true,
+			onFinish: () => setDeactivateOpen(false),
+		});
+	};
+
+	const confirmDeleteCampaign = () => {
+		if (deletingCampaign) return;
+		destroyCampaign(route("admin.coupons.destroy", coupon.id));
 	};
 
 	const pending = coupon.approval_status === "pending_authorization";
@@ -473,31 +565,140 @@ export default function CouponsShow({
 	};
 
 	return (
-		<AdminLayout title={`Cupón #${coupon.id}`}>
+		<AdminLayout title={`Crédito #${coupon.id}`}>
 			<div className="space-y-6">
 				<div className="flex flex-wrap items-start justify-between gap-4">
-					<div>
-						<Heading>Cupón #{coupon.id}</Heading>
+					<div className="min-w-0 max-w-3xl">
+						<div className="flex flex-wrap items-center gap-2">
+							<span className="font-mono text-sm text-zinc-500 dark:text-zinc-400">
+								#{coupon.id}
+							</span>
+							<CouponStatusBadge {...couponActiveBadge(coupon)} />
+							{coupon.approval_status === "pending_authorization" && (
+								<CouponStatusBadge label="Pendiente autorización" color="purple" />
+							)}
+							<CouponValidityBadge coupon={coupon} />
+						</div>
+						<Heading className="mt-2">
+							{coupon.code || coupon.concept?.title || coupon.concept_other || "Crédito"}
+						</Heading>
 						<p className="mt-1 text-base/6 text-zinc-700 dark:text-zinc-300 sm:text-sm/6">
 							{coupon.description || "Sin descripción"}
 						</p>
+						<p className="mt-2 text-lg font-semibold text-famedic-dark dark:text-famedic-lime">
+							{formatMxFromCents(coupon.amount_cents)}
+							<span className="ml-2 text-sm font-normal text-zinc-500 dark:text-zinc-400">
+								por beneficiario
+							</span>
+						</p>
 					</div>
-					<div className="flex flex-wrap gap-2">
-						<Button href={route("admin.coupons.index")} plain>
-							Ir a créditos
-						</Button>
-						<Button
-							type="button"
-							outline
-							onClick={openAssignModal}
-							disabled={!canAssignInPlace}
-						>
-							Agregar beneficiario
-						</Button>
-						<Button href={route("admin.coupons.edit", coupon.id)} outline>
-							Editar
-						</Button>
-					</div>
+					<CouponActionMenu
+						items={[
+							{
+								key: "back",
+								label: "Ir a créditos",
+								href: route("admin.coupons.index"),
+							},
+							...(couponAuthorizerNav?.is_authorizer &&
+							(pending || assignmentMultiSig?.i_can_approve)
+								? [
+										{
+											key: "review-auth",
+											label: "Revisar autorización",
+											href: route("admin.coupons.authorizations.show", {
+												coupon: coupon.id,
+												...(assignmentMultiSig?.id
+													? { request: assignmentMultiSig.id }
+													: {}),
+											}),
+										},
+									]
+								: []),
+							{
+								key: "edit",
+								label: "Editar",
+								href: route("admin.coupons.edit", coupon.id),
+							},
+							{
+								key: "assign",
+								label: "Agregar beneficiario",
+								disabled: !canAssignInPlace,
+								title: !coupon.is_active
+									? "Esta campaña está inactiva y no permite nuevas asignaciones."
+									: undefined,
+								onClick: openAssignModal,
+							},
+							...(campaignAdminActions.can_deactivate
+								? [
+										{
+											key: "deactivate",
+											label: "Desactivar campaña",
+											danger: true,
+											onClick: () => setDeactivateOpen(true),
+										},
+									]
+								: []),
+							...(campaignAdminActions.can_delete
+								? [
+										{
+											key: "delete-campaign",
+											label: "Eliminar campaña",
+											danger: true,
+											onClick: () => setDeleteCampaignOpen(true),
+										},
+									]
+								: []),
+							{
+								key: "assign-page",
+								label: "Asignar en flujo completo",
+								href: route("admin.coupons.assign", { coupon_id: coupon.id }),
+							},
+							{
+								key: "logs",
+								label: "Historial",
+								href: route("admin.coupons.logs", { coupon_id: coupon.id }),
+							},
+						]}
+					/>
+				</div>
+
+				<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+					<CouponMetricCard
+						label="Monto"
+						value={formatMxFromCents(coupon.amount_cents)}
+						tone="lime"
+					/>
+					<CouponMetricCard
+						label="Beneficiarios"
+						value={
+							coupon.max_beneficiaries != null
+								? `${assignedCount} / ${coupon.max_beneficiaries}`
+								: assignedCount
+						}
+						tone="sky"
+						hint={
+							availableSlots != null
+								? `${availableSlots} cupo(s) disponible(s)`
+								: undefined
+						}
+					/>
+					<CouponMetricCard
+						label="Vigencia"
+						value={
+							{
+								sin_vigencia: "Sin vigencia",
+								programado: "Programado",
+								vigente: "Vigente",
+								vencido: "Vencido",
+							}[coupon.validity_status] ?? coupon.validity_status ?? "—"
+						}
+						tone={coupon.validity_status === "vencido" ? "red" : "zinc"}
+					/>
+					<CouponMetricCard
+						label="Compra mínima"
+						value={coupon.formatted_min_purchase ?? "Sin mínimo"}
+						tone="zinc"
+					/>
 				</div>
 
 				{false && assignmentMultiSig && (
@@ -802,6 +1003,35 @@ export default function CouponsShow({
 									{coupon.max_beneficiaries != null ? coupon.max_beneficiaries : "Sin límite"}
 								</dd>
 							</div>
+							<div className="flex justify-between gap-3">
+								<dt className="text-zinc-500 dark:text-zinc-400">Estado de vigencia</dt>
+								<dd className="font-medium text-zinc-900 dark:text-zinc-100">
+									{{
+										sin_vigencia: "Sin vigencia",
+										programado: "Programado",
+										vigente: "Vigente",
+										vencido: "Vencido",
+									}[coupon.validity_status] ?? coupon.validity_status}
+								</dd>
+							</div>
+							<div className="flex justify-between gap-3">
+								<dt className="text-zinc-500 dark:text-zinc-400">Disponible desde</dt>
+								<dd className="font-medium text-zinc-900 dark:text-zinc-100">
+									{formatShortDateTime(coupon.valid_from)}
+								</dd>
+							</div>
+							<div className="flex justify-between gap-3">
+								<dt className="text-zinc-500 dark:text-zinc-400">Vence el</dt>
+								<dd className="font-medium text-zinc-900 dark:text-zinc-100">
+									{formatShortDateTime(coupon.expires_at)}
+								</dd>
+							</div>
+							<div className="flex justify-between gap-3">
+								<dt className="text-zinc-500 dark:text-zinc-400">Compra mínima</dt>
+								<dd className="font-medium text-zinc-900 dark:text-zinc-100">
+									{coupon.formatted_min_purchase ?? "—"}
+								</dd>
+							</div>
 						</dl>
 					</CollapsiblePanel>
 
@@ -895,9 +1125,17 @@ export default function CouponsShow({
 						)}
 						{!canAssignInPlace && (
 							<p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
-								{preApprovalMultisigPending
-									? "No puedes agregar beneficiarios hasta completar las autorizaciones de pre-aprobación indicadas arriba."
-									: "No puedes agregar beneficiarios hasta que el cupón esté activo y con disponibilidad."}
+								{!coupon.is_active
+									? "Esta campaña está inactiva. No permite nuevas asignaciones."
+									: preApprovalMultisigPending
+										? "No puedes agregar beneficiarios hasta completar las autorizaciones de pre-aprobación indicadas arriba."
+										: "No puedes agregar beneficiarios hasta que el cupón esté activo y con disponibilidad."}
+							</p>
+						)}
+						{!coupon.is_active && (
+							<p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+								Los créditos ya asignados y los pendientes existentes conservan su
+								estado actual.
 							</p>
 						)}
 					</CollapsiblePanel>
@@ -1035,42 +1273,61 @@ export default function CouponsShow({
 					</form>
 				)}
 
-				<Subheading className="text-famedic-darker dark:text-white">
-					Beneficiarios y uso
-				</Subheading>
-				<Text className="!text-zinc-600 dark:!text-zinc-400">
-					Cada fila corresponde a un cupón hijo asignado a un usuario.
-				</Text>
-
-				<div className="overflow-x-auto">
+				<CouponSectionCard
+					title="Beneficiarios y uso"
+					description="Cada fila corresponde a un cupón hijo asignado a un usuario o pendiente de registro."
+				>
+				<div className="overflow-x-auto -mx-4 sm:-mx-6">
+					<div className="min-w-full px-4 sm:px-6">
 					<Table>
 						<TableHead>
 							<TableRow>
 								<TableHeader>Usuario</TableHeader>
 								<TableHeader>Correo</TableHeader>
 								<TableHeader>Cliente</TableHeader>
-								<TableHeader>Estado</TableHeader>
+								<TableHeader>Uso del cupón</TableHeader>
 								<TableHeader>Asignado</TableHeader>
 								<TableHeader>Usado</TableHeader>
 								<TableHeader>Compra</TableHeader>
+								<TableHeader>Reverso</TableHeader>
 								<TableHeader />
 							</TableRow>
 						</TableHead>
 						<TableBody>
 							{beneficiaryRows.length === 0 ? (
 								<TableRow>
-									<TableCell colSpan={8} className="text-zinc-500 dark:text-zinc-400">
-										Aún no hay beneficiarios.
+									<TableCell colSpan={9} className="!p-0">
+										<CouponEmptyState
+											icon={UsersIcon}
+											title="Sin beneficiarios"
+											description="Agrega beneficiarios manualmente o desde un archivo CSV."
+											action={
+												<Button
+													type="button"
+													onClick={openAssignModal}
+													disabled={!canAssignInPlace}
+												>
+													Agregar beneficiario
+												</Button>
+											}
+										/>
 									</TableCell>
 								</TableRow>
 							) : (
-								beneficiaryRows.map((row, idx) => (
-									<TableRow key={`${row.coupon_id}-${row.assignment_id ?? idx}`}>
+								beneficiaryRows.map((row, idx) => {
+									const usageBadge = couponUsageStatusBadge(row);
+									const actions = row.admin_actions ?? {};
+									return (
+										<TableRow key={`${row.coupon_id}-${row.assignment_id ?? idx}`}>
 										<TableCell className="text-zinc-900 dark:text-zinc-100">
-											{row.user?.full_name?.trim() || "—"}
+											{row.is_pending_user
+												? row.pending_name || row.pending_email || "—"
+												: row.user?.full_name?.trim() || "—"}
 										</TableCell>
 										<TableCell className="max-w-[12rem] break-all text-sm text-zinc-800 dark:text-zinc-200">
-											{row.user?.email || "—"}
+											{row.is_pending_user
+												? row.pending_email
+												: row.user?.email || "—"}
 										</TableCell>
 										<TableCell>
 											{row.customer_admin_url ? (
@@ -1082,10 +1339,50 @@ export default function CouponsShow({
 											)}
 										</TableCell>
 										<TableCell>
-											{row.used_at ? <Badge color="blue">Usado</Badge> : <Badge color="amber">Pendiente</Badge>}
+											<div className="flex flex-col gap-1">
+												<CouponBeneficiaryStatusBadge row={row} />
+												<Badge color={usageBadge.color}>{usageBadge.label}</Badge>
+												{row.is_pending_user && (
+													<span className="text-xs text-zinc-600 dark:text-zinc-400">
+														{row.invitation_sent_at
+															? `Invitación enviada: ${formatShortDateTime(row.invitation_sent_at)}${
+																	row.invitation_count > 1
+																		? ` (${row.invitation_count} envíos)`
+																		: ""
+																}`
+															: "Invitación: no enviada"}
+													</span>
+												)}
+												{row.validity_status && row.validity_status !== "sin_vigencia" && (
+													<span className="text-xs text-zinc-600 dark:text-zinc-400">
+														{{
+															programado: "Programado",
+															vigente: row.expires_at
+																? `Vigente hasta ${formatShortDateTime(row.expires_at)}`
+																: "Vigente",
+															vencido: "Vencido",
+														}[row.validity_status] ?? row.validity_status}
+													</span>
+												)}
+												{row.formatted_min_purchase && (
+													<span className="text-xs text-zinc-600 dark:text-zinc-400">
+														Mín. {row.formatted_min_purchase}
+													</span>
+												)}
+												{row.transaction?.amount_used_cents > 0 && (
+													<span className="text-xs text-zinc-600 dark:text-zinc-400">
+														{formatMxFromCents(row.transaction.amount_used_cents)}
+													</span>
+												)}
+											</div>
 										</TableCell>
 										<TableCell className="text-xs text-zinc-600 dark:text-zinc-400">
 											{formatShortDateTime(row.assigned_at)}
+											{row.claimed_at && (
+												<div className="text-zinc-500 dark:text-zinc-500">
+													Reclamado: {formatShortDateTime(row.claimed_at)}
+												</div>
+											)}
 										</TableCell>
 										<TableCell className="text-xs text-zinc-600 dark:text-zinc-400">
 											{formatShortDateTime(row.used_at)}
@@ -1099,29 +1396,93 @@ export default function CouponsShow({
 												<span className="text-zinc-500 dark:text-zinc-400">—</span>
 											)}
 										</TableCell>
+										<TableCell className="max-w-[14rem] text-xs text-zinc-700 dark:text-zinc-300">
+											{row.transaction?.is_reversed ? (
+												<div className="space-y-1">
+													<div>{formatShortDateTime(row.transaction.reversed_at)}</div>
+													<div>{reversalReasonLabel(row.transaction.reversal_reason)}</div>
+													{row.transaction.reversed_by_user && (
+														<div className="break-all text-zinc-500 dark:text-zinc-400">
+															{row.transaction.reversed_by_user.full_name ||
+																row.transaction.reversed_by_user.email}
+														</div>
+													)}
+												</div>
+											) : (
+												<span className="text-zinc-500 dark:text-zinc-400">—</span>
+											)}
+										</TableCell>
 										<TableCell className="text-right">
-											{!row.used_at && row.assignment_id ? (
-												<Button
-													plain
-													className="text-red-600 dark:text-red-400"
-													onClick={() =>
-														setRevokeTarget({
-															couponId: row.coupon_id,
-															assignmentId: row.assignment_id,
-															email: row.user?.email,
-														})
-													}
-												>
-													Quitar
-												</Button>
-											) : null}
+											<div className="flex flex-col items-end gap-1">
+												{actions.can_cancel_pending && row.beneficiary_id ? (
+													<Button
+														plain
+														className="text-red-600 dark:text-red-400"
+														disabled={cancellingPending}
+														onClick={() =>
+															setCancelTarget({
+																beneficiaryId: row.beneficiary_id,
+																email: row.pending_email,
+															})
+														}
+													>
+														Cancelar pendiente
+													</Button>
+												) : null}
+												{actions.can_resend_invitation && row.beneficiary_id ? (
+													<Button
+														plain
+														disabled={
+															resendInvitationProcessing &&
+															resendInvitationBeneficiaryId === row.beneficiary_id
+														}
+														onClick={() =>
+															resendBeneficiaryInvitation(row.beneficiary_id)
+														}
+													>
+														{resendInvitationProcessing &&
+														resendInvitationBeneficiaryId === row.beneficiary_id
+															? "Enviando…"
+															: "Reenviar invitación"}
+													</Button>
+												) : null}
+												{actions.can_revoke_credit && row.assignment_id ? (
+													<Button
+														plain
+														className="text-red-600 dark:text-red-400"
+														onClick={() =>
+															setRevokeTarget({
+																couponId: row.coupon_id,
+																assignmentId: row.assignment_id,
+																email: row.user?.email,
+																requiresStrongConfirmation:
+																	actions.requires_strong_confirmation,
+															})
+														}
+													>
+														Revocar crédito
+													</Button>
+												) : null}
+												{actions.blocked_reason === "used" ? (
+													<span
+														className="max-w-[12rem] text-right text-xs text-zinc-600 dark:text-zinc-400"
+														title={actions.blocked_message ?? undefined}
+													>
+														Crédito utilizado
+													</span>
+												) : null}
+											</div>
 										</TableCell>
 									</TableRow>
-								))
+									);
+								})
 							)}
 						</TableBody>
 					</Table>
 				</div>
+			</div>
+				</CouponSectionCard>
+
 			</div>
 
 			<Modal
@@ -1228,9 +1589,14 @@ export default function CouponsShow({
 								</p>
 								<div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
 									<Button
-										href={route("admin.coupons.assign.bulk-template")}
+										type="button"
 										outline
 										className="text-sm"
+										onClick={() => {
+											window.location.assign(
+												route("admin.coupons.assign.bulk-template"),
+											);
+										}}
 									>
 										Descargar plantilla CSV de ejemplo
 									</Button>
@@ -1461,14 +1827,48 @@ export default function CouponsShow({
 			<DeleteConfirmationModal
 				isOpen={!!revokeTarget}
 				close={() => setRevokeTarget(null)}
-				title="Quitar asignación"
+				title="Revocar crédito"
 				description={
-					revokeTarget
-						? `Se eliminará la asignación para ${revokeTarget.email ?? "el usuario"}.`
-						: ""
+					revokeTarget?.requiresStrongConfirmation
+						? "Este crédito fue restaurado tras cancelar un pedido. Si lo revocas, el beneficiario dejará de verlo definitivamente."
+						: "¿Revocar este crédito? El beneficiario dejará de verlo y no podrá usarlo en checkout. Esta acción no se puede deshacer automáticamente."
 				}
 				processing={revoking}
 				destroy={confirmRevoke}
+				confirmLabel="Revocar crédito"
+			/>
+
+			<DeleteConfirmationModal
+				isOpen={!!cancelTarget}
+				close={() => setCancelTarget(null)}
+				title="¿Cancelar beneficiario pendiente?"
+				description="Este correo ya no recibirá invitaciones y no se vinculará si crea una cuenta después."
+				processing={cancellingPending}
+				destroy={confirmCancelPending}
+				confirmLabel="Cancelar pendiente"
+			/>
+
+			<DeleteConfirmationModal
+				isOpen={deactivateOpen}
+				close={() => setDeactivateOpen(false)}
+				title="Desactivar campaña"
+				description={
+					campaignAdminActions.deactivate_message ??
+					"La campaña se desactivará y ya no permitirá nuevas asignaciones. Los créditos ya asignados conservarán su estado actual."
+				}
+				processing={deactivating}
+				destroy={confirmDeactivate}
+				confirmLabel="Desactivar"
+			/>
+
+			<DeleteConfirmationModal
+				isOpen={deleteCampaignOpen}
+				close={() => setDeleteCampaignOpen(false)}
+				title="Eliminar campaña"
+				description="Se eliminará permanentemente esta campaña sin actividad. Esta acción no se puede deshacer."
+				processing={deletingCampaign}
+				destroy={confirmDeleteCampaign}
+				confirmLabel="Eliminar"
 			/>
 		</AdminLayout>
 	);

@@ -14,6 +14,7 @@ use App\Notifications\FewDaysLeftToRequestInvoice;
 use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Services\CouponApplicationService;
+use App\Services\PromoCodeService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,7 @@ class FulfillLaboratoryCartOrderAction
         private CreateGDAQuotationAction $createGDAQuotationAction,
         private SyncMonitoringCartService $syncMonitoringCartService,
         private CouponApplicationService $couponApplicationService,
+        private PromoCodeService $promoCodeService,
         private SyncLaboratoryCheckoutDraftAction $syncLaboratoryCheckoutDraftAction,
     ) {
     }
@@ -43,6 +45,8 @@ class FulfillLaboratoryCartOrderAction
         Collection $laboratoryCartItems,
         string $gdaBrandValue,
         ?int $couponId = null,
+        ?string $promoValidationToken = null,
+        ?string $cartHash = null,
     ): LaboratoryPurchase {
         DB::beginTransaction();
 
@@ -93,7 +97,20 @@ class FulfillLaboratoryCartOrderAction
                 'pdf_base64' => $gdaQuotation['pdf_base64'] ?? null,
             ]);
 
-            if ($couponId !== null) {
+            if ($promoValidationToken !== null) {
+                $resolvedCartHash = $cartHash ?? $this->promoCodeService->buildLaboratoryCartHash(
+                    $laboratoryCartItems,
+                    (int) $laboratoryPurchase->total_cents
+                );
+
+                $this->promoCodeService->confirmRedemption(
+                    $customer->user,
+                    $promoValidationToken,
+                    $laboratoryPurchase,
+                    (int) $laboratoryPurchase->total_cents,
+                    $resolvedCartHash,
+                );
+            } elseif ($couponId !== null) {
                 $this->couponApplicationService->applyForLaboratoryPurchase(
                     $customer->user,
                     $laboratoryPurchase,

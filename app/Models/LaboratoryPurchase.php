@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CouponPurchaseType;
 use App\Enums\Gender;
 use App\Enums\LaboratoryBrand;
 use Carbon\Carbon;
@@ -34,6 +35,7 @@ class LaboratoryPurchase extends Model
         'formatted_sample_collection_at',
         'formatted_results_at',
         'formatted_coupon_discount',
+        'formatted_net_total',
     ];
 
     protected function casts(): array
@@ -45,6 +47,9 @@ class LaboratoryPurchase extends Model
             'phone' => RawPhoneNumberCast::class.':country_field',
             'temporarily_hide_gda_order_id' => 'boolean',
             'gda_consecutivo' => 'integer',
+            'ready_at' => 'datetime',
+            'results_downloaded_at' => 'datetime',
+            'completed_at' => 'datetime',
         ];
     }
 
@@ -205,6 +210,40 @@ class LaboratoryPurchase extends Model
     }
 
     /**
+     * Resumen del reverso de saldo a favor, si el pedido tuvo cupón restaurado al cancelarse.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getCouponReversalSummary(): ?array
+    {
+        $transaction = CouponTransaction::query()
+            ->where('purchase_type', CouponPurchaseType::Lab)
+            ->where('purchase_id', $this->id)
+            ->whereNotNull('reversed_at')
+            ->with('reversedByUser:id,name,paternal_lastname,maternal_lastname,email')
+            ->first();
+
+        if ($transaction === null) {
+            return null;
+        }
+
+        $amountCents = (int) $transaction->amount_used_cents;
+
+        return [
+            'coupon_transaction_id' => $transaction->id,
+            'coupon_id' => $transaction->coupon_id,
+            'amount_restored_cents' => $amountCents,
+            'formatted_amount_restored' => formattedCentsPrice($amountCents),
+            'reversed_at' => $transaction->reversed_at?->toIso8601String(),
+            'formatted_reversed_at' => $transaction->reversed_at
+                ? localizedDate($transaction->reversed_at)->isoFormat('D MMM Y h:mm a')
+                : null,
+            'reversal_reason' => $transaction->reversal_reason,
+            'reversed_by_user' => $transaction->reversedByUser,
+        ];
+    }
+
+    /**
      * Completa feature_list en ítems sin JSON persistido, usando el catálogo (mismo gda_id y marca).
      */
     public function hydrateLaboratoryPurchaseItemsFeatureLists(): void
@@ -288,6 +327,51 @@ class LaboratoryPurchase extends Model
             get: fn() => $this->coupon_discount_cents
                 ? formattedCentsPrice($this->coupon_discount_cents)
                 : null,
+        );
+    }
+
+    /**
+     * Total cobrado al cliente (bruto de ítems menos crédito a favor aplicado).
+     */
+    public function netTotalCents(): int
+    {
+        return max(0, (int) $this->total_cents - (int) ($this->coupon_discount_cents ?? 0));
+    }
+
+    /**
+     * Suma de price_cents de ítems (puede coincidir con total_cents si no hay ajustes).
+     */
+    public function itemsSubtotalCents(): int
+    {
+        if ($this->relationLoaded('laboratoryPurchaseItems')) {
+            return (int) $this->laboratoryPurchaseItems->sum(fn ($item) => (int) $item->price_cents);
+        }
+
+        return (int) $this->laboratoryPurchaseItems()->sum('price_cents');
+    }
+
+    /**
+     * Descuento de catálogo (diferencia entre suma de ítems y total bruto del pedido).
+     */
+    public function catalogDiscountCents(): int
+    {
+        return max(0, $this->itemsSubtotalCents() - (int) $this->total_cents);
+    }
+
+    public function appliedCouponDiscountCents(): int
+    {
+        return max(0, (int) ($this->coupon_discount_cents ?? 0));
+    }
+
+    public function hasAppliedCouponCredit(): bool
+    {
+        return $this->appliedCouponDiscountCents() > 0;
+    }
+
+    protected function formattedNetTotal(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => formattedCentsPrice($this->netTotalCents()),
         );
     }
 
@@ -451,6 +535,87 @@ class LaboratoryPurchase extends Model
     public function latestResultsNotification()
     {
         return $this->resultsNotification()->first();
+    }
+
+    /**
+     * Última notificación de resultados buscando por compra, folio o consecutivo GDA.
+     */
+    public function findLatestResultsNotification(): ?LaboratoryNotification
+    {
+        return LaboratoryNotification::query()
+            ->where(function ($query) {
+                $query->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
+            })
+            ->where(function ($query) {
+                $query->where('laboratory_purchase_id', $this->id);
+
+                if ($this->gda_order_id) {
+                    $query->orWhere('gda_order_id', $this->gda_order_id);
+                }
+
+                if ($this->gda_consecutivo) {
+                    $query->orWhere('gda_consecutivo', $this->gda_consecutivo);
+                }
+            })
+            ->orderByDesc('results_received_at')
+            ->orderByDesc('created_at')
+            ->first();
+    }
+
+    /**
+     * Fecha formateada de disponibilidad de resultados para el panel del paciente.
+     */
+    public function formatLatestResultsAt(): ?string
+    {
+        $format = function ($date): ?string {
+            if ($date === null) {
+                return null;
+            }
+
+            try {
+                $parsed = $date instanceof Carbon ? $date : Carbon::parse($date);
+
+                return localizedDate($parsed)->isoFormat('D MMM Y h:mm a');
+            } catch (\Throwable) {
+                return null;
+            }
+        };
+
+        if (! empty($this->results)) {
+            $fromStorage = $this->formatted_results_uploaded_at;
+            if ($fromStorage) {
+                return $fromStorage;
+            }
+        }
+
+        $notification = $this->findLatestResultsNotification() ?? $this->latestResultsNotification();
+
+        if ($notification?->results_received_at) {
+            return $format($notification->results_received_at);
+        }
+
+        $receivedAt = LaboratoryNotification::latestResultsReceivedAtForOrder(
+            $this->id,
+            $this->gda_order_id,
+            $this->gda_consecutivo
+        );
+
+        if ($receivedAt) {
+            return $format($receivedAt);
+        }
+
+        if ($notification?->created_at) {
+            return $format($notification->created_at);
+        }
+
+        foreach (['results_downloaded_at', 'ready_at', 'completed_at'] as $column) {
+            if ($this->{$column}) {
+                return $format($this->{$column});
+            }
+        }
+
+        return null;
     }
 
     public function scopeWithNotificationStatus($query)

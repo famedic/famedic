@@ -6,7 +6,9 @@ import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Textarea } from "@/Components/Catalyst/textarea";
 import { Switch, SwitchField } from "@/Components/Catalyst/switch";
+import CouponEligibilityControls from "@/Components/Admin/Coupon/CouponEligibilityControls";
 import { useForm } from "@inertiajs/react";
+import { appendCouponEligibilityToPayload } from "@/lib/couponEligibilityUi";
 
 export default function CouponsCreate({ settings }) {
 	const requireAuth = !!settings?.require_authorization;
@@ -16,6 +18,11 @@ export default function CouponsCreate({ settings }) {
 		code: "",
 		description: "",
 		max_beneficiaries: "",
+		validity_mode: "open",
+		valid_from: "",
+		expires_at: "",
+		minimum_purchase_mode: "none",
+		min_purchase_mxn: "",
 		is_active: true,
 	});
 
@@ -24,13 +31,16 @@ export default function CouponsCreate({ settings }) {
 			parseFloat(String(d.amount_mxn).replace(",", "")) * 100,
 		);
 		const maxB = String(d.max_beneficiaries ?? "").trim();
-		return {
-			amount_cents: cents,
-			code: d.code || null,
-			description: d.description || null,
-			max_beneficiaries: maxB === "" ? null : parseInt(maxB, 10),
-			is_active: d.is_active,
-		};
+		return appendCouponEligibilityToPayload(
+			{
+				amount_cents: cents,
+				code: d.code || null,
+				description: d.description || null,
+				max_beneficiaries: maxB === "" ? null : parseInt(maxB, 10),
+				is_active: d.is_active,
+			},
+			d,
+		);
 	});
 
 	const submit = (e) => {
@@ -91,6 +101,12 @@ export default function CouponsCreate({ settings }) {
 						onChange={(e) => setData("code", e.target.value)}
 					/>
 				</Field>
+				<CouponEligibilityControls
+					data={data}
+					setData={setData}
+					errors={errors}
+					embedded
+				/>
 				{!requireAuth && (
 					<SwitchField>
 						<Label>Activo al crear</Label>

@@ -18,6 +18,7 @@ class SyncLaboratoryCheckoutDraftAction
      *     address_id?: int|null,
      *     payment_method?: string|null,
      *     coupon_id?: int|null,
+     *     promo_validation_token?: string|null,
      * }  $payload
      */
     public function __invoke(
@@ -49,6 +50,15 @@ class SyncLaboratoryCheckoutDraftAction
         if ($payload['step'] === 'payment') {
             $attributes['payment_method'] = $payload['payment_method'] ?? null;
             $attributes['coupon_id'] = $payload['coupon_id'] ?? null;
+            if (array_key_exists('promo_validation_token', $payload)) {
+                $attributes['promo_validation_token'] = $payload['promo_validation_token'];
+                if ($payload['promo_validation_token'] !== null) {
+                    $attributes['coupon_id'] = null;
+                }
+            }
+            if (($payload['coupon_id'] ?? null) !== null) {
+                $attributes['promo_validation_token'] = null;
+            }
         }
 
         $draft = LaboratoryCheckoutDraft::query()->updateOrCreate(

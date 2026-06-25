@@ -14,6 +14,9 @@ class ExcludePasswordConfirm
             'tax-profiles.extract-data',
             'test.service',
             'debug.extract-data',
+            'admin.coupons.assign.creation-otp.send',
+            'admin.coupons.assign.creation-otp.resend',
+            'admin.coupons.assign.creation-otp.verify',
         ];
         
         // Verificar si la ruta actual está excluida

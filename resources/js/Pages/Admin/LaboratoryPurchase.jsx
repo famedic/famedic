@@ -17,7 +17,7 @@ import {
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
 import { Badge } from "@/Components/Catalyst/badge";
-import { Text } from "@/Components/Catalyst/text";
+import { Text, Strong } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
 
 import {
@@ -42,6 +42,8 @@ import DevAssistanceButton from "@/Components/DevAssistance/DevAssistanceButton"
 import DevAssistanceDropdown from "@/Components/DevAssistance/DevAssistanceDropdown";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import PaymentDetails from "@/Components/PaymentDetails";
+import CouponReversalNotice from "@/Components/Admin/CouponReversalNotice";
+import { buildLaboratoryPurchaseTotals } from "@/lib/laboratoryPurchaseTotals";
 
 function normalizePackageFeatureLabels(raw) {
 	if (raw == null) return [];
@@ -72,6 +74,7 @@ function normalizePackageFeatureLabels(raw) {
 
 export default function LaboratoryPurchase({
 	laboratoryPurchase,
+	couponReversal = null,
 	showDeleteButton,
 	canResendConfirmationEmail,
 	hasSampleCollected,
@@ -107,6 +110,8 @@ export default function LaboratoryPurchase({
 					purchase={laboratoryPurchase}
 				/>
 			)}
+
+			<CouponReversalNotice couponReversal={couponReversal} />
 
 		</AdminLayout>
 	);
@@ -518,10 +523,34 @@ function Order({ laboratoryPurchase }) {
 
 				</DescriptionDetails>
 
-				<DescriptionTerm>Total</DescriptionTerm>
+				<DescriptionTerm>Subtotal</DescriptionTerm>
 
 				<DescriptionDetails>
-					{laboratoryPurchase.formatted_total}
+					{buildLaboratoryPurchaseTotals(laboratoryPurchase).subtotal}
+				</DescriptionDetails>
+
+				{laboratoryPurchase.coupon_discount_cents > 0 && (
+					<>
+						<DescriptionTerm>Crédito a favor</DescriptionTerm>
+						<DescriptionDetails>
+							−{laboratoryPurchase.formatted_coupon_discount}
+						</DescriptionDetails>
+					</>
+				)}
+
+				<DescriptionTerm>Total pagado</DescriptionTerm>
+
+				<DescriptionDetails>
+					<Strong>
+						{laboratoryPurchase.formatted_net_total ??
+							buildLaboratoryPurchaseTotals(laboratoryPurchase).netTotal}
+					</Strong>
+					{laboratoryPurchase.coupon_discount_cents > 0 && (
+						<Text className="mt-2 block text-sm text-violet-800 dark:text-violet-200">
+							Se aplicó un crédito a favor de{" "}
+							{laboratoryPurchase.formatted_coupon_discount}.
+						</Text>
+					)}
 				</DescriptionDetails>
 
 			</DescriptionList>

@@ -155,6 +155,8 @@ class FinalizeLaboratoryPayPalPaymentAction
             $cartItems,
             $gdaBrandValue,
             isset($details['coupon_id']) ? (int) $details['coupon_id'] : null,
+            $details['promo_validation_token'] ?? null,
+            $details['cart_hash'] ?? null,
         );
     }
 

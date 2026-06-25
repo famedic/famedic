@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Laboratories\OrderAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\CouponApplicationException;
+use App\Exceptions\PromoCodeException;
 use App\Exceptions\OdessaInsufficientFundsException;
 use App\Exceptions\EfevooPaymentException;
 use App\Http\Requests\Laboratories\LaboratoryPurchases\StoreLaboratoryPurchaseRequest;
@@ -31,6 +32,9 @@ class LaboratoryPurchaseController extends Controller
                 laboratoryBrand: $laboratoryBrand,
                 totalCents: (int) $request->total,
                 couponId: $request->filled('coupon_id') ? (int) $request->input('coupon_id') : null,
+                promoValidationToken: $request->filled('promo_validation_token')
+                    ? (string) $request->input('promo_validation_token')
+                    : null,
             );
         } catch (EfevooPaymentException $e) {
             return redirect()->back()
@@ -38,6 +42,9 @@ class LaboratoryPurchaseController extends Controller
         } catch (CouponApplicationException $e) {
             return redirect()->back()
                 ->withErrors(['coupon_id' => $e->getMessage()]);
+        } catch (PromoCodeException $e) {
+            return redirect()->back()
+                ->withErrors(['promo_validation_token' => $e->getMessage()]);
         } catch (OdessaInsufficientFundsException $e) {
             return redirect()->back()
                 ->withErrors(['payment_method' => 'No cuentas con suficiente Saldo a la Vista en tu caja de ahorro para realizar el pago.']);
@@ -300,11 +307,15 @@ class LaboratoryPurchaseController extends Controller
                 ? localizedDate($latestSampleCollection->created_at)->isoFormat('D MMM Y h:mm a')
                 : null;
 
-            $latestResultsAt = $latestResultsNotification?->created_at
-                ? localizedDate($latestResultsNotification->created_at)->isoFormat('D MMM Y h:mm a')
-                : null;
-
             $hasResultsPdfCached = (bool) $latestResultsNotification?->hasResults();
+        }
+
+        if ($hasManualResults) {
+            $hasResultsAvailable = true;
+        }
+
+        if ($hasManualResults || $hasResultsAvailable) {
+            $latestResultsAt = $laboratoryPurchase->formatLatestResultsAt();
         }
 
         $isNewResult = ! $hasManualResults && LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(

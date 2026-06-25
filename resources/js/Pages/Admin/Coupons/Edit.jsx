@@ -5,27 +5,55 @@ import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Textarea } from "@/Components/Catalyst/textarea";
 import { Switch, SwitchField } from "@/Components/Catalyst/switch";
+import CouponEligibilityControls from "@/Components/Admin/Coupon/CouponEligibilityControls";
 import { useForm } from "@inertiajs/react";
 import { Badge } from "@/Components/Catalyst/badge";
+import { Select } from "@/Components/Catalyst/select";
+import { CREDIT_TYPE_OPTIONS } from "@/lib/couponAdminUi";
+import {
+	appendCouponEligibilityToPayload,
+	inferMinimumPurchaseMode,
+	inferValidityMode,
+	toDatetimeLocalValue,
+} from "@/lib/couponEligibilityUi";
 
 export default function CouponsEdit({ coupon }) {
+	const initialValidFrom = toDatetimeLocalValue(coupon.valid_from);
+	const initialExpiresAt = toDatetimeLocalValue(coupon.expires_at);
+	const initialMinPurchaseMxn =
+		coupon.min_purchase_cents != null
+			? String(coupon.min_purchase_cents / 100)
+			: "";
+
 	const { data, setData, put, processing, errors, transform } = useForm({
+		type: coupon.type ?? "balance",
 		code: coupon.code || "",
 		description: coupon.description || "",
 		max_beneficiaries:
 			coupon.max_beneficiaries != null ? String(coupon.max_beneficiaries) : "",
+		validity_mode: inferValidityMode(initialValidFrom, initialExpiresAt),
+		valid_from: initialValidFrom,
+		expires_at: initialExpiresAt,
+		minimum_purchase_mode: inferMinimumPurchaseMode(initialMinPurchaseMxn),
+		min_purchase_mxn: initialMinPurchaseMxn,
 		is_active: coupon.is_active,
 	});
 
-	transform((d) => ({
-		code: d.code || null,
-		description: d.description || null,
-		max_beneficiaries:
-			String(d.max_beneficiaries ?? "").trim() === ""
-				? null
-				: parseInt(String(d.max_beneficiaries), 10),
-		is_active: d.is_active,
-	}));
+	transform((d) =>
+		appendCouponEligibilityToPayload(
+			{
+				type: d.type,
+				code: d.code || null,
+				description: d.description || null,
+				max_beneficiaries:
+					String(d.max_beneficiaries ?? "").trim() === ""
+						? null
+						: parseInt(String(d.max_beneficiaries), 10),
+				is_active: d.is_active,
+			},
+			d,
+		),
+	);
 
 	const submit = (e) => {
 		e.preventDefault();
@@ -61,6 +89,24 @@ export default function CouponsEdit({ coupon }) {
 			</p>
 			<form onSubmit={submit} className="mt-6 max-w-md space-y-6">
 				<Field>
+					<Label>Tipo de crédito</Label>
+					<Select
+						value={data.type ?? "balance"}
+						onChange={(e) => setData("type", e.target.value)}
+					>
+						{CREDIT_TYPE_OPTIONS.map((option) => (
+							<option key={option.value} value={option.value}>
+								{option.label}
+							</option>
+						))}
+					</Select>
+					{errors.type && (
+						<p className="mt-1 text-sm text-red-600 dark:text-red-400">
+							{errors.type}
+						</p>
+					)}
+				</Field>
+				<Field>
 					<Label>Descripción</Label>
 					<Textarea
 						rows={3}
@@ -88,6 +134,12 @@ export default function CouponsEdit({ coupon }) {
 						onChange={(e) => setData("code", e.target.value)}
 					/>
 				</Field>
+				<CouponEligibilityControls
+					data={data}
+					setData={setData}
+					errors={errors}
+					embedded
+				/>
 				<SwitchField>
 					<Label>Activo</Label>
 					<Switch

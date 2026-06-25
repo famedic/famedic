@@ -46,16 +46,22 @@ class LaboratoryCheckoutController extends Controller
         );
 
         $customer = $request->user()->customer;
-        $balanceCents = $couponService->getUserBalance($userId);
         try {
-            $availableCoupons = $couponService->getAvailableCoupons($userId);
+            $balancePresentation = $couponService->buildCheckoutCreditPresentation($userId, (int) $totals['total']);
         } catch (\Throwable $e) {
-            Log::error('Checkout: getAvailableCoupons failed', [
+            Log::error('Checkout: buildCheckoutCreditPresentation failed', [
                 'user_id' => $userId,
                 'message' => $e->getMessage(),
             ]);
-            $availableCoupons = collect();
+            $balancePresentation = [
+                'balanceCouponsCents' => 0,
+                'formattedBalanceCoupons' => null,
+                'availableBalanceCoupons' => [],
+                'coupons' => [],
+                'cartTotalCents' => (int) $totals['total'],
+            ];
         }
+        $availableCoupons = collect($balancePresentation['availableBalanceCoupons']);
         $mockTokens = MockEfevooPaymentSupport::isMockMode()
             ? MockEfevooPaymentSupport::ensureTestTokensForCustomer($customer)
             : [];
@@ -126,6 +132,13 @@ class LaboratoryCheckoutController extends Controller
             Log::error('Checkout: laboratory_checkout_drafts table is missing');
         }
 
+        if (is_array($savedCheckout) && ! empty($savedCheckout['coupon_id'])) {
+            $availableCouponIds = $availableCoupons->pluck('id');
+            if (! $availableCouponIds->contains((int) $savedCheckout['coupon_id'])) {
+                $savedCheckout['coupon_id'] = null;
+            }
+        }
+
         if ($requiresAppointment && ! $laboratoryAppointment && ! $pendingLaboratoryAppointment) {
             $pendingLaboratoryAppointment = $this->ensurePendingLaboratoryAppointment(
                 $customer,
@@ -152,9 +165,8 @@ class LaboratoryCheckoutController extends Controller
             'pendingLaboratoryAppointment' => $this->appointmentForCheckout($pendingLaboratoryAppointment),
             'callbackPreferenceSavedAtFormatted' => $callbackPreferenceSavedAtFormatted,
             ...$totals,
-            'balanceCouponsCents' => $balanceCents,
-            'formattedBalanceCoupons' => $balanceCents > 0 ? formattedCentsPrice($balanceCents) : null,
-            'availableBalanceCoupons' => $availableCoupons,
+            ...$balancePresentation,
+            'balanceCreditPresentation' => $balancePresentation,
             'hasPayPal' => (bool) config('services.paypal.client_id'),
             'paypalClientId' => config('services.paypal.client_id'),
             'contacts' => $request->user()->customer->contacts,

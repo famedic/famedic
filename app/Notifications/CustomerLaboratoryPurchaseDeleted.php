@@ -12,51 +12,39 @@ class CustomerLaboratoryPurchaseDeleted extends Notification
 {
     use Queueable;
 
-    /**
-     * Create a new notification instance.
-     */
     public function __construct(
-        private LaboratoryPurchase $laboratoryPurchase
-    ) {
-        //
-    }
+        private LaboratoryPurchase $laboratoryPurchase,
+        private int $couponBalanceRestoredCents = 0,
+    ) {}
 
-    /**
-     * Get the notification's delivery channels.
-     *
-     * @return array<int, string>
-     */
     public function via(object $notifiable): array
     {
         return ['mail'];
     }
 
-    /**
-     * Get the mail representation of the notification.
-     */
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
+        $mail = (new MailMessage)
             ->subject('Cancelación de tu orden de laboratorio - ' . $this->laboratoryPurchase->gda_order_id)
             ->greeting('¡Hola!')
             ->line('Te informamos que tu orden de laboratorio ha sido cancelada. Los detalles de la orden cancelada son:')
             ->line('Folio: **' . $this->laboratoryPurchase->gda_order_id . '**')
             ->line('Paciente: **' . $this->laboratoryPurchase->full_name . '**')
-            ->line('Total: **' . $this->laboratoryPurchase->formatted_total . '**')
-            ->line('Hemos iniciado el proceso de reembolso por el monto total de tu compra. El reembolso se verá reflejado en tu cuenta en los próximos días hábiles.')
+            ->line('Total pagado: **' . $this->laboratoryPurchase->formatted_net_total . '**')
+            ->line('Hemos iniciado el proceso de reembolso por el monto total de tu compra. El reembolso se verá reflejado en tu cuenta en los próximos días hábiles.');
+
+        if ($this->couponBalanceRestoredCents > 0) {
+            $mail->line('Tu saldo a favor aplicado a este pedido fue restaurado.')
+                ->line('Saldo restaurado: **' . formattedCentsPrice($this->couponBalanceRestoredCents) . '**');
+        }
+
+        return $mail
             ->line('Si tienes alguna pregunta o necesitas más información, no dudes en contactar a nuestro equipo de atención al cliente.')
             ->line('¡Gracias por confiar en Famedic para tus necesidades de salud!');
     }
 
-    /**
-     * Get the array representation of the notification.
-     *
-     * @return array<string, mixed>
-     */
     public function toArray(object $notifiable): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 }

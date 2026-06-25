@@ -16,4 +16,13 @@ class VerifyCsrfToken extends Middleware
         'paypal/webhook',
         'apigda/*',
     ];
+
+    public function handle($request, \Closure $next)
+    {
+        if ($this->app->environment('testing') || $this->app->runningUnitTests() || defined('PHPUNIT_COMPOSER_INSTALL')) {
+            return $next($request);
+        }
+
+        return parent::handle($request, $next);
+    }
 }

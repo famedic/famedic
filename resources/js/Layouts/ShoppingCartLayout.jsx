@@ -121,6 +121,7 @@ export default function ShoppingCartLayout({
 	onCheckoutClick, // Callback para manejar checkout click
 	currency = 'MXN', // Moneda por defecto
 	productDataList = [], // Lista de datos de productos para GA4
+	summaryExtra = null,
 	// =============================================
 }) {
 	
@@ -314,6 +315,7 @@ export default function ShoppingCartLayout({
 							itemsCount={items.length}
 							totalValue={calculateTotalValue()}
 							currency={currency}
+							summaryExtra={summaryExtra}
 						/>
 					)}
 				</div>
@@ -539,7 +541,8 @@ function CartSummary({
 	onCheckoutClick,
 	itemsCount = 0,
 	totalValue = 0,
-	currency = 'MXN'
+	currency = 'MXN',
+	summaryExtra = null,
 	// ====================================
 }) {
 	
@@ -579,6 +582,8 @@ function CartSummary({
 				</div>
 			)}
 
+			{summaryExtra}
+
 			<Heading>Resumen</Heading>
 
 			{/* Debug info solo en desarrollo */}
@@ -603,7 +608,7 @@ function CartSummary({
 			<Button
 				href={checkoutUrl}
 				onClick={handleCheckout}
-				className="w-full animate-pulse !py-3 hover:animate-none"
+				className="w-full !py-3"
 			>
 				<ChevronDoubleRightIcon />
 				Continuar

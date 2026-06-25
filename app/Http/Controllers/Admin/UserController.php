@@ -15,6 +15,7 @@ use App\Models\EfevooToken;
 use App\Models\EfevooTransaction;
 use App\Models\LaboratoryNotification;
 use App\Models\User;
+use App\Services\CouponBeneficiaryService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -206,12 +207,14 @@ class UserController extends Controller
         return back()->flashMessage('Usuario actualizado correctamente.');
     }
 
-    public function verifyEmail(User $user)
+    public function verifyEmail(User $user, CouponBeneficiaryService $beneficiaryService)
     {
         request()->user()->administrator->hasPermissionTo('users.manage') || abort(403);
 
         $user->email_verified_at = now();
         $user->save();
+
+        $beneficiaryService->linkPendingBeneficiariesForUser($user->fresh());
 
         return back()->flashMessage('Correo marcado como verificado.');
     }

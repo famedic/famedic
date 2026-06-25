@@ -2,7 +2,11 @@
 
 use App\Http\Controllers\Admin\AdministratorController;
 use App\Http\Controllers\Admin\CouponConceptController;
+use App\Http\Controllers\Admin\CouponBeneficiaryController;
+use App\Http\Controllers\Admin\CouponAuthorizationController;
 use App\Http\Controllers\Admin\CouponController;
+use App\Http\Controllers\Admin\CouponCreationOtpController;
+use App\Http\Controllers\Admin\PromoCodeController;
 use App\Http\Controllers\Admin\CartController;
 use App\Http\Controllers\Admin\ConfigMonitorController;
 use App\Http\Controllers\Admin\ConfigMonitorMetadataController;
@@ -183,6 +187,14 @@ Route::prefix('admin')->middleware([
         Route::get('laboratory-notifications-monitor/{gdaOrderId}', [LaboratoryNotificationMonitorController::class, 'show'])
             ->name('laboratory-notifications-monitor.show');
 
+        Route::get('coupons/beneficiaries/export', [CouponBeneficiaryController::class, 'export'])->name('coupons.beneficiaries.export');
+        Route::get('coupons/beneficiaries', [CouponBeneficiaryController::class, 'index'])->name('coupons.beneficiaries.index');
+        Route::get('coupons/promo-codes', [PromoCodeController::class, 'index'])->name('coupons.promo-codes.index');
+        Route::get('coupons/promo-codes/create', [PromoCodeController::class, 'create'])->name('coupons.promo-codes.create');
+        Route::post('coupons/promo-codes', [PromoCodeController::class, 'store'])->name('coupons.promo-codes.store');
+        Route::post('coupons/promo-codes/check-code', [PromoCodeController::class, 'checkCode'])->name('coupons.promo-codes.check-code');
+        Route::get('coupons/promo-codes/{promoCode}', [PromoCodeController::class, 'show'])->name('coupons.promo-codes.show');
+        Route::post('coupons/promo-codes/{promoCode}/deactivate', [PromoCodeController::class, 'deactivate'])->name('coupons.promo-codes.deactivate');
         Route::get('coupons/export', [CouponController::class, 'export'])->name('coupons.export');
         Route::get('coupons/settings', [CouponController::class, 'settings'])->name('coupons.settings');
         Route::put('coupons/settings', [CouponController::class, 'updateSettings'])->name('coupons.settings.update');
@@ -191,6 +203,20 @@ Route::prefix('admin')->middleware([
         Route::get('coupons/assign/bulk-template', [CouponController::class, 'downloadBulkAssignTemplate'])->name('coupons.assign.bulk-template');
         Route::get('coupons/users/lookup', [CouponController::class, 'lookupAssignableUser'])->name('coupons.users.lookup');
         Route::post('coupons/assign/preview-bulk', [CouponController::class, 'previewBulkAssignEmails'])->name('coupons.assign.preview-bulk');
+        Route::post('coupons/{coupon}/beneficiaries/preview', [CouponController::class, 'previewBeneficiaries'])->name('coupons.beneficiaries.preview');
+        Route::post('coupons/{coupon}/beneficiaries/preview-file', [CouponController::class, 'previewBeneficiariesFile'])->name('coupons.beneficiaries.preview-file');
+        Route::post('coupons/{coupon}/beneficiaries/confirm', [CouponController::class, 'confirmBeneficiaries'])->name('coupons.beneficiaries.confirm');
+        Route::post('coupons/{coupon}/beneficiaries/{beneficiary}/resend-invitation', [CouponController::class, 'resendBeneficiaryInvitation'])->name('coupons.beneficiaries.resend-invitation');
+        Route::post('coupons/{coupon}/beneficiaries/{beneficiary}/cancel', [CouponController::class, 'cancelBeneficiary'])->name('coupons.beneficiaries.cancel');
+        Route::post('coupons/assign/creation-otp/send', [CouponCreationOtpController::class, 'send'])->name('coupons.assign.creation-otp.send');
+        Route::post('coupons/assign/creation-otp/resend', [CouponCreationOtpController::class, 'resend'])->name('coupons.assign.creation-otp.resend');
+        Route::post('coupons/assign/creation-otp/verify', [CouponCreationOtpController::class, 'verify'])->name('coupons.assign.creation-otp.verify');
+        Route::get('coupons/authorizations', [CouponAuthorizationController::class, 'index'])->name('coupons.authorizations.index');
+        Route::get('coupons/authorizations/{coupon}', [CouponAuthorizationController::class, 'show'])->name('coupons.authorizations.show');
+        Route::post('coupons/authorizations/{coupon}/approval-otp/send', [CouponAuthorizationController::class, 'sendApprovalOtp'])->name('coupons.authorizations.approval-otp.send');
+        Route::post('coupons/authorizations/{coupon}/approval-otp/verify', [CouponAuthorizationController::class, 'verifyApprovalOtp'])->name('coupons.authorizations.approval-otp.verify');
+        Route::post('coupons/authorizations/{coupon}/approve', [CouponAuthorizationController::class, 'approve'])->name('coupons.authorizations.approve');
+        Route::post('coupons/authorizations/{coupon}/reject', [CouponAuthorizationController::class, 'reject'])->name('coupons.authorizations.reject');
         Route::post('coupons/assign', [CouponController::class, 'assign'])->name('coupons.assign.store');
         Route::get('coupons/import', [CouponController::class, 'importForm'])->name('coupons.import');
         Route::post('coupons/import', [CouponController::class, 'import'])->name('coupons.import.store');
@@ -201,6 +227,7 @@ Route::prefix('admin')->middleware([
         Route::delete('coupons/concepts/{couponConcept}', [CouponConceptController::class, 'destroy'])->name('coupons.concepts.destroy');
         Route::post('coupons/{coupon}/authorize', [CouponController::class, 'authorizeCoupon'])->name('coupons.authorize');
         Route::post('coupons/{coupon}/resend-authorization', [CouponController::class, 'resendAuthorization'])->name('coupons.resend-authorization');
+        Route::post('coupons/{coupon}/deactivate', [CouponController::class, 'deactivate'])->name('coupons.deactivate');
         Route::delete('coupons/{coupon}/assignments/{couponUser}', [CouponController::class, 'destroyAssignment'])->name('coupons.assignments.destroy');
         Route::resource('coupons', CouponController::class);
         Route::get('simulators', [SimulatorController::class, 'index'])->name('simulators.index');
