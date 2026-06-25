@@ -41,7 +41,7 @@ export default function PaymentMethodStep({
     errors,
     clearErrors,
     description = "Selecciona el método de pago que deseas utilizar para tu pedido.",
-    paymentMethods,
+    paymentMethods = [],
     hasOdessaPay,
     hasPayPal = false,
     addCardReturnUrl,
@@ -239,6 +239,8 @@ function PaymentMethodSelectionInner({
     close,
 }) {
 
+    const isCompact = showRadio || forceMobile;
+
     const selectPaymentMethod = (paymentMethod) => {
         setData("payment_method", String(paymentMethod.id));
         clearErrors("payment_method");
@@ -264,8 +266,9 @@ function PaymentMethodSelectionInner({
                     onClick={() => selectPaymentMethod({ id: "paypal" })}
                     selected={selectedId === "paypal"}
                     showRadio={showRadio}
+                    compact={isCompact}
                     className={clsx(
-                        showRadio ? "min-h-0" : "relative min-h-[11rem] overflow-hidden",
+                        isCompact ? "min-h-0" : "relative min-h-[11rem] overflow-hidden",
                         "border-[#003087]/20 bg-gradient-to-br from-[#003087]/8 via-sky-50 to-[#009cde]/10",
                         "ring-1 ring-[#003087]/25",
                         "dark:border-[#009cde]/25 dark:from-[#003087]/25 dark:via-slate-900 dark:to-[#009cde]/15 dark:ring-[#009cde]/30",
@@ -275,7 +278,7 @@ function PaymentMethodSelectionInner({
                         className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-[#009cde]/15"
                         aria-hidden
                     />
-                    <div className="relative flex h-full flex-col justify-between">
+                    <div className={clsx("relative flex flex-col", isCompact ? "gap-2" : "h-full justify-between")}>
                         <div className="flex items-start justify-between gap-2">
                             <span className="inline-flex items-center rounded-lg bg-white px-3 py-2 shadow-sm ring-1 ring-[#003087]/15 dark:bg-slate-800 dark:ring-[#009cde]/25">
                                 <PayPalWordmark className="h-7" />
@@ -284,7 +287,7 @@ function PaymentMethodSelectionInner({
                                 PayPal
                             </Badge>
                         </div>
-                        <div className="mt-4 space-y-1">
+                        <div className={clsx("space-y-1", !isCompact && "mt-4")}>
                             <Text className="text-sm font-medium text-[#003087] dark:text-[#009cde]">
                                 Paga con tu cuenta PayPal
                             </Text>
@@ -301,8 +304,9 @@ function PaymentMethodSelectionInner({
                     onClick={() => selectPaymentMethod({ id: "odessa" })}
                     selected={selectedId === "odessa"}
                     showRadio={showRadio}
+                    compact={isCompact}
                     className={clsx(
-                        showRadio ? "min-h-0" : "relative min-h-[11rem] overflow-hidden",
+                        isCompact ? "min-h-0" : "relative min-h-[11rem] overflow-hidden",
                         "border-orange-200/80 bg-gradient-to-br from-orange-50 via-amber-50/90 to-orange-100/50",
                         "ring-1 ring-orange-200/70",
                         "dark:border-orange-800/50 dark:from-orange-950/40 dark:via-slate-900 dark:to-amber-950/30 dark:ring-orange-800/40",
@@ -312,7 +316,7 @@ function PaymentMethodSelectionInner({
                         className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-bl-full bg-orange-400/20"
                         aria-hidden
                     />
-                    <div className="relative flex h-full flex-col justify-between">
+                    <div className={clsx("relative flex flex-col", isCompact ? "gap-2" : "h-full justify-between")}>
                         <div className="flex items-start justify-between gap-2">
                             <span className="inline-flex items-center gap-2 rounded-lg bg-white p-2 shadow-sm ring-1 ring-orange-200/80 dark:bg-slate-800 dark:ring-orange-800/50">
                                 <img
@@ -325,7 +329,7 @@ function PaymentMethodSelectionInner({
                                 Caja de ahorro
                             </Badge>
                         </div>
-                        <div className="mt-4 space-y-1">
+                        <div className={clsx("space-y-1", !isCompact && "mt-4")}>
                             <Text className="text-sm font-medium text-orange-900 dark:text-orange-100">
                                 Cobro a caja de ahorro Odessa
                             </Text>
@@ -348,13 +352,14 @@ function PaymentMethodSelectionInner({
                         key={paymentMethod.id}
                         selected={String(selectedId) === String(paymentMethod.id)}
                         showRadio={showRadio}
+                        compact={isCompact}
                         className={clsx(
-                            showRadio ? "min-h-0" : "min-h-[11rem]",
+                            isCompact ? "min-h-0" : "min-h-[11rem]",
                             isMock &&
                                 "ring-2 ring-amber-300/80 dark:ring-amber-600/50",
                         )}
                     >
-                        <div className="flex h-full flex-col justify-between">
+                        <div className={clsx("flex flex-col", isCompact ? "gap-2" : "h-full justify-between")}>
                             <div className="flex justify-between items-start">
                                 <div className="flex items-center gap-2">
                                     <CreditCardBrand
@@ -378,7 +383,7 @@ function PaymentMethodSelectionInner({
                                     </Badge>
                                 )}
                             </div>
-                            <div className="mt-3 space-y-1">
+                            <div className={clsx("space-y-1", !isCompact && "mt-3")}>
                                 <Text className="font-medium">
                                     **** **** **** {paymentMethod.card?.last4}
                                 </Text>
@@ -406,7 +411,8 @@ function PaymentMethodSelectionInner({
                 IconComponent={showRadio ? null : PlusIcon}
                 greenIcon={!showRadio}
                 showRadio={showRadio}
-                className={clsx(showRadio ? "min-h-0" : "min-h-[11rem]")}
+                compact={isCompact}
+                className={clsx(isCompact ? "min-h-0" : "min-h-[11rem]")}
             >
                 <div className="space-y-2">
                     <Text className="line-clamp-2">

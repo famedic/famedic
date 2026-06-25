@@ -14,13 +14,13 @@ return new class extends Migration
 
         Schema::table('tax_profiles', function (Blueprint $table) {
             if (! Schema::hasColumn('tax_profiles', 'razon_social')) {
-                $table->string('razon_social')->nullable()->after('name');
+                $table->string('razon_social')->nullable();
             }
             if (! Schema::hasColumn('tax_profiles', 'tipo_persona')) {
-                $table->string('tipo_persona')->nullable()->after('razon_social');
+                $table->string('tipo_persona')->nullable();
             }
             if (! Schema::hasColumn('tax_profiles', 'fecha_emision_constancia')) {
-                $table->string('fecha_emision_constancia')->nullable()->after('fiscal_certificate');
+                $table->string('fecha_emision_constancia')->nullable();
             }
             if (! Schema::hasColumn('tax_profiles', 'fecha_inscripcion')) {
                 $table->date('fecha_inscripcion')->nullable();
@@ -50,10 +50,10 @@ return new class extends Migration
                 $table->timestamp('fecha_verificacion')->nullable();
             }
             if (! Schema::hasColumn('tax_profiles', 'regimen_fiscal_original')) {
-                $table->string('regimen_fiscal_original')->nullable()->after('tax_regime');
+                $table->string('regimen_fiscal_original')->nullable();
             }
             if (! Schema::hasColumn('tax_profiles', 'codigo_postal_original')) {
-                $table->string('codigo_postal_original')->nullable()->after('zipcode');
+                $table->string('codigo_postal_original')->nullable();
             }
         });
     }
@@ -64,7 +64,7 @@ return new class extends Migration
             return;
         }
 
-        $columns = [
+        $columnNames = [
             'razon_social',
             'tipo_persona',
             'fecha_emision_constancia',
@@ -81,17 +81,17 @@ return new class extends Migration
             'codigo_postal_original',
         ];
 
-        $toDrop = array_values(array_filter(
-            $columns,
-            fn (string $column) => Schema::hasColumn('tax_profiles', $column)
+        $columnsToDrop = array_values(array_filter(
+            $columnNames,
+            fn (string $column) => Schema::hasColumn('tax_profiles', $column),
         ));
 
-        if ($toDrop === []) {
+        if ($columnsToDrop === []) {
             return;
         }
 
-        Schema::table('tax_profiles', function (Blueprint $table) use ($toDrop) {
-            $table->dropColumn($toDrop);
+        Schema::table('tax_profiles', function (Blueprint $table) use ($columnsToDrop) {
+            $table->dropColumn($columnsToDrop);
         });
     }
 };

@@ -17,42 +17,86 @@ use App\Support\AppEnvironmentLabel;
 use App\Support\MockEfevooPaymentSupport;
 use Illuminate\Http\Request;
 use App\Services\Tracking\InitiateCheckout;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
 class LaboratoryCheckoutController extends Controller
 {
     public function __invoke(Request $request, LaboratoryBrand $laboratoryBrand, CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction, CouponService $couponService)
     {
-        $laboratoryCartItems = $request->user()->customer->laboratoryCartItems()->ofBrand($laboratoryBrand)->get();
+        Log::info('Laboratory checkout: request started', [
+            'user_id' => $request->user()?->id,
+            'brand' => $laboratoryBrand->value,
+        ]);
+
+        $laboratoryCartItems = $request->user()->customer
+            ->laboratoryCartItems()
+            ->ofBrand($laboratoryBrand)
+            ->with('laboratoryTest')
+            ->get();
+
+        Log::info('Laboratory checkout: cart loaded', [
+            'user_id' => $userId = $request->user()->id,
+            'items' => $laboratoryCartItems->count(),
+        ]);
 
         $totals = $calculateTotalsAndDiscountAction(
             $laboratoryCartItems
         );
 
-        $userId = $request->user()->id;
         $customer = $request->user()->customer;
-        $balancePresentation = $couponService->buildCheckoutCreditPresentation($userId, (int) $totals['total']);
+        try {
+            $balancePresentation = $couponService->buildCheckoutCreditPresentation($userId, (int) $totals['total']);
+        } catch (\Throwable $e) {
+            Log::error('Checkout: buildCheckoutCreditPresentation failed', [
+                'user_id' => $userId,
+                'message' => $e->getMessage(),
+            ]);
+            $balancePresentation = [
+                'balanceCouponsCents' => 0,
+                'formattedBalanceCoupons' => null,
+                'availableBalanceCoupons' => [],
+                'coupons' => [],
+                'cartTotalCents' => (int) $totals['total'],
+            ];
+        }
         $availableCoupons = collect($balancePresentation['availableBalanceCoupons']);
         $mockTokens = MockEfevooPaymentSupport::isMockMode()
             ? MockEfevooPaymentSupport::ensureTestTokensForCustomer($customer)
             : [];
         $paymentMethods = $this->resolveCheckoutPaymentMethods($customer, $mockTokens);
 
-        InitiateCheckout::track(
-            contents: [
-                ...$laboratoryCartItems->map(function ($item) {
-                    return [
-                        'id' => (string) $item->laboratoryTest->gda_id,
-                        'quantity' => 1
-                    ];
-                })->all(),
-            ],
-            value: floatval(str_replace(',', '', formattedCents($totals['total']))),
-            source: 'laboratory',
-            customProperties: [
+        Log::info('Laboratory checkout: payment methods resolved', [
+            'user_id' => $userId,
+            'methods' => count($paymentMethods),
+        ]);
+
+        try {
+            InitiateCheckout::track(
+                contents: [
+                    ...$laboratoryCartItems
+                        ->filter(fn ($item) => $item->laboratoryTest !== null)
+                        ->map(function ($item) {
+                            return [
+                                'id' => (string) $item->laboratoryTest->gda_id,
+                                'quantity' => 1,
+                            ];
+                        })
+                        ->all(),
+                ],
+                value: floatval(str_replace(',', '', formattedCents($totals['total']))),
+                source: 'laboratory',
+                customProperties: [
+                    'brand' => $laboratoryBrand->value,
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::warning('InitiateCheckout tracking failed', [
+                'message' => $e->getMessage(),
                 'brand' => $laboratoryBrand->value,
-            ]
-        );
+            ]);
+        }
 
         $requiresAppointment = $customer->getHasLaboratoryCartItemRequiringAppointment($laboratoryBrand);
         $laboratoryAppointment = null;
@@ -70,11 +114,23 @@ class LaboratoryCheckoutController extends Controller
             }
         }
 
-        $savedCheckout = LaboratoryCheckoutDraft::query()
-            ->where('customer_id', $customer->id)
-            ->where('laboratory_brand', $laboratoryBrand)
-            ->first()
-            ?->forCheckout();
+        Log::info('Laboratory checkout: appointment state resolved', [
+            'user_id' => $userId,
+            'requires_appointment' => $requiresAppointment,
+            'has_confirmed_appointment' => $laboratoryAppointment !== null,
+            'has_pending_appointment' => $pendingLaboratoryAppointment !== null,
+        ]);
+
+        $savedCheckout = null;
+        if (Schema::hasTable('laboratory_checkout_drafts')) {
+            $savedCheckout = LaboratoryCheckoutDraft::query()
+                ->where('customer_id', $customer->id)
+                ->where('laboratory_brand', $laboratoryBrand)
+                ->first()
+                ?->forCheckout();
+        } else {
+            Log::error('Checkout: laboratory_checkout_drafts table is missing');
+        }
 
         if (is_array($savedCheckout) && ! empty($savedCheckout['coupon_id'])) {
             $availableCouponIds = $availableCoupons->pluck('id');
@@ -98,12 +154,15 @@ class LaboratoryCheckoutController extends Controller
             }
         }
 
-        return Inertia::render('LaboratoryCheckout', [
+        Log::info('Laboratory checkout: building inertia response', ['user_id' => $userId]);
+
+        try {
+            return Inertia::render('LaboratoryCheckout', [
             'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryBrand),
             'savedCheckout' => $savedCheckout,
             'requiresAppointment' => $requiresAppointment,
-            'laboratoryAppointment' => $laboratoryAppointment,
-            'pendingLaboratoryAppointment' => $pendingLaboratoryAppointment,
+            'laboratoryAppointment' => $this->appointmentForCheckout($laboratoryAppointment),
+            'pendingLaboratoryAppointment' => $this->appointmentForCheckout($pendingLaboratoryAppointment),
             'callbackPreferenceSavedAtFormatted' => $callbackPreferenceSavedAtFormatted,
             ...$totals,
             ...$balancePresentation,
@@ -120,7 +179,17 @@ class LaboratoryCheckoutController extends Controller
             'appEnvLabel' => AppEnvironmentLabel::current(),
             'hasOdessaPay' => $request->user()->customer->has_odessa_afiliate_account,
             'mexicanStates' => config('mexicanstates'),
-        ]);
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Laboratory checkout: render failed', [
+                'user_id' => $request->user()?->id,
+                'brand' => $laboratoryBrand->value,
+                'message' => $e->getMessage(),
+                'exception' => $e::class,
+            ]);
+
+            throw $e;
+        }
     }
 
     /**
@@ -243,6 +312,36 @@ class LaboratoryCheckoutController extends Controller
         ]);
     }
 
+    private function appointmentForCheckout(?\App\Models\LaboratoryAppointment $appointment): ?array
+    {
+        if (! $appointment) {
+            return null;
+        }
+
+        $appointment->loadMissing('laboratoryStore');
+
+        return [
+            'id' => $appointment->id,
+            'brand' => $appointment->brand?->value ?? $appointment->brand,
+            'confirmed_at' => $appointment->confirmed_at?->toIso8601String(),
+            'patient_full_name' => $appointment->patient_full_name,
+            'formatted_patient_gender' => $appointment->formatted_patient_gender,
+            'formatted_patient_birth_date' => $appointment->formatted_patient_birth_date,
+            'patient_phone' => $appointment->patient_phone,
+            'formatted_appointment_date' => $appointment->formatted_appointment_date,
+            'callback_availability_starts_at' => $appointment->callback_availability_starts_at?->toIso8601String(),
+            'callback_availability_ends_at' => $appointment->callback_availability_ends_at?->toIso8601String(),
+            'patient_callback_comment' => $appointment->patient_callback_comment,
+            'has_left_callback_info' => $appointment->has_left_callback_info,
+            'formatted_request_saved_at' => $appointment->formatted_request_saved_at,
+            'formatted_callback_availability_range' => $appointment->formatted_callback_availability_range,
+            'laboratory_store' => $appointment->laboratoryStore ? [
+                'name' => $appointment->laboratoryStore->name,
+                'address' => $appointment->laboratoryStore->address,
+            ] : null,
+        ];
+    }
+
     private function formatCallbackPreferenceSavedAt($appointment): ?string
     {
         if (! $appointment) {
@@ -275,6 +374,10 @@ class LaboratoryCheckoutController extends Controller
             || in_array($savedCheckout['checkout_step'] ?? null, ['appointment', 'confirmation'], true);
 
         if (! $shouldEnsure) {
+            return null;
+        }
+
+        if ($customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand)) {
             return null;
         }
 

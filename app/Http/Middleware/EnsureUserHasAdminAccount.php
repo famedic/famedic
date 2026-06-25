@@ -272,10 +272,35 @@ class EnsureUserHasAdminAccount
                             'url' => route('admin.config-monitor.index'),
                             'current' => str_starts_with((string) Route::currentRouteName(), 'admin.config-monitor'),
                         ] : null,
+                        $request->user()->administrator->hasPermissionTo('monitoring-ai.manage') ? [
+                            'label' => 'Asistente IA',
+                            'url' => route('admin.monitoring-ai.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.monitoring-ai'),
+                        ] : null,
                         $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
-                            'label' => 'Murguía — asegurados',
+                            'label' => 'Murguía — dashboard',
+                            'url' => route('admin.murguia-dashboard.index'),
+                            'current' => Route::currentRouteName() === 'admin.murguia-dashboard.index',
+                        ] : null,
+                        $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+                            'label' => 'Murguía — reportes',
+                            'url' => route('admin.murguia-reports.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia-reports'),
+                        ] : null,
+                        $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+                            'label' => 'Murguía — conciliación',
+                            'url' => route('admin.murguia-reconciliation.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia-reconciliation'),
+                        ] : null,
+                        $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+                            'label' => 'Murguía — monitor',
                             'url' => route('admin.murguia-monitor.index'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia'),
+                            'current' => in_array(Route::currentRouteName(), [
+                                'admin.murguia-monitor.index',
+                                'admin.murguia-monitor.show',
+                                'admin.murguia.upload',
+                                'admin.murguia.logs',
+                            ], true),
                         ] : null,
                     ])),
                 ],

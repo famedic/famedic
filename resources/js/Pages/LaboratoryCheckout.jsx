@@ -870,6 +870,7 @@ export default function LaboratoryCheckout({
 
         if (
             !pendingLaboratoryAppointment &&
+            !laboratoryAppointment &&
             data.contact &&
             !syncingAppointment &&
             !appointmentAutoSyncRef.current
@@ -893,6 +894,7 @@ export default function LaboratoryCheckout({
         currentStep.id,
         needsAppointment,
         pendingLaboratoryAppointment,
+        laboratoryAppointment,
         data.contact,
         syncingAppointment,
         syncAppointmentFromContact,

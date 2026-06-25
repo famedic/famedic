@@ -21,7 +21,8 @@ class SyncLaboratoryAppointmentFromContactAction
         LaboratoryBrand $laboratoryBrand,
         Contact $contact,
     ): LaboratoryAppointment {
-        $laboratoryAppointment = $customer->getPendingLaboratoryAppointment($laboratoryBrand);
+        $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand)
+            ?? $customer->getPendingLaboratoryAppointment($laboratoryBrand);
 
         if (! $laboratoryAppointment) {
             $laboratoryAppointment = $customer->laboratoryAppointments()->create([

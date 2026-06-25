@@ -8,6 +8,6 @@ class GenerateOdessaKeyAction
 {
     public function __invoke(): Key
     {
-        return new Key(base64_decode(env('ODESSA_PUBLIC_KEY')), 'RS512');
+        return new Key(base64_decode((string) config('services.odessa.public_key')), 'RS512');
     }
 }

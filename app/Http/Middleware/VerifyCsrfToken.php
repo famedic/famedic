@@ -13,7 +13,8 @@ class VerifyCsrfToken extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        // Rutas excluidas explícitamente (no usar '*' — no coincide con todas las rutas).
+        'paypal/webhook',
+        'apigda/*',
     ];
 
     public function handle($request, \Closure $next)

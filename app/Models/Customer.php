@@ -214,6 +214,11 @@ class Customer extends Model
         return $this->hasMany(MedicalAttentionSubscription::class);
     }
 
+    public function murguiaSyncLogs(): HasMany
+    {
+        return $this->hasMany(MurguiaSyncLog::class);
+    }
+
     public function familyAccounts(): HasMany
     {
         return $this->hasMany(FamilyAccount::class);

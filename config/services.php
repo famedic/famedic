@@ -125,6 +125,8 @@ return [
 
     'odessa' => [
         'url' => env('ODESSA_URL'),
+        'public_key' => env('ODESSA_PUBLIC_KEY'),
+        'famedic_public_key' => env('FAMEDIC_PUBLIC_KEY'),
         'refund_report_emails' => env('ODESSA_REFUND_REPORT_EMAILS') ? explode(',', env('ODESSA_REFUND_REPORT_EMAILS')) : [],
     ],
 
@@ -175,5 +177,12 @@ return [
         'skip_admin_mail' => env('SKIP_LABORATORY_INVOICE_REQUEST_MAIL', false),
         'test_notify_email' => env('LAB_INVOICE_REQUEST_TEST_EMAIL', 'emedina.externo@odessa.com.mx'),
         'allow_fallback_to_invoice_admins' => env('LAB_INVOICE_REQUEST_FALLBACK_TO_ADMINS', false),
+    ],
+
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        'timeout' => (int) env('OPENAI_TIMEOUT', 60),
+        'max_context_chars' => (int) env('OPENAI_MAX_CONTEXT_CHARS', 12000),
     ],
 ];

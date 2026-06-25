@@ -10,24 +10,33 @@ export default function LaboratoryTestsGrid({
 	if (!laboratoryTests.data.length) {
 		return <EmptyListCard />;
 	}
-	const {
-		data,
-		post,
-		processing: storeProcessing,
-	} = useForm({
-		laboratory_test: "",
-	});
+
 	const [submittingId, setSubmittingId] = useState(null);
 
+	const isTestInCart = (laboratoryTestId) =>
+		laboratoryCartItems.some(
+			(laboratoryCartItem) =>
+				String(laboratoryCartItem.laboratory_test_id) ===
+				String(laboratoryTestId),
+		);
+
 	const addLaboratoryTest = (laboratoryTest) => {
-		if (!storeProcessing) {
-			setSubmittingId(laboratoryTest.id);
-			data.laboratory_test = laboratoryTest.id;
-			post(route("laboratory-cart-items.store"), {
+		if (submittingId !== null) {
+			return;
+		}
+
+		setSubmittingId(laboratoryTest.id);
+		router.post(
+			route("laboratory-cart-items.store"),
+			{
+				laboratory_test: laboratoryTest.id,
+				laboratory_brand: laboratoryBrand.value,
+			},
+			{
 				preserveScroll: true,
 				onFinish: () => setSubmittingId(null),
-			});
-		}
+			},
+		);
 	};
 
 	const {
@@ -97,11 +106,7 @@ export default function LaboratoryTestsGrid({
 									laboratoryTest.indications
 								}
 								inCartHref={
-									laboratoryCartItems.filter(
-										(laboratoryCartItem) =>
-											laboratoryCartItem.laboratory_test_id ===
-											laboratoryTest.id,
-									).length > 0
+									isTestInCart(laboratoryTest.id)
 										? route("laboratory.shopping-cart", {
 												laboratory_brand:
 													laboratoryBrand.value,
@@ -122,8 +127,9 @@ export default function LaboratoryTestsGrid({
 									setLaboratoryCartItemToDelete(
 										laboratoryCartItems.find(
 											(laboratoryCartItem) =>
-												laboratoryCartItem.laboratory_test_id ==
-												laboratoryTest.id,
+												String(
+													laboratoryCartItem.laboratory_test_id,
+												) === String(laboratoryTest.id),
 										),
 									)
 								}
@@ -161,7 +167,7 @@ import { BadgeButton } from "@/Components/Catalyst/badge";
 import { Strong, Text } from "@/Components/Catalyst/text";
 import { TagIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import { InformationCircleIcon } from "@heroicons/react/20/solid";
-import { useForm } from "@inertiajs/react";
+import { router } from "@inertiajs/react";
 import { useState } from "react";
 import { useDeleteLaboratoryCartItem } from "@/Hooks/useDeleteLaboratoryCartItem";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
