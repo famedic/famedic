@@ -22,7 +22,7 @@ const ICON_MAP = {
 function PlanRow({ label, value, children }) {
 	return (
 		<div className="flex items-start justify-between gap-4 border-b border-slate-100 py-3 last:border-b-0 dark:border-slate-800">
-			<Text className="text-sm text-zinc-500">{label}</Text>
+			<Text className="text-sm text-zinc-500 dark:text-slate-400">{label}</Text>
 			<div className="text-right text-sm font-medium text-zinc-800 dark:text-slate-100">
 				{children ?? value ?? "—"}
 			</div>
@@ -54,12 +54,12 @@ export default function MembershipPlan({ plan, benefits = [] }) {
 				<h3 className="font-poppins text-lg font-semibold text-famedic-dark dark:text-white">
 					Detalles del plan
 				</h3>
-				<Text className="text-sm text-zinc-500">
+				<Text className="text-sm text-zinc-500 dark:text-slate-400">
 					Información completa de tu membresía.
 				</Text>
 			</div>
 
-			<Card className="rounded-2xl p-6 ring-1 ring-slate-100 sm:p-8">
+			<Card className="rounded-2xl p-6 ring-1 ring-slate-100 dark:ring-slate-700/80 sm:p-8">
 				<div className="divide-y divide-slate-100 dark:divide-slate-800">
 					<PlanRow label="Plan" value={plan.name} />
 					<PlanRow label="Precio" value={plan.price} />
@@ -92,19 +92,19 @@ export default function MembershipPlan({ plan, benefits = [] }) {
 							return (
 								<Card
 									key={benefit.title}
-									className="rounded-2xl p-4 ring-1 ring-slate-100"
+									className="rounded-2xl p-4 ring-1 ring-slate-100 dark:ring-slate-700/80"
 								>
 									<div className="flex items-start gap-3">
-										<div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+										<div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300">
 											<Icon className="size-4" />
 										</div>
 										<div>
-											<p className="text-sm font-medium">
+											<p className="text-sm font-medium text-zinc-900 dark:text-white">
 												{benefit.title}
 											</p>
-											<Text className="mt-0.5 text-xs text-zinc-500">
+											<p className="mt-0.5 text-xs text-zinc-500 dark:text-slate-400">
 												{benefit.description}
-											</Text>
+											</p>
 										</div>
 									</div>
 								</Card>

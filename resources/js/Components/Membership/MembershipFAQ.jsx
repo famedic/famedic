@@ -19,18 +19,18 @@ export default function MembershipFAQ({ faq = [] }) {
 				<h3 className="font-poppins text-lg font-semibold text-famedic-dark dark:text-white">
 					Preguntas frecuentes
 				</h3>
-				<Text className="text-sm text-zinc-500">
+				<Text className="text-sm text-zinc-500 dark:text-slate-400">
 					Respuestas rápidas sobre tu membresía.
 				</Text>
 			</div>
 
-			<Card className="divide-y divide-slate-100 overflow-hidden shadow-sm ring-1 ring-slate-100 dark:divide-slate-800">
+			<Card className="divide-y divide-slate-100 overflow-hidden shadow-sm ring-1 ring-slate-100 dark:divide-slate-800 dark:ring-slate-700/80">
 				{faq.map((item) => (
 					<Disclosure key={item.question} as="div">
 						{({ open }) => (
 							<>
 								<DisclosureButton className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
-									<span className="font-medium text-zinc-800 dark:text-slate-100">
+									<span className="font-medium text-zinc-900 dark:text-white">
 										{item.question}
 									</span>
 									<ChevronDownIcon

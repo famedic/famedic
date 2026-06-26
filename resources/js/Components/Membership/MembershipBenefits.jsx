@@ -44,19 +44,19 @@ function BenefitsGrid({ benefits, compact = false }) {
 				return (
 					<Card
 						key={benefit.title}
-						className="rounded-2xl p-4 shadow-sm ring-1 ring-slate-100"
+						className="rounded-2xl p-4 shadow-sm ring-1 ring-slate-100 dark:ring-slate-700/80"
 					>
 						<div className="flex items-start gap-3">
-							<div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+							<div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300">
 								<Icon className="size-4" />
 							</div>
 							<div className="min-w-0">
-								<p className="text-sm font-medium text-zinc-800 dark:text-slate-100">
+								<p className="text-sm font-medium text-zinc-900 dark:text-white">
 									{benefit.title}
 								</p>
-								<Text className="mt-0.5 text-xs text-zinc-500">
+								<p className="mt-0.5 text-xs text-zinc-500 dark:text-slate-400">
 									{benefit.description}
-								</Text>
+								</p>
 							</div>
 						</div>
 					</Card>
@@ -99,7 +99,7 @@ export default function MembershipBenefits({ benefits = [], compact = false }) {
 				<h3 className="font-poppins text-lg font-semibold text-famedic-dark dark:text-white">
 					Beneficios principales
 				</h3>
-				<Text className="text-sm text-zinc-500">
+				<Text className="text-sm text-zinc-500 dark:text-slate-400">
 					Lo esencial de tu membresía médica.
 				</Text>
 			</div>
@@ -135,19 +135,19 @@ export function BenefitsModal({ open, onClose, benefits = [] }) {
 						return (
 							<Card
 								key={benefit.title}
-								className="rounded-2xl p-4 ring-1 ring-slate-100"
+								className="rounded-2xl p-4 ring-1 ring-slate-100 dark:ring-slate-700/80"
 							>
 								<div className="flex items-start gap-3">
-									<div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+									<div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300">
 										<Icon className="size-5" />
 									</div>
 									<div>
-										<p className="font-medium text-zinc-800 dark:text-slate-100">
+										<p className="font-medium text-zinc-900 dark:text-white">
 											{benefit.title}
 										</p>
-										<Text className="mt-1 text-sm text-zinc-500">
+										<p className="mt-1 text-sm text-zinc-500 dark:text-slate-400">
 											{benefit.description}
-										</Text>
+										</p>
 									</div>
 								</div>
 							</Card>

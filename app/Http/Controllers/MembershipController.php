@@ -24,7 +24,7 @@ class MembershipController extends Controller
 
     public function tab(Request $request, string $tab, MembershipDashboardService $dashboardService)
     {
-        $allowedTabs = ['plan', 'pagos', 'cobertura', 'uso', 'historial', 'documentos'];
+        $allowedTabs = ['plan', 'pagos', 'cobertura', 'uso', 'historial'];
 
         abort_unless(in_array($tab, $allowedTabs, true), 404);
 

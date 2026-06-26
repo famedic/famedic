@@ -19,9 +19,6 @@ const MembershipUsage = lazy(
 const MembershipHistory = lazy(
 	() => import("@/Components/Membership/MembershipHistory"),
 );
-const MembershipDocuments = lazy(
-	() => import("@/Components/Membership/MembershipDocuments"),
-);
 
 const TABS = [
 	{ key: "resumen", label: "Resumen" },
@@ -30,21 +27,22 @@ const TABS = [
 	{ key: "cobertura", label: "Cobertura" },
 	{ key: "uso", label: "Uso y beneficios" },
 	{ key: "historial", label: "Historial" },
-	{ key: "documentos", label: "Documentos" },
 ];
 
 function TabLoading() {
 	return (
-		<div className="flex min-h-[200px] items-center justify-center rounded-2xl border border-dashed border-slate-200">
-			<Text className="text-sm text-zinc-500">Cargando información...</Text>
+		<div className="flex min-h-[200px] items-center justify-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+			<Text className="text-sm text-zinc-500 dark:text-slate-400">
+				Cargando información...
+			</Text>
 		</div>
 	);
 }
 
 function TabError() {
 	return (
-		<div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center">
-			<Text className="text-sm text-rose-700">
+		<div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center dark:border-rose-500/30 dark:bg-rose-500/10">
+			<Text className="text-sm text-rose-700 dark:text-rose-300">
 				No pudimos cargar esta sección. Intenta de nuevo más tarde.
 			</Text>
 		</div>
@@ -99,9 +97,6 @@ function TabContent({ activeTab, membership, tabData, loading, error }) {
 			)}
 			{activeTab === "historial" && (
 				<MembershipHistory timeline={tabData?.timeline ?? []} />
-			)}
-			{activeTab === "documentos" && (
-				<MembershipDocuments documents={tabData?.documents ?? []} />
 			)}
 		</Suspense>
 	);
