@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import SettingsLayout from "@/Layouts/SettingsLayout";
 import { GradientHeading } from "@/Components/Catalyst/heading";
 import { Divider } from "@/Components/Catalyst/divider";
@@ -5,24 +6,34 @@ import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
 import Card from "@/Components/Card";
 import { HeartIcon } from "@heroicons/react/24/solid";
-import MembershipStatusCard from "@/Components/Membership/MembershipStatusCard";
-import MembershipAccessCard from "@/Components/Membership/MembershipAccessCard";
-import MembershipProgress from "@/Components/Membership/MembershipProgress";
-import MembershipBenefits from "@/Components/Membership/MembershipBenefits";
-import MembershipPlanInfo from "@/Components/Membership/MembershipPlanInfo";
-import MembershipPaymentCard from "@/Components/Membership/MembershipPaymentCard";
-import MembershipHistory from "@/Components/Membership/MembershipHistory";
-import MembershipCoverage from "@/Components/Membership/MembershipCoverage";
+import MembershipHero from "@/Components/Membership/MembershipHero";
+import MembershipStats from "@/Components/Membership/MembershipStats";
+import MembershipFamily from "@/Components/Membership/MembershipFamily";
+import MembershipTabs from "@/Components/Membership/MembershipTabs";
+import MembershipBenefits, {
+	BenefitsModal,
+} from "@/Components/Membership/MembershipBenefits";
 import MembershipRenewBanner from "@/Components/Membership/MembershipRenewBanner";
-import MembershipUsage from "@/Components/Membership/MembershipUsage";
 import MembershipFAQ from "@/Components/Membership/MembershipFAQ";
+import QuickActions from "@/Components/Membership/QuickActions";
 
 export default function MembershipIndex({ membership }) {
 	const hasMembership = membership?.status?.status !== "none";
+	const [showBenefits, setShowBenefits] = useState(false);
+	const [activeTab, setActiveTab] = useState("resumen");
+	const tabsRef = useRef(null);
+
+	const scrollToTabs = (tabKey) => {
+		setActiveTab(tabKey);
+		tabsRef.current?.scrollIntoView({
+			behavior: "smooth",
+			block: "start",
+		});
+	};
 
 	return (
 		<SettingsLayout title="Mi Membresía">
-			<div className="space-y-8 lg:space-y-10">
+			<div className="space-y-6 lg:space-y-8">
 				<header className="space-y-2">
 					<div className="flex items-center gap-3">
 						<div className="flex size-10 items-center justify-center rounded-2xl bg-rose-50 text-rose-500 dark:bg-rose-500/10">
@@ -33,8 +44,8 @@ export default function MembershipIndex({ membership }) {
 						</GradientHeading>
 					</div>
 					<Text className="max-w-2xl text-zinc-600 dark:text-slate-300">
-						Consulta el estado, beneficios y detalles de tu
-						membresía médica en un solo lugar.
+						Estado, familia y beneficios de tu membresía médica en un
+						solo lugar.
 					</Text>
 				</header>
 
@@ -43,48 +54,67 @@ export default function MembershipIndex({ membership }) {
 				{!hasMembership ? (
 					<MembershipEmptyState renewUrl={membership?.status?.renewUrl} />
 				) : (
-					<div className="space-y-8 lg:space-y-10">
+					<div className="space-y-6 lg:space-y-8">
 						<MembershipRenewBanner renewal={membership.renewal} />
 
-						<MembershipStatusCard
+						<MembershipHero
 							status={membership.status}
+							progress={membership.progress}
 							capabilities={membership.capabilities}
+							onShowBenefits={() => setShowBenefits(true)}
 						/>
 
-						<MembershipAccessCard access={membership.access} />
-
-						<MembershipProgress progress={membership.progress} />
-
-						<MembershipBenefits benefits={membership.benefits} />
-
-						<div className="grid gap-6 xl:grid-cols-2">
-							<MembershipPlanInfo plan={membership.plan} />
-							<MembershipPaymentCard
-								payment={membership.payment}
-								capabilities={membership.capabilities}
-							/>
-						</div>
-
-						<MembershipCoverage
+						<MembershipFamily
 							coverage={membership.coverage}
 							capabilities={membership.capabilities}
+							onViewAll={() => scrollToTabs("cobertura")}
 						/>
 
-						<MembershipUsage usage={membership.usage} />
+						<MembershipStats
+							access={membership.access}
+							status={membership.status}
+							plan={membership.plan}
+						/>
 
-						<MembershipHistory history={membership.history} />
+						<MembershipBenefits
+							benefits={membership.benefits}
+							compact
+						/>
+
+						<QuickActions
+							membership={membership}
+							onAction={(action) => {
+								if (action === "benefits") {
+									setShowBenefits(true);
+								}
+							}}
+						/>
+
+						<div ref={tabsRef}>
+							<MembershipTabs
+								membership={membership}
+								activeTab={activeTab}
+								onTabChange={setActiveTab}
+							/>
+						</div>
 
 						<MembershipFAQ faq={membership.faq} />
 					</div>
 				)}
 			</div>
+
+			<BenefitsModal
+				open={showBenefits}
+				onClose={setShowBenefits}
+				benefits={membership?.benefits ?? []}
+			/>
 		</SettingsLayout>
 	);
 }
 
 function MembershipEmptyState({ renewUrl }) {
 	return (
-		<Card className="overflow-hidden shadow-sm ring-1 ring-slate-100">
+		<Card className="overflow-hidden rounded-[20px] shadow-sm ring-1 ring-slate-100">
 			<div className="px-6 py-12 text-center sm:px-10 sm:py-16">
 				<div className="mx-auto flex size-16 items-center justify-center rounded-3xl bg-rose-50 text-rose-500 dark:bg-rose-500/10">
 					<HeartIcon className="size-8" />

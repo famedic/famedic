@@ -21,4 +21,22 @@ class MembershipController extends Controller
             'membership' => $dashboardService->build($customer),
         ]);
     }
+
+    public function tab(Request $request, string $tab, MembershipDashboardService $dashboardService)
+    {
+        $allowedTabs = ['plan', 'pagos', 'cobertura', 'uso', 'historial', 'documentos'];
+
+        abort_unless(in_array($tab, $allowedTabs, true), 404);
+
+        $customer = $request->user()->customer;
+        $customer->load([
+            'user',
+            'familyAccounts',
+            'medicalAttentionSubscriptions.transactions',
+        ]);
+
+        return response()->json(
+            $dashboardService->buildTabData($customer, $tab),
+        );
+    }
 }

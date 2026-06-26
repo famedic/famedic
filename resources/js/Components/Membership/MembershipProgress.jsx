@@ -1,7 +1,11 @@
-import Card from "@/Components/Card";
 import { Text } from "@/Components/Catalyst/text";
+import clsx from "clsx";
 
-export default function MembershipProgress({ progress }) {
+export default function MembershipProgress({
+	progress,
+	size = "lg",
+	className,
+}) {
 	if (!progress) {
 		return null;
 	}
@@ -14,81 +18,53 @@ export default function MembershipProgress({ progress }) {
 	const strokeDashoffset =
 		circumference - (percentageRemaining / 100) * circumference;
 
+	const dimensions = size === "sm" ? "size-24" : "size-32 sm:size-36";
+	const valueClass =
+		size === "sm"
+			? "text-2xl font-bold"
+			: "text-3xl font-bold sm:text-4xl";
+
 	return (
-		<Card className="p-6 shadow-sm ring-1 ring-slate-100 sm:p-8">
-			<div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center sm:justify-between">
-				<div className="relative flex size-36 items-center justify-center">
-					<svg
-						className="size-full -rotate-90"
-						viewBox="0 0 100 100"
-						aria-hidden="true"
-					>
-						<circle
-							cx="50"
-							cy="50"
-							r="42"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="8"
-							className="text-slate-100 dark:text-slate-800"
-						/>
-						<circle
-							cx="50"
-							cy="50"
-							r="42"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="8"
-							strokeLinecap="round"
-							strokeDasharray={circumference}
-							strokeDashoffset={strokeDashoffset}
-							className="text-famedic-dark transition-all duration-500 dark:text-sky-400"
-						/>
-					</svg>
-					<div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-						<span className="font-poppins text-3xl font-bold text-famedic-dark dark:text-white">
-							{progress.remainingDays}
-						</span>
-						<Text className="text-xs text-zinc-500">
-							días restantes
-						</Text>
-					</div>
-				</div>
-
-				<div className="w-full flex-1 space-y-4">
-					<div className="flex items-end justify-between gap-4">
-						<div>
-							<Text className="text-sm text-zinc-500">
-								Periodo total
-							</Text>
-							<p className="font-poppins text-xl font-semibold text-famedic-dark dark:text-white">
-								{progress.totalDays} días
-							</p>
-						</div>
-						<div className="text-right">
-							<Text className="text-sm text-zinc-500">
-								Utilizados
-							</Text>
-							<p className="font-poppins text-xl font-semibold text-zinc-700 dark:text-slate-200">
-								{progress.usedDays} días
-							</p>
-						</div>
-					</div>
-
-					<div className="space-y-2">
-						<div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-							<div
-								className="h-full rounded-full bg-gradient-to-r from-famedic-dark to-violet-500 transition-all duration-500"
-								style={{ width: `${progress.percentageUsed}%` }}
-							/>
-						</div>
-						<div className="flex justify-between text-xs text-zinc-500">
-							<span>{progress.usedDays} días utilizados</span>
-							<span>{progress.remainingDays} días restantes</span>
-						</div>
-					</div>
-				</div>
+		<div
+			className={clsx("relative flex items-center justify-center", dimensions, className)}
+			role="img"
+			aria-label={`${progress.remainingDays} días restantes de membresía`}
+		>
+			<svg
+				className="size-full -rotate-90"
+				viewBox="0 0 100 100"
+				aria-hidden="true"
+			>
+				<circle
+					cx="50"
+					cy="50"
+					r="42"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="8"
+					className="text-white/15"
+				/>
+				<circle
+					cx="50"
+					cy="50"
+					r="42"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="8"
+					strokeLinecap="round"
+					strokeDasharray={circumference}
+					strokeDashoffset={strokeDashoffset}
+					className="text-white transition-all duration-700"
+				/>
+			</svg>
+			<div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+				<span className={clsx("font-poppins leading-none text-white", valueClass)}>
+					{progress.remainingDays}
+				</span>
+				<Text className="mt-0.5 text-[10px] text-white/70 sm:text-xs">
+					días
+				</Text>
 			</div>
-		</Card>
+		</div>
 	);
 }

@@ -14,6 +14,86 @@ class MembershipDashboardService
 {
     public function build(Customer $customer): array
     {
+        $context = $this->buildContext($customer);
+
+        return [
+            'status' => $this->buildStatus(
+                $customer,
+                $context['currentSubscription'],
+                $context['isActive'],
+                $context['remainingDays'],
+                $context['renewUrl'],
+            ),
+            'access' => $this->buildAccess($customer, $context['isActive']),
+            'progress' => $context['progress'],
+            'benefits' => $this->buildBenefits(),
+            'plan' => $this->buildPlan($context['currentSubscription'], $context['isActive']),
+            'payment' => $context['latestPayment']
+                ? $this->formatPayment($context['latestPayment'])
+                : null,
+            'coverage' => $this->buildCoverage($customer, $context['isActive']),
+            'renewal' => $this->buildRenewal(
+                $context['isActive'],
+                $context['remainingDays'],
+                $context['renewUrl'],
+            ),
+            'holder' => $this->buildHolder($customer, $context['isActive']),
+            'faq' => $this->buildFaq(),
+            'capabilities' => $this->buildCapabilities(
+                $customer,
+                $context['isActive'],
+                $context['latestPayment'],
+            ),
+        ];
+    }
+
+    public function buildTabData(Customer $customer, string $tab): array
+    {
+        $context = $this->buildContext($customer);
+
+        return match ($tab) {
+            'plan' => [
+                'plan' => $this->buildPlan($context['currentSubscription'], $context['isActive']),
+                'benefits' => $this->buildBenefits(),
+            ],
+            'pagos' => [
+                'payments' => $this->buildPayments($context['subscriptions']),
+                'capabilities' => $this->buildCapabilities(
+                    $customer,
+                    $context['isActive'],
+                    $context['latestPayment'],
+                ),
+            ],
+            'cobertura' => [
+                'coverage' => $this->buildCoverage($customer, $context['isActive']),
+                'capabilities' => $this->buildCapabilities(
+                    $customer,
+                    $context['isActive'],
+                    $context['latestPayment'],
+                ),
+            ],
+            'uso' => [
+                'usage' => $this->buildUsage(),
+            ],
+            'historial' => [
+                'timeline' => $this->buildTimeline($context['subscriptions'], $customer),
+            ],
+            'documentos' => [
+                'documents' => $this->buildDocuments(
+                    $context['latestPayment'],
+                    $this->buildCapabilities(
+                        $customer,
+                        $context['isActive'],
+                        $context['latestPayment'],
+                    ),
+                ),
+            ],
+            default => [],
+        };
+    }
+
+    protected function buildContext(Customer $customer): array
+    {
         $subscriptions = $customer->medicalAttentionSubscriptions()
             ->with(['transactions'])
             ->orderByDesc('end_date')
@@ -22,25 +102,19 @@ class MembershipDashboardService
         $currentSubscription = $this->resolveCurrentSubscription($subscriptions, $customer);
         $isActive = $customer->medical_attention_subscription_is_active;
         $renewUrl = route('medical-attention.checkout');
-
         $remainingDays = $this->remainingDays($customer, $currentSubscription);
         $progress = $this->buildProgress($currentSubscription, $remainingDays, $isActive);
         $latestPayment = $this->resolveLatestPayment($currentSubscription, $subscriptions);
 
-        return [
-            'status' => $this->buildStatus($customer, $currentSubscription, $isActive, $remainingDays, $renewUrl),
-            'access' => $this->buildAccess($customer, $isActive),
-            'progress' => $progress,
-            'benefits' => $this->buildBenefits(),
-            'plan' => $this->buildPlan($currentSubscription, $isActive),
-            'payment' => $latestPayment ? $this->formatPayment($latestPayment) : null,
-            'history' => $this->buildHistory($subscriptions),
-            'coverage' => $this->buildCoverage($customer, $isActive),
-            'renewal' => $this->buildRenewal($isActive, $remainingDays, $renewUrl),
-            'usage' => $this->buildUsage(),
-            'faq' => $this->buildFaq(),
-            'capabilities' => $this->buildCapabilities($customer, $isActive, $latestPayment),
-        ];
+        return compact(
+            'subscriptions',
+            'currentSubscription',
+            'isActive',
+            'renewUrl',
+            'remainingDays',
+            'progress',
+            'latestPayment',
+        );
     }
 
     protected function resolveCurrentSubscription(Collection $subscriptions, Customer $customer): ?MedicalAttentionSubscription
@@ -207,10 +281,15 @@ class MembershipDashboardService
             'price' => $subscription->formatted_price,
             'purchaseDate' => $this->formatDashboardDate($subscription->created_at),
             'renewalDate' => $this->formatDashboardDate($subscription->end_date),
+            'startDate' => $this->formatDashboardDate($subscription->start_date),
+            'endDate' => $this->formatDashboardDate($subscription->end_date),
             'paymentType' => $this->paymentTypeLabel($subscription),
             'status' => $paymentStatus,
             'type' => $subscription->type->value,
             'isActive' => $isActive,
+            'provider' => $transaction
+                ? $this->paymentProviderLabel($transaction)
+                : 'Famedic',
         ];
     }
 
@@ -302,12 +381,42 @@ class MembershipDashboardService
             ->all();
     }
 
+    protected function buildHolder(Customer $customer, bool $isActive): array
+    {
+        $user = $customer->user;
+        $isTitular = $customer->customerable_type !== FamilyAccount::class;
+
+        return [
+            'id' => 'holder-'.$customer->id,
+            'name' => trim(collect([
+                $user?->name,
+                $user?->paternal_lastname,
+                $user?->maternal_lastname,
+            ])->filter()->join(' ')),
+            'email' => $user?->email,
+            'phone' => $user?->phone,
+            'formattedPhone' => $user?->phone
+                ? $this->formatPhone((string) $user->phone)
+                : null,
+            'birthDate' => $user?->birth_date
+                ? $this->formatDashboardDate($user->birth_date)
+                : null,
+            'userType' => $isTitular ? 'Titular' : 'Beneficiario',
+            'status' => $isActive ? 'Activo' : 'Inactivo',
+            'statusKey' => $isActive ? 'active' : 'inactive',
+            'avatarUrl' => $user?->profile_photo_url,
+            'initials' => $this->initials($user?->name),
+            'editUrl' => route('user.edit'),
+        ];
+    }
+
     protected function buildCoverage(Customer $customer, bool $isActive): array
     {
         $user = $customer->user;
         $beneficiaries = [
             [
                 'id' => 'holder-'.$customer->id,
+                'familyAccountId' => null,
                 'name' => trim(collect([
                     $user?->name,
                     $user?->paternal_lastname,
@@ -319,6 +428,8 @@ class MembershipDashboardService
                 'statusKey' => $isActive ? 'active' : 'inactive',
                 'avatarUrl' => $user?->profile_photo_url,
                 'initials' => $this->initials($user?->name),
+                'isHolder' => true,
+                'editUrl' => route('user.edit'),
             ],
         ];
 
@@ -327,6 +438,7 @@ class MembershipDashboardService
         foreach ($familyAccounts as $familyAccount) {
             $beneficiaries[] = [
                 'id' => 'family-'.$familyAccount->id,
+                'familyAccountId' => $familyAccount->id,
                 'name' => $familyAccount->full_name,
                 'kinship' => $familyAccount->formatted_kinship,
                 'age' => $familyAccount->birth_date ? (int) Carbon::parse($familyAccount->birth_date)->age : null,
@@ -334,10 +446,144 @@ class MembershipDashboardService
                 'statusKey' => $isActive ? 'active' : 'inactive',
                 'avatarUrl' => $familyAccount->profile_photo_url,
                 'initials' => $this->initials($familyAccount->name),
+                'isHolder' => false,
+                'editUrl' => route('family.edit', $familyAccount),
             ];
         }
 
         return $beneficiaries;
+    }
+
+    protected function buildPayments(Collection $subscriptions): array
+    {
+        return $subscriptions
+            ->flatMap(function (MedicalAttentionSubscription $subscription) {
+                $transactions = $subscription->transactions->sortByDesc('created_at');
+
+                if ($transactions->isEmpty()) {
+                    return [[
+                        'id' => 'subscription-'.$subscription->id,
+                        'sortAt' => $subscription->created_at,
+                        'date' => $this->formatDashboardDate($subscription->created_at),
+                        'concept' => $this->historyConcept($subscription),
+                        'amount' => $subscription->formatted_price,
+                        'method' => $this->paymentTypeLabel($subscription),
+                        'provider' => 'Famedic',
+                        'status' => $subscription->price_cents > 0 ? 'Registrado' : 'Gratuito',
+                        'statusKey' => $subscription->price_cents > 0 ? 'paid' : 'free',
+                        'invoiceAvailable' => false,
+                        'transactionId' => null,
+                    ]];
+                }
+
+                return $transactions->map(fn (Transaction $transaction) => [
+                    'id' => 'transaction-'.$transaction->id,
+                    'sortAt' => $transaction->created_at,
+                    'date' => $this->formatDashboardDate($transaction->created_at),
+                    'concept' => $this->historyConcept($subscription),
+                    'amount' => $transaction->formatted_amount,
+                    'method' => $this->formatPayment($transaction)['method'],
+                    'provider' => $this->paymentProviderLabel($transaction),
+                    'status' => $transaction->isSuccessfulPayment() ? 'Pagado' : 'Pendiente',
+                    'statusKey' => $transaction->isSuccessfulPayment() ? 'paid' : 'pending',
+                    'invoiceAvailable' => false,
+                    'transactionId' => $transaction->id,
+                ]);
+            })
+            ->sortByDesc(fn (array $entry) => $entry['sortAt'])
+            ->map(fn (array $entry) => collect($entry)->except('sortAt')->all())
+            ->values()
+            ->all();
+    }
+
+    protected function buildTimeline(Collection $subscriptions, Customer $customer): array
+    {
+        $events = collect();
+
+        foreach ($subscriptions as $subscription) {
+            $events->push([
+                'id' => 'subscription-start-'.$subscription->id,
+                'sortAt' => $subscription->start_date ?? $subscription->created_at,
+                'date' => $this->formatDashboardDate($subscription->start_date ?? $subscription->created_at),
+                'title' => $this->historyConcept($subscription),
+                'description' => 'Vigencia hasta '.$this->formatDashboardDate($subscription->end_date),
+                'type' => 'purchase',
+                'typeLabel' => 'Compra',
+                'amount' => $subscription->formatted_price,
+            ]);
+
+            foreach ($subscription->transactions->sortByDesc('created_at') as $transaction) {
+                $events->push([
+                    'id' => 'transaction-'.$transaction->id,
+                    'sortAt' => $transaction->created_at,
+                    'date' => $this->formatDashboardDate($transaction->created_at),
+                    'title' => 'Pago registrado',
+                    'description' => $this->historyConcept($subscription),
+                    'type' => 'payment',
+                    'typeLabel' => 'Pago',
+                    'amount' => $transaction->formatted_amount,
+                ]);
+            }
+        }
+
+        foreach ($customer->familyAccounts as $familyAccount) {
+            $events->push([
+                'id' => 'family-added-'.$familyAccount->id,
+                'sortAt' => $familyAccount->created_at,
+                'date' => $this->formatDashboardDate($familyAccount->created_at),
+                'title' => 'Beneficiario agregado',
+                'description' => $familyAccount->full_name.' · '.$familyAccount->formatted_kinship,
+                'type' => 'beneficiary',
+                'typeLabel' => 'Alta',
+                'amount' => null,
+            ]);
+        }
+
+        return $events
+            ->sortByDesc(fn (array $event) => $event['sortAt'])
+            ->map(fn (array $event) => collect($event)->except('sortAt')->all())
+            ->values()
+            ->all();
+    }
+
+    protected function buildDocuments(?Transaction $latestPayment, array $capabilities): array
+    {
+        $canDownloadReceipt = $capabilities['canDownloadReceipt'] ?? false;
+
+        return [
+            [
+                'id' => 'receipt',
+                'type' => 'receipt',
+                'label' => 'Comprobante de pago',
+                'description' => 'Recibo de tu última transacción.',
+                'available' => $canDownloadReceipt,
+                'downloadUrl' => $capabilities['receiptDownloadUrl'] ?? null,
+            ],
+            [
+                'id' => 'contract',
+                'type' => 'contract',
+                'label' => 'Contrato de membresía',
+                'description' => 'Términos y condiciones de tu plan.',
+                'available' => false,
+                'downloadUrl' => null,
+            ],
+            [
+                'id' => 'invoice',
+                'type' => 'invoice',
+                'label' => 'Factura',
+                'description' => 'Comprobante fiscal de tu compra.',
+                'available' => false,
+                'downloadUrl' => null,
+            ],
+            [
+                'id' => 'terms',
+                'type' => 'terms',
+                'label' => 'Términos y condiciones',
+                'description' => 'Políticas de uso de la membresía.',
+                'available' => false,
+                'downloadUrl' => null,
+            ],
+        ];
     }
 
     protected function buildRenewal(bool $isActive, int $remainingDays, string $renewUrl): array
@@ -512,7 +758,22 @@ class MembershipDashboardService
         }
 
         $parts = preg_split('/\s+/', trim($name)) ?: [];
+        $first = mb_substr($parts[0] ?? '?', 0, 1);
+        $second = isset($parts[1]) ? mb_substr($parts[1], 0, 1) : '';
 
-        return mb_strtoupper(mb_substr($parts[0] ?? '?', 0, 1));
+        return mb_strtoupper($first.$second);
+    }
+
+    protected function formatPhone(string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?? $phone;
+
+        if (strlen($digits) === 10) {
+            return substr($digits, 0, 2).' '
+                .substr($digits, 2, 4).' '
+                .substr($digits, 6);
+        }
+
+        return $phone;
     }
 }

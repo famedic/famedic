@@ -93,6 +93,7 @@ Route::middleware([
     Route::resource('online-pharmacy-purchases', OnlinePharmacyPurchaseController::class)->only(['index', 'show']);
 
     Route::get('/membership', [MembershipController::class, 'index'])->name('membership.index');
+    Route::get('/membership/tab/{tab}', [MembershipController::class, 'tab'])->name('membership.tab');
 });
 
 // Password.confirm

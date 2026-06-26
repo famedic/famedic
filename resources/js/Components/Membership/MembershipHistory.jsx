@@ -1,117 +1,109 @@
 import Card from "@/Components/Card";
 import { Badge } from "@/Components/Catalyst/badge";
-import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/Components/Catalyst/table";
+import clsx from "clsx";
 
-const STATUS_COLORS = {
-	paid: "emerald",
-	pending: "amber",
-	free: "sky",
+const TYPE_STYLES = {
+	purchase: {
+		color: "violet",
+		dot: "bg-violet-500",
+	},
+	payment: {
+		color: "emerald",
+		dot: "bg-emerald-500",
+	},
+	beneficiary: {
+		color: "sky",
+		dot: "bg-sky-500",
+	},
+	renewal: {
+		color: "amber",
+		dot: "bg-amber-500",
+	},
+	change: {
+		color: "zinc",
+		dot: "bg-zinc-400",
+	},
 };
 
-export default function MembershipHistory({ history = [] }) {
-	if (history.length === 0) {
+export default function MembershipHistory({ timeline = [] }) {
+	if (timeline.length === 0) {
 		return (
-			<Card className="p-6 shadow-sm ring-1 ring-slate-100 sm:p-8">
-				<h3 className="font-poppins text-lg font-semibold text-famedic-dark dark:text-white">
-					Historial
-				</h3>
-				<Text className="mt-2 text-sm text-zinc-500">
-					Aún no hay movimientos registrados en tu membresía.
+			<Card className="rounded-2xl p-8 ring-1 ring-slate-100">
+				<Text className="text-sm text-zinc-500">
+					Aún no hay eventos registrados en tu membresía.
 				</Text>
 			</Card>
 		);
 	}
 
 	return (
-		<section className="space-y-4">
+		<div className="space-y-6">
 			<div>
 				<h3 className="font-poppins text-lg font-semibold text-famedic-dark dark:text-white">
 					Historial
 				</h3>
 				<Text className="text-sm text-zinc-500">
-					Compras y movimientos de tu membresía.
+					Línea de tiempo de compras, pagos y cambios.
 				</Text>
 			</div>
 
-			<Card className="overflow-hidden shadow-sm ring-1 ring-slate-100">
-				<div className="hidden sm:block">
-					<Table>
-						<TableHead>
-							<TableRow>
-								<TableHeader>Fecha</TableHeader>
-								<TableHeader>Concepto</TableHeader>
-								<TableHeader>Monto</TableHeader>
-								<TableHeader>Estado</TableHeader>
-								<TableHeader className="text-right">
-									Acciones
-								</TableHeader>
-							</TableRow>
-						</TableHead>
-						<TableBody>
-							{history.map((item) => (
-								<TableRow key={item.id}>
-									<TableCell>{item.date}</TableCell>
-									<TableCell>{item.concept}</TableCell>
-									<TableCell>{item.amount}</TableCell>
-									<TableCell>
-										<Badge
-											color={
-												STATUS_COLORS[item.statusKey] ??
-												"zinc"
-											}
-										>
-											{item.status}
-										</Badge>
-									</TableCell>
-									<TableCell className="text-right">
-										<Button
-											plain
-											disabled
-											className="!text-sm"
-										>
-											Ver detalle
-										</Button>
-									</TableCell>
-								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-				</div>
+			<Card className="rounded-2xl p-5 shadow-sm ring-1 ring-slate-100 sm:p-8">
+				<ol className="relative space-y-0">
+					{timeline.map((event, index) => {
+						const style =
+							TYPE_STYLES[event.type] ?? TYPE_STYLES.change;
+						const isLast = index === timeline.length - 1;
 
-				<div className="divide-y divide-slate-100 sm:hidden dark:divide-slate-800">
-					{history.map((item) => (
-						<div key={item.id} className="space-y-2 p-4">
-							<div className="flex items-center justify-between gap-3">
-								<p className="font-medium text-zinc-800 dark:text-slate-100">
-									{item.concept}
-								</p>
-								<Badge
-									color={
-										STATUS_COLORS[item.statusKey] ?? "zinc"
-									}
-								>
-									{item.status}
-								</Badge>
-							</div>
-							<div className="flex items-center justify-between text-sm text-zinc-500">
-								<span>{item.date}</span>
-								<span className="font-medium text-zinc-700 dark:text-slate-200">
-									{item.amount}
-								</span>
-							</div>
-						</div>
-					))}
-				</div>
+						return (
+							<li
+								key={event.id}
+								className="relative flex gap-4 pb-8 last:pb-0"
+							>
+								{!isLast && (
+									<span
+										className="absolute left-[11px] top-6 h-[calc(100%-12px)] w-px bg-slate-200 dark:bg-slate-700"
+										aria-hidden="true"
+									/>
+								)}
+
+								<div className="relative z-10 mt-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-white ring-4 ring-white dark:bg-slate-900 dark:ring-slate-900">
+									<span
+										className={clsx(
+											"size-2.5 rounded-full",
+											style.dot,
+										)}
+									/>
+								</div>
+
+								<div className="min-w-0 flex-1 space-y-2">
+									<div className="flex flex-wrap items-center gap-2">
+										<p className="font-medium text-zinc-800 dark:text-slate-100">
+											{event.title}
+										</p>
+										<Badge color={style.color}>
+											{event.typeLabel}
+										</Badge>
+									</div>
+									<Text className="text-sm text-zinc-500">
+										{event.description}
+									</Text>
+									<div className="flex flex-wrap items-center gap-3 text-sm">
+										<span className="text-zinc-400">
+											{event.date}
+										</span>
+										{event.amount && (
+											<span className="font-medium text-famedic-dark dark:text-white">
+												{event.amount}
+											</span>
+										)}
+									</div>
+								</div>
+							</li>
+						);
+					})}
+				</ol>
 			</Card>
-		</section>
+		</div>
 	);
 }
