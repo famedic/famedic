@@ -27,6 +27,21 @@ export default {
 			borderRadius: {
 				"4xl": "2rem",
 			},
+			keyframes: {
+				"call-invite": {
+					"0%, 100%": {
+						opacity: "0.72",
+						transform: "scale(1)",
+					},
+					"50%": {
+						opacity: "1",
+						transform: "scale(1.04)",
+					},
+				},
+			},
+			animation: {
+				"call-invite": "call-invite 2.6s ease-in-out infinite",
+			},
 		},
 	},
 	plugins: [aspectRatio, require("@tailwindcss/typography")],

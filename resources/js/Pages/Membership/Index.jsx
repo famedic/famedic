@@ -7,7 +7,6 @@ import { Text } from "@/Components/Catalyst/text";
 import Card from "@/Components/Card";
 import { HeartIcon } from "@heroicons/react/24/solid";
 import MembershipHero from "@/Components/Membership/MembershipHero";
-import MembershipStats from "@/Components/Membership/MembershipStats";
 import MembershipFamily from "@/Components/Membership/MembershipFamily";
 import MembershipTabs from "@/Components/Membership/MembershipTabs";
 import MembershipBenefits, {
@@ -60,6 +59,8 @@ export default function MembershipIndex({ membership }) {
 						<MembershipHero
 							status={membership.status}
 							progress={membership.progress}
+							access={membership.access}
+							plan={membership.plan}
 							capabilities={membership.capabilities}
 							onShowBenefits={() => setShowBenefits(true)}
 						/>
@@ -68,12 +69,6 @@ export default function MembershipIndex({ membership }) {
 							coverage={membership.coverage}
 							capabilities={membership.capabilities}
 							onViewAll={() => scrollToTabs("cobertura")}
-						/>
-
-						<MembershipStats
-							access={membership.access}
-							status={membership.status}
-							plan={membership.plan}
 						/>
 
 						<MembershipBenefits

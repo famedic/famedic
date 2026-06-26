@@ -1,90 +1,163 @@
+import { useState } from "react";
 import Card from "@/Components/Card";
 import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
 import {
-	ArrowDownTrayIcon,
 	HeartIcon,
 	SparklesIcon,
 } from "@heroicons/react/24/solid";
+import {
+	ClipboardDocumentIcon,
+	CheckIcon,
+	PhoneIcon,
+} from "@heroicons/react/24/outline";
 import MembershipProgress from "@/Components/Membership/MembershipProgress";
 import clsx from "clsx";
 
-const STATUS_STYLES = {
-	active: {
-		dot: "bg-emerald-400",
-		label: "Activa",
-		pill: "bg-emerald-500/20 text-emerald-100",
-	},
-	expired: {
-		dot: "bg-zinc-400",
-		label: "Expirada",
-		pill: "bg-white/10 text-white/80",
-	},
-	none: {
-		dot: "bg-zinc-300",
-		label: "Sin membresía",
-		pill: "bg-white/10 text-white/80",
-	},
-};
+function HeroStat({ label, children, action }) {
+	return (
+		<div className="rounded-2xl bg-white/10 px-3 py-3 backdrop-blur sm:px-4 sm:py-3.5">
+			<div className="flex items-start justify-between gap-2">
+				<Text className="text-[10px] font-medium uppercase tracking-wide text-white/50 sm:text-xs">
+					{label}
+				</Text>
+				{action}
+			</div>
+			<div className="mt-1.5 min-w-0">{children}</div>
+		</div>
+	);
+}
 
 export default function MembershipHero({
 	status,
 	progress,
+	access,
+	plan,
 	capabilities,
 	onShowBenefits,
 }) {
-	const style = STATUS_STYLES[status?.status] ?? STATUS_STYLES.none;
+	const [copied, setCopied] = useState(false);
+	const isActive = status?.status === "active";
+
+	const copyIdentifier = async () => {
+		if (!access?.identifier) return;
+
+		try {
+			await navigator.clipboard.writeText(access.identifier);
+			setCopied(true);
+			window.setTimeout(() => setCopied(false), 2000);
+		} catch {
+			setCopied(false);
+		}
+	};
 
 	return (
 		<Card className="overflow-hidden rounded-[20px] shadow-lg ring-1 ring-slate-100">
 			<div className="bg-gradient-to-br from-famedic-dark via-famedic-dark to-violet-900 px-5 py-7 text-white sm:px-8 sm:py-9">
-				<div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+				<div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
 					<div className="min-w-0 flex-1 space-y-5">
-						<div className="flex items-start gap-4">
-							<div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 backdrop-blur">
-								<HeartIcon className="size-6 text-rose-300" />
+						<div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+							<div className="flex min-w-0 items-start gap-4">
+								<div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 backdrop-blur">
+									<HeartIcon className="size-6 text-rose-300" />
+								</div>
+								<div className="min-w-0">
+									<Text className="text-sm text-white/60">
+										Tu plan
+									</Text>
+									<h2 className="font-poppins text-2xl font-semibold tracking-tight sm:text-3xl">
+										{status?.title}
+									</h2>
+									<div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-white/70">
+										<span>Vigencia</span>
+										<span className="font-medium text-white">
+											{status?.startDate ?? "—"}
+										</span>
+										<span className="text-white/40">→</span>
+										<span className="font-medium text-white">
+											{status?.endDate ?? "—"}
+										</span>
+									</div>
+								</div>
 							</div>
-							<div className="min-w-0">
-								<Text className="text-sm text-white/60">
-									Tu plan
-								</Text>
-								<h2 className="font-poppins text-2xl font-semibold tracking-tight sm:text-3xl">
-									{status?.title}
-								</h2>
-							</div>
+
+							{progress && (
+								<div className="flex shrink-0 justify-center sm:justify-end xl:hidden">
+									<MembershipProgress progress={progress} size="sm" />
+								</div>
+							)}
 						</div>
 
-						<div className="flex flex-wrap items-center gap-3">
-							<span
-								className={clsx(
-									"inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium",
-									style.pill,
-								)}
+						<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+							<HeroStat
+								label="ID de membresía"
+								action={
+									access?.identifier ? (
+										<button
+											type="button"
+											onClick={copyIdentifier}
+											className="inline-flex items-center gap-1 text-[11px] font-medium text-white/80 transition hover:text-white"
+											aria-label="Copiar ID de membresía"
+										>
+											{copied ? (
+												<CheckIcon className="size-3.5 text-emerald-300" />
+											) : (
+												<ClipboardDocumentIcon className="size-3.5" />
+											)}
+											{copied ? "Copiado" : "Copiar"}
+										</button>
+									) : null
+								}
 							>
-								<span
-									className={clsx("size-2 rounded-full", style.dot)}
-								/>
-								{status?.statusLabel}
-							</span>
-						</div>
+								<p className="font-poppins text-lg font-bold leading-tight tracking-tight sm:text-xl">
+									{access?.identifier ?? "—"}
+								</p>
+							</HeroStat>
 
-						<div className="grid gap-3 sm:grid-cols-2">
-							<div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur">
-								<Text className="text-xs uppercase tracking-wide text-white/50">
-									Inicio
-								</Text>
-								<p className="mt-1 font-poppins text-base font-semibold">
-									{status?.startDate ?? "—"}
+							<HeroStat
+								label="Línea médica"
+								action={
+									access?.telHref ? (
+										<a
+											href={access.telHref}
+											className="relative inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold text-emerald-300 no-underline motion-safe:animate-call-invite transition hover:bg-white/15 hover:text-white hover:animate-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300/80"
+										>
+											<PhoneIcon className="size-3.5 shrink-0" />
+											Llamar
+										</a>
+									) : null
+								}
+							>
+								<p className="font-poppins text-base font-semibold leading-tight sm:text-lg">
+									{access?.formattedPhone ?? "—"}
 								</p>
-							</div>
-							<div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur">
-								<Text className="text-xs uppercase tracking-wide text-white/50">
-									Fin
-								</Text>
-								<p className="mt-1 font-poppins text-base font-semibold">
-									{status?.endDate ?? "—"}
+								{access?.lineLabel && (
+									<Text className="mt-0.5 text-[11px] leading-snug text-white/55 sm:text-xs">
+										{access.lineLabel}
+									</Text>
+								)}
+							</HeroStat>
+
+							<HeroStat label="Estado">
+								<p className="inline-flex items-center gap-2 font-poppins text-base font-semibold sm:text-lg">
+									<span
+										className={clsx(
+											"size-2.5 rounded-full",
+											isActive ? "bg-emerald-400" : "bg-zinc-400",
+										)}
+									/>
+									{status?.statusLabel ?? "—"}
 								</p>
-							</div>
+							</HeroStat>
+
+							<HeroStat label="Próxima renovación">
+								<p className="font-poppins text-base font-semibold leading-tight sm:text-lg">
+									{plan?.renewalDate ?? status?.endDate ?? "—"}
+								</p>
+								<Text className="mt-0.5 text-[11px] text-white/55 sm:text-xs">
+									{plan?.paymentType ?? "—"}
+								</Text>
+							</HeroStat>
 						</div>
 
 						<div className="flex flex-wrap gap-3">
@@ -96,17 +169,6 @@ export default function MembershipHero({
 								<SparklesIcon className="size-4" />
 								Ver beneficios
 							</Button>
-							{capabilities?.canDownloadReceipt && (
-								<Button
-									outline
-									disabled={!capabilities.receiptDownloadUrl}
-									href={capabilities.receiptDownloadUrl ?? undefined}
-									className="!border-white/25 !text-white hover:!bg-white/10"
-								>
-									<ArrowDownTrayIcon className="size-4" />
-									Descargar comprobante
-								</Button>
-							)}
 							{status?.canRenew && capabilities?.canRenew && (
 								<Button
 									href={status.renewUrl}
@@ -119,7 +181,7 @@ export default function MembershipHero({
 					</div>
 
 					{progress && (
-						<div className="flex shrink-0 justify-center lg:justify-end">
+						<div className="hidden shrink-0 justify-center xl:flex xl:justify-end">
 							<MembershipProgress progress={progress} />
 						</div>
 					)}
