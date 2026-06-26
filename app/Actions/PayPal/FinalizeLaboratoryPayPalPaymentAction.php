@@ -2,7 +2,8 @@
 
 namespace App\Actions\PayPal;
 
-use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
+use App\Actions\Laboratories\FulfillLaboratoryCartMembershipAction;
+use App\Actions\Laboratories\ResolveLaboratoryCartTotalsAction;
 use App\Actions\Laboratories\FulfillLaboratoryCartOrderAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\MissingLaboratoryAppointmentException;
@@ -23,8 +24,9 @@ class FinalizeLaboratoryPayPalPaymentAction
 {
     public function __construct(
         private PayPalService $payPalService,
-        private CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
+        private ResolveLaboratoryCartTotalsAction $resolveLaboratoryCartTotalsAction,
         private FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction,
+        private FulfillLaboratoryCartMembershipAction $fulfillLaboratoryCartMembershipAction,
     ) {
     }
 
@@ -125,8 +127,8 @@ class FinalizeLaboratoryPayPalPaymentAction
             ->with('laboratoryTest')
             ->get();
 
-        $totals = ($this->calculateTotalsAndDiscountAction)($cartItems);
-        if ((int) ($details['total_cents'] ?? 0) !== $totals['total']) {
+        $totals = ($this->resolveLaboratoryCartTotalsAction)($customer, $brand, $cartItems);
+        if ((int) ($details['total_cents'] ?? 0) !== (int) $totals['total']) {
             throw new UnmatchingTotalPriceException();
         }
 
@@ -145,7 +147,7 @@ class FinalizeLaboratoryPayPalPaymentAction
 
         $gdaBrandValue = $brand->value;
 
-        return ($this->fulfillLaboratoryCartOrderAction)(
+        $purchase = ($this->fulfillLaboratoryCartOrderAction)(
             $customer,
             $brand,
             $address,
@@ -158,6 +160,17 @@ class FinalizeLaboratoryPayPalPaymentAction
             $details['promo_validation_token'] ?? null,
             $details['cart_hash'] ?? null,
         );
+
+        if ((bool) ($details['has_membership_in_cart'] ?? false)) {
+            ($this->fulfillLaboratoryCartMembershipAction)(
+                $customer,
+                $brand,
+                $transaction,
+                hadMembershipInCart: true,
+            );
+        }
+
+        return $purchase;
     }
 
     /**

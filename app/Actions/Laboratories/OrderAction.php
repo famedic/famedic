@@ -4,6 +4,8 @@ namespace App\Actions\Laboratories;
 
 use App\Actions\Odessa\ChargeOdessaAction;
 use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction;
+use App\Actions\Laboratories\FulfillLaboratoryCartMembershipAction;
+use App\Actions\Laboratories\ResolveLaboratoryCartTotalsAction;
 use App\Actions\Transactions\CreateCouponBalanceTransactionAction;
 use App\Actions\Transactions\RefundTransactionAction;
 use App\Enums\LaboratoryBrand;
@@ -25,7 +27,8 @@ use Propaganistas\LaravelPhone\PhoneNumber;
 
 class OrderAction
 {
-    private CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction;
+    private ResolveLaboratoryCartTotalsAction $resolveLaboratoryCartTotalsAction;
+    private FulfillLaboratoryCartMembershipAction $fulfillLaboratoryCartMembershipAction;
     private ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction;
     private ChargeOdessaAction $chargeOdessaAction;
     private CreateGDAQuotationAction $createGDAQuotationAction;
@@ -38,7 +41,8 @@ class OrderAction
     private Collection $laboratoryCartItems;
 
     public function __construct(
-        CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
+        ResolveLaboratoryCartTotalsAction $resolveLaboratoryCartTotalsAction,
+        FulfillLaboratoryCartMembershipAction $fulfillLaboratoryCartMembershipAction,
         ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction,
         ChargeOdessaAction $chargeOdessaAction,
         CreateGDAQuotationAction $createGDAQuotationAction,
@@ -48,7 +52,8 @@ class OrderAction
         CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction,
         FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction
     ) {
-        $this->calculateTotalsAndDiscountAction = $calculateTotalsAndDiscountAction;
+        $this->resolveLaboratoryCartTotalsAction = $resolveLaboratoryCartTotalsAction;
+        $this->fulfillLaboratoryCartMembershipAction = $fulfillLaboratoryCartMembershipAction;
         $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction;
         $this->chargeOdessaAction = $chargeOdessaAction;
         $this->createGDAQuotationAction = $createGDAQuotationAction;
@@ -75,8 +80,15 @@ class OrderAction
             ->with('laboratoryTest')
             ->get();
 
-        $totals = ($this->calculateTotalsAndDiscountAction)($this->laboratoryCartItems);
-        $calculatedTotalCents = $totals['total'];
+        $totals = ($this->resolveLaboratoryCartTotalsAction)(
+            $customer,
+            $laboratoryBrand,
+            $this->laboratoryCartItems,
+        );
+        $calculatedTotalCents = (int) $totals['total'];
+        $laboratoryTotalCents = (int) $totals['laboratoryTotalCents'];
+        $membershipPriceCents = (int) $totals['membershipPriceCents'];
+        $hasMembershipInCart = (bool) $totals['hasMembershipInCart'];
 
         if ($totalCents != $calculatedTotalCents) {
             throw new UnmatchingTotalPriceException();
@@ -87,13 +99,13 @@ class OrderAction
         }
 
         $discountCents = 0;
-        $cartHash = $this->promoCodeService->buildLaboratoryCartHash($this->laboratoryCartItems, $calculatedTotalCents);
+        $cartHash = $this->promoCodeService->buildLaboratoryCartHash($this->laboratoryCartItems, $laboratoryTotalCents);
 
         if ($promoValidationToken !== null) {
             $redemption = $this->promoCodeService->resolveValidatedRedemption(
                 $customer->user,
                 $promoValidationToken,
-                $calculatedTotalCents,
+                $laboratoryTotalCents,
                 $cartHash,
             );
             $discountCents = (int) $redemption->discount_cents;
@@ -101,16 +113,16 @@ class OrderAction
             $this->couponApplicationService->validateApplication(
                 $customer->user,
                 $couponId,
-                $calculatedTotalCents
+                $laboratoryTotalCents
             );
             $coupon = Coupon::query()->findOrFail($couponId);
             $discountCents = $this->couponApplicationService->resolveDiscountCents(
                 $coupon,
-                $calculatedTotalCents
+                $laboratoryTotalCents
             );
         }
 
-        $amountToChargeCents = $calculatedTotalCents - $discountCents;
+        $amountToChargeCents = max(0, $laboratoryTotalCents - $discountCents) + $membershipPriceCents;
 
         $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand);
 
@@ -154,9 +166,9 @@ class OrderAction
             }
 
             if ($couponId !== null) {
-                $this->addCouponDetailsToTransaction($transaction, (int) $couponId, $discountCents, $calculatedTotalCents);
+                $this->addCouponDetailsToTransaction($transaction, (int) $couponId, $discountCents, $laboratoryTotalCents);
             } elseif ($promoValidationToken !== null) {
-                $this->addPromoDetailsToTransaction($transaction, $promoValidationToken, $discountCents, $calculatedTotalCents);
+                $this->addPromoDetailsToTransaction($transaction, $promoValidationToken, $discountCents, $laboratoryTotalCents);
             }
 
             $gdaBrandValue = request()->laboratory_brand->value ?? $laboratoryBrand->value;
@@ -174,6 +186,20 @@ class OrderAction
                 $promoValidationToken,
                 $cartHash,
             );
+
+            if ($hasMembershipInCart) {
+                $this->addMembershipDetailsToTransaction(
+                    $transaction,
+                    $membershipPriceCents,
+                );
+
+                ($this->fulfillLaboratoryCartMembershipAction)(
+                    $customer,
+                    $laboratoryBrand,
+                    $transaction,
+                    hadMembershipInCart: true,
+                );
+            }
         } catch (\Throwable $th) {
             if (DB::transactionLevel() > 0) {
                 DB::rollBack();
@@ -239,5 +265,20 @@ class OrderAction
             $amountCents,
             $paymentMethod
         );
+    }
+
+    private function addMembershipDetailsToTransaction(
+        Transaction $transaction,
+        int $membershipPriceCents,
+    ): void {
+        $details = is_array($transaction->details) ? $transaction->details : [];
+
+        $transaction->update([
+            'details' => array_merge($details, [
+                'has_membership_in_cart' => true,
+                'membership_price_cents' => $membershipPriceCents,
+                'membership_fulfillment_source' => 'laboratory_checkout',
+            ]),
+        ]);
     }
 }

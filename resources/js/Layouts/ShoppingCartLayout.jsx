@@ -125,6 +125,7 @@ export default function ShoppingCartLayout({
 	summaryExtra = null,
 	addMoreHref = null,
 	addMoreLabel = null,
+	crossSellSlot = null,
 	// =============================================
 }) {
 	
@@ -307,6 +308,8 @@ export default function ShoppingCartLayout({
 								</li>
 							)}
 						</ul>
+
+						{crossSellSlot}
 					</section>
 
 					{items.length > 0 && (

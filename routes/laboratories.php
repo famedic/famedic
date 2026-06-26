@@ -5,6 +5,7 @@ use App\Http\Controllers\Laboratories\LaboratoryPurchases\InvoiceRequestControll
 use App\Http\Controllers\Laboratories\LaboratoryTestsController;
 use App\Http\Controllers\LaboratoryAppointmentController;
 use App\Http\Controllers\LaboratoryCartItemController;
+use App\Http\Controllers\LaboratoryCartMembershipController;
 use App\Http\Controllers\LaboratoryCheckoutController;
 use App\Http\Controllers\LaboratoryPurchaseController;
 use App\Http\Controllers\LaboratoryQuoteController;
@@ -64,6 +65,10 @@ Route::middleware([
 
     // Shopping Cart & Checkout
     Route::resource('laboratory-cart-items', LaboratoryCartItemController::class)->only(['store', 'destroy']);
+    Route::post('/laboratory/{laboratory_brand}/cart-membership', [LaboratoryCartMembershipController::class, 'store'])
+        ->name('laboratory.cart-membership.store');
+    Route::delete('/laboratory/{laboratory_brand}/cart-membership', [LaboratoryCartMembershipController::class, 'destroy'])
+        ->name('laboratory.cart-membership.destroy');
     Route::get('/laboratory/{laboratory_brand}/shopping-cart', LaboratoryShoppingCartController::class)->name('laboratory.shopping-cart');
 
     Route::get('/laboratory/{laboratory_brand}/checkout', LaboratoryCheckoutController::class)

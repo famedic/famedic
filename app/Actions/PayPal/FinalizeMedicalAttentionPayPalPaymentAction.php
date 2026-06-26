@@ -3,6 +3,7 @@
 namespace App\Actions\PayPal;
 
 use App\Actions\MedicalAttention\CreateRegularSubscriptionAction;
+use App\Actions\MedicalAttention\NotifyMedicalMembershipPurchasedAction;
 use App\Models\Customer;
 use App\Models\MedicalAttentionSubscription;
 use App\Models\Transaction;
@@ -16,6 +17,7 @@ class FinalizeMedicalAttentionPayPalPaymentAction
     public function __construct(
         private PayPalService $payPalService,
         private CreateRegularSubscriptionAction $createRegularSubscriptionAction,
+        private NotifyMedicalMembershipPurchasedAction $notifyMedicalMembershipPurchasedAction,
     ) {
     }
 
@@ -135,6 +137,12 @@ class FinalizeMedicalAttentionPayPalPaymentAction
                 'transaction_id' => $tx->id,
                 'customer_id' => $customer->id,
             ]);
+
+            ($this->notifyMedicalMembershipPurchasedAction)(
+                $subscription,
+                $tx,
+                'medical_attention_checkout',
+            );
 
             return $subscription;
         });

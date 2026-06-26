@@ -13,6 +13,8 @@ import {
 } from "@heroicons/react/24/solid";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import BalanceCreditCard from "@/Components/Coupons/BalanceCreditCard";
+import MembershipCrossSellCard from "@/Components/Laboratory/MembershipCrossSellCard";
+import MembershipInCartCard from "@/Components/Laboratory/MembershipInCartCard";
 import { useEffect, useState } from "react";
 
 // ==================== FUNCIÓN DEBUG GA4 ACTUALIZADA ====================
@@ -139,6 +141,10 @@ export default function LaboratoryShoppingCart({
 	availableBalanceCoupons = [],
 	cartTotalCents = 0,
 	balanceCreditPresentation = null,
+	showMembershipCrossSell = false,
+	hasMembershipInCart = false,
+	formattedMembershipPrice = null,
+	membershipCrossSell = null,
 }) {
 	const {
 		laboratoryCartItemToDelete,
@@ -522,6 +528,14 @@ export default function LaboratoryShoppingCart({
 				summaryDetails={[
 					{ value: formattedSubtotal, label: "Subtotal" },
 					{ value: "-" + formattedDiscount, label: "Descuento" },
+					...(hasMembershipInCart
+						? [
+								{
+									value: formattedMembershipPrice,
+									label: "Membresía médica anual",
+								},
+							]
+						: []),
 					{ value: formattedTotal, label: "Total" },
 				]}
 				summaryInfoMessage={
@@ -550,6 +564,21 @@ export default function LaboratoryShoppingCart({
 						availableBalanceCoupons={availableBalanceCoupons}
 						cartTotalCents={cartTotalCents || total}
 					/>
+				}
+				crossSellSlot={
+					hasMembershipInCart ? (
+						<MembershipInCartCard
+							laboratoryBrand={laboratoryBrand}
+							membershipCrossSell={membershipCrossSell}
+							formattedMembershipPrice={formattedMembershipPrice}
+						/>
+					) : showMembershipCrossSell ? (
+						<MembershipCrossSellCard
+							laboratoryBrand={laboratoryBrand}
+							membershipCrossSell={membershipCrossSell}
+							formattedMembershipPrice={formattedMembershipPrice}
+						/>
+					) : null
 				}
 				// =========== NUEVAS PROPS PARA GA4 ===========
 				currency="MXN"

@@ -196,9 +196,13 @@ export default function LaboratoryCheckout({
     laboratoryCarts,
     laboratoryBrand,
     total,
+    laboratoryTotalCents = total,
     formattedTotal,
     formattedSubtotal,
     formattedDiscount,
+    hasMembershipInCart = false,
+    formattedMembershipPrice = null,
+    membershipPriceCents = 0,
     balanceCouponsCents = 0,
     availableBalanceCoupons = [],
     balanceCreditPresentation = null,
@@ -217,6 +221,24 @@ export default function LaboratoryCheckout({
         destroyLaboratoryCartItem,
         processing,
     } = useDeleteLaboratoryCartItem();
+
+    const [isRemovingMembership, setIsRemovingMembership] = useState(false);
+
+    const handleRemoveMembership = useCallback(() => {
+        if (isRemovingMembership) return;
+
+        setIsRemovingMembership(true);
+
+        router.delete(
+            route("laboratory.cart-membership.destroy", {
+                laboratory_brand: laboratoryBrand.value,
+            }),
+            {
+                preserveScroll: true,
+                onFinish: () => setIsRemovingMembership(false),
+            },
+        );
+    }, [isRemovingMembership, laboratoryBrand.value]);
 
     const { url } = usePage();
 
@@ -395,8 +417,8 @@ export default function LaboratoryCheckout({
     const couponTooLarge = useMemo(() => {
         if (!selectedCoupon) return false;
         if (!isBalanceCreditType(selectedCoupon)) return false;
-        return selectedCoupon.remaining_cents > total;
-    }, [selectedCoupon, total]);
+        return selectedCoupon.remaining_cents > laboratoryTotalCents;
+    }, [selectedCoupon, laboratoryTotalCents]);
 
     const couponNotYetValid = useMemo(() => {
         if (!selectedCoupon) return false;
@@ -408,15 +430,15 @@ export default function LaboratoryCheckout({
 
     const couponBelowMinPurchase = useMemo(() => {
         if (!selectedCoupon) return false;
-        return !couponMeetsMinPurchase(selectedCoupon, total);
-    }, [selectedCoupon, total]);
+        return !couponMeetsMinPurchase(selectedCoupon, laboratoryTotalCents);
+    }, [selectedCoupon, laboratoryTotalCents]);
 
     const minPurchaseShortfallCents = useMemo(() => {
-        if (!selectedCoupon?.min_purchase_cents || couponMeetsMinPurchase(selectedCoupon, total)) {
+        if (!selectedCoupon?.min_purchase_cents || couponMeetsMinPurchase(selectedCoupon, laboratoryTotalCents)) {
             return 0;
         }
-        return Math.max(0, selectedCoupon.min_purchase_cents - total);
-    }, [selectedCoupon, total]);
+        return Math.max(0, selectedCoupon.min_purchase_cents - laboratoryTotalCents);
+    }, [selectedCoupon, laboratoryTotalCents]);
 
     const couponBlocked = couponTooLarge || couponNotYetValid || couponBelowMinPurchase;
 
@@ -424,8 +446,8 @@ export default function LaboratoryCheckout({
         if (!appliedPromo?.validation_token || !appliedPromo?.discount_cents) {
             return 0;
         }
-        return Math.min(appliedPromo.discount_cents, total);
-    }, [appliedPromo, total]);
+        return Math.min(appliedPromo.discount_cents, laboratoryTotalCents);
+    }, [appliedPromo, laboratoryTotalCents]);
 
     const hasPromoApplied = Boolean(
         appliedPromo?.validation_token && promoDiscountCents > 0,
@@ -434,28 +456,34 @@ export default function LaboratoryCheckout({
     const selectedDiscountCents = useMemo(() => {
         if (hasPromoApplied) return promoDiscountCents;
         if (!selectedCoupon || couponBlocked) return 0;
-        return couponDiscountCents(selectedCoupon, total);
+        return couponDiscountCents(selectedCoupon, laboratoryTotalCents);
     }, [
         hasPromoApplied,
         promoDiscountCents,
         selectedCoupon,
         couponBlocked,
-        total,
+        laboratoryTotalCents,
     ]);
 
     const amountAfterCoupon = useMemo(() => {
+        const membershipAmount = hasMembershipInCart ? membershipPriceCents : 0;
+
         if (hasPromoApplied) {
-            return Math.max(0, total - promoDiscountCents);
+            return Math.max(0, laboratoryTotalCents - promoDiscountCents) + membershipAmount;
         }
-        if (!selectedCoupon || couponBlocked) return total;
-        return Math.max(0, total - selectedDiscountCents);
+        if (!selectedCoupon || couponBlocked) {
+            return laboratoryTotalCents + membershipAmount;
+        }
+        return Math.max(0, laboratoryTotalCents - selectedDiscountCents) + membershipAmount;
     }, [
         hasPromoApplied,
         promoDiscountCents,
         selectedCoupon,
         couponBlocked,
-        total,
+        laboratoryTotalCents,
         selectedDiscountCents,
+        hasMembershipInCart,
+        membershipPriceCents,
     ]);
 
     const summaryDetails = useMemo(() => {
@@ -486,6 +514,12 @@ export default function LaboratoryCheckout({
                     appliedPromo?.benefit_label || "Descuento promocional",
             });
         }
+        if (hasMembershipInCart && formattedMembershipPrice) {
+            rows.push({
+                value: formattedMembershipPrice,
+                label: "Membresía médica anual",
+            });
+        }
         rows.push({
             value:
                 selectedDiscountCents === 0 && !hasPromoApplied
@@ -508,6 +542,59 @@ export default function LaboratoryCheckout({
         hasPromoApplied,
         promoDiscountCents,
         appliedPromo,
+        hasMembershipInCart,
+        formattedMembershipPrice,
+    ]);
+
+    const checkoutItems = useMemo(() => {
+        const laboratoryItems = (laboratoryCarts?.[laboratoryBrand.value] ?? []).map(
+            (laboratoryCartItem) => ({
+                heading: laboratoryCartItem.laboratory_test.name,
+                description: laboratoryCartItem.laboratory_test.description,
+                indications: laboratoryCartItem.laboratory_test.indications,
+                features: laboratoryCartItem.laboratory_test.feature_list,
+                price: laboratoryCartItem.laboratory_test.formatted_famedic_price,
+                discountedPrice:
+                    laboratoryCartItem.laboratory_test.formatted_public_price,
+                discountPercentage: Math.round(
+                    ((laboratoryCartItem.laboratory_test.public_price_cents -
+                        laboratoryCartItem.laboratory_test.famedic_price_cents) /
+                        laboratoryCartItem.laboratory_test.public_price_cents) *
+                        100,
+                ),
+                showDefaultImage: false,
+                ...(laboratoryCartItem.laboratory_test.requires_appointment
+                    ? { infoMessage: "Requiere cita" }
+                    : {}),
+                onDestroy: () =>
+                    setLaboratoryCartItemToDelete(laboratoryCartItem),
+            }),
+        );
+
+        if (!hasMembershipInCart) {
+            return laboratoryItems;
+        }
+
+        return [
+            ...laboratoryItems,
+            {
+                heading: "Membresía Médica Anual",
+                description: "Atención médica familiar 24/7 por un año.",
+                price: formattedMembershipPrice,
+                showDefaultImage: false,
+                infoMessage: "Membresía",
+                features: [],
+                onDestroy: handleRemoveMembership,
+            },
+        ];
+    }, [
+        laboratoryCarts,
+        laboratoryBrand.value,
+        hasMembershipInCart,
+        formattedMembershipPrice,
+        isRemovingMembership,
+        setLaboratoryCartItemToDelete,
+        handleRemoveMembership,
     ]);
 
     const paymentMethodStepIsComplete = useMemo(() => {
@@ -538,24 +625,27 @@ export default function LaboratoryCheckout({
     useEffect(() => {
         if (!data.coupon_id) return;
         const c = checkoutCoupons.find((x) => x.id === data.coupon_id);
-        if (!c || !isCouponApplicableForCheckout(c, total)) {
+        if (!c || !isCouponApplicableForCheckout(c, laboratoryTotalCents)) {
             setData("coupon_id", null);
             if (data.payment_method === "coupon_balance") {
                 setData("payment_method", null);
             }
         }
-    }, [data.coupon_id, data.payment_method, checkoutCoupons, total, setData]);
+    }, [data.coupon_id, data.payment_method, checkoutCoupons, laboratoryTotalCents, setData]);
 
     const applyBalanceCoupon = (couponId) => {
         if (!couponId) return;
         const applicable = checkoutCoupons.find(
-            (c) => c.id === couponId && isCouponApplicableForCheckout(c, total),
+            (c) => c.id === couponId && isCouponApplicableForCheckout(c, laboratoryTotalCents),
         );
         if (!applicable) return;
         setAppliedPromo(null);
         setData("promo_validation_token", null);
         setData("coupon_id", applicable.id);
-        const after = total - couponDiscountCents(applicable, total);
+        const after =
+            laboratoryTotalCents -
+            couponDiscountCents(applicable, laboratoryTotalCents) +
+            (hasMembershipInCart ? membershipPriceCents : 0);
         if (after === 0) {
             setData("payment_method", "coupon_balance");
         }
@@ -578,7 +668,13 @@ export default function LaboratoryCheckout({
         }
         setAppliedPromo(promoResult);
         setData("promo_validation_token", promoResult.validation_token);
-        const after = Math.max(0, total - (promoResult.discount_cents || 0));
+        const promoDiscount = Math.min(
+            promoResult.discount_cents || 0,
+            laboratoryTotalCents,
+        );
+        const after =
+            Math.max(0, laboratoryTotalCents - promoDiscount) +
+            (hasMembershipInCart ? membershipPriceCents : 0);
         if (after === 0) {
             setData("payment_method", "coupon_balance");
         }
@@ -1279,38 +1375,7 @@ export default function LaboratoryCheckout({
                 }
                 laboratoryBrand={laboratoryBrand}
                 summaryDetails={summaryDetails}
-                items={laboratoryCarts[laboratoryBrand.value].map(
-                    (laboratoryCartItem) => ({
-                        heading: laboratoryCartItem.laboratory_test.name,
-                        description:
-                            laboratoryCartItem.laboratory_test.description,
-                        indications:
-                            laboratoryCartItem.laboratory_test.indications,
-                        features:
-                            laboratoryCartItem.laboratory_test.feature_list,
-                        price: laboratoryCartItem.laboratory_test
-                            .formatted_famedic_price,
-                        discountedPrice:
-                            laboratoryCartItem.laboratory_test
-                                .formatted_public_price,
-                        discountPercentage: Math.round(
-                            ((laboratoryCartItem.laboratory_test
-                                .public_price_cents -
-                                laboratoryCartItem.laboratory_test
-                                    .famedic_price_cents) /
-                                laboratoryCartItem.laboratory_test
-                                    .public_price_cents) *
-                                100,
-                        ),
-                        showDefaultImage: false,
-                        ...(laboratoryCartItem.laboratory_test
-                            .requires_appointment
-                            ? { infoMessage: "Requiere cita" }
-                            : {}),
-                        onDestroy: () =>
-                            setLaboratoryCartItemToDelete(laboratoryCartItem),
-                    }),
-                )}
+                items={checkoutItems}
                 onlinePaymentDisabled={onlinePaymentDisabled}
                 branchPaymentDisabled={branchPaymentDisabled}
                 paymentProcessing={checkoutProcessing}

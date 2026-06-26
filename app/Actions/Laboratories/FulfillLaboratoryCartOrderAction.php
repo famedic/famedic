@@ -120,7 +120,7 @@ class FulfillLaboratoryCartOrderAction
 
             $this->syncMonitoringCartService->markLaboratoryCartCompleted($customer);
             $this->syncLaboratoryCheckoutDraftAction->clearForCustomer($customer, $laboratoryBrand);
-            $this->clearCart($customer);
+            $this->clearCart($customer, $laboratoryBrand);
 
             DB::commit();
         } catch (\Throwable $th) {
@@ -149,9 +149,11 @@ class FulfillLaboratoryCartOrderAction
         return $laboratoryPurchase;
     }
 
-    private function clearCart(Customer $customer): void
+    private function clearCart(Customer $customer, LaboratoryBrand $laboratoryBrand): void
     {
         $customer->laboratoryCartItems()->delete();
+        // La membresía del carrito se elimina en FulfillLaboratoryCartMembershipAction
+        // después de crear la suscripción y sincronizar con Murguía.
     }
 
     private function createLaboratoryPurchase(

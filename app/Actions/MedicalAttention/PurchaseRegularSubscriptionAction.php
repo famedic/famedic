@@ -18,17 +18,20 @@ class PurchaseRegularSubscriptionAction
     private ChargeOdessaAction $chargeOdessaAction;
     private ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction;
     private RefundTransactionAction $refundTransactionAction;
+    private NotifyMedicalMembershipPurchasedAction $notifyMedicalMembershipPurchasedAction;
 
     public function __construct(
         CreateRegularSubscriptionAction $createRegularSubscriptionAction,
         ChargeOdessaAction $chargeOdessaAction,
         ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction,
-        RefundTransactionAction $refundTransactionAction
+        RefundTransactionAction $refundTransactionAction,
+        NotifyMedicalMembershipPurchasedAction $notifyMedicalMembershipPurchasedAction,
     ) {
         $this->createRegularSubscriptionAction = $createRegularSubscriptionAction;
         $this->chargeOdessaAction = $chargeOdessaAction;
         $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction;
         $this->refundTransactionAction = $refundTransactionAction;
+        $this->notifyMedicalMembershipPurchasedAction = $notifyMedicalMembershipPurchasedAction;
     }
 
     public function __invoke(
@@ -114,6 +117,12 @@ class PurchaseRegularSubscriptionAction
             ]);
 
             DB::commit();
+
+            ($this->notifyMedicalMembershipPurchasedAction)(
+                $subscription,
+                $transaction,
+                'medical_attention_checkout',
+            );
 
             return $subscription;
 

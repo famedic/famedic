@@ -211,6 +211,12 @@ class HandleInertiaRequests extends Middleware
                     Route::currentRouteName() === 'contacts.create' ||
                     Route::currentRouteName() === 'contacts.edit',
             ],
+            [
+                'label' => 'Mi Membresía',
+                'url' => route('membership.index'),
+                'icon' => 'HeartIcon',
+                'current' => Route::currentRouteName() === 'membership.index',
+            ],
         ];
 
         if ($admin) {

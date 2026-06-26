@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
+use App\Actions\Laboratories\ResolveLaboratoryCartTotalsAction;
 use App\Actions\Laboratories\SyncLaboratoryCheckoutDraftAction;
 use App\Actions\Laboratories\SyncLaboratoryAppointmentFromContactAction;
 use App\Http\Requests\LaboratoryCheckout\SyncLaboratoryCheckoutDraftRequest;
@@ -23,7 +23,7 @@ use Inertia\Inertia;
 
 class LaboratoryCheckoutController extends Controller
 {
-    public function __invoke(Request $request, LaboratoryBrand $laboratoryBrand, CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction, CouponService $couponService)
+    public function __invoke(Request $request, LaboratoryBrand $laboratoryBrand, ResolveLaboratoryCartTotalsAction $resolveLaboratoryCartTotalsAction, CouponService $couponService)
     {
         Log::info('Laboratory checkout: request started', [
             'user_id' => $request->user()?->id,
@@ -41,8 +41,10 @@ class LaboratoryCheckoutController extends Controller
             'items' => $laboratoryCartItems->count(),
         ]);
 
-        $totals = $calculateTotalsAndDiscountAction(
-            $laboratoryCartItems
+        $totals = $resolveLaboratoryCartTotalsAction(
+            $request->user()->customer,
+            $laboratoryBrand,
+            $laboratoryCartItems,
         );
 
         $customer = $request->user()->customer;

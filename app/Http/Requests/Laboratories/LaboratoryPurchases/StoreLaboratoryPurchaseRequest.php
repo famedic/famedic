@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Laboratories\LaboratoryPurchases;
 
-use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
+use App\Actions\Laboratories\ResolveLaboratoryCartTotalsAction;
 use App\Exceptions\CouponApplicationException;
 use App\Exceptions\PromoCodeException;
 use App\Models\Coupon;
@@ -74,8 +74,13 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
                 ->with('laboratoryTest')
                 ->get();
 
-            $totals = app(CalculateTotalsAndDiscountAction::class)($cartItems);
+            $totals = app(ResolveLaboratoryCartTotalsAction::class)(
+                auth()->user()->customer,
+                $brand,
+                $cartItems,
+            );
             $calculatedTotal = (int) $totals['total'];
+            $laboratoryTotal = (int) $totals['laboratoryTotalCents'];
 
             if ((int) $this->input('total') !== $calculatedTotal) {
                 $validator->errors()->add('total', 'El total de la compra no coincide con el carrito.');
@@ -99,14 +104,14 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
 
             $amountToCharge = $calculatedTotal;
             $hasPromoOrCoupon = $couponId !== null || $promoValidationToken !== null;
-            $cartHash = app(PromoCodeService::class)->buildLaboratoryCartHash($cartItems, $calculatedTotal);
+            $cartHash = app(PromoCodeService::class)->buildLaboratoryCartHash($cartItems, $laboratoryTotal);
 
             if ($promoValidationToken !== null) {
                 try {
                     $redemption = app(PromoCodeService::class)->resolveValidatedRedemption(
                         auth()->user(),
                         $promoValidationToken,
-                        $calculatedTotal,
+                        $laboratoryTotal,
                         $cartHash,
                     );
                     $amountToCharge = $calculatedTotal - (int) $redemption->discount_cents;
@@ -120,7 +125,7 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
                     app(CouponApplicationService::class)->validateApplication(
                         auth()->user(),
                         $couponId,
-                        $calculatedTotal
+                        $laboratoryTotal
                     );
                 } catch (CouponApplicationException $e) {
                     $validator->errors()->add('coupon_id', $e->getMessage());
@@ -130,7 +135,7 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
 
                 $coupon = Coupon::query()->findOrFail($couponId);
                 $amountToCharge = $calculatedTotal - app(CouponApplicationService::class)
-                    ->resolveDiscountCents($coupon, $calculatedTotal);
+                    ->resolveDiscountCents($coupon, $laboratoryTotal);
             }
 
             $allowed = $this->paymentMethodsForAmount($amountToCharge, $hasPromoOrCoupon);

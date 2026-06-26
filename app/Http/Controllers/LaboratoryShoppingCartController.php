@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
+use App\Actions\Laboratories\ResolveLaboratoryCartTotalsAction;
 use App\Enums\LaboratoryBrand;
 use App\Services\CouponService;
+use App\Services\LaboratoryCartMembershipService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -13,12 +14,18 @@ class LaboratoryShoppingCartController extends Controller
     public function __invoke(
         Request $request,
         LaboratoryBrand $laboratoryBrand,
-        CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
+        ResolveLaboratoryCartTotalsAction $resolveLaboratoryCartTotalsAction,
         CouponService $couponService,
+        LaboratoryCartMembershipService $laboratoryCartMembershipService,
     ) {
-        $totals = $calculateTotalsAndDiscountAction(
-            $request->user()->customer->laboratoryCartItems()->ofBrand($laboratoryBrand)->get()
-        );
+        $customer = $request->user()->customer;
+
+        $cartItems = $customer->laboratoryCartItems()
+            ->ofBrand($laboratoryBrand)
+            ->with('laboratoryTest')
+            ->get();
+
+        $totals = $resolveLaboratoryCartTotalsAction($customer, $laboratoryBrand, $cartItems);
 
         $balancePresentation = $couponService->emptyCheckoutCreditPresentation($totals['total']);
 
@@ -36,6 +43,11 @@ class LaboratoryShoppingCartController extends Controller
             ...$totals,
             ...$balancePresentation,
             'balanceCreditPresentation' => $balancePresentation,
+            'membershipCrossSell' => [
+                'imageSrc' => '/images/welcome/family.jpg',
+                'formattedPrice' => $laboratoryCartMembershipService->formattedPrice(),
+                'priceCents' => $laboratoryCartMembershipService->priceCents(),
+            ],
         ]);
     }
 }

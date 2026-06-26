@@ -6,6 +6,7 @@ use App\Http\Controllers\Checkout\ContactController as CheckoutContactController
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\FamilyController;
 use App\Http\Controllers\LaboratoryPurchaseController;
+use App\Http\Controllers\MembershipController;
 use App\Http\Controllers\LaboratoryResultController;
 use App\Http\Controllers\LaboratoryQuoteController;
 use App\Http\Controllers\EfevooWebhookController;
@@ -90,6 +91,8 @@ Route::middleware([
     Route::resource('laboratory-results', LaboratoryResultController::class)->only(['index', 'show']);
 
     Route::resource('online-pharmacy-purchases', OnlinePharmacyPurchaseController::class)->only(['index', 'show']);
+
+    Route::get('/membership', [MembershipController::class, 'index'])->name('membership.index');
 });
 
 // Password.confirm
