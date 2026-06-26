@@ -38,9 +38,21 @@ export default {
 						transform: "scale(1.04)",
 					},
 				},
+				"member-status-pulse": {
+					"0%, 100%": {
+						opacity: "1",
+						boxShadow: "0 0 0 0 rgba(52, 211, 153, 0.45)",
+					},
+					"50%": {
+						opacity: "0.45",
+						boxShadow: "0 0 0 4px rgba(52, 211, 153, 0)",
+					},
+				},
 			},
 			animation: {
 				"call-invite": "call-invite 2.6s ease-in-out infinite",
+				"member-status-pulse":
+					"member-status-pulse 2s ease-in-out infinite",
 			},
 		},
 	},

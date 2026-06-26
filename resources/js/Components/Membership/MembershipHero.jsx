@@ -12,7 +12,6 @@ import {
 	PhoneIcon,
 } from "@heroicons/react/24/outline";
 import MembershipProgress from "@/Components/Membership/MembershipProgress";
-import clsx from "clsx";
 
 function HeroStat({ label, children, action }) {
 	return (
@@ -38,6 +37,7 @@ export default function MembershipHero({
 }) {
 	const [copied, setCopied] = useState(false);
 	const isActive = status?.status === "active";
+	const renewalDate = plan?.renewalDate ?? status?.endDate;
 
 	const copyIdentifier = async () => {
 		if (!access?.identifier) return;
@@ -88,7 +88,7 @@ export default function MembershipHero({
 							)}
 						</div>
 
-						<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+						<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 							<HeroStat
 								label="ID de membresía"
 								action={
@@ -137,45 +137,56 @@ export default function MembershipHero({
 									</Text>
 								)}
 							</HeroStat>
-
-							<HeroStat label="Estado">
-								<p className="inline-flex items-center gap-2 font-poppins text-base font-semibold sm:text-lg">
-									<span
-										className={clsx(
-											"size-2.5 rounded-full",
-											isActive ? "bg-emerald-400" : "bg-zinc-400",
-										)}
-									/>
-									{status?.statusLabel ?? "—"}
-								</p>
-							</HeroStat>
-
-							<HeroStat label="Próxima renovación">
-								<p className="font-poppins text-base font-semibold leading-tight sm:text-lg">
-									{plan?.renewalDate ?? status?.endDate ?? "—"}
-								</p>
-								<Text className="mt-0.5 text-[11px] text-white/55 sm:text-xs">
-									{plan?.paymentType ?? "—"}
-								</Text>
-							</HeroStat>
 						</div>
 
-						<div className="flex flex-wrap gap-3">
-							<Button
-								type="button"
-								onClick={onShowBenefits}
-								className="!bg-white/15 !text-white hover:!bg-white/25"
-							>
-								<SparklesIcon className="size-4" />
-								Ver beneficios
-							</Button>
-							{status?.canRenew && capabilities?.canRenew && (
+						<div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+							<div className="flex flex-wrap gap-3">
 								<Button
-									href={status.renewUrl}
-									className="!bg-white !text-famedic-dark hover:!bg-white/90"
+									type="button"
+									onClick={onShowBenefits}
+									className="!bg-white/15 !text-white hover:!bg-white/25"
 								>
-									Renovar membresía
+									<SparklesIcon className="size-4" />
+									Ver beneficios
 								</Button>
+								{status?.canRenew && capabilities?.canRenew && (
+									<Button
+										href={status.renewUrl}
+										className="!bg-white !text-famedic-dark hover:!bg-white/90"
+									>
+										Renovar membresía
+									</Button>
+								)}
+							</div>
+
+							{(isActive || renewalDate) && (
+								<div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+									{isActive && (
+										<span className="inline-flex items-center gap-2 font-medium text-white">
+											<span
+												className="size-2.5 shrink-0 rounded-full bg-emerald-400 motion-safe:animate-member-status-pulse"
+												aria-hidden="true"
+											/>
+											Activa
+										</span>
+									)}
+									{renewalDate && (
+										<span className="text-white/70">
+											<span className="text-white/50">
+												Próxima renovación{" "}
+											</span>
+											<span className="font-medium text-white">
+												{renewalDate}
+											</span>
+											{plan?.paymentType && (
+												<span className="text-white/50">
+													{" "}
+													· {plan.paymentType}
+												</span>
+											)}
+										</span>
+									)}
+								</div>
 							)}
 						</div>
 					</div>

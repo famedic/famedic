@@ -49,7 +49,8 @@ export default function UserNavigationDropdown({
 	dropdownMenuProps,
 	dropdownButtonProps,
 }) {
-	const { userNavigation, auth } = usePage().props;
+	const { userNavigation, auth, medicalAttentionSubscriptionIsActive } =
+		usePage().props;
 
 	if (!auth.user) {
 		return null;
@@ -58,6 +59,7 @@ export default function UserNavigationDropdown({
 	const initials = getAvatarInitials(auth.user);
 	const displayName = getAvatarDisplayName(auth.user);
 	const photoUrl = auth.user.profile_photo_url || null;
+	const isMemberActive = Boolean(medicalAttentionSubscriptionIsActive);
 
 	const iconMap = {
 		UserCircleIcon: UserCircleIcon,
@@ -74,14 +76,27 @@ export default function UserNavigationDropdown({
 	return (
 		<Dropdown>
 			<DropdownButton {...dropdownButtonProps}>
-				{children || (
-					<Avatar
-						src={photoUrl}
-						initials={initials}
-						alt={displayName}
-						className="size-7 bg-zinc-200 text-zinc-700 dark:bg-slate-600 dark:text-white sm:size-6"
-					/>
-				)}
+				{children ||
+					(isMemberActive ? (
+						<div
+							className="user-avatar is-member-active"
+							aria-label="Usuario con membresía activa"
+						>
+							<Avatar
+								src={photoUrl}
+								initials={initials}
+								alt={displayName}
+								className="size-7 bg-zinc-200 text-zinc-700 dark:bg-slate-600 dark:text-white sm:size-6"
+							/>
+						</div>
+					) : (
+						<Avatar
+							src={photoUrl}
+							initials={initials}
+							alt={displayName}
+							className="size-7 bg-zinc-200 text-zinc-700 dark:bg-slate-600 dark:text-white sm:size-6"
+						/>
+					))}
 			</DropdownButton>
 			<DropdownMenu {...dropdownMenuProps}>
 				{userNavigation.map(({ label, url, icon }) => {
