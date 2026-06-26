@@ -4,22 +4,28 @@ import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
 import { CreditCardIcon } from "@heroicons/react/24/outline";
+import { ChevronDownIcon } from "@heroicons/react/20/solid";
+import {
+	Disclosure,
+	DisclosureButton,
+	DisclosurePanel,
+} from "@headlessui/react";
 import clsx from "clsx";
 
 function SummaryCard({ title, description, children, className }) {
 	return (
 		<Card
 			className={clsx(
-				"flex h-full min-w-[min(100%,280px)] snap-start flex-col rounded-2xl p-5 shadow-sm ring-1 ring-slate-100 dark:ring-slate-700/80 sm:min-w-[300px] lg:min-w-0",
+				"flex h-full flex-col rounded-2xl p-5 shadow-sm ring-1 ring-slate-100 sm:p-6 dark:ring-slate-700/80",
 				className,
 			)}
 		>
-			<div className="mb-4 shrink-0 border-b border-slate-100 pb-4 dark:border-slate-800">
-				<h4 className="font-poppins font-semibold text-famedic-dark dark:text-white">
+			<div className="mb-5 shrink-0">
+				<h4 className="font-poppins text-base font-semibold text-famedic-dark sm:text-lg dark:text-white">
 					{title}
 				</h4>
 				{description && (
-					<p className="mt-1 text-sm text-zinc-500 dark:text-slate-400">
+					<p className="mt-1 text-sm leading-relaxed text-zinc-500 dark:text-slate-400">
 						{description}
 					</p>
 				)}
@@ -29,11 +35,23 @@ function SummaryCard({ title, description, children, className }) {
 	);
 }
 
-function SummaryRow({ label, children, value }) {
+function SummaryRow({ label, children, value, breakAll = false, compact = false }) {
 	return (
-		<div className="flex items-start justify-between gap-3 border-b border-slate-100 py-2.5 text-sm last:border-b-0 dark:border-slate-800">
-			<dt className="shrink-0 text-zinc-500 dark:text-slate-400">{label}</dt>
-			<dd className="text-right font-medium text-zinc-900 dark:text-slate-100">
+		<div
+			className={clsx(
+				!compact && "border-b border-slate-100 py-3.5 last:border-b-0 dark:border-slate-800",
+			)}
+		>
+			<dt className="text-xs font-medium uppercase tracking-wide text-zinc-400 dark:text-slate-500">
+				{label}
+			</dt>
+			<dd
+				className={clsx(
+					"mt-1 text-sm font-medium leading-snug text-zinc-900 dark:text-slate-100",
+					breakAll ? "break-all" : "break-words",
+					!compact && "mt-1",
+				)}
+			>
 				{children ?? value ?? "—"}
 			</dd>
 		</div>
@@ -51,20 +69,20 @@ function HolderSummary({ holder }) {
 
 	return (
 		<>
-			<div className="flex items-start gap-3">
+			<div className="flex flex-col gap-4 sm:flex-row sm:items-start">
 				<Avatar
 					src={holder.avatarUrl}
 					initials={holder.initials}
-					className="size-12 bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200"
+					className="size-14 shrink-0 bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200"
 				/>
 				<div className="min-w-0 flex-1">
-					<p className="truncate font-poppins font-semibold text-zinc-900 dark:text-white">
+					<p className="font-poppins text-lg font-semibold leading-snug text-zinc-900 dark:text-white">
 						{holder.name}
 					</p>
-					<p className="text-sm text-zinc-500 dark:text-slate-400">
+					<p className="mt-1 text-sm text-zinc-500 dark:text-slate-400">
 						{holder.userType}
 					</p>
-					<div className="mt-2">
+					<div className="mt-3">
 						<Badge color={holder.statusKey === "active" ? "emerald" : "zinc"}>
 							{holder.status}
 						</Badge>
@@ -72,17 +90,50 @@ function HolderSummary({ holder }) {
 				</div>
 			</div>
 
-			<dl className="mt-4 flex-1 space-y-0">
-				<SummaryRow label="Correo" value={holder.email} />
-				<SummaryRow
-					label="Teléfono"
-					value={holder.formattedPhone ?? holder.phone}
-				/>
-				<SummaryRow label="Nacimiento" value={holder.birthDate} />
-			</dl>
+			<Disclosure as="div" className="mt-3">
+				{({ open }) => (
+					<>
+						<DisclosureButton className="flex w-full items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition hover:bg-slate-100 dark:bg-slate-800/50 dark:text-slate-200 dark:hover:bg-slate-800">
+							<span>Ver datos de contacto</span>
+							<ChevronDownIcon
+								className={clsx(
+									"size-4 shrink-0 text-zinc-400 transition-transform",
+									open && "rotate-180",
+								)}
+							/>
+						</DisclosureButton>
+						<DisclosurePanel className="mt-2 overflow-hidden rounded-xl ring-1 ring-slate-100 dark:ring-slate-800">
+							<dl className="divide-y divide-slate-100 dark:divide-slate-800">
+								<div className="px-3 py-3">
+									<SummaryRow
+										label="Correo"
+										value={holder.email}
+										breakAll
+										compact
+									/>
+								</div>
+								<div className="px-3 py-3">
+									<SummaryRow
+										label="Teléfono"
+										value={holder.formattedPhone ?? holder.phone}
+										compact
+									/>
+								</div>
+								<div className="px-3 py-3">
+									<SummaryRow
+										label="Nacimiento"
+										value={holder.birthDate}
+										compact
+									/>
+								</div>
+							</dl>
+						</DisclosurePanel>
+					</>
+				)}
+			</Disclosure>
 
-			<div className="mt-4 shrink-0 pt-2">
-				<Button outline href={holder.editUrl} className="w-full">
+			<div className="mt-5 shrink-0 border-t border-slate-100 pt-5 dark:border-slate-800">
+				<Button outline href={holder.editUrl} className="w-full sm:w-auto">
 					Editar información
 				</Button>
 			</div>
@@ -129,15 +180,15 @@ function PaymentSummary({ payment }) {
 
 	return (
 		<>
-			<div className="mb-3 flex items-center gap-3">
-				<div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300">
+			<div className="mb-4 flex items-start gap-3 rounded-xl bg-slate-50 p-3.5 dark:bg-slate-800/50">
+				<div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300">
 					<CreditCardIcon className="size-5" />
 				</div>
 				<div className="min-w-0">
 					<p className="font-medium text-zinc-900 dark:text-white">
 						Último pago
 					</p>
-					<p className="text-xs text-zinc-500 dark:text-slate-400">
+					<p className="mt-0.5 text-sm text-zinc-500 dark:text-slate-400">
 						{payment.date} · {payment.time}
 					</p>
 				</div>
@@ -159,19 +210,22 @@ function PaymentSummary({ payment }) {
 
 function UsageSummary() {
 	return (
-		<p className="flex-1 text-sm leading-relaxed text-zinc-600 dark:text-slate-300">
-			Las estadísticas de uso estarán disponibles pronto. Mientras tanto,
-			accede a telemedicina y asistencias desde Atención médica.
-		</p>
+		<div className="flex flex-1 items-center rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
+			<p className="text-sm leading-relaxed text-zinc-600 dark:text-slate-300">
+				Las estadísticas de uso estarán disponibles pronto. Mientras tanto,
+				accede a telemedicina y asistencias desde Atención médica.
+			</p>
+		</div>
 	);
 }
 
 export default function MembershipSummary({ holder, plan, payment }) {
 	return (
-		<div className="flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] lg:grid lg:snap-none lg:grid-cols-2 lg:overflow-visible xl:grid-cols-4">
+		<div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2 min-[1400px]:grid-cols-4">
 			<SummaryCard
 				title="Información del titular"
 				description="Datos de contacto y perfil."
+				className="md:col-span-2 min-[1400px]:col-span-1"
 			>
 				<HolderSummary holder={holder} />
 			</SummaryCard>
@@ -190,7 +244,11 @@ export default function MembershipSummary({ holder, plan, payment }) {
 				<PaymentSummary payment={payment} />
 			</SummaryCard>
 
-			<SummaryCard title="Uso rápido" description="Actividad reciente.">
+			<SummaryCard
+				title="Uso rápido"
+				description="Actividad reciente."
+				className="md:col-span-2 min-[1400px]:col-span-1"
+			>
 				<UsageSummary />
 			</SummaryCard>
 		</div>
