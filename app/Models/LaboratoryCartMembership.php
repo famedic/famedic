@@ -24,6 +24,6 @@ class LaboratoryCartMembership extends Model
 
     public function scopeOfBrand($query, LaboratoryBrand $brand)
     {
-        return $query->where('laboratory_brand', $brand);
+        return $query->where('laboratory_brand', $brand->value);
     }
 }

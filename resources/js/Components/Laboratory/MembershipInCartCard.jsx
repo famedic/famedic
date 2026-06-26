@@ -1,8 +1,7 @@
-import { useState } from "react";
-import { router } from "@inertiajs/react";
 import Card from "@/Components/Card";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Text } from "@/Components/Catalyst/text";
+import { useRemoveLaboratoryCartMembership } from "@/Hooks/useRemoveLaboratoryCartMembership";
 import {
 	CheckCircleIcon,
 	ShieldCheckIcon,
@@ -14,7 +13,9 @@ export default function MembershipInCartCard({
 	formattedMembershipPrice,
 	membershipCrossSell,
 }) {
-	const [isRemoving, setIsRemoving] = useState(false);
+	const { isRemoving, error, removeMembership } = useRemoveLaboratoryCartMembership(
+		laboratoryBrand,
+	);
 
 	const displayPrice =
 		formattedMembershipPrice || membershipCrossSell?.formattedPrice || "$300.00";
@@ -24,19 +25,7 @@ export default function MembershipInCartCard({
 		: displayPrice.replace(/[^0-9]/g, "");
 
 	const handleRemoveMembership = () => {
-		if (isRemoving) return;
-
-		setIsRemoving(true);
-
-		router.delete(
-			route("laboratory.cart-membership.destroy", {
-				laboratory_brand: laboratoryBrand.value,
-			}),
-			{
-				preserveScroll: true,
-				onFinish: () => setIsRemoving(false),
-			},
-		);
+		removeMembership();
 	};
 
 	return (
@@ -83,6 +72,11 @@ export default function MembershipInCartCard({
 							<TrashIcon className="size-4" />
 							{isRemoving ? "Quitando..." : "Quitar membresía"}
 						</button>
+						{error && (
+							<Text className="text-xs text-red-600 dark:text-red-400">
+								{error}
+							</Text>
+						)}
 					</div>
 				</div>
 			</Card>

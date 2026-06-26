@@ -2,23 +2,25 @@
 
 namespace App\Http\Requests\Laboratories\LaboratoryCartMemberships;
 
+use App\Http\Requests\Concerns\ResolvesLaboratoryBrand;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreLaboratoryCartMembershipRequest extends FormRequest
 {
+    use ResolvesLaboratoryBrand;
+
     public function authorize(): bool
     {
         $customer = $this->user()?->customer;
+        $brand = $this->resolveLaboratoryBrand();
 
-        if (! $customer) {
+        if (! $customer || ! $brand) {
             return false;
         }
 
         if ($customer->medical_attention_subscription_is_active) {
             return false;
         }
-
-        $brand = $this->route('laboratory_brand');
 
         return $customer->laboratoryCartItems()
             ->ofBrand($brand)

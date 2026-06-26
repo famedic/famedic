@@ -16,7 +16,7 @@ import { Divider } from "@/Components/Catalyst/divider";
 import CheckoutLayout, {
     scrollToCheckoutSummaryTotals,
 } from "@/Layouts/CheckoutLayout";
-import { useForm, usePage } from "@inertiajs/react";
+import { useForm, usePage, router } from "@inertiajs/react";
 import { GradientHeading } from "@/Components/Catalyst/heading";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import ContactStep from "@/Components/Checkout/ContactStep";
@@ -30,7 +30,7 @@ import LaboratoryPayPalButton from "@/Components/Checkout/LaboratoryPayPalButton
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import Card from "@/Components/Card";
 import { Button } from "@/Components/Catalyst/button";
-import { router } from "@inertiajs/react";
+import { removeLaboratoryCartMembership } from "@/lib/laboratoryCartMembership";
 import EnvironmentBadge from "@/Components/EnvironmentBadge";
 import { ChevronLeftIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon } from "@heroicons/react/16/solid";
@@ -223,22 +223,22 @@ export default function LaboratoryCheckout({
     } = useDeleteLaboratoryCartItem();
 
     const [isRemovingMembership, setIsRemovingMembership] = useState(false);
+    const [membershipRemoveError, setMembershipRemoveError] = useState(null);
 
     const handleRemoveMembership = useCallback(() => {
         if (isRemovingMembership) return;
 
+        setMembershipRemoveError(null);
         setIsRemovingMembership(true);
 
-        router.delete(
-            route("laboratory.cart-membership.destroy", {
-                laboratory_brand: laboratoryBrand.value,
-            }),
-            {
-                preserveScroll: true,
-                onFinish: () => setIsRemovingMembership(false),
+        removeLaboratoryCartMembership(laboratoryBrand, {
+            onFinish: () => setIsRemovingMembership(false),
+            onError: (message) => {
+                setMembershipRemoveError(message);
+                setIsRemovingMembership(false);
             },
-        );
-    }, [isRemovingMembership, laboratoryBrand.value]);
+        });
+    }, [isRemovingMembership, laboratoryBrand]);
 
     const { url } = usePage();
 
@@ -1344,6 +1344,11 @@ export default function LaboratoryCheckout({
 
     return (
         <>
+            {membershipRemoveError && (
+                <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {membershipRemoveError}
+                </div>
+            )}
             <CheckoutLayout
                 title="Completar compra"
                 header={
