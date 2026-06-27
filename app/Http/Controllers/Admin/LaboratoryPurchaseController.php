@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Actions\BuildDailyChartDataAction;
 use App\Actions\Laboratories\DeleteLaboratoryPurchaseAction;
 use App\Enums\LaboratoryBrand;
 use App\Http\Controllers\Controller;
@@ -18,7 +17,7 @@ use Inertia\Inertia;
 
 class LaboratoryPurchaseController extends Controller
 {
-    public function index(IndexLaboratoryPurchaseRequest $request, BuildDailyChartDataAction $buildDailyChartDataAction)
+    public function index(IndexLaboratoryPurchaseRequest $request)
     {
         $filters = collect($request->only([
             'search',
@@ -34,37 +33,19 @@ class LaboratoryPurchaseController extends Controller
             'dev_assistance',
         ]))->filter()->all();
 
-        // Aplicar filtro de fecha por defecto (último año en ambiente local)
-        if (empty($filters['start_date']) && empty($filters['end_date']) && app()->environment('staging')) {
-            $filters['start_date'] = Carbon::now('America/Monterrey')->subYear()->startOfDay()->toDateString();
+        // Sin fechas en la petición: últimos 3 meses (evita escanear toda la tabla y timeouts/502).
+        // Si el usuario elige fechas en los filtros, se respetan tal cual.
+        if (empty($filters['start_date']) && empty($filters['end_date'])) {
+            $filters['start_date'] = Carbon::now('America/Monterrey')->subMonths(3)->startOfDay()->toDateString();
             $filters['end_date'] = Carbon::now('America/Monterrey')->endOfDay()->toDateString();
         }
 
-        $laboratoryPurchasesQuery = LaboratoryPurchase::with([
-            'transactions',
-            'vendorPayments',
-            'laboratoryPurchaseItems',
-            'customer.user',
-            'invoice',
-            'invoiceRequest',
-            'devAssistanceRequests',
-        ])
-            ->withNotificationStatus()
-            ->filter($filters);
-
-        // Obtener datos para el chart (solo si hay fechas definidas para evitar cargar todo)
-        $laboratoryDailyChart = null;
-        if (!empty($filters['start_date']) || !empty($filters['end_date'])) {
-            $purchasesForChart = (clone $laboratoryPurchasesQuery)->get();
-
-            $laboratoryDailyChart = $buildDailyChartDataAction(
-                $purchasesForChart,
-                $request->start_date ? Carbon::parse($request->start_date, 'America/Monterrey') : null,
-                $request->end_date ? Carbon::parse($request->end_date, 'America/Monterrey') : null
-            );
-        }
-
-        $laboratoryPurchases = $laboratoryPurchasesQuery->latest()->paginate()->withQueryString();
+        $laboratoryPurchases = LaboratoryPurchase::query()
+            ->filter($filters)
+            ->forAdminIndexList()
+            ->latest('laboratory_purchases.created_at')
+            ->paginate()
+            ->withQueryString();
 
         if (!empty($filters['start_date'])) {
             $filters['formatted_start_date'] = Carbon::parse($filters['start_date'], 'America/Monterrey')->isoFormat('MMM D, Y');
@@ -76,7 +57,6 @@ class LaboratoryPurchaseController extends Controller
 
         return Inertia::render('Admin/LaboratoryPurchases', [
             'laboratoryPurchases' => $laboratoryPurchases,
-            'chart' => $laboratoryDailyChart,
             'filters' => $filters,
             'brands' => LaboratoryBrand::brandsData(),
             'canExport' => $request->user()->administrator->hasPermissionTo('laboratory-purchases.manage.export'),
@@ -98,13 +78,17 @@ class LaboratoryPurchaseController extends Controller
             'laboratoryNotifications',
         ]);
 
+        $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
+
         return Inertia::render('Admin/LaboratoryPurchase', [
             'laboratoryPurchase' => $laboratoryPurchase,
+            'couponReversal' => $laboratoryPurchase->getCouponReversalSummary(),
             'showDeleteButton' => $request->user()->can('delete', $laboratoryPurchase),
             'canResendConfirmationEmail' => $request->user()->administrator?->hasPermissionTo('laboratory-purchases.manage') ?? false,
 
             'hasSampleCollected' => $laboratoryPurchase->hasSampleCollected(),
             'hasResultsAvailable' => $laboratoryPurchase->hasResultsAvailable(),
+            'hasManualResults' => filled($laboratoryPurchase->results),
             'latestSampleCollectionAt' => optional(
                 $laboratoryPurchase->latestSampleCollection()?->created_at
             )?->isoFormat('D MMM Y h:mm a'),
@@ -128,7 +112,7 @@ class LaboratoryPurchaseController extends Controller
         ]);
 
         try {
-            ($deleteLaboratoryPurchaseAction)($laboratoryPurchase);
+            ($deleteLaboratoryPurchaseAction)($laboratoryPurchase, $request->user());
 
             Log::info('✅ LaboratoryPurchaseController@destroy COMPLETADO', [
                 'laboratory_purchase_id' => $laboratoryPurchase->id,

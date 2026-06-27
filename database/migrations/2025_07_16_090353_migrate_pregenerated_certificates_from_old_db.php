@@ -15,6 +15,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (app()->environment('testing') || config('database.default') === 'sqlite') {
+            return;
+        }
+
         Log::info('Starting pregenerated certificates migration...');
 
         $totalProcessed = 0;

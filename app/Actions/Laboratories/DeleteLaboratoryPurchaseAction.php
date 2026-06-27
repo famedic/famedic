@@ -2,8 +2,10 @@
 
 namespace App\Actions\Laboratories;
 
+use App\Actions\Coupons\ReverseCouponBalanceForLaboratoryPurchaseAction;
 use App\Actions\Transactions\RefundTransactionAction;
 use App\Models\LaboratoryPurchase;
+use App\Models\User;
 use App\Notifications\CustomerLaboratoryPurchaseDeleted;
 use App\Notifications\GDALaboratoryPurchaseDeleted;
 use Illuminate\Support\Facades\Notification;
@@ -12,13 +14,17 @@ use Illuminate\Support\Facades\Log;
 class DeleteLaboratoryPurchaseAction
 {
     private RefundTransactionAction $refundTransactionAction;
+    private ReverseCouponBalanceForLaboratoryPurchaseAction $reverseCouponBalanceForLaboratoryPurchaseAction;
 
-    public function __construct(RefundTransactionAction $refundTransactionAction)
-    {
+    public function __construct(
+        RefundTransactionAction $refundTransactionAction,
+        ReverseCouponBalanceForLaboratoryPurchaseAction $reverseCouponBalanceForLaboratoryPurchaseAction
+    ) {
         $this->refundTransactionAction = $refundTransactionAction;
+        $this->reverseCouponBalanceForLaboratoryPurchaseAction = $reverseCouponBalanceForLaboratoryPurchaseAction;
     }
 
-    public function __invoke(LaboratoryPurchase $laboratoryPurchase)
+    public function __invoke(LaboratoryPurchase $laboratoryPurchase, ?User $actor = null)
     {
         Log::info('🔁 DeleteLaboratoryPurchaseAction INICIO', [
             'laboratory_purchase_id' => $laboratoryPurchase->id,
@@ -50,16 +56,19 @@ class DeleteLaboratoryPurchaseAction
                     "No se pudo reembolsar la transacción {$transaction->id}"
                 );
             }
-
-            if (config('services.gda.report_emails')) {
-                Log::info('📧 Enviando notificación GDA', [
-                    'laboratory_purchase_id' => $laboratoryPurchase->id,
-                ]);
-
-                Notification::route('mail', config('services.gda.report_emails'))
-                    ->notify(new GDALaboratoryPurchaseDeleted($laboratoryPurchase));
-            }
         }
+
+        $restoredCents = ($this->reverseCouponBalanceForLaboratoryPurchaseAction)(
+            $laboratoryPurchase,
+            $actor
+        );
+
+        Log::info('🎟️ Reverso de cupón procesado', [
+            'laboratory_purchase_id' => $laboratoryPurchase->id,
+            'amount_restored_cents' => $restoredCents,
+        ]);
+
+        $this->sendCancellationNotifications($laboratoryPurchase, $restoredCents);
 
         Log::info('🧹 Eliminando items del laboratorio', [
             'laboratory_purchase_id' => $laboratoryPurchase->id,
@@ -78,5 +87,36 @@ class DeleteLaboratoryPurchaseAction
         ]);
     }
 
+    private function sendCancellationNotifications(LaboratoryPurchase $laboratoryPurchase, int $couponBalanceRestoredCents = 0): void
+    {
+        $laboratoryPurchase->loadMissing('customer.user');
 
+        if (config('services.gda.report_emails')) {
+            Log::info('📧 Enviando notificación GDA', [
+                'laboratory_purchase_id' => $laboratoryPurchase->id,
+            ]);
+
+            Notification::route('mail', config('services.gda.report_emails'))
+                ->notify(new GDALaboratoryPurchaseDeleted($laboratoryPurchase, $couponBalanceRestoredCents));
+        }
+
+        $user = $laboratoryPurchase->customer?->user;
+
+        if ($user?->email) {
+            Log::info('📧 Enviando notificación de cancelación al cliente', [
+                'laboratory_purchase_id' => $laboratoryPurchase->id,
+                'user_id' => $user->id,
+                'email' => $user->email,
+            ]);
+
+            $user->notify(new CustomerLaboratoryPurchaseDeleted($laboratoryPurchase, $couponBalanceRestoredCents));
+
+            return;
+        }
+
+        Log::warning('⚠️ No se envió correo de cancelación al cliente: sin usuario o correo', [
+            'laboratory_purchase_id' => $laboratoryPurchase->id,
+            'customer_id' => $laboratoryPurchase->customer_id,
+        ]);
+    }
 }

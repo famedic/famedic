@@ -40,7 +40,7 @@ class LaboratoryTest extends Model
             'other_name' => $this->other_name,
             'elements' => $this->elements,
             'common_use' => $this->common_use,
-            'brand' => $this->brand,
+            'brand' => $this->brand->value,
             'gda_id' => $this->gda_id,
         ];
     }
@@ -113,7 +113,11 @@ class LaboratoryTest extends Model
                 });
             })
             ->when($filters['brand'] ?? null, function ($query, $brand) {
-                $query->ofBrand(LaboratoryBrand::from($brand));
+                $brandEnum = LaboratoryBrand::tryFrom($brand);
+
+                if ($brandEnum) {
+                    $query->ofBrand($brandEnum);
+                }
             })
             ->when($filters['category'] ?? null, function ($query, $categoryId) {
                 $query->where('laboratory_test_category_id', $categoryId);

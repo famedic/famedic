@@ -1,5 +1,5 @@
 import { usePage } from "@inertiajs/react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dropdown, DropdownButton } from "@/Components/Catalyst/dropdown";
 import {
 	Navbar,
@@ -13,6 +13,7 @@ import { BeakerIcon } from "@heroicons/react/20/solid";
 import { DocumentCheckIcon } from "@heroicons/react/20/solid";
 
 import ApplicationLogo from "@/Components/ApplicationLogo";
+import EnvironmentIndicator from "@/Components/EnvironmentBanner";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import UserNavigationDropdown from "@/Components/UserNavigationDropdown";
 import NotificationBell from "@/Components/NotificationBell";
@@ -49,31 +50,54 @@ export default function NavBar() {
 		(brand) => (laboratoryCarts?.[brand]?.length || 0) > 0,
 	);
 	const [selectedLaboratoryBrand, setSelectedLaboratoryBrand] = useState(
-		laboratoryBrand
-			? laboratoryBrand.value
-			: firstBrandWithItems || laboratoryCartKeys[0],
+		() =>
+			laboratoryBrand?.value ||
+			firstBrandWithItems ||
+			laboratoryCartKeys[0],
 	);
 
-	const laboratoryItemCount =
-		(laboratoryCarts &&
-			selectedLaboratoryBrand &&
-			(laboratoryCarts[selectedLaboratoryBrand]?.length || 0)) ||
-		0;
+	const totalLaboratoryItemCount = useMemo(
+		() =>
+			Object.values(laboratoryCarts || {}).reduce(
+				(sum, items) => sum + (items?.length || 0),
+				0,
+			),
+		[laboratoryCarts],
+	);
+
+	useEffect(() => {
+		if (laboratoryBrand?.value) {
+			setSelectedLaboratoryBrand(laboratoryBrand.value);
+			return;
+		}
+
+		setSelectedLaboratoryBrand((current) => {
+			if ((laboratoryCarts?.[current]?.length || 0) > 0) {
+				return current;
+			}
+
+			return firstBrandWithItems || current;
+		});
+	}, [laboratoryBrand?.value, laboratoryCarts, firstBrandWithItems]);
+
 	const pharmacyItemCount = onlinePharmacyCart?.length || 0;
 	const cartCount =
-		selectedIndex === 0 ? laboratoryItemCount : pharmacyItemCount;
+		selectedIndex === 0 ? totalLaboratoryItemCount : pharmacyItemCount;
 
 	return (
 		<Navbar>
-			<NavbarItem href={homeRoute}>
-				{hasOdessaAfiliateAccount && (
-					<OdessaLogo className="-mr-2 h-6 w-auto" />
-				)}
-				<ApplicationLogo className="h-6 w-auto" />
-				<Text className="-ml-1">
-					<Strong className="!font-poppins">Famedic</Strong>
-				</Text>
-			</NavbarItem>
+			<div className="flex items-center gap-1.5">
+				<NavbarItem href={homeRoute}>
+					{hasOdessaAfiliateAccount && (
+						<OdessaLogo className="-mr-2 h-6 w-auto" />
+					)}
+					<ApplicationLogo className="h-6 w-auto" />
+					<Text className="-ml-1">
+						<Strong className="!font-poppins">Famedic</Strong>
+					</Text>
+				</NavbarItem>
+				<EnvironmentIndicator />
+			</div>
 			<NavbarDivider className="!bg-slate-400 max-lg:hidden dark:!bg-slate-500" />
 			<NavbarSection className="max-lg:hidden">
 				{mainNavigation.map(({ label, url, current }) => (

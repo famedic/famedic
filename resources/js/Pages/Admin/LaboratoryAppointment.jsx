@@ -15,6 +15,7 @@ import { Button } from "@/Components/Catalyst/button";
 import { Checkbox, CheckboxField } from "@/Components/Catalyst/checkbox";
 import { Input } from "@/Components/Catalyst/input";
 import { Textarea } from "@/Components/Catalyst/textarea";
+import { Text } from "@/Components/Catalyst/text";
 import { Select } from "@/Components/Catalyst/select";
 import {
 	Field,
@@ -34,9 +35,11 @@ import CountryListbox from "@/Components/CountryListbox";
 import AppointmentHeader from "@/Pages/Admin/LaboratoryAppointment/AppointmentHeader";
 import PurchaseStatusCard from "@/Pages/Admin/LaboratoryAppointment/PurchaseStatusCard";
 import PatientInfoCard from "@/Pages/Admin/LaboratoryAppointment/PatientInfoCard";
+import PatientCallbackInfoCard from "@/Pages/Admin/LaboratoryAppointment/PatientCallbackInfoCard";
 import ContactInfoCard from "@/Pages/Admin/LaboratoryAppointment/ContactInfoCard";
 import StudiesTable from "@/Pages/Admin/LaboratoryAppointment/StudiesTable";
 import AppointmentSidebar from "@/Pages/Admin/LaboratoryAppointment/AppointmentSidebar";
+import LaboratoryAppointmentEmailActions from "@/Pages/Admin/LaboratoryAppointment/LaboratoryAppointmentEmailActions";
 
 export default function LaboratoryAppointment({
 	laboratoryAppointment,
@@ -45,6 +48,8 @@ export default function LaboratoryAppointment({
 	studyItemsSource,
 	interactions,
 	hasPaidLaboratoryPurchase,
+	callbackPreferenceSavedAtFormatted = null,
+	checkoutProgress = null,
 }) {
 	const [openDeleteConfirmation, setOpenDeleteConfirmation] = useState(false);
 	const [openConfirmation, setOpenConfirmation] = useState(false);
@@ -56,13 +61,7 @@ export default function LaboratoryAppointment({
 			: "pending";
 
 	const purchase = laboratoryAppointment.laboratory_purchase ?? null;
-	const primaryTransaction = purchase?.transactions?.[0] ?? null;
-	const hasCapturedPayment = ["captured", "paid", "completed"].includes(
-		primaryTransaction?.payment_status,
-	);
-	const purchaseStatus = hasCapturedPayment || laboratoryAppointment.laboratory_purchase_id
-		? "paid"
-		: "pending";
+	const purchaseStatus = hasPaidLaboratoryPurchase ? "paid" : "pending";
 
 	const studies = useMemo(() => {
 		if (
@@ -138,6 +137,10 @@ export default function LaboratoryAppointment({
 					showEditButton={false}
 					actions={
 						<>
+							<LaboratoryAppointmentEmailActions
+								appointment={laboratoryAppointment}
+								hasPaidLaboratoryPurchase={hasPaidLaboratoryPurchase}
+							/>
 							{!laboratoryAppointment.confirmed_at && (
 								<LaboratoryAppointmentDeleteForm
 									laboratoryAppointment={laboratoryAppointment}
@@ -163,19 +166,26 @@ export default function LaboratoryAppointment({
 
 				<PurchaseStatusCard
 					purchaseStatus={purchaseStatus}
-					orderNumber={purchase?.gda_order_id ?? primaryTransaction?.reference_id}
+					orderNumber={purchase?.gda_order_id ?? purchase?.transactions?.[0]?.reference_id}
 					purchaseDate={
 						purchase?.formatted_created_at ??
-						primaryTransaction?.formatted_created_at ??
+						purchase?.transactions?.[0]?.formatted_created_at ??
 						null
 					}
 					studies={studies}
+					checkoutProgress={checkoutProgress}
 				/>
 
 				<div className="grid gap-6 lg:grid-cols-10">
 					<div className="space-y-4 lg:col-span-7">
 						<PatientInfoCard patient={patient} />
 						<ContactInfoCard contact={contact} />
+						<PatientCallbackInfoCard
+							appointment={laboratoryAppointment}
+							callbackPreferenceSavedAtFormatted={
+								callbackPreferenceSavedAtFormatted
+							}
+						/>
 						<StudiesTable studies={studies} />
 					</div>
 					<div className="lg:col-span-3">
@@ -555,7 +565,15 @@ function LaboratoryAppointmentConfirmationForm({
 											</Description>
 										</CheckboxField>
 									</div>
-								) : null}
+								) : (
+									<div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+										<Text className="text-sm text-amber-900 dark:text-amber-100">
+											Al guardar, se enviará automáticamente un correo al
+											cliente con el resumen de la cita y un enlace para
+											completar el pago en el checkout.
+										</Text>
+									</div>
+								)}
 							</section>
 						</div>
 					</DialogBody>

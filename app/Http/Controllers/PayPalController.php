@@ -7,6 +7,7 @@ use App\Actions\PayPal\CreatePayPalOrderAction;
 use App\Actions\PayPal\HandlePayPalWebhookAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\CouponApplicationException;
+use App\Exceptions\PromoCodeException;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\UnmatchingTotalPriceException;
 use App\Exceptions\PayPalPaymentException;
@@ -32,6 +33,7 @@ class PayPalController extends Controller
             'laboratory_brand' => ['required', Rule::enum(LaboratoryBrand::class)],
             'total' => ['required', 'integer', 'min:1'],
             'coupon_id' => ['nullable', 'integer', 'exists:coupons,id'],
+            'promo_validation_token' => ['nullable', 'string', 'max:64'],
         ]);
 
         $brandRaw = $validated['laboratory_brand'];
@@ -58,6 +60,16 @@ class PayPalController extends Controller
 
         try {
             $couponId = !empty($validated['coupon_id']) ? (int) $validated['coupon_id'] : null;
+            $promoValidationToken = !empty($validated['promo_validation_token'])
+                ? (string) $validated['promo_validation_token']
+                : null;
+
+            if ($couponId !== null && $promoValidationToken !== null) {
+                throw ValidationException::withMessages([
+                    'promo_validation_token' => 'No puedes combinar un crédito asignado con un código promocional.',
+                ]);
+            }
+
             if ($couponId !== null) {
                 $couponApplicationService->validateApplication(
                     $request->user(),
@@ -73,6 +85,7 @@ class PayPalController extends Controller
                 $brand,
                 (int) $validated['total'],
                 $couponId,
+                $promoValidationToken,
             );
         } catch (MissingLaboratoryAppointmentException $e) {
             throw ValidationException::withMessages(['patient_id' => 'Debes completar la cita en laboratorio para este pedido.']);
@@ -80,6 +93,8 @@ class PayPalController extends Controller
             throw ValidationException::withMessages(['total' => 'El total no coincide con el carrito. Actualiza la página.']);
         } catch (CouponApplicationException $e) {
             throw ValidationException::withMessages(['coupon_id' => $e->getMessage()]);
+        } catch (PromoCodeException $e) {
+            throw ValidationException::withMessages(['promo_validation_token' => $e->getMessage()]);
         } catch (PayPalPaymentException $e) {
             Log::warning('[PayPal] create-order rechazado por API', ['message' => $e->getMessage()]);
 
@@ -125,6 +140,8 @@ class PayPalController extends Controller
                 'message' => $result['message'] ?? 'No se pudo completar el pago.',
             ], 422);
         }
+
+        session()->flash('confetti', true);
 
         return response()->json([
             'status' => $status,

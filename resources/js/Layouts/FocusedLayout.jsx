@@ -8,26 +8,30 @@ export default function FocusedLayout({
 	useTrackingEvents();
 
 	return (
-		<div className="min-h-screen bg-neutral-50 dark:bg-slate-950">
-			<div className="mx-auto max-w-[100rem]">
-				<Head title={title} />
+		<AppLayout>
+			<div className="min-h-screen bg-neutral-50 dark:bg-slate-950">
+				<div className="mx-auto max-w-[100rem]">
+					<Head title={title} />
 
 				{/* Navbar */}
 				<header className="px-4 pt-2">
 					<Navbar className="flex items-center justify-between">
-						<NavbarItem
-							href={auth.user ? route("home") : route("welcome")}
-						>
-							{hasOdessaAfiliateAccount && (
-								<OdessaLogo className="h-6 w-auto" />
-							)}
-							<ApplicationLogo className="h-6 w-auto" />
-							<Text>
-								<Strong className="!font-poppins">
-									Famedic
-								</Strong>
-							</Text>
-						</NavbarItem>
+						<div className="flex items-center gap-1.5">
+							<NavbarItem
+								href={auth.user ? route("home") : route("welcome")}
+							>
+								{hasOdessaAfiliateAccount && (
+									<OdessaLogo className="h-6 w-auto" />
+								)}
+								<ApplicationLogo className="h-6 w-auto" />
+								<Text>
+									<Strong className="!font-poppins">
+										Famedic
+									</Strong>
+								</Text>
+							</NavbarItem>
+							<EnvironmentIndicator />
+						</div>
 						{auth.user && (
 							<NavbarSection>
 								<NotificationBell feed={inAppNotificationFeed} />
@@ -46,13 +50,14 @@ export default function FocusedLayout({
 					</Navbar>
 				</header>
 
-				<div className="px-4">
-					<main className="pt-6">{children}</main>
+					<div className="px-4">
+						<main className="pt-6">{children}</main>
+					</div>
 				</div>
+				<Notification />
+				{!hideHelpBubble && <HelpBubble className="bottom-3 right-3" />}
 			</div>
-			<Notification />
-			{!hideHelpBubble && <HelpBubble className="bottom-3 right-3" />}
-		</div>
+		</AppLayout>
 	);
 }
 
@@ -70,3 +75,5 @@ import {
 import OdessaLogo from "@/Components/OdessaLogo";
 import HelpBubble from "@/Components/Catalyst/HelpBubble";
 import useTrackingEvents from "@/Hooks/useTrackingEvents";
+import AppLayout from "@/Layouts/AppLayout";
+import EnvironmentIndicator from "@/Components/EnvironmentBanner";

@@ -39,6 +39,7 @@ import PaginatedTable from "@/Components/Admin/PaginatedTable";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import FilterCountBadge from "@/Components/Admin/FilterCountBadge";
 import ExportDialog from "@/Components/ExportDialog";
+import { laboratoryBrandImageSrc } from "@/lib/laboratoryBrand";
 
 export default function LaboratoryTests({
 	laboratoryTests,
@@ -193,6 +194,7 @@ export default function LaboratoryTests({
 					laboratoryTests={laboratoryTests}
 					filterBadges={filterBadges}
 					filters={filters}
+					brands={brands}
 				/>
 			</div>
 		</AdminLayout>
@@ -265,7 +267,12 @@ function Filters({ data, setData, brands, categories }) {
 	);
 }
 
-function LaboratoryTestsList({ laboratoryTests, filterBadges, filters }) {
+function LaboratoryTestsList({
+	laboratoryTests,
+	filterBadges,
+	filters,
+	brands,
+}) {
 	if (
 		!laboratoryTests ||
 		!laboratoryTests.data ||
@@ -328,7 +335,10 @@ function LaboratoryTestsList({ laboratoryTests, filterBadges, filters }) {
 
 								<TableCell>
 									<LaboratoryBrandCard
-										src={`/images/gda/GDA-${laboratoryTest.brand.toUpperCase()}.png`}
+										src={laboratoryBrandImageSrc(
+											laboratoryTest.brand,
+											brands,
+										)}
 										className="w-32 p-4"
 									/>
 								</TableCell>
@@ -353,11 +363,9 @@ function LaboratoryTestsList({ laboratoryTests, filterBadges, filters }) {
 								<TableCell className="text-right">
 									<div className="space-y-1">
 										<Text>
-											{
-												laboratoryTest
-													.laboratory_test_category
-													.name
-											}
+											{laboratoryTest
+												.laboratory_test_category
+												?.name ?? "Sin categoría"}
 										</Text>
 										<div>
 											<Badge

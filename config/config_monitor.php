@@ -113,6 +113,8 @@ return [
         'GDA_BRANDS_FAMEDIC_TOKEN' => 'services.gda.brands.famedic.token',
         'GDA_BRANDS_FAMEDIC_BRAND_AGREEMENT_ID' => 'services.gda.brands.famedic.brand_agreement_id',
         'ODESSA_URL' => 'services.odessa.url',
+        'ODESSA_PUBLIC_KEY' => 'services.odessa.public_key',
+        'FAMEDIC_PUBLIC_KEY' => 'services.odessa.famedic_public_key',
         'ODESSA_REFUND_REPORT_EMAILS' => 'services.odessa.refund_report_emails',
         'RECAPTCHA_SITE_KEY' => 'services.recaptcha.site_key',
         'RECAPTCHA_SECRET_KEY' => 'services.recaptcha.secret_key',

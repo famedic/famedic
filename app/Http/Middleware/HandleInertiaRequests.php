@@ -3,9 +3,12 @@
 namespace App\Http\Middleware;
 
 use App\Enums\LaboratoryBrand;
+use App\Support\AppEnvironmentLabel;
+use App\Support\MockEfevooPaymentSupport;
 use App\Services\NotificationService;
 use App\Services\Tracking\Tracking;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Inertia\Middleware;
 use Tighten\Ziggy\Ziggy;
@@ -37,7 +40,13 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $request->user()
+                    ? [
+                        ...$request->user()->toArray(),
+                        'masked_phone' => mask_phone($request->user()->phone),
+                        'masked_email' => mask_email($request->user()->email),
+                    ]
+                    : null,
             ],
             ...($request->user() ? [
                 'medicalAttentionSubscriptionIsActive' => $request->user()->customer?->medical_attention_subscription_is_active,
@@ -68,6 +77,12 @@ class HandleInertiaRequests extends Middleware
             ],
             'userNavigation' => $request->user() ? $this->getUserNavigation((bool) $request->user()->administrator, (bool) $request->user()?->customer?->medical_attention_subscription_is_active) : [],
             'flashMessage' => session('flashMessage'),
+            'appEnv' => app()->environment(),
+            'appEnvLabel' => AppEnvironmentLabel::current(),
+            'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
+            'medicalAttentionTrialEnabled' => (bool) config('famedic.medical_attention_trial_enabled'),
+            'paymentUsesMock' => MockEfevooPaymentSupport::isMockMode(),
+            'labResultsOtpRequired' => (bool) config('laboratory-results.otp_required', false),
             'trackingEvents' => function () {
                 if (! app()->environment('production')) {
                     return [];
@@ -80,8 +95,19 @@ class HandleInertiaRequests extends Middleware
                     config('services.facebook.pixel_id') &&
                     config('services.facebook.capi_token')
                 ) {
-                    $tracking = app(Tracking::class);
-                    $tracking->propagateEvents($trackingEvents);
+                    $queueConnection = config('queue.default') === 'sync'
+                        ? 'database'
+                        : config('queue.default');
+
+                    dispatch(function () use ($trackingEvents) {
+                        try {
+                            app(Tracking::class)->propagateEvents($trackingEvents);
+                        } catch (\Throwable $e) {
+                            Log::warning('Facebook CAPI request failed', [
+                                'message' => $e->getMessage(),
+                            ]);
+                        }
+                    })->onConnection($queueConnection)->afterResponse();
 
                     return collect($trackingEvents)
                         ->filter(fn ($e) => $e->sendToBrowser)

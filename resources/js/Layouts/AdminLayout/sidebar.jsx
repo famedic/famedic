@@ -77,6 +77,21 @@ export default function SideBar() {
 			<SidebarBody>
 				<SidebarSection>
 					{adminNavigation.map((navItem) => {
+						if (navItem.disabled) {
+							const IconComponent = iconMap[navItem.icon];
+
+							return (
+								<SidebarItem
+									key={navItem.label}
+									disabled
+									title="Temporalmente deshabilitado"
+								>
+									{IconComponent && <IconComponent />}
+									<SidebarLabel>{navItem.label}</SidebarLabel>
+								</SidebarItem>
+							);
+						}
+
 						if (navItem.items) {
 							const IconComponent = iconMap[navItem.icon];
 							const hasActiveChild = navItem.items.some(

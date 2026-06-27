@@ -23,7 +23,9 @@ class LaboratoryTestController extends Controller
         $filters = collect($request->only(['search', 'brand', 'category', 'requires_appointment']))->filter()->all();
 
         $laboratoryTests = LaboratoryTest::query()
-            ->with(['laboratoryTestCategory'])
+            ->with([
+                'laboratoryTestCategory' => fn ($query) => $query->withTrashed(),
+            ])
             ->filter($filters)
             ->orderBy('name')
             ->paginate()
@@ -70,7 +72,9 @@ class LaboratoryTestController extends Controller
     public function show(ShowLaboratoryTestRequest $request, LaboratoryTest $laboratoryTest)
     {
         return Inertia::render('Admin/LaboratoryTest', [
-            'laboratoryTest' => $laboratoryTest->load(['laboratoryTestCategory']),
+            'laboratoryTest' => $laboratoryTest->load([
+                'laboratoryTestCategory' => fn ($query) => $query->withTrashed(),
+            ]),
             'brands' => LaboratoryBrand::brandsData(),
             'categories' => LaboratoryTestCategory::orderBy('name')->get(['id', 'name']),
         ]);

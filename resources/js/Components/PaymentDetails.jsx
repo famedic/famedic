@@ -174,6 +174,34 @@ export default function PaymentDetails({ transaction, purchase = null }) {
 					{transaction.formatted_created_at}
 				</DescriptionDetails>
 
+				{transaction.payment_method === "efevoopay" &&
+					transaction.efevoo_commission_breakdown && (
+						<>
+							<DescriptionTerm>Comisión EfevooPay (sin IVA)</DescriptionTerm>
+							<DescriptionDetails>
+								<span className="tabular-nums">
+									{transaction.efevoo_commission_breakdown.formatted_base}
+								</span>
+								<span className="ml-2 text-xs text-zinc-500">(2.9% del cobro)</span>
+							</DescriptionDetails>
+
+							<DescriptionTerm>IVA de la comisión</DescriptionTerm>
+							<DescriptionDetails>
+								<span className="tabular-nums">
+									{transaction.efevoo_commission_breakdown.formatted_vat}
+								</span>
+								<span className="ml-2 text-xs text-zinc-500">(16%)</span>
+							</DescriptionDetails>
+
+							<DescriptionTerm>Comisión total EfevooPay</DescriptionTerm>
+							<DescriptionDetails>
+								<span className="font-medium tabular-nums">
+									{transaction.efevoo_commission_breakdown.formatted_total}
+								</span>
+							</DescriptionDetails>
+						</>
+					)}
+
 				{transaction.payment_method === "efevoopay" && (
 					<>
 						<DescriptionTerm>Consulta Efevoo</DescriptionTerm>

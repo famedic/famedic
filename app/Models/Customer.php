@@ -194,6 +194,11 @@ class Customer extends Model
         return $this->hasMany(LaboratoryCartItem::class);
     }
 
+    public function laboratoryCheckoutDrafts(): HasMany
+    {
+        return $this->hasMany(LaboratoryCheckoutDraft::class);
+    }
+
     public function laboratoryAppointments(): HasMany
     {
         return $this->hasMany(LaboratoryAppointment::class);
@@ -207,6 +212,11 @@ class Customer extends Model
     public function medicalAttentionSubscriptions(): HasMany
     {
         return $this->hasMany(MedicalAttentionSubscription::class);
+    }
+
+    public function murguiaSyncLogs(): HasMany
+    {
+        return $this->hasMany(MurguiaSyncLog::class);
     }
 
     public function familyAccounts(): HasMany
@@ -362,6 +372,7 @@ class Customer extends Model
     {
         return $this->efevooTokens()
             ->active()
+            ->excludeMockInProduction()
             ->get()
             ->map(function ($token) {
                 // Crear un objeto stdClass para mantener compatibilidad
@@ -395,6 +406,7 @@ class Customer extends Model
     {
         return $this->efevooTokens()
             ->active()
+            ->excludeMockInProduction()
             ->get()
             ->map(function ($token) {
                 return [

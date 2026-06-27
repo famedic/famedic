@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (app()->environment('testing') || config('database.default') === 'sqlite') {
+            return;
+        }
+
         Log::info('Migrating missing subscription invoices from old database...');
 
         DB::connection('mysqlold')

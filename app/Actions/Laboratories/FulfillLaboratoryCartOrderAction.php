@@ -11,8 +11,10 @@ use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryPurchaseItem;
 use App\Models\Transaction;
 use App\Notifications\FewDaysLeftToRequestInvoice;
+use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Services\CouponApplicationService;
+use App\Services\PromoCodeService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +26,8 @@ class FulfillLaboratoryCartOrderAction
         private CreateGDAQuotationAction $createGDAQuotationAction,
         private SyncMonitoringCartService $syncMonitoringCartService,
         private CouponApplicationService $couponApplicationService,
+        private PromoCodeService $promoCodeService,
+        private SyncLaboratoryCheckoutDraftAction $syncLaboratoryCheckoutDraftAction,
     ) {
     }
 
@@ -41,6 +45,8 @@ class FulfillLaboratoryCartOrderAction
         Collection $laboratoryCartItems,
         string $gdaBrandValue,
         ?int $couponId = null,
+        ?string $promoValidationToken = null,
+        ?string $cartHash = null,
     ): LaboratoryPurchase {
         DB::beginTransaction();
 
@@ -91,7 +97,20 @@ class FulfillLaboratoryCartOrderAction
                 'pdf_base64' => $gdaQuotation['pdf_base64'] ?? null,
             ]);
 
-            if ($couponId !== null) {
+            if ($promoValidationToken !== null) {
+                $resolvedCartHash = $cartHash ?? $this->promoCodeService->buildLaboratoryCartHash(
+                    $laboratoryCartItems,
+                    (int) $laboratoryPurchase->total_cents
+                );
+
+                $this->promoCodeService->confirmRedemption(
+                    $customer->user,
+                    $promoValidationToken,
+                    $laboratoryPurchase,
+                    (int) $laboratoryPurchase->total_cents,
+                    $resolvedCartHash,
+                );
+            } elseif ($couponId !== null) {
                 $this->couponApplicationService->applyForLaboratoryPurchase(
                     $customer->user,
                     $laboratoryPurchase,
@@ -100,6 +119,7 @@ class FulfillLaboratoryCartOrderAction
             }
 
             $this->syncMonitoringCartService->markLaboratoryCartCompleted($customer);
+            $this->syncLaboratoryCheckoutDraftAction->clearForCustomer($customer, $laboratoryBrand);
             $this->clearCart($customer);
 
             DB::commit();
@@ -109,6 +129,20 @@ class FulfillLaboratoryCartOrderAction
         }
 
         $laboratoryPurchase->customer->user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));
+
+        if ($laboratoryAppointment?->laboratory_purchase_id === $laboratoryPurchase->id) {
+            $laboratoryAppointment->refresh();
+            $laboratoryAppointment->loadMissing([
+                'laboratoryStore',
+                'laboratoryPurchase.transactions',
+                'laboratoryPurchase.laboratoryPurchaseItems',
+                'customer.laboratoryCartItems.laboratoryTest',
+            ]);
+
+            $laboratoryPurchase->customer->user->notify(
+                new LaboratoryAppointmentUpdatedByConcierge($laboratoryAppointment)
+            );
+        }
 
         $this->checkAndSendInvoiceDeadlineNotification($laboratoryPurchase);
 
@@ -157,6 +191,8 @@ class FulfillLaboratoryCartOrderAction
             $laboratoryPurchase->laboratoryPurchaseItems()->save(
                 new LaboratoryPurchaseItem([
                     'name' => $laboratoryCartItem->laboratoryTest->name,
+                    'description' => $laboratoryCartItem->laboratoryTest->description,
+                    'feature_list' => $laboratoryCartItem->laboratoryTest->feature_list,
                     'gda_id' => $laboratoryCartItem->laboratoryTest->gda_id,
                     'indications' => $laboratoryCartItem->laboratoryTest->indications,
                     'price_cents' => $laboratoryCartItem->laboratoryTest->famedic_price_cents,

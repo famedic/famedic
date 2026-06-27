@@ -6,6 +6,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
+import CheckoutProgressTimeline from "@/Pages/Admin/LaboratoryAppointment/CheckoutProgressTimeline";
 
 export default function PurchaseStatusCard({
 	purchaseStatus,
@@ -13,6 +14,7 @@ export default function PurchaseStatusCard({
 	purchaseDate,
 	studies = [],
 	paymentUrl = null,
+	checkoutProgress = null,
 }) {
 	const isPaid = purchaseStatus === "paid";
 	const completed = studies.filter((study) => study.status === "completed").length;
@@ -48,6 +50,13 @@ export default function PurchaseStatusCard({
 					</Button>
 				)}
 			</div>
+
+			{checkoutProgress?.steps?.length > 0 && (
+				<CheckoutProgressTimeline
+					steps={checkoutProgress.steps}
+					draftUpdatedAt={checkoutProgress.draft_updated_at}
+				/>
+			)}
 
 			{isPaid && (
 				<div className="grid gap-3 sm:grid-cols-2">

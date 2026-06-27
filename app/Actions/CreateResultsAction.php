@@ -3,7 +3,7 @@
 namespace App\Actions;
 
 use App\Models\LaboratoryPurchase;
-use App\Notifications\LaboratoryPurchaseResultsUploaded;
+use App\Notifications\LaboratoryResultsAvailable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -35,7 +35,12 @@ class CreateResultsAction
                 })->afterResponse();
             }
 
-            $laboratoryPurchase->customer->user->notify(new LaboratoryPurchaseResultsUploaded($laboratoryPurchase));
+            $laboratoryPurchase->customer->user->notify(new LaboratoryResultsAvailable(
+                laboratoryPurchase: $laboratoryPurchase,
+                laboratoryQuote: null,
+                gdaOrderId: $laboratoryPurchase->gda_order_id,
+                hasPdfInPayload: false
+            ));
 
             return $laboratoryPurchase;
         } catch (\Throwable $e) {

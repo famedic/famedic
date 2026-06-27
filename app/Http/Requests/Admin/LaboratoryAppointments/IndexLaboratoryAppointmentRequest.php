@@ -19,7 +19,11 @@ class IndexLaboratoryAppointmentRequest extends FormRequest
             'completed' => ['nullable', 'in:,true,false'],
             'view' => ['nullable', 'in:list,dashboard'],
             'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'date_range' => ['nullable', 'in:,today,last_7_days,last_15_days,last_30_days,last_60_days,last_6_months'],
+            'brand' => ['nullable', 'in:,olab,swisslab,jenner,liacsa,azteca'],
+            'phone_call_intent' => ['nullable', 'in:,true,false'],
+            'callback_info' => ['nullable', 'in:,true,false'],
         ];
     }
 }

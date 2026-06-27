@@ -11,7 +11,10 @@ class RedirectIfAppointmentConfirmed
     public function handle(Request $request, Closure $next): Response
     {
         if ($request->route('laboratory_appointment')->confirmed_at) {
-            return redirect()->route('laboratory.checkout', ['laboratory_brand' => $request->route('laboratory_brand')]);
+            return redirect()->route('laboratory.checkout', [
+                'laboratory_brand' => $request->route('laboratory_brand'),
+                'step' => 'confirmation',
+            ]);
         }
 
         return $next($request);

@@ -99,7 +99,7 @@ export function SidebarHeading({ className, ...props }) {
 }
 
 export const SidebarItem = forwardRef(function SidebarItem(
-	{ current, forceHoverStyle, className, children, ...props },
+	{ current, forceHoverStyle, className, children, disabled = false, title, ...props },
 
 	ref,
 ) {
@@ -124,7 +124,21 @@ export const SidebarItem = forwardRef(function SidebarItem(
 		"dark:data-[hover]:bg-white/5 dark:data-[slot=icon]:*:data-[hover]:fill-white",
 		"dark:data-[active]:bg-white/5 dark:data-[slot=icon]:*:data-[active]:fill-white",
 		"dark:data-[slot=icon]:*:data-[current]:fill-white",
+		disabled &&
+			"cursor-not-allowed opacity-50 pointer-events-none data-[hover]:bg-transparent dark:data-[hover]:bg-transparent",
 	);
+
+	if (disabled) {
+		return (
+			<span
+				className={clsx(className, "relative")}
+				title={title}
+				aria-disabled="true"
+			>
+				<span className={classes}>{children}</span>
+			</span>
+		);
+	}
 
 	return (
 		<span className={clsx(className, "relative")}>

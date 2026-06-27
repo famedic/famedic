@@ -27,6 +27,13 @@ class LaboratoryTestsController extends Controller
                 'category' => $request->category,
             ]);
 
+        // Algolia puede desincronizarse: solo mostrar estudios cuya marca en BD coincide.
+        $laboratoryTests->setCollection(
+            $laboratoryTests->getCollection()
+                ->filter(fn (LaboratoryTest $test) => $test->brand === $laboratoryBrand)
+                ->values()
+        );
+
         Search::track(
             searchString: $request->input('query'),
             contentIds: collect($laboratoryTests->items())->pluck('gda_id')->all(),

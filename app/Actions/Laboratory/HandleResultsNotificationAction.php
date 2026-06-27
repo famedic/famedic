@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Notifications\LaboratoryResultsAvailable;
 use App\Services\Laboratory\LabOrderNotificationGateService;
+use App\Support\Laboratory\GdaSimulatorSettings;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -33,6 +34,7 @@ class HandleResultsNotificationAction
 
         // Actualizar notificación
         $this->updateNotification($notification, $data, $hasResultsInPayload);
+        $this->invalidateStalePdfCaches($notification);
 
         // Actualizar quote
         $quote = $this->updateQuote($references, $data, $hasResultsInPayload);
@@ -55,7 +57,16 @@ class HandleResultsNotificationAction
         // Encontrar usuario
         $userToNotify = $this->findUserToNotify($references, $quote, $purchase);
 
-        if ($gateResult['should_send_results_email']) {
+        $simulator = $this->simulatorSettings();
+
+        if ($simulator && ! $simulator->sendEmail) {
+            Log::info('Results email skipped (GDA simulator: send_email disabled)', [
+                'gda_order_id' => $gdaOrderId,
+                'notification_id' => $notification->id,
+            ]);
+        } elseif ($simulator?->bypassGate) {
+            $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase, $hasResultsInPayload);
+        } elseif ($gateResult['should_send_results_email']) {
             $wasSent = $this->notificationGateService->sendResultsOnce($gdaOrderId, function () use (
                 $userToNotify,
                 $notification,
@@ -92,10 +103,20 @@ class HandleResultsNotificationAction
         $display = $data['code']['coding'][0]['display'] ?? null;
 
         if ($code || $display) {
-            return trim(($code ?? 'unknown') . '|' . ($display ?? 'unknown'));
+            return trim(($code ?? 'unknown').'|'.($display ?? 'unknown'));
         }
 
         return $data['requisition']['value'] ?? null;
+    }
+
+    protected function invalidateStalePdfCaches(LaboratoryNotification $current): void
+    {
+        LaboratoryNotification::query()
+            ->ofResultsType()
+            ->forSameOrderAs($current)
+            ->where('id', '!=', $current->id)
+            ->whereNotNull('results_pdf_base64')
+            ->update(['results_pdf_base64' => null]);
     }
 
     protected function updateNotification(LaboratoryNotification $notification, array $data, bool $hasResultsInPayload): void
@@ -264,6 +285,13 @@ class HandleResultsNotificationAction
         }
 
         return null;
+    }
+
+    protected function simulatorSettings(): ?GdaSimulatorSettings
+    {
+        return app()->bound(GdaSimulatorSettings::class)
+            ? app(GdaSimulatorSettings::class)
+            : null;
     }
 
     protected function sendEmailNotification(?User $user, LaboratoryNotification $notification, array $data, $quote, $purchase, bool $hasResultsInPayload): void

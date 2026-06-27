@@ -1,0 +1,353 @@
+Resumen tecnico administrativo - Famedic
+=======================================
+
+Descripcion general del modulo administrativo
+---------------------------------------------
+El modulo administrativo es una aplicacion Inertia/React montada bajo el prefijo /admin. Todas las rutas administrativas declaradas en routes/admin.php usan los middleware auth, admin y password.confirm. El middleware admin corresponde a App\Http\Middleware\EnsureUserHasAdminAccount y exige que el usuario tenga cuenta Administrator. Algunas rutas adicionales usan super.admin o validaciones por permisos Spatie.
+
+El admin centraliza monitoreo y operacion de:
+- Usuarios, clientes, administradores, roles y permisos.
+- Compras de laboratorio, compras de farmacia, membresias de atencion medica y pagos a proveedores.
+- Catalogo de estudios de laboratorio.
+- Carritos monitoreados y abandono de carrito.
+- Intentos de pago y tokens EfevooPay.
+- Cupones / saldo a favor.
+- Facturas, resultados de laboratorio, notificaciones GDA y simuladores.
+- Configuracion visible en monitor, logs generales y monitor Murguia.
+
+Funcionalidades principales del administrador
+---------------------------------------------
+- Dashboard general: App\Http\Controllers\AdminController, pagina resources/js/Pages/Admin/Admin.jsx.
+- Administradores y roles: gestion CRUD de Administrator y Role con permisos Spatie.
+- Usuarios y clientes: busqueda, detalle, verificacion manual de email/telefono, historial de compras, tokens Efevoo, notificaciones de laboratorio, carritos monitoreados y perfiles fiscales.
+- Laboratorio: gestion de catalogo, citas, compras, resultados, facturas, cancelaciones, reenvio de confirmacion, graficas, vendor payments y monitoreo de notificaciones GDA.
+- Farmacia: gestion de compras, facturas, dev assistance y vendor payments. La navegacion publica de farmacia esta deshabilitada, pero el modulo administrativo y rutas autenticadas siguen existiendo.
+- Pagos: monitoreo de PaymentAttempt, tokens Efevoo, transacciones asociadas a compras, PayPal en laboratorio, Stripe legado/en farmacia, Odessa y saldo a favor.
+- Cupones: creacion, autorizacion, asignacion, importacion, aprobaciones, reglas, auditoria y conceptos.
+- Carritos monitoreados: seguimiento de carts/cart_items, estado activo/abandonado/completado, borradores de checkout y citas asociadas.
+- Reportes/exportaciones: Excel para administradores, clientes, carritos, compras de laboratorio, catalogo de laboratorio, compras de farmacia y membresias.
+
+Pantallas o paginas administrativas existentes
+----------------------------------------------
+Layout principal:
+- resources/js/Layouts/AdminLayout.jsx
+- resources/js/Layouts/AdminLayout/navbar.jsx
+- resources/js/Layouts/AdminLayout/sidebar.jsx
+
+Paginas principales:
+- resources/js/Pages/Admin/Admin.jsx
+- resources/js/Pages/Admin/Administrators.jsx, Administrator.jsx, AdministratorCreation.jsx
+- resources/js/Pages/Admin/Roles.jsx, Role.jsx, RoleCreation.jsx
+- resources/js/Pages/Admin/Users.jsx, User.jsx
+- resources/js/Pages/Admin/Customers.jsx, Customer.jsx, CustomerReferrals.jsx
+- resources/js/Pages/Admin/Carts.jsx, CartShow.jsx
+- resources/js/Pages/Admin/LaboratoryTests.jsx, LaboratoryTest.jsx, LaboratoryTestCreation.jsx, LaboratoryTestEdit.jsx
+- resources/js/Pages/Admin/LaboratoryAppointments.jsx, LaboratoryAppointment.jsx, LaboratoryAppointmentMetrics.jsx
+- resources/js/Pages/Admin/LaboratoryPurchases.jsx, LaboratoryPurchase.jsx, LaboratoryPurchasesChart.jsx
+- resources/js/Pages/Admin/LaboratoryVendorPaymentCreate.jsx
+- resources/js/Pages/Admin/OnlinePharmacyPurchases.jsx, OnlinePharmacyPurchase.jsx, OnlinePharmacyVendorPaymentCreate.jsx
+- resources/js/Pages/Admin/VendorPayments.jsx, VendorPaymentShow.jsx, VendorPaymentEdit.jsx
+- resources/js/Pages/Admin/MedicalAttentionSubscriptions.jsx, MedicalAttentionSubscription.jsx
+- resources/js/Pages/Admin/EfevooTokens.jsx, EfevooToken.jsx
+- resources/js/Pages/Admin/PaymentAttempts.jsx, PaymentAttempt.jsx
+- resources/js/Pages/Admin/TaxProfiles.jsx, TaxProfile.jsx
+- resources/js/Pages/Admin/LaboratoryNotificationsMonitor.jsx, LaboratoryNotificationsMonitorShow.jsx
+- resources/js/Pages/Admin/Documentation.jsx
+- resources/js/Pages/Admin/LogsGeneral.jsx
+- resources/js/Pages/Admin/MurguiaMonitor.jsx, MurguiaMonitorShow.jsx, MurguiaUpload.jsx, MurguiaLogs.jsx
+- resources/js/Pages/Admin/Coupons/* (Index, Show, Edit, Assign, Settings, Logs)
+- resources/js/Pages/Admin/ConfigMonitor/* (Index, Metadata)
+- resources/js/Pages/Admin/Simulators/* (GDA, Emails, OTP, Index)
+
+Rutas administrativas relevantes
+--------------------------------
+Archivo principal: routes/admin.php
+
+Prefijo y middlewares:
+- /admin/*
+- auth, admin, password.confirm
+- super.admin solo para monitor Murguia y operaciones asociadas.
+
+Rutas clave:
+- GET /admin/admin -> admin.admin
+- resources /admin/administrators -> admin.administrators.*
+- resources /admin/roles -> admin.roles.*
+- resources /admin/customers -> admin.customers.index/show/destroy
+- resources /admin/users -> admin.users.index/show; PATCH /admin/users/{user}; POST verify-email y verify-phone
+- resources /admin/carts -> admin.carts.index/show; POST /admin/carts/export
+- resources /admin/laboratory-tests -> admin.laboratory-tests.*
+- resources /admin/laboratory-appointments -> admin.laboratory-appointments.*
+- GET /admin/laboratory-appointments/metrics
+- POST /admin/laboratory-appointments/{id}/send-payment-summary
+- resources /admin/laboratory-purchases -> admin.laboratory-purchases.index/show/destroy
+- GET /admin/laboratory-purchases/chart
+- POST /admin/laboratory-purchases/{id}/invoice
+- POST /admin/laboratory-purchases/{id}/results
+- POST /admin/laboratory-purchases/{id}/resend-confirmation-email
+- POST /admin/laboratory-purchases/{id}/fetch-results
+- resources /admin/laboratory-vendor-payments, nombradas como admin.laboratory-purchases.vendor-payments.*
+- resources /admin/online-pharmacy-purchases -> index/show
+- resources /admin/online-pharmacy-vendor-payments, nombradas como admin.online-pharmacy-purchases.vendor-payments.*
+- POST /admin/online-pharmacy-purchases/{id}/invoice
+- resources /admin/medical-attention-subscriptions -> index/show
+- resources /admin/efevoo-tokens -> index/show
+- resources /admin/payment-attempts -> index/show
+- /admin/laboratory-notifications-monitor/*
+- /admin/coupons/*, incluyendo assign, import, settings, logs y approval-requests
+- /admin/config-monitor/* y /admin/config-monitor/metadata/*
+- /admin/simulators/*
+- /admin/logs-general/manage y /admin/logs-general/download
+
+Controllers administrativos
+---------------------------
+Principales:
+- app/Http/Controllers/AdminController.php
+- app/Http/Controllers/Admin/AdministratorController.php
+- app/Http/Controllers/Admin/RoleController.php
+- app/Http/Controllers/Admin/UserController.php
+- app/Http/Controllers/Admin/CustomerController.php
+- app/Http/Controllers/Admin/CustomerReferralController.php
+- app/Http/Controllers/Admin/CartController.php
+- app/Http/Controllers/Admin/LaboratoryTestController.php
+- app/Http/Controllers/Admin/LaboratoryAppointmentController.php
+- app/Http/Controllers/Admin/LaboratoryAppointmentMetricsController.php
+- app/Http/Controllers/Admin/LaboratoryPurchaseController.php
+- app/Http/Controllers/Admin/LaboratoryPurchaseChartController.php
+- app/Http/Controllers/Admin/LaboratoryResultController.php
+- app/Http/Controllers/Admin/LaboratoryNotificationController.php
+- app/Http/Controllers/Admin/LaboratoryNotificationMonitorController.php
+- app/Http/Controllers/Admin/OnlinePharmacyPurchaseController.php
+- app/Http/Controllers/Admin/MedicalAttentionSubscriptionController.php
+- app/Http/Controllers/Admin/EfevooTokenController.php
+- app/Http/Controllers/Admin/PaymentAttemptController.php
+- app/Http/Controllers/Admin/CouponController.php
+- app/Http/Controllers/Admin/CouponConceptController.php
+- app/Http/Controllers/Admin/ConfigMonitorController.php
+- app/Http/Controllers/Admin/ConfigMonitorMetadataController.php
+- app/Http/Controllers/Admin/TaxProfileController.php
+- app/Http/Controllers/Admin/TaxProfileFiscalCertificateController.php
+- app/Http/Controllers/Admin/DocumentationController.php
+- app/Http/Controllers/Admin/LogsGeneralController.php
+- app/Http/Controllers/Admin/MurguiaMonitorController.php
+- app/Http/Controllers/Admin/SimulatorController.php
+- app/Http/Controllers/Admin/GdaNotificationSimulatorController.php
+- app/Http/Controllers/Admin/EmailSimulatorController.php
+- app/Http/Controllers/Admin/OtpSimulatorController.php
+
+Controllers de submodulos de compras:
+- app/Http/Controllers/Admin/LaboratoryPurchases/InvoiceController.php
+- app/Http/Controllers/Admin/LaboratoryPurchases/ResultsController.php
+- app/Http/Controllers/Admin/LaboratoryPurchases/VendorPaymentsController.php
+- app/Http/Controllers/Admin/LaboratoryPurchases/DevAssistanceRequestController.php
+- app/Http/Controllers/Admin/LaboratoryPurchases/ResolvedDevAssistanceRequestController.php
+- app/Http/Controllers/Admin/LaboratoryPurchases/UnresolvedDevAssistanceRequestController.php
+- app/Http/Controllers/Admin/OnlinePharmacyPurchases/InvoiceController.php
+- app/Http/Controllers/Admin/OnlinePharmacyPurchases/VendorPaymentsController.php
+- app/Http/Controllers/Admin/OnlinePharmacyPurchases/DevAssistanceRequestController.php
+- app/Http/Controllers/Admin/OnlinePharmacyPurchases/ResolvedDevAssistanceRequestController.php
+- app/Http/Controllers/Admin/OnlinePharmacyPurchases/UnresolvedDevAssistanceRequestController.php
+
+Modelos usados por administracion
+---------------------------------
+- User, Customer, Administrator, Role, Permission.
+- RegularAccount, FamilyAccount, OdessaAfiliateAccount, CertificateAccount, OdessaAfiliatedCompany.
+- LaboratoryTest, LaboratoryTestCategory, LaboratoryStore.
+- LaboratoryAppointment, LaboratoryAppointmentInteraction, LaboratoryConcierge.
+- LaboratoryPurchase, LaboratoryPurchaseItem, LaboratoryNotification, LabOrderEventState, LabOrderEventReceipt, LabResultAccessToken.
+- OnlinePharmacyPurchase, OnlinePharmacyPurchaseItem.
+- Transaction, PaymentAttempt, PaymentLog, EfevooToken, EfevooTransaction, Efevoo3dsSession.
+- VendorPayment, Invoice, InvoiceRequest.
+- Cart, CartItem, LaboratoryCheckoutDraft.
+- Coupon, CouponUser, CouponTransaction, CouponAdminSettings, CouponApprovalRequest, CouponApprovalRequestAuthorizer, CouponAuditLog, CouponConcept y reglas de aprobacion.
+- MedicalAttentionSubscription, MurguiaSyncLog.
+- TaxProfile, Documentation, DevAssistanceRequest, DevAssistanceComment, InAppNotification, OtpCode, OtpAccessLog.
+
+Servicios, actions, helpers y clases usadas por administracion
+--------------------------------------------------------------
+- App\Actions\Admin\Users\UpdateAdminUserAction
+- App\Actions\Admin\Administrators\CreateAdministratorAction, UpdateAdministratorAction, DestroyAdministratorAction
+- App\Actions\Admin\Roles\CreateRoleAction, UpdateRoleAction, DestroyRoleAction
+- App\Actions\Admin\LaboratoryTests\CreateLaboratoryTestAction, UpdateLaboratoryTestAction
+- App\Actions\Admin\LaboratoryPurchases\BuildLaboratoryPurchaseChartsDataAction
+- App\Actions\Admin\LaboratoryAppointments\BuildLaboratoryAppointmentDashboardDataAction, BuildLaboratoryAppointmentCheckoutProgressAction, UpdateLaboratoryAppointmentAction
+- App\Actions\Admin\VendorPayments\BuildVendorPaymentDetailsAction
+- App\Actions\Laboratories\DeleteLaboratoryPurchaseAction, GetGDAResultsAction, ResolveLaboratoryPurchasePdfPath
+- App\Actions\Transactions\RefundTransactionAction
+- App\Actions\CreateInvoiceAction, CreateResultsAction, CreateInvoiceRequestAction
+- App\Actions\CreateVendorPaymentAndAttachPurchasesAction, UpdateVendorPaymentAction, DeleteVendorPaymentAction
+- App\Services\CouponService, CouponApplicationService
+- App\Services\ConfigMonitorService
+- App\Services\Laboratory\GdaNotificationSimulatorService, LabOrderNotificationGateService, LabResultsAccessTokenService
+- App\Services\Monitoring\SyncMonitoringCartService
+- App\Services\Murguia\MurguiaInsuredExcelRowProcessor
+- App\Services\EfevooPayService, EfevooPayFactoryService, EfevooPay\MockEfevooPayGateway
+- App\Services\PayPalService
+- App\Services\ActiveCampaign\ActiveCampaignService
+- App\Services\ConstanciaFiscalService
+- App\Services\Tracking\Tracking y eventos AddToCart, InitiateCheckout, Purchase, Search, ViewContent.
+
+Flujos principales del admin
+----------------------------
+Gestion de usuarios:
+- UserController@index lista usuarios con filtros por busqueda, verificacion y fecha.
+- UserController@show carga customer con compras, direcciones, contactos, tax profiles, tokens Efevoo, EfevooTransaction, notificaciones de laboratorio y carritos monitoreados.
+- PATCH /admin/users/{user} actualiza datos por UpdateAdminUserAction.
+- verifyEmail y verifyPhone marcan verificaciones manuales.
+
+Gestion de clientes:
+- CustomerController@index filtra Customer por busqueda, tipo de cuenta, estado de membresia medica, referidos, verificacion y fechas.
+- CustomerController@show muestra compras de laboratorio, farmacia y membresias con sus Transaction, VendorPayment, Invoice e InvoiceRequest.
+
+Gestion de productos/servicios:
+- LaboratoryTestController maneja catalogo de estudios de laboratorio y exportacion.
+- Los productos de farmacia no se almacenan como catalogo local completo en este admin; se consultan con acciones Vitau para el flujo usuario. No identificado claramente en el codigo un CRUD admin de productos de farmacia.
+- MedicalAttentionSubscriptionController monitorea membresias.
+
+Gestion de ordenes/compras:
+- LaboratoryPurchaseController@index lista compras con filtros de search, deleted, fechas, factura solicitada/subida, resultados, payment_method, payment_status, brand y dev_assistance. Si no hay fechas usa por defecto los ultimos 3 meses.
+- LaboratoryPurchaseController@show carga transacciones, vendor payments, items, cliente, factura, solicitud de factura, cita, asistencia y notificaciones.
+- LaboratoryPurchaseController@destroy llama DeleteLaboratoryPurchaseAction, que usa RefundTransactionAction para intentar reembolsar antes/como parte de la cancelacion.
+- OnlinePharmacyPurchaseController@index/show lista compras de farmacia, transacciones, proveedor, items, factura y dev assistance.
+- VendorPaymentsController de laboratorio/farmacia gestiona pagos a proveedores con relacion polimorfica vendor_paymentables.
+
+Gestion de pagos:
+- PaymentAttemptController lista intentos de pago, principalmente gateway efevoopay, con filtros gateway/status/search.
+- EfevooTokenController lista tokens guardados por customer, ambiente test/production y estado activo/inactivo.
+- PaymentDetails.jsx permite ver detalles de transaccion y consultar EfevooPay cuando aplica.
+- Transaction soporta payment_method/gateway stripe, efevoopay, odessa, paypal y coupon_balance. Tambien guarda payment_provider, provider_order_id, provider_transaction_id, payment_status, gateway_transaction_id, gateway_response, raw_response y details.
+- RefundTransactionAction determina gateway por gateway, payment_method, gateway_transaction_id y details. Soporta coupon_balance, efevoopay, stripe, paypal y odessa.
+
+Gestion de reportes/exportaciones:
+- ExportAdministratorsController, ExportCustomersController, ExportCartsController, ExportLaboratoryPurchasesController, ExportLaboratoryTestsController, ExportOnlinePharmacyPurchasesController, ExportMedicalAttentionSubscriptionsController.
+- Jobs de exportacion: ProcessAdministratorsSpreadsheetExport, ProcessCartsSpreadsheetExport, ProcessLaboratoryPurchasesSpreadsheetExport, ProcessLaboratoryTestsSpreadsheetExport, ProcessOnlinePharmacyPurchasesSpreadsheetExport, ProcessMedicalAttentionSubscriptionsSpreadsheetExport.
+
+Configuracion del sistema:
+- ConfigMonitorController lee configuraciones mapeadas en config/config_monitor.php.
+- ConfigMonitorMetadataController permite administrar grupos/settings metadata.
+- config/famedic.php define permisos y configuraciones de negocio como precios de membresia, rutas de storage y visibilidad de cupones.
+- config/services.php define credenciales de Stripe, PayPal, Vitau, GDA, Odessa, ActiveCampaign, Murguia, Facebook, mailers, recaptcha.
+- config/efevoopay.php y config/efevoo.php definen integracion EfevooPay/Efevoo, TOTP, cifrado, endpoints, simulacion y operaciones.
+
+Permisos, roles, guards, middleware y policies
+----------------------------------------------
+- Spatie Permission se usa en Administrator con guard_name web.
+- Role extiende Spatie\Permission\Models\Role.
+- Middleware admin: EnsureUserHasAdminAccount.
+- Middleware super.admin: EnsureUserHasSuperAdminRole.
+- password.confirm esta aliasado a ExcludePasswordConfirm.
+- Policies relevantes:
+  - AdministratorPolicy: administrators.manage
+  - RolePolicy: administrators.manage
+  - CustomerPolicy: customers.manage
+  - LaboratoryTestPolicy: laboratory-tests.manage y laboratory-tests.manage.edit
+  - LaboratoryPurchasePolicy: laboratory-purchases.manage y laboratory-purchases.manage.cancel
+  - OnlinePharmacyPurchasePolicy: online-pharmacy-purchases.manage
+  - MedicalAttentionSubscriptionPolicy: medical-attention-subscriptions.manage
+  - VendorPaymentPolicy: permisos de vendor payments por tipo de compra
+  - DocumentationPolicy: documentation.manage
+  - CouponPolicy: coupons.view/create/edit/delete/config/manage y approveRequests
+- Permisos declarados en config/famedic.php: administrators.manage, customers.manage/export, documentation.manage, laboratory-purchases.manage/invoices/results/cancel/export/vendor-payments, laboratory-tests.manage/edit, online-pharmacy-purchases.manage/invoices/cancel/export/vendor-payments, medical-attention-subscriptions.manage/export, laboratory-notifications.monitor, logs-general.manage, users.manage, efevoo-tokens.manage, tax-profiles.manage, payment-attempts.manage, config_monitor.manage_metadata.
+- Permisos agregados por migraciones: view carts, view cart details, coupons roles/permissions, simulators.manage, config monitor permissions, laboratory notifications monitor.
+
+Componentes React/Inertia usados en admin
+-----------------------------------------
+- resources/js/Components/Admin/PaginatedTable.jsx
+- resources/js/Components/Admin/SearchInput.jsx
+- resources/js/Components/Admin/SearchResultsWithFilters.jsx
+- resources/js/Components/Admin/ReloadListButton.jsx
+- resources/js/Components/Admin/UpdateButton.jsx
+- resources/js/Components/Admin/FilterCountBadge.jsx
+- resources/js/Components/Admin/UsersChart.jsx
+- resources/js/Components/Admin/Purchases.jsx
+- resources/js/Components/Admin/LaboratoryTestsFilters.jsx
+- resources/js/Components/Admin/LaboratoryAppointmentsDashboard.jsx
+- resources/js/Components/Admin/LaboratoryPurchasesChartsDashboard.jsx
+- resources/js/Components/Admin/LaboratoryNotificationResultsPdfActions.jsx
+- resources/js/Components/Admin/ManageUserDialog.jsx
+- resources/js/Components/PaymentDetails.jsx
+- resources/js/Components/PaymentMethodBadge.jsx
+- resources/js/Components/EfevooPayBadge.jsx
+- resources/js/Components/VendorPaymentDialog.jsx, VendorPaymentForm.jsx, VendorPaymentPurchaseCard.jsx
+- resources/js/Components/DevAssistance/*
+- resources/js/Components/ExportDialog.jsx
+- resources/js/Components/Filters/DateFilter.jsx, ListboxFilter.jsx
+- resources/js/Components/LaboratoryPurchases/*
+- resources/js/Components/LaboratoryOrderDetail/*
+- resources/js/Components/CouponBalanceBadge.jsx
+- resources/js/Components/ResultsDialog.jsx, PurchasePdfDialog.jsx, RequestInvoiceModal.jsx
+
+Integraciones externas usadas por el admin
+------------------------------------------
+- EfevooPay: tokenizacion, 3DS, cargos, reembolsos, busqueda de transacciones y monitoreo de tokens/intentos.
+- PayPal: ordenes/capturas/webhook/reembolsos para laboratorio.
+- Stripe/Cashier: legado y farmacia; Customer usa Billable y Transaction puede consultar comisiones Stripe.
+- Odessa: pagos por caja de ahorro y flujos de afiliado/upgrade.
+- GDA: creacion de orden/cotizacion de laboratorio, notificaciones, resultados, simulador.
+- Vitau: farmacia en linea, ordenes y calculo de productos/envio.
+- ActiveCampaign: tracking, contactos, carritos abandonados, compras completadas y resultados.
+- Murguia: validacion/sincronizacion de membresias medicas institucionales.
+- Facebook CAPI/Pixel: tracking de eventos.
+- Mail/Vonage/OTP: notificaciones, verificacion telefonica y OTP de resultados.
+- S3/local storage/Dompdf: PDFs, facturas, resultados y ordenes de laboratorio.
+- ConstanciaFiscalService/PDF parser: extraccion de datos fiscales.
+
+Dependencias importantes
+------------------------
+Backend: Laravel 11, PHP 8.3, Inertia Laravel, Laravel Cashier, Spatie Permission, Laravel Scout/Algolia, Maatwebsite Excel, Dompdf, Vonage notifications, Facebook Business SDK, Firebase JWT, Guzzle/Symfony HTTP, PDF parser, OTP/TOTP.
+
+Frontend: React 18, Inertia React 2, Vite, Tailwind, Headless UI, Heroicons, Recharts, Framer Motion, Axios, canvas-confetti, react-markdown.
+
+Archivos clave involucrados
+---------------------------
+- routes/admin.php
+- routes/web.php, routes/settings.php, routes/laboratories.php, routes/online-pharmacy.php, routes/webhooks.php, routes/api.php
+- bootstrap/app.php
+- app/Providers/AppServiceProvider.php
+- app/Providers/EfevooPayServiceProvider.php
+- config/famedic.php, config/services.php, config/efevoopay.php, config/efevoo.php, config/config_monitor.php
+- app/Models/Transaction.php
+- app/Models/PaymentAttempt.php
+- app/Models/PaymentLog.php
+- app/Models/EfevooToken.php, app/Models/EfevooTransaction.php, app/Models/Efevoo3dsSession.php
+- app/Models/LaboratoryPurchase.php, LaboratoryPurchaseItem.php, LaboratoryAppointment.php, LaboratoryNotification.php
+- app/Models/OnlinePharmacyPurchase.php, OnlinePharmacyPurchaseItem.php
+- app/Models/Coupon*.php
+- app/Actions/Transactions/RefundTransactionAction.php
+- app/Actions/Laboratories/DeleteLaboratoryPurchaseAction.php
+- app/Services/PayPalService.php
+- app/Services/EfevooPayService.php
+- database/migrations/*transactions*, *efevoo*, *payment_attempts*, *paypal*, *coupon*, *carts*, *laboratory_checkout_drafts*
+
+Riesgos antes de cambiar el procesador de pagos
+-----------------------------------------------
+- Hay varios motores conviviendo: laboratorio usa EfevooPay/Odessa y PayPal; farmacia usa Stripe/Odessa; Transaction conserva compatibilidad con Stripe; medical attention acepta Odessa/Stripe y posiblemente tokens guardados. Cambiar solo un servicio no cubre todos los flujos.
+- Los filtros admin aceptan payment_method específicos. Hay que actualizar validaciones, filtros, badges, exportaciones y reportes si cambia el nombre del metodo.
+- RefundTransactionAction depende de convenciones en gateway, payment_method, gateway_transaction_id, provider_transaction_id y details. Un nuevo gateway debe mapear reembolsos y estados.
+- PayPal tiene fulfillment asincrono/idempotente via capture y webhook. La migracion debe preservar idempotencia para evitar compras duplicadas.
+- LaboratoryPurchase se crea despues de pago autorizado/capturado y despues se llama GDA. Si GDA falla, el codigo intenta reembolso en ciertos caminos. Este comportamiento debe revalidarse.
+- PaymentAttempt solo se crea en ChargeEfevooPaymentMethodAction. Si se migra a otro procesador conviene mantener una tabla equivalente o adaptar el monitor.
+- EfevooToken contiene tokens de tarjeta y alias. Si el nuevo procesador no puede reutilizar tokens, se requiere plan de migracion/re-tokenizacion.
+- Transaction::commission_cents consulta comision Stripe bajo demanda para payment_method stripe. Nuevos procesadores deben poblar details.commission_cents o implementar equivalente.
+- Cupones pueden cubrir el total y generan Transaction con payment_method/gateway coupon_balance. El nuevo motor debe respetar compras con monto a cobrar cero.
+- Admin de carritos y ActiveCampaign dependen de markLaboratoryCartCompleted/markPharmacyCartCompleted al finalizar compra.
+- Hay credenciales default en config/efevoopay.php y config/efevoo.php. Revisar seguridad antes de cualquier cambio.
+
+Notas para migracion de procesador de pagos
+-------------------------------------------
+- Definir una interfaz unica para cargo, captura, webhook, reembolso, comision y normalizacion de errores. Ya existe App\Contracts\EfevooPayGateway, pero no cubre PayPal/Stripe/Odessa de forma comun.
+- Mantener campos Transaction: payment_method, gateway, payment_provider, reference_id, gateway_transaction_id, provider_order_id, provider_transaction_id, payment_status, gateway_status, gateway_response, raw_response y details.
+- Crear/adaptar logs equivalentes a payment_attempts y payment_logs.
+- Actualizar validaciones de requests: Admin\LaboratoryPurchases\IndexLaboratoryPurchaseRequest, OnlinePharmacyPurchases requests, MedicalAttention requests y StoreLaboratoryPurchaseRequest.
+- Actualizar frontend: PaymentMethodStep, ConfirmationStep, LaboratoryPayPalButton si se reemplaza PayPal, PaymentMethodBadge, PaymentDetails, PaymentMethodDisplayIcon, paginas PaymentMethods.
+- Preservar reglas de cupones y monto cero.
+- Probar cancelacion/reembolso desde admin para laboratorio, farmacia y membresias.
+- Probar escenarios de fallo: cargo aprobado + GDA falla; captura webhook duplicado; token vencido; tarjeta declinada; reembolso parcial/no disponible; usuario refresca checkout.
+
+Preguntas abiertas o puntos no identificados
+--------------------------------------------
+- No identificado claramente en el codigo si farmacia en linea debe seguir activa: las rutas publicas redirigen a welcome indicando que esta deshabilitada, pero checkout autenticado y admin siguen presentes.
+- No identificado claramente un CRUD administrativo local de productos de farmacia.
+- No identificado claramente si Stripe sigue siendo requerido para nuevas altas de metodos de pago o solo compatibilidad historica; PaymentMethods usa EfevooPay, pero Customer conserva Billable/Cashier.
+- No identificado claramente si todos los webhooks EfevooPay de routes/settings.php estan activos en produccion.
+- No identificado claramente un flujo admin de reembolso manual separado de cancelacion de orden.
+- No identificado claramente si PayPal esta habilitado para todas las marcas de laboratorio o depende de configuracion/env.

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\LaboratoryAppointments;
 
 use App\Enums\LaboratoryBrand;
+use Carbon\Carbon;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
@@ -10,6 +11,8 @@ use Illuminate\Validation\Validator;
 
 class UpdateLaboratoryAppointmentCallbackAvailabilityRequest extends FormRequest
 {
+    private const BUSINESS_TIMEZONE = 'America/Monterrey';
+
     protected function prepareForValidation(): void
     {
         foreach (['callback_availability_starts_at', 'callback_availability_ends_at', 'patient_callback_comment'] as $key) {
@@ -17,6 +20,36 @@ class UpdateLaboratoryAppointmentCallbackAvailabilityRequest extends FormRequest
                 $this->merge([$key => null]);
             }
         }
+    }
+
+    /**
+     * @return array{
+     *     callback_availability_starts_at: Carbon|null,
+     *     callback_availability_ends_at: Carbon|null,
+     *     patient_callback_comment: string|null,
+     * }
+     */
+    public function parsedCallbackAvailability(): array
+    {
+        $startAt = $this->filled('callback_availability_starts_at')
+            ? Carbon::parse($this->input('callback_availability_starts_at'), self::BUSINESS_TIMEZONE)
+            : null;
+        $endAt = $this->filled('callback_availability_ends_at')
+            ? Carbon::parse($this->input('callback_availability_ends_at'), self::BUSINESS_TIMEZONE)
+            : null;
+        $comment = $this->input('patient_callback_comment');
+        $now = now(self::BUSINESS_TIMEZONE);
+
+        if ($startAt && $startAt->lte($now) && filled($comment)) {
+            $startAt = null;
+            $endAt = null;
+        }
+
+        return [
+            'callback_availability_starts_at' => $startAt,
+            'callback_availability_ends_at' => $endAt,
+            'patient_callback_comment' => $comment,
+        ];
     }
 
     public function authorize(): bool
@@ -86,16 +119,20 @@ class UpdateLaboratoryAppointmentCallbackAvailabilityRequest extends FormRequest
              * $validator->getData() puede no reflejar igual todos los campos del cuerpo
              * (falso positivo en xor de ventana parcial).
              */
-            $start = $this->input('callback_availability_starts_at');
-            $end = $this->input('callback_availability_ends_at');
-            if ($start && $end && strtotime((string) $end) <= strtotime((string) $start)) {
+            $startAt = $this->filled('callback_availability_starts_at')
+                ? Carbon::parse($this->input('callback_availability_starts_at'), self::BUSINESS_TIMEZONE)
+                : null;
+            $endAt = $this->filled('callback_availability_ends_at')
+                ? Carbon::parse($this->input('callback_availability_ends_at'), self::BUSINESS_TIMEZONE)
+                : null;
+
+            if ($startAt && $endAt && $endAt->lte($startAt)) {
                 $validator->errors()->add(
                     'callback_availability_ends_at',
                     'La hora final debe ser posterior a la inicial.'
                 );
             }
-            $hasFullWindow = $this->filled('callback_availability_starts_at')
-                && $this->filled('callback_availability_ends_at');
+            $hasFullWindow = $startAt !== null && $endAt !== null;
             /*
              * Paréntesis obligatorios: en PHP `xor` tiene menor precedencia que `=`, así que
              * `$a = $x xor $y` se interpreta como `($a = $x) xor $y` (el xor no forma parte del valor asignado).
@@ -114,7 +151,7 @@ class UpdateLaboratoryAppointmentCallbackAvailabilityRequest extends FormRequest
                     'Indica el horario completo (desde y hasta) o un comentario.'
                 );
             }
-            if ($start && strtotime((string) $start) <= time()) {
+            if ($hasFullWindow && $startAt->lte(now(self::BUSINESS_TIMEZONE)) && ! $hasComment) {
                 $validator->errors()->add(
                     'callback_availability_starts_at',
                     'El inicio debe ser posterior al momento actual.'

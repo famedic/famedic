@@ -9,27 +9,33 @@ use App\Models\LaboratoryPurchase;
 use App\Notifications\LaboratoryPurchasePdfEmail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
-use Inertia\Inertia;
 
 class LaboratoryPurchasePdfController extends Controller
 {
-    private ResolveLaboratoryPurchasePdfPath $resolvePdfPath;
-
-    public function __construct(ResolveLaboratoryPurchasePdfPath $resolvePdfPath)
-    {
-        $this->resolvePdfPath = $resolvePdfPath;
+    public function __construct(
+        private ResolveLaboratoryPurchasePdfPath $resolvePdfPath,
+    ) {
     }
 
     public function download(DownloadLaboratoryPurchasePdfRequest $request, LaboratoryPurchase $laboratoryPurchase)
     {
-        $storagePath = ($this->resolvePdfPath)($laboratoryPurchase);
+        try {
+            $storagePath = ($this->resolvePdfPath)($laboratoryPurchase);
+        } catch (\Throwable $exception) {
+            report($exception);
 
-        return Inertia::location(
-            Storage::temporaryUrl(
-                $storagePath,
-                now()->addMinutes(5)
-            )
-        );
+            return redirect()
+                ->route('laboratory-purchases.show', $laboratoryPurchase)
+                ->withErrors([
+                    'pdf' => 'No se pudo generar el PDF de la orden. Intenta de nuevo más tarde o contacta a soporte.',
+                ]);
+        }
+
+        $filename = 'orden-laboratorio-'.($laboratoryPurchase->gda_order_id ?: $laboratoryPurchase->id).'.pdf';
+
+        return Storage::disk(config('filesystems.default'))->download($storagePath, $filename, [
+            'Content-Type' => 'application/pdf',
+        ]);
     }
 
     public function email(EmailLaboratoryPurchasePdfRequest $request, LaboratoryPurchase $laboratoryPurchase)

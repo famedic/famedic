@@ -5,18 +5,19 @@ namespace App\Http\Controllers;
 use App\Actions\Laboratories\OrderAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\CouponApplicationException;
+use App\Exceptions\PromoCodeException;
 use App\Exceptions\OdessaInsufficientFundsException;
 use App\Exceptions\EfevooPaymentException;
 use App\Http\Requests\Laboratories\LaboratoryPurchases\StoreLaboratoryPurchaseRequest;
+use App\Http\Resources\PatientLaboratoryPurchaseCardResource;
 use App\Models\Address;
 use App\Models\Contact;
-use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryNotification;
+use App\Models\LaboratoryPurchase;
 use App\Services\Tracking\Purchase;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Log;
-
+use Inertia\Inertia;
 
 class LaboratoryPurchaseController extends Controller
 {
@@ -31,6 +32,9 @@ class LaboratoryPurchaseController extends Controller
                 laboratoryBrand: $laboratoryBrand,
                 totalCents: (int) $request->total,
                 couponId: $request->filled('coupon_id') ? (int) $request->input('coupon_id') : null,
+                promoValidationToken: $request->filled('promo_validation_token')
+                    ? (string) $request->input('promo_validation_token')
+                    : null,
             );
         } catch (EfevooPaymentException $e) {
             return redirect()->back()
@@ -38,6 +42,9 @@ class LaboratoryPurchaseController extends Controller
         } catch (CouponApplicationException $e) {
             return redirect()->back()
                 ->withErrors(['coupon_id' => $e->getMessage()]);
+        } catch (PromoCodeException $e) {
+            return redirect()->back()
+                ->withErrors(['promo_validation_token' => $e->getMessage()]);
         } catch (OdessaInsufficientFundsException $e) {
             return redirect()->back()
                 ->withErrors(['payment_method' => 'No cuentas con suficiente Saldo a la Vista en tu caja de ahorro para realizar el pago.']);
@@ -67,43 +74,148 @@ class LaboratoryPurchaseController extends Controller
 
     public function index(Request $request)
     {
-        $filters = $request->only('search');
+        $customer = $request->user()->customer;
 
-        $laboratoryPurchases = $request->user()->customer->laboratoryPurchases()
-            ->filter($filters)
+        $filters = array_merge(
+            [
+                // Solo pedidos activos; los cancelados (soft-deleted) no se muestran en Mis pedidos.
+                'deleted' => 'false',
+            ],
+            $request->only([
+                'search',
+                'patient',
+                'payment_method',
+                'brand',
+                'start_date',
+                'end_date',
+                'deleted',
+            ])
+        );
+
+        $studyStatus = $request->input('study_status', 'all');
+        $pipeline = $request->input('pipeline', 'all');
+        if (! in_array($pipeline, ['all', 'processing', 'completed', 'invoiced'], true)) {
+            $pipeline = 'all';
+        }
+
+        $baseQuery = $customer->laboratoryPurchases()
+            ->filter($filters);
+
+        if ($pipeline !== 'all') {
+            $baseQuery->wherePatientPipeline($pipeline);
+        } else {
+            $baseQuery->wherePatientStudyStatus($studyStatus === 'all' ? null : $studyStatus);
+        }
+
+        $resultsReceived = function ($q) {
+            $q->where(function ($q2) {
+                $q2->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                    ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
+            })->whereNotNull('results_received_at');
+        };
+
+        $pendingCount = $customer->laboratoryPurchases()
+            ->whereNull('deleted_at')
+            ->whereNull('results')
+            ->whereDoesntHave('laboratoryNotifications', $resultsReceived)
+            ->count();
+
+        $readyCount = $customer->laboratoryPurchases()
+            ->whereNull('deleted_at')
+            ->where(function ($q) use ($resultsReceived) {
+                $q->whereNotNull('results')
+                    ->orWhereHas('laboratoryNotifications', $resultsReceived);
+            })
+            ->count();
+
+        $invoicedCount = $customer->laboratoryPurchases()
+            ->whereNull('deleted_at')
+            ->whereHas('invoice')
+            ->whereHas('invoiceRequest')
+            ->count();
+
+        $patientOptions = $customer->laboratoryPurchases()
+            ->whereNull('deleted_at')
+            ->select(['name', 'paternal_lastname', 'maternal_lastname'])
+            ->orderByDesc('created_at')
+            ->limit(500)
+            ->get()
+            ->map(fn ($p) => trim($p->name.' '.$p->paternal_lastname.' '.$p->maternal_lastname))
+            ->filter()
+            ->unique()
+            ->values()
+            ->take(80)
+            ->map(fn ($label) => ['value' => $label, 'label' => $label])
+            ->all();
+
+        $paginator = $baseQuery
             ->withNotificationStatus()
             ->with([
                 'transactions',
                 'laboratoryPurchaseItems',
+                'laboratoryAppointment',
                 'invoice',
-                'invoiceRequest'
+                'invoiceRequest',
             ])
             ->latest()
-            ->get();
+            ->paginate(12)
+            ->withQueryString();
 
-        // Log para ver los datos después del scope
-        foreach ($laboratoryPurchases as $purchase) {
-            \Illuminate\Support\Facades\Log::info('Purchase after scope', [
-                'id' => $purchase->id,
-                'has_sample_collected' => $purchase->has_sample_collected,
-                'has_results_available' => $purchase->has_results_available,
-                'latest_sample_collection_at' => $purchase->latest_sample_collection_at,
-                'latest_results_at' => $purchase->latest_results_at,
-                'formatted_sample_collection_at' => $purchase->formatted_sample_collection_at,
-                'formatted_results_at' => $purchase->formatted_results_at,
-            ]);
-        }
+        $purchaseCards = collect($paginator->items())->map(
+            fn (LaboratoryPurchase $p) => (new PatientLaboratoryPurchaseCardResource($p))->toArray($request)
+        )->all();
 
-        $laboratoryQuotes = $request->user()->customer->laboratoryQuotes()
-            ->filter($filters)
+        $laboratoryQuotes = $customer->laboratoryQuotes()
+            ->filter($request->only('search'))
             ->with(['appointment', 'user'])
             ->latest()
             ->get();
 
         return Inertia::render('LaboratoryPurchases', [
-            'laboratoryPurchases' => $laboratoryPurchases,
+            'purchaseCards' => $purchaseCards,
+            'pagination' => [
+                'total' => $paginator->total(),
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+                'prev_page_url' => $paginator->previousPageUrl(),
+                'next_page_url' => $paginator->nextPageUrl(),
+            ],
             'laboratoryQuotes' => $laboratoryQuotes,
-            'filters' => $filters,
+            'filters' => array_merge($filters, [
+                'study_status' => $studyStatus,
+                'pipeline' => $pipeline,
+            ]),
+            'summary' => [
+                'pending_count' => $pendingCount,
+                'ready_count' => $readyCount,
+                'processing_count' => $pendingCount,
+                'completed_count' => $readyCount,
+                'invoiced_count' => $invoicedCount,
+            ],
+            'filterOptions' => [
+                'study_statuses' => [
+                    ['value' => 'all', 'label' => 'Todos los estados'],
+                    ['value' => 'in_progress', 'label' => 'En proceso'],
+                    ['value' => 'sample_taken', 'label' => 'Muestra tomada'],
+                    ['value' => 'results_ready', 'label' => 'Resultados listos'],
+                    ['value' => 'cancelled', 'label' => 'Cancelados'],
+                ],
+                'payment_methods' => [
+                    ['value' => '', 'label' => 'Cualquier forma de pago'],
+                    ['value' => 'stripe', 'label' => 'Tarjeta (Stripe)'],
+                    ['value' => 'odessa', 'label' => 'Caja de ahorro (Odessa)'],
+                    ['value' => 'efevoopay', 'label' => 'Efevoo'],
+                    ['value' => 'paypal', 'label' => 'PayPal'],
+                ],
+                'laboratory_brands' => collect(LaboratoryBrand::cases())->map(fn (LaboratoryBrand $b) => [
+                    'value' => $b->value,
+                    'label' => $b->label(),
+                ])->values()->all(),
+                'patients' => $patientOptions,
+            ],
         ]);
     }
 
@@ -118,15 +230,15 @@ class LaboratoryPurchaseController extends Controller
             'laboratoryPurchaseItems',
             'laboratoryAppointment.laboratoryStore',
             'invoiceRequest',
-            'invoice'
+            'invoice',
         ]);
 
         // Usar los mismos métodos que en el admin para obtener las notificaciones
         $hasSampleCollected = $laboratoryPurchase->hasSampleCollected();
         $hasResultsAvailable = $laboratoryPurchase->hasResultsAvailable();
 
-        $latestSampleCollection = $laboratoryPurchase->latestSampleCollection()?->first();
-        $latestResultsNotification = $laboratoryPurchase->latestResultsNotification()?->first();
+        $latestSampleCollection = $laboratoryPurchase->latestSampleCollection();
+        $latestResultsNotification = $laboratoryPurchase->latestResultsNotification();
 
         Log::info('🔍 LaboratoryPurchase show', [
             'purchase_id' => $laboratoryPurchase->id,
@@ -163,6 +275,8 @@ class LaboratoryPurchaseController extends Controller
 
     public function show(Request $request, LaboratoryPurchase $laboratoryPurchase)
     {
+        $this->authorize('view', $laboratoryPurchase);
+
         $lastDayOfPurchaseMonth = localizedDate($laboratoryPurchase->created_at)->endOfMonth();
         $nowInMonterrey = localizedDate(now());
         $laboratoryPurchase->load([
@@ -172,6 +286,8 @@ class LaboratoryPurchaseController extends Controller
             'invoiceRequest',
             'invoice'
         ]);
+
+        $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
 
         $hasManualResults = !empty($laboratoryPurchase->results);
         $hasSampleCollected = false;
@@ -191,20 +307,32 @@ class LaboratoryPurchaseController extends Controller
                 ? localizedDate($latestSampleCollection->created_at)->isoFormat('D MMM Y h:mm a')
                 : null;
 
-            $latestResultsAt = $latestResultsNotification?->created_at
-                ? localizedDate($latestResultsNotification->created_at)->isoFormat('D MMM Y h:mm a')
-                : null;
-
             $hasResultsPdfCached = (bool) $latestResultsNotification?->hasResults();
         }
 
+        if ($hasManualResults) {
+            $hasResultsAvailable = true;
+        }
+
+        if ($hasManualResults || $hasResultsAvailable) {
+            $latestResultsAt = $laboratoryPurchase->formatLatestResultsAt();
+        }
+
+        $isNewResult = ! $hasManualResults && LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(
+            $laboratoryPurchase->id,
+            $laboratoryPurchase->gda_order_id,
+            $laboratoryPurchase->gda_consecutivo
+        );
+
         return Inertia::render('LaboratoryPurchase', [
             'laboratoryPurchase' => $laboratoryPurchase,
+            'isCancelled' => $laboratoryPurchase->trashed(),
             'hasSampleCollected' => $hasSampleCollected,
             'hasResultsAvailable' => $hasResultsAvailable,
             'latestSampleCollectionAt' => $latestSampleCollectionAt,
             'latestResultsAt' => $latestResultsAt,
             'hasResultsPdfCached' => $hasResultsPdfCached,
+            'is_new_result' => $isNewResult,
             'taxProfiles' => auth()->guard()->user()->customer->taxProfiles,
             'daysLeftToRequestInvoice' => $nowInMonterrey->lt($lastDayOfPurchaseMonth)
                 ? (int)ceil($nowInMonterrey->diffInDays($lastDayOfPurchaseMonth, false))

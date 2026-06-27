@@ -26,7 +26,7 @@ export function StackedLayout({ navbar, sidebar, children }) {
 			</MobileSidebar>
 
 			{/* Navbar */}
-			<header className="sticky top-0 z-10">
+			<header className="sticky top-0 z-50">
 				<div className="flex items-center justify-center rounded-none border-b border-slate-200 bg-white/90 px-4 backdrop-blur-sm lg:px-8 dark:border-slate-800 dark:bg-slate-900/90">
 					<div className="lg:hidden">
 						<NavbarItem

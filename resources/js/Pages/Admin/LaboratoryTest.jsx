@@ -21,13 +21,14 @@ import {
 	DropdownItem,
 } from "@/Components/Catalyst/dropdown";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
+import { laboratoryBrandImageSrc } from "@/lib/laboratoryBrand";
 
 export default function LaboratoryTest({ laboratoryTest, brands, categories }) {
 	return (
 		<AdminLayout title="Prueba de Laboratorio">
 			<Header laboratoryTest={laboratoryTest} />
 
-			<TestDetails laboratoryTest={laboratoryTest} />
+			<TestDetails laboratoryTest={laboratoryTest} brands={brands} />
 
 			<PriceInformation laboratoryTest={laboratoryTest} />
 
@@ -76,7 +77,7 @@ function Header({ laboratoryTest }) {
 	);
 }
 
-function TestDetails({ laboratoryTest }) {
+function TestDetails({ laboratoryTest, brands }) {
 	return (
 		<div>
 			<Subheading>Detalles de la prueba</Subheading>
@@ -96,17 +97,17 @@ function TestDetails({ laboratoryTest }) {
 
 				<DescriptionTerm>Categoría</DescriptionTerm>
 				<DescriptionDetails>
-					{laboratoryTest.laboratory_test_category.name}
+					{laboratoryTest.laboratory_test_category?.name ??
+						"Sin categoría"}
 				</DescriptionDetails>
 
 				<DescriptionTerm>Marca</DescriptionTerm>
 				<DescriptionDetails>
 					<LaboratoryBrandCard
-						src={
-							"/images/gda/GDA-" +
-							laboratoryTest.brand.toUpperCase() +
-							".png"
-						}
+						src={laboratoryBrandImageSrc(
+							laboratoryTest.brand,
+							brands,
+						)}
 						className="w-36 p-4"
 					/>
 				</DescriptionDetails>

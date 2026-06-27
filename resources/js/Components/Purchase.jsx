@@ -28,18 +28,35 @@ import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import PurchasePdfDialog from "@/Components/PurchasePdfDialog";
 import Card from "@/Components/Card";
 import PaymentMethodBadge from "@/Components/PaymentMethodBadge";
+import { buildLaboratoryPurchaseTotals } from "@/lib/laboratoryPurchaseTotals";
 
-const formatCents = (cents) =>
-	new Intl.NumberFormat("es-MX", {
-		style: "currency",
-		currency: "MXN",
-	}).format(Number(cents || 0) / 100);
-
-export default function Purchase({ purchase, isLabPurchase = false }) {
+export default function Purchase({
+	purchase,
+	isLabPurchase = false,
+	requireOtpThen = null,
+}) {
 	const [showRequestInvoiceModal, setShowRequestInvoiceModal] =
 		useState(false);
 
 	const { daysLeftToRequestInvoice } = usePage().props;
+	const handleViewResults = async () => {
+		const openResults = () => {
+			window.open(
+				route("laboratory-purchases.results", {
+					laboratory_purchase: purchase,
+				}),
+				"_blank",
+				"noopener,noreferrer",
+			);
+		};
+
+		if (isLabPurchase && typeof requireOtpThen === "function") {
+			await requireOtpThen(() => openResults());
+			return;
+		}
+
+		openResults();
+	};
 
 	return (
 		<>
@@ -93,24 +110,20 @@ export default function Purchase({ purchase, isLabPurchase = false }) {
 
 					{/* Results Button */}
 					{purchase.results && (
-						<Anchor
-							href={route("laboratory-purchases.results", {
-								laboratory_purchase: purchase,
-							})}
-							target="_blank"
-							rel="noopener noreferrer"
+						<Button
+							outline
+							onClick={handleViewResults}
 							className="w-full sm:w-auto"
 						>
-							<Button outline className="w-full">
-								<DocumentTextIcon />
-								Ver resultados
-							</Button>
-						</Anchor>
+							<DocumentTextIcon />
+							Ver resultados
+						</Button>
 					)}
 				</div>
 			)}
 
-
+			{/* COMENTADO: Esta información ahora está en los tabs */}
+			{/*
 			<PurchaseDetails
 				purchase={purchase}
 				isLabPurchase={isLabPurchase}
@@ -128,6 +141,7 @@ export default function Purchase({ purchase, isLabPurchase = false }) {
 				setShowRequestInvoiceModal={setShowRequestInvoiceModal}
 				daysLeftToRequestInvoice={daysLeftToRequestInvoice}
 			/>
+			*/}
 		</>
 	);
 }
@@ -173,7 +187,7 @@ function Header({ purchase, isLabPurchase }) {
 
 			<div className="gap-6 max-md:space-y-6 md:flex md:items-center">
 				<GradientHeading noDivider className="flex-1">
-					¡Gracias por tu pedido!
+					Orden de laboratorio
 				</GradientHeading>
 
 				{isLabPurchase && (
@@ -619,59 +633,65 @@ function PharmacyDelivery({ purchase }) {
 }
 
 function Totals({ purchase, isLabPurchase }) {
-	const couponDiscountCents = Number(purchase.coupon_discount_cents || 0);
-	const totalCents = Number(purchase.total_cents || 0);
-	const paidCents = Math.max(0, totalCents - couponDiscountCents);
-
-	return (
-		<div className="space-y-6 text-sm">
-			{!isLabPurchase && (
-				<>
-					<div className="flex justify-between">
-						<Text>Subtotal</Text>
-
-						<Text>{purchase.formatted_subtotal}</Text>
-					</div>
-					<div className="flex justify-between">
-						<Text>Envío</Text>
-
-						<Text>{purchase.formatted_shipping_price}</Text>
-					</div>
-					{purchase.tax_cents !== 0 && (
-						<div className="flex justify-between">
-							<Text>Impuesto</Text>
-
-							<Text>{purchase.formatted_tax}</Text>
-						</div>
-					)}
-					{purchase.discount_cents !== 0 && (
-						<div className="flex justify-between">
-							<Text>Descuento</Text>
-
-							<Text>-{purchase.formatted_discount}</Text>
-						</div>
-					)}
-				</>
-			)}
-			{isLabPurchase && (
+	if (!isLabPurchase) {
+		return (
+			<div className="space-y-6 text-sm">
 				<div className="flex justify-between">
-					<Text>Total de estudios</Text>
-					<Text>{purchase.formatted_total}</Text>
+					<Text>Subtotal</Text>
+					<Text>{purchase.formatted_subtotal}</Text>
 				</div>
-			)}
-			{isLabPurchase &&
-				couponDiscountCents > 0 && (
+				<div className="flex justify-between">
+					<Text>Envío</Text>
+					<Text>{purchase.formatted_shipping_price}</Text>
+				</div>
+				{purchase.tax_cents !== 0 && (
 					<div className="flex justify-between">
-						<Text>Saldo a favor aplicado</Text>
-						<Text>-{purchase.formatted_coupon_discount}</Text>
+						<Text>Impuesto</Text>
+						<Text>{purchase.formatted_tax}</Text>
 					</div>
 				)}
-			<div className="flex justify-between">
-				<Subheading>{isLabPurchase ? "Total pagado" : "Total"}</Subheading>
+				{purchase.discount_cents !== 0 && (
+					<div className="flex justify-between">
+						<Text>Descuento</Text>
+						<Text>-{purchase.formatted_discount}</Text>
+					</div>
+				)}
+				<div className="flex justify-between">
+					<Subheading>Total</Subheading>
+					<Subheading>{purchase.formatted_total}</Subheading>
+				</div>
+			</div>
+		);
+	}
 
-				<Subheading>
-					{isLabPurchase ? formatCents(paidCents) : purchase.formatted_total}
-				</Subheading>
+	const totals = buildLaboratoryPurchaseTotals(purchase);
+
+	return (
+		<div className="space-y-4 text-sm">
+			<div className="flex justify-between">
+				<Text>Subtotal</Text>
+				<Text>{totals.subtotal}</Text>
+			</div>
+			{totals.hasCatalogDiscount && (
+				<div className="flex justify-between">
+					<Text>Descuento</Text>
+					<Text>−{totals.catalogDiscount}</Text>
+				</div>
+			)}
+			{totals.hasAppliedCreditBalance && totals.creditApplied && (
+				<div className="flex justify-between">
+					<Text>Crédito a favor</Text>
+					<Text>−{totals.creditApplied}</Text>
+				</div>
+			)}
+			{totals.creditAppliedMessage && (
+				<p className="rounded-lg border border-violet-200/80 bg-violet-50/60 px-3 py-2 text-xs text-violet-900 dark:border-violet-800/40 dark:bg-violet-950/25 dark:text-violet-100">
+					{totals.creditAppliedMessage}
+				</p>
+			)}
+			<div className="flex justify-between">
+				<Subheading>Total pagado</Subheading>
+				<Subheading>{totals.netTotal}</Subheading>
 			</div>
 		</div>
 	);

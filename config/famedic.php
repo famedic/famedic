@@ -73,6 +73,10 @@ return [
 
     'medical_attention_subscription_price_cents' => 30000,
     'free_medical_attention_subscription_days' => 30,
+    'medical_attention_trial_enabled' => filter_var(
+        env('MEDICAL_ATTENTION_TRIAL_ENABLED', false),
+        FILTER_VALIDATE_BOOLEAN
+    ),
 
     /** Licencia institucional Odessa (monitor admin / alta manual) */
     'institutional_odessa_subscription_years' => (int) env('INSTITUTIONAL_ODESSA_SUBSCRIPTION_YEARS', 1),
@@ -93,4 +97,7 @@ return [
      * sea desde otro entorno. Sobrescribe con FAMEDIC_EMAIL_PUBLIC_URL si necesitas otro host.
      */
     'email_public_url' => rtrim((string) env('FAMEDIC_EMAIL_PUBLIC_URL', 'https://famedic.com.mx'), '/'),
+
+    /** Menú admin: muestra "Créditos a favor" pero sin permitir navegación. */
+    'admin_coupons_navigation_disabled' => env('ADMIN_COUPONS_NAVIGATION_DISABLED', true),
 ];

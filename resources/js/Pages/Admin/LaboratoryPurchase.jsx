@@ -17,7 +17,7 @@ import {
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
 import { Badge } from "@/Components/Catalyst/badge";
-import { Text } from "@/Components/Catalyst/text";
+import { Text, Strong } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
 
 import {
@@ -42,14 +42,44 @@ import DevAssistanceButton from "@/Components/DevAssistance/DevAssistanceButton"
 import DevAssistanceDropdown from "@/Components/DevAssistance/DevAssistanceDropdown";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import PaymentDetails from "@/Components/PaymentDetails";
+import CouponReversalNotice from "@/Components/Admin/CouponReversalNotice";
+import { buildLaboratoryPurchaseTotals } from "@/lib/laboratoryPurchaseTotals";
+
+function normalizePackageFeatureLabels(raw) {
+	if (raw == null) return [];
+	let list = [];
+	if (Array.isArray(raw)) {
+		list = raw;
+	} else if (typeof raw === "string") {
+		try {
+			const parsed = JSON.parse(raw);
+			list = Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	} else {
+		return [];
+	}
+	return list
+		.map((entry) => {
+			if (typeof entry === "string") return entry.trim();
+			if (entry != null && typeof entry === "object" && "name" in entry) {
+				return String(entry.name ?? "").trim();
+			}
+			return String(entry ?? "").trim();
+		})
+		.filter(Boolean);
+}
 
 
 export default function LaboratoryPurchase({
 	laboratoryPurchase,
+	couponReversal = null,
 	showDeleteButton,
 	canResendConfirmationEmail,
 	hasSampleCollected,
 	hasResultsAvailable,
+	hasManualResults = false,
 	latestSampleCollectionAt,
 	latestResultsAt,
 }) {
@@ -63,6 +93,7 @@ export default function LaboratoryPurchase({
 				canResendConfirmationEmail={canResendConfirmationEmail}
 				hasSampleCollected={hasSampleCollected}
 				hasResultsAvailable={hasResultsAvailable}
+				hasManualResults={hasManualResults}
 				latestSampleCollectionAt={latestSampleCollectionAt}
 				latestResultsAt={latestResultsAt}
 			/>
@@ -80,6 +111,8 @@ export default function LaboratoryPurchase({
 				/>
 			)}
 
+			<CouponReversalNotice couponReversal={couponReversal} />
+
 		</AdminLayout>
 	);
 }
@@ -91,6 +124,7 @@ function Header({
 	canResendConfirmationEmail,
 	hasSampleCollected,
 	hasResultsAvailable,
+	hasManualResults,
 	latestSampleCollectionAt,
 	latestResultsAt,
 }) {
@@ -210,15 +244,22 @@ function Header({
 							)}
 						</Badge>
 
-						<Badge color={hasResultsAvailable ? "emerald" : "slate"}>
-							{hasResultsAvailable ? "Resultados disponibles" : "Resultados pendientes"}
+						<div className="flex flex-wrap items-center gap-2">
+							<Badge color={hasResultsAvailable ? "emerald" : "slate"}>
+								{hasResultsAvailable ? "Resultados disponibles" : "Resultados pendientes"}
 
-							{hasResultsAvailable && latestResultsAt && (
-								<span className="ml-2 text-xs opacity-70">
-									{latestResultsAt}
-								</span>
+								{hasResultsAvailable && latestResultsAt && (
+									<span className="ml-2 text-xs opacity-70">
+										{latestResultsAt}
+									</span>
+								)}
+							</Badge>
+							{hasManualResults && (
+								<Badge color="violet" className="font-medium">
+									PDF · carga manual
+								</Badge>
 							)}
-						</Badge>
+						</div>
 
 					</div>
 
@@ -439,19 +480,6 @@ function Patient({ laboratoryPurchase }) {
 
 
 function Order({ laboratoryPurchase }) {
-	const transaction = laboratoryPurchase.transactions?.[0] ?? null;
-	const commissionCentsRaw = transaction?.details?.commission_cents;
-	const commissionCents = Number.isFinite(Number(commissionCentsRaw))
-		? Number(commissionCentsRaw)
-		: null;
-	const formattedCommission =
-		commissionCents === null
-			? null
-			: new Intl.NumberFormat("es-MX", {
-					style: "currency",
-					currency: "MXN",
-				}).format(commissionCents / 100);
-
 	return (
 
 		<div>
@@ -464,40 +492,66 @@ function Order({ laboratoryPurchase }) {
 
 				<DescriptionDetails>
 
-					<div className="flex flex-col gap-1">
+					<div className="flex flex-col gap-3">
 
-						{laboratoryPurchase.laboratory_purchase_items.map(
-							(item) => (
-
-								<span key={item.id}>
-
-									<Badge color="slate">
-
-										{item.name} ({item.formatted_price})
-
-									</Badge>
-
-								</span>
-
-							)
-						)}
+						{laboratoryPurchase.laboratory_purchase_items.map((item) => {
+							const packageFeatures = normalizePackageFeatureLabels(item.feature_list);
+							return (
+								<div key={item.id} className="space-y-1.5">
+									<div>
+										<Badge color="slate">
+											{item.name} ({item.formatted_price})
+										</Badge>
+									</div>
+									{packageFeatures.length > 0 && (
+										<div className="ml-0.5 border-l-2 border-orange-400/80 pl-3 dark:border-orange-500/70">
+											<p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+												Incluye en el paquete
+											</p>
+											<ul className="list-disc space-y-0.5 pl-4 text-xs leading-snug text-zinc-600 dark:text-slate-400">
+												{packageFeatures.map((label, idx) => (
+													<li key={`${item.id}-f-${idx}`}>{label}</li>
+												))}
+											</ul>
+										</div>
+									)}
+								</div>
+							);
+						})}
 
 					</div>
 
 				</DescriptionDetails>
 
-				<DescriptionTerm>Total</DescriptionTerm>
+				<DescriptionTerm>Subtotal</DescriptionTerm>
 
 				<DescriptionDetails>
-					{laboratoryPurchase.formatted_total}
+					{buildLaboratoryPurchaseTotals(laboratoryPurchase).subtotal}
 				</DescriptionDetails>
 
-				{formattedCommission !== null && (
+				{laboratoryPurchase.coupon_discount_cents > 0 && (
 					<>
-						<DescriptionTerm>Comisión</DescriptionTerm>
-						<DescriptionDetails>{formattedCommission}</DescriptionDetails>
+						<DescriptionTerm>Crédito a favor</DescriptionTerm>
+						<DescriptionDetails>
+							−{laboratoryPurchase.formatted_coupon_discount}
+						</DescriptionDetails>
 					</>
 				)}
+
+				<DescriptionTerm>Total pagado</DescriptionTerm>
+
+				<DescriptionDetails>
+					<Strong>
+						{laboratoryPurchase.formatted_net_total ??
+							buildLaboratoryPurchaseTotals(laboratoryPurchase).netTotal}
+					</Strong>
+					{laboratoryPurchase.coupon_discount_cents > 0 && (
+						<Text className="mt-2 block text-sm text-violet-800 dark:text-violet-200">
+							Se aplicó un crédito a favor de{" "}
+							{laboratoryPurchase.formatted_coupon_discount}.
+						</Text>
+					)}
+				</DescriptionDetails>
 
 			</DescriptionList>
 

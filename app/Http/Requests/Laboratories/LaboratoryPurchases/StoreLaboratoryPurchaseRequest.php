@@ -4,8 +4,10 @@ namespace App\Http\Requests\Laboratories\LaboratoryPurchases;
 
 use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
 use App\Exceptions\CouponApplicationException;
+use App\Exceptions\PromoCodeException;
 use App\Models\Coupon;
 use App\Services\CouponApplicationService;
+use App\Services\PromoCodeService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -26,6 +28,7 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
         return [
             'total' => 'required|numeric|min:0',
             'coupon_id' => ['nullable', 'integer', 'exists:coupons,id'],
+            'promo_validation_token' => ['nullable', 'string', 'max:64'],
             'address' => [
                 'required',
                 'exists:addresses,id',
@@ -81,9 +84,38 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
             }
 
             $couponId = $this->filled('coupon_id') ? (int) $this->input('coupon_id') : null;
+            $promoValidationToken = $this->filled('promo_validation_token')
+                ? (string) $this->input('promo_validation_token')
+                : null;
+
+            if ($couponId !== null && $promoValidationToken !== null) {
+                $validator->errors()->add(
+                    'promo_validation_token',
+                    'No puedes combinar un crédito asignado con un código promocional.'
+                );
+
+                return;
+            }
 
             $amountToCharge = $calculatedTotal;
-            if ($couponId !== null) {
+            $hasPromoOrCoupon = $couponId !== null || $promoValidationToken !== null;
+            $cartHash = app(PromoCodeService::class)->buildLaboratoryCartHash($cartItems, $calculatedTotal);
+
+            if ($promoValidationToken !== null) {
+                try {
+                    $redemption = app(PromoCodeService::class)->resolveValidatedRedemption(
+                        auth()->user(),
+                        $promoValidationToken,
+                        $calculatedTotal,
+                        $cartHash,
+                    );
+                    $amountToCharge = $calculatedTotal - (int) $redemption->discount_cents;
+                } catch (PromoCodeException $e) {
+                    $validator->errors()->add('promo_validation_token', $e->getMessage());
+
+                    return;
+                }
+            } elseif ($couponId !== null) {
                 try {
                     app(CouponApplicationService::class)->validateApplication(
                         auth()->user(),
@@ -97,10 +129,11 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
                 }
 
                 $coupon = Coupon::query()->findOrFail($couponId);
-                $amountToCharge = $calculatedTotal - $coupon->remaining_cents;
+                $amountToCharge = $calculatedTotal - app(CouponApplicationService::class)
+                    ->resolveDiscountCents($coupon, $calculatedTotal);
             }
 
-            $allowed = $this->paymentMethodsForAmount($amountToCharge, $couponId !== null);
+            $allowed = $this->paymentMethodsForAmount($amountToCharge, $hasPromoOrCoupon);
 
             if (! in_array((string) $this->input('payment_method'), $allowed, true)) {
                 $validator->errors()->add('payment_method', 'El método de pago seleccionado no es válido o ha expirado.');
@@ -117,7 +150,7 @@ class StoreLaboratoryPurchaseRequest extends FormRequest
 
         $customer = auth()->user()->customer;
 
-        foreach ($customer->efevooTokens()->active()->get() as $token) {
+        foreach ($customer->efevooTokens()->active()->excludeMockInProduction()->get() as $token) {
             $allowed[] = (string) $token->id;
         }
 

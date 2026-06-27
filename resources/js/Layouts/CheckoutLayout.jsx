@@ -8,9 +8,12 @@ import {
   BuildingStorefrontIcon,
   CreditCardIcon,
   InformationCircleIcon as InformationCircleIconSolid,
+  LockClosedIcon,
 } from "@heroicons/react/16/solid";
 import { Subheading } from "@/Components/Catalyst/heading";
 import FocusedLayout from "@/Layouts/FocusedLayout";
+import CheckoutWhatsAppHelp from "@/Components/Checkout/CheckoutWhatsAppHelp";
+import CheckoutWizardFloatingFooter from "@/Components/Checkout/CheckoutWizardFloatingFooter";
 import { Divider } from "@/Components/Catalyst/divider";
 import { XMarkIcon, InformationCircleIcon } from "@heroicons/react/20/solid";
 import FAQs from "@/Components/FAQs";
@@ -24,6 +27,30 @@ const emptyItemsContent = (
     <Text className="text-zinc-500">Tu carrito está vacío.</Text>
   </div>
 );
+
+export function scrollToCheckoutSummaryTotals() {
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const el = document.getElementById("checkout-summary-totals");
+      if (!el) return;
+
+      el.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "nearest",
+      });
+
+      el.classList.add("checkout-summary-totals-highlight");
+      window.setTimeout(
+        () => el.classList.remove("checkout-summary-totals-highlight"),
+        1600,
+      );
+    });
+  });
+}
 
 export default function CheckoutLayout({
   title,
@@ -40,10 +67,20 @@ export default function CheckoutLayout({
   data = {},
   /** Si se pasa, sustituye el botón "Pagar ahora" (p. ej. PayPal). */
   alternateOnlinePayment = null,
+  /** Modo wizard multi-paso */
+  stepper = null,
+  footerActions = null,
+  couponSection = null,
+  hideDefaultSubmit = false,
+  /** Ancla para scroll al cambiar de paso del wizard */
+  stepContentRef = null,
+  /** Footer Continuar/Volver pegado al fondo en pasos con listas largas */
+  floatingWizardFooter = false,
+  /** Acciones debajo de los totales del resumen (p. ej. confirmar pago) */
+  summaryActions = null,
 }) {
   const [isOnlineProcessing, setIsOnlineProcessing] = useState(false);
   const [isBranchProcessing, setIsBranchProcessing] = useState(false);
-
   const onlineDisabled = onlinePaymentDisabled !== undefined ? onlinePaymentDisabled : paymentDisabled;
   const branchDisabled = branchPaymentDisabled !== undefined ? branchPaymentDisabled : paymentDisabled;
 
@@ -55,38 +92,69 @@ export default function CheckoutLayout({
     return "Pagar en sucursal " + (summaryDetails[summaryDetails.length - 1]?.value || "$0");
   }, [summaryDetails]);
 
-  console.log('CheckoutLayout - onlineDisabled:', onlineDisabled);
-  console.log('CheckoutLayout - branchDisabled:', branchDisabled);
-  console.log('CheckoutLayout - paymentProcessing:', paymentProcessing);
-  console.log('CheckoutLayout - data.payment_method:', data?.payment_method);
-  console.log('CheckoutLayout - showBranchPayment:', showBranchPayment);
-
   return (
     <FocusedLayout title={title} hideHelpBubble={true}>
       {header}
 
-      <div className="mx-auto mt-8 grid grid-cols-1 gap-8 lg:max-w-none lg:grid-cols-5">
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const isBranch = e.nativeEvent.submitter?.name === "branch_payment";
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const isBranch = e.nativeEvent.submitter?.name === "branch_payment";
 
-            if (isBranch ? isBranchProcessing : isOnlineProcessing) return;
+          if (isBranch ? isBranchProcessing : isOnlineProcessing) return;
 
-            if (isBranch) setIsBranchProcessing(true);
-            else setIsOnlineProcessing(true);
+          if (isBranch) setIsBranchProcessing(true);
+          else setIsOnlineProcessing(true);
 
-            try {
-              await submit(e, isBranch);
-            } finally {
-              setIsOnlineProcessing(false);
-              setIsBranchProcessing(false);
-            }
-          }}
-          className="flex w-full flex-col gap-8 lg:col-span-3"
-        >
-          {children}          
-          
+          try {
+            await submit(e, isBranch);
+          } finally {
+            setIsOnlineProcessing(false);
+            setIsBranchProcessing(false);
+          }
+        }}
+        className="mx-auto mt-8 grid grid-cols-1 gap-8 lg:max-w-none lg:grid-cols-5"
+      >
+        <div className="flex w-full flex-col gap-6 lg:col-span-3">
+          <div
+            ref={stepContentRef}
+            id="checkout-wizard-step"
+            className={clsx(
+              "scroll-mt-20 space-y-6",
+              floatingWizardFooter && "pb-28",
+            )}
+          >
+            {stepper}
+            {children}
+          </div>
+
+          {summaryActions && (
+            <div className="lg:hidden">
+              <CheckoutSummaryCard>
+                <CheckoutTotalsPanel
+                  summaryDetails={summaryDetails}
+                  couponSection={couponSection}
+                  summaryActions={summaryActions}
+                />
+              </CheckoutSummaryCard>
+            </div>
+          )}
+
+          {floatingWizardFooter && (
+            <div className="h-20 shrink-0" aria-hidden="true" />
+          )}
+
+          {footerActions &&
+            (floatingWizardFooter ? (
+              <CheckoutWizardFloatingFooter>
+                {footerActions}
+              </CheckoutWizardFloatingFooter>
+            ) : (
+              footerActions
+            ))}
+
+          {!hideDefaultSubmit && (
+            <>
           {/* PAGO ONLINE */}
           {alternateOnlinePayment ? (
             <div
@@ -148,51 +216,139 @@ export default function CheckoutLayout({
             </Anchor>
             .
           </Text>
-        </form>
+            </>
+          )}
+        </div>
 
-        <CheckoutSummary summaryDetails={summaryDetails} items={items} />
-      </div>
+        <CheckoutSummary
+          summaryDetails={summaryDetails}
+          items={items}
+          couponSection={couponSection}
+          summaryActions={summaryActions}
+        />
+      </form>
 
       <Footer />
+      <CheckoutWhatsAppHelp />
     </FocusedLayout>
   );
 }
 
-function CheckoutSummary({ summaryDetails, items }) {
-    return (
-        <div className="order-first mx-auto w-full lg:order-last lg:col-span-2">
-            <section className="sticky top-8 space-y-6 rounded-lg bg-white px-4 py-6 shadow sm:p-6 lg:col-span-5 lg:p-8 dark:bg-slate-900">
-                <div className="flow-root">
-                    <ul role="list" className="[&>*:last-child]:hidden">
-                        {items.length > 0 ? (
-                            items.map((item, index) => (
-                                <CartItem
-                                    key={index}
-                                    imgSrc={item.imgSrc}
-                                    showDefaultImage={item.showDefaultImage}
-                                    heading={item.heading}
-                                    description={item.description}
-                                    indications={item.indications}
-                                    features={item.features || []}
-                                    price={item.price}
-                                    discountedPrice={item.discountedPrice}
-                                    discountPercentage={item.discountPercentage}
-                                    infoMessage={item.infoMessage}
-                                    quantity={item.quantity}
-                                    destroyCartItem={item.onDestroy}
-                                />
-                            ))
-                        ) : (
-                            <li className="py-6 sm:py-10">
-                                {emptyItemsContent}
-                            </li>
-                        )}
-                    </ul>
+function CheckoutSummary({
+    summaryDetails,
+    items,
+    couponSection = null,
+    summaryActions = null,
+}) {
+    const splitMobileCheckout = Boolean(summaryActions);
+
+    const orderItems = <CheckoutOrderItems items={items} />;
+
+    const totalsPanel = (
+        <CheckoutTotalsPanel
+            summaryDetails={summaryDetails}
+            couponSection={couponSection}
+            summaryActions={summaryActions}
+        />
+    );
+
+    if (splitMobileCheckout) {
+        return (
+            <>
+                <div className="order-first mx-auto w-full lg:hidden">
+                    <CheckoutSummaryCard>{orderItems}</CheckoutSummaryCard>
                 </div>
 
+                <div className="order-last mx-auto hidden w-full lg:col-span-2 lg:block">
+                    <CheckoutSummaryCard sticky>
+                        {orderItems}
+                        {totalsPanel}
+                    </CheckoutSummaryCard>
+                </div>
+            </>
+        );
+    }
+
+    return (
+        <div className="order-first mx-auto w-full lg:order-last lg:col-span-2">
+            <CheckoutSummaryCard sticky>
+                {orderItems}
+                {totalsPanel}
+            </CheckoutSummaryCard>
+        </div>
+    );
+}
+
+function CheckoutSummaryCard({ children, sticky = false }) {
+    return (
+        <section
+            className={clsx(
+                "space-y-6 overflow-hidden rounded-lg bg-white px-4 py-6 shadow sm:p-6 lg:p-8 dark:bg-slate-900",
+                sticky && "sticky top-8",
+            )}
+        >
+            {children}
+        </section>
+    );
+}
+
+function CheckoutOrderItems({ items }) {
+    return (
+        <>
+            <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-slate-400">
+                <LockClosedIcon className="size-4" />
+                <Text>Pago 100% seguro</Text>
+            </div>
+
+            <Subheading>Resumen del pedido</Subheading>
+
+            <div className="flow-root max-h-64 overflow-x-hidden overflow-y-auto lg:max-h-80">
+                <ul role="list" className="[&>*:last-child]:hidden">
+                    {items.length > 0 ? (
+                        items.map((item, index) => (
+                            <CartItem
+                                key={index}
+                                imgSrc={item.imgSrc}
+                                showDefaultImage={item.showDefaultImage}
+                                heading={item.heading}
+                                description={item.description}
+                                indications={item.indications}
+                                features={item.features || []}
+                                price={item.price}
+                                discountedPrice={item.discountedPrice}
+                                discountPercentage={item.discountPercentage}
+                                infoMessage={item.infoMessage}
+                                quantity={item.quantity}
+                                destroyCartItem={item.onDestroy}
+                            />
+                        ))
+                    ) : (
+                        <li className="py-6 sm:py-10">
+                            {emptyItemsContent}
+                        </li>
+                    )}
+                </ul>
+            </div>
+        </>
+    );
+}
+
+function CheckoutTotalsPanel({
+    summaryDetails,
+    couponSection = null,
+    summaryActions = null,
+}) {
+    return (
+        <>
+            {couponSection}
+
+            <div
+                id="checkout-summary-totals"
+                className="scroll-mt-24 rounded-lg transition-[box-shadow] duration-300"
+            >
                 <Subheading>Resumen</Subheading>
 
-                <dl className="[&>:first-child]:pt-0 [&>:last-child]:pb-6">
+                <dl className="[&>:first-child]:pt-0 [&>:last-child]:pb-0">
                     {summaryDetails.map((cartDetail, index) => (
                         <CartDetail
                             key={cartDetail.label}
@@ -201,16 +357,25 @@ function CheckoutSummary({ summaryDetails, items }) {
                         />
                     ))}
                 </dl>
-            </section>
-        </div>
+
+                {summaryActions && (
+                    <div
+                        id="checkout-summary-payment"
+                        className="mt-4 space-y-3 border-t border-zinc-200 pt-4 dark:border-slate-700"
+                    >
+                        {summaryActions}
+                    </div>
+                )}
+            </div>
+        </>
     );
 }
 
 function CartDetail({ label, value, totalRow = false }) {
     return (
         <>
-            <div className="flex items-center justify-between gap-2 py-6">
-                <dt>
+            <div className="flex min-w-0 items-center justify-between gap-2 py-6">
+                <dt className="min-w-0 shrink">
                     {totalRow ? (
                         <Subheading
                             className={totalRow ? "dark:!text-famedic-light" : ""}
@@ -221,8 +386,8 @@ function CartDetail({ label, value, totalRow = false }) {
                         <Text>{label}</Text>
                     )}
                 </dt>
-                <dd>
-                    <Text className="max-w-48 text-right">
+                <dd className="min-w-0 shrink-0">
+                    <Text className="max-w-48 break-words text-right">
                         {totalRow ? (
                             <Strong
                                 className={totalRow ? "dark:!text-famedic-light" : ""}
@@ -256,7 +421,7 @@ function CartItem({
 }) {
     return (
         <>
-            <li className="flex pb-6">
+            <li className="flex min-w-0 pb-6">
                 {(showDefaultImage || imgSrc) && (
                     <div className="flex-shrink-0">
                         {imgSrc ? (
@@ -273,12 +438,12 @@ function CartItem({
                     </div>
                 )}
                 <div
-                    className={`w-full ${imgSrc || showDefaultImage ? "ml-4 sm:ml-6" : ""}`}
+                    className={`min-w-0 w-full ${imgSrc || showDefaultImage ? "ml-4 sm:ml-6" : ""}`}
                 >
-                    <div className="relative flex sm:gap-x-6">
-                        <div className="w-full">
+                    <div className="relative flex min-w-0 sm:gap-x-6">
+                        <div className="min-w-0 w-full">
                             <div className="pr-9">
-                                <Subheading className="mb-3">
+                                <Subheading className="mb-3 break-words">
                                     {quantity && (
                                         <Badge color="slate">{quantity}</Badge>
                                     )}{" "}
@@ -296,7 +461,7 @@ function CartItem({
                                 )}
 
                                 {description && (
-                                    <Text className="sm:max-w-[80%]">
+                                    <Text className="break-words">
                                         <span className="text-xs">
                                             {description}
                                         </span>
@@ -304,7 +469,7 @@ function CartItem({
                                 )}
 
                                 {indications && (
-                                    <Text className="sm:max-w-[80%]">
+                                    <Text className="break-words">
                                         <span className="text-xs">
                                             {indications}
                                         </span>
@@ -331,19 +496,19 @@ function CartItem({
                                 )}
                             </div>
                             {discountedPrice && discountPercentage > 0 && (
-                                <Text className="mt-3 space-x-2 text-right">
+                                <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
                                     {discountPercentage && (
                                         <Badge color="famedic-lime">
                                             {discountPercentage}%
                                         </Badge>
                                     )}
-                                    <span className="line-through">
+                                    <span className="text-sm text-zinc-500 line-through dark:text-slate-400">
                                         {discountedPrice}
                                     </span>
-                                </Text>
+                                </div>
                             )}
 
-                            <Text className="mt-4 text-right">
+                            <Text className="mt-4 break-words text-right">
                                 <Strong>
                                     <span className="text-famedic-dark dark:text-white">
                                         {price}

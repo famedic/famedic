@@ -26,10 +26,10 @@ export default function AppointmentSidebar({ appointment, summary }) {
 
 			<section className="rounded-2xl border border-zinc-200/70 bg-white/80 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
 				<h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-					Notas del cliente
+					Notas para el cliente
 				</h3>
 				<p className="text-sm text-zinc-700 dark:text-zinc-300">
-					{appointment.notes || "Sin notas compartidas."}
+					{appointment.notes || "Sin notas para el cliente."}
 				</p>
 			</section>
 

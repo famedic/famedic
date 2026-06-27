@@ -1,3 +1,29 @@
+import { useMemo, useState, useEffect } from "react";
+import { router, usePage, useForm } from "@inertiajs/react";
+import axios from "axios";
+import { Text } from "@/Components/Catalyst/text";
+import { Input } from "@/Components/Catalyst/input";
+import { Field, Label, ErrorMessage } from "@/Components/Catalyst/fieldset";
+import { Select } from "@/Components/Catalyst/select";
+import { Badge } from "@/Components/Catalyst/badge";
+import { useClose } from "@headlessui/react";
+import CountryListbox from "@/Components/CountryListbox";
+import {
+	PlusIcon,
+	UserCircleIcon,
+	ChevronLeftIcon,
+	PhoneIcon,
+	CalendarDaysIcon,
+	ArrowPathIcon,
+} from "@heroicons/react/16/solid";
+import CheckoutStep from "@/Components/Checkout/CheckoutStep";
+import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
+import { IdentificationIcon } from "@heroicons/react/24/solid";
+import CheckoutSelectionCard from "@/Components/Checkout/CheckoutSelectionCard";
+import { Button } from "@/Components/Catalyst/button";
+import CheckoutSaveSuccessAlert from "@/Components/Checkout/CheckoutSaveSuccessAlert";
+import clsx from "clsx";
+
 export default function ContactStep({
 	data,
 	setData,
@@ -7,18 +33,80 @@ export default function ContactStep({
 	contacts,
 	toggleContactForm,
 	showContactForm,
+	variant = "accordion",
+	onSelected,
 	...props
 }) {
+	const [saveSuccessMessage, setSaveSuccessMessage] = useState(null);
+
+	useEffect(() => {
+		if (showContactForm) {
+			setSaveSuccessMessage(null);
+		}
+	}, [showContactForm]);
+
 	const selectedContact = useMemo(() => {
 		return contacts.find((contact) => contact.id == data.contact);
-	}, [data.contact]);
+	}, [data.contact, contacts]);
 
 	const stepHeading = useMemo(() => {
 		if (showContactForm) {
 			return "Ingresa los datos del paciente";
 		}
-		return data.contact ? "Paciente" : "Selecciona el paciente";
-	}, [showContactForm, data.contact]);
+		if (saveSuccessMessage || data.contact) {
+			return "Paciente seleccionado";
+		}
+		return "Selecciona el paciente";
+	}, [showContactForm, data.contact, saveSuccessMessage]);
+
+	const isWizard = variant === "wizard";
+
+	const handleContactSaved = (displayName) => {
+		setSaveSuccessMessage(
+			displayName
+				? `${displayName} se guardó correctamente.`
+				: "Paciente guardado correctamente.",
+		);
+	};
+
+	if (isWizard) {
+		return (
+			<CheckoutWizardStep
+				title={stepHeading}
+				description={description}
+				error={props.error}
+			>
+				{saveSuccessMessage && !showContactForm && (
+					<CheckoutSaveSuccessAlert
+						className="mb-4"
+						message={saveSuccessMessage}
+					/>
+				)}
+				{contacts.length > 0 && !showContactForm && (
+					<ContactSelection
+						variant={variant}
+						setData={setData}
+						contacts={contacts}
+						toggleContactForm={toggleContactForm}
+						clearErrors={clearErrors}
+						selectedId={data.contact}
+						showRadio
+						onSelected={onSelected}
+					/>
+				)}
+				{showContactForm && (
+					<ContactForm
+						variant={variant}
+						setCheckoutData={setData}
+						toggleContactForm={toggleContactForm}
+						showContactsButton={contacts.length > 0}
+						onSelected={onSelected}
+						onSaved={handleContactSaved}
+					/>
+				)}
+			</CheckoutWizardStep>
+		);
+	}
 
 	return (
 		<CheckoutStep
@@ -39,6 +127,7 @@ export default function ContactStep({
 				<>
 					{contacts.length > 0 && !showContactForm && (
 						<ContactSelection
+							variant="accordion"
 							setData={setData}
 							contacts={contacts}
 							toggleContactForm={toggleContactForm}
@@ -47,6 +136,7 @@ export default function ContactStep({
 					)}
 					{showContactForm && (
 						<ContactForm
+							variant="accordion"
 							setCheckoutData={setData}
 							toggleContactForm={toggleContactForm}
 							showContactsButton={contacts.length > 0}
@@ -59,13 +149,28 @@ export default function ContactStep({
 	);
 }
 
-function ContactSelection({
+function ContactSelection(props) {
+	if (props.variant === "wizard") {
+		return <ContactSelectionInner close={() => {}} {...props} />;
+	}
+	return <ContactSelectionAccordion {...props} />;
+}
+
+function ContactSelectionAccordion(props) {
+	const close = useClose();
+	return <ContactSelectionInner close={close} {...props} />;
+}
+
+function ContactSelectionInner({
 	setData,
 	contacts,
 	toggleContactForm,
 	clearErrors,
+	selectedId,
+	showRadio = false,
+	onSelected,
+	close,
 }) {
-	const close = useClose();
 
 	const selectContact = (contact) => {
 		setData("contact", contact.id);
@@ -78,16 +183,19 @@ function ContactSelection({
 		clearErrors("contact_birth_date");
 		clearErrors("contact_gender");
 		close();
+		onSelected?.();
 	};
 
 	return (
-		<ul className="mt-3 grid gap-8 sm:grid-cols-2">
+		<ul className={clsx("mt-3 grid gap-4", showRadio ? "grid-cols-1" : "gap-8 sm:grid-cols-2")}>
 			{contacts.map((contact) => (
 				<CheckoutSelectionCard
 					key={contact.id}
 					onClick={() => selectContact(contact)}
 					heading={contact.full_name}
-					IconComponent={UserCircleIcon}
+					IconComponent={showRadio ? null : UserCircleIcon}
+					selected={selectedId == contact.id}
+					showRadio={showRadio}
 				>
 					<Badge color="slate" className="mb-2">
 						{contact.formatted_gender}
@@ -105,8 +213,9 @@ function ContactSelection({
 			<CheckoutSelectionCard
 				onClick={toggleContactForm}
 				heading="Nuevo paciente"
-				IconComponent={PlusIcon}
-				greenIcon
+				IconComponent={showRadio ? null : PlusIcon}
+				greenIcon={!showRadio}
+				showRadio={showRadio}
 			>
 				<Text className="line-clamp-3 max-w-64">
 					Puedes agregar un nuevo paciente y guardarlo para futuras
@@ -117,27 +226,46 @@ function ContactSelection({
 	);
 }
 
-function ContactForm({
+function ContactForm(props) {
+	if (props.variant === "wizard") {
+		return <ContactFormInner close={() => {}} {...props} />;
+	}
+	return <ContactFormAccordion {...props} />;
+}
+
+function ContactFormAccordion(props) {
+	const close = useClose();
+	return <ContactFormInner close={close} {...props} />;
+}
+
+function ContactFormInner({
+	variant = "accordion",
 	toggleContactForm,
 	showContactsButton,
 	setCheckoutData,
+	onSelected,
+	onSaved,
+	close,
 }) {
-	const close = useClose();
-
 	const { genders } = usePage().props;
+	const [saving, setSaving] = useState(false);
 
-	const { data, setData, processing, errors, setError, clearErrors } =
-		useForm({
-			name: "",
-			paternal_lastname: "",
-			maternal_lastname: "",
-			birth_date: "",
-			gender: "",
-			phone: "",
-			phone_country: "MX",
-		});
+	const { data, setData, errors, setError, clearErrors } = useForm({
+		name: "",
+		paternal_lastname: "",
+		maternal_lastname: "",
+		birth_date: "",
+		gender: "",
+		phone: "",
+		phone_country: "MX",
+	});
 
 	const submit = () => {
+		setSaving(true);
+		const savedLabel = [data.name, data.paternal_lastname]
+			.filter(Boolean)
+			.join(" ");
+
 		axios
 			.post(route("checkout.contacts.store"), {
 				...data,
@@ -147,12 +275,22 @@ function ContactForm({
 					only: ["contacts"],
 					onFinish: () => {
 						setCheckoutData("contact", response.data.contact);
-						close();
+						setSaving(false);
+						onSaved?.(savedLabel);
+
+						if (variant === "wizard") {
+							toggleContactForm();
+						} else {
+							close();
+						}
+
+						onSelected?.();
 					},
 				});
 			})
 			.catch((error) => {
-				if (error.status === 422) {
+				setSaving(false);
+				if (error.response?.status === 422) {
 					clearErrors();
 					setError(error.response.data.errors);
 				}
@@ -279,33 +417,19 @@ function ContactForm({
 				<Button
 					onClick={submit}
 					type="button"
-					className={`w-full sm:w-auto ${processing ? "opacity-0" : ""}`}
-					disabled={processing}
+					className="w-full sm:w-auto"
+					disabled={saving}
 				>
-					Guardar paciente
+					{saving ? (
+						<>
+							<ArrowPathIcon className="size-4 animate-spin" />
+							Guardando…
+						</>
+					) : (
+						"Guardar paciente"
+					)}
 				</Button>
 			</div>
 		</>
 	);
 }
-
-import { useMemo } from "react";
-import { router, usePage, useForm } from "@inertiajs/react";
-import { Text } from "@/Components/Catalyst/text";
-import { Input } from "@/Components/Catalyst/input";
-import { Field, Label, ErrorMessage } from "@/Components/Catalyst/fieldset";
-import { Select } from "@/Components/Catalyst/select";
-import { Badge } from "@/Components/Catalyst/badge";
-import { useClose } from "@headlessui/react";
-import CountryListbox from "@/Components/CountryListbox";
-import {
-	PlusIcon,
-	UserCircleIcon,
-	ChevronLeftIcon,
-	PhoneIcon,
-	CalendarDaysIcon,
-} from "@heroicons/react/16/solid";
-import CheckoutStep from "@/Components/Checkout/CheckoutStep";
-import { IdentificationIcon } from "@heroicons/react/24/solid";
-import CheckoutSelectionCard from "@/Components/Checkout/CheckoutSelectionCard";
-import { Button } from "@/Components/Catalyst/button";

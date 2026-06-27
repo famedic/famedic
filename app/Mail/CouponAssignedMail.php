@@ -4,19 +4,22 @@ namespace App\Mail;
 
 use App\Models\User;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class CouponAssignedMail extends Mailable
+class CouponAssignedMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
     public function __construct(
         public User $user,
         public int $amountCents
-    ) {}
+    ) {
+        $this->afterCommit();
+    }
 
     public function envelope(): Envelope
     {

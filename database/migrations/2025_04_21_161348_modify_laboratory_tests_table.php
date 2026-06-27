@@ -319,7 +319,7 @@ return new class extends Migration
         }
 
         // 4. Create new laboratory_tests records for newPackages (one per brand)
-        if (app()->environment() !== 'testing') {
+        if (DB::getDriverName() !== 'sqlite') {
             foreach ($this->newPackages as $pkg) {
                 foreach ($pkg['brand_codes'] as $brand => $gda_id) {
                     DB::table('laboratory_tests')->insert([

@@ -6,7 +6,10 @@ import {
 	CheckCircleIcon,
 	ArchiveBoxIcon,
 	CalendarDateRangeIcon,
+	CalendarDaysIcon,
 	ArrowPathIcon,
+	PhoneIcon,
+	ChatBubbleLeftRightIcon,
 } from "@heroicons/react/16/solid";
 import { BuildingStorefrontIcon } from "@heroicons/react/24/solid";
 import { PresentationChartLineIcon } from "@heroicons/react/24/outline";
@@ -40,16 +43,49 @@ import StatusBadge from "@/Components/StatusBadge";
 import DateFilter from "@/Components/Filters/DateFilter";
 import LaboratoryAppointmentsDashboard from "@/Components/Admin/LaboratoryAppointmentsDashboard";
 
+function dateRangePresetLabel(preset) {
+	switch (preset) {
+		case "today":
+			return "Citas de hoy";
+		case "last_7_days":
+			return "Últimos 7 días";
+		case "last_15_days":
+			return "Últimos 15 días";
+		case "last_30_days":
+			return "Últimos 30 días";
+		case "last_60_days":
+			return "Últimos 60 días";
+		case "last_6_months":
+			return "Últimos 6 meses";
+		default:
+			return null;
+	}
+}
+
+const LIST_FILTER_KEYS = [
+	"search",
+	"completed",
+	"date_range",
+	"brand",
+	"phone_call_intent",
+	"callback_info",
+];
+
 export default function LaboratoryAppointments({
 	laboratoryAppointments,
 	filters,
 	dashboard,
+	brands,
 }) {
 	const view = filters.view || "list";
 
 	const { data, setData, get, processing } = useForm({
 		search: filters.search || "",
 		completed: filters.completed || "",
+		date_range: filters.date_range || "",
+		brand: filters.brand || "",
+		phone_call_intent: filters.phone_call_intent || "",
+		callback_info: filters.callback_info || "",
 		view,
 		start_date: filters.start_date || "",
 		end_date: filters.end_date || "",
@@ -59,6 +95,10 @@ export default function LaboratoryAppointments({
 		setData({
 			search: filters.search || "",
 			completed: filters.completed || "",
+			date_range: filters.date_range || "",
+			brand: filters.brand || "",
+			phone_call_intent: filters.phone_call_intent || "",
+			callback_info: filters.callback_info || "",
 			view: filters.view || "list",
 			start_date: filters.start_date || "",
 			end_date: filters.end_date || "",
@@ -66,6 +106,10 @@ export default function LaboratoryAppointments({
 	}, [
 		filters.search,
 		filters.completed,
+		filters.date_range,
+		filters.brand,
+		filters.phone_call_intent,
+		filters.callback_info,
 		filters.view,
 		filters.start_date,
 		filters.end_date,
@@ -84,14 +128,16 @@ export default function LaboratoryAppointments({
 	};
 
 	const showUpdateButton = useMemo(() => {
-		const listChanged =
-			(data.search || "") !== (filters.search || "") ||
-			(data.completed || "") !== (filters.completed || "");
-		const dashboardDatesChanged =
-			view === "dashboard" &&
-			((data.start_date || "") !== (filters.start_date || "") ||
-				(data.end_date || "") !== (filters.end_date || ""));
-		return listChanged || dashboardDatesChanged;
+		if (view === "dashboard") {
+			return (
+				(data.start_date || "") !== (filters.start_date || "") ||
+				(data.end_date || "") !== (filters.end_date || "")
+			);
+		}
+
+		return LIST_FILTER_KEYS.some(
+			(key) => (data[key] || "") !== (filters[key] || ""),
+		);
 	}, [data, filters, view]);
 
 	const filterBadges = useMemo(() => {
@@ -137,25 +183,12 @@ export default function LaboratoryAppointments({
 			);
 		}
 
-		if (filters.date_range === "today") {
+		const dateRangeLabel = dateRangePresetLabel(filters.date_range);
+		if (dateRangeLabel) {
 			badges.push(
-				<Badge color="sky" key="range-today">
+				<Badge color="sky" key={`range-${filters.date_range}`}>
 					<CalendarDaysIcon className="size-4" />
-					Citas de hoy
-				</Badge>,
-			);
-		} else if (filters.date_range === "last_7_days") {
-			badges.push(
-				<Badge color="sky" key="range-last-7-days">
-					<CalendarDaysIcon className="size-4" />
-					Últimos 7 días
-				</Badge>,
-			);
-		} else if (filters.date_range === "last_6_months") {
-			badges.push(
-				<Badge color="sky" key="range-last-6-months">
-					<CalendarDaysIcon className="size-4" />
-					Últimos 6 meses
+					{dateRangeLabel}
 				</Badge>,
 			);
 		}
@@ -205,30 +238,27 @@ export default function LaboratoryAppointments({
 		}
 
 		return badges;
-	}, [filters, view]);
+	}, [filters, view, brands]);
 
 	const filtersCount = useMemo(() => {
-		let n = ["search", "completed"].filter((key) => filters[key]).length;
 		if (view === "dashboard") {
-			if (filters.start_date) {
-				n += 1;
-			}
-			if (filters.end_date) {
-				n += 1;
-			}
+			return ["start_date", "end_date"].filter((key) => filters[key]).length;
 		}
-		return n;
+
+		return LIST_FILTER_KEYS.filter((key) => filters[key]).length;
 	}, [filters, view]);
 
 	const listTabHref = route("admin.laboratory-appointments.index", {
 		search: data.search || undefined,
 		completed: data.completed || undefined,
+		date_range: data.date_range || undefined,
+		brand: data.brand || undefined,
+		phone_call_intent: data.phone_call_intent || undefined,
+		callback_info: data.callback_info || undefined,
 		view: "list",
 	});
 
 	const dashboardTabHref = route("admin.laboratory-appointments.index", {
-		search: data.search || undefined,
-		completed: data.completed || undefined,
 		view: "dashboard",
 		start_date: data.start_date || undefined,
 		end_date: data.end_date || undefined,
@@ -280,7 +310,7 @@ export default function LaboratoryAppointments({
 					</div>
 
 					{showFilters && view === "list" && (
-						<Filters data={data} setData={setData} />
+						<Filters data={data} setData={setData} brands={brands} />
 					)}
 
 					{view === "dashboard" && (
@@ -371,6 +401,18 @@ function Filters({ data, setData, brands }) {
 				<ListboxOption value="last_7_days" className="group">
 					<CalendarDaysIcon />
 					<ListboxLabel>Últimos 7 días</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="last_15_days" className="group">
+					<CalendarDaysIcon />
+					<ListboxLabel>Últimos 15 días</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="last_30_days" className="group">
+					<CalendarDaysIcon />
+					<ListboxLabel>Últimos 30 días</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="last_60_days" className="group">
+					<CalendarDaysIcon />
+					<ListboxLabel>Últimos 60 días</ListboxLabel>
 				</ListboxOption>
 				<ListboxOption value="last_6_months" className="group">
 					<CalendarDaysIcon />

@@ -61,6 +61,9 @@ Route::middleware([
     Route::get('/payment-methods/3ds/redirect/{sessionId}', [PaymentMethodController::class, 'show3dsRedirect'])
         ->name('payment-methods.3ds-redirect');
 
+    Route::get('/payment-methods/3ds/mock/{sessionId}', [PaymentMethodController::class, 'showMock3ds'])
+        ->name('payment-methods.3ds-mock');
+
     Route::post('/payment-methods/3ds/callback', [PaymentMethodController::class, 'handle3dsCallback'])
         ->name('payment-methods.3ds-callback')
         ->withoutMiddleware(['auth']); // importante

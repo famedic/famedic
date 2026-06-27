@@ -3,7 +3,7 @@
 
 <head>
     <link rel="manifest" href="/manifest.json">
-    
+
     <!-- ios support -->
     <link rel="apple-touch-icon" href="images/icons/ios/16.png" />
     <link rel="apple-touch-icon" href="images/icons/ios/20.png" />
@@ -65,7 +65,7 @@
     <!-- Scripts -->
     @routes
     @viteReactRefresh
-    @vite(['resources/js/app.jsx', "resources/js/Pages/{$page['component']}.jsx"])
+    @vite(['resources/js/app.jsx'])
     @inertiaHead
 
     @env('production')
@@ -92,6 +92,7 @@
     <!-- End Google Tag Manager -->
 
     @endenv
+
 </head>
 
 <body class="font-sans antialiased">
@@ -108,16 +109,16 @@
         t.src=v;s=b.getElementsByTagName(e)[0];
         s.parentNode.insertBefore(t,s)}(window,document,'script',
         'https://connect.facebook.net/en_US/fbevents.js');
-         fbq('init', '1818127705804364'); 
+         fbq('init', '1818127705804364');
         fbq('track', 'PageView');
         </script>
         <noscript>
-         <img height="1" width="1" 
+         <img height="1" width="1"
         src="https://www.facebook.com/tr?id=1818127705804364&ev=PageView
         &noscript=1"/>
         </noscript>
         <!-- End Facebook Pixel Code -->
-        
+
         <!-- Google tag (gtag.js) -->
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-F5VNYJNMBP"></script>
         <script>
@@ -137,6 +138,11 @@
             vgo('process');
         </script>
         @endenv
+
+    @unless(app()->environment('production'))
+        <script>window.__FAMEDIC_ZOHO_SALESIQ__ = { enabled: true };</script>
+    @endunless
+
 </body>
 
 </html>

@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\EfevooToken;
 use App\Models\Efevoo3dsSession;
 use App\Services\CouponService;
-use App\Services\EfevooPayService;
+use App\Contracts\EfevooPayGateway;
+use App\Support\AppEnvironmentLabel;
+use App\Support\MockEfevooPaymentSupport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Log;
@@ -13,9 +15,9 @@ use Inertia\Inertia;
 
 class PaymentMethodController extends Controller
 {
-    protected EfevooPayService $service;
+    protected EfevooPayGateway $service;
 
-    public function __construct(EfevooPayService $service)
+    public function __construct(EfevooPayGateway $service)
     {
         $this->service = $service;
     }
@@ -31,7 +33,8 @@ class PaymentMethodController extends Controller
         $balanceCents = $couponService->getUserBalance($request->user()->id);
 
         $tokens = EfevooToken::where('customer_id', $customer->id)
-            ->where('is_active', true)
+            ->active()
+            ->excludeMockInProduction()
             ->orderByDesc('created_at')
             ->get();
 
@@ -43,6 +46,9 @@ class PaymentMethodController extends Controller
         return Inertia::render('PaymentMethods', [
             'paymentMethods' => $paymentMethods,
             'environment' => config('efevoopay.environment'),
+            'paymentUsesMock' => MockEfevooPaymentSupport::isMockMode(),
+            'appEnvLabel' => AppEnvironmentLabel::current(),
+            'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
             'balanceCouponsCents' => $balanceCents,
             'formattedBalanceCoupons' => $balanceCents > 0 ? formattedCentsPrice($balanceCents) : null,
         ]);
@@ -52,15 +58,22 @@ class PaymentMethodController extends Controller
      * CREATE
      * ========================================================== */
 
-    public function create()
+    public function create(Request $request)
     {
         return Inertia::render('PaymentMethods/Create', [
+            'returnUrl' => $request->query('return_url'),
             'efevooConfig' => [
                 'environment' => config('efevoopay.environment'),
                 'tokenization_amount' => config('efevoopay.test_amounts.default') / 100,
-                'requires_3ds' => true,
+                'requires_3ds' => ! MockEfevooPaymentSupport::isMockMode(),
             ],
             'hasPending3ds' => false,
+            'paymentUsesMock' => MockEfevooPaymentSupport::isMockMode(),
+            'mockTestCards' => MockEfevooPaymentSupport::isMockMode()
+                ? $this->service->getTestCards()
+                : [],
+            'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
+            'appEnvLabel' => AppEnvironmentLabel::current(),
         ]);
     }
 
@@ -113,6 +126,25 @@ class PaymentMethodController extends Controller
             'amount' => config('efevoopay.test_amounts.default') / 100,
         ];
 
+        if (MockEfevooPaymentSupport::isMockMode()) {
+            $result = $this->service->tokenizeCard($cardData, $customer->id);
+
+            if (! $result['success']) {
+                return back()->withErrors([
+                    'error' => $result['message'] ?? 'No se pudo registrar la tarjeta (simulación)',
+                ]);
+            }
+
+            $returnUrl = $request->input('return_url') ?? $request->query('return_url');
+            $redirect = $returnUrl
+                ? redirect($returnUrl)
+                : redirect()->route('payment-methods.index');
+
+            return $redirect->with('success', 'Tarjeta de prueba registrada correctamente (sin cargo real).');
+        }
+
+        $returnUrl = $request->input('return_url') ?? $request->query('return_url');
+
         Log::info('[3DS] Iniciando proceso');
 
         $result = $this->service->initiate3DS($cardData, $customer->id);
@@ -123,11 +155,31 @@ class PaymentMethodController extends Controller
             ]);
         }
 
-        // Guardar datos de tarjeta por sessionId
         Session::put('3ds_card_data_' . $result['session_id'], $cardData);
+
+        if ($returnUrl) {
+            Session::put('3ds_return_url_' . $result['session_id'], $returnUrl);
+        }
 
         return redirect()->route('payment-methods.3ds-redirect', [
             'sessionId' => $result['session_id']
+        ]);
+    }
+
+    public function showMock3ds(Request $request, $sessionId)
+    {
+        $customer = $request->user()->customer;
+
+        $session = Efevoo3dsSession::where('id', $sessionId)
+            ->where('customer_id', $customer->id)
+            ->firstOrFail();
+
+        return Inertia::render('PaymentMethods/MockThreeDS', [
+            'sessionId' => $session->id,
+            'cardLastFour' => $session->card_last_four,
+            'amount' => $session->amount,
+            'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
+            'appEnvLabel' => AppEnvironmentLabel::current(),
         ]);
     }
 
@@ -163,6 +215,8 @@ class PaymentMethodController extends Controller
             ? 'Tarjeta verificada correctamente'
             : ($session->error_message ?: $this->resolveStatusMessage($session->status));
 
+        $returnUrl = Session::pull('3ds_return_url_' . $session->id);
+
         return Inertia::render('PaymentMethods/ThreeDSResult', [
             'sessionId' => $session->id,
             'success' => $success,
@@ -172,6 +226,7 @@ class PaymentMethodController extends Controller
             'cardLastFour' => $session->card_last_four,
             'amount' => $session->amount,
             'createdAt' => $session->created_at,
+            'returnUrl' => $returnUrl,
         ]);
     }
 
@@ -222,6 +277,15 @@ class PaymentMethodController extends Controller
             ->firstOrFail();
 
         // Si ya es estado final, no reprocesar
+        if ($session->status === 'mock_pending') {
+            $cardData = Session::get('3ds_card_data_' . $sessionId);
+
+            if ($cardData) {
+                $this->service->complete3DS($session, $cardData);
+                $session->refresh();
+            }
+        }
+
         if (
             in_array($session->status, [
                 'completed',

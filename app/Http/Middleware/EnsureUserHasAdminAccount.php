@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\CouponAuthorizationInboxService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -16,7 +17,21 @@ class EnsureUserHasAdminAccount
             abort(404);
         }
 
+        $administrator = $request->user()->administrator;
+        $isAuthorizer = $administrator->hasRole('autorizador');
+        $pendingAuthorizationsCount = 0;
+
+        if ($isAuthorizer) {
+            $pendingAuthorizationsCount = app(CouponAuthorizationInboxService::class)
+                ->actionableCountFor($request->user());
+        }
+
         Inertia::share([
+            'couponAuthorizerNav' => [
+                'is_authorizer' => $isAuthorizer,
+                'pending_actionable_count' => $pendingAuthorizationsCount,
+                'inbox_url' => $isAuthorizer ? route('admin.coupons.authorizations.index') : null,
+            ],
             'adminNavigation' => [
                 [
                     'label' => 'Resumen',
@@ -52,6 +67,7 @@ class EnsureUserHasAdminAccount
                             'label' => 'Pedidos',
                             'url' => route('admin.laboratory-purchases.index'),
                             'current' => Route::currentRouteName() === 'admin.laboratory-purchases.index' ||
+                                Route::currentRouteName() === 'admin.laboratory-purchases.chart' ||
                                 Route::currentRouteName() === 'admin.laboratory-purchases.show',
                         ] : null,
                         $request->user()->administrator->hasPermissionTo('laboratory-tests.manage') ? [
@@ -116,10 +132,29 @@ class EnsureUserHasAdminAccount
                     'current' => Route::currentRouteName() === 'admin.customers.index' ||
                         Route::currentRouteName() === 'admin.customers.show',
                 ]] : [],
-                ...$request->user()->administrator->hasPermissionTo('coupons.manage') ? [[
+                ...($request->user()->administrator->hasPermissionTo('coupons.manage') || $isAuthorizer) ? [[
                     'label' => 'Créditos a favor',
                     'icon' => 'BanknotesIcon',
+                    'disabled' => (bool) config('famedic.admin_coupons_navigation_disabled', false),
                     'items' => [
+                        [
+                            'label' => 'Beneficiarios',
+                            'url' => route('admin.coupons.beneficiaries.index'),
+                            'current' => Route::currentRouteName() === 'admin.coupons.beneficiaries.index'
+                                || Route::currentRouteName() === 'admin.coupons.beneficiaries.export',
+                        ],
+                        [
+                            'label' => 'Códigos promocionales',
+                            'url' => route('admin.coupons.promo-codes.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.coupons.promo-codes.'),
+                        ],
+                        ...($isAuthorizer ? [[
+                            'label' => $pendingAuthorizationsCount > 0
+                                ? "Pendientes de autorización ({$pendingAuthorizationsCount})"
+                                : 'Pendientes de autorización',
+                            'url' => route('admin.coupons.authorizations.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.coupons.authorizations.'),
+                        ]] : []),
                         [
                             'label' => 'Créditos',
                             'url' => route('admin.coupons.index'),
@@ -159,6 +194,32 @@ class EnsureUserHasAdminAccount
                     'url' => route('admin.documentation'),
                     'icon' => 'BookOpenIcon',
                     'current' => Route::currentRouteName() === 'admin.documentation',
+                ]] : [],
+                ...$request->user()->administrator->hasPermissionTo('simulators.manage') ? [[
+                    'label' => 'Simuladores',
+                    'icon' => 'BeakerIcon',
+                    'items' => [
+                        [
+                            'label' => 'Inicio',
+                            'url' => route('admin.simulators.index'),
+                            'current' => Route::currentRouteName() === 'admin.simulators.index',
+                        ],
+                        [
+                            'label' => 'Simulador OTP',
+                            'url' => route('admin.simulators.otp'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.otp'),
+                        ],
+                        [
+                            'label' => 'Simulador de correos',
+                            'url' => route('admin.simulators.emails'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.emails'),
+                        ],
+                        [
+                            'label' => 'Simulador GDA',
+                            'url' => route('admin.simulators.gda'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.gda'),
+                        ],
+                    ],
                 ]] : [],
                 // Monitoreo y herramientas internas solo para administradores
                 [
@@ -211,10 +272,35 @@ class EnsureUserHasAdminAccount
                             'url' => route('admin.config-monitor.index'),
                             'current' => str_starts_with((string) Route::currentRouteName(), 'admin.config-monitor'),
                         ] : null,
+                        $request->user()->administrator->hasPermissionTo('monitoring-ai.manage') ? [
+                            'label' => 'Asistente IA',
+                            'url' => route('admin.monitoring-ai.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.monitoring-ai'),
+                        ] : null,
                         $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
-                            'label' => 'Murguía — asegurados',
+                            'label' => 'Murguía — dashboard',
+                            'url' => route('admin.murguia-dashboard.index'),
+                            'current' => Route::currentRouteName() === 'admin.murguia-dashboard.index',
+                        ] : null,
+                        $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+                            'label' => 'Murguía — reportes',
+                            'url' => route('admin.murguia-reports.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia-reports'),
+                        ] : null,
+                        $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+                            'label' => 'Murguía — conciliación',
+                            'url' => route('admin.murguia-reconciliation.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia-reconciliation'),
+                        ] : null,
+                        $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+                            'label' => 'Murguía — monitor',
                             'url' => route('admin.murguia-monitor.index'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia'),
+                            'current' => in_array(Route::currentRouteName(), [
+                                'admin.murguia-monitor.index',
+                                'admin.murguia-monitor.show',
+                                'admin.murguia.upload',
+                                'admin.murguia.logs',
+                            ], true),
                         ] : null,
                     ])),
                 ],
