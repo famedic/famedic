@@ -270,6 +270,16 @@ class CouponBeneficiaryService
                             actor: $actor,
                             context: $this->auditContextFromBeneficiary($beneficiary)
                         );
+
+                        try {
+                            app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)
+                                ->pendingBeneficiaryCreated($beneficiary);
+                        } catch (\Throwable $e) {
+                            Log::warning('AC: fallo al encolar pending_beneficiary_created', [
+                                'beneficiary_id' => $beneficiary->id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
                     }
                 } catch (\DomainException $e) {
                     $skippedCount++;
@@ -391,6 +401,19 @@ class CouponBeneficiaryService
                     'cancelled_at' => $locked->cancelled_at?->toIso8601String(),
                 ])
             );
+
+            try {
+                app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)->pendingBeneficiaryCancelled(
+                    $locked,
+                    $actor?->id,
+                    $reason ?? 'admin_manual_cancellation',
+                );
+            } catch (\Throwable $e) {
+                Log::warning('AC: fallo al encolar pending_beneficiary_cancelled', [
+                    'beneficiary_id' => $locked->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         });
     }
 
@@ -556,6 +579,7 @@ class CouponBeneficiaryService
                 $parent,
                 sendNotification: false,
                 createdByUserId: $user->id,
+                skipActiveCampaignCreditAssigned: true,
             );
 
             $now = now();
@@ -588,6 +612,27 @@ class CouponBeneficiaryService
                     'min_purchase_cents' => $child->min_purchase_cents,
                 ]
             );
+
+            $couponUser = CouponUser::query()
+                ->where('coupon_id', $child->id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if ($couponUser !== null) {
+                try {
+                    app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)->pendingBeneficiaryActivated(
+                        $locked->fresh(),
+                        $user,
+                        $child,
+                        $couponUser,
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('AC: fallo al encolar pending_beneficiary_activated', [
+                        'beneficiary_id' => $locked->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
 
             $beneficiaryForNotify = $locked->fresh();
             DB::afterCommit(function () use ($beneficiaryForNotify, $user, $child) {

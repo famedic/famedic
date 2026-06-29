@@ -96,7 +96,7 @@ class PromoCodeService
 
             $token = Str::random(48);
 
-            PromoRedemption::create([
+            $redemption = PromoRedemption::create([
                 'promo_code_id' => $promoCode->id,
                 'user_id' => $user->id,
                 'customer_id' => $customer->id,
@@ -108,6 +108,8 @@ class PromoCodeService
                 'user_agent' => $userAgent,
                 'validated_at' => now(),
             ]);
+
+            $this->dispatchPromoValidated($redemption);
 
             $remainingUses = $this->remainingUses($promoCode);
 
@@ -139,6 +141,8 @@ class PromoCodeService
             'status' => PromoRedemptionStatus::Released,
             'released_at' => now(),
         ]);
+
+        $this->dispatchPromoReleased($redemption->fresh(['user']), 'user_cleared');
     }
 
     /**
@@ -175,6 +179,8 @@ class PromoCodeService
                 'status' => PromoRedemptionStatus::Released,
                 'released_at' => now(),
             ]);
+
+            $this->dispatchPromoReleased($redemption->fresh(['user']), 'validation_expired');
 
             throw new PromoCodeException('El código expiró. Vuelve a validarlo.');
         }
@@ -245,6 +251,8 @@ class PromoCodeService
                     'released_at' => now(),
                 ]);
 
+                $this->dispatchPromoReleased($redemption->fresh(['user']), 'validation_expired');
+
                 throw new PromoCodeException('El código expiró. Vuelve a validarlo.');
             }
 
@@ -281,12 +289,14 @@ class PromoCodeService
                 $user,
                 $promoCode->coupon,
                 sendNotification: false,
+                skipActiveCampaignCreditAssigned: true,
             );
 
             $appliedCents = $this->couponApplicationService->applyForLaboratoryPurchase(
                 $user,
                 $purchase,
                 $childCoupon->id,
+                skipActiveCampaignCreditRedeemed: true,
             );
 
             $redemption->update([
@@ -297,6 +307,8 @@ class PromoCodeService
                 'discount_cents' => $appliedCents,
                 'confirmed_at' => now(),
             ]);
+
+            $this->dispatchPromoUsed($redemption->fresh(['user', 'promoCode']));
 
             return $appliedCents;
         });
@@ -635,14 +647,21 @@ class PromoCodeService
 
     private function releaseStaleValidations(PromoCode $promoCode, User $user): void
     {
-        PromoRedemption::query()
+        $stale = PromoRedemption::query()
+            ->with('user')
             ->where('promo_code_id', $promoCode->id)
             ->where('user_id', $user->id)
             ->where('status', PromoRedemptionStatus::Validated)
-            ->update([
+            ->get();
+
+        foreach ($stale as $redemption) {
+            $redemption->update([
                 'status' => PromoRedemptionStatus::Released,
                 'released_at' => now(),
             ]);
+
+            $this->dispatchPromoReleased($redemption->fresh(['user']), 'superseded_by_new_validation');
+        }
     }
 
     private function remainingUses(PromoCode $promoCode): ?int
@@ -657,5 +676,41 @@ class PromoCodeService
     private function benefitLabel(Coupon $master, int $discountCents): string
     {
         return 'Descuento promocional: '.formattedCents($discountCents);
+    }
+
+    private function dispatchPromoValidated(PromoRedemption $redemption): void
+    {
+        try {
+            app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)->promoValidated($redemption);
+        } catch (\Throwable $e) {
+            Log::warning('AC: fallo al encolar promo_validated', [
+                'promo_redemption_id' => $redemption->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function dispatchPromoUsed(PromoRedemption $redemption): void
+    {
+        try {
+            app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)->promoUsed($redemption);
+        } catch (\Throwable $e) {
+            Log::warning('AC: fallo al encolar promo_used', [
+                'promo_redemption_id' => $redemption->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function dispatchPromoReleased(PromoRedemption $redemption, string $reason): void
+    {
+        try {
+            app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)->promoReleased($redemption, $reason);
+        } catch (\Throwable $e) {
+            Log::warning('AC: fallo al encolar promo_released', [
+                'promo_redemption_id' => $redemption->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

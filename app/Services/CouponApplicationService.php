@@ -23,9 +23,13 @@ class CouponApplicationService
      *
      * @return int Monto descontado en centavos
      */
-    public function applyForLaboratoryPurchase(User $user, LaboratoryPurchase $purchase, int $couponId): int
-    {
-        return DB::transaction(function () use ($user, $purchase, $couponId) {
+    public function applyForLaboratoryPurchase(
+        User $user,
+        LaboratoryPurchase $purchase,
+        int $couponId,
+        bool $skipActiveCampaignCreditRedeemed = false,
+    ): int {
+        return DB::transaction(function () use ($user, $purchase, $couponId, $skipActiveCampaignCreditRedeemed) {
             $coupon = Coupon::query()->whereKey($couponId)->lockForUpdate()->firstOrFail();
 
             $assignment = CouponUser::query()
@@ -44,7 +48,7 @@ class CouponApplicationService
             $assignment->used_at = now();
             $assignment->save();
 
-            CouponTransaction::create([
+            $transaction = CouponTransaction::create([
                 'coupon_id' => $coupon->id,
                 'user_id' => $user->id,
                 'purchase_type' => CouponPurchaseType::Lab,
@@ -55,6 +59,11 @@ class CouponApplicationService
             $purchase->coupon_discount_cents = $discountCents;
             $purchase->save();
 
+            if (! $skipActiveCampaignCreditRedeemed) {
+                app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)
+                    ->creditRedeemed($coupon, $assignment, $transaction, $user, $purchase);
+            }
+
             return $discountCents;
         });
     }
@@ -62,9 +71,13 @@ class CouponApplicationService
     /**
      * @return int Monto descontado en centavos
      */
-    public function applyForPharmacyPurchase(User $user, OnlinePharmacyPurchase $purchase, int $couponId): int
-    {
-        return DB::transaction(function () use ($user, $purchase, $couponId) {
+    public function applyForPharmacyPurchase(
+        User $user,
+        OnlinePharmacyPurchase $purchase,
+        int $couponId,
+        bool $skipActiveCampaignCreditRedeemed = false,
+    ): int {
+        return DB::transaction(function () use ($user, $purchase, $couponId, $skipActiveCampaignCreditRedeemed) {
             $coupon = Coupon::query()->whereKey($couponId)->lockForUpdate()->firstOrFail();
 
             $assignment = CouponUser::query()
@@ -83,7 +96,7 @@ class CouponApplicationService
             $assignment->used_at = now();
             $assignment->save();
 
-            CouponTransaction::create([
+            $transaction = CouponTransaction::create([
                 'coupon_id' => $coupon->id,
                 'user_id' => $user->id,
                 'purchase_type' => CouponPurchaseType::Pharmacy,
@@ -93,6 +106,11 @@ class CouponApplicationService
 
             $purchase->coupon_discount_cents = $discountCents;
             $purchase->save();
+
+            if (! $skipActiveCampaignCreditRedeemed) {
+                app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)
+                    ->creditRedeemed($coupon, $assignment, $transaction, $user, $purchase);
+            }
 
             return $discountCents;
         });
@@ -286,6 +304,18 @@ class CouponApplicationService
                     'actor_user_id' => $actor?->id,
                 ],
             ]);
+
+            $user = $purchase->customer?->user ?? User::query()->find($couponTransaction->user_id);
+            if ($user !== null) {
+                app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)->creditRestored(
+                    $coupon,
+                    $assignment,
+                    $couponTransaction,
+                    $user,
+                    $purchase,
+                    $reason,
+                );
+            }
 
             return $amountUsedCents;
         });
