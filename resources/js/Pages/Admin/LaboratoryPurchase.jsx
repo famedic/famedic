@@ -610,7 +610,8 @@ function DeleteDialog({ laboratoryPurchase, className = "" }) {
 			destroy(
 				route("admin.laboratory-purchases.destroy", {
 					laboratory_purchase: laboratoryPurchase,
-				})
+				}),
+				{ preserveScroll: true }
 			);
 
 		}
