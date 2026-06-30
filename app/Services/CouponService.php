@@ -595,7 +595,7 @@ class CouponService
                 'updated_by_user_id' => $createdByUserId,
             ]);
 
-            CouponUser::create([
+            $couponUser = CouponUser::create([
                 'coupon_id' => $coupon->id,
                 'user_id' => $user->id,
                 'assigned_at' => now(),
@@ -615,6 +615,9 @@ class CouponService
                     'amount_cents' => $amountCents,
                 ]
             );
+
+            app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)
+                ->creditAssigned($coupon, $couponUser, $user, 'individual');
 
             return $coupon;
         });
@@ -690,6 +693,7 @@ class CouponService
         Coupon $parent,
         bool $sendNotification = true,
         ?int $createdByUserId = null,
+        bool $skipActiveCampaignCreditAssigned = false,
     ): Coupon {
         $child = Coupon::create([
             'parent_coupon_id' => $parent->id,
@@ -709,7 +713,7 @@ class CouponService
             'updated_by_user_id' => $createdByUserId,
         ]);
 
-        CouponUser::create([
+        $couponUser = CouponUser::create([
             'coupon_id' => $child->id,
             'user_id' => $user->id,
             'assigned_at' => now(),
@@ -734,6 +738,11 @@ class CouponService
                 'min_purchase_cents' => $parent->min_purchase_cents,
             ]
         );
+
+        if (! $skipActiveCampaignCreditAssigned) {
+            app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)
+                ->creditAssigned($child, $couponUser, $user, 'campaign');
+        }
 
         return $child;
     }
@@ -818,6 +827,18 @@ class CouponService
                     'had_reversed_transaction' => $hadReversedTransaction,
                 ],
             ]);
+
+            $user = $assignment->user;
+            if ($user !== null) {
+                app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)->creditRevoked(
+                    $coupon,
+                    $assignment,
+                    $user,
+                    $remainingBefore,
+                    $actor?->id,
+                    $reason ?? 'admin_manual_revocation',
+                );
+            }
         });
     }
 

@@ -54,6 +54,7 @@ class DeleteLaboratoryPurchaseAction
 
                 throw new \Exception(
                     "No se pudo reembolsar la transacción {$transaction->id}"
+                    . " ({$transaction->payment_method}/{$transaction->gateway})"
                 );
             }
         }

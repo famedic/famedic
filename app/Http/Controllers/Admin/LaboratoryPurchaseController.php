@@ -128,9 +128,10 @@ class LaboratoryPurchaseController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return back()->withErrors([
-                'error' => 'No se pudo cancelar el pedido: ' . $e->getMessage()
-            ]);
+            return back()->flashMessage(
+                'No se pudo cancelar el pedido: ' . $e->getMessage(),
+                'error'
+            );
         }
     }
 
