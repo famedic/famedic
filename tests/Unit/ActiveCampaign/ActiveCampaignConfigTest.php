@@ -85,12 +85,56 @@ test('activecampaign config contiene fields finales de nomenclatura', function (
     ]);
 });
 
-test('fields §17 sin valor en env resuelven a null', function () {
+test('fields §17 resuelven a null o string no vacío', function () {
     $fields = config('services.activecampaign.fields');
 
-    foreach ($fields as $value) {
+    foreach ($fields as $key => $value) {
+        if ($value === null) {
+            expect($value)->toBeNull();
+
+            continue;
+        }
+
+        expect($value)->toBeString()->not->toBe('');
+    }
+});
+
+test('fields §17 sin ID configurado resuelven a null vía config', function () {
+    $fieldKeys = [
+        'fm_user_id',
+        'fm_customer_id',
+        'fm_credito_estado',
+        'fm_credito_monto',
+        'fm_credito_restante',
+        'fm_credito_expira_at',
+        'fm_credito_compra_minima',
+        'fm_credito_campania',
+        'fm_credito_tipo',
+        'fm_credito_ultimo_uso_at',
+        'fm_saldo_total',
+        'fm_saldo_aplicable',
+        'fm_saldo_condicionado',
+        'fm_promo_ultimo_codigo',
+        'fm_promo_estado',
+        'fm_ultima_compra_lab_at',
+    ];
+
+    config([
+        'services.activecampaign.fields' => array_fill_keys($fieldKeys, null),
+    ]);
+
+    foreach (config('services.activecampaign.fields') as $value) {
         expect($value)->toBeNull();
     }
+});
+
+test('active_campaign_env resuelve fields §17 ausentes a null sin default', function () {
+    $key = 'ACTIVECAMPAIGN_FIELD_FM_TEST_'.uniqid();
+
+    putenv($key);
+    unset($_ENV[$key], $_SERVER[$key]);
+
+    expect(active_campaign_env($key))->toBeNull();
 });
 
 test('active_campaign_env usa default cuando la variable está ausente', function () {
