@@ -42,12 +42,16 @@ import {
 	OdessaCompanyBadge,
 	OdessaPartnerBadge,
 } from "@/Components/CustomerAccountBadges";
+import OdessaCustomerInfoPanel from "@/Components/Admin/Odessa/OdessaCustomerInfoPanel";
 
 export default function Customer({
 	customer,
 	laboratoryPurchases,
 	onlinePharmacyPurchases,
 	medicalAttentionSubscriptions,
+	odessaSyncPreview,
+	successMessage,
+	errorMessage,
 }) {
 	const [activeTab, setActiveTab] = useState("laboratory");
 	return (
@@ -55,6 +59,13 @@ export default function Customer({
 			<Header customer={customer} />
 
 			<MedicalAttentionInfo customer={customer} />
+
+			<OdessaCustomerInfoPanel
+				customer={customer}
+				odessaSyncPreview={odessaSyncPreview}
+				successMessage={successMessage}
+				errorMessage={errorMessage}
+			/>
 
 			<FamilyMembersList familyMembers={customer.family_members} />
 

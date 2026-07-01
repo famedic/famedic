@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Actions\BuildDailyCountChartDataAction;
+use App\Http\Controllers\Admin\OdessaCustomerSyncController;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\Customers\IndexCustomerRequest;
 use App\Http\Requests\Admin\Customers\ShowCustomerRequest;
@@ -106,6 +107,9 @@ class CustomerController extends Controller
                 ->with(['transactions', 'customer'])
                 ->latest()
                 ->paginate(5, ['*'], 'medical_attention_subscriptions_page'),
+            'odessaSyncPreview' => OdessaCustomerSyncController::previewForCustomer($request, $customer),
+            'successMessage' => $request->session()->pull('success'),
+            'errorMessage' => $request->session()->pull('error'),
         ]);
     }
 }

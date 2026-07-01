@@ -16,12 +16,18 @@ class RegisterOdessaAfiliateCustomerAction
     private CreateUserAction $createUserAction;
     private CreateOdessaAfiliateAccountCustomerAction $createOdessaAfiliateAccountCustomerAction;
     private SendProperAccountLinkingAction $sendProperAccountLinkingAction;
+    private SyncOdessaUserDataSafelyAction $syncOdessaUserDataSafelyAction;
 
-    public function __construct(CreateUserAction $createUserAction, CreateOdessaAfiliateAccountCustomerAction $createOdessaAfiliateAccountCustomerAction, SendProperAccountLinkingAction $sendProperAccountLinkingAction)
-    {
+    public function __construct(
+        CreateUserAction $createUserAction,
+        CreateOdessaAfiliateAccountCustomerAction $createOdessaAfiliateAccountCustomerAction,
+        SendProperAccountLinkingAction $sendProperAccountLinkingAction,
+        SyncOdessaUserDataSafelyAction $syncOdessaUserDataSafelyAction,
+    ) {
         $this->createUserAction = $createUserAction;
         $this->createOdessaAfiliateAccountCustomerAction = $createOdessaAfiliateAccountCustomerAction;
         $this->sendProperAccountLinkingAction = $sendProperAccountLinkingAction;
+        $this->syncOdessaUserDataSafelyAction = $syncOdessaUserDataSafelyAction;
     }
 
     public function __invoke(
@@ -65,6 +71,8 @@ class RegisterOdessaAfiliateCustomerAction
             DB::rollBack();
             throw $th;
         }
+
+        ($this->syncOdessaUserDataSafelyAction)($odessaAfiliateAccount);
 
         return $odessaAfiliateAccount;
     }

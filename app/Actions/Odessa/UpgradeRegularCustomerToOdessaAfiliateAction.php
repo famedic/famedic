@@ -13,6 +13,7 @@ class UpgradeRegularCustomerToOdessaAfiliateAction
 {
     public function __construct(
         private SendProperAccountLinkingAction $sendProperAccountLinkingAction,
+        private SyncOdessaUserDataSafelyAction $syncOdessaUserDataSafelyAction,
     ) {}
 
     public function __invoke(Customer $customer, OdessaTokenData $odessaTokenData): OdessaAfiliateAccount
@@ -21,7 +22,7 @@ class UpgradeRegularCustomerToOdessaAfiliateAction
             throw new OdessaAfiliateMemberAlreadyLinkedException();
         }
 
-        return DB::transaction(function () use ($customer, $odessaTokenData) {
+        $odessaAfiliateAccount = DB::transaction(function () use ($customer, $odessaTokenData) {
             $existingOdessaAfiliateAccount = OdessaAfiliateAccount::with('customer')
                 ->where('odessa_identifier', $odessaTokenData->odessaId)
                 ->first();
@@ -45,5 +46,9 @@ class UpgradeRegularCustomerToOdessaAfiliateAction
 
             return $odessaAfiliateAccount;
         });
+
+        ($this->syncOdessaUserDataSafelyAction)($odessaAfiliateAccount);
+
+        return $odessaAfiliateAccount;
     }
 }

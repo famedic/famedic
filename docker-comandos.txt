@@ -49,6 +49,19 @@ Importar un .sql (ejemplo):
 docker compose build --no-cache app
 docker compose up -d
 
+--- ODESSA getUserData (sync manual QA) ---
+# Ver docs/Odessa/sync-get-user-data-qa.md
+
+docker compose exec app php artisan odessa:get-user-data 10
+docker compose exec app php artisan odessa:get-user-data 10 --json
+
+docker compose exec app php artisan odessa:sync-user-data 10 --dry-run
+docker compose exec app php artisan odessa:sync-user-data 10
+
+docker compose exec app php artisan odessa:sync-user-data-batch --only-missing --limit=5 --dry-run
+docker compose exec app php artisan odessa:sync-user-data-batch --only-missing --limit=25 --dry-run --show-fields
+docker compose exec app php artisan odessa:sync-user-data-batch --only-missing --limit=25
+
 --- LIMPIAR IMÁGENES / CONTENEDORES HUÉRFANOS (opcional, con cuidado) ---
 docker system prune               Elimina contenedores parados, redes no usadas, etc.
 docker volume ls                  Ver volúmenes (ej. datos persistentes de MySQL)
