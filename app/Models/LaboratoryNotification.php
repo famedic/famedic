@@ -454,6 +454,22 @@ class LaboratoryNotification extends Model
         });
     }
 
+    /**
+     * Relaciona notificaciones con una fila de laboratory_purchases (subconsultas / joins).
+     */
+    public function scopeForPurchaseMatch(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->whereColumn('laboratory_notifications.laboratory_purchase_id', 'laboratory_purchases.id')
+                ->orWhereColumn('laboratory_notifications.gda_order_id', 'laboratory_purchases.gda_order_id')
+                ->orWhere(function (Builder $inner) {
+                    $inner->whereColumn('laboratory_notifications.gda_consecutivo', 'laboratory_purchases.gda_consecutivo')
+                        ->whereNotNull('laboratory_purchases.gda_consecutivo')
+                        ->whereNotNull('laboratory_notifications.gda_consecutivo');
+                });
+        });
+    }
+
     public function scopeForSameOrderAs(Builder $query, self $notification): Builder
     {
         return $query->where(function (Builder $q) use ($notification) {

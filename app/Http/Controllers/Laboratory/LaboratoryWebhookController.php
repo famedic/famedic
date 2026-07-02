@@ -76,7 +76,9 @@ class LaboratoryWebhookController extends Controller
             ], 422);
         }
 
-        $data = $validator->validated();
+        // Payload completo tras validar: validated() descarta campos GDA opcionales
+        // (infogda_orden, infogda_muestras, etc.) necesarios para gabinete.
+        $data = $request->all();
 
         try {
             // Buscar referencias

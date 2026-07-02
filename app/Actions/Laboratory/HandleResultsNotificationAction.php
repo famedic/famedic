@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Notifications\LaboratoryResultsAvailable;
 use App\Services\Laboratory\LabOrderNotificationGateService;
+use App\Support\GDA\GdaWebhookPayloadResolver;
 use App\Support\Laboratory\GdaSimulatorSettings;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -17,7 +18,8 @@ use Illuminate\Support\Facades\Schema;
 class HandleResultsNotificationAction
 {
     public function __construct(
-        protected LabOrderNotificationGateService $notificationGateService
+        protected LabOrderNotificationGateService $notificationGateService,
+        protected GdaWebhookPayloadResolver $payloadResolver,
     ) {
     }
 
@@ -31,19 +33,20 @@ class HandleResultsNotificationAction
         ]);
 
         $hasResultsInPayload = isset($data['infogda_resultado_b64']) && !empty($data['infogda_resultado_b64']);
+        $resolved = $references['gda'] ?? $this->payloadResolver->resolve($data);
 
         // Actualizar notificación
         $this->updateNotification($notification, $data, $hasResultsInPayload);
         $this->invalidateStalePdfCaches($notification);
 
         // Actualizar quote
-        $quote = $this->updateQuote($references, $data, $hasResultsInPayload);
+        $quote = $this->updateQuote($references, $data, $hasResultsInPayload, $resolved);
 
         // Actualizar purchase
-        $purchase = $this->updatePurchase($references, $data, $hasResultsInPayload);
+        $purchase = $this->updatePurchase($references, $data, $hasResultsInPayload, $resolved);
 
         $studyExternalId = $this->extractStudyExternalId($data);
-        $gdaOrderId = (string) ($data['id'] ?? '');
+        $gdaOrderId = $this->payloadResolver->gateOrderId($resolved, $data);
 
         $gateResult = $this->notificationGateService->registerEvent(
             gdaOrderId: $gdaOrderId,
@@ -138,7 +141,7 @@ class HandleResultsNotificationAction
         ]);
     }
 
-    protected function updateQuote(array $references, array $data, bool $hasResultsInPayload): ?LaboratoryQuote
+    protected function updateQuote(array $references, array $data, bool $hasResultsInPayload, array $resolved): ?LaboratoryQuote
     {
         if (empty($references['quote_id'])) {
             return null;
@@ -152,14 +155,14 @@ class HandleResultsNotificationAction
         $quoteColumns = Schema::getColumnListing('laboratory_quotes');
         $updates = [];
 
-        // Actualizar campos de GDA
-        if (in_array('gda_order_id', $quoteColumns) && empty($quote->gda_order_id)) {
-            $updates['gda_order_id'] = $data['id'];
-        }
-
-        if (in_array('gda_consecutivo', $quoteColumns) && empty($quote->gda_consecutivo)) {
-            $updates['gda_consecutivo'] = $data['id'];
-        }
+        $updates = array_merge(
+            $updates,
+            $this->payloadResolver->emptyGdaFieldUpdates(
+                $resolved,
+                $quote->gda_order_id ?? null,
+                $quote->gda_consecutivo ?? null
+            )
+        );
 
         if (isset($data['GDA_menssage']['acuse']) && in_array('gda_acuse', $quoteColumns)) {
             $updates['gda_acuse'] = $data['GDA_menssage']['acuse'];
@@ -205,7 +208,7 @@ class HandleResultsNotificationAction
         return $quote;
     }
 
-    protected function updatePurchase(array $references, array $data, bool $hasResultsInPayload): ?LaboratoryPurchase
+    protected function updatePurchase(array $references, array $data, bool $hasResultsInPayload, array $resolved): ?LaboratoryPurchase
     {
         if (empty($references['purchase_id'])) {
             return null;
@@ -218,14 +221,14 @@ class HandleResultsNotificationAction
 
         $updates = [];
 
-        // Actualizar campos de GDA si están vacíos
-        if (empty($purchase->gda_order_id)) {
-            $updates['gda_order_id'] = $data['id'];
-        }
-
-        if (empty($purchase->gda_consecutivo)) {
-            $updates['gda_consecutivo'] = $data['id'];
-        }
+        $updates = array_merge(
+            $updates,
+            $this->payloadResolver->emptyGdaFieldUpdates(
+                $resolved,
+                $purchase->gda_order_id ?? null,
+                $purchase->gda_consecutivo ?? null
+            )
+        );
 
         if (isset($data['GDA_menssage']['acuse'])) {
             $updates['gda_acuse'] = $data['GDA_menssage']['acuse'];
@@ -307,7 +310,10 @@ class HandleResultsNotificationAction
             $user->notify(new LaboratoryResultsAvailable(
                 laboratoryPurchase: $purchase,
                 laboratoryQuote: $quote,
-                gdaOrderId: $data['id'],
+                gdaOrderId: $this->payloadResolver->gateOrderId(
+                    $references['gda'] ?? $this->payloadResolver->resolve($data),
+                    $data
+                ),
                 hasPdfInPayload: $hasResultsInPayload
             ));
 

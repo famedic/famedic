@@ -13,7 +13,7 @@ function makeResultsNotification(array $overrides = []): LaboratoryNotification
         'notification_type' => LaboratoryNotification::TYPE_RESULTS,
         'lineanegocio' => LaboratoryNotification::LINEA_NEGOCIO_RESULTS,
         'gda_order_id' => 'GDA-ORDER-1',
-        'gda_consecutivo' => 'GDA-ORDER-1',
+        'gda_consecutivo' => 1,
         'laboratory_purchase_id' => 100,
         'status' => LaboratoryNotification::STATUS_PROCESSED,
         'gda_status' => LaboratoryNotification::GDA_STATUS_COMPLETED,
@@ -110,7 +110,7 @@ it('shows updated results badge when a newer notification arrives after patient 
         'results_pdf_base64' => null,
     ]);
 
-    expect(LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(100, 'GDA-ORDER-1', 'GDA-ORDER-1'))
+    expect(LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(100, 'GDA-ORDER-1', 1))
         ->toBeTrue();
 });
 
@@ -131,6 +131,6 @@ it('hides updated results badge after patient accessed the latest notification',
         ],
     ]);
 
-    expect(LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(100, 'GDA-ORDER-1', 'GDA-ORDER-1'))
+    expect(LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(100, 'GDA-ORDER-1', 1))
         ->toBeFalse();
 });
