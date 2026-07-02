@@ -5,9 +5,11 @@ namespace App\Providers;
 use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\OnlinePharmacyPurchase;
+use App\Listeners\ApplyMailSafetyPolicy;
 use App\Listeners\LinkPendingCouponBeneficiaries;
 use App\Services\Tracking\Tracking;
 use Illuminate\Auth\Events\Verified;
+use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Routing\Redirector;
@@ -79,6 +81,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Event::listen(Verified::class, LinkPendingCouponBeneficiaries::class);
+        Event::listen(MessageSending::class, ApplyMailSafetyPolicy::class);
 
         Gate::define('assign-autorizador-role', function ($user): bool {
             return (bool) $user->administrator?->hasRole('superadmin');
