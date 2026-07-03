@@ -22,6 +22,8 @@ function openPdfFromBase64(base64) {
 export function pdfLocationBadge(pdf) {
 	if (!pdf) return { color: "slate", label: "—" };
 	switch (pdf.location) {
+		case "storage":
+			return { color: "emerald", label: pdf.label };
 		case "db_base64":
 			return { color: "famedic-lime", label: pdf.label };
 		case "db_base64_stale":
@@ -36,6 +38,12 @@ export function pdfLocationBadge(pdf) {
 function formatDateTime(value) {
 	if (!value) return "—";
 	return new Date(value).toLocaleString("es-MX");
+}
+
+function maskStoragePath(path) {
+	if (!path) return "—";
+	if (path.length <= 30) return path;
+	return path.substring(0, 12) + "…" + path.substring(path.length - 18);
 }
 
 async function postJson(routeName, orderKey) {
@@ -81,7 +89,7 @@ export default function LaboratoryNotificationResultsPdfActions({
 	const pdfBadge = pdfLocationBadge(resultsPdf);
 	const canFetchFromGda = Boolean(resultsPdf.can_fetch_from_gda);
 	const canForceRefresh = Boolean(resultsPdf.can_force_refresh_from_gda);
-	const canDownloadFromDb = Boolean(resultsPdf.can_download_from_db);
+	const canDownload = Boolean(resultsPdf.can_download);
 
 	const handleSuccess = (json) => {
 		setMessage(json.message);
@@ -108,11 +116,11 @@ export default function LaboratoryNotificationResultsPdfActions({
 	};
 
 	const forceRefreshFromGda = async () => {
-		if (
-			!window.confirm(
-				"¿Forzar actualización desde GDA? Se limpiará el PDF cacheado en la BD y se consultará el resultado más reciente al laboratorio.",
-			)
-		) {
+		const confirmMsg = resultsPdf.is_manual_result
+			? "Este resultado fue subido manualmente. ¿Está seguro de que desea sobrescribirlo con el resultado de GDA?"
+			: "¿Forzar actualización desde GDA? Se consultará el resultado más reciente al laboratorio y se guardará en storage/S3.";
+
+		if (!window.confirm(confirmMsg)) {
 			return;
 		}
 
@@ -138,7 +146,7 @@ export default function LaboratoryNotificationResultsPdfActions({
 		}
 	};
 
-	const downloadFromDb = async () => {
+	const downloadPdf = async () => {
 		setDownloading(true);
 		setMessage(null);
 		setError(null);
@@ -158,7 +166,7 @@ export default function LaboratoryNotificationResultsPdfActions({
 			);
 
 			if (!response.ok) {
-				throw new Error("No se pudo descargar el PDF desde la base de datos.");
+				throw new Error("No se pudo descargar el PDF.");
 			}
 
 			const blob = await response.blob();
@@ -173,12 +181,12 @@ export default function LaboratoryNotificationResultsPdfActions({
 			link.remove();
 			window.URL.revokeObjectURL(url);
 
-			setMessage("Descarga del PDF cacheado en BD completada.");
+			setMessage("Descarga del PDF completada.");
 		} catch (err) {
 			setError(
 				err instanceof Error
 					? err.message
-					: "No se pudo descargar el PDF desde la base de datos.",
+					: "No se pudo descargar el PDF.",
 			);
 		} finally {
 			setDownloading(false);
@@ -193,7 +201,7 @@ export default function LaboratoryNotificationResultsPdfActions({
 				{resultsPdf.has_newer_results && (
 					<div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-950/30">
 						<Text className="text-sm text-amber-900 dark:text-amber-100">
-							<Strong>Hay resultados más recientes.</Strong> El PDF en BD puede estar
+							<Strong>Hay resultados más recientes.</Strong> El PDF puede estar
 							desactualizado respecto a la última notificación de GDA.
 						</Text>
 					</div>
@@ -202,35 +210,66 @@ export default function LaboratoryNotificationResultsPdfActions({
 
 			<div className="grid gap-2 text-sm sm:grid-cols-2">
 				<Text>
-					Origen actual del PDF:{" "}
-					<Strong>{resultsPdf.pdf_source_label ?? "Sin PDF en BD"}</Strong>
+					Archivo en storage/S3:{" "}
+					<Strong>{resultsPdf.has_pdf_in_storage ? "Sí" : "No"}</Strong>
 				</Text>
 				<Text>
-					Notificaciones de resultados:{" "}
-					<Strong>{resultsPdf.results_notifications_count ?? 0}</Strong>
+					Ruta storage:{" "}
+					<Strong>{maskStoragePath(resultsPdf.storage_path)}</Strong>
 				</Text>
 				<Text>
-					Última notificación GDA:{" "}
-					<Strong>#{resultsPdf.latest_notification_id ?? "—"}</Strong>
+					Resultado manual:{" "}
+					<Strong>{resultsPdf.is_manual_result ? "Sí" : "No"}</Strong>
 				</Text>
 				<Text>
-					Notificación con PDF en BD:{" "}
-					<Strong>#{resultsPdf.serving_notification_id ?? "—"}</Strong>
+					Resultado automático GDA:{" "}
+					<Strong>{resultsPdf.is_gda_automatic ? "Sí" : "No"}</Strong>
 				</Text>
 				<Text>
-					Últimos resultados recibidos:{" "}
-					<Strong>{formatDateTime(resultsPdf.latest_results_at)}</Strong>
+					Base64 legacy en BD:{" "}
+					<Strong>{resultsPdf.has_pdf_in_db ? "Sí" : "No"}</Strong>
+				</Text>
+				<Text>
+					Disponible en GDA:{" "}
+					<Strong>{resultsPdf.available_at_gda ? "Sí" : "No"}</Strong>
 				</Text>
 				<Text>
 					Última descarga vía API GDA:{" "}
 					<Strong>{formatDateTime(resultsPdf.pdf_fetched_at)}</Strong>
 				</Text>
+				<Text>
+					Última sincronización a storage:{" "}
+					<Strong>{formatDateTime(resultsPdf.last_sync_at)}</Strong>
+				</Text>
 			</div>
 
+			{resultsPdf.last_sync_error && (
+				<div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/50 dark:bg-red-950/30">
+					<Text className="text-sm text-red-900 dark:text-red-100">
+						<Strong>Último error de sync:</Strong>{" "}
+						{resultsPdf.last_sync_error}
+						{resultsPdf.last_sync_error_at && (
+							<span className="ml-1 text-xs text-red-600 dark:text-red-400">
+								({formatDateTime(resultsPdf.last_sync_error_at)})
+							</span>
+						)}
+					</Text>
+				</div>
+			)}
+
 			<div className="flex flex-wrap gap-2">
-				<Badge color={resultsPdf.has_pdf_in_db ? "famedic-lime" : "slate"}>
-					En BD (base64): {resultsPdf.has_pdf_in_db ? "Sí" : "No"}
+				<Badge color={resultsPdf.has_pdf_in_storage ? "emerald" : "slate"}>
+					En storage/S3: {resultsPdf.has_pdf_in_storage ? "Sí" : "No"}
 				</Badge>
+				{resultsPdf.is_manual_result && (
+					<Badge color="violet">Resultado manual</Badge>
+				)}
+				{resultsPdf.is_gda_automatic && (
+					<Badge color="emerald">GDA automático</Badge>
+				)}
+				{resultsPdf.has_pdf_in_db && (
+					<Badge color="amber">Base64 legacy en BD</Badge>
+				)}
 				<Badge color={resultsPdf.available_at_gda ? "sky" : "slate"}>
 					Disponible en GDA: {resultsPdf.available_at_gda ? "Sí" : "No"}
 				</Badge>
@@ -240,9 +279,14 @@ export default function LaboratoryNotificationResultsPdfActions({
 			</div>
 
 			<div className="flex flex-wrap gap-2">
+				{canDownload && (
+					<Button color="emerald" onClick={downloadPdf} disabled={downloading}>
+						{downloading ? "Descargando..." : "Descargar PDF"}
+					</Button>
+				)}
 				{canFetchFromGda && (
 					<Button color="sky" onClick={fetchFromGda} disabled={fetching || forcing}>
-						{fetching ? "Consultando GDA..." : "Obtener PDF desde GDA"}
+						{fetching ? "Sincronizando..." : "Sincronizar desde GDA a S3"}
 					</Button>
 				)}
 				{canForceRefresh && (
@@ -250,11 +294,17 @@ export default function LaboratoryNotificationResultsPdfActions({
 						{forcing ? "Actualizando..." : "Forzar actualización desde GDA"}
 					</Button>
 				)}
-				{canDownloadFromDb && (
-					<Button outline onClick={downloadFromDb} disabled={downloading}>
-						{downloading ? "Descargando..." : "Descargar PDF (BD)"}
-					</Button>
-				)}
+			</div>
+
+			<div className="flex flex-wrap gap-2 text-xs text-zinc-500">
+				<Text>
+					Origen actual del PDF:{" "}
+					<Strong>{resultsPdf.pdf_source_label ?? "Sin PDF"}</Strong>
+				</Text>
+				<Text>
+					Notificaciones de resultados:{" "}
+					<Strong>{resultsPdf.results_notifications_count ?? 0}</Strong>
+				</Text>
 			</div>
 
 			{message && (
