@@ -8,6 +8,7 @@ use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryQuote;
 use App\Models\LaboratoryPurchase;
 use App\Models\User;
+use App\Jobs\Laboratory\SyncGdaResultPdfToStorageJob;
 use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Notifications\LaboratoryResultsAvailable;
 use App\Services\Laboratory\LabOrderNotificationGateService;
@@ -16,6 +17,7 @@ use App\Support\GDA\GdaWebhookPayloadResolver;
 use App\Support\Laboratory\GdaSimulatorSettings;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class HandleResultsNotificationAction
 {
@@ -50,9 +52,13 @@ class HandleResultsNotificationAction
         // Actualizar purchase
         $purchase = $this->updatePurchase($references, $sanitizedData, $hasResultsInPayload, $resolved);
 
+        $pdfStoredFromWebhook = false;
+
         if ($hasResultsInPayload && $purchase && empty($purchase->results)) {
-            $this->storeResultsPdfFromWebhook($purchase, $pdfBase64FromPayload, $notification);
+            $pdfStoredFromWebhook = $this->storeResultsPdfFromWebhook($purchase, $pdfBase64FromPayload, $notification);
         }
+
+        $this->dispatchResultsPdfSyncJob($purchase, $notification, $pdfStoredFromWebhook);
 
         $studyExternalId = $this->extractStudyExternalId($sanitizedData);
         $gdaOrderId = $this->payloadResolver->gateOrderId($resolved, $data);
@@ -115,7 +121,7 @@ class HandleResultsNotificationAction
         LaboratoryPurchase $purchase,
         string $pdfBase64,
         LaboratoryNotification $notification
-    ): void {
+    ): bool {
         try {
             $this->storeGdaResultsPdfToStorageAction->execute(
                 $purchase,
@@ -123,6 +129,8 @@ class HandleResultsNotificationAction
                 $notification,
                 overwrite: false
             );
+
+            return true;
         } catch (\Throwable $e) {
             Log::error('Failed to store GDA results PDF from webhook payload', [
                 'purchase_id' => $purchase->id,
@@ -136,7 +144,52 @@ class HandleResultsNotificationAction
                     'results_storage_error_at' => now()->toISOString(),
                 ]),
             ]);
+
+            return false;
         }
+    }
+
+    protected function dispatchResultsPdfSyncJob(
+        ?LaboratoryPurchase $purchase,
+        LaboratoryNotification $notification,
+        bool $pdfStoredFromWebhook
+    ): void {
+        if (! $purchase?->id) {
+            return;
+        }
+
+        if ($pdfStoredFromWebhook) {
+            Log::info('GDA results PDF sync job skipped: PDF stored from webhook payload', [
+                'purchase_id' => $purchase->id,
+                'notification_id' => $notification->id,
+            ]);
+
+            return;
+        }
+
+        $purchase->refresh();
+
+        if (! empty($purchase->results) && Storage::exists($purchase->results)) {
+            Log::info('GDA results PDF sync job skipped: purchase already has results', [
+                'purchase_id' => $purchase->id,
+                'notification_id' => $notification->id,
+                'existing_results' => $purchase->results,
+            ]);
+
+            return;
+        }
+
+        if (! $notification->hasAvailableResults()) {
+            return;
+        }
+
+        SyncGdaResultPdfToStorageJob::dispatch($purchase->id, $notification->id)
+            ->afterCommit();
+
+        Log::info('GDA results PDF sync job dispatched', [
+            'purchase_id' => $purchase->id,
+            'notification_id' => $notification->id,
+        ]);
     }
 
     protected function extractStudyExternalId(array $data): ?string

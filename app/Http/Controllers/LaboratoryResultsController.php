@@ -8,6 +8,7 @@ use App\Models\LaboratoryNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class LaboratoryResultsController extends Controller
 {
@@ -33,6 +34,16 @@ class LaboratoryResultsController extends Controller
                     'success' => false,
                     'message' => 'No se encontró el pedido de laboratorio'
                 ], 404);
+            }
+
+            if (! empty($laboratoryPurchase->results) && Storage::exists($laboratoryPurchase->results)) {
+                return response()->json([
+                    'success' => true,
+                    'cached' => true,
+                    'refreshed' => false,
+                    'results_url' => route('laboratory-purchases.results', ['laboratory_purchase' => $laboratoryPurchase->id]),
+                    'storage_path' => $laboratoryPurchase->results,
+                ]);
             }
 
             $notification = LaboratoryNotification::latestResultsForOrder(
@@ -69,6 +80,10 @@ class LaboratoryResultsController extends Controller
                 'cached' => $result['cached'],
                 'refreshed' => $result['refreshed'],
                 'pdf_base64' => $result['pdf_base64'],
+                'results_url' => ! empty($result['storage_path'])
+                    ? route('laboratory-purchases.results', ['laboratory_purchase' => $laboratoryPurchase->id])
+                    : null,
+                'storage_path' => $result['storage_path'] ?? null,
             ]);
         } catch (\Exception $e) {
             Log::error('🔥 Error inesperado en LaboratoryResultsController', [

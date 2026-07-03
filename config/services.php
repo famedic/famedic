@@ -89,6 +89,7 @@ return [
 
     'gda' => [
         'url' => env('GDA_URL'),
+        'results_sync_queue' => env('GDA_RESULTS_SYNC_QUEUE', 'default'),
         'report_emails' => env('GDA_REPORT_EMAILS') ? explode(',', env('GDA_REPORT_EMAILS')) : [],
         'concierge_emails' => env('GDA_CONCIERGE_EMAILS') ? explode(',', env('GDA_CONCIERGE_EMAILS')) : [],
         'brands' => [

@@ -6,6 +6,7 @@ use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Tarjeta de pedido de laboratorio para el panel del paciente (sin datos sensibles innecesarios).
@@ -19,18 +20,19 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
         /** @var LaboratoryPurchase $p */
         $p = $this->resource;
 
-        $manualResults = ! empty($p->results);
+        $hasStoredResults = ! empty($p->results) && Storage::exists($p->results);
         $resultsNotif = $p->resultsNotification()->first();
         $apiResultsReady = $resultsNotif !== null
             && $resultsNotif->results_received_at !== null;
 
-        $hasResults = $manualResults || $apiResultsReady;
+        $hasResults = $hasStoredResults || $apiResultsReady;
         $cancelled = $p->trashed();
 
         $studyStatus = $this->resolveStudyStatus($cancelled, $hasResults, $p);
 
         $resultSource = match (true) {
-            $manualResults => 'manual',
+            $hasStoredResults && $apiResultsReady => 'gda',
+            $hasStoredResults => 'manual',
             $apiResultsReady => 'api',
             default => null,
         };
@@ -38,7 +40,7 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
         $resultViewUrl = null;
         $resultDownloadUrl = null;
 
-        if ($manualResults) {
+        if ($hasStoredResults) {
             $resultViewUrl = route('laboratory-purchases.results', ['laboratory_purchase' => $p->id]);
             $resultDownloadUrl = $resultViewUrl;
         } elseif ($apiResultsReady) {
@@ -81,8 +83,8 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
             && ! empty($resultsNotif->results_pdf_base64);
 
         $canDownloadPdf = match (true) {
-            $manualResults => $resultViewUrl !== null,
-            $apiResultsReady => $resultsPdfBase64Available,
+            $hasStoredResults => $resultViewUrl !== null,
+            $apiResultsReady => true,
             default => false,
         };
 
@@ -109,7 +111,7 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
             'temporarly_hide_gda_order_id' => $p->temporarly_hide_gda_order_id,
             'gda_consecutivo' => $p->gda_consecutivo,
             'result_source' => $resultSource,
-            'pdf_url' => $manualResults ? $resultViewUrl : null,
+            'pdf_url' => $hasStoredResults ? $resultViewUrl : null,
             'results_pdf_base64_available' => $resultsPdfBase64Available,
             'can_download_pdf' => $canDownloadPdf,
             'api_result_url' => $apiResultsReady ? $resultViewUrl : null,

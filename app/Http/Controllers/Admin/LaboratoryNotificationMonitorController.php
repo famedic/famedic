@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class LaboratoryNotificationMonitorController extends Controller
@@ -255,22 +256,38 @@ class LaboratoryNotificationMonitorController extends Controller
             $resultsNotifications->first()?->gda_consecutivo ?? $orderKey
         );
 
-        if (! $notification || ! $notification->hasResults()) {
-            $notification = $resultsNotifications
-                ->sortByDesc('created_at')
-                ->first(fn (LaboratoryNotification $n) => $n->hasResults());
+        if (! $notification) {
+            $notification = $resultsNotifications->sortByDesc('created_at')->first();
         }
 
-        if (! $notification || ! $notification->hasResults()) {
-            abort(404, 'PDF no disponible en la base de datos.');
+        if (! $notification || ! $notification->hasAvailableResults()) {
+            abort(404, 'PDF no disponible.');
         }
 
-        $pdfContent = base64_decode($notification->results_pdf_base64);
-        $filename = 'resultados_'.($notification->gda_consecutivo ?? $notification->gda_order_id ?? $orderKey).'.pdf';
+        $purchase = $notification->laboratoryPurchase;
 
-        return response($pdfContent)
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="'.$filename.'"');
+        if ($purchase && ! empty($purchase->results) && Storage::exists($purchase->results)) {
+            $filename = 'resultados_'.($notification->gda_consecutivo ?? $notification->gda_order_id ?? $orderKey).'.pdf';
+
+            return Storage::download($purchase->results, $filename);
+        }
+
+        try {
+            $result = app(ResolveGdaResultsPdfAction::class)($notification);
+            $pdfContent = base64_decode($result['pdf_base64'], true);
+
+            if ($pdfContent === false || $pdfContent === '') {
+                abort(404, 'PDF no disponible.');
+            }
+
+            $filename = 'resultados_'.($notification->gda_consecutivo ?? $notification->gda_order_id ?? $orderKey).'.pdf';
+
+            return response($pdfContent)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'attachment; filename="'.$filename.'"');
+        } catch (\Throwable $e) {
+            abort(404, 'PDF no disponible: '.$e->getMessage());
+        }
     }
 
     private function baseNotificationsQuery(Carbon $startDate, Carbon $endDate, string $search = ''): Builder
@@ -397,6 +414,32 @@ class LaboratoryNotificationMonitorController extends Controller
             return $this->emptyResultsPdfSummary();
         }
 
+        $purchase = $latest->laboratoryPurchase;
+
+        if ($purchase && ! empty($purchase->results) && Storage::exists($purchase->results)) {
+            return [
+                'location' => 'storage',
+                'label' => 'PDF almacenado en storage/S3 (laboratory_purchases.results)',
+                'notification_id' => $latest->id,
+                'serving_notification_id' => $latest->id,
+                'latest_notification_id' => $latest->id,
+                'has_pdf_in_db' => false,
+                'has_pdf_in_storage' => true,
+                'storage_path' => $purchase->results,
+                'available_at_gda' => $latest->hasAvailableResults(),
+                'is_stale' => false,
+                'has_newer_results' => false,
+                'pdf_source' => data_get($latest->gda_message, 'results_source', 'storage'),
+                'pdf_source_label' => 'Storage / S3',
+                'latest_results_at' => $latest->results_received_at?->toIso8601String(),
+                'pdf_fetched_at' => $latest->pdfFetchedAt()?->toIso8601String(),
+                'results_notifications_count' => $resultsNotifications->count(),
+                'can_fetch_from_gda' => false,
+                'can_force_refresh_from_gda' => $latest->hasAvailableResults(),
+                'can_download_from_db' => true,
+            ];
+        }
+
         $cachedNotification = $resultsNotifications
             ->filter(fn (LaboratoryNotification $n) => $n->hasResults())
             ->sortByDesc(fn (LaboratoryNotification $n) => $n->pdfFetchedAt() ?? $n->updated_at)
@@ -478,6 +521,7 @@ class LaboratoryNotificationMonitorController extends Controller
     {
         return match ($source) {
             'gda_api' => 'API de consulta GDA',
+            'storage' => 'Storage / S3',
             'webhook_or_legacy' => 'Webhook GDA o caché legacy',
             default => null,
         };

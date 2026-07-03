@@ -11,6 +11,7 @@ use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryNotification;
 use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 
 class LaboratoryResultController extends Controller
 {
@@ -154,6 +155,10 @@ class LaboratoryResultController extends Controller
      */
     public function view($type, $id)
     {
+        if ($redirect = $this->redirectToStoredPurchaseResults($type, $id)) {
+            return $redirect;
+        }
+
         $user = Auth::user();
 
         // Buscar la notificación basada en el tipo y ID
@@ -212,6 +217,10 @@ class LaboratoryResultController extends Controller
      */
     public function download($type, $id)
     {
+        if ($redirect = $this->redirectToStoredPurchaseResults($type, $id)) {
+            return $redirect;
+        }
+
         $user = Auth::user();
 
         // Buscar la notificación basada en el tipo y ID
@@ -263,6 +272,29 @@ class LaboratoryResultController extends Controller
             
             abort(500, 'Error al descargar el resultado: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Redirige a la URL firmada de storage cuando la compra ya tiene PDF en results.
+     */
+    private function redirectToStoredPurchaseResults(string $type, $id)
+    {
+        if ($type !== 'purchase') {
+            return null;
+        }
+
+        $user = Auth::user();
+        $purchase = LaboratoryPurchase::query()->find($id);
+
+        if (! $purchase || ! Gate::forUser($user)->allows('view', $purchase)) {
+            return null;
+        }
+
+        if (empty($purchase->results) || ! Storage::exists($purchase->results)) {
+            return null;
+        }
+
+        return redirect()->route('laboratory-purchases.results', ['laboratory_purchase' => $purchase->id]);
     }
 
     /**
