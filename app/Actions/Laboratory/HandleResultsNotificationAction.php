@@ -3,6 +3,7 @@
 
 namespace App\Actions\Laboratory;
 
+use App\Actions\Laboratories\StoreGdaResultsPdfToStorageAction;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryQuote;
 use App\Models\LaboratoryPurchase;
@@ -10,6 +11,7 @@ use App\Models\User;
 use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Notifications\LaboratoryResultsAvailable;
 use App\Services\Laboratory\LabOrderNotificationGateService;
+use App\Support\GDA\GdaPayloadSanitizer;
 use App\Support\GDA\GdaWebhookPayloadResolver;
 use App\Support\Laboratory\GdaSimulatorSettings;
 use Illuminate\Support\Facades\Log;
@@ -20,6 +22,7 @@ class HandleResultsNotificationAction
     public function __construct(
         protected LabOrderNotificationGateService $notificationGateService,
         protected GdaWebhookPayloadResolver $payloadResolver,
+        protected StoreGdaResultsPdfToStorageAction $storeGdaResultsPdfToStorageAction,
     ) {
     }
 
@@ -32,20 +35,26 @@ class HandleResultsNotificationAction
             'quote_id' => $references['quote_id'] ?? null
         ]);
 
-        $hasResultsInPayload = isset($data['infogda_resultado_b64']) && !empty($data['infogda_resultado_b64']);
+        $pdfBase64FromPayload = GdaPayloadSanitizer::extractResultsPdfBase64($data);
+        $hasResultsInPayload = $pdfBase64FromPayload !== null;
+        $sanitizedData = GdaPayloadSanitizer::sanitize($data);
         $resolved = $references['gda'] ?? $this->payloadResolver->resolve($data);
 
         // Actualizar notificación
-        $this->updateNotification($notification, $data, $hasResultsInPayload);
+        $this->updateNotification($notification, $sanitizedData, $hasResultsInPayload);
         $this->invalidateStalePdfCaches($notification);
 
         // Actualizar quote
-        $quote = $this->updateQuote($references, $data, $hasResultsInPayload, $resolved);
+        $quote = $this->updateQuote($references, $sanitizedData, $hasResultsInPayload, $resolved);
 
         // Actualizar purchase
-        $purchase = $this->updatePurchase($references, $data, $hasResultsInPayload, $resolved);
+        $purchase = $this->updatePurchase($references, $sanitizedData, $hasResultsInPayload, $resolved);
 
-        $studyExternalId = $this->extractStudyExternalId($data);
+        if ($hasResultsInPayload && $purchase && empty($purchase->results)) {
+            $this->storeResultsPdfFromWebhook($purchase, $pdfBase64FromPayload, $notification);
+        }
+
+        $studyExternalId = $this->extractStudyExternalId($sanitizedData);
         $gdaOrderId = $this->payloadResolver->gateOrderId($resolved, $data);
 
         $gateResult = $this->notificationGateService->registerEvent(
@@ -54,7 +63,7 @@ class HandleResultsNotificationAction
             purchase: $purchase,
             studyExternalId: $studyExternalId,
             providerEventId: $data['GDA_menssage']['acuse'] ?? null,
-            payload: $data
+            payload: $sanitizedData
         );
 
         // Encontrar usuario
@@ -68,17 +77,19 @@ class HandleResultsNotificationAction
                 'notification_id' => $notification->id,
             ]);
         } elseif ($simulator?->bypassGate) {
-            $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase, $hasResultsInPayload);
+            $this->sendEmailNotification($userToNotify, $notification, $sanitizedData, $quote, $purchase, $hasResultsInPayload, $resolved, $data);
         } elseif ($gateResult['should_send_results_email']) {
             $wasSent = $this->notificationGateService->sendResultsOnce($gdaOrderId, function () use (
                 $userToNotify,
                 $notification,
-                $data,
+                $sanitizedData,
                 $quote,
                 $purchase,
-                $hasResultsInPayload
+                $hasResultsInPayload,
+                $resolved,
+                $data
             ) {
-                $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase, $hasResultsInPayload);
+                $this->sendEmailNotification($userToNotify, $notification, $sanitizedData, $quote, $purchase, $hasResultsInPayload, $resolved, $data);
             });
 
             if (! $wasSent) {
@@ -98,6 +109,34 @@ class HandleResultsNotificationAction
 
         // Marcar como procesada
         $notification->update(['status' => LaboratoryNotification::STATUS_PROCESSED]);
+    }
+
+    protected function storeResultsPdfFromWebhook(
+        LaboratoryPurchase $purchase,
+        string $pdfBase64,
+        LaboratoryNotification $notification
+    ): void {
+        try {
+            $this->storeGdaResultsPdfToStorageAction->execute(
+                $purchase,
+                $pdfBase64,
+                $notification,
+                overwrite: false
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to store GDA results PDF from webhook payload', [
+                'purchase_id' => $purchase->id,
+                'notification_id' => $notification->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $notification->update([
+                'gda_message' => array_merge($notification->gda_message ?? [], [
+                    'results_storage_error' => $e->getMessage(),
+                    'results_storage_error_at' => now()->toISOString(),
+                ]),
+            ]);
+        }
     }
 
     protected function extractStudyExternalId(array $data): ?string
@@ -128,10 +167,6 @@ class HandleResultsNotificationAction
             'gda_status' => 'completed',
             'results_received_at' => now(),
         ];
-
-        if ($hasResultsInPayload) {
-            $updateData['results_pdf_base64'] = $data['infogda_resultado_b64'];
-        }
 
         $notification->update($updateData);
 
@@ -168,17 +203,10 @@ class HandleResultsNotificationAction
             $updates['gda_acuse'] = $data['GDA_menssage']['acuse'];
         }
 
-        // Guardar respuesta completa de GDA
         if (in_array('gda_response', $quoteColumns)) {
             $updates['gda_response'] = $data;
         }
 
-        // Guardar resultados en PDF si vienen
-        if ($hasResultsInPayload && in_array('pdf_base64', $quoteColumns)) {
-            $updates['pdf_base64'] = $data['infogda_resultado_b64'];
-        }
-
-        // Marcar como completado
         if (in_array('completed_at', $quoteColumns)) {
             $updates['completed_at'] = now();
         }
@@ -187,7 +215,6 @@ class HandleResultsNotificationAction
             $updates['results_downloaded_at'] = now();
         }
 
-        // Actualizar status de pago si está pendiente
         if ($quote->status === 'pending_branch_payment' && in_array('status', $quoteColumns)) {
             $updates['status'] = 'paid';
 
@@ -234,10 +261,8 @@ class HandleResultsNotificationAction
             $updates['gda_acuse'] = $data['GDA_menssage']['acuse'];
         }
 
-        // Guardar respuesta completa de GDA
         $updates['gda_response'] = $data;
 
-        // Actualizar código HTTP y mensaje
         if (isset($data['GDA_menssage']['codeHttp'])) {
             $updates['gda_code_http'] = $data['GDA_menssage']['codeHttp'];
         }
@@ -250,16 +275,8 @@ class HandleResultsNotificationAction
             $updates['gda_description'] = $data['GDA_menssage']['descripcion'];
         }
 
-        // Guardar PDF si viene
-        if ($hasResultsInPayload) {
-            $updates['pdf_base64'] = $data['infogda_resultado_b64'];
-        }
-
-        // Marcar timestamps de resultados
         $updates['results_downloaded_at'] = now();
         $updates['completed_at'] = now();
-
-        // Actualizar status
         $updates['status'] = 'completed';
 
         $purchase->update($updates);
@@ -270,7 +287,7 @@ class HandleResultsNotificationAction
             'has_pdf' => $hasResultsInPayload
         ]);
 
-        return $purchase;
+        return $purchase->fresh();
     }
 
     protected function findUserToNotify(array $references, $quote, $purchase): ?User
@@ -297,11 +314,19 @@ class HandleResultsNotificationAction
             : null;
     }
 
-    protected function sendEmailNotification(?User $user, LaboratoryNotification $notification, array $data, $quote, $purchase, bool $hasResultsInPayload): void
-    {
+    protected function sendEmailNotification(
+        ?User $user,
+        LaboratoryNotification $notification,
+        array $sanitizedData,
+        $quote,
+        $purchase,
+        bool $hasResultsInPayload,
+        array $resolved,
+        array $originalData
+    ): void {
         if (!$user || empty($user->email)) {
             Log::warning('No user/email found to notify for results', [
-                'gda_order_id' => $data['id']
+                'gda_order_id' => $originalData['id'] ?? null
             ]);
             return;
         }
@@ -310,10 +335,7 @@ class HandleResultsNotificationAction
             $user->notify(new LaboratoryResultsAvailable(
                 laboratoryPurchase: $purchase,
                 laboratoryQuote: $quote,
-                gdaOrderId: $this->payloadResolver->gateOrderId(
-                    $references['gda'] ?? $this->payloadResolver->resolve($data),
-                    $data
-                ),
+                gdaOrderId: $this->payloadResolver->gateOrderId($resolved, $originalData),
                 hasPdfInPayload: $hasResultsInPayload
             ));
 
@@ -332,7 +354,7 @@ class HandleResultsNotificationAction
                 'user_id' => $user->id,
                 'email' => $user->email,
                 'notification_id' => $notification->id,
-                'gda_order_id' => $data['id'],
+                'gda_order_id' => $originalData['id'] ?? null,
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to send results email', [

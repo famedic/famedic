@@ -3,12 +3,15 @@
 namespace App\Actions\Laboratories;
 
 use App\Models\LaboratoryNotification;
+use App\Models\LaboratoryPurchase;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class ResolveGdaResultsPdfAction
 {
     public function __construct(
-        protected GetGDAResultsAction $getGdaResultsAction
+        protected GetGDAResultsAction $getGdaResultsAction,
+        protected StoreGdaResultsPdfToStorageAction $storeGdaResultsPdfToStorageAction,
     ) {
     }
 
@@ -16,7 +19,7 @@ class ResolveGdaResultsPdfAction
      * Resuelve el PDF de resultados para una notificación, usando siempre la notificación
      * más reciente de la orden y refrescando desde GDA cuando hay eventos nuevos.
      *
-     * @return array{pdf_base64: string, notification: LaboratoryNotification, cached: bool, refreshed: bool}
+     * @return array{pdf_base64: string, storage_path: string|null, notification: LaboratoryNotification, cached: bool, refreshed: bool}
      */
     public function __invoke(LaboratoryNotification $notification): array
     {
@@ -26,14 +29,55 @@ class ResolveGdaResultsPdfAction
             throw new \RuntimeException('Los resultados aún no están disponibles.');
         }
 
-        if (! $notification->shouldRefreshPdfFromGda()) {
-            Log::info('Using cached GDA results PDF', [
+        $purchase = $this->resolvePurchase($notification);
+
+        if ($purchase && $this->hasStoredResults($purchase)) {
+            Log::info('Using stored GDA results PDF from purchase.results', [
+                'notification_id' => $notification->id,
+                'purchase_id' => $purchase->id,
+                'path' => $purchase->results,
+            ]);
+
+            return $this->buildResultFromStorage($purchase, $notification, cached: true, refreshed: false);
+        }
+
+        if (! empty($notification->results_pdf_base64) && $purchase) {
+            try {
+                $this->storeGdaResultsPdfToStorageAction->execute(
+                    $purchase,
+                    $notification->results_pdf_base64,
+                    $notification,
+                    overwrite: false
+                );
+
+                $purchase = $purchase->fresh();
+
+                if ($this->hasStoredResults($purchase)) {
+                    return $this->buildResultFromStorage(
+                        $purchase,
+                        $notification->fresh(),
+                        cached: true,
+                        refreshed: false
+                    );
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Failed to migrate legacy GDA results PDF base64 to storage', [
+                    'notification_id' => $notification->id,
+                    'purchase_id' => $purchase->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        if (! empty($notification->results_pdf_base64) && ! $notification->shouldRefreshPdfFromGda()) {
+            Log::info('Using legacy cached GDA results PDF base64', [
                 'notification_id' => $notification->id,
                 'gda_order_id' => $notification->gda_order_id,
             ]);
 
             return [
                 'pdf_base64' => $notification->results_pdf_base64,
+                'storage_path' => null,
                 'notification' => $notification,
                 'cached' => true,
                 'refreshed' => false,
@@ -53,8 +97,23 @@ class ResolveGdaResultsPdfAction
 
         $pdfBase64 = $this->fetchFromGdaApi($notification);
 
+        if ($purchase) {
+            $this->storeGdaResultsPdfToStorageAction->execute(
+                $purchase,
+                $pdfBase64,
+                $notification,
+                overwrite: false
+            );
+
+            return $this->buildResultFromStorage(
+                $purchase->fresh(),
+                $notification->fresh(),
+                cached: false,
+                refreshed: true
+            );
+        }
+
         $notification->update([
-            'results_pdf_base64' => $pdfBase64,
             'gda_message' => array_merge($notification->gda_message ?? [], [
                 'results_fetched_at' => now()->toISOString(),
                 'results_source' => 'gda_api',
@@ -63,6 +122,7 @@ class ResolveGdaResultsPdfAction
 
         return [
             'pdf_base64' => $pdfBase64,
+            'storage_path' => null,
             'notification' => $notification->fresh(),
             'cached' => false,
             'refreshed' => true,
@@ -70,9 +130,9 @@ class ResolveGdaResultsPdfAction
     }
 
     /**
-     * Fuerza la consulta a GDA, limpia PDFs cacheados previos y guarda el resultado más reciente.
+     * Fuerza la consulta a GDA y guarda el resultado en storage cuando hay compra asociada.
      *
-     * @return array{pdf_base64: string, notification: LaboratoryNotification, cached: bool, refreshed: bool, forced: bool}
+     * @return array{pdf_base64: string, storage_path: string|null, notification: LaboratoryNotification, cached: bool, refreshed: bool, forced: bool}
      */
     public function forceRefresh(LaboratoryNotification $notification): array
     {
@@ -80,6 +140,20 @@ class ResolveGdaResultsPdfAction
 
         if (! $notification->hasAvailableResults()) {
             throw new \RuntimeException('Los resultados aún no están disponibles.');
+        }
+
+        $purchase = $this->resolvePurchase($notification);
+
+        if ($purchase && $this->hasStoredResults($purchase) && ! $this->isGdaManagedResultsPath($purchase->results)) {
+            Log::warning('GDA results PDF not stored because purchase already has results', [
+                'purchase_id' => $purchase->id,
+                'existing_results' => $purchase->results,
+            ]);
+
+            return array_merge(
+                $this->buildResultFromStorage($purchase, $notification, cached: true, refreshed: false),
+                ['forced' => false]
+            );
         }
 
         LaboratoryNotification::query()
@@ -97,8 +171,21 @@ class ResolveGdaResultsPdfAction
 
         $pdfBase64 = $this->fetchFromGdaApi($notification);
 
+        if ($purchase) {
+            $this->storeGdaResultsPdfToStorageAction->execute(
+                $purchase,
+                $pdfBase64,
+                $notification,
+                overwrite: true
+            );
+
+            return array_merge(
+                $this->buildResultFromStorage($purchase->fresh(), $notification->fresh(), cached: false, refreshed: true),
+                ['forced' => true]
+            );
+        }
+
         $notification->update([
-            'results_pdf_base64' => $pdfBase64,
             'gda_message' => array_merge($notification->gda_message ?? [], [
                 'results_fetched_at' => now()->toISOString(),
                 'results_source' => 'gda_api',
@@ -108,6 +195,7 @@ class ResolveGdaResultsPdfAction
 
         return [
             'pdf_base64' => $pdfBase64,
+            'storage_path' => null,
             'notification' => $notification->fresh(),
             'cached' => false,
             'refreshed' => true,
@@ -163,6 +251,51 @@ class ResolveGdaResultsPdfAction
         }
 
         return $payload;
+    }
+
+    private function resolvePurchase(LaboratoryNotification $notification): ?LaboratoryPurchase
+    {
+        if (! $notification->laboratory_purchase_id) {
+            return null;
+        }
+
+        return $notification->relationLoaded('laboratoryPurchase')
+            ? $notification->laboratoryPurchase
+            : LaboratoryPurchase::query()->find($notification->laboratory_purchase_id);
+    }
+
+    private function hasStoredResults(LaboratoryPurchase $purchase): bool
+    {
+        return ! empty($purchase->results) && Storage::exists($purchase->results);
+    }
+
+    private function isGdaManagedResultsPath(string $path): bool
+    {
+        return str_contains($path, 'results/gda-');
+    }
+
+    /**
+     * @return array{pdf_base64: string, storage_path: string, notification: LaboratoryNotification, cached: bool, refreshed: bool}
+     */
+    private function buildResultFromStorage(
+        LaboratoryPurchase $purchase,
+        LaboratoryNotification $notification,
+        bool $cached,
+        bool $refreshed
+    ): array {
+        $binary = Storage::get($purchase->results);
+
+        if ($binary === false || $binary === '') {
+            throw new \RuntimeException('No se pudo leer el PDF de resultados almacenado.');
+        }
+
+        return [
+            'pdf_base64' => base64_encode($binary),
+            'storage_path' => $purchase->results,
+            'notification' => $notification,
+            'cached' => $cached,
+            'refreshed' => $refreshed,
+        ];
     }
 
     private static function latestResultsReceivedAtForOrder(

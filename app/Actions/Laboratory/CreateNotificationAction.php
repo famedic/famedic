@@ -4,6 +4,7 @@
 namespace App\Actions\Laboratory;
 
 use App\Models\LaboratoryNotification;
+use App\Support\GDA\GdaPayloadSanitizer;
 use App\Support\GDA\GdaWebhookPayloadResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -44,7 +45,7 @@ class CreateNotificationAction
             'gda_acuse' => $resolved['acuse'],
             'gda_status' => $data['status'],
             'resource_type' => $data['resourceType'],
-            'payload' => $request->all(),
+            'payload' => GdaPayloadSanitizer::sanitize($request->all()),
             'lineanegocio' => $data['header']['lineanegocio'] ?? null,
             'gda_message' => $data['GDA_menssage'] ?? null,
             'laboratory_quote_id' => $references['quote_id'] ?? null,
