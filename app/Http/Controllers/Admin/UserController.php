@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Services\CouponBeneficiaryService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 
 class UserController extends Controller
@@ -196,6 +197,7 @@ class UserController extends Controller
             'states' => StatesMexico::todos(),
             'customer' => $customer,
             'canViewTaxProfilesAdmin' => request()->user()->administrator->hasPermissionTo('tax-profiles.manage'),
+            'canUpdatePassword' => (bool) request()->user()->administrator?->hasRole('superadmin'),
             'efevooTokens' => $efevooTokens,
             'efevooTransactions' => $efevooTransactions,
             'laboratoryNotifications' => $labNotifications,
@@ -232,5 +234,21 @@ class UserController extends Controller
         $user->save();
 
         return back()->flashMessage('Teléfono marcado como verificado.');
+    }
+
+    public function updatePassword(Request $request, User $user)
+    {
+        $admin = $request->user()->administrator;
+
+        abort_unless($admin && $admin->hasRole('superadmin'), 403);
+
+        $request->validate([
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user->password = Hash::make($request->password);
+        $user->save();
+
+        return back()->flashMessage('Contraseña actualizada correctamente.');
     }
 }
