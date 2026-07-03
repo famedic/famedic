@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "@inertiajs/react";
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading } from "@/Components/Catalyst/heading";
-import { Text, Strong } from "@/Components/Catalyst/text";
+import { Text } from "@/Components/Catalyst/text";
 import { Avatar } from "@/Components/Catalyst/avatar";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
@@ -23,8 +23,28 @@ import {
 	CheckCircleIcon,
 	XCircleIcon,
 	CalendarDateRangeIcon,
+	EnvelopeIcon,
+	PhoneIcon,
+	ShoppingCartIcon,
 } from "@heroicons/react/16/solid";
 import { PresentationChartLineIcon } from "@heroicons/react/24/outline";
+import { Link } from "@inertiajs/react";
+
+function getInitials(user) {
+	const name = user.name || "";
+	const last = user.paternal_lastname || "";
+	return (name.charAt(0) + last.charAt(0)).toUpperCase() || "?";
+}
+
+function formatDate(dateStr) {
+	if (!dateStr) return "—";
+	const d = new Date(dateStr);
+	if (isNaN(d.getTime())) return dateStr;
+	const dd = String(d.getDate()).padStart(2, "0");
+	const mm = String(d.getMonth() + 1).padStart(2, "0");
+	const yyyy = d.getFullYear();
+	return `${dd}-${mm}-${yyyy}`;
+}
 
 export default function Users({ users, filters, chart }) {
 	const view = filters.view || "list";
@@ -263,109 +283,97 @@ export default function Users({ users, filters, chart }) {
 
 				{view === "chart" && chart && <UsersChart chart={chart} />}
 
-				{view === "list" && (
-					<PaginatedTable paginatedData={users}>
-						<Table>
-							<TableHead>
-								<TableRow>
-									<TableHeader>Usuario</TableHeader>
-									<TableHeader>Correo</TableHeader>
-									<TableHeader>Verificación</TableHeader>
-									<TableHeader>Registrado</TableHeader>
-									<TableHeader>Referidos</TableHeader>
-									<TableHeader></TableHeader>
-								</TableRow>
-							</TableHead>
-							<TableBody>
-								{users.data.map((user) => (
-									<TableRow key={user.id}>
-										<TableCell>
-											<div className="flex items-center gap-3">
-												<Avatar
-													src={user.profile_photo_url}
-													alt={user.full_name || user.email}
+			{view === "list" && (
+				<PaginatedTable paginatedData={users}>
+					<Table>
+						<TableHead>
+							<TableRow>
+								<TableHeader>Usuario</TableHeader>
+								<TableHeader className="text-center">Verificación</TableHeader>
+								<TableHeader>Registrado</TableHeader>
+								<TableHeader className="text-center">Carrito</TableHeader>
+								<TableHeader className="text-right">Acciones</TableHeader>
+							</TableRow>
+						</TableHead>
+						<TableBody>
+							{users.data.map((user) => (
+								<TableRow key={user.id}>
+									<TableCell>
+										<div className="flex items-center gap-3">
+											<Avatar
+												initials={getInitials(user)}
+												src={user.profile_photo_url}
+												alt={user.full_name || user.email}
+												className="size-10"
+											/>
+											<div className="min-w-0">
+												<Link
+													href={route("admin.users.show", { user: user.id })}
+													className="text-sm font-semibold text-zinc-900 hover:text-famedic-dark dark:text-white dark:hover:text-famedic-light"
+												>
+													{user.full_name || "Sin nombre"}
+												</Link>
+												{user.phone && (
+													<p className="text-xs text-zinc-500 truncate">
+														{user.full_phone || user.phone}
+													</p>
+												)}
+												<p className="text-xs text-zinc-500 truncate">
+													{user.email}
+												</p>
+											</div>
+										</div>
+									</TableCell>
+									<TableCell>
+										<div className="flex items-center justify-center gap-2">
+											<span title={user.email_verified_at ? "Correo verificado" : "Correo no verificado"}>
+												<EnvelopeIcon
+													className={`size-5 ${user.email_verified_at ? "text-green-500" : "text-zinc-300 dark:text-zinc-600"}`}
 												/>
-												<div className="space-y-1">
-													<Text>
-														<Strong>
-															{user.full_name || "Sin nombre"}
-														</Strong>
-													</Text>
-													{user.phone && (
-														<Text className="text-xs text-zinc-500">
-															{user.full_phone || user.phone}
-														</Text>
-													)}
-												</div>
-											</div>
-										</TableCell>
-										<TableCell>
-											<Text>{user.email}</Text>
-										</TableCell>
-										<TableCell>
-											<div className="space-y-1">
-												<Badge
-													color={
-														user.email_verified_at
-															? "famedic-lime"
-															: "slate"
-													}
-												>
-													{user.email_verified_at ? (
-														<CheckCircleIcon className="size-4" />
-													) : (
-														<XCircleIcon className="size-4" />
-													)}
-													{user.email_verified_at
-														? "Correo verificado"
-														: "Correo no verificado"}
-												</Badge>
-												<Badge
-													color={
-														user.phone_verified_at
-															? "famedic-lime"
-															: "slate"
-													}
-												>
-													{user.phone_verified_at ? (
-														<CheckCircleIcon className="size-4" />
-													) : (
-														<XCircleIcon className="size-4" />
-													)}
-													{user.phone_verified_at
-														? "Teléfono verificado"
-														: "Teléfono no verificado"}
-												</Badge>
-											</div>
-										</TableCell>
-										<TableCell>
-											<div className="flex items-center gap-1 text-xs text-zinc-500">
-												<CalendarDateRangeIcon className="size-4" />
-												<span>{user.created_at}</span>
-											</div>
-										</TableCell>
-										<TableCell>
+											</span>
+											<span title={user.phone_verified_at ? "Teléfono verificado" : "Teléfono no verificado"}>
+												<PhoneIcon
+													className={`size-5 ${user.phone_verified_at ? "text-green-500" : "text-zinc-300 dark:text-zinc-600"}`}
+												/>
+											</span>
+										</div>
+									</TableCell>
+									<TableCell>
+										<Text className="text-sm text-zinc-500 whitespace-nowrap">
+											{formatDate(user.created_at)}
+										</Text>
+									</TableCell>
+									<TableCell>
+										<div className="flex items-center justify-center gap-1">
+											<ShoppingCartIcon className="size-4 text-zinc-400" />
 											<Text className="text-sm">
-												{user.referrals_count || 0}
+												{user.active_carts_count || 0}
 											</Text>
-										</TableCell>
-										<TableCell>
+										</div>
+									</TableCell>
+									<TableCell>
+										<div className="flex items-center justify-end gap-2">
 											<Button
-												href={route("admin.users.show", {
-													user: user.id,
-												})}
+												href={route("admin.users.show", { user: user.id })}
 												outline
 												size="sm"
 											>
 												Ver detalles
 											</Button>
-										</TableCell>
-									</TableRow>
-								))}
-							</TableBody>
-						</Table>
-					</PaginatedTable>
-				)}
+											<Button
+												href={route("admin.users.show", { user: user.id })}
+												size="sm"
+											>
+												Gestionar
+											</Button>
+										</div>
+									</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
+				</PaginatedTable>
+			)}
 			</div>
 		</AdminLayout>
 	);

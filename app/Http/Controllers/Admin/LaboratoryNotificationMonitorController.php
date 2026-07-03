@@ -108,7 +108,7 @@ class LaboratoryNotificationMonitorController extends Controller
 
         $orderKeys = collect($orders->items())->pluck('order_key')->all();
 
-        $ownersMap = LaboratoryNotification::query()
+        $notificationsGrouped = LaboratoryNotification::query()
             ->where(function (Builder $query) use ($orderKeys) {
                 $query->whereIn('gda_consecutivo', $orderKeys)
                     ->orWhereIn('gda_order_id', $orderKeys);
@@ -116,18 +116,38 @@ class LaboratoryNotificationMonitorController extends Controller
             ->with([
                 'user',
                 'laboratoryPurchase.customer.user',
+                'laboratoryPurchase.laboratoryPurchaseItems',
             ])
             ->get()
-            ->groupBy(fn (LaboratoryNotification $n) => (string) ($n->gda_consecutivo ?? $n->gda_order_id))
-            ->map(function ($group) {
-                $n = $group->first();
-                $user = $n->user ?: $n->laboratoryPurchase?->customer?->user;
+            ->groupBy(fn (LaboratoryNotification $n) => (string) ($n->gda_consecutivo ?? $n->gda_order_id));
 
-                return $user ? $this->formatOwner($user) : null;
-            });
+        $ownersMap = $notificationsGrouped->map(function ($group) {
+            $n = $group->first();
+            $user = $n->user ?: $n->laboratoryPurchase?->customer?->user;
 
-        $orders->getCollection()->transform(function ($row) use ($ownersMap) {
+            return $user ? $this->formatOwner($user) : null;
+        });
+
+        $purchaseInfoMap = $notificationsGrouped->map(function ($group) {
+            $purchase = $group->first(fn (LaboratoryNotification $n) => $n->laboratoryPurchase !== null)?->laboratoryPurchase;
+
+            if (! $purchase) {
+                return null;
+            }
+
+            return [
+                'brand' => $purchase->brand?->label(),
+                'patient_name' => trim(($purchase->name ?? '').' '.($purchase->paternal_lastname ?? '').' '.($purchase->maternal_lastname ?? '')),
+                'studies_count' => $purchase->laboratoryPurchaseItems->count(),
+            ];
+        });
+
+        $orders->getCollection()->transform(function ($row) use ($ownersMap, $purchaseInfoMap) {
             $row['owner'] = $ownersMap[$row['order_key']] ?? null;
+            $purchaseInfo = $purchaseInfoMap[$row['order_key']] ?? null;
+            $row['brand'] = $purchaseInfo['brand'] ?? null;
+            $row['patient_name'] = $purchaseInfo['patient_name'] ?? null;
+            $row['studies_count'] = $purchaseInfo['studies_count'] ?? null;
 
             return $row;
         });

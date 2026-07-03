@@ -61,7 +61,12 @@ class UserController extends Controller
             ->orderByDesc('created_at');
 
         $users = $query
-            ->withCount(['referrals'])
+            ->withCount([
+                'referrals',
+                'monitoringCarts as active_carts_count' => function ($q) {
+                    $q->where('status', '!=', MonitoringCartStatus::Completed);
+                },
+            ])
             ->paginate(25)
             ->withQueryString();
 

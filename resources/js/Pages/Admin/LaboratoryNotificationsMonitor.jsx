@@ -249,7 +249,11 @@ export default function LaboratoryNotificationsMonitor({
 						<Table>
 							<TableHead>
 								<TableRow>
-									<TableHeader>Orden</TableHeader>
+									<TableHeader>Consecutivo</TableHeader>
+									<TableHeader>gda_order_id</TableHeader>
+									<TableHeader>Brand</TableHeader>
+									<TableHeader>Paciente</TableHeader>
+									<TableHeader>Estudios</TableHeader>
 									<TableHeader>Propietario</TableHeader>
 									<TableHeader>Toma de muestra</TableHeader>
 									<TableHeader>Resultados</TableHeader>
@@ -270,13 +274,32 @@ export default function LaboratoryNotificationsMonitor({
 													{o.gda_consecutivo ?? o.gda_order_id}
 												</Strong>
 											</button>
-											{o.gda_order_id &&
-												String(o.gda_order_id) !==
-													String(o.gda_consecutivo ?? o.order_key) && (
-													<Text className="text-xs text-zinc-500">
-														gda_order_id: {o.gda_order_id}
-													</Text>
-												)}
+										</TableCell>
+										<TableCell>
+											<Text className="text-xs text-zinc-500">
+												{o.gda_order_id || "—"}
+											</Text>
+										</TableCell>
+										<TableCell>
+											{o.brand ? (
+												<Badge color="violet">{o.brand}</Badge>
+											) : (
+												<Text className="text-xs text-zinc-400">—</Text>
+											)}
+										</TableCell>
+										<TableCell>
+											{o.patient_name ? (
+												<Text className="text-sm">{o.patient_name}</Text>
+											) : (
+												<Text className="text-xs text-zinc-400">—</Text>
+											)}
+										</TableCell>
+										<TableCell>
+											{o.studies_count != null ? (
+												<Badge color="sky">{o.studies_count}</Badge>
+											) : (
+												<Text className="text-xs text-zinc-400">—</Text>
+											)}
 										</TableCell>
 										<TableCell>
 											{o.owner ? (
