@@ -353,7 +353,7 @@ class CartController extends Controller
         ];
 
         if ($compact) {
-            return collect($data)->only([
+            $result = collect($data)->only([
                 'request_saved_at',
                 'callback_availability_range',
                 'callback_comment_short',
@@ -361,6 +361,10 @@ class CartController extends Controller
                 'has_phone_call_intent',
                 'phone_call_intent_at_human',
             ])->filter(fn ($value) => $value !== null && $value !== false)->all();
+
+            $result['is_confirmed'] = $data['is_confirmed'];
+
+            return $result;
         }
 
         return $data;
