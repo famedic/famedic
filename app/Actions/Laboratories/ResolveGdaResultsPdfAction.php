@@ -2,6 +2,7 @@
 
 namespace App\Actions\Laboratories;
 
+use App\Exceptions\GdaResultsNotAvailableException;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use Illuminate\Support\Facades\Log;
@@ -228,7 +229,19 @@ class ResolveGdaResultsPdfAction
             throw new \RuntimeException('No se encontraron marca o convenio en el payload de la notificación.');
         }
 
-        $results = ($this->getGdaResultsAction)($orderId, $payload);
+        try {
+            $results = ($this->getGdaResultsAction)($orderId, $payload);
+        } catch (GdaResultsNotAvailableException $e) {
+            $notification->update([
+                'gda_message' => array_merge($notification->gda_message ?? [], [
+                    'last_gda_not_available_at' => now()->toISOString(),
+                    'last_gda_not_available_message' => $e->gdaMessage,
+                ]),
+            ]);
+
+            throw $e;
+        }
+
         $pdfBase64 = $results['infogda_resultado_b64'] ?? null;
 
         if (empty($pdfBase64)) {

@@ -3,6 +3,7 @@
 namespace App\Jobs\Laboratory;
 
 use App\Actions\Laboratories\SyncGdaResultPdfToStorageAction;
+use App\Exceptions\GdaResultsNotAvailableException;
 use DomainException;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -16,7 +17,7 @@ class SyncGdaResultPdfToStorageJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    public int $tries = 5;
 
     public int $uniqueFor = 3600;
 
@@ -34,7 +35,7 @@ class SyncGdaResultPdfToStorageJob implements ShouldQueue, ShouldBeUnique
 
     public function backoff(): array
     {
-        return [60, 300, 900];
+        return [60, 300, 900, 1800, 3600];
     }
 
     public function handle(SyncGdaResultPdfToStorageAction $syncGdaResultPdfToStorageAction): void
@@ -62,6 +63,17 @@ class SyncGdaResultPdfToStorageJob implements ShouldQueue, ShouldBeUnique
                 'notification_id' => $this->notificationId,
                 'path' => $path,
             ]);
+        } catch (GdaResultsNotAvailableException $e) {
+            Log::warning('GDA results not available yet, job will retry', [
+                'purchase_id' => $this->purchaseId,
+                'notification_id' => $this->notificationId,
+                'order_id' => $e->orderId,
+                'gda_message' => $e->gdaMessage,
+                'attempt' => $this->attempts(),
+                'max_tries' => $this->tries,
+            ]);
+
+            throw $e;
         } catch (DomainException $e) {
             Log::error('GDA results PDF sync job failed (non-retryable)', [
                 'purchase_id' => $this->purchaseId,

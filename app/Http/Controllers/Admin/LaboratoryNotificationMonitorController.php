@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
+use App\Exceptions\GdaResultsNotAvailableException;
 use App\Http\Controllers\Controller;
 use App\Models\LabOrderEventState;
 use App\Models\LaboratoryNotification;
@@ -198,6 +199,19 @@ class LaboratoryNotificationMonitorController extends Controller
 
         try {
             $result = app(ResolveGdaResultsPdfAction::class)($notification);
+        } catch (GdaResultsNotAvailableException $e) {
+            $resultsNotifications = $this->notificationsForOrder($orderKey)
+                ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                ->values();
+
+            return response()->json([
+                'success' => false,
+                'gda_not_available' => true,
+                'message' => 'GDA respondió: No contiene resultados todavía. El PDF aún no está disponible en la API de consulta.',
+                'last_attempt_at' => now()->toISOString(),
+                'gda_message' => $e->gdaMessage,
+                'results_pdf' => $this->buildResultsPdfSummary($resultsNotifications),
+            ], 422);
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
@@ -242,6 +256,19 @@ class LaboratoryNotificationMonitorController extends Controller
 
         try {
             $result = app(ResolveGdaResultsPdfAction::class)->forceRefresh($notification);
+        } catch (GdaResultsNotAvailableException $e) {
+            $resultsNotifications = $this->notificationsForOrder($orderKey)
+                ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                ->values();
+
+            return response()->json([
+                'success' => false,
+                'gda_not_available' => true,
+                'message' => 'GDA respondió: No contiene resultados todavía. El PDF aún no está disponible en la API de consulta.',
+                'last_attempt_at' => now()->toISOString(),
+                'gda_message' => $e->gdaMessage,
+                'results_pdf' => $this->buildResultsPdfSummary($resultsNotifications),
+            ], 422);
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
@@ -455,6 +482,8 @@ class LaboratoryNotificationMonitorController extends Controller
         $lastSyncAt = data_get($latest->gda_message, 'results_fetched_at');
         $lastSyncError = data_get($latest->gda_message, 'results_storage_error');
         $lastSyncErrorAt = data_get($latest->gda_message, 'results_storage_error_at');
+        $lastGdaNotAvailableAt = data_get($latest->gda_message, 'last_gda_not_available_at');
+        $lastGdaNotAvailableMessage = data_get($latest->gda_message, 'last_gda_not_available_message');
         $storagePath = $hasPdfInStorage ? $purchase->results : data_get($latest->gda_message, 'results_storage_path');
 
         if ($hasPdfInStorage) {
@@ -505,6 +534,8 @@ class LaboratoryNotificationMonitorController extends Controller
             'last_sync_at' => $lastSyncAt,
             'last_sync_error' => $lastSyncError,
             'last_sync_error_at' => $lastSyncErrorAt,
+            'last_gda_not_available_at' => $lastGdaNotAvailableAt,
+            'last_gda_not_available_message' => $lastGdaNotAvailableMessage,
             'results_notifications_count' => $resultsNotifications->count(),
             'can_fetch_from_gda' => $availableAtGda && ! $hasPdfInStorage && ! $hasPdfInDb,
             'can_force_refresh_from_gda' => $availableAtGda && ! $isManual,

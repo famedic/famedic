@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exceptions\GdaResultsNotAvailableException;
 use App\Http\Controllers\Controller;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryNotification;
@@ -49,6 +50,19 @@ class LaboratoryResultController extends Controller
 
         try {
             $result = app(ResolveGdaResultsPdfAction::class)($notification);
+        } catch (GdaResultsNotAvailableException $e) {
+            Log::warning('⏳ [CONTROLLER] GDA results not available yet', [
+                'purchase_id' => $laboratoryPurchase->id,
+                'order_id' => $e->orderId,
+                'gda_message' => $e->gdaMessage,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'gda_not_available' => true,
+                'message' => 'GDA respondió: No contiene resultados todavía. Intenta nuevamente más tarde.',
+                'last_attempt_at' => now()->toISOString(),
+            ], 422);
         } catch (\Throwable $e) {
             Log::error('🔥 [CONTROLLER] Error en ResolveGdaResultsPdfAction', [
                 'error_message' => $e->getMessage(),

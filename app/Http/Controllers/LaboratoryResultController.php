@@ -10,6 +10,7 @@ use App\Models\LaboratoryQuote;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryNotification;
 use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
+use App\Exceptions\GdaResultsNotAvailableException;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 
@@ -201,6 +202,15 @@ class LaboratoryResultController extends Controller
                 ->header('Content-Type', 'application/pdf')
                 ->header('Content-Disposition', 'inline; filename="resultados_' . $notification->gda_order_id . '.pdf"');
 
+        } catch (GdaResultsNotAvailableException $e) {
+            logger()->warning('⏳ PDF no disponible aún en GDA:', [
+                'notification_id' => $notification->id,
+                'order_id' => $e->orderId,
+                'gda_message' => $e->gdaMessage,
+            ]);
+
+            abort(404, 'Tus resultados están en proceso de publicación. Intenta nuevamente más tarde.');
+
         } catch (\Exception $e) {
             logger()->error('❌ Error en view PDF:', [
                 'notification_id' => $notification->id,
@@ -262,6 +272,15 @@ class LaboratoryResultController extends Controller
             return response($pdfContent)
                 ->header('Content-Type', 'application/pdf')
                 ->header('Content-Disposition', 'attachment; filename="resultados_' . $notification->gda_order_id . '.pdf"');
+
+        } catch (GdaResultsNotAvailableException $e) {
+            logger()->warning('⏳ PDF no disponible aún en GDA (download):', [
+                'notification_id' => $notification->id,
+                'order_id' => $e->orderId,
+                'gda_message' => $e->gdaMessage,
+            ]);
+
+            abort(404, 'Tus resultados están en proceso de publicación. Intenta nuevamente más tarde.');
 
         } catch (\Exception $e) {
             logger()->error('❌ Error en download PDF:', [
@@ -475,6 +494,13 @@ class LaboratoryResultController extends Controller
                 'success' => true,
                 'message' => 'Resultados actualizados correctamente'
             ]);
+
+        } catch (GdaResultsNotAvailableException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El resultado fue notificado por GDA, pero el PDF aún no está disponible en la API de consulta. Intenta nuevamente más tarde.',
+                'gda_not_available' => true,
+            ], 422);
 
         } catch (\Exception $e) {
             return response()->json([

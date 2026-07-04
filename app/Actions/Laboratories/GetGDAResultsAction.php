@@ -2,6 +2,7 @@
 
 namespace App\Actions\Laboratories;
 
+use App\Exceptions\GdaResultsNotAvailableException;
 use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -59,9 +60,24 @@ class GetGDAResultsAction
         ]);
 
         if ($response->failed()) {
-            throw new Exception(
-                'Error GDA: '.($responseData['GDA_menssage']['descripcion'] ?? $response->body())
-            );
+            $message = $responseData['GDA_menssage']['descripcion'] ?? $response->body();
+
+            if ($response->status() === 400 && $this->isResultsNotAvailableMessage($message)) {
+                Log::warning('GDA results not available yet', [
+                    'order_id' => $orderId,
+                    'payload_id' => data_get($payload, 'id'),
+                    'requisition_value' => data_get($payload, 'requisition.value'),
+                    'status' => $response->status(),
+                    'message' => $message,
+                ]);
+
+                throw new GdaResultsNotAvailableException(
+                    orderId: $orderId,
+                    gdaMessage: $message,
+                );
+            }
+
+            throw new Exception('Error GDA: '.$message);
         }
 
         if (empty($responseData['infogda_resultado_b64'])) {
@@ -92,6 +108,11 @@ class GetGDAResultsAction
             ?? data_get($notificationPayload, 'code.coding.0.infogda_muestras.0.infogda_etiqueta')
             ?? data_get($notificationPayload, 'requisition.value')
             ?? $orderId;
+    }
+
+    private function isResultsNotAvailableMessage(string $message): bool
+    {
+        return str_contains(mb_strtolower($message), 'no contiene resultados');
     }
 
     private function findBrandByMarcaAndConvenio(int $marca, int $convenio): ?array
