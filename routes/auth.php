@@ -37,7 +37,7 @@ Route::middleware('guest')->group(function () {
         ->name('register');
 
     Route::get('register/invitation/{user}', [RegisteredUserController::class, 'createFromInvitation'])
-        ->middleware('signed')
+        ->middleware('signed:fbclid,gclid,utm_source,utm_medium,utm_campaign,utm_term,utm_content')
         ->name('register.invitation');
 
     Route::post('register', [RegisteredUserController::class, 'store']);
