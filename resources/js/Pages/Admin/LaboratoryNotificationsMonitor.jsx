@@ -39,6 +39,11 @@ import LaboratoryNotificationResultsPdfActions, {
 	pdfLocationBadge,
 } from "@/Components/Admin/LaboratoryNotificationResultsPdfActions";
 
+function isGabineteOrder(gdaOrderId) {
+	if (!gdaOrderId) return false;
+	return /[a-zA-Z]/.test(String(gdaOrderId));
+}
+
 function formatDiff(minutes) {
 	if (minutes == null) return "—";
 	if (minutes < 60) return `${minutes} min`;
@@ -249,7 +254,12 @@ export default function LaboratoryNotificationsMonitor({
 						<Table>
 							<TableHead>
 								<TableRow>
-									<TableHeader>Orden</TableHeader>
+									<TableHeader>Tipo</TableHeader>
+									<TableHeader>Consecutivo GDA</TableHeader>
+									<TableHeader>Folio / etiqueta GDA</TableHeader>
+									<TableHeader>Brand</TableHeader>
+									<TableHeader>Paciente</TableHeader>
+									<TableHeader>Estudios</TableHeader>
 									<TableHeader>Propietario</TableHeader>
 									<TableHeader>Toma de muestra</TableHeader>
 									<TableHeader>Resultados</TableHeader>
@@ -258,67 +268,105 @@ export default function LaboratoryNotificationsMonitor({
 								</TableRow>
 							</TableHead>
 							<TableBody>
-								{orders.data.map((o) => (
-									<TableRow key={o.order_key}>
-										<TableCell>
-											<button
-												type="button"
-												onClick={() => openOrderDetail(o.order_key)}
-												className="text-left text-famedic-600 hover:underline dark:text-famedic-400"
-											>
-												<Strong>
-													{o.gda_consecutivo ?? o.gda_order_id}
-												</Strong>
-											</button>
-											{o.gda_order_id &&
-												String(o.gda_order_id) !==
-													String(o.gda_consecutivo ?? o.order_key) && (
-													<Text className="text-xs text-zinc-500">
-														gda_order_id: {o.gda_order_id}
+								{orders.data.map((o) => {
+									const isGabinete = isGabineteOrder(o.gda_order_id);
+
+									return (
+										<TableRow key={o.order_key}>
+											<TableCell>
+												<Badge color={isGabinete ? "amber" : "sky"}>
+													{isGabinete ? "Gabinete" : "Laboratorio"}
+												</Badge>
+											</TableCell>
+											<TableCell>
+												<button
+													type="button"
+													onClick={() => openOrderDetail(o.order_key)}
+													className="text-left text-famedic-600 hover:underline dark:text-famedic-400"
+												>
+													<Strong>
+														{o.gda_consecutivo ?? o.gda_order_id}
+													</Strong>
+												</button>
+												{isGabinete && (
+													<Text className="text-[10px] text-zinc-400">
+														infogda_orden (corto)
 													</Text>
 												)}
-										</TableCell>
-										<TableCell>
-											{o.owner ? (
-												<div className="space-y-1">
-													<Text className="text-sm">
-														<Strong>{o.owner.full_name}</Strong>
+											</TableCell>
+											<TableCell>
+												<Text className="text-xs font-mono text-zinc-600 dark:text-zinc-300">
+													{o.gda_order_id || "—"}
+												</Text>
+												{isGabinete && o.gda_order_id && (
+													<Text className="text-[10px] text-zinc-400">
+														Etiqueta alfanumérica
 													</Text>
-													<Text className="text-xs text-zinc-500">
-														{o.owner.email}
-													</Text>
+												)}
+											</TableCell>
+											<TableCell>
+												{o.brand ? (
+													<Badge color="violet">{o.brand}</Badge>
+												) : (
+													<Text className="text-xs text-zinc-400">—</Text>
+												)}
+											</TableCell>
+											<TableCell>
+												{o.patient_name ? (
+													<Text className="text-sm">{o.patient_name}</Text>
+												) : (
+													<Text className="text-xs text-zinc-400">—</Text>
+												)}
+											</TableCell>
+											<TableCell>
+												{o.studies_count != null ? (
+													<Badge color="sky">{o.studies_count}</Badge>
+												) : (
+													<Text className="text-xs text-zinc-400">—</Text>
+												)}
+											</TableCell>
+											<TableCell>
+												{o.owner ? (
+													<div className="space-y-1">
+														<Text className="text-sm">
+															<Strong>{o.owner.full_name}</Strong>
+														</Text>
+														<Text className="text-xs text-zinc-500">
+															{o.owner.email}
+														</Text>
+													</div>
+												) : (
+													<Text className="text-xs text-zinc-400">—</Text>
+												)}
+											</TableCell>
+											<TableCell>
+												<Text className="text-xs">
+													{formatDateTime(o.sample_at)}
+												</Text>
+											</TableCell>
+											<TableCell>
+												<Text className="text-xs">
+													{formatDateTime(o.results_at)}
+												</Text>
+											</TableCell>
+											<TableCell>
+												<Badge color="slate">
+													{formatDiff(o.diff_minutes)}
+												</Badge>
+											</TableCell>
+											<TableCell>
+												<div className="flex gap-2">
+													<Badge color="sky">
+														M: {o.sample_notifications}
+													</Badge>
+													<Badge color="emerald">
+														R: {o.results_notifications}
+													</Badge>
 												</div>
-											) : (
-												<Text className="text-xs text-zinc-400">—</Text>
-											)}
-										</TableCell>
-										<TableCell>
-											<Text className="text-xs">
-												{formatDateTime(o.sample_at)}
-											</Text>
-										</TableCell>
-										<TableCell>
-											<Text className="text-xs">
-												{formatDateTime(o.results_at)}
-											</Text>
-										</TableCell>
-										<TableCell>
-											<Badge color="slate">
-												{formatDiff(o.diff_minutes)}
-											</Badge>
-										</TableCell>
-										<TableCell>
-											<div className="flex gap-2">
-												<Badge color="sky">
-													M: {o.sample_notifications}
-												</Badge>
-												<Badge color="emerald">
-													R: {o.results_notifications}
-												</Badge>
-											</div>
-										</TableCell>
-									</TableRow>
-								))}
+											</TableCell>
+										</TableRow>
+									);
+								})}
 							</TableBody>
 						</Table>
 					</PaginatedTable>
@@ -437,15 +485,31 @@ function OrderTab({ label }) {
 
 function OrderSummaryTab({ detail, onResultsPdfUpdated }) {
 	const emails = detail.summary.emails;
+	const isGabinete = isGabineteOrder(detail.gdaOrderId);
 
 	return (
 		<div className="space-y-6">
 			<div className="flex flex-wrap gap-2 text-xs text-zinc-500">
+				<Badge color={isGabinete ? "amber" : "sky"}>
+					{isGabinete ? "Gabinete" : "Laboratorio"}
+				</Badge>
 				{detail.gdaConsecutivo && (
-					<span>Consecutivo: {detail.gdaConsecutivo}</span>
+					<span>Consecutivo GDA: {detail.gdaConsecutivo}</span>
 				)}
-				{detail.gdaOrderId && <span>gda_order_id: {detail.gdaOrderId}</span>}
+				{detail.gdaOrderId && <span>Folio / etiqueta GDA: {detail.gdaOrderId}</span>}
 			</div>
+
+			{isGabinete && (
+				<Text className="text-xs text-zinc-400">
+					El consecutivo corto proviene de infogda_orden; el folio completo es gda_order_id.
+				</Text>
+			)}
+
+			{!isGabinete && detail.gdaConsecutivo && (
+				<Text className="text-xs text-zinc-400">
+					El consecutivo corresponde a ServiceRequest.id.
+				</Text>
+			)}
 
 			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 				<SummaryCard
@@ -479,6 +543,13 @@ function OrderSummaryTab({ detail, onResultsPdfUpdated }) {
 					onResultsPdfUpdated={onResultsPdfUpdated}
 				/>
 			</div>
+
+			{detail.summary.sync_logs?.length > 0 && (
+				<div className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+					<Subheading>Logs de sincronización GDA</Subheading>
+					<SyncLogsTable logs={detail.summary.sync_logs} />
+				</div>
+			)}
 
 			<div className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
 				<Subheading>Emails al paciente</Subheading>
@@ -555,6 +626,92 @@ function OrderSummaryTab({ detail, onResultsPdfUpdated }) {
 					</Text>
 				)}
 			</div>
+		</div>
+	);
+}
+
+function SyncLogsTable({ logs }) {
+	if (!logs || logs.length === 0) {
+		return <Text className="text-sm text-zinc-500">Sin registros de sincronización.</Text>;
+	}
+
+	return (
+		<div className="overflow-x-auto">
+			<Table>
+				<TableHead>
+					<TableRow>
+						<TableHeader>Notificación</TableHeader>
+						<TableHeader>Recibida</TableHeader>
+						<TableHeader>Acuse</TableHeader>
+						<TableHeader>Fuente</TableHeader>
+						<TableHeader>Archivo storage</TableHeader>
+						<TableHeader>Estado</TableHeader>
+						<TableHeader>Email</TableHeader>
+					</TableRow>
+				</TableHead>
+				<TableBody>
+					{logs.map((log) => (
+						<TableRow key={log.notification_id}>
+							<TableCell>
+								<Text className="text-xs">#{log.notification_id}</Text>
+								{log.gda_order_id && (
+									<Text className="text-xs text-zinc-400">{log.gda_order_id}</Text>
+								)}
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs">{formatDateTime(log.results_received_at)}</Text>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs font-mono">{log.gda_acuse ? log.gda_acuse.substring(0, 8) + "…" : "—"}</Text>
+							</TableCell>
+							<TableCell>
+								<Badge color={log.results_source === "storage" ? "emerald" : log.results_source ? "sky" : "slate"}>
+									{log.results_source || "—"}
+								</Badge>
+							</TableCell>
+							<TableCell>
+								{log.stored_in_storage ? (
+									<Badge color="emerald">Sí</Badge>
+								) : log.results_storage_error ? (
+									<Badge color="red">Error</Badge>
+								) : (
+									<Badge color="slate">No</Badge>
+								)}
+								{log.purchase_results_path && (
+									<Text className="text-xs text-zinc-400 mt-0.5 break-all">{log.purchase_results_path}</Text>
+								)}
+							</TableCell>
+							<TableCell>
+								<div className="space-y-0.5">
+									{log.skipped_manual_result && <Badge color="violet">Manual existente</Badge>}
+									{log.skipped_existing_result && <Badge color="zinc">Ya existía</Badge>}
+									{log.admin_forced_refresh_at && (
+										<Badge color="amber">Forzado</Badge>
+									)}
+									{log.results_storage_error && (
+										<Text className="text-xs text-red-500">{log.results_storage_error}</Text>
+									)}
+								</div>
+							</TableCell>
+							<TableCell>
+								{log.email_sent_at ? (
+									<div>
+										<Badge color="emerald">Enviado</Badge>
+										<Text className="text-xs text-zinc-400">{log.email_recipient}</Text>
+									</div>
+								) : log.email_error ? (
+									<div>
+										<Badge color="red">Error</Badge>
+										<Text className="text-xs text-red-400">{log.email_error}</Text>
+									</div>
+								) : (
+									<Text className="text-xs text-zinc-400">—</Text>
+								)}
+							</TableCell>
+						</TableRow>
+					))}
+				</TableBody>
+			</Table>
 		</div>
 	);
 }

@@ -65,6 +65,17 @@ function statusBadge(displayStatus) {
 	return { color: "green", label: "Activo" };
 }
 
+function CheckoutTag({ active, label, color }) {
+	return (
+		<Badge color={active ? color || "green" : "zinc"}>
+			<CheckCircleIcon
+				className={clsx("size-3.5", !active && "opacity-40")}
+			/>
+			{label}
+		</Badge>
+	);
+}
+
 function CheckoutSummaryCell({ cart }) {
 	if (cart.type !== "lab") {
 		return (
@@ -86,64 +97,63 @@ function CheckoutSummaryCell({ cart }) {
 
 	return (
 		<div className="space-y-2">
-			{entries.map((entry) => (
-				<div key={entry.id} className="space-y-1">
-					<div className="flex flex-wrap items-center gap-1">
+			{entries.map((entry) => {
+				const hasAppointment = !!entry.appointment;
+				const isConfirmed =
+					hasAppointment && entry.appointment.is_confirmed;
+				const hasContactInfo =
+					!!entry.appointment?.has_phone_call_intent ||
+					!!entry.appointment?.has_callback_info;
+
+				let appointmentLabel = "Cita";
+				let appointmentColor = "zinc";
+				let appointmentActive = false;
+
+				if (hasAppointment) {
+					appointmentActive = true;
+					if (isConfirmed) {
+						appointmentLabel = "Cita confirmada";
+						appointmentColor = "green";
+					} else {
+						appointmentLabel = "Cita pendiente";
+						appointmentColor = "amber";
+					}
+				}
+
+				return (
+					<div
+						key={entry.id}
+						className="flex flex-wrap items-center gap-1"
+					>
 						{entries.length > 1 && (
-							<Badge color="zinc">{entry.brand_label}</Badge>
+							<Badge color="slate">
+								{entry.brand_label}
+							</Badge>
 						)}
-						<Badge color="sky">{entry.checkout_step_label}</Badge>
+						<CheckoutTag
+							active={!!entry.patient_name}
+							label="Paciente"
+						/>
+						<CheckoutTag
+							active={!!entry.address_short}
+							label="Dirección"
+						/>
+						<CheckoutTag
+							active={!!entry.payment_method_label}
+							label="Pago"
+						/>
+						<CheckoutTag
+							active={appointmentActive}
+							label={appointmentLabel}
+							color={appointmentColor}
+						/>
+						<CheckoutTag
+							active={hasContactInfo}
+							label="Contacto"
+						/>
 					</div>
-					{entry.patient_name && (
-						<Text className="text-xs text-zinc-700 dark:text-zinc-200">
-							{entry.patient_name}
-						</Text>
-					)}
-					{entry.address_short && (
-						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-							{entry.address_short}
-						</Text>
-					)}
-					{entry.payment_method_label && (
-						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-							{entry.payment_method_label}
-						</Text>
-					)}
-					{entry.appointment?.request_saved_at && (
-						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-							Solicitud: {entry.appointment.request_saved_at}
-						</Text>
-					)}
-					{entry.appointment?.has_phone_call_intent && (
-						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-							Intentó llamar
-							{entry.appointment.phone_call_intent_at_human
-								? ` · ${entry.appointment.phone_call_intent_at_human}`
-								: ""}
-						</Text>
-					)}
-					{entry.appointment?.callback_availability_range && (
-						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-							{entry.appointment.callback_availability_range}
-						</Text>
-					)}
-					{entry.appointment?.callback_comment_short && (
-						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-							{entry.appointment.callback_comment_short}
-						</Text>
-					)}
-					{!entry.patient_name &&
-						!entry.address_short &&
-						!entry.payment_method_label &&
-						!entry.appointment?.request_saved_at &&
-						!entry.appointment?.has_callback_info &&
-						!entry.appointment?.has_phone_call_intent && (
-							<Text className="text-xs text-zinc-500 dark:text-zinc-400">
-								Sin datos aún
-							</Text>
-						)}
-				</div>
-			))}
+				);
+			})}
 		</div>
 	);
 }
@@ -379,8 +389,6 @@ export default function Carts({
 							<TableRow>
 								<TableHeader>Usuario</TableHeader>
 								<TableHeader>Tipo</TableHeader>
-								<TableHeader>Ítems</TableHeader>
-								<TableHeader>Total</TableHeader>
 								<TableHeader>Checkout</TableHeader>
 								<TableHeader>Estatus</TableHeader>
 								<TableHeader>Última actividad</TableHeader>
@@ -411,31 +419,34 @@ export default function Carts({
 												<Text className="text-sm">—</Text>
 											)}
 										</TableCell>
-										<TableCell>
-											<div className="flex flex-col gap-1">
-												<div className="flex items-center gap-1 text-sm text-zinc-950 dark:text-zinc-100">
-													<ShoppingCartIcon className="size-4 text-zinc-400 dark:text-zinc-500" />
-													{cart.type_label}
-												</div>
-												{cart.type === "lab" &&
-													cart.lab_brands?.length > 0 && (
-														<div className="flex flex-wrap gap-1">
-															{cart.lab_brands.map((brand) => (
-																<Badge
-																	key={brand.value}
-																	color="slate"
-																>
-																	{brand.label}
-																</Badge>
-															))}
-														</div>
-													)}
+									<TableCell>
+										<div className="flex flex-col gap-1">
+											<div className="flex items-center gap-1 text-sm text-zinc-950 dark:text-zinc-100">
+												<ShoppingCartIcon className="size-4 text-zinc-400 dark:text-zinc-500" />
+												{cart.type_label}
 											</div>
-										</TableCell>
-										<TableCell>
-											<Strong>{cart.items_count}</Strong>
-										</TableCell>
-										<TableCell>{cart.total_formatted}</TableCell>
+											<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+												{cart.items_count}{" "}
+												{cart.items_count === 1
+													? "ítem"
+													: "ítems"}{" "}
+												· {cart.total_formatted}
+											</Text>
+											{cart.type === "lab" &&
+												cart.lab_brands?.length > 0 && (
+													<div className="flex flex-wrap gap-1">
+														{cart.lab_brands.map((brand) => (
+															<Badge
+																key={brand.value}
+																color="slate"
+															>
+																{brand.label}
+															</Badge>
+														))}
+													</div>
+												)}
+										</div>
+									</TableCell>
 										<TableCell>
 											<CheckoutSummaryCell cart={cart} />
 										</TableCell>

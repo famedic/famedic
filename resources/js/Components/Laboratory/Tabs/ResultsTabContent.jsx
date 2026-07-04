@@ -43,7 +43,9 @@ export default function ResultsTabContent({
                 }
             });
 
-            if (response.data.success && response.data.pdf_base64) {
+            if (response.data.success && response.data.results_url) {
+                window.open(response.data.results_url, "_blank");
+            } else if (response.data.success && response.data.pdf_base64) {
                 const byteCharacters = atob(response.data.pdf_base64);
                 const byteNumbers = new Array(byteCharacters.length);
                 for (let i = 0; i < byteCharacters.length; i++) {

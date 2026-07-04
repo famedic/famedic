@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class LaboratoryNotification extends Model
 {
@@ -454,6 +455,22 @@ class LaboratoryNotification extends Model
         });
     }
 
+    /**
+     * Relaciona notificaciones con una fila de laboratory_purchases (subconsultas / joins).
+     */
+    public function scopeForPurchaseMatch(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->whereColumn('laboratory_notifications.laboratory_purchase_id', 'laboratory_purchases.id')
+                ->orWhereColumn('laboratory_notifications.gda_order_id', 'laboratory_purchases.gda_order_id')
+                ->orWhere(function (Builder $inner) {
+                    $inner->whereColumn('laboratory_notifications.gda_consecutivo', 'laboratory_purchases.gda_consecutivo')
+                        ->whereNotNull('laboratory_purchases.gda_consecutivo')
+                        ->whereNotNull('laboratory_notifications.gda_consecutivo');
+                });
+        });
+    }
+
     public function scopeForSameOrderAs(Builder $query, self $notification): Builder
     {
         return $query->where(function (Builder $q) use ($notification) {
@@ -621,6 +638,16 @@ class LaboratoryNotification extends Model
             return false;
         }
 
+        if ($this->laboratory_purchase_id) {
+            $purchase = $this->relationLoaded('laboratoryPurchase')
+                ? $this->laboratoryPurchase
+                : $this->laboratoryPurchase()->first();
+
+            if ($purchase && ! empty($purchase->results) && Storage::exists($purchase->results)) {
+                return false;
+            }
+        }
+
         $latestResultsAt = static::latestResultsReceivedAtForOrder(
             $this->laboratory_purchase_id,
             $this->gda_order_id,
@@ -629,6 +656,10 @@ class LaboratoryNotification extends Model
 
         if (empty($this->results_pdf_base64)) {
             return true;
+        }
+
+        if (data_get($this->gda_message, 'results_source') === 'storage') {
+            return false;
         }
 
         if (data_get($this->gda_message, 'results_source') !== 'gda_api') {

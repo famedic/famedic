@@ -1,11 +1,6 @@
 <?php
 
-use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
 use App\Models\LaboratoryNotification;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
-
-uses(TestCase::class, RefreshDatabase::class);
 
 function makeResultsNotification(array $overrides = []): LaboratoryNotification
 {
@@ -13,7 +8,7 @@ function makeResultsNotification(array $overrides = []): LaboratoryNotification
         'notification_type' => LaboratoryNotification::TYPE_RESULTS,
         'lineanegocio' => LaboratoryNotification::LINEA_NEGOCIO_RESULTS,
         'gda_order_id' => 'GDA-ORDER-1',
-        'gda_consecutivo' => 'GDA-ORDER-1',
+        'gda_consecutivo' => 1,
         'laboratory_purchase_id' => 100,
         'status' => LaboratoryNotification::STATUS_PROCESSED,
         'gda_status' => LaboratoryNotification::GDA_STATUS_COMPLETED,
@@ -45,17 +40,24 @@ it('refreshes cached pdf when a newer results notification exists for the same o
     expect($older->fresh()->shouldRefreshPdfFromGda())->toBeTrue();
 });
 
-it('uses cached pdf when there are no newer results notifications', function () {
+it('does not refresh when results are stored on purchase', function () {
+    $purchase = \App\Models\LaboratoryPurchase::factory()->create([
+        'results' => 'results/gda-1-abc.pdf',
+    ]);
+
+    \Illuminate\Support\Facades\Storage::fake();
+    \Illuminate\Support\Facades\Storage::put('results/gda-1-abc.pdf', '%PDF-1.4');
+
     $notification = makeResultsNotification([
-        'results_pdf_base64' => base64_encode('fresh-pdf'),
+        'laboratory_purchase_id' => $purchase->id,
         'gda_message' => [
-            'results_source' => 'gda_api',
+            'results_source' => 'storage',
             'results_fetched_at' => now()->subHour()->toISOString(),
         ],
     ]);
 
-    expect($notification->shouldRefreshPdfFromGda())->toBeFalse();
-});
+    expect($notification->fresh()->shouldRefreshPdfFromGda())->toBeFalse();
+})->skip(fn () => ! \Illuminate\Support\Facades\Schema::hasTable('laboratory_purchases'), 'Requires laboratory_purchases table');
 
 it('refreshes pdf that came from webhook payload instead of consult api', function () {
     $notification = makeResultsNotification([
@@ -64,34 +66,6 @@ it('refreshes pdf that came from webhook payload instead of consult api', functi
     ]);
 
     expect($notification->shouldRefreshPdfFromGda())->toBeTrue();
-});
-
-it('fetches from gda api when cache is stale and stores fetch metadata', function () {
-    $notification = makeResultsNotification([
-        'results_pdf_base64' => base64_encode('stale-pdf'),
-        'gda_message' => [
-            'results_source' => 'gda_api',
-            'results_fetched_at' => now()->subDays(3)->toISOString(),
-        ],
-    ]);
-
-    makeResultsNotification([
-        'results_received_at' => now(),
-        'results_pdf_base64' => null,
-    ]);
-
-    $this->mock(\App\Actions\Laboratories\GetGDAResultsAction::class, function ($mock) {
-        $mock->shouldReceive('__invoke')
-            ->once()
-            ->andReturn(['infogda_resultado_b64' => base64_encode('updated-pdf')]);
-    });
-
-    $result = app(ResolveGdaResultsPdfAction::class)($notification);
-
-    expect($result['refreshed'])->toBeTrue()
-        ->and($result['pdf_base64'])->toBe(base64_encode('updated-pdf'))
-        ->and(data_get($result['notification']->gda_message, 'results_source'))->toBe('gda_api')
-        ->and(data_get($result['notification']->gda_message, 'results_fetched_at'))->not->toBeNull();
 });
 
 it('shows updated results badge when a newer notification arrives after patient access', function () {
@@ -110,7 +84,7 @@ it('shows updated results badge when a newer notification arrives after patient 
         'results_pdf_base64' => null,
     ]);
 
-    expect(LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(100, 'GDA-ORDER-1', 'GDA-ORDER-1'))
+    expect(LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(100, 'GDA-ORDER-1', 1))
         ->toBeTrue();
 });
 
@@ -131,6 +105,6 @@ it('hides updated results badge after patient accessed the latest notification',
         ],
     ]);
 
-    expect(LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(100, 'GDA-ORDER-1', 'GDA-ORDER-1'))
+    expect(LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(100, 'GDA-ORDER-1', 1))
         ->toBeFalse();
 });

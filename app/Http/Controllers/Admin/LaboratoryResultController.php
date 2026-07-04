@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exceptions\GdaResultsNotAvailableException;
 use App\Http\Controllers\Controller;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryNotification;
 use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class LaboratoryResultController extends Controller
 {
@@ -36,8 +38,31 @@ class LaboratoryResultController extends Controller
             ], 404);
         }
 
+        if (! empty($laboratoryPurchase->results) && Storage::exists($laboratoryPurchase->results)) {
+            return response()->json([
+                'success' => true,
+                'cached' => true,
+                'refreshed' => false,
+                'results_url' => route('laboratory-purchases.results', ['laboratory_purchase' => $laboratoryPurchase->id]),
+                'storage_path' => $laboratoryPurchase->results,
+            ]);
+        }
+
         try {
             $result = app(ResolveGdaResultsPdfAction::class)($notification);
+        } catch (GdaResultsNotAvailableException $e) {
+            Log::warning('⏳ [CONTROLLER] GDA results not available yet', [
+                'purchase_id' => $laboratoryPurchase->id,
+                'order_id' => $e->orderId,
+                'gda_message' => $e->gdaMessage,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'gda_not_available' => true,
+                'message' => 'GDA respondió: No contiene resultados todavía. Intenta nuevamente más tarde.',
+                'last_attempt_at' => now()->toISOString(),
+            ], 422);
         } catch (\Throwable $e) {
             Log::error('🔥 [CONTROLLER] Error en ResolveGdaResultsPdfAction', [
                 'error_message' => $e->getMessage(),
@@ -56,6 +81,10 @@ class LaboratoryResultController extends Controller
             'cached' => $result['cached'],
             'refreshed' => $result['refreshed'],
             'pdf_base64' => $result['pdf_base64'],
+            'results_url' => ! empty($result['storage_path'])
+                ? route('laboratory-purchases.results', ['laboratory_purchase' => $laboratoryPurchase->id])
+                : null,
+            'storage_path' => $result['storage_path'] ?? null,
         ]);
     }
 }

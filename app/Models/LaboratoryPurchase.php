@@ -457,11 +457,7 @@ class LaboratoryPurchase extends Model
     // Relacion para obtener notificaciones de laboratorio asociadas a esta compra
     public function laboratoryNotifications()
     {
-        return $this->hasMany(
-            LaboratoryNotification::class,
-            'gda_consecutivo',
-            'gda_consecutivo'
-        );
+        return $this->hasMany(LaboratoryNotification::class, 'laboratory_purchase_id');
     }
 
     // Método para obtener notificaciones de resultados
@@ -620,9 +616,11 @@ class LaboratoryPurchase extends Model
 
     public function scopeWithNotificationStatus($query)
     {
+        $notificationMatch = fn ($notificationQuery) => $notificationQuery->forPurchaseMatch();
+
         return $query->addSelect([
             'has_sample_collected' => LaboratoryNotification::selectRaw('COUNT(*) > 0')
-                ->whereColumn('gda_consecutivo', 'laboratory_purchases.gda_consecutivo')
+                ->tap($notificationMatch)
                 ->where(function ($q) {
                     $q->where('notification_type', LaboratoryNotification::TYPE_SAMPLE_COLLECTION)
                         ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_SAMPLE);
@@ -630,7 +628,7 @@ class LaboratoryPurchase extends Model
                 ->limit(1),
 
             'has_results_available' => LaboratoryNotification::selectRaw('COUNT(*) > 0')
-                ->whereColumn('gda_consecutivo', 'laboratory_purchases.gda_consecutivo')
+                ->tap($notificationMatch)
                 ->where(function ($q) {
                     $q->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
                         ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
@@ -638,7 +636,7 @@ class LaboratoryPurchase extends Model
                 ->limit(1),
 
             'latest_sample_collection_at' => LaboratoryNotification::select('created_at')
-                ->whereColumn('gda_consecutivo', 'laboratory_purchases.gda_consecutivo')
+                ->tap($notificationMatch)
                 ->where(function ($q) {
                     $q->where('notification_type', LaboratoryNotification::TYPE_SAMPLE_COLLECTION)
                         ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_SAMPLE);
@@ -647,7 +645,7 @@ class LaboratoryPurchase extends Model
                 ->limit(1),
 
             'latest_results_at' => LaboratoryNotification::select('created_at')
-                ->whereColumn('gda_consecutivo', 'laboratory_purchases.gda_consecutivo')
+                ->tap($notificationMatch)
                 ->where(function ($q) {
                     $q->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
                         ->orWhere('lineanegocio', LaboratoryNotification::LINEA_NEGOCIO_RESULTS);
