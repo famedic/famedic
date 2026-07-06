@@ -5,6 +5,8 @@ import { Button } from "@/Components/Catalyst/button";
 import { Avatar } from "@/Components/Catalyst/avatar";
 import Card from "@/Components/Card";
 import MedicalAttentionSubscriptionTableRow from "@/Components/MedicalAttentionSubscriptionTableRow";
+import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
+import { useForm } from "@inertiajs/react";
 import {
 	Table,
 	TableBody,
@@ -17,6 +19,7 @@ import {
 	CalendarIcon,
 	EnvelopeIcon,
 	UserIcon,
+	TrashIcon,
 } from "@heroicons/react/16/solid";
 import PhoneButton from "@/Components/PhoneButton";
 import EmptyListCard from "@/Components/EmptyListCard";
@@ -52,6 +55,7 @@ export default function Customer({
 	odessaSyncPreview,
 	successMessage,
 	errorMessage,
+	canDeleteTestUser,
 }) {
 	const [activeTab, setActiveTab] = useState("laboratory");
 	return (
@@ -76,6 +80,10 @@ export default function Customer({
 				onlinePharmacyPurchases={onlinePharmacyPurchases}
 				medicalAttentionSubscriptions={medicalAttentionSubscriptions}
 			/>
+
+			{canDeleteTestUser && (
+				<DeleteTestUserSection customer={customer} />
+			)}
 		</AdminLayout>
 	);
 }
@@ -423,6 +431,47 @@ function CustomerAccountTypeBadges({ customer }) {
 					<OdessaPartnerBadge customer={customer} />
 				</>
 			)}
+		</div>
+	);
+}
+
+function DeleteTestUserSection({ customer }) {
+	const [isOpen, setIsOpen] = useState(false);
+	const { delete: destroy, processing } = useForm({});
+
+	const handleDelete = () => {
+		if (!processing) {
+			destroy(
+				route("admin.customers.delete-test-user", {
+					customer: customer.id,
+				}),
+			);
+		}
+	};
+
+	return (
+		<div className="mt-10 space-y-3 rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-900/50 dark:bg-red-950/30">
+			<Subheading className="text-red-700 dark:text-red-400">
+				Zona de peligro
+			</Subheading>
+			<Text className="text-red-800 dark:text-red-300">
+				Elimina por completo este usuario de prueba y toda su
+				información asociada. Solo disponible fuera de production.
+			</Text>
+			<Button color="red" onClick={() => setIsOpen(true)} outline>
+				<TrashIcon />
+				Eliminar usuario de prueba
+			</Button>
+
+			<DeleteConfirmationModal
+				isOpen={isOpen}
+				close={() => setIsOpen(false)}
+				title="Eliminar usuario de prueba"
+				description="Esta acción eliminará al usuario, cliente, contacto, relaciones con Odessa e información relacionada. Esta acción no se puede deshacer. ¿Deseas continuar?"
+				processing={processing}
+				destroy={handleDelete}
+				confirmLabel="Eliminar usuario de prueba"
+			/>
 		</div>
 	);
 }

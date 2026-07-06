@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\ConfigMonitorController;
 use App\Http\Controllers\Admin\ConfigMonitorMetadataController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\CustomerReferralController;
+use App\Http\Controllers\Admin\CustomerTestDeletionController;
 use App\Http\Controllers\Admin\OdessaCustomerSyncController;
 use App\Http\Controllers\Admin\DocumentationController;
 use App\Http\Controllers\Admin\EfevooTokenController;
@@ -73,6 +74,8 @@ Route::prefix('admin')->middleware([
         Route::resource('administrators', AdministratorController::class)->except(['show']);
         Route::post('administrators/export', ExportAdministratorsController::class)->name('administrators.export');
         Route::get('customers/referrals', [CustomerReferralController::class, 'index'])->name('customers.referrals');
+        Route::delete('customers/{customer}/delete-test-user', [CustomerTestDeletionController::class, 'destroy'])
+            ->name('customers.delete-test-user');
         Route::resource('customers', CustomerController::class)->only(['index', 'show', 'destroy']);
         Route::post('customers/{customer}/odessa-sync-preview', [OdessaCustomerSyncController::class, 'preview'])
             ->name('customers.odessa-sync-preview');

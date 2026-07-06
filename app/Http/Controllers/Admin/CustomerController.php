@@ -72,6 +72,7 @@ class CustomerController extends Controller
             'chart' => $customersDailyChart,
             'filters' => $filters,
             'canExport' => $request->user()->administrator->hasPermissionTo('customers.manage.export'),
+            'successMessage' => $request->session()->pull('success'),
         ]);
     }
 
@@ -110,6 +111,7 @@ class CustomerController extends Controller
             'odessaSyncPreview' => OdessaCustomerSyncController::previewForCustomer($request, $customer),
             'successMessage' => $request->session()->pull('success'),
             'errorMessage' => $request->session()->pull('error'),
+            'canDeleteTestUser' => $request->user()->can('deleteTestUser', $customer),
         ]);
     }
 }

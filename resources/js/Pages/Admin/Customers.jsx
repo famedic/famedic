@@ -46,7 +46,7 @@ import CustomerInfo from "@/Components/CustomerInfo";
 import ReferralBadge from "@/Components/ReferralBadge";
 import MedicalAttentionBadge from "@/Components/MedicalAttentionBadge";
 
-export default function Customers({ customers, chart, filters, canExport }) {
+export default function Customers({ customers, chart, filters, canExport, successMessage }) {
 	const { data, setData, get, errors, processing } = useForm({
 		search: filters.search || "",
 		type: filters.type || "",
@@ -176,6 +176,12 @@ export default function Customers({ customers, chart, filters, canExport }) {
 	return (
 		<AdminLayout title="Clientes">
 			<Heading>Clientes</Heading>
+
+			{successMessage && (
+				<div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800 dark:border-green-900/50 dark:bg-green-950/30 dark:text-green-300">
+					{successMessage}
+				</div>
+			)}
 
 			<form className="space-y-8" onSubmit={updateResults}>
 				<div className="flex flex-col justify-between gap-8 md:flex-row md:items-center">

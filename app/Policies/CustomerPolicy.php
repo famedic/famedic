@@ -16,4 +16,13 @@ class CustomerPolicy
     {
         return $user->administrator?->hasPermissionTo('customers.manage');
     }
+
+    public function deleteTestUser(User $user, Customer $customer): bool
+    {
+        if (app()->isProduction()) {
+            return false;
+        }
+
+        return $user->administrator?->hasPermissionTo('customers.manage') ?? false;
+    }
 }
