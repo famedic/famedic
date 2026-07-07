@@ -138,10 +138,12 @@
             vgo('process');
         </script>
 
-        <!-- ActiveCampaign WhatsApp Widget -->
-        <script src="https://diffuser-cdn.app-us1.com/whatsapp/widget.cjs.production.min.js" data-widget-id="06a47e35-87c0-72a7-8000-831831976ef4" data-account-id="69689492"></script>
         @endenv
 
+        @env('staging', 'testing')
+            <!-- ActiveCampaign WhatsApp Widget -->
+            <script src="https://diffuser-cdn.app-us1.com/whatsapp/widget.cjs.production.min.js" data-widget-id="06a47e35-87c0-72a7-8000-831831976ef4" data-account-id="69689492"></script>
+        @endenv
     @unless(app()->environment('production'))
         <script>window.__FAMEDIC_ZOHO_SALESIQ__ = { enabled: true };</script>
     @endunless
