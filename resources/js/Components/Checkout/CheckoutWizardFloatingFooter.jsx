@@ -8,7 +8,7 @@ export default function CheckoutWizardFloatingFooter({ children, className }) {
     return (
         <div
             className={clsx(
-                "pointer-events-none fixed inset-x-0 bottom-0 z-30",
+                "pointer-events-none fixed inset-x-0 bottom-0 z-40",
                 className,
             )}
         >

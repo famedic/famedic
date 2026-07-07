@@ -63,7 +63,7 @@ function WhatsAppIcon({ className }) {
     );
 }
 
-export default function CheckoutWhatsAppHelp() {
+export default function CheckoutWhatsAppHelp({ reserveFooterSpace = false }) {
     const [open, setOpen] = useState(false);
     const rootRef = useRef(null);
 
@@ -88,7 +88,12 @@ export default function CheckoutWhatsAppHelp() {
     return (
         <div
             ref={rootRef}
-            className="pointer-events-none fixed bottom-4 right-4 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6"
+            className={clsx(
+                "pointer-events-none fixed right-4 z-50 flex flex-col items-end gap-3 sm:right-6",
+                reserveFooterSpace
+                    ? "bottom-[5.75rem] sm:bottom-6"
+                    : "bottom-4 sm:bottom-6",
+            )}
             aria-live="polite"
         >
             {open && (

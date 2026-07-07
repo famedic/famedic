@@ -229,7 +229,7 @@ export default function CheckoutLayout({
       </form>
 
       <Footer />
-      <CheckoutWhatsAppHelp />
+      <CheckoutWhatsAppHelp reserveFooterSpace={floatingWizardFooter} />
     </FocusedLayout>
   );
 }
