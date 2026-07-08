@@ -234,4 +234,14 @@ return [
         'timeout' => (int) env('OPENAI_TIMEOUT', 60),
         'max_context_chars' => (int) env('OPENAI_MAX_CONTEXT_CHARS', 12000),
     ],
+
+    'zoho' => [
+        'salesiq' => [
+            'enabled' => filter_var(env('ZOHO_SALESIQ_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+            'widget_code' => env('ZOHO_SALESIQ_WIDGET_CODE'),
+            'widget_url' => env('ZOHO_SALESIQ_WIDGET_URL'),
+            'env' => env('ZOHO_SALESIQ_ENV'),
+            'webhook_secret' => env('ZOHO_SALESIQ_WEBHOOK_SECRET'),
+        ],
+    ],
 ];

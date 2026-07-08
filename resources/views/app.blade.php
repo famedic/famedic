@@ -150,9 +150,10 @@
                 <script src="https://diffuser-cdn.app-us1.com/whatsapp/widget.cjs.production.min.js" data-widget-id="06a47e35-87c0-72a7-8000-831831976ef4" data-account-id="69689492"></script>
             @endunless
         @endenv
-    @unless(app()->environment('production'))
-        <script>window.__FAMEDIC_ZOHO_SALESIQ__ = { enabled: true };</script>
-    @endunless
+    @php($zohoSalesIqConfig = \App\Support\ZohoSalesIq::frontendConfig())
+    <script>
+        window.__FAMEDIC_ZOHO_SALESIQ__ = @json($zohoSalesIqConfig);
+    </script>
 
 </body>
 

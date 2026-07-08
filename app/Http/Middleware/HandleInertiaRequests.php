@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Enums\LaboratoryBrand;
 use App\Support\AppEnvironmentLabel;
 use App\Support\MockEfevooPaymentSupport;
+use App\Support\ZohoSalesIq;
 use App\Services\NotificationService;
 use App\Services\Tracking\Tracking;
 use Illuminate\Http\Request;
@@ -118,10 +119,19 @@ class HandleInertiaRequests extends Middleware
 
                 return [];
             },
-            ...($request->user() ? ['laboratoryCarts' => $this->getLaboratoryCarts()] : []),
+            ...($request->user() ? ['laboratoryCarts' => fn () => $this->getLaboratoryCarts($request)] : []),
             'laboratoryBrands' => LaboratoryBrand::brandsData(),
             ...($request->user() ? ['onlinePharmacyCart' => $this->getOnlinePharmacyCart()] : []),
             'inAppNotificationFeed' => fn () => $this->getInAppNotificationFeed($request),
+            'zohoSalesIq' => function () use ($request) {
+                if (! ZohoSalesIq::isEnabled()) {
+                    return null;
+                }
+
+                $laboratoryCarts = $request->user() ? $this->getLaboratoryCarts($request) : null;
+
+                return ZohoSalesIq::visitorContext($request, $laboratoryCarts);
+            },
         ];
     }
 
@@ -225,12 +235,26 @@ class HandleInertiaRequests extends Middleware
         return $userNavigation;
     }
 
-    protected function getLaboratoryCarts()
+    protected function getLaboratoryCarts(?Request $request = null): array
     {
-        return array_combine(
+        if ($request !== null) {
+            $cached = $request->attributes->get('famedic.laboratory_carts');
+
+            if (is_array($cached)) {
+                return $cached;
+            }
+        }
+
+        $carts = array_combine(
             array_map(fn ($brand) => $brand->value, LaboratoryBrand::cases()),
             array_map(fn ($brand) => auth()->user()->customer?->laboratoryCartItems()->with('laboratoryTest')->ofBrand($brand)->get(), LaboratoryBrand::cases())
         );
+
+        if ($request !== null) {
+            $request->attributes->set('famedic.laboratory_carts', $carts);
+        }
+
+        return $carts;
     }
 
     protected function getOnlinePharmacyCart()

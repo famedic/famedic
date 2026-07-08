@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Zoho SalesIQ (Fase 1): refuerzo visual para convivir con WhatsApp (derecha).
+ * La posición principal se configura vía floatbutton.position('left') en zohoSalesIQ.js.
+ * El portal Zoho también puede ajustar la posición del launcher.
+ */
+#zsiq_float,
+.zsiq_floatmain {
+	z-index: 45;
+}
+
+@media (max-width: 639px) {
+	#zsiq_float,
+	.zsiq_floatmain {
+		bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px)) !important;
+	}
+}
+
 @keyframes checkout-summary-pulse {
 	0%,
 	100% {
