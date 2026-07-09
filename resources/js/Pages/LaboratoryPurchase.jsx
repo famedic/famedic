@@ -1,5 +1,11 @@
 import { useEffect } from "react";
 import LaboratoryOrderDetail from "@/Pages/LaboratoryOrderDetail";
+import {
+	getZohoCurrentPage,
+	mapPaymentGateway,
+	trackZohoBusinessEvent,
+} from "@/lib/zohoSalesIqEvents";
+
 export default function LaboratoryPurchase({
 	laboratoryPurchase,
 	isCancelled = false,
@@ -10,6 +16,41 @@ export default function LaboratoryPurchase({
 	hasResultsAvailable,
 	is_new_result = false,
 }) {
+	useEffect(() => {
+		if (!confetti || !laboratoryPurchase?.id || isCancelled) {
+			return;
+		}
+
+		const storageKey = `zoho_payment_success_${laboratoryPurchase.id}`;
+
+		try {
+			if (sessionStorage.getItem(storageKey)) {
+				return;
+			}
+
+			sessionStorage.setItem(storageKey, "1");
+		} catch {
+			// ignore quota errors
+		}
+
+		const paymentMethod =
+			laboratoryPurchase.payment_method ||
+			laboratoryPurchase.transactions?.[0]?.payment_method ||
+			"unknown";
+
+		trackZohoBusinessEvent("payment_success", {
+			checkout_type: "laboratory",
+			purchase_id: laboratoryPurchase.id,
+			payment_method: mapPaymentGateway(paymentMethod),
+			brand:
+				laboratoryPurchase.brand?.value ||
+				laboratoryPurchase.brand ||
+				"unknown",
+			total_cents: laboratoryPurchase.total_cents,
+			page: getZohoCurrentPage(),
+		});
+	}, [confetti, laboratoryPurchase, isCancelled]);
+
 	useEffect(() => {
 		if (laboratoryPurchase && !window.ga4PurchaseSent) {
 			window.dataLayer = window.dataLayer || [];

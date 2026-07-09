@@ -7,11 +7,41 @@ export default function LaboratoryTestsGrid({
 	updateSearch,
 	laboratoryBrand,
 }) {
+	const [submittingId, setSubmittingId] = useState(null);
+	const lastNoResultsKeyRef = useRef("");
+
+	useEffect(() => {
+		const query = search?.trim();
+
+		if (!query || laboratoryTests.data.length > 0) {
+			return;
+		}
+
+		const eventKey = `${query}|${category || ""}|${laboratoryBrand.value}`;
+
+		if (lastNoResultsKeyRef.current === eventKey) {
+			return;
+		}
+
+		lastNoResultsKeyRef.current = eventKey;
+
+		trackZohoBusinessEvent("search_no_results", {
+			query: truncateZohoQuery(query),
+			brand: laboratoryBrand.value,
+			category: category || undefined,
+			results_count: 0,
+			page: getZohoCurrentPage(),
+		});
+	}, [
+		search,
+		category,
+		laboratoryTests.data.length,
+		laboratoryBrand.value,
+	]);
+
 	if (!laboratoryTests.data.length) {
 		return <EmptyListCard />;
 	}
-
-	const [submittingId, setSubmittingId] = useState(null);
 
 	const isTestInCart = (laboratoryTestId) =>
 		laboratoryCartItems.some(
@@ -168,7 +198,12 @@ import { Strong, Text } from "@/Components/Catalyst/text";
 import { TagIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import { InformationCircleIcon } from "@heroicons/react/20/solid";
 import { router } from "@inertiajs/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+	getZohoCurrentPage,
+	trackZohoBusinessEvent,
+	truncateZohoQuery,
+} from "@/lib/zohoSalesIqEvents";
 import { useDeleteLaboratoryCartItem } from "@/Hooks/useDeleteLaboratoryCartItem";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import EmptyListCard from "@/Components/EmptyListCard";

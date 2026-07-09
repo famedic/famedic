@@ -12,6 +12,7 @@ export default function PromoCodeField({
     appliedPromo = null,
     onApplied,
     onCleared,
+    onValidationFailed,
     error = null,
 }) {
     const [code, setCode] = useState("");
@@ -60,6 +61,7 @@ export default function PromoCodeField({
                 err.response?.data?.message ||
                 "No se pudo validar el código.";
             setLocalError(message);
+            onValidationFailed?.(message, trimmed);
         } finally {
             setLoading(false);
         }

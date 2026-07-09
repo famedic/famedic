@@ -13,7 +13,12 @@ import {
 } from "@heroicons/react/24/solid";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import BalanceCreditCard from "@/Components/Coupons/BalanceCreditCard";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import useZohoCartIdle from "@/Hooks/useZohoCartIdle";
+import {
+	getZohoCurrentPage,
+	trackZohoBusinessEvent,
+} from "@/lib/zohoSalesIqEvents";
 
 // ==================== FUNCIÓN DEBUG GA4 ACTUALIZADA ====================
 const sendGA4Event = (eventName, ecommerceData, debugInfo = {}) => {
@@ -153,6 +158,7 @@ export default function LaboratoryShoppingCart({
 		last_remove_event: null,
 		last_checkout_event: null
 	});
+	const zohoCartViewedRef = useRef(false);
 
 	// ============ DEBUG: Información inicial ============
 	useEffect(() => {
@@ -193,6 +199,32 @@ export default function LaboratoryShoppingCart({
 		const value = parseFloat(normalized);
 		return isNaN(value) ? 0 : value;
 	};
+
+	// ============ ZOHO: cart_viewed (una vez por vista) ============
+	useEffect(() => {
+		if (zohoCartViewedRef.current) {
+			return;
+		}
+
+		zohoCartViewedRef.current = true;
+
+		const cartItems = laboratoryCarts?.[laboratoryBrand.value] || [];
+
+		trackZohoBusinessEvent("cart_viewed", {
+			brand: laboratoryBrand.value,
+			item_count: cartItems.length,
+			cart_total_cents: cartTotalCents || total,
+			has_items: cartItems.length > 0,
+			page: getZohoCurrentPage(),
+		});
+	}, [laboratoryBrand.value, laboratoryCarts, cartTotalCents, total]);
+
+	useZohoCartIdle({
+		source: "cart",
+		brand: laboratoryBrand.value,
+		itemCount: laboratoryCarts?.[laboratoryBrand.value]?.length || 0,
+		cartTotalCents: cartTotalCents || total,
+	});
 
 	// ============ EVENTO: view_cart (al cargar la página) ============
 	useEffect(() => {

@@ -39,10 +39,21 @@ export default function LaboratoryPayPalButton({
     couponId = null,
     promoValidationToken = null,
     disabled,
+    onPaymentFailed,
 }) {
     const containerRef = useRef(null);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    const reportPaymentFailure = (message) => {
+        const safeMessage =
+            typeof message === "string" && message.trim()
+                ? message.trim()
+                : "Error en el pago con PayPal. Intenta de nuevo.";
+
+        setError(safeMessage);
+        onPaymentFailed?.(safeMessage);
+    };
 
     useEffect(() => {
         if (!paypalClientId || disabled) {
@@ -92,7 +103,7 @@ export default function LaboratoryPayPalButton({
                                     err.response?.data?.message ||
                                     err.message ||
                                     "No se pudo iniciar el pago con PayPal.";
-                                setError(msg);
+                                reportPaymentFailure(msg);
                                 throw new Error(msg);
                             }
                         },
@@ -126,13 +137,13 @@ export default function LaboratoryPayPalButton({
                                 );
                                 return;
                             }
-                            setError(
+                            reportPaymentFailure(
                                 "No se pudo confirmar el pago. Contacta soporte si se te cobró.",
                             );
                         },
                         onError: (err) => {
                             console.error(err);
-                            setError(
+                            reportPaymentFailure(
                                 "Error en el pago con PayPal. Intenta de nuevo.",
                             );
                         },
@@ -143,7 +154,7 @@ export default function LaboratoryPayPalButton({
                     .render(containerRef.current);
             } catch (e) {
                 console.error(e);
-                setError(
+                reportPaymentFailure(
                     "No se pudo iniciar PayPal. Verifica tu conexión o intenta más tarde.",
                 );
             } finally {
@@ -166,6 +177,7 @@ export default function LaboratoryPayPalButton({
         couponId,
         promoValidationToken,
         disabled,
+        onPaymentFailed,
     ]);
 
     if (!paypalClientId) {

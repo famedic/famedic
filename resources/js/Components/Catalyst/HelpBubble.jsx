@@ -12,6 +12,18 @@ import {
 } from "@heroicons/react/24/solid";
 import { Button } from "@/Components/Catalyst/button";
 import clsx from "clsx";
+import {
+	getZohoCurrentPage,
+	trackZohoBusinessEvent,
+} from "@/lib/zohoSalesIqEvents";
+
+function trackHelpBubbleClick(topic) {
+	trackZohoBusinessEvent("human_help_requested", {
+		source: "help_bubble",
+		topic,
+		page: getZohoCurrentPage(),
+	});
+}
 
 export default function HelpBubble({ className = "", reserveMobileBottomNavSpace = false }) {
 	return (
@@ -35,7 +47,10 @@ export default function HelpBubble({ className = "", reserveMobileBottomNavSpace
 				</Headless.MenuButton>
 				<DropdownMenu anchor="top end">
 					<DropdownItem
-						onClick={() => window.open("tel:8128601893", "_blank")}
+						onClick={() => {
+							trackHelpBubbleClick("general");
+							window.open("tel:8128601893", "_blank");
+						}}
 					>
 						<PhoneIcon className="size-5" />
 						<DropdownLabel>Ayuda en general</DropdownLabel>
@@ -49,12 +64,13 @@ export default function HelpBubble({ className = "", reserveMobileBottomNavSpace
 						</DropdownDescription>
 					</DropdownItem>
 					<DropdownItem
-						onClick={() =>
+						onClick={() => {
+							trackHelpBubbleClick("study_search");
 							window.open(
 								"https://wa.me/5540572139?text=Hola%2C%20quisiera%20mas%20informaci%C3%B3n%20sobre%20sus%20estudios%20de%20laboratorio",
 								"_blank",
-							)
-						}
+							);
+						}}
 					>
 						<svg
 							data-icon="icon"

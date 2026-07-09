@@ -45,6 +45,16 @@ import {
 } from "@/lib/couponEligibilityUi";
 import BalanceCreditCard from "@/Components/Coupons/BalanceCreditCard";
 import PromoCodeField from "@/Components/Checkout/PromoCodeField";
+import useZohoCartIdle from "@/Hooks/useZohoCartIdle";
+import {
+    getZohoCurrentPage,
+    mapCouponFailureReason,
+    mapPaymentErrorCode,
+    mapPaymentGateway,
+    maskPromoCode,
+    sanitizeSafeUserMessage,
+    trackZohoBusinessEvent,
+} from "@/lib/zohoSalesIqEvents";
 
 const BASE_WIZARD_STEPS = [
     { id: "patient", number: 1, label: "Paciente" },
@@ -218,7 +228,7 @@ export default function LaboratoryCheckout({
         processing,
     } = useDeleteLaboratoryCartItem();
 
-    const { url } = usePage();
+    const { url, props: pageProps } = usePage();
 
     const initialFormData = resolveInitialCheckoutData(savedCheckout);
 
@@ -234,6 +244,39 @@ export default function LaboratoryCheckout({
     } = useForm(initialFormData);
 
     const checkoutSubmittedRef = useRef(false);
+    const checkoutStartedRef = useRef(false);
+    const balanceCreditTrackedRef = useRef(false);
+    const previousStepRef = useRef(null);
+    const couponBlockedTrackedRef = useRef(null);
+
+    const trackLaboratoryCouponFailed = useCallback(
+        (couponType, message, maskedCode = undefined) => {
+            trackZohoBusinessEvent("coupon_failed", {
+                coupon_type: couponType,
+                reason_code: mapCouponFailureReason(message),
+                checkout_type: "laboratory",
+                brand: laboratoryBrand.value,
+                ...(maskedCode ? { masked_code: maskedCode } : {}),
+                page: getZohoCurrentPage(),
+            });
+        },
+        [laboratoryBrand.value],
+    );
+
+    const trackLaboratoryPaymentFailed = useCallback(
+        (gateway, message) => {
+            trackZohoBusinessEvent("payment_failed", {
+                checkout_type: "laboratory",
+                gateway: mapPaymentGateway(gateway),
+                safe_error_code: mapPaymentErrorCode(message),
+                safe_message: sanitizeSafeUserMessage(message),
+                brand: laboratoryBrand.value,
+                cart_total_cents: total,
+                page: getZohoCurrentPage(),
+            });
+        },
+        [laboratoryBrand.value, total],
+    );
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -332,6 +375,24 @@ export default function LaboratoryCheckout({
                     checkoutSubmittedRef.current = false;
                     console.error('Errores del backend:', errors);
 
+                    if (errors.payment_method) {
+                        trackLaboratoryPaymentFailed(
+                            data.payment_method,
+                            errors.payment_method,
+                        );
+                    }
+
+                    if (errors.coupon_id) {
+                        trackLaboratoryCouponFailed("coupon", errors.coupon_id);
+                    }
+
+                    if (errors.promo_validation_token) {
+                        trackLaboratoryCouponFailed(
+                            "promo_code",
+                            errors.promo_validation_token,
+                        );
+                    }
+
                     // Manejar errores específicos
                     if (errors.payment_method) {
                         alert(`Error en método de pago: ${errors.payment_method}`);
@@ -419,6 +480,45 @@ export default function LaboratoryCheckout({
     }, [selectedCoupon, total]);
 
     const couponBlocked = couponTooLarge || couponNotYetValid || couponBelowMinPurchase;
+
+    useEffect(() => {
+        if (!selectedCoupon || !couponBlocked) {
+            return;
+        }
+
+        let reasonCode = "unknown";
+
+        if (couponNotYetValid) {
+            reasonCode = "expired";
+        } else if (couponBelowMinPurchase) {
+            reasonCode = "min_purchase";
+        } else if (couponTooLarge) {
+            reasonCode = "not_applicable";
+        }
+
+        const trackKey = `${selectedCoupon.id}:${reasonCode}`;
+
+        if (couponBlockedTrackedRef.current === trackKey) {
+            return;
+        }
+
+        couponBlockedTrackedRef.current = trackKey;
+
+        trackZohoBusinessEvent("coupon_failed", {
+            coupon_type: "balance",
+            reason_code: reasonCode,
+            checkout_type: "laboratory",
+            brand: laboratoryBrand.value,
+            page: getZohoCurrentPage(),
+        });
+    }, [
+        selectedCoupon,
+        couponBlocked,
+        couponNotYetValid,
+        couponBelowMinPurchase,
+        couponTooLarge,
+        laboratoryBrand.value,
+    ]);
 
     const promoDiscountCents = useMemo(() => {
         if (!appliedPromo?.validation_token || !appliedPromo?.discount_cents) {
@@ -630,6 +730,82 @@ export default function LaboratoryCheckout({
 
     const currentStep = wizardSteps[currentStepIndex];
 
+    useEffect(() => {
+        if (checkoutStartedRef.current) {
+            return;
+        }
+
+        checkoutStartedRef.current = true;
+
+        const cartItems = laboratoryCarts?.[laboratoryBrand.value] ?? [];
+
+        trackZohoBusinessEvent("checkout_started", {
+            checkout_type: "laboratory",
+            brand: laboratoryBrand.value,
+            item_count: cartItems.length,
+            cart_total_cents: total,
+            has_balance_credit: balanceCouponsCents > 0,
+            has_membership_active:
+                pageProps.zohoSalesIq?.membershipActive ?? false,
+            page: getZohoCurrentPage(),
+        });
+    }, [
+        laboratoryBrand.value,
+        laboratoryCarts,
+        total,
+        balanceCouponsCents,
+        pageProps.zohoSalesIq?.membershipActive,
+    ]);
+
+    useEffect(() => {
+        if (balanceCreditTrackedRef.current || balanceCouponsCents <= 0) {
+            return;
+        }
+
+        balanceCreditTrackedRef.current = true;
+
+        trackZohoBusinessEvent("balance_credit_available", {
+            checkout_type: "laboratory",
+            has_balance_credit: true,
+            balance_amount_cents: balanceCouponsCents,
+            brand: laboratoryBrand.value,
+            page: getZohoCurrentPage(),
+        });
+    }, [balanceCouponsCents, laboratoryBrand.value]);
+
+    useEffect(() => {
+        if (!currentStep?.id) {
+            return;
+        }
+
+        const stepId =
+            currentStep.id === "confirmation" ? "review" : currentStep.id;
+        const previousStepId = previousStepRef.current
+            ? previousStepRef.current === "confirmation"
+                ? "review"
+                : previousStepRef.current
+            : null;
+
+        if (previousStepId && previousStepId !== stepId) {
+            trackZohoBusinessEvent("checkout_step_changed", {
+                checkout_type: "laboratory",
+                step: stepId,
+                previous_step: previousStepId,
+                brand: laboratoryBrand.value,
+                page: getZohoCurrentPage(),
+            });
+        }
+
+        previousStepRef.current = currentStep.id;
+    }, [currentStep?.id, laboratoryBrand.value]);
+
+    useZohoCartIdle({
+        source: "checkout",
+        brand: laboratoryBrand.value,
+        itemCount: laboratoryCarts?.[laboratoryBrand.value]?.length ?? 0,
+        cartTotalCents: total,
+    });
+
     const persistWizardState = (stepId) => {
         const filteredData = Object.fromEntries(
             Object.entries(data).filter(
@@ -839,6 +1015,21 @@ export default function LaboratoryCheckout({
                     },
                     onError: (syncErrors) => {
                         console.error("No se pudo guardar el checkout:", syncErrors);
+
+                        if (syncErrors.coupon_id) {
+                            trackLaboratoryCouponFailed(
+                                "coupon",
+                                syncErrors.coupon_id,
+                            );
+                        }
+
+                        if (syncErrors.promo_validation_token) {
+                            trackLaboratoryCouponFailed(
+                                "promo_code",
+                                syncErrors.promo_validation_token,
+                            );
+                        }
+
                         Object.entries(syncErrors).forEach(([field, message]) => {
                             const mappedField =
                                 field === "contact_id"
@@ -862,6 +1053,7 @@ export default function LaboratoryCheckout({
             laboratoryBrand.value,
             setError,
             syncStepFromLocation,
+            trackLaboratoryCouponFailed,
         ],
     );
 
@@ -1000,6 +1192,13 @@ export default function LaboratoryCheckout({
                 appliedPromo={appliedPromo}
                 onApplied={applyPromoCode}
                 onCleared={clearPromoCode}
+                onValidationFailed={(message, code) =>
+                    trackLaboratoryCouponFailed(
+                        "promo_code",
+                        message,
+                        maskPromoCode(code),
+                    )
+                }
                 error={errors.promo_validation_token}
             />
             {hasCheckoutCredits && (
@@ -1067,6 +1266,9 @@ export default function LaboratoryCheckout({
                             couponId={data.coupon_id}
                             promoValidationToken={data.promo_validation_token}
                             disabled={onlinePaymentDisabled}
+                            onPaymentFailed={(message) =>
+                                trackLaboratoryPaymentFailed("paypal", message)
+                            }
                         />
                     ) : (
                         <Button

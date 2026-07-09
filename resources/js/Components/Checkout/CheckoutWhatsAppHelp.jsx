@@ -6,6 +6,10 @@ import {
     BeakerIcon,
     ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
+import {
+    getZohoCurrentPage,
+    trackZohoBusinessEvent,
+} from "@/lib/zohoSalesIqEvents";
 
 const WHATSAPP_E164 = "528128601893";
 
@@ -15,23 +19,27 @@ const HELP_TOPICS = [
         message:
             "Hola, tengo dudas sobre mi compra en el checkout de laboratorio.",
         Icon: QuestionMarkCircleIcon,
+        topic: "general",
     },
     {
         label: "Problemas de pago",
         message:
             "Hola, tengo problemas con el pago de mi compra en laboratorio.",
         Icon: CreditCardIcon,
+        topic: "payment",
     },
     {
         label: "Duda con los estudios",
         message:
             "Hola, tengo una duda con los estudios de laboratorio que quiero comprar.",
         Icon: BeakerIcon,
+        topic: "study_search",
     },
     {
         label: "Atención a clientes",
         message: "Hola, necesito atención a clientes.",
         Icon: ChatBubbleLeftRightIcon,
+        topic: "general",
     },
 ];
 
@@ -80,7 +88,12 @@ export default function CheckoutWhatsAppHelp({ reserveFooterSpace = false }) {
         return () => document.removeEventListener("mousedown", handlePointerDown);
     }, [open]);
 
-    const handleTopicClick = (message) => {
+    const handleTopicClick = (message, topic = "general") => {
+        trackZohoBusinessEvent("human_help_requested", {
+            source: "checkout_whatsapp",
+            topic,
+            page: getZohoCurrentPage(),
+        });
         setOpen(false);
         openWhatsApp(message);
     };
@@ -111,12 +124,12 @@ export default function CheckoutWhatsAppHelp({ reserveFooterSpace = false }) {
                             escríbenos:
                         </p>
                         <ul className="mt-3 divide-y divide-zinc-100 dark:divide-slate-800">
-                            {HELP_TOPICS.map(({ label, message, Icon }) => (
+                            {HELP_TOPICS.map(({ label, message, Icon, topic }) => (
                                 <li key={label}>
                                     <button
                                         type="button"
                                         onClick={() =>
-                                            handleTopicClick(message)
+                                            handleTopicClick(message, topic)
                                         }
                                         className="flex w-full items-center gap-3 py-3 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
                                     >
@@ -128,7 +141,9 @@ export default function CheckoutWhatsAppHelp({ reserveFooterSpace = false }) {
                         </ul>
                         <button
                             type="button"
-                            onClick={() => handleTopicClick(DEFAULT_MESSAGE)}
+                            onClick={() =>
+                                handleTopicClick(DEFAULT_MESSAGE, "cart")
+                            }
                             className="mt-2 w-full py-2 text-center text-sm font-medium text-[#25D366] hover:underline"
                         >
                             Escríbenos por WhatsApp (81) 2860 1893

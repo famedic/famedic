@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Link, useForm } from "@inertiajs/react";
 import { GradientHeading, Subheading } from "@/Components/Catalyst/heading";
 import { Text } from "@/Components/Catalyst/text";
@@ -7,9 +7,14 @@ import CheckoutLayout from "@/Layouts/CheckoutLayout";
 import PaymentMethodStep from "@/Components/Checkout/PaymentMethodStep";
 import CheckoutPlanDetails from "./components/CheckoutPlanDetails";
 import MedicalAttentionPayPalButton from "./components/MedicalAttentionPayPalButton";
+import {
+    getZohoCurrentPage,
+    trackZohoBusinessEvent,
+} from "@/lib/zohoSalesIqEvents";
 
 export default function MedicalAttentionCheckout({
     formattedPrice,
+    priceCents = 0,
     paymentMethods = [],
     paymentUsesMock = false,
     hasOdessaPay = false,
@@ -18,6 +23,24 @@ export default function MedicalAttentionCheckout({
     hasOdessaAfiliateAccount = false,
     checkoutReturnUrl,
 }) {
+    const membershipCheckoutStartedRef = useRef(false);
+
+    useEffect(() => {
+        if (membershipCheckoutStartedRef.current) {
+            return;
+        }
+
+        membershipCheckoutStartedRef.current = true;
+
+        trackZohoBusinessEvent("membership_checkout_started", {
+            checkout_type: "medical_membership",
+            plan: "annual_family_membership",
+            amount_cents: priceCents,
+            has_membership_active: false,
+            page: getZohoCurrentPage(),
+        });
+    }, [priceCents]);
+
     const initialPaymentMethod =
         new URLSearchParams(window.location.search).get("payment_method") ||
         null;
