@@ -9,6 +9,8 @@ const FORBIDDEN_KEY_PATTERN =
 
 let initialized = false;
 let latestVisitorContext = null;
+/** Campos seguros de Zobot (último evento / intent) — se fusionan en visitor.info. */
+let latestZobotFields = {};
 
 function isBrowser() {
 	return typeof window !== "undefined" && typeof document !== "undefined";
@@ -157,6 +159,7 @@ function buildVisitorInfo(context, extra = {}) {
 		"Membresia activa": context?.membershipActive,
 		"Estudios en carrito": context?.cart?.itemCount,
 		"Marcas en carrito": context?.cart?.brands?.join(", "),
+		...latestZobotFields,
 		...extra,
 	});
 }
@@ -218,7 +221,36 @@ export function setZohoSalesIqVisitorContext(context) {
 }
 
 /**
- * Base para eventos de negocio en fases posteriores.
+ * Actualiza campos de contexto para Zobot / operador (Fase 3).
+ * Se fusionan en visitor.info y se conservan entre pageviews.
+ */
+export function setZohoZobotVisitorFields(fields = {}) {
+	if (!isEnabled() || !isBrowser()) {
+		return;
+	}
+
+	const cleaned = sanitizePayload(fields);
+
+	if (Object.keys(cleaned).length === 0) {
+		return;
+	}
+
+	latestZobotFields = {
+		...latestZobotFields,
+		...cleaned,
+	};
+
+	whenZohoReady(() => {
+		const info = buildVisitorInfo(latestVisitorContext);
+
+		if (Object.keys(info).length > 0) {
+			window.$zoho?.salesiq?.visitor?.info?.(info);
+		}
+	});
+}
+
+/**
+ * Base para eventos de negocio (Fase 2+) y contexto Zobot (Fase 3).
  * Valida, limpia el payload y lo envía si SalesIQ está disponible.
  */
 export function trackZohoSalesIqEvent(eventName, payload = {}) {

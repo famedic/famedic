@@ -1,4 +1,5 @@
 import { trackZohoSalesIqEvent } from "@/lib/zohoSalesIQ";
+import { syncZobotContextFromEvent } from "@/lib/zohoZobotContext";
 
 const QUERY_MAX_LENGTH = 100;
 
@@ -166,4 +167,5 @@ export function trackZohoBusinessEvent(eventName, payload = {}) {
 	}
 
 	trackZohoSalesIqEvent(eventName, payload);
+	syncZobotContextFromEvent(eventName, payload);
 }
