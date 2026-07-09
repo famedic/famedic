@@ -3,10 +3,30 @@
 
 use App\Http\Controllers\PayPalController;
 use App\Http\Controllers\WebHook\GDAController;
+use App\Http\Controllers\Webhooks\Zoho\SalesIqConversationClosedWebhookController;
+use App\Http\Controllers\Webhooks\Zoho\SalesIqEventWebhookController;
+use App\Http\Controllers\Webhooks\Zoho\SalesIqHandoffWebhookController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 
 Route::post('/paypal/webhook', [PayPalController::class, 'webhook'])->name('paypal.webhook');
+
+// ==================================================
+// Zoho SalesIQ (Fase 4) — secret via X-Famedic-Zoho-Secret
+// ==================================================
+
+Route::prefix('webhooks/zoho/salesiq')
+    ->middleware(['zoho.salesiq.webhook', 'throttle:60,1'])
+    ->group(function () {
+        Route::post('/events', SalesIqEventWebhookController::class)
+            ->name('webhooks.zoho.salesiq.events');
+
+        Route::post('/handoff', SalesIqHandoffWebhookController::class)
+            ->name('webhooks.zoho.salesiq.handoff');
+
+        Route::post('/conversation-closed', SalesIqConversationClosedWebhookController::class)
+            ->name('webhooks.zoho.salesiq.conversation-closed');
+    });
 
 // ==================================================
 // RUTAS GDA - SOLO EN ESTE ARCHIVO

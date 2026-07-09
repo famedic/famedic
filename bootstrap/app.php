@@ -16,12 +16,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'paypal/webhook',
             'apigda/*',
+            'webhooks/zoho/salesiq/*',
         ]);
 
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ])->alias([
+            'zoho.salesiq.webhook' => \App\Http\Middleware\VerifyZohoSalesIqWebhookSecret::class,
             'admin' => \App\Http\Middleware\EnsureUserHasAdminAccount::class,
             'super.admin' => \App\Http\Middleware\EnsureUserHasSuperAdminRole::class,
             'customer' => \App\Http\Middleware\EnsureUserHasCustomerAccount::class,

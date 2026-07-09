@@ -104,6 +104,20 @@ class ZohoSalesIq
     }
 
     /**
+     * Secreto de webhooks (solo backend). Nunca incluir en frontendConfig().
+     */
+    public static function webhookSecret(): ?string
+    {
+        $secret = config('services.zoho.salesiq.webhook_secret');
+
+        if (! is_string($secret) || trim($secret) === '') {
+            return null;
+        }
+
+        return trim($secret);
+    }
+
+    /**
      * @param  array<string, mixed>|null  $laboratoryCarts
      * @return array{itemCount: int, brands: list<string>}
      */
