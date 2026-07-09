@@ -251,6 +251,14 @@ export default function LaboratoryNotificationResultsPdfActions({
 					<Strong>{resultsPdf.available_at_gda ? "Sí" : "No"}</Strong>
 				</Text>
 				<Text>
+					ID consulta GDA:{" "}
+					<Strong>{resultsPdf.gda_consult_id ?? "—"}</Strong>
+				</Text>
+				<Text>
+					Fuente ID consulta:{" "}
+					<Strong>{resultsPdf.gda_consult_id_source_label ?? "—"}</Strong>
+				</Text>
+				<Text>
 					Última descarga vía API GDA:{" "}
 					<Strong>{formatDateTime(resultsPdf.pdf_fetched_at)}</Strong>
 				</Text>

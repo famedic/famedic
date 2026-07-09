@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Laboratories\ResolveConsultableGdaId;
 use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
+use App\Exceptions\GdaConsultIdNotResolvableException;
 use App\Exceptions\GdaResultsNotAvailableException;
 use App\Http\Controllers\Controller;
 use App\Models\LabOrderEventState;
@@ -484,6 +486,7 @@ class LaboratoryNotificationMonitorController extends Controller
         $lastSyncErrorAt = data_get($latest->gda_message, 'results_storage_error_at');
         $lastGdaNotAvailableAt = data_get($latest->gda_message, 'last_gda_not_available_at');
         $lastGdaNotAvailableMessage = data_get($latest->gda_message, 'last_gda_not_available_message');
+        $consultIdResolution = $this->resolveConsultIdForNotification($latest);
         $storagePath = $hasPdfInStorage ? $purchase->results : data_get($latest->gda_message, 'results_storage_path');
 
         if ($hasPdfInStorage) {
@@ -536,6 +539,9 @@ class LaboratoryNotificationMonitorController extends Controller
             'last_sync_error_at' => $lastSyncErrorAt,
             'last_gda_not_available_at' => $lastGdaNotAvailableAt,
             'last_gda_not_available_message' => $lastGdaNotAvailableMessage,
+            'gda_consult_id' => $consultIdResolution['id'],
+            'gda_consult_id_source' => $consultIdResolution['source'],
+            'gda_consult_id_source_label' => $this->consultIdSourceLabel($consultIdResolution['source']),
             'results_notifications_count' => $resultsNotifications->count(),
             'can_fetch_from_gda' => $availableAtGda && ! $hasPdfInStorage && ! $hasPdfInDb,
             'can_force_refresh_from_gda' => $availableAtGda && ! $isManual,
@@ -567,6 +573,9 @@ class LaboratoryNotificationMonitorController extends Controller
             'last_sync_at' => null,
             'last_sync_error' => null,
             'last_sync_error_at' => null,
+            'gda_consult_id' => null,
+            'gda_consult_id_source' => 'none',
+            'gda_consult_id_source_label' => null,
             'results_notifications_count' => 0,
             'can_fetch_from_gda' => false,
             'can_force_refresh_from_gda' => false,
@@ -583,6 +592,40 @@ class LaboratoryNotificationMonitorController extends Controller
             'manual' => 'Storage / S3 (subido manualmente)',
             'webhook_or_legacy' => 'Webhook GDA o caché legacy',
             default => null,
+        };
+    }
+
+    /**
+     * @return array{id: ?string, source: string}
+     */
+    private function resolveConsultIdForNotification(LaboratoryNotification $notification): array
+    {
+        $payload = $notification->payload;
+
+        if (is_string($payload)) {
+            $payload = json_decode($payload, true);
+        }
+
+        if (! is_array($payload)) {
+            return ['id' => null, 'source' => 'none'];
+        }
+
+        try {
+            return app(ResolveConsultableGdaId::class)($notification->gda_order_id, $payload);
+        } catch (GdaConsultIdNotResolvableException) {
+            return ['id' => null, 'source' => 'none'];
+        }
+    }
+
+    private function consultIdSourceLabel(?string $source): ?string
+    {
+        return match ($source) {
+            'gda_order_id' => 'gda_order_id',
+            'payload.id' => 'payload.id',
+            'infogda_etiqueta' => 'infogda_etiqueta',
+            'requisition.value' => 'requisition.value',
+            'none' => 'Sin ID consultable',
+            default => $source,
         };
     }
 

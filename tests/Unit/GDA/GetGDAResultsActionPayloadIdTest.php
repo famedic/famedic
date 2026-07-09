@@ -1,6 +1,8 @@
 <?php
 
 use App\Actions\Laboratories\GetGDAResultsAction;
+use App\Actions\Laboratories\ResolveConsultableGdaId;
+use App\Exceptions\GdaConsultIdNotResolvableException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -22,7 +24,7 @@ beforeEach(function () {
     ]);
 });
 
-function gabinetePayload(string $orderId = 'GZ0L000515'): array
+function gdaResultsGabinetePayload(string $orderId = 'GZ0L000515'): array
 {
     return [
         'id' => $orderId,
@@ -43,13 +45,13 @@ function gabinetePayload(string $orderId = 'GZ0L000515'): array
     ];
 }
 
-function laboratorioPayload(string $orderId = '24642071'): array
+function gdaResultsLaboratorioPayload(string $orderId = '24642071', string $requisitionValue = 'HD0L001392'): array
 {
     return [
         'id' => $orderId,
         'header' => ['marca' => 5, 'lineanegocio' => '3'],
         'requisition' => [
-            'value' => 'HD0L001392',
+            'value' => $requisitionValue,
             'convenio' => 17479,
         ],
         'code' => [
@@ -70,104 +72,176 @@ function fakeGdaSuccessResponse(): void
     ]);
 }
 
-it('gabinete: usa orderId en vez de requisition.value como payload id', function () {
+function resolveConsultableGdaId(?string $orderId, array $payload): array
+{
+    return app(ResolveConsultableGdaId::class)($orderId, $payload);
+}
+
+it('gabinete: usa gda_order_id cuando cumple patrón consultable', function () {
     fakeGdaSuccessResponse();
-    Log::spy();
 
     $action = app(GetGDAResultsAction::class);
-    $result = $action('GZ0L000515', gabinetePayload());
-
-    expect($result)->toHaveKey('infogda_resultado_b64');
+    $action('GZ0L000423', gdaResultsGabinetePayload('GZ0L000423'));
 
     Http::assertSent(function ($request) {
         $body = $request->data();
 
-        return $body['id'] === 'GZ0L000515'
+        return $body['id'] === 'GZ0L000423'
             && $body['requisition']['value'] === '2066';
     });
 });
 
-it('gabinete: no reemplaza id con requisition.value', function () {
+it('gabinete: no reemplaza id con requisition.value numérico', function () {
     fakeGdaSuccessResponse();
 
     $action = app(GetGDAResultsAction::class);
-    $action('GZ0L000515', gabinetePayload());
+    $action('GZ0L000515', gdaResultsGabinetePayload());
 
     Http::assertSent(function ($request) {
         return $request->data()['id'] !== '2066';
     });
 });
 
-it('laboratorio normal: conserva orderId numérico', function () {
+it('laboratorio normal Swisslab: no usa orderId numérico si no cumple patrón', function () {
     fakeGdaSuccessResponse();
 
     $action = app(GetGDAResultsAction::class);
-    $action('24642071', laboratorioPayload());
+    $action('24678619', gdaResultsLaboratorioPayload('24678619', 'HD0L001402'));
 
     Http::assertSent(function ($request) {
         $body = $request->data();
 
-        return $body['id'] === '24642071'
-            && $body['requisition']['value'] === 'HD0L001392';
+        return $body['id'] === 'HD0L001402'
+            && $body['id'] !== '24678619'
+            && $body['requisition']['value'] === 'HD0L001402';
     });
 });
 
-it('loguea payload_id y requested_order_id antes de llamar a GDA', function () {
+it('laboratorio normal: usa requisition.value cuando payload.id es numérico', function () {
+    fakeGdaSuccessResponse();
+
+    $action = app(GetGDAResultsAction::class);
+    $action('24642071', gdaResultsLaboratorioPayload());
+
+    Http::assertSent(function ($request) {
+        $body = $request->data();
+
+        return $body['id'] === 'HD0L001392'
+            && $body['id'] !== '24642071';
+    });
+});
+
+it('laboratorio normal: usa infogda_etiqueta si cumple patrón y requisition.value no', function () {
+    fakeGdaSuccessResponse();
+
+    $payload = gdaResultsLaboratorioPayload('24642071', '1888');
+    $payload['code']['coding'][0]['infogda_muestras'] = [[
+        'infogda_etiqueta' => 'HD0L001392',
+    ]];
+
+    $action = app(GetGDAResultsAction::class);
+    $action('24642071', $payload);
+
+    Http::assertSent(function ($request) {
+        return $request->data()['id'] === 'HD0L001392';
+    });
+
+    expect(resolveConsultableGdaId('24642071', $payload))
+        ->toMatchArray(['id' => 'HD0L001392', 'source' => 'infogda_etiqueta']);
+});
+
+it('laboratorio normal: ignora infogda_etiqueta con sufijo y usa requisition.value', function () {
+    fakeGdaSuccessResponse();
+
+    $payload = gdaResultsLaboratorioPayload('24642071', 'HD0L001392');
+    $payload['code']['coding'][0]['infogda_muestras'] = [[
+        'infogda_etiqueta' => 'HD0L001392OQ',
+    ]];
+
+    $action = app(GetGDAResultsAction::class);
+    $action('24642071', $payload);
+
+    Http::assertSent(function ($request) {
+        return $request->data()['id'] === 'HD0L001392';
+    });
+
+    expect(resolveConsultableGdaId('24642071', $payload))
+        ->toMatchArray(['id' => 'HD0L001392', 'source' => 'requisition.value']);
+});
+
+it('lanza excepción controlada si ningún candidato cumple patrón consultable', function () {
+    $payload = [
+        'id' => '24678619',
+        'requisition' => ['value' => '1888'],
+    ];
+
+    expect(fn () => resolveConsultableGdaId('24678619', $payload))
+        ->toThrow(GdaConsultIdNotResolvableException::class);
+});
+
+it('loguea payload_id, requested_order_id y resolved_consult_id_source antes de llamar a GDA', function () {
     fakeGdaSuccessResponse();
     Log::spy();
 
     $action = app(GetGDAResultsAction::class);
-    $action('GZ0L000515', gabinetePayload());
+    $action('24678619', gdaResultsLaboratorioPayload('24678619', 'HD0L001402'));
 
     Log::shouldHaveReceived('info')
-        ->once()
+        ->with(
+            'GDA results consult id resolved',
+            \Mockery::on(fn (array $ctx) => $ctx['requested_order_id'] === '24678619'
+                && $ctx['payload_id_original'] === '24678619'
+                && $ctx['requisition_value'] === 'HD0L001402'
+                && $ctx['resolved_consult_id'] === 'HD0L001402'
+                && $ctx['resolved_consult_id_source'] === 'requisition.value')
+        );
+
+    Log::shouldHaveReceived('info')
         ->with(
             'GDA results consult payload prepared',
-            \Mockery::on(fn (array $ctx) => $ctx['requested_order_id'] === 'GZ0L000515'
-                && $ctx['payload_id'] === 'GZ0L000515'
-                && $ctx['requisition_value'] === '2066'
-                && $ctx['is_payload_id_same_as_requested_order_id'] === true)
+            \Mockery::on(fn (array $ctx) => $ctx['requested_order_id'] === '24678619'
+                && $ctx['payload_id'] === 'HD0L001402'
+                && $ctx['requisition_value'] === 'HD0L001402'
+                && $ctx['is_payload_id_same_as_requested_order_id'] === false
+                && $ctx['resolved_consult_id_source'] === 'requisition.value')
         );
 });
 
-it('fallback: usa payload.id si orderId está vacío', function () {
+it('gabinete: loguea resolved_consult_id_source como gda_order_id', function () {
     fakeGdaSuccessResponse();
-
-    $payload = gabinetePayload();
-    $payload['id'] = 'FALLBACK-ID';
+    Log::spy();
 
     $action = app(GetGDAResultsAction::class);
+    $action('GZ0L000423', gdaResultsGabinetePayload('GZ0L000423'));
 
-    $reflection = new ReflectionClass($action);
-    $method = $reflection->getMethod('resolvePayloadId');
-    $method->setAccessible(true);
-
-    $resolved = $method->invoke($action, '', $payload);
-
-    expect($resolved)->toBe('FALLBACK-ID');
+    Log::shouldHaveReceived('info')
+        ->with(
+            'GDA results consult payload prepared',
+            \Mockery::on(fn (array $ctx) => $ctx['requested_order_id'] === 'GZ0L000423'
+                && $ctx['payload_id'] === 'GZ0L000423'
+                && $ctx['requisition_value'] === '2066'
+                && $ctx['is_payload_id_same_as_requested_order_id'] === true
+                && $ctx['resolved_consult_id_source'] === 'gda_order_id')
+        );
 });
 
-it('fallback: usa infogda_etiqueta si orderId y payload.id están vacíos', function () {
-    fakeGdaSuccessResponse();
+it('fallback: usa payload.id consultable si orderId está vacío', function () {
+    expect(resolveConsultableGdaId('', gdaResultsGabinetePayload('GZ0L000515')))
+        ->toMatchArray(['id' => 'GZ0L000515', 'source' => 'payload.id']);
+});
 
-    $payload = gabinetePayload();
+it('fallback: usa infogda_etiqueta consultable si orderId y payload.id están vacíos', function () {
+    $payload = gdaResultsGabinetePayload();
     unset($payload['id']);
 
-    $action = app(GetGDAResultsAction::class);
-
-    $reflection = new ReflectionClass($action);
-    $method = $reflection->getMethod('resolvePayloadId');
-    $method->setAccessible(true);
-
-    $resolved = $method->invoke($action, '', $payload);
-
-    expect($resolved)->toBe('GZ0L000515');
+    expect(resolveConsultableGdaId('', $payload))
+        ->toMatchArray(['id' => 'GZ0L000515', 'source' => 'infogda_etiqueta']);
 });
 
 it('gabinete: el request a GDA no contiene GDA_menssage', function () {
     fakeGdaSuccessResponse();
 
-    $payload = gabinetePayload();
+    $payload = gdaResultsGabinetePayload();
     $payload['GDA_menssage'] = ['acuse' => 'test', 'codeHttp' => 200];
 
     $action = app(GetGDAResultsAction::class);
@@ -175,5 +249,19 @@ it('gabinete: el request a GDA no contiene GDA_menssage', function () {
 
     Http::assertSent(function ($request) {
         return ! array_key_exists('GDA_menssage', $request->data());
+    });
+});
+
+it('Swisslab: el payload final enviado a GDA no usa el id numérico 24678619', function () {
+    fakeGdaSuccessResponse();
+
+    $action = app(GetGDAResultsAction::class);
+    $action('24678619', gdaResultsLaboratorioPayload('24678619', 'HD0L001402'));
+
+    Http::assertSent(function ($request) {
+        $body = $request->data();
+
+        return $body['id'] === 'HD0L001402'
+            && $body['id'] !== '24678619';
     });
 });
