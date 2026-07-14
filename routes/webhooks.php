@@ -6,13 +6,14 @@ use App\Http\Controllers\WebHook\GDAController;
 use App\Http\Controllers\Webhooks\Zoho\SalesIqConversationClosedWebhookController;
 use App\Http\Controllers\Webhooks\Zoho\SalesIqEventWebhookController;
 use App\Http\Controllers\Webhooks\Zoho\SalesIqHandoffWebhookController;
+use App\Http\Controllers\Webhooks\Zoho\SalesIqStudySearchWebhookController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 
 Route::post('/paypal/webhook', [PayPalController::class, 'webhook'])->name('paypal.webhook');
 
 // ==================================================
-// Zoho SalesIQ (Fase 4) — secret via X-Famedic-Zoho-Secret
+// Zoho SalesIQ (Fase 4 + Fase 5) — secret via X-Famedic-Zoho-Secret
 // ==================================================
 
 Route::prefix('webhooks/zoho/salesiq')
@@ -26,6 +27,9 @@ Route::prefix('webhooks/zoho/salesiq')
 
         Route::post('/conversation-closed', SalesIqConversationClosedWebhookController::class)
             ->name('webhooks.zoho.salesiq.conversation-closed');
+
+        Route::post('/study-search', SalesIqStudySearchWebhookController::class)
+            ->name('webhooks.zoho.salesiq.study-search');
     });
 
 // ==================================================

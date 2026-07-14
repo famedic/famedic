@@ -45,6 +45,12 @@ class ZohoSalesIqWebhookPayloadSanitizer
         'checkout_type',
         'source',
         'topic',
+        // Fase 5 — study search
+        'query',
+        'result_count',
+        'result_ids',
+        'handoff_recommended',
+        'reason',
     ];
 
     /**
@@ -105,8 +111,24 @@ class ZohoSalesIqWebhookPayloadSanitizer
         }
 
         if (is_array($value)) {
-            // No anidar objetos arbitrarios: solo escalares planos.
-            return null;
+            // Solo listas planas de escalares (p. ej. result_ids). Sin objetos anidados.
+            if (! array_is_list($value)) {
+                return null;
+            }
+
+            $items = [];
+            foreach ($value as $item) {
+                if (is_array($item)) {
+                    return null;
+                }
+
+                $sanitizedItem = $this->sanitizeValue($item);
+                if ($sanitizedItem !== null) {
+                    $items[] = $sanitizedItem;
+                }
+            }
+
+            return $items === [] ? null : $items;
         }
 
         return null;

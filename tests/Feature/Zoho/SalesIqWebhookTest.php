@@ -265,6 +265,26 @@ test('zoho salesiq webhook payload sanitizer strips forbidden keys', function ()
         ->and($result)->not->toHaveKey('nested');
 });
 
+test('zoho salesiq webhook payload sanitizer keeps flat result_ids lists', function () {
+    $sanitizer = new ZohoSalesIqWebhookPayloadSanitizer;
+
+    $result = $sanitizer->sanitize([
+        'query' => 'colesterol bueno',
+        'result_count' => 2,
+        'result_ids' => [10, 20],
+        'handoff_recommended' => true,
+        'reason' => 'breve',
+        'nested_object' => ['a' => 1],
+    ]);
+
+    expect($result['query'])->toBe('colesterol bueno')
+        ->and($result['result_count'])->toBe(2)
+        ->and($result['result_ids'])->toBe([10, 20])
+        ->and($result['handoff_recommended'])->toBeTrue()
+        ->and($result['reason'])->toBe('breve')
+        ->and($result)->not->toHaveKey('nested_object');
+});
+
 test('zoho salesiq raw json body is sanitized and never stores secrets', function () {
     $content = json_encode([
         'event_type' => 'bot_intent',
