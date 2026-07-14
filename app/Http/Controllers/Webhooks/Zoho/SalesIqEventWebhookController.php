@@ -11,7 +11,7 @@ class SalesIqEventWebhookController extends Controller
 {
     public function __invoke(Request $request, SalesIqWebhookService $service): JsonResponse
     {
-        $service->record('bot_intent', $request->all());
+        $service->recordFromRequest($request, 'bot_intent');
 
         return response()->json(['ok' => true]);
     }

@@ -11,10 +11,7 @@ class SalesIqConversationClosedWebhookController extends Controller
 {
     public function __invoke(Request $request, SalesIqWebhookService $service): JsonResponse
     {
-        $payload = $request->all();
-        $payload['event_type'] = $payload['event_type'] ?? 'conversation_closed';
-
-        $service->record('conversation_closed', $payload);
+        $service->recordFromRequest($request, 'conversation_closed');
 
         return response()->json(['ok' => true]);
     }

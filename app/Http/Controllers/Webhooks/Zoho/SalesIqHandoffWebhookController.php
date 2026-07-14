@@ -11,10 +11,7 @@ class SalesIqHandoffWebhookController extends Controller
 {
     public function __invoke(Request $request, SalesIqWebhookService $service): JsonResponse
     {
-        $payload = $request->all();
-        $payload['event_type'] = $payload['event_type'] ?? 'handoff';
-
-        $service->record('handoff', $payload);
+        $service->recordFromRequest($request, 'handoff');
 
         return response()->json(['ok' => true]);
     }
