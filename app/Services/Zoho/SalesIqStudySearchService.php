@@ -19,6 +19,8 @@ class SalesIqStudySearchService
 {
     private const MAX_RESULTS = 5;
 
+    private const MAX_BOT_MESSAGE_RESULTS = 3;
+
     private const MAX_CANDIDATES = 20;
 
     private const OPENAI_TIMEOUT_SECONDS = 20;
@@ -73,7 +75,8 @@ PROMPT;
      *     source: string,
      *     message: string,
      *     results: list<array<string, mixed>>,
-     *     handoff_recommended: bool
+     *     handoff_recommended: bool,
+     *     bot_message: string
      * }
      */
     public function handle(array $input): array
@@ -92,6 +95,7 @@ PROMPT;
      *     message: string,
      *     results: list<array<string, mixed>>,
      *     handoff_recommended: bool,
+     *     bot_message: string,
      *     reason?: string|null
      * }
      */
@@ -152,12 +156,15 @@ PROMPT;
             );
         }
 
+        $results = $filtered->map(fn (LaboratoryTest $test) => $this->formatResult($test))->all();
+
         return [
             'ok' => true,
             'source' => 'openai_assisted',
             'message' => 'Encontré algunos estudios que podrían ayudarte.',
-            'results' => $filtered->map(fn (LaboratoryTest $test) => $this->formatResult($test))->all(),
+            'results' => $results,
             'handoff_recommended' => false,
+            'bot_message' => $this->buildBotMessage($results),
             'reason' => $selection['reason'] ?? null,
         ];
     }
@@ -169,21 +176,25 @@ PROMPT;
      *     source: string,
      *     message: string,
      *     results: list<array<string, mixed>>,
-     *     handoff_recommended: bool
+     *     handoff_recommended: bool,
+     *     bot_message: string
      * }
      */
     private function catalogResponse(Collection $tests): array
     {
+        $results = $tests
+            ->take(self::MAX_RESULTS)
+            ->map(fn (LaboratoryTest $test) => $this->formatResult($test))
+            ->values()
+            ->all();
+
         return [
             'ok' => true,
             'source' => 'catalog',
             'message' => 'Encontré algunos estudios que podrían ayudarte.',
-            'results' => $tests
-                ->take(self::MAX_RESULTS)
-                ->map(fn (LaboratoryTest $test) => $this->formatResult($test))
-                ->values()
-                ->all(),
+            'results' => $results,
             'handoff_recommended' => false,
+            'bot_message' => $this->buildBotMessage($results),
         ];
     }
 
@@ -194,6 +205,7 @@ PROMPT;
      *     message: string,
      *     results: list<array<string, mixed>>,
      *     handoff_recommended: bool,
+     *     bot_message: string,
      *     reason?: string|null
      * }
      */
@@ -205,6 +217,7 @@ PROMPT;
             'message' => $message,
             'results' => [],
             'handoff_recommended' => true,
+            'bot_message' => $message,
         ];
 
         if ($reason !== null && trim($reason) !== '') {
@@ -212,6 +225,39 @@ PROMPT;
         }
 
         return $response;
+    }
+
+    /**
+     * Texto plano listo para mostrar en Zoho Zobot (máx. 3 nombres de estudio).
+     *
+     * @param  list<array<string, mixed>>  $results
+     */
+    private function buildBotMessage(array $results): string
+    {
+        $lines = ['Encontré estas opciones:'];
+        $index = 1;
+
+        foreach (array_slice($results, 0, self::MAX_BOT_MESSAGE_RESULTS) as $result) {
+            $name = isset($result['name']) && is_string($result['name'])
+                ? trim($result['name'])
+                : '';
+
+            if ($name === '') {
+                continue;
+            }
+
+            $lines[] = "{$index}. {$name}";
+            $index++;
+        }
+
+        if ($index === 1) {
+            return 'No encontré una coincidencia segura. Te recomiendo hablar con Atención a Clientes para evitar sugerirte un estudio incorrecto.';
+        }
+
+        $lines[] = '';
+        $lines[] = 'Si no estás seguro, puedo canalizarte con Atención a Clientes.';
+
+        return implode("\n", $lines);
     }
 
     public function normalizeQuery(string $query): string

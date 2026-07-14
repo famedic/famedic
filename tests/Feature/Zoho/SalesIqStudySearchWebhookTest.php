@@ -136,7 +136,11 @@ test('zoho study search returns catalog matches without calling openai', functio
         ->assertJsonPath('results.0.id', $test->id)
         ->assertJsonPath('results.0.name', 'Biometria hematica')
         ->assertJsonPath('results.0.brand', 'olab')
-        ->assertJsonPath('results.0.price_cents', 45000);
+        ->assertJsonPath('results.0.price_cents', 45000)
+        ->assertJsonPath(
+            'bot_message',
+            "Encontré estas opciones:\n1. Biometria hematica\n\nSi no estás seguro, puedo canalizarte con Atención a Clientes."
+        );
 
     Http::assertNothingSent();
 
@@ -228,6 +232,10 @@ test('zoho study search uses openai when no clear catalog match', function () {
         ->assertJsonPath('source', 'openai_assisted')
         ->assertJsonPath('handoff_recommended', false)
         ->assertJsonPath('results.0.id', $candidate->id)
+        ->assertJsonPath(
+            'bot_message',
+            "Encontré estas opciones:\n1. Perfil de lípidos\n\nSi no estás seguro, puedo canalizarte con Atención a Clientes."
+        )
         ->assertJsonMissingPath('reason');
 
     Http::assertSent(fn ($request) => str_contains($request->url(), 'api.openai.com'));
@@ -307,9 +315,81 @@ test('zoho study search returns no_results when openai fails without 500', funct
             'source' => 'no_results',
             'results' => [],
             'handoff_recommended' => true,
+            'bot_message' => 'No pude confirmar una coincidencia segura en este momento. Te recomiendo hablar con Atención a Clientes.',
         ]);
 
     expect(ZohoSalesIqEvent::query()->where('event_type', 'study_search')->exists())->toBeTrue();
+});
+
+test('zoho study search bot_message lists at most three study names', function () {
+    Http::fake();
+
+    createStudySearchTest(['name' => 'Estudio uno', 'other_name' => 'shared-match', 'gda_id' => 'BOT-1']);
+    createStudySearchTest([
+        'name' => 'Estudio dos',
+        'other_name' => 'shared-match',
+        'gda_id' => 'BOT-2',
+        'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create(['name' => 'Cat B'])->id,
+    ]);
+    createStudySearchTest([
+        'name' => 'Estudio tres',
+        'other_name' => 'shared-match',
+        'gda_id' => 'BOT-3',
+        'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create(['name' => 'Cat C'])->id,
+    ]);
+    createStudySearchTest([
+        'name' => 'Estudio cuatro',
+        'other_name' => 'shared-match',
+        'gda_id' => 'BOT-4',
+        'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create(['name' => 'Cat D'])->id,
+    ]);
+
+    $response = $this->postJson(
+        route('webhooks.zoho.salesiq.study-search'),
+        [
+            'query' => 'shared-match',
+            'brand' => 'olab',
+        ],
+        zohoStudySearchHeaders(),
+    );
+
+    $response->assertOk()->assertJsonPath('source', 'catalog');
+
+    $botMessage = (string) $response->json('bot_message');
+
+    expect($botMessage)->toStartWith("Encontré estas opciones:\n")
+        ->and($botMessage)->toContain('1. ')
+        ->and($botMessage)->toContain('2. ')
+        ->and($botMessage)->toContain('3. ')
+        ->and($botMessage)->not->toContain('4. ')
+        ->and($botMessage)->toContain('Si no estás seguro, puedo canalizarte con Atención a Clientes.')
+        ->and($botMessage)->not->toContain('password')
+        ->and($botMessage)->not->toContain('token')
+        ->and($botMessage)->not->toContain('selected_ids');
+});
+
+test('zoho study search bot_message for unmatched query recommends handoff', function () {
+    Http::fake();
+
+    $response = $this->postJson(
+        route('webhooks.zoho.salesiq.study-search'),
+        [
+            'query' => 'xyzzy-estudio-inexistente-999',
+            'brand' => 'olab',
+        ],
+        zohoStudySearchHeaders(),
+    );
+
+    $response->assertOk()
+        ->assertJson([
+            'ok' => true,
+            'source' => 'no_results',
+            'results' => [],
+            'handoff_recommended' => true,
+            'bot_message' => 'No encontré una coincidencia segura. Te recomiendo hablar con Atención a Clientes para evitar sugerirte un estudio incorrecto.',
+        ]);
+
+    Http::assertNothingSent();
 });
 
 test('zoho study search sanitizes payload and never stores secrets', function () {
