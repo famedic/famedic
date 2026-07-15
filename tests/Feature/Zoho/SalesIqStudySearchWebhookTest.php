@@ -264,6 +264,13 @@ test('zoho study search returns stores when state is provided', function () {
     createStudySearchStore([
         'name' => 'Olab Polanco',
         'state' => 'Ciudad de México',
+        'address' => 'Av. Reforma 123, Col. Polanco',
+    ]);
+
+    createStudySearchStore([
+        'name' => 'Olab Roma',
+        'state' => 'Ciudad de México',
+        'address' => 'Calle Ámsterdam 45, Col. Roma',
     ]);
 
     $response = $this->postJson(
@@ -278,16 +285,28 @@ test('zoho study search returns stores when state is provided', function () {
 
     $response->assertOk()
         ->assertJsonPath('stores.0.name', 'Olab Polanco')
-        ->assertJsonPath('stores.0.state', 'Ciudad de México');
+        ->assertJsonPath('stores.0.state', 'Ciudad de México')
+        ->assertJsonPath('stores.0.address', 'Av. Reforma 123, Col. Polanco')
+        ->assertJsonPath('stores_count', 2)
+        ->assertJsonPath('brand', 'olab')
+        ->assertJsonPath('state', 'Ciudad de México');
 
     $botMessage = (string) $response->json('bot_message');
-    expect($botMessage)->toContain('Sucursales disponibles en Ciudad de México:')
-        ->and($botMessage)->toContain('Olab Polanco')
-        ->and($botMessage)->toContain('Estado: Ciudad de México');
+    expect($botMessage)->toContain('Código: BH-STORE-1')
+        ->and($botMessage)->toContain('Precio Famedic:')
+        ->and($botMessage)->toContain('Laboratorio: Olab')
+        ->and($botMessage)->toContain('Sucursales:')
+        ->and($botMessage)->toContain('Olab cuenta con 2 sucursales disponibles en Ciudad de México.')
+        ->and($botMessage)->toContain('Puedes elegir la sucursal al continuar tu compra en Famedic.')
+        ->and($botMessage)->toContain('Estado: Ciudad de México')
+        ->and($botMessage)->not->toContain('Av. Reforma 123')
+        ->and($botMessage)->not->toContain('Calle Ámsterdam 45')
+        ->and($botMessage)->not->toContain('Olab Polanco —');
 
     $event = ZohoSalesIqEvent::query()->first();
     expect($event->payload['state'] ?? null)->toBe('Ciudad de México')
-        ->and($event->payload['store_count'] ?? null)->toBe(1);
+        ->and($event->payload['brand'] ?? null)->toBe('olab')
+        ->and($event->payload['store_count'] ?? null)->toBe(2);
 });
 
 test('zoho study search reports missing stores without blocking study results', function () {
@@ -311,10 +330,97 @@ test('zoho study search reports missing stores without blocking study results', 
 
     $response->assertOk()
         ->assertJsonPath('results.0.name', 'Biometria hematica')
-        ->assertJsonPath('stores', []);
+        ->assertJsonPath('stores', [])
+        ->assertJsonPath('stores_count', 0)
+        ->assertJsonPath('brand', 'olab')
+        ->assertJsonPath('state', 'Nuevo León');
 
-    expect((string) $response->json('bot_message'))
-        ->toContain('No encontré sucursales disponibles para ese estado/laboratorio en este momento.');
+    $botMessage = (string) $response->json('bot_message');
+    expect($botMessage)->toContain('Código: BH-NOSTORE-1')
+        ->and($botMessage)->toContain('Precio Famedic:')
+        ->and($botMessage)->toContain('Laboratorio: Olab')
+        ->and($botMessage)->toContain('Sucursales:')
+        ->and($botMessage)->toContain('No encontré sucursales de Olab disponibles en Nuevo León en este momento.');
+});
+
+test('zoho study search bot_message asks for state when stores state is missing', function () {
+    Http::fake();
+
+    createStudySearchTest([
+        'name' => 'Biometria hematica',
+        'other_name' => 'BH-NO-STATE',
+        'gda_id' => 'BH-NOSTATE-1',
+    ]);
+
+    $response = $this->postJson(
+        route('webhooks.zoho.salesiq.study-search'),
+        [
+            'query' => 'BH-NO-STATE',
+            'brand' => 'olab',
+        ],
+        zohoStudySearchHeaders(),
+    );
+
+    $response->assertOk()
+        ->assertJsonPath('stores', [])
+        ->assertJsonPath('stores_count', 0)
+        ->assertJsonPath('brand', 'olab')
+        ->assertJsonPath('state', null);
+
+    $botMessage = (string) $response->json('bot_message');
+    expect($botMessage)->toContain('Código: BH-NOSTATE-1')
+        ->and($botMessage)->toContain('Laboratorio: Olab')
+        ->and($botMessage)->toContain('Sucursales:')
+        ->and($botMessage)->toContain('Olab cuenta con sucursales disponibles. Para mostrar disponibilidad por estado, indícame dónde te encuentras.')
+        ->and($botMessage)->not->toContain('Av.');
+});
+
+test('zoho study search stores_count reflects total when more than response limit', function () {
+    Http::fake();
+
+    createStudySearchTest([
+        'brand' => LaboratoryBrand::SWISSLAB->value,
+        'name' => 'Biometria hematica swiss',
+        'other_name' => 'BH-SWISS-COUNT',
+        'gda_id' => 'BH-SWISS-COUNT-1',
+        'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create([
+            'name' => 'Química swiss count',
+        ])->id,
+    ]);
+
+    for ($i = 1; $i <= 8; $i++) {
+        createStudySearchStore([
+            'name' => "Swisslab Sucursal {$i}",
+            'brand' => LaboratoryBrand::SWISSLAB->value,
+            'state' => 'Nuevo León',
+            'address' => "Calle Ejemplo {$i}, Monterrey",
+        ]);
+    }
+
+    $response = $this->postJson(
+        route('webhooks.zoho.salesiq.study-search'),
+        [
+            'query' => 'BH-SWISS-COUNT',
+            'brand' => 'swisslab',
+            'state' => 'Nuevo León',
+        ],
+        zohoStudySearchHeaders(),
+    );
+
+    $response->assertOk()
+        ->assertJsonPath('stores_count', 8)
+        ->assertJsonPath('brand', 'swisslab')
+        ->assertJsonPath('state', 'Nuevo León');
+
+    expect(count($response->json('stores')))->toBe(5);
+
+    $botMessage = (string) $response->json('bot_message');
+    expect($botMessage)->toContain('Swisslab cuenta con 8 sucursales disponibles en Nuevo León.')
+        ->and($botMessage)->not->toContain('Calle Ejemplo')
+        ->and($botMessage)->not->toContain('Monterrey');
+
+    $event = ZohoSalesIqEvent::query()->first();
+    expect($event->payload['store_count'] ?? null)->toBe(8);
 });
 
 test('zoho study search respects brand filter', function () {

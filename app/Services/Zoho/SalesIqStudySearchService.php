@@ -24,8 +24,6 @@ class SalesIqStudySearchService
 
     private const MAX_STORES_RESPONSE = 5;
 
-    private const MAX_STORES_BOT = 3;
-
     private const MAX_CANDIDATES = 20;
 
     private const OPENAI_TIMEOUT_SECONDS = 20;
@@ -224,7 +222,9 @@ PROMPT;
             ->all();
 
         $resultBrands = collect($results)->pluck('brand')->unique()->filter()->values()->all();
-        $stores = $this->findStores($brandFilter, $state, $resultBrands);
+        $storeData = $this->findStores($brandFilter, $state, $resultBrands);
+        $brandValue = $this->resolveBrandValue($brandFilter, $results, $input);
+        $brandLabel = $this->resolveBrandLabel($brandFilter, $results, $storeData['stores']);
 
         $response = [
             'ok' => true,
@@ -233,9 +233,18 @@ PROMPT;
                 ? 'Encontré varias opciones relacionadas con tu búsqueda.'
                 : 'Encontré algunos estudios que podrían ayudarte.',
             'results' => $results,
-            'stores' => $stores,
+            'stores' => $storeData['stores'],
+            'stores_count' => $storeData['stores_count'],
+            'brand' => $brandValue,
+            'state' => $state,
             'handoff_recommended' => false,
-            'bot_message' => $this->buildBotMessage($results, $state, $stores, $tooBroad),
+            'bot_message' => $this->buildBotMessage(
+                $results,
+                $state,
+                $storeData['stores_count'],
+                $brandLabel,
+                $tooBroad,
+            ),
         ];
 
         if ($reason !== null && trim($reason) !== '') {
@@ -254,14 +263,18 @@ PROMPT;
         ?string $state,
         ?string $reason = null,
     ): array {
-        $stores = $this->findStores($brandFilter, $state, []);
+        $storeData = $this->findStores($brandFilter, $state, []);
+        $brandValue = $brandFilter?->value;
 
         $response = [
             'ok' => true,
             'source' => 'no_results',
             'message' => $message,
             'results' => [],
-            'stores' => $stores,
+            'stores' => $storeData['stores'],
+            'stores_count' => $storeData['stores_count'],
+            'brand' => $brandValue,
+            'state' => $state,
             'handoff_recommended' => true,
             'bot_message' => $message,
         ];
@@ -275,10 +288,14 @@ PROMPT;
 
     /**
      * @param  list<array<string, mixed>>  $results
-     * @param  list<array<string, mixed>>  $stores
      */
-    private function buildBotMessage(array $results, ?string $state, array $stores, bool $tooBroad): string
-    {
+    private function buildBotMessage(
+        array $results,
+        ?string $state,
+        int $storesCount,
+        ?string $brandLabel,
+        bool $tooBroad,
+    ): string {
         if ($results === []) {
             return 'No encontré una coincidencia segura. Te recomiendo hablar con Atención a Clientes para evitar sugerirte un estudio incorrecto.';
         }
@@ -315,30 +332,44 @@ PROMPT;
 
         $lines[] = 'Puedes copiar el código o nombre del estudio y buscarlo directamente en Famedic.';
         $lines[] = '';
-
-        if ($state !== null && $state !== '') {
-            if ($stores !== []) {
-                $lines[] = "Sucursales disponibles en {$state}:";
-                $storeIndex = 1;
-                foreach (array_slice($stores, 0, self::MAX_STORES_BOT) as $store) {
-                    $storeName = is_string($store['name'] ?? null) ? trim($store['name']) : '';
-                    $address = is_string($store['address'] ?? null) ? trim($store['address']) : '';
-                    if ($storeName === '') {
-                        continue;
-                    }
-                    $lines[] = $address !== ''
-                        ? "{$storeIndex}. {$storeName} — {$address}"
-                        : "{$storeIndex}. {$storeName}";
-                    $storeIndex++;
-                }
-            } else {
-                $lines[] = 'No encontré sucursales disponibles para ese estado/laboratorio en este momento.';
-            }
-        } else {
-            $lines[] = 'Si no estás seguro, puedo canalizarte con Atención a Clientes.';
-        }
+        $lines = array_merge($lines, $this->buildStoresBotMessageLines($state, $storesCount, $brandLabel));
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function buildStoresBotMessageLines(?string $state, int $storesCount, ?string $brandLabel): array
+    {
+        $lines = ['Sucursales:'];
+        $brandText = is_string($brandLabel) && trim($brandLabel) !== ''
+            ? trim($brandLabel)
+            : null;
+
+        if ($state !== null && $state !== '') {
+            if ($storesCount > 0) {
+                $lab = $brandText ?? 'El laboratorio';
+                $noun = $storesCount === 1 ? 'sucursal disponible' : 'sucursales disponibles';
+                $lines[] = "{$lab} cuenta con {$storesCount} {$noun} en {$state}.";
+                $lines[] = '';
+                $lines[] = 'Puedes elegir la sucursal al continuar tu compra en Famedic.';
+            } elseif ($brandText !== null) {
+                $lines[] = "No encontré sucursales de {$brandText} disponibles en {$state} en este momento.";
+            } else {
+                $lines[] = "No encontré sucursales disponibles en {$state} en este momento.";
+            }
+
+            return $lines;
+        }
+
+        if ($brandText !== null) {
+            $lines[] = "{$brandText} cuenta con sucursales disponibles. Para mostrar disponibilidad por estado, indícame dónde te encuentras.";
+        } else {
+            $lines[] = 'Para mostrar disponibilidad de sucursales por estado, indícame dónde te encuentras.';
+        }
+
+        return $lines;
     }
 
     public function normalizeQuery(string $query): string
@@ -685,12 +716,15 @@ PROMPT;
 
     /**
      * @param  list<string>  $resultBrandValues
-     * @return list<array<string, mixed>>
+     * @return array{stores: list<array<string, mixed>>, stores_count: int}
      */
     private function findStores(?LaboratoryBrand $brand, ?string $state, array $resultBrandValues): array
     {
         if ($state === null || $state === '') {
-            return [];
+            return [
+                'stores' => [],
+                'stores_count' => 0,
+            ];
         }
 
         $query = LaboratoryStore::query()->orderBy('name');
@@ -707,11 +741,78 @@ PROMPT;
                 ->orWhere('state', 'like', '%'.$escapedState.'%');
         });
 
-        return $query
+        $storesCount = (clone $query)->count();
+
+        $stores = $query
             ->limit(self::MAX_STORES_RESPONSE)
             ->get()
             ->map(fn (LaboratoryStore $store) => $this->formatStore($store))
             ->all();
+
+        return [
+            'stores' => $stores,
+            'stores_count' => $storesCount,
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $results
+     */
+    private function resolveBrandValue(?LaboratoryBrand $brandFilter, array $results, array $input): ?string
+    {
+        if ($brandFilter instanceof LaboratoryBrand) {
+            return $brandFilter->value;
+        }
+
+        $uniqueResultBrands = collect($results)
+            ->pluck('brand')
+            ->filter(fn ($value) => is_string($value) && trim($value) !== '')
+            ->unique()
+            ->values();
+
+        if ($uniqueResultBrands->count() === 1) {
+            return (string) $uniqueResultBrands->first();
+        }
+
+        $inputBrand = $input['brand'] ?? null;
+        if (is_string($inputBrand) && trim($inputBrand) !== '' && ! self::isUnknownBrand($inputBrand)) {
+            return mb_strtolower(trim($inputBrand));
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $results
+     * @param  list<array<string, mixed>>  $stores
+     */
+    private function resolveBrandLabel(?LaboratoryBrand $brandFilter, array $results, array $stores): ?string
+    {
+        if ($brandFilter instanceof LaboratoryBrand) {
+            return $brandFilter->label();
+        }
+
+        $uniqueResultLabels = collect($results)
+            ->pluck('brand_label')
+            ->filter(fn ($value) => is_string($value) && trim($value) !== '')
+            ->unique()
+            ->values();
+
+        if ($uniqueResultLabels->count() === 1) {
+            return (string) $uniqueResultLabels->first();
+        }
+
+        $uniqueStoreLabels = collect($stores)
+            ->pluck('brand_label')
+            ->filter(fn ($value) => is_string($value) && trim($value) !== '')
+            ->unique()
+            ->values();
+
+        if ($uniqueStoreLabels->count() === 1) {
+            return (string) $uniqueStoreLabels->first();
+        }
+
+        return null;
     }
 
     /**
@@ -865,7 +966,7 @@ PROMPT;
             'source' => $result['source'] ?? 'no_results',
             'result_count' => count($resultIds),
             'result_ids' => $resultIds,
-            'store_count' => count($result['stores'] ?? []),
+            'store_count' => (int) ($result['stores_count'] ?? count($result['stores'] ?? [])),
             'handoff_recommended' => (bool) ($result['handoff_recommended'] ?? false),
         ];
 
