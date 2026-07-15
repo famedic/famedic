@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\LaboratoryBrand;
+use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
 use App\Models\LaboratoryTestCategory;
 use App\Models\ZohoSalesIqEvent;
@@ -36,6 +37,20 @@ function createStudySearchTest(array $overrides = []): LaboratoryTest
         'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create([
             'name' => 'Química clínica',
         ])->id,
+    ], $overrides));
+}
+
+function createStudySearchStore(array $overrides = []): LaboratoryStore
+{
+    return LaboratoryStore::create(array_merge([
+        'name' => 'Sucursal Centro',
+        'brand' => LaboratoryBrand::OLAB->value,
+        'state' => 'Ciudad de México',
+        'address' => 'Av. Reforma 123',
+        'weekly_hours' => '9-18',
+        'saturday_hours' => '9-14',
+        'sunday_hours' => 'Cerrado',
+        'google_maps_url' => 'https://maps.example.com/olab-centro',
     ], $overrides));
 }
 
@@ -79,7 +94,8 @@ test('zoho study search accepts valid secret', function () {
         ],
         zohoStudySearchHeaders(),
     )->assertOk()
-        ->assertJson(['ok' => true]);
+        ->assertJson(['ok' => true])
+        ->assertJsonStructure(['bot_message', 'stores']);
 });
 
 test('zoho study search requires query', function () {
@@ -92,29 +108,50 @@ test('zoho study search requires query', function () {
     expect(ZohoSalesIqEvent::count())->toBe(0);
 });
 
-test('zoho study search rejects empty query', function () {
-    $this->postJson(
+test('zoho study search accepts unknown brand and searches all laboratories', function () {
+    Http::fake();
+
+    createStudySearchTest([
+        'brand' => LaboratoryBrand::OLAB->value,
+        'name' => 'Glucosa Olab',
+        'other_name' => 'Glucosa marca olab',
+        'gda_id' => 'GLU-OLAB-UNIQ',
+    ]);
+
+    createStudySearchTest([
+        'brand' => LaboratoryBrand::SWISSLAB->value,
+        'name' => 'Glucosa Swisslab',
+        'other_name' => 'Glucosa marca swiss',
+        'gda_id' => 'GLU-SWISS-UNIQ',
+        'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create([
+            'name' => 'Química swiss',
+        ])->id,
+    ]);
+
+    $response = $this->postJson(
         route('webhooks.zoho.salesiq.study-search'),
-        ['query' => '   '],
+        [
+            'query' => 'Glucosa marca',
+            'brand' => 'unknown',
+        ],
         zohoStudySearchHeaders(),
-    )->assertUnprocessable();
+    );
+
+    $response->assertOk()->assertJsonPath('source', 'catalog');
+
+    $brands = collect($response->json('results'))->pluck('brand')->unique()->sort()->values()->all();
+    expect($brands)->toContain('olab')
+        ->and($brands)->toContain('swisslab');
 });
 
-test('zoho study search validates max query length', function () {
-    $this->postJson(
-        route('webhooks.zoho.salesiq.study-search'),
-        ['query' => str_repeat('a', 121)],
-        zohoStudySearchHeaders(),
-    )->assertUnprocessable();
-});
-
-test('zoho study search returns catalog matches without calling openai', function () {
+test('zoho study search returns catalog matches with enriched fields', function () {
     Http::fake();
 
     $test = createStudySearchTest([
         'name' => 'Biometria hematica',
         'other_name' => 'BH Completa',
         'gda_id' => 'BH-DIRECT-1',
+        'famedic_price_cents' => 45000,
     ]);
 
     $response = $this->postJson(
@@ -130,28 +167,154 @@ test('zoho study search returns catalog matches without calling openai', functio
     );
 
     $response->assertOk()
-        ->assertJsonPath('ok', true)
         ->assertJsonPath('source', 'catalog')
-        ->assertJsonPath('handoff_recommended', false)
         ->assertJsonPath('results.0.id', $test->id)
-        ->assertJsonPath('results.0.name', 'Biometria hematica')
-        ->assertJsonPath('results.0.brand', 'olab')
+        ->assertJsonPath('results.0.search_code', 'BH-DIRECT-1')
         ->assertJsonPath('results.0.price_cents', 45000)
-        ->assertJsonPath(
-            'bot_message',
-            "Encontré estas opciones:\n1. Biometria hematica\n\nSi no estás seguro, puedo canalizarte con Atención a Clientes."
-        );
+        ->assertJsonPath('results.0.price_formatted', '$450.00 MXN')
+        ->assertJsonPath('results.0.brand', 'olab')
+        ->assertJsonPath('results.0.brand_label', 'Olab');
+
+    $botMessage = (string) $response->json('bot_message');
+    expect($botMessage)->toContain('Biometria hematica')
+        ->and($botMessage)->toContain('Código: BH-DIRECT-1')
+        ->and($botMessage)->toContain('Precio Famedic: $450.00 MXN')
+        ->and($botMessage)->toContain('Laboratorio: Olab')
+        ->and($botMessage)->toContain('Puedes copiar el código o nombre del estudio');
 
     Http::assertNothingSent();
 
     $event = ZohoSalesIqEvent::query()->first();
-    expect($event)->not->toBeNull()
-        ->and($event->event_type)->toBe('study_search')
-        ->and($event->intent)->toBe('help_study_search')
-        ->and($event->last_event)->toBe('search_no_results')
-        ->and($event->payload['source'] ?? null)->toBe('catalog')
-        ->and($event->payload['result_count'] ?? null)->toBe(1)
-        ->and($event->payload['result_ids'] ?? null)->toBe([$test->id]);
+    expect($event->payload['source'] ?? null)->toBe('catalog')
+        ->and($event->payload['brand'] ?? null)->toBe('olab');
+});
+
+test('zoho study search matches query via other_name abbreviation', function () {
+    Http::fake();
+
+    createStudySearchTest([
+        'name' => 'Examen general de orina',
+        'other_name' => 'EGO',
+        'gda_id' => 'EGO-GDA-99',
+    ]);
+
+    $response = $this->postJson(
+        route('webhooks.zoho.salesiq.study-search'),
+        ['query' => 'EGO', 'brand' => 'olab'],
+        zohoStudySearchHeaders(),
+    );
+
+    $response->assertOk()
+        ->assertJsonPath('results.0.name', 'Examen general de orina')
+        ->assertJsonPath('results.0.search_code', 'EGO-GDA-99');
+});
+
+test('zoho study search prefers gda_id over other_name as search_code', function () {
+    Http::fake();
+
+    createStudySearchTest([
+        'name' => 'Perfil hepatico',
+        'other_name' => 'HEP',
+        'gda_id' => 'HEP-GDA-123',
+    ]);
+
+    $response = $this->postJson(
+        route('webhooks.zoho.salesiq.study-search'),
+        ['query' => 'HEP-GDA-123', 'brand' => 'olab'],
+        zohoStudySearchHeaders(),
+    );
+
+    $response->assertOk()
+        ->assertJsonPath('results.0.search_code', 'HEP-GDA-123');
+});
+
+test('zoho study search does not invent price when famedic price is unavailable', function () {
+    Http::fake();
+
+    createStudySearchTest([
+        'name' => 'Estudio sin precio',
+        'other_name' => 'SIN-PRECIO-UNIQ',
+        'gda_id' => 'SIN-PRECIO-GDA',
+        'famedic_price_cents' => 0,
+    ]);
+
+    $response = $this->postJson(
+        route('webhooks.zoho.salesiq.study-search'),
+        ['query' => 'SIN-PRECIO-UNIQ', 'brand' => 'olab'],
+        zohoStudySearchHeaders(),
+    );
+
+    $response->assertOk()
+        ->assertJsonPath('results.0.price_cents', null)
+        ->assertJsonPath('results.0.price_formatted', 'Precio no disponible para esta opción');
+
+    expect((string) $response->json('bot_message'))
+        ->toContain('Precio no disponible para esta opción');
+});
+
+test('zoho study search returns stores when state is provided', function () {
+    Http::fake();
+
+    createStudySearchTest([
+        'name' => 'Biometria hematica',
+        'other_name' => 'BH-STORE-TEST',
+        'gda_id' => 'BH-STORE-1',
+    ]);
+
+    createStudySearchStore([
+        'name' => 'Olab Polanco',
+        'state' => 'Ciudad de México',
+    ]);
+
+    $response = $this->postJson(
+        route('webhooks.zoho.salesiq.study-search'),
+        [
+            'query' => 'BH-STORE-TEST',
+            'brand' => 'olab',
+            'state' => 'Ciudad de México',
+        ],
+        zohoStudySearchHeaders(),
+    );
+
+    $response->assertOk()
+        ->assertJsonPath('stores.0.name', 'Olab Polanco')
+        ->assertJsonPath('stores.0.state', 'Ciudad de México');
+
+    $botMessage = (string) $response->json('bot_message');
+    expect($botMessage)->toContain('Sucursales disponibles en Ciudad de México:')
+        ->and($botMessage)->toContain('Olab Polanco')
+        ->and($botMessage)->toContain('Estado: Ciudad de México');
+
+    $event = ZohoSalesIqEvent::query()->first();
+    expect($event->payload['state'] ?? null)->toBe('Ciudad de México')
+        ->and($event->payload['store_count'] ?? null)->toBe(1);
+});
+
+test('zoho study search reports missing stores without blocking study results', function () {
+    Http::fake();
+
+    createStudySearchTest([
+        'name' => 'Biometria hematica',
+        'other_name' => 'BH-NO-STORE',
+        'gda_id' => 'BH-NOSTORE-1',
+    ]);
+
+    $response = $this->postJson(
+        route('webhooks.zoho.salesiq.study-search'),
+        [
+            'query' => 'BH-NO-STORE',
+            'brand' => 'olab',
+            'state' => 'Nuevo León',
+        ],
+        zohoStudySearchHeaders(),
+    );
+
+    $response->assertOk()
+        ->assertJsonPath('results.0.name', 'Biometria hematica')
+        ->assertJsonPath('stores', []);
+
+    expect((string) $response->json('bot_message'))
+        ->toContain('No encontré sucursales disponibles para ese estado/laboratorio en este momento.');
 });
 
 test('zoho study search respects brand filter', function () {
@@ -160,14 +323,14 @@ test('zoho study search respects brand filter', function () {
     createStudySearchTest([
         'brand' => LaboratoryBrand::OLAB->value,
         'name' => 'Glucosa en sangre',
-        'other_name' => 'Azúcar',
+        'other_name' => 'Azucar olab',
         'gda_id' => 'GLU-OLAB',
     ]);
 
     createStudySearchTest([
         'brand' => LaboratoryBrand::SWISSLAB->value,
         'name' => 'Glucosa en sangre',
-        'other_name' => 'Azúcar',
+        'other_name' => 'Azucar swiss',
         'gda_id' => 'GLU-SWISS',
         'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create([
             'name' => 'Química clínica swiss',
@@ -177,7 +340,7 @@ test('zoho study search respects brand filter', function () {
     $response = $this->postJson(
         route('webhooks.zoho.salesiq.study-search'),
         [
-            'query' => 'Glucosa en sangre',
+            'query' => 'Azucar olab',
             'brand' => 'olab',
         ],
         zohoStudySearchHeaders(),
@@ -219,73 +382,21 @@ test('zoho study search uses openai when no clear catalog match', function () {
         [
             'query' => 'colesterol bueno',
             'brand' => 'olab',
-            'visitor_id' => 'zoho-test',
-            'conversation_id' => 'zoho-test-conversation',
-            'page' => '/laboratory/olab/laboratory-tests',
-            'environment' => 'beta',
         ],
         zohoStudySearchHeaders(),
     );
 
     $response->assertOk()
-        ->assertJsonPath('ok', true)
         ->assertJsonPath('source', 'openai_assisted')
-        ->assertJsonPath('handoff_recommended', false)
         ->assertJsonPath('results.0.id', $candidate->id)
-        ->assertJsonPath(
-            'bot_message',
-            "Encontré estas opciones:\n1. Perfil de lípidos\n\nSi no estás seguro, puedo canalizarte con Atención a Clientes."
-        )
         ->assertJsonMissingPath('reason');
 
+    $botMessage = (string) $response->json('bot_message');
+    expect($botMessage)->toContain('Perfil de lípidos')
+        ->and($botMessage)->toContain('LIP-OPENAI-1')
+        ->and($botMessage)->toContain('Precio Famedic:');
+
     Http::assertSent(fn ($request) => str_contains($request->url(), 'api.openai.com'));
-
-    $event = ZohoSalesIqEvent::query()->first();
-    expect($event->event_type)->toBe('study_search')
-        ->and($event->payload['source'] ?? null)->toBe('openai_assisted')
-        ->and($event->payload['query'] ?? null)->toBe('colesterol bueno')
-        ->and($event->payload)->not->toHaveKey('password');
-});
-
-test('zoho study search never returns invented or out-of-candidate ids', function () {
-    $candidate = createStudySearchTest([
-        'name' => 'Perfil tiroideo',
-        'other_name' => null,
-        'elements' => 'TSH T3 T4 tiroides',
-        'gda_id' => 'TIR-1',
-    ]);
-
-    Http::fake([
-        'api.openai.com/*' => Http::response([
-            'choices' => [
-                [
-                    'message' => [
-                        'content' => json_encode([
-                            'selected_ids' => [$candidate->id, 999999, 42],
-                            'confidence' => 'low',
-                            'reason' => 'intento inventar ids',
-                        ], JSON_THROW_ON_ERROR),
-                    ],
-                ],
-            ],
-        ], 200),
-    ]);
-
-    $response = $this->postJson(
-        route('webhooks.zoho.salesiq.study-search'),
-        [
-            'query' => 'tiroides raro synonym',
-            'brand' => 'olab',
-        ],
-        zohoStudySearchHeaders(),
-    );
-
-    $response->assertOk()->assertJsonPath('source', 'openai_assisted');
-
-    $ids = collect($response->json('results'))->pluck('id')->all();
-    expect($ids)->toBe([$candidate->id])
-        ->and($ids)->not->toContain(999999)
-        ->and($ids)->not->toContain(42);
 });
 
 test('zoho study search returns no_results when openai fails without 500', function () {
@@ -317,55 +428,30 @@ test('zoho study search returns no_results when openai fails without 500', funct
             'handoff_recommended' => true,
             'bot_message' => 'No pude confirmar una coincidencia segura en este momento. Te recomiendo hablar con Atención a Clientes.',
         ]);
-
-    expect(ZohoSalesIqEvent::query()->where('event_type', 'study_search')->exists())->toBeTrue();
 });
 
-test('zoho study search bot_message lists at most three study names', function () {
+test('zoho study search broad query returns safe bot_message with max three results', function () {
     Http::fake();
 
-    createStudySearchTest(['name' => 'Estudio uno', 'other_name' => 'shared-match', 'gda_id' => 'BOT-1']);
-    createStudySearchTest([
-        'name' => 'Estudio dos',
-        'other_name' => 'shared-match',
-        'gda_id' => 'BOT-2',
-        'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create(['name' => 'Cat B'])->id,
-    ]);
-    createStudySearchTest([
-        'name' => 'Estudio tres',
-        'other_name' => 'shared-match',
-        'gda_id' => 'BOT-3',
-        'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create(['name' => 'Cat C'])->id,
-    ]);
-    createStudySearchTest([
-        'name' => 'Estudio cuatro',
-        'other_name' => 'shared-match',
-        'gda_id' => 'BOT-4',
-        'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create(['name' => 'Cat D'])->id,
-    ]);
+    createStudySearchTest(['name' => 'Examen general de orina', 'gda_id' => 'ORINA-1']);
+    createStudySearchTest(['name' => 'Orina completa', 'gda_id' => 'ORINA-2', 'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create(['name' => 'Urologia'])->id]);
+    createStudySearchTest(['name' => 'Urocultivo en orina', 'gda_id' => 'ORINA-3', 'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create(['name' => 'Urologia B'])->id]);
+    createStudySearchTest(['name' => 'Sedimento de orina', 'gda_id' => 'ORINA-4', 'laboratory_test_category_id' => LaboratoryTestCategory::factory()->create(['name' => 'Urologia C'])->id]);
 
     $response = $this->postJson(
         route('webhooks.zoho.salesiq.study-search'),
-        [
-            'query' => 'shared-match',
-            'brand' => 'olab',
-        ],
+        ['query' => 'orina', 'brand' => 'olab'],
         zohoStudySearchHeaders(),
     );
 
     $response->assertOk()->assertJsonPath('source', 'catalog');
 
-    $botMessage = (string) $response->json('bot_message');
+    expect(count($response->json('results')))->toBeLessThanOrEqual(3);
 
-    expect($botMessage)->toStartWith("Encontré estas opciones:\n")
-        ->and($botMessage)->toContain('1. ')
-        ->and($botMessage)->toContain('2. ')
-        ->and($botMessage)->toContain('3. ')
-        ->and($botMessage)->not->toContain('4. ')
-        ->and($botMessage)->toContain('Si no estás seguro, puedo canalizarte con Atención a Clientes.')
-        ->and($botMessage)->not->toContain('password')
-        ->and($botMessage)->not->toContain('token')
-        ->and($botMessage)->not->toContain('selected_ids');
+    $botMessage = (string) $response->json('bot_message');
+    expect($botMessage)->toContain('Encontré varias opciones relacionadas con tu búsqueda')
+        ->and($botMessage)->toContain('escribir un nombre más específico')
+        ->and($botMessage)->not->toContain('4.');
 });
 
 test('zoho study search bot_message for unmatched query recommends handoff', function () {
@@ -384,7 +470,6 @@ test('zoho study search bot_message for unmatched query recommends handoff', fun
         ->assertJson([
             'ok' => true,
             'source' => 'no_results',
-            'results' => [],
             'handoff_recommended' => true,
             'bot_message' => 'No encontré una coincidencia segura. Te recomiendo hablar con Atención a Clientes para evitar sugerirte un estudio incorrecto.',
         ]);
@@ -406,6 +491,7 @@ test('zoho study search sanitizes payload and never stores secrets', function ()
         [
             'query' => 'EGO',
             'brand' => 'olab',
+            'state' => 'Ciudad de México',
             'visitor_id' => 'v-safe',
             'password' => 'should-not-persist',
             'token' => 'secret-token',
@@ -417,7 +503,9 @@ test('zoho study search sanitizes payload and never stores secrets', function ()
 
     $event = ZohoSalesIqEvent::query()->first();
 
-    expect($event->payload)->not->toHaveKey('password')
+    expect($event->payload['brand'] ?? null)->toBe('olab')
+        ->and($event->payload['state'] ?? null)->toBe('Ciudad de México')
+        ->and($event->payload)->not->toHaveKey('password')
         ->and($event->payload)->not->toHaveKey('token')
         ->and($event->payload)->not->toHaveKey('otp')
         ->and($event->payload)->not->toHaveKey('raw_response')

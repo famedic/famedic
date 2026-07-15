@@ -47,8 +47,10 @@ class ZohoSalesIqWebhookPayloadSanitizer
         'topic',
         // Fase 5 — study search
         'query',
+        'state',
         'result_count',
         'result_ids',
+        'store_count',
         'handoff_recommended',
         'reason',
     ];

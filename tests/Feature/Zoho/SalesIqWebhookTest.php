@@ -285,6 +285,22 @@ test('zoho salesiq webhook payload sanitizer keeps flat result_ids lists', funct
         ->and($result)->not->toHaveKey('nested_object');
 });
 
+test('zoho salesiq webhook payload sanitizer keeps study search counters', function () {
+    $sanitizer = new ZohoSalesIqWebhookPayloadSanitizer;
+
+    $result = $sanitizer->sanitize([
+        'query' => 'orina',
+        'brand' => 'unknown',
+        'state' => 'Ciudad de México',
+        'store_count' => 2,
+        'result_count' => 1,
+        'result_ids' => [10],
+    ]);
+
+    expect($result['state'] ?? null)->toBe('Ciudad de México')
+        ->and($result['store_count'] ?? null)->toBe(2);
+});
+
 test('zoho salesiq raw json body is sanitized and never stores secrets', function () {
     $content = json_encode([
         'event_type' => 'bot_intent',
