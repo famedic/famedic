@@ -451,7 +451,7 @@ test('DELETE /cart/coupon does not affect another customer', function () {
 
 test('payment link works with applied coupon', function () {
     [$user, $token] = akubicaCustomerToken();
-    addOlabCartItem($user);
+    addOlabCartItemReadyForPaymentLink($user);
     setupAkubicaCheckoutDraft($user);
     createBalanceCouponForUser($user, 'PROMO10', 7000);
 
@@ -480,7 +480,7 @@ test('payment link works with applied coupon', function () {
 
 test('payment link does not create purchase or payment', function () {
     [$user, $token] = akubicaCustomerToken();
-    addOlabCartItem($user);
+    addOlabCartItemReadyForPaymentLink($user);
     setupAkubicaCheckoutDraft($user);
 
     $purchasesBefore = LaboratoryPurchase::query()->count();

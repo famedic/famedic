@@ -105,6 +105,44 @@ function addOlabCartItem(\App\Models\User $user, ?\App\Models\LaboratoryTest $te
     return $test;
 }
 
+/**
+ * Cart item for payment-link flows that are not testing appointments.
+ * Checkout readiness still requires draft contact/address (e.g. setupAkubicaCheckoutDraft).
+ */
+function addOlabCartItemReadyForPaymentLink(\App\Models\User $user): \App\Models\LaboratoryTest
+{
+    return addOlabCartItem($user, createOlabTest([
+        'famedic_price_cents' => 35000,
+        'public_price_cents' => 45000,
+        'requires_appointment' => false,
+    ]));
+}
+
+/**
+ * Assert Cache-Control contains exactly the given directives (order-independent).
+ *
+ * @param  \Illuminate\Testing\TestResponse|\Illuminate\Http\Response  $response
+ * @param  list<string>  $expectedDirectives
+ */
+function assertExactCacheControlDirectives($response, array $expectedDirectives): void
+{
+    $header = (string) $response->headers->get('Cache-Control');
+
+    $normalize = static function (array $directives): array {
+        return collect($directives)
+            ->map(fn (string $directive) => strtolower(trim($directive)))
+            ->filter()
+            ->sort()
+            ->values()
+            ->all();
+    };
+
+    $actual = $normalize(explode(',', $header));
+    $expected = $normalize($expectedDirectives);
+
+    expect($actual)->toBe($expected);
+}
+
 function assignUserCoupon(\App\Models\User $user, \App\Models\Coupon $coupon, ?\DateTimeInterface $usedAt = null): \App\Models\CouponUser
 {
     return \App\Models\CouponUser::query()->create([
