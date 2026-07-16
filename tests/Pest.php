@@ -152,10 +152,13 @@ function createAkubicaLaboratoryPurchase(
     \App\Models\User $user,
     array $attributes = [],
 ): \App\Models\LaboratoryPurchase {
+    // gda_consecutivo must be set: LaboratoryPurchase::laboratoryNotifications() joins on it.
+    // Production fills it from GDA payload.id (see HandleResultsNotificationAction / CreateNotificationAction).
     return \App\Models\LaboratoryPurchase::query()->create(array_merge([
         'customer_id' => $user->customer->id,
         'brand' => \App\Enums\LaboratoryBrand::OLAB,
         'gda_order_id' => 'GDA-'.fake()->unique()->numerify('######'),
+        'gda_consecutivo' => nextAkubicaGdaConsecutivo(),
         'name' => 'Juan',
         'paternal_lastname' => 'Pérez',
         'maternal_lastname' => 'López',
@@ -171,6 +174,16 @@ function createAkubicaLaboratoryPurchase(
         'zipcode' => '64000',
         'total_cents' => 35000,
     ], $attributes));
+}
+
+/**
+ * Deterministic unique GDA consecutivo for Feature tests (integer, as cast on LaboratoryPurchase).
+ */
+function nextAkubicaGdaConsecutivo(): int
+{
+    static $next = 700000;
+
+    return $next++;
 }
 
 function storeFakePdf(string $path, string $content = '%PDF-1.4 fake pdf content'): void
@@ -198,14 +211,17 @@ function createAkubicaResultsNotification(
 ): \App\Models\LaboratoryNotification {
     $pdfContent ??= '%PDF-1.4 notification results';
 
+    // Must equal purchase.gda_consecutivo — that is the hasMany join key (not laboratory_purchase_id).
+    $consecutivo = $order->gda_consecutivo;
+
     return \App\Models\LaboratoryNotification::query()->create([
         'notification_type' => \App\Models\LaboratoryNotification::TYPE_RESULTS,
         'lineanegocio' => \App\Models\LaboratoryNotification::LINEA_NEGOCIO_RESULTS,
         'laboratory_purchase_id' => $order->id,
         'gda_order_id' => $order->gda_order_id,
-        'gda_consecutivo' => (string) ($order->gda_consecutivo ?? $order->gda_order_id),
+        'gda_consecutivo' => $consecutivo,
         'status' => \App\Models\LaboratoryNotification::STATUS_PROCESSED,
-        'payload' => [],
+        'payload' => ['id' => $consecutivo],
         'results_received_at' => now(),
         'results_pdf_base64' => base64_encode($pdfContent),
     ]);
