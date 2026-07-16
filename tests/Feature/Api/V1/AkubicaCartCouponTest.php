@@ -279,9 +279,24 @@ test('applying coupon does not affect another customer', function () {
         'code' => 'PROMO10',
     ], authHeaders($tokenA))->assertOk();
 
-    $this->getJson('/api/v1/cart/coupon?brand=olab', authHeaders($tokenB))
+    $this->getJson('/api/v1/cart/coupon?brand=olab', $this->switchApiBearerToken($tokenB))
         ->assertOk()
         ->assertJsonPath('data.coupon', null);
+
+    // Second request must resolve customer B: B has no applied coupon; A's draft keeps PROMO10.
+    expect(
+        LaboratoryCheckoutDraft::query()
+            ->where('customer_id', $userB->customer->id)
+            ->where('laboratory_brand', LaboratoryBrand::OLAB)
+            ->value('coupon_id'),
+    )->toBeNull();
+
+    expect(
+        LaboratoryCheckoutDraft::query()
+            ->where('customer_id', $userA->customer->id)
+            ->where('laboratory_brand', LaboratoryBrand::OLAB)
+            ->value('coupon_id'),
+    )->not->toBeNull();
 });
 
 // ── Remove ──────────────────────────────────────────────────────────────
@@ -366,11 +381,34 @@ test('DELETE /cart/coupon does not affect another customer', function () {
         'code' => 'PROMO10',
     ], authHeaders($tokenA))->assertOk();
 
-    $this->deleteJson('/api/v1/cart/coupon?brand=olab', [], authHeaders($tokenB))
+    $couponIdOnA = LaboratoryCheckoutDraft::query()
+        ->where('customer_id', $userA->customer->id)
+        ->where('laboratory_brand', LaboratoryBrand::OLAB)
+        ->value('coupon_id');
+
+    expect($couponIdOnA)->not->toBeNull();
+
+    $this->deleteJson('/api/v1/cart/coupon?brand=olab', [], $this->switchApiBearerToken($tokenB))
         ->assertOk()
         ->assertJsonPath('data.removed', false);
 
-    $this->getJson('/api/v1/cart/coupon?brand=olab', authHeaders($tokenA))
+    // DELETE as B must not clear A's draft coupon (proves request ran as customer B).
+    expect(
+        LaboratoryCheckoutDraft::query()
+            ->where('customer_id', $userA->customer->id)
+            ->where('laboratory_brand', LaboratoryBrand::OLAB)
+            ->value('coupon_id'),
+    )->toBe($couponIdOnA);
+
+    expect(
+        LaboratoryCheckoutDraft::query()
+            ->where('customer_id', $userB->customer->id)
+            ->where('laboratory_brand', LaboratoryBrand::OLAB)
+            ->whereNotNull('coupon_id')
+            ->exists(),
+    )->toBeFalse();
+
+    $this->getJson('/api/v1/cart/coupon?brand=olab', $this->switchApiBearerToken($tokenA))
         ->assertOk()
         ->assertJsonPath('data.coupon.code', 'PROMO10');
 });

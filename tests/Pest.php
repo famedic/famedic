@@ -69,6 +69,18 @@ function authHeaders(string $token): array
     return ['Authorization' => 'Bearer '.$token];
 }
 
+/**
+ * Headers for a different Bearer identity within the same Feature test.
+ * Prefer $this->switchApiBearerToken($token) from Tests\TestCase when switching
+ * customers after a prior authenticated HTTP call (avoids sticky Auth guards).
+ *
+ * @return array{Authorization: string}
+ */
+function switchApiBearerToken(\Tests\TestCase $test, string $token): array
+{
+    return $test->switchApiBearerToken($token);
+}
+
 function createOlabTest(array $attributes = []): \App\Models\LaboratoryTest
 {
     return \App\Models\LaboratoryTest::factory()->create(array_merge([
