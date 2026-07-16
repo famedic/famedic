@@ -36,11 +36,13 @@ class CartCouponSupport
             return null;
         }
 
+        // Scope by assignment to the authenticated user only. Do not filter used_at
+        // here: used coupons must reach validateApplication → COUPON_EXPIRED (409).
+        // Codes not assigned to this user remain invisible (null → COUPON_NOT_FOUND).
         return Coupon::query()
             ->whereRaw('UPPER(code) = ?', [$normalizedCode])
             ->whereHas('couponUsers', fn ($query) => $query
-                ->where('user_id', $user->id)
-                ->whereNull('used_at'))
+                ->where('user_id', $user->id))
             ->first();
     }
 

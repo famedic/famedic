@@ -146,12 +146,46 @@ test('POST /cart/coupon with used coupon returns 409 COUPON_EXPIRED', function (
         ->where('user_id', $user->id)
         ->update(['used_at' => now()]);
 
+    $draftCouponBefore = LaboratoryCheckoutDraft::query()
+        ->where('customer_id', $user->customer->id)
+        ->where('laboratory_brand', LaboratoryBrand::OLAB)
+        ->value('coupon_id');
+
     $this->postJson('/api/v1/cart/coupon', [
         'brand' => 'olab',
         'code' => 'USADO',
     ], authHeaders($token))
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'COUPON_EXPIRED');
+
+    expect(
+        LaboratoryCheckoutDraft::query()
+            ->where('customer_id', $user->customer->id)
+            ->where('laboratory_brand', LaboratoryBrand::OLAB)
+            ->value('coupon_id'),
+    )->toBe($draftCouponBefore);
+});
+
+test('POST /cart/coupon with another users coupon returns 404 COUPON_NOT_FOUND', function () {
+    [$owner] = akubicaCustomerToken();
+    [$stranger, $strangerToken] = akubicaCustomerToken();
+    addOlabCartItem($stranger);
+    createBalanceCouponForUser($owner, 'AJENO', 7000);
+
+    $this->postJson('/api/v1/cart/coupon', [
+        'brand' => 'olab',
+        'code' => 'AJENO',
+    ], authHeaders($strangerToken))
+        ->assertNotFound()
+        ->assertJsonPath('error.code', 'COUPON_NOT_FOUND');
+
+    expect(
+        LaboratoryCheckoutDraft::query()
+            ->where('customer_id', $stranger->customer->id)
+            ->where('laboratory_brand', LaboratoryBrand::OLAB)
+            ->whereNotNull('coupon_id')
+            ->exists(),
+    )->toBeFalse();
 });
 
 test('POST /cart/coupon with zero balance returns 409 COUPON_EXPIRED', function () {

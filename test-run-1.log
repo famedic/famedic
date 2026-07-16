@@ -1,0 +1,8 @@
+﻿wsl.exe : wsl: Failed to translate '\\wsl.localhost\Ubuntu\home\developer\projects\famedic'
+En C:\Users\RomanLopezSuarez\AppData\Local\Temp\ps-script-19021d49-4bd6-4bb7-b9b2-45df6534eb94.ps1: 88 Carácter: 1
++ wsl.exe bash -lc 'docker exec famedic-app-1 bash -lc "cd /var/www/htm ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (wsl: Failed to ...ojects\famedic':String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+/bin/sh: bash: Permission denied
