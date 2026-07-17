@@ -50,6 +50,9 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
 
         $invoice = $p->invoice;
         $invoiceUrl = $invoice ? route('invoice', ['invoice' => $invoice->id]) : null;
+        $invoiceXmlUrl = ($invoice && filled($invoice->invoice_xml))
+            ? route('invoice.xml', ['invoice' => $invoice->id])
+            : null;
 
         $transaction = $p->transactions->first();
 
@@ -118,7 +121,9 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
             'result_view_url' => $resultViewUrl,
             'result_download_url' => $resultDownloadUrl,
             'invoice_url' => $invoiceUrl,
+            'invoice_xml_url' => $invoiceXmlUrl,
             'has_invoice' => $invoice !== null,
+            'has_invoice_xml' => $invoiceXmlUrl !== null,
             'invoice_requested' => $p->invoiceRequest !== null,
             'has_results' => $hasResults,
             'is_pipeline_invoiced' => $invoice !== null

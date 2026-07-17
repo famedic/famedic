@@ -70,15 +70,34 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 
 			{hasInvoice && (
 				<div className="space-y-3">
-					<Anchor
-						href={route("invoice", { invoice: invoiceRecord?.id ?? invoiceRecord })}
-						target="_blank"
-					>
-						<Button outline className="w-full" type="button">
-							<ArrowDownTrayIcon className="size-4" />
-							Descargar factura
-						</Button>
-					</Anchor>
+					<div className="flex flex-col gap-2 sm:flex-row">
+						<Anchor
+							href={route("invoice", {
+								invoice: invoiceRecord?.id ?? invoiceRecord,
+							})}
+							target="_blank"
+							className="flex-1"
+						>
+							<Button outline className="w-full" type="button">
+								<ArrowDownTrayIcon className="size-4" />
+								Descargar PDF
+							</Button>
+						</Anchor>
+						{invoiceRecord?.invoice_xml && (
+							<Anchor
+								href={route("invoice.xml", {
+									invoice: invoiceRecord?.id ?? invoiceRecord,
+								})}
+								target="_blank"
+								className="flex-1"
+							>
+								<Button outline className="w-full" type="button">
+									<ArrowDownTrayIcon className="size-4" />
+									Descargar XML
+								</Button>
+							</Anchor>
+						)}
+					</div>
 
 					<div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
 						<div className="flex items-center gap-2">

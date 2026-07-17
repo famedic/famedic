@@ -180,29 +180,62 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 											</TableCell>
 
 											<TableCell className="text-right">
-												<a
-													href={route("invoice", {
-														invoice: invoice,
-													})}
-													target="_blank"
-												>
-													<Button
-														className="hidden dark:inline-flex"
-														type="button"
-														color="dark"
+												<div className="inline-flex flex-wrap justify-end gap-2">
+													<a
+														href={route("invoice", {
+															invoice: invoice,
+														})}
+														target="_blank"
 													>
-														<DocumentTextIcon />
-														Ver factura
-													</Button>
-													<Button
-														className="dark:hidden"
-														type="button"
-														color="white"
-													>
-														<DocumentTextIcon />
-														Ver factura
-													</Button>
-												</a>
+														<Button
+															className="hidden dark:inline-flex"
+															type="button"
+															color="dark"
+														>
+															<DocumentTextIcon />
+															Ver PDF
+														</Button>
+														<Button
+															className="dark:hidden"
+															type="button"
+															color="white"
+														>
+															<DocumentTextIcon />
+															Ver PDF
+														</Button>
+													</a>
+													{invoice.invoice_xml && (
+														<a
+															href={route(
+																"invoice.xml",
+																{
+																	invoice:
+																		invoice,
+																},
+															)}
+															target="_blank"
+														>
+															<Button
+																className="hidden dark:inline-flex"
+																type="button"
+																color="dark"
+																outline
+															>
+																<DocumentTextIcon />
+																Ver XML
+															</Button>
+															<Button
+																className="dark:hidden"
+																type="button"
+																color="white"
+																outline
+															>
+																<DocumentTextIcon />
+																Ver XML
+															</Button>
+														</a>
+													)}
+												</div>
 											</TableCell>
 										</TableRow>
 									);

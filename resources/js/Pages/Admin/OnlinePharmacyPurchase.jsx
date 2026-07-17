@@ -135,8 +135,18 @@ function Header({ onlinePharmacyPurchase, setOpenDeleteConfirmation }) {
 									})
 								: null
 						}
+						invoiceXmlRoute={
+							onlinePharmacyPurchase.invoice?.invoice_xml
+								? route("invoice.xml", {
+										invoice: onlinePharmacyPurchase.invoice,
+									})
+								: null
+						}
 						invoiceRequest={onlinePharmacyPurchase.invoice_request}
 						hasInvoice={!!onlinePharmacyPurchase.invoice}
+						hasInvoiceXml={
+							!!onlinePharmacyPurchase.invoice?.invoice_xml
+						}
 					/>
 					{onlinePharmacyPurchase.dev_assistance_requests.length ===
 					0 ? (

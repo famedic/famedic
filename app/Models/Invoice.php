@@ -16,11 +16,19 @@ class Invoice extends Model
 
     protected $appends = [
         'formatted_created_at',
+        'has_invoice_xml',
     ];
 
     public function invoiceable(): MorphTo
     {
         return $this->morphTo()->withTrashed();
+    }
+
+    protected function hasInvoiceXml(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => filled($this->invoice_xml)
+        );
     }
 
     protected function formattedCreatedAt(): Attribute
