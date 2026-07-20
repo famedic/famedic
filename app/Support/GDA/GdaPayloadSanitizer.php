@@ -18,6 +18,56 @@ class GdaPayloadSanitizer
         return self::sanitizeRecursive($payload);
     }
 
+    /**
+     * Sanitiza payloads para depuración: omite PDF base64 pesado pero deja una marca
+     * con el tamaño, y enmascara tokens sensibles.
+     */
+    public static function sanitizeForDebug(array $payload): array
+    {
+        return self::sanitizeForDebugRecursive($payload);
+    }
+
+    private static function sanitizeForDebugRecursive(array $data): array
+    {
+        $sanitized = [];
+
+        foreach ($data as $key => $value) {
+            if (in_array($key, self::HEAVY_BASE64_KEYS, true) && is_string($value) && $value !== '') {
+                $bytes = strlen($value);
+                $sanitized[$key] = sprintf(
+                    '[omitted base64: %s chars ≈ %s KB]',
+                    number_format($bytes),
+                    number_format($bytes / 1024, 1)
+                );
+
+                continue;
+            }
+
+            if ($key === 'token' && is_string($value) && $value !== '') {
+                $sanitized[$key] = self::maskSecret($value);
+
+                continue;
+            }
+
+            $sanitized[$key] = is_array($value)
+                ? self::sanitizeForDebugRecursive($value)
+                : $value;
+        }
+
+        return $sanitized;
+    }
+
+    private static function maskSecret(string $value): string
+    {
+        $length = strlen($value);
+
+        if ($length <= 8) {
+            return str_repeat('*', $length);
+        }
+
+        return substr($value, 0, 4).str_repeat('*', max(4, $length - 8)).substr($value, -4);
+    }
+
     public static function extractResultsPdfBase64(array $payload): ?string
     {
         foreach (self::HEAVY_BASE64_KEYS as $key) {

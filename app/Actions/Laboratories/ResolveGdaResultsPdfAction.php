@@ -215,8 +215,8 @@ class ResolveGdaResultsPdfAction
 
     private function fetchFromGdaApi(LaboratoryNotification $notification): string
     {
-        $orderId = $notification->gda_order_id;
         $payload = $this->resolvePayload($notification);
+        $orderId = $this->resolveConsultOrderId($notification, $payload);
 
         if (! $orderId) {
             throw new \RuntimeException('Falta el ID de orden GDA.');
@@ -236,6 +236,7 @@ class ResolveGdaResultsPdfAction
                 'gda_message' => array_merge($notification->gda_message ?? [], [
                     'last_gda_not_available_at' => now()->toISOString(),
                     'last_gda_not_available_message' => $e->gdaMessage,
+                    'last_gda_not_available_consult_id' => $orderId,
                 ]),
             ]);
 
@@ -248,7 +249,48 @@ class ResolveGdaResultsPdfAction
             throw new \RuntimeException('No se encontraron resultados PDF en la respuesta de GDA.');
         }
 
+        $notification->update([
+            'gda_message' => array_merge($notification->gda_message ?? [], [
+                'last_gda_not_available_at' => null,
+                'last_gda_not_available_message' => null,
+                'last_successful_consult_id' => $orderId,
+            ]),
+        ]);
+
         return $pdfBase64;
+    }
+
+    /**
+     * Prefiere el folio consultable de la compra (etiqueta GZ0L…) cuando la
+     * notificación guardó un ServiceRequest.id numérico por error histórico.
+     */
+    private function resolveConsultOrderId(LaboratoryNotification $notification, array $payload): ?string
+    {
+        $purchase = $this->resolvePurchase($notification);
+        $resolver = app(ResolveConsultableGdaId::class);
+
+        $candidates = [
+            $purchase?->gda_order_id,
+            data_get($payload, 'code.coding.0.infogda_muestras.0.infogda_etiqueta'),
+            $notification->gda_order_id,
+            data_get($payload, 'id'),
+            data_get($payload, 'requisition.value'),
+        ];
+
+        foreach ($candidates as $candidate) {
+            if ($candidate === null || $candidate === '') {
+                continue;
+            }
+
+            $normalized = (string) $candidate;
+
+            if ($resolver->isConsultable($normalized)) {
+                return $normalized;
+            }
+        }
+
+        return $notification->gda_order_id
+            ?: (data_get($payload, 'id') ? (string) data_get($payload, 'id') : null);
     }
 
     private function resolvePayload(LaboratoryNotification $notification): array

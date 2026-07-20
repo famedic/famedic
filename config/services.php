@@ -89,6 +89,12 @@ return [
 
     'gda' => [
         'url' => env('GDA_URL'),
+        /*
+         * URL completa del endpoint de consulta de PDF de resultados.
+         * GDA indicó una URL distinta a GDA_URL solo para este endpoint.
+         * Si está vacío, se usa el path legacy: {GDA_URL}infogda-fullV3/consult
+         */
+        'results_consult_url' => env('GDA_RESULTS_CONSULT_URL'),
         'results_sync_queue' => env('GDA_RESULTS_SYNC_QUEUE', 'default'),
         'report_emails' => env('GDA_REPORT_EMAILS') ? explode(',', env('GDA_REPORT_EMAILS')) : [],
         'concierge_emails' => env('GDA_CONCIERGE_EMAILS') ? explode(',', env('GDA_CONCIERGE_EMAILS')) : [],

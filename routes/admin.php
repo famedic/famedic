@@ -183,6 +183,8 @@ Route::prefix('admin')->middleware([
             ->name('laboratory-notifications-monitor.fetch-results');
         Route::post('laboratory-notifications-monitor/order/{orderKey}/force-refresh-results', [LaboratoryNotificationMonitorController::class, 'forceRefreshResults'])
             ->name('laboratory-notifications-monitor.force-refresh-results');
+        Route::post('laboratory-notifications-monitor/order/{orderKey}/test-gda-consult', [LaboratoryNotificationMonitorController::class, 'testGdaConsult'])
+            ->name('laboratory-notifications-monitor.test-gda-consult');
         Route::get('laboratory-notifications-monitor/order/{orderKey}/download-results', [LaboratoryNotificationMonitorController::class, 'downloadResults'])
             ->name('laboratory-notifications-monitor.download-results');
         Route::get('laboratory-notifications-monitor/{gdaOrderId}', [LaboratoryNotificationMonitorController::class, 'show'])

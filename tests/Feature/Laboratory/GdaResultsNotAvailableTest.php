@@ -47,7 +47,7 @@ class GdaResultsNotAvailableTest extends TestCase
     #[Test]
     public function get_gda_results_action_throws_not_available_exception_on_400_no_contiene_resultados(): void
     {
-        $gdaUrl = config('services.gda.url').'infogda-fullV3/consult';
+        $gdaUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
 
         Http::fake([
             $gdaUrl => Http::response([
@@ -77,7 +77,7 @@ class GdaResultsNotAvailableTest extends TestCase
     #[Test]
     public function get_gda_results_action_throws_generic_exception_on_other_400_messages(): void
     {
-        $gdaUrl = config('services.gda.url').'infogda-fullV3/consult';
+        $gdaUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
 
         Http::fake([
             $gdaUrl => Http::response([
@@ -111,7 +111,7 @@ class GdaResultsNotAvailableTest extends TestCase
         $purchase = $this->seedPurchase(['gda_order_id' => 'GZ0L000423']);
         $notification = $this->seedResultsNotificationRecord($purchase);
 
-        $gdaUrl = config('services.gda.url').'infogda-fullV3/consult';
+        $gdaUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
 
         Http::fake([
             $gdaUrl => Http::response([
@@ -138,7 +138,7 @@ class GdaResultsNotAvailableTest extends TestCase
         $purchase = $this->seedPurchase(['gda_order_id' => 'GZ0L000423']);
         $notification = $this->seedResultsNotificationRecord($purchase);
 
-        $gdaUrl = config('services.gda.url').'infogda-fullV3/consult';
+        $gdaUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
 
         Http::fake([
             $gdaUrl => Http::response([
@@ -171,7 +171,7 @@ class GdaResultsNotAvailableTest extends TestCase
         $purchase = $this->seedPurchase(['gda_order_id' => 'GZ0L000423']);
         $notification = $this->seedResultsNotificationRecord($purchase);
 
-        $gdaUrl = config('services.gda.url').'infogda-fullV3/consult';
+        $gdaUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
 
         Http::fake([
             $gdaUrl => Http::response([
@@ -197,7 +197,7 @@ class GdaResultsNotAvailableTest extends TestCase
     #[Test]
     public function get_gda_results_action_sends_order_id_as_payload_id_for_gabinete(): void
     {
-        $gdaUrl = config('services.gda.url').'infogda-fullV3/consult';
+        $gdaUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
 
         Http::fake([
             $gdaUrl => Http::response([
@@ -235,7 +235,7 @@ class GdaResultsNotAvailableTest extends TestCase
         $notification = $this->seedResultsNotificationRecord($purchase);
 
         $pdfContent = '%PDF-1.4 valid test content for storage';
-        $gdaUrl = config('services.gda.url').'infogda-fullV3/consult';
+        $gdaUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
 
         Http::fake([
             $gdaUrl => Http::response([
@@ -266,7 +266,7 @@ class GdaResultsNotAvailableTest extends TestCase
         $notification = $this->seedResultsNotificationRecord($purchase);
 
         $pdfContent = '%PDF-1.4 valid test content';
-        $gdaUrl = config('services.gda.url').'infogda-fullV3/consult';
+        $gdaUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
 
         Http::fake([
             $gdaUrl => Http::response([

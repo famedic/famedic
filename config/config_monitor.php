@@ -92,6 +92,7 @@ return [
         'MURGUIA_QUEUE_NAME' => 'services.murguia.queue',
         'MURGUIA_INSTITUTIONAL_ALLOW_NON_ODESSA' => 'famedic.murguia_institutional_allow_non_odessa_morph',
         'GDA_URL' => 'services.gda.url',
+        'GDA_RESULTS_CONSULT_URL' => 'services.gda.results_consult_url',
         'GDA_REPORT_EMAILS' => 'services.gda.report_emails',
         'GDA_CONCIERGE_EMAILS' => 'services.gda.concierge_emails',
         'GDA_SWISSLAB_ID' => 'services.gda.brands.swisslab.brand_id',

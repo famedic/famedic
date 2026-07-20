@@ -39,8 +39,8 @@ class GdaWebhookPayloadResolver
 
         $isGabinete = $this->detectGabinete($serviceRequestId, $contenedorAcronim);
 
-        $gdaOrderId = $this->resolveGdaOrderId($serviceRequestId, $infogdaEtiqueta);
-        $gdaConsecutivo = $this->resolveGdaConsecutivo($serviceRequestId, $infogdaOrden);
+        $gdaOrderId = $this->resolveGdaOrderId($serviceRequestId, $infogdaEtiqueta, $isGabinete);
+        $gdaConsecutivo = $this->resolveGdaConsecutivo($serviceRequestId, $infogdaOrden, $isGabinete);
 
         return [
             'service_request_id' => $serviceRequestId,
@@ -65,8 +65,14 @@ class GdaWebhookPayloadResolver
         return (bool) preg_match('/^\d+$/', $value);
     }
 
-    protected function resolveGdaOrderId(?string $serviceRequestId, ?string $infogdaEtiqueta): ?string
+    protected function resolveGdaOrderId(?string $serviceRequestId, ?string $infogdaEtiqueta, bool $isGabinete = false): ?string
     {
+        // Gabinete: la etiqueta (GZ0L…) es el folio consultable. GDA a veces manda
+        // ServiceRequest.id numérico junto con la etiqueta; no debemos guardar el numérico.
+        if ($isGabinete && $infogdaEtiqueta !== null && $infogdaEtiqueta !== '') {
+            return $infogdaEtiqueta;
+        }
+
         if ($serviceRequestId !== null && $serviceRequestId !== '') {
             return $serviceRequestId;
         }
@@ -78,14 +84,27 @@ class GdaWebhookPayloadResolver
         return null;
     }
 
-    protected function resolveGdaConsecutivo(?string $serviceRequestId, ?string $infogdaOrden): ?int
+    protected function resolveGdaConsecutivo(?string $serviceRequestId, ?string $infogdaOrden, bool $isGabinete = false): ?int
     {
+        if ($isGabinete) {
+            // Si GDA manda ServiceRequest.id numérico (híbrido), conservarlo como
+            // consecutivo para agrupar con notificaciones históricas ya guardadas.
+            if ($this->isNumericConsecutivo($serviceRequestId)) {
+                return (int) $serviceRequestId;
+            }
+
+            if ($this->isNumericConsecutivo($infogdaOrden)) {
+                return (int) $infogdaOrden;
+            }
+
+            return null;
+        }
+
         // Compatibilidad laboratorio normal: si ServiceRequest.id es numérico, es el consecutivo histórico.
         if ($this->isNumericConsecutivo($serviceRequestId)) {
             return (int) $serviceRequestId;
         }
 
-        // Gabinete / etiquetas alfanuméricas: usar infogda_orden cuando exista.
         if ($this->isNumericConsecutivo($infogdaOrden)) {
             return (int) $infogdaOrden;
         }

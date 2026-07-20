@@ -65,6 +65,37 @@ test('detecta gabinete por contenedor GAB', function () {
         ->and($resolved['gda_consecutivo'])->toBe(515);
 });
 
+test('gabinete hibrido: prioriza etiqueta sobre ServiceRequest.id numerico', function () {
+    $resolved = $this->resolver->resolve([
+        'id' => '24748093',
+        'requisition' => ['value' => '2151', 'convenio' => 17682],
+        'GDA_menssage' => ['acuse' => 'uuid-gab-hybrid'],
+        'code' => [
+            'coding' => [[
+                'infogda_orden' => '552',
+                'infogda_muestras' => [[
+                    'infogda_etiqueta' => 'GZ0L000552',
+                    'infogda_contenedoracronim' => 'GAB',
+                ]],
+            ]],
+        ],
+    ]);
+
+    expect($resolved['is_gabinete'])->toBeTrue()
+        ->and($resolved['gda_order_id'])->toBe('GZ0L000552')
+        ->and($resolved['gda_consecutivo'])->toBe(24748093)
+        ->and($resolved['service_request_id'])->toBe('24748093')
+        ->and($resolved['infogda_etiqueta'])->toBe('GZ0L000552');
+});
+
+test('laboratorio normal no usa etiqueta con sufijo como gda_order_id', function () {
+    $resolved = $this->resolver->resolve(normalLabPayload());
+
+    expect($resolved['is_gabinete'])->toBeFalse()
+        ->and($resolved['gda_order_id'])->toBe('24642071')
+        ->and($resolved['infogda_etiqueta'])->toBe('HD0L001392OQ');
+});
+
 test('isNumericConsecutivo valida solo digitos', function () {
     expect($this->resolver->isNumericConsecutivo('414'))->toBeTrue()
         ->and($this->resolver->isNumericConsecutivo('GZ0L000414'))->toBeFalse()
