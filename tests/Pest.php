@@ -111,6 +111,19 @@ function addOlabCartItem(\App\Models\User $user, ?\App\Models\LaboratoryTest $te
 }
 
 /**
+ * Cart item for payment-link happy paths: appointment not required.
+ * Keep using addOlabCartItem() where APPOINTMENT_REQUIRED must remain random/true.
+ */
+function addOlabCartItemReadyForPaymentLink(\App\Models\User $user): \App\Models\LaboratoryTest
+{
+    return addOlabCartItem($user, createOlabTest([
+        'requires_appointment' => false,
+        'famedic_price_cents' => 35000,
+        'public_price_cents' => 45000,
+    ]));
+}
+
+/**
  * Compare Cache-Control by exact directive set (order-independent).
  * Symfony may reorder directives; production header semantics stay unchanged.
  *
@@ -135,7 +148,6 @@ function assertExactCacheControlDirectives($response, array $expectedDirectives)
 
     expect($actual)->toBe($expected);
 }
-
 
 function assignUserCoupon(\App\Models\User $user, \App\Models\Coupon $coupon, ?\DateTimeInterface $usedAt = null): \App\Models\CouponUser
 {
