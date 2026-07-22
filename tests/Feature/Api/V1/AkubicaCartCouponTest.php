@@ -279,9 +279,21 @@ test('applying coupon does not affect another customer', function () {
         'code' => 'PROMO10',
     ], authHeaders($tokenA))->assertOk();
 
-    $this->getJson('/api/v1/cart/coupon?brand=olab', authHeaders($tokenB))
+    $headersB = switchApiBearerToken($this, $tokenB);
+
+    $this->getJson('/api/v1/cart/coupon?brand=olab', $headersB)
         ->assertOk()
         ->assertJsonPath('data.coupon', null);
+
+    expect(LaboratoryCheckoutDraft::query()
+        ->where('customer_id', $userB->customer->id)
+        ->where('laboratory_brand', LaboratoryBrand::OLAB)
+        ->value('coupon_id'))->toBeNull();
+
+    expect(LaboratoryCheckoutDraft::query()
+        ->where('customer_id', $userA->customer->id)
+        ->where('laboratory_brand', LaboratoryBrand::OLAB)
+        ->value('coupon_id'))->not->toBeNull();
 });
 
 // ── Remove ──────────────────────────────────────────────────────────────
@@ -366,13 +378,27 @@ test('DELETE /cart/coupon does not affect another customer', function () {
         'code' => 'PROMO10',
     ], authHeaders($tokenA))->assertOk();
 
-    $this->deleteJson('/api/v1/cart/coupon?brand=olab', [], authHeaders($tokenB))
+    $headersB = switchApiBearerToken($this, $tokenB);
+
+    $this->deleteJson('/api/v1/cart/coupon?brand=olab', [], $headersB)
         ->assertOk()
         ->assertJsonPath('data.removed', false);
 
-    $this->getJson('/api/v1/cart/coupon?brand=olab', authHeaders($tokenA))
+    expect(LaboratoryCheckoutDraft::query()
+        ->where('customer_id', $userB->customer->id)
+        ->where('laboratory_brand', LaboratoryBrand::OLAB)
+        ->value('coupon_id'))->toBeNull();
+
+    $headersA = switchApiBearerToken($this, $tokenA);
+
+    $this->getJson('/api/v1/cart/coupon?brand=olab', $headersA)
         ->assertOk()
         ->assertJsonPath('data.coupon.code', 'PROMO10');
+
+    expect(LaboratoryCheckoutDraft::query()
+        ->where('customer_id', $userA->customer->id)
+        ->where('laboratory_brand', LaboratoryBrand::OLAB)
+        ->value('coupon_id'))->not->toBeNull();
 });
 
 // ── Regresión ───────────────────────────────────────────────────────────

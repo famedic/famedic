@@ -69,6 +69,17 @@ function authHeaders(string $token): array
     return ['Authorization' => 'Bearer '.$token];
 }
 
+/**
+ * Pest wrapper for Tests\TestCase::switchApiBearerToken().
+ *
+ * @return array{Authorization: string}
+ */
+function switchApiBearerToken(TestCase $test, string $token): array
+{
+    return $test->switchApiBearerToken($token);
+}
+
+
 function createOlabTest(array $attributes = []): \App\Models\LaboratoryTest
 {
     return \App\Models\LaboratoryTest::factory()->create(array_merge([
