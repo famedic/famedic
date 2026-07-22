@@ -39,8 +39,7 @@ class CartCouponSupport
         return Coupon::query()
             ->whereRaw('UPPER(code) = ?', [$normalizedCode])
             ->whereHas('couponUsers', fn ($query) => $query
-                ->where('user_id', $user->id)
-                ->whereNull('used_at'))
+                ->where('user_id', $user->id))
             ->first();
     }
 
