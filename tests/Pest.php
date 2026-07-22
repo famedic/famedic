@@ -79,6 +79,12 @@ function switchApiBearerToken(TestCase $test, string $token): array
     return $test->switchApiBearerToken($token);
 }
 
+function nextAkubicaGdaConsecutivo(): int
+{
+    static $next = 700000;
+
+    return $next++;
+}
 
 function createOlabTest(array $attributes = []): \App\Models\LaboratoryTest
 {
@@ -151,10 +157,13 @@ function createAkubicaLaboratoryPurchase(
     \App\Models\User $user,
     array $attributes = [],
 ): \App\Models\LaboratoryPurchase {
+    $gdaConsecutivo = $attributes['gda_consecutivo'] ?? nextAkubicaGdaConsecutivo();
+
     return \App\Models\LaboratoryPurchase::query()->create(array_merge([
         'customer_id' => $user->customer->id,
         'brand' => \App\Enums\LaboratoryBrand::OLAB,
         'gda_order_id' => 'GDA-'.fake()->unique()->numerify('######'),
+        'gda_consecutivo' => $gdaConsecutivo,
         'name' => 'Juan',
         'paternal_lastname' => 'Pérez',
         'maternal_lastname' => 'López',
@@ -196,15 +205,18 @@ function createAkubicaResultsNotification(
     ?string $pdfContent = null,
 ): \App\Models\LaboratoryNotification {
     $pdfContent ??= '%PDF-1.4 notification results';
+    $gdaConsecutivo = $order->gda_consecutivo ?? nextAkubicaGdaConsecutivo();
 
     return \App\Models\LaboratoryNotification::query()->create([
         'notification_type' => \App\Models\LaboratoryNotification::TYPE_RESULTS,
         'lineanegocio' => \App\Models\LaboratoryNotification::LINEA_NEGOCIO_RESULTS,
         'laboratory_purchase_id' => $order->id,
         'gda_order_id' => $order->gda_order_id,
-        'gda_consecutivo' => (string) ($order->gda_consecutivo ?? $order->gda_order_id),
+        'gda_consecutivo' => $gdaConsecutivo,
         'status' => \App\Models\LaboratoryNotification::STATUS_PROCESSED,
-        'payload' => [],
+        'payload' => [
+            'id' => $gdaConsecutivo,
+        ],
         'results_received_at' => now(),
         'results_pdf_base64' => base64_encode($pdfContent),
     ]);
