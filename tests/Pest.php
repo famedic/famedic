@@ -110,6 +110,33 @@ function addOlabCartItem(\App\Models\User $user, ?\App\Models\LaboratoryTest $te
     return $test;
 }
 
+/**
+ * Compare Cache-Control by exact directive set (order-independent).
+ * Symfony may reorder directives; production header semantics stay unchanged.
+ *
+ * @param  \Illuminate\Testing\TestResponse|\Illuminate\Http\Response  $response
+ * @param  array<int, string>  $expectedDirectives
+ */
+function assertExactCacheControlDirectives($response, array $expectedDirectives): void
+{
+    $header = $response->headers->get('Cache-Control') ?? '';
+
+    $normalize = static function (array $directives): array {
+        return collect($directives)
+            ->map(fn (string $directive) => strtolower(trim($directive)))
+            ->filter(fn (string $directive) => $directive !== '')
+            ->sort()
+            ->values()
+            ->all();
+    };
+
+    $actual = $normalize(explode(',', $header));
+    $expected = $normalize($expectedDirectives);
+
+    expect($actual)->toBe($expected);
+}
+
+
 function assignUserCoupon(\App\Models\User $user, \App\Models\Coupon $coupon, ?\DateTimeInterface $usedAt = null): \App\Models\CouponUser
 {
     return \App\Models\CouponUser::query()->create([

@@ -125,8 +125,14 @@ test('result download response includes secure Cache-Control header', function (
     storeFakePdf($path);
     $order = createAkubicaLaboratoryPurchase($user, ['results' => $path]);
 
-    $this->get("/api/v1/orders/{$order->id}/results/download", authHeaders($token))
-        ->assertHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+    $response = $this->get("/api/v1/orders/{$order->id}/results/download", authHeaders($token));
+
+    assertExactCacheControlDirectives($response, [
+        'private',
+        'no-store',
+        'no-cache',
+        'must-revalidate',
+    ]);
 });
 
 // ── Invoice download ────────────────────────────────────────────────────
@@ -222,8 +228,14 @@ test('invoice download response includes secure Cache-Control header', function 
     $order = createAkubicaLaboratoryPurchase($user);
     $invoice = createAkubicaLaboratoryInvoice($order);
 
-    $this->get("/api/v1/orders/{$order->id}/invoices/{$invoice->id}/download", authHeaders($token))
-        ->assertHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+    $response = $this->get("/api/v1/orders/{$order->id}/invoices/{$invoice->id}/download", authHeaders($token));
+
+    assertExactCacheControlDirectives($response, [
+        'private',
+        'no-store',
+        'no-cache',
+        'must-revalidate',
+    ]);
 });
 
 // ── Integración con resources ───────────────────────────────────────────
