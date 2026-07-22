@@ -28,18 +28,31 @@ import SettingsCard from "@/Components/SettingsCard";
 const PDF_MAX_BYTES = 10 * 1024 * 1024;
 const XML_MAX_BYTES = 5 * 1024 * 1024;
 
+function isPdfFile(file) {
+	return (
+		file.type === "application/pdf" || /\.pdf$/i.test(file.name)
+	);
+}
+
+function isXmlFile(file) {
+	return (
+		["text/xml", "application/xml"].includes(file.type) ||
+		/\.xml$/i.test(file.name)
+	);
+}
+
 export default function InvoiceDialog({
 	storeRoute,
 	invoiceRoute,
 	invoiceXmlRoute = null,
 	invoiceRequest,
 	hasInvoice,
-	hasInvoiceXml = false,
 	className = "",
 }) {
 	const [isOpen, setIsOpen] = useState(false);
 	const [showChangeInvoiceButton, setShowChangeInvoiceButton] =
 		useState(!!invoiceRoute);
+	const [selectionError, setSelectionError] = useState(null);
 
 	const {
 		data,
@@ -57,7 +70,7 @@ export default function InvoiceDialog({
 
 	const selectedPdfName = data.invoice?.name ?? null;
 	const selectedXmlName = data.invoice_xml?.name ?? null;
-	const hasSelectedFile = Boolean(data.invoice || data.invoice_xml);
+	const hasBothFiles = Boolean(data.invoice && data.invoice_xml);
 
 	const submit = (e) => {
 		e.preventDefault();
@@ -66,10 +79,9 @@ export default function InvoiceDialog({
 			return;
 		}
 
-		if (hasInvoice && !hasSelectedFile) {
-			setError(
-				"invoice",
-				"Debes seleccionar al menos un archivo (PDF o XML) para actualizar la factura.",
+		if (!hasBothFiles) {
+			setSelectionError(
+				"Debes seleccionar un archivo PDF y un archivo XML para guardar la factura.",
 			);
 			return;
 		}
@@ -79,6 +91,7 @@ export default function InvoiceDialog({
 			forceFormData: true,
 			onSuccess: () => {
 				reset();
+				setSelectionError(null);
 				setIsOpen(false);
 			},
 		});
@@ -89,50 +102,94 @@ export default function InvoiceDialog({
 			setShowChangeInvoiceButton(!!invoiceRoute);
 			reset();
 			clearErrors();
+			setSelectionError(null);
 		}
 	}, [isOpen]);
 
-	const handlePdfChange = (e) => {
-		const file = e.target.files?.[0];
-		if (!file) {
-			setData("invoice", null);
+	const handleFilesChange = (e) => {
+		const files = Array.from(e.target.files ?? []);
+
+		if (files.length === 0) {
+			setData({
+				invoice: null,
+				invoice_xml: null,
+			});
+			setSelectionError(null);
+			clearErrors(["invoice", "invoice_xml"]);
 			return;
 		}
 
-		if (file.size > PDF_MAX_BYTES) {
-			setError("invoice", "El archivo PDF no debe superar los 10MB.");
-			e.target.value = "";
-			return;
-		}
+		const pdfFiles = files.filter(isPdfFile);
+		const xmlFiles = files.filter(isXmlFile);
+		const otherFiles = files.filter(
+			(file) => !isPdfFile(file) && !isXmlFile(file),
+		);
 
-		clearErrors("invoice");
-		setData("invoice", file);
-	};
-
-	const handleXmlChange = (e) => {
-		const file = e.target.files?.[0];
-		if (!file) {
-			setData("invoice_xml", null);
-			return;
-		}
-
-		if (!/\.xml$/i.test(file.name)) {
-			setError(
-				"invoice_xml",
-				"La factura XML debe ser un archivo con extensión .xml.",
+		if (otherFiles.length > 0) {
+			setSelectionError(
+				"Solo se permiten archivos PDF y XML. Selecciona un PDF y un XML.",
 			);
 			e.target.value = "";
+			setData({
+				invoice: null,
+				invoice_xml: null,
+			});
 			return;
 		}
 
-		if (file.size > XML_MAX_BYTES) {
-			setError("invoice_xml", "El archivo XML no debe superar los 5MB.");
+		if (pdfFiles.length > 1 || xmlFiles.length > 1) {
+			setSelectionError(
+				"Selecciona exactamente un archivo PDF y un archivo XML.",
+			);
 			e.target.value = "";
+			setData({
+				invoice: null,
+				invoice_xml: null,
+			});
 			return;
 		}
 
-		clearErrors("invoice_xml");
-		setData("invoice_xml", file);
+		const pdfFile = pdfFiles[0] ?? null;
+		const xmlFile = xmlFiles[0] ?? null;
+
+		if (!pdfFile || !xmlFile) {
+			setSelectionError(
+				"Debes seleccionar un archivo PDF y un archivo XML en la misma operación.",
+			);
+			e.target.value = "";
+			setData({
+				invoice: null,
+				invoice_xml: null,
+			});
+			return;
+		}
+
+		if (pdfFile.size > PDF_MAX_BYTES) {
+			setSelectionError("El archivo PDF no debe superar los 10MB.");
+			e.target.value = "";
+			setData({
+				invoice: null,
+				invoice_xml: null,
+			});
+			return;
+		}
+
+		if (xmlFile.size > XML_MAX_BYTES) {
+			setSelectionError("El archivo XML no debe superar los 5MB.");
+			e.target.value = "";
+			setData({
+				invoice: null,
+				invoice_xml: null,
+			});
+			return;
+		}
+
+		setSelectionError(null);
+		clearErrors(["invoice", "invoice_xml"]);
+		setData({
+			invoice: pdfFile,
+			invoice_xml: xmlFile,
+		});
 	};
 
 	return (
@@ -153,8 +210,8 @@ export default function InvoiceDialog({
 					</DialogTitle>
 					<DialogDescription>
 						{hasInvoice
-							? "Visualiza o actualiza el PDF y, si lo deseas, el XML de la factura. Puedes reemplazar uno o ambos archivos."
-							: "Sube el archivo PDF de la factura. Ahora también puedes agregar el XML de forma opcional."}
+							? "Visualiza la factura o actualiza el PDF y el XML juntos. Ambos archivos son obligatorios."
+							: "Selecciona el PDF y el XML de la factura en una misma operación. Ambos archivos son obligatorios."}
 					</DialogDescription>
 					<DialogBody className="space-y-6">
 						{invoiceRequest && (
@@ -189,10 +246,9 @@ export default function InvoiceDialog({
 							</SettingsCard>
 						)}
 
-						<Field>
-							<Label>Factura PDF</Label>
-
-							{invoiceRoute && showChangeInvoiceButton ? (
+						{invoiceRoute && showChangeInvoiceButton ? (
+							<Field>
+								<Label>Factura</Label>
 								<div
 									data-slot="control"
 									className="flex flex-wrap gap-2"
@@ -225,66 +281,56 @@ export default function InvoiceDialog({
 										Actualizar archivos
 									</Button>
 								</div>
-							) : (
-								<>
-									<Input
-										invalid={!!errors.invoice}
-										dusk="invoice"
-										type="file"
-										accept="application/pdf,.pdf"
-										onChange={handlePdfChange}
-									/>
-									<Description className="mt-1">
-										{hasInvoice
-											? "Opcional al actualizar. Si no eliges un PDF nuevo, se conserva el actual. Formato: PDF • Máx. 10MB"
-											: "Obligatorio. Formato: PDF • Tamaño máximo: 10MB"}
-									</Description>
-									{selectedPdfName && (
-										<Text className="mt-1 text-sm">
-											Seleccionado: {selectedPdfName}
-											{hasInvoice
-												? " — se actualizará el PDF"
-												: ""}
-										</Text>
-									)}
-									{errors.invoice && (
-										<ErrorMessage>
-											{errors.invoice}
-										</ErrorMessage>
-									)}
-								</>
-							)}
-						</Field>
-
-						{(!showChangeInvoiceButton || !invoiceRoute) && (
+							</Field>
+						) : (
 							<Field>
-								<div className="mb-1 flex items-center gap-2">
-									<Label className="!mb-0">Factura XML</Label>
-									<Badge color="lime">NEW</Badge>
-								</div>
+								<Label>Archivos de factura</Label>
 								<Input
-									invalid={!!errors.invoice_xml}
-									dusk="invoice_xml"
+									invalid={
+										!!selectionError ||
+										!!errors.invoice ||
+										!!errors.invoice_xml
+									}
+									dusk="invoice_files"
 									type="file"
-									accept=".xml,text/xml,application/xml"
-									onChange={handleXmlChange}
+									multiple
+									accept=".pdf,.xml,application/pdf,text/xml,application/xml"
+									onChange={handleFilesChange}
 								/>
 								<Description className="mt-1">
-									{hasInvoice
-										? hasInvoiceXml
-											? "Opcional. Si no eliges un XML nuevo, se conserva el actual. Formato: XML • Máx. 5MB"
-											: "Opcional. Puedes agregar el XML ahora sin modificar el PDF. Formato: XML • Máx. 5MB"
-										: "Opcional. Ahora también puedes agregar el XML de la factura junto con el PDF. Formato: XML • Máx. 5MB"}
+									Selecciona un PDF y un XML juntos.
+									Obligatorios. PDF máx. 10MB • XML máx. 5MB
 								</Description>
-								{selectedXmlName && (
-									<Text className="mt-1 text-sm">
-										Seleccionado: {selectedXmlName}
-										{hasInvoice
-											? hasInvoiceXml
-												? " — se actualizará el XML"
-												: " — se agregará el XML"
-											: " — se guardará junto con el PDF"}
-									</Text>
+
+								{(selectedPdfName || selectedXmlName) && (
+									<div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+										<Text className="text-sm font-medium">
+											Archivos seleccionados
+										</Text>
+										<ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-600 dark:text-slate-300">
+											<li>
+												PDF:{" "}
+												{selectedPdfName ??
+													"pendiente de seleccionar"}
+											</li>
+											<li>
+												XML:{" "}
+												{selectedXmlName ??
+													"pendiente de seleccionar"}
+											</li>
+										</ul>
+									</div>
+								)}
+
+								{selectionError && (
+									<ErrorMessage>
+										{selectionError}
+									</ErrorMessage>
+								)}
+								{errors.invoice && (
+									<ErrorMessage>
+										{errors.invoice}
+									</ErrorMessage>
 								)}
 								{errors.invoice_xml && (
 									<ErrorMessage>
@@ -293,38 +339,6 @@ export default function InvoiceDialog({
 								)}
 							</Field>
 						)}
-
-						{hasInvoice &&
-							!showChangeInvoiceButton &&
-							hasSelectedFile && (
-								<div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-slate-700 dark:bg-slate-900/40">
-									<Text className="text-sm font-medium">
-										Archivos que se actualizarán
-									</Text>
-									<ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-600 dark:text-slate-300">
-										{selectedPdfName && (
-											<li>PDF: {selectedPdfName}</li>
-										)}
-										{selectedXmlName && (
-											<li>XML: {selectedXmlName}</li>
-										)}
-										{!selectedPdfName && (
-											<li>
-												PDF: se conserva el archivo
-												actual
-											</li>
-										)}
-										{!selectedXmlName && (
-											<li>
-												XML:{" "}
-												{hasInvoiceXml
-													? "se conserva el archivo actual"
-													: "sin cambios (sigue sin XML)"}
-											</li>
-										)}
-									</ul>
-								</div>
-							)}
 					</DialogBody>
 					<DialogActions>
 						<Button
@@ -338,10 +352,7 @@ export default function InvoiceDialog({
 						{(!showChangeInvoiceButton || !invoiceRoute) && (
 							<Button
 								type="submit"
-								disabled={
-									processing ||
-									(hasInvoice && !hasSelectedFile)
-								}
+								disabled={processing || !hasBothFiles}
 							>
 								Guardar
 								{processing && (

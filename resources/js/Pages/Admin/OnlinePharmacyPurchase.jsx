@@ -144,9 +144,6 @@ function Header({ onlinePharmacyPurchase, setOpenDeleteConfirmation }) {
 						}
 						invoiceRequest={onlinePharmacyPurchase.invoice_request}
 						hasInvoice={!!onlinePharmacyPurchase.invoice}
-						hasInvoiceXml={
-							!!onlinePharmacyPurchase.invoice?.invoice_xml
-						}
 					/>
 					{onlinePharmacyPurchase.dev_assistance_requests.length ===
 					0 ? (

@@ -337,7 +337,6 @@ function Header({
 					}
 					invoiceRequest={laboratoryPurchase.invoice_request}
 					hasInvoice={!!laboratoryPurchase.invoice}
-					hasInvoiceXml={!!laboratoryPurchase.invoice?.invoice_xml}
 				/>
 
 				<ResultsDialog
