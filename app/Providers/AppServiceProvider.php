@@ -17,6 +17,8 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Laravel\Cashier\Cashier;
 use Stripe\StripeClient;
 use App\Services\ConstanciaFiscalService;
+use App\Contracts\Otp\OtpCodeGenerator;
+use App\Services\Otp\SecureOtpCodeGenerator;
 //use App\Services\EfevooPayService;
 /*
 use App\Services\EfevooPayFactoryService;
@@ -49,6 +51,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ConstanciaFiscalService::class, function ($app) {
             return new ConstanciaFiscalService();
         });
+
+        $this->app->bind(OtpCodeGenerator::class, SecureOtpCodeGenerator::class);
 
         $this->app->register(\App\Providers\EfevooPayServiceProvider::class);
         $this->app->register(\App\Providers\ActiveCampaignServiceProvider::class);
