@@ -278,7 +278,7 @@ test('GET order invoices includes bearer download metadata for issued invoice', 
 
 test('payment link still works after document download endpoints', function () {
     [$user, $token] = akubicaCustomerToken();
-    addOlabCartItemReadyForPaymentLink($user);
+    addOlabCartItem($user);
     setupAkubicaCheckoutDraft($user);
 
     $this->postJson('/api/v1/checkout/payment-link', ['brand' => 'olab'], authHeaders($token))

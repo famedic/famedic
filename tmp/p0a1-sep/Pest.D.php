@@ -86,6 +86,8 @@ function nextAkubicaGdaConsecutivo(): int
     return $next++;
 }
 
+
+
 function createOlabTest(array $attributes = []): \App\Models\LaboratoryTest
 {
     return \App\Models\LaboratoryTest::factory()->create(array_merge([
@@ -108,19 +110,6 @@ function addOlabCartItem(\App\Models\User $user, ?\App\Models\LaboratoryTest $te
     ]);
 
     return $test;
-}
-
-/**
- * Cart item for payment-link happy paths: appointment not required.
- * Keep using addOlabCartItem() where APPOINTMENT_REQUIRED must remain random/true.
- */
-function addOlabCartItemReadyForPaymentLink(\App\Models\User $user): \App\Models\LaboratoryTest
-{
-    return addOlabCartItem($user, createOlabTest([
-        'requires_appointment' => false,
-        'famedic_price_cents' => 35000,
-        'public_price_cents' => 45000,
-    ]));
 }
 
 /**

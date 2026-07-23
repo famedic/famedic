@@ -1,0 +1,1 @@
+test(api): stabilize payment-link checkout fixtures

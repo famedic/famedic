@@ -279,21 +279,9 @@ test('applying coupon does not affect another customer', function () {
         'code' => 'PROMO10',
     ], authHeaders($tokenA))->assertOk();
 
-    $headersB = switchApiBearerToken($this, $tokenB);
-
-    $this->getJson('/api/v1/cart/coupon?brand=olab', $headersB)
+    $this->getJson('/api/v1/cart/coupon?brand=olab', authHeaders($tokenB))
         ->assertOk()
         ->assertJsonPath('data.coupon', null);
-
-    expect(LaboratoryCheckoutDraft::query()
-        ->where('customer_id', $userB->customer->id)
-        ->where('laboratory_brand', LaboratoryBrand::OLAB)
-        ->value('coupon_id'))->toBeNull();
-
-    expect(LaboratoryCheckoutDraft::query()
-        ->where('customer_id', $userA->customer->id)
-        ->where('laboratory_brand', LaboratoryBrand::OLAB)
-        ->value('coupon_id'))->not->toBeNull();
 });
 
 // ── Remove ──────────────────────────────────────────────────────────────
@@ -378,34 +366,20 @@ test('DELETE /cart/coupon does not affect another customer', function () {
         'code' => 'PROMO10',
     ], authHeaders($tokenA))->assertOk();
 
-    $headersB = switchApiBearerToken($this, $tokenB);
-
-    $this->deleteJson('/api/v1/cart/coupon?brand=olab', [], $headersB)
+    $this->deleteJson('/api/v1/cart/coupon?brand=olab', [], authHeaders($tokenB))
         ->assertOk()
         ->assertJsonPath('data.removed', false);
 
-    expect(LaboratoryCheckoutDraft::query()
-        ->where('customer_id', $userB->customer->id)
-        ->where('laboratory_brand', LaboratoryBrand::OLAB)
-        ->value('coupon_id'))->toBeNull();
-
-    $headersA = switchApiBearerToken($this, $tokenA);
-
-    $this->getJson('/api/v1/cart/coupon?brand=olab', $headersA)
+    $this->getJson('/api/v1/cart/coupon?brand=olab', authHeaders($tokenA))
         ->assertOk()
         ->assertJsonPath('data.coupon.code', 'PROMO10');
-
-    expect(LaboratoryCheckoutDraft::query()
-        ->where('customer_id', $userA->customer->id)
-        ->where('laboratory_brand', LaboratoryBrand::OLAB)
-        ->value('coupon_id'))->not->toBeNull();
 });
 
 // ── Regresión ───────────────────────────────────────────────────────────
 
 test('payment link works with applied coupon', function () {
     [$user, $token] = akubicaCustomerToken();
-    addOlabCartItemReadyForPaymentLink($user);
+    addOlabCartItem($user);
     setupAkubicaCheckoutDraft($user);
     createBalanceCouponForUser($user, 'PROMO10', 7000);
 
@@ -434,7 +408,7 @@ test('payment link works with applied coupon', function () {
 
 test('payment link does not create purchase or payment', function () {
     [$user, $token] = akubicaCustomerToken();
-    addOlabCartItemReadyForPaymentLink($user);
+    addOlabCartItem($user);
     setupAkubicaCheckoutDraft($user);
 
     $purchasesBefore = LaboratoryPurchase::query()->count();

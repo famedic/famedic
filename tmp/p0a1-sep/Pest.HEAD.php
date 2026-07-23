@@ -69,23 +69,6 @@ function authHeaders(string $token): array
     return ['Authorization' => 'Bearer '.$token];
 }
 
-/**
- * Pest wrapper for Tests\TestCase::switchApiBearerToken().
- *
- * @return array{Authorization: string}
- */
-function switchApiBearerToken(TestCase $test, string $token): array
-{
-    return $test->switchApiBearerToken($token);
-}
-
-function nextAkubicaGdaConsecutivo(): int
-{
-    static $next = 700000;
-
-    return $next++;
-}
-
 function createOlabTest(array $attributes = []): \App\Models\LaboratoryTest
 {
     return \App\Models\LaboratoryTest::factory()->create(array_merge([
@@ -108,45 +91,6 @@ function addOlabCartItem(\App\Models\User $user, ?\App\Models\LaboratoryTest $te
     ]);
 
     return $test;
-}
-
-/**
- * Cart item for payment-link happy paths: appointment not required.
- * Keep using addOlabCartItem() where APPOINTMENT_REQUIRED must remain random/true.
- */
-function addOlabCartItemReadyForPaymentLink(\App\Models\User $user): \App\Models\LaboratoryTest
-{
-    return addOlabCartItem($user, createOlabTest([
-        'requires_appointment' => false,
-        'famedic_price_cents' => 35000,
-        'public_price_cents' => 45000,
-    ]));
-}
-
-/**
- * Compare Cache-Control by exact directive set (order-independent).
- * Symfony may reorder directives; production header semantics stay unchanged.
- *
- * @param  \Illuminate\Testing\TestResponse|\Illuminate\Http\Response  $response
- * @param  array<int, string>  $expectedDirectives
- */
-function assertExactCacheControlDirectives($response, array $expectedDirectives): void
-{
-    $header = $response->headers->get('Cache-Control') ?? '';
-
-    $normalize = static function (array $directives): array {
-        return collect($directives)
-            ->map(fn (string $directive) => strtolower(trim($directive)))
-            ->filter(fn (string $directive) => $directive !== '')
-            ->sort()
-            ->values()
-            ->all();
-    };
-
-    $actual = $normalize(explode(',', $header));
-    $expected = $normalize($expectedDirectives);
-
-    expect($actual)->toBe($expected);
 }
 
 function assignUserCoupon(\App\Models\User $user, \App\Models\Coupon $coupon, ?\DateTimeInterface $usedAt = null): \App\Models\CouponUser
@@ -196,13 +140,10 @@ function createAkubicaLaboratoryPurchase(
     \App\Models\User $user,
     array $attributes = [],
 ): \App\Models\LaboratoryPurchase {
-    $gdaConsecutivo = $attributes['gda_consecutivo'] ?? nextAkubicaGdaConsecutivo();
-
     return \App\Models\LaboratoryPurchase::query()->create(array_merge([
         'customer_id' => $user->customer->id,
         'brand' => \App\Enums\LaboratoryBrand::OLAB,
         'gda_order_id' => 'GDA-'.fake()->unique()->numerify('######'),
-        'gda_consecutivo' => $gdaConsecutivo,
         'name' => 'Juan',
         'paternal_lastname' => 'Pérez',
         'maternal_lastname' => 'López',
@@ -244,18 +185,15 @@ function createAkubicaResultsNotification(
     ?string $pdfContent = null,
 ): \App\Models\LaboratoryNotification {
     $pdfContent ??= '%PDF-1.4 notification results';
-    $gdaConsecutivo = $order->gda_consecutivo ?? nextAkubicaGdaConsecutivo();
 
     return \App\Models\LaboratoryNotification::query()->create([
         'notification_type' => \App\Models\LaboratoryNotification::TYPE_RESULTS,
         'lineanegocio' => \App\Models\LaboratoryNotification::LINEA_NEGOCIO_RESULTS,
         'laboratory_purchase_id' => $order->id,
         'gda_order_id' => $order->gda_order_id,
-        'gda_consecutivo' => $gdaConsecutivo,
+        'gda_consecutivo' => (string) ($order->gda_consecutivo ?? $order->gda_order_id),
         'status' => \App\Models\LaboratoryNotification::STATUS_PROCESSED,
-        'payload' => [
-            'id' => $gdaConsecutivo,
-        ],
+        'payload' => [],
         'results_received_at' => now(),
         'results_pdf_base64' => base64_encode($pdfContent),
     ]);
