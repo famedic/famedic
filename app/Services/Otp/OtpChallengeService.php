@@ -23,8 +23,9 @@ use Illuminate\Support\Str;
  * OtpCode flows (IssueAuthOtpAction, LaboratoryResultsOtpController). Brute-force
  * risk is mitigated by failed_attempts + max_attempts (lockout/block in P0-A3).
  *
- * Persistent audit logging is deferred (P0-A later). Purge of expired/consumed
- * rows is deferred — see docs/Akubica/p0-a2-persistencia-servicio-otp.md.
+ * Anti-abuse (cooldown / IP / identity / block) lives in OtpAbusePolicy +
+ * OtpRateLimitService (P0-A3). This class stays focused on challenge CRUD.
+ * Purge of expired/consumed challenge rows remains deferred.
  *
  * This service is NOT wired into production auth/lab controllers yet.
  */

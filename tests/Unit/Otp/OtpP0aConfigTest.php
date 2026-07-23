@@ -27,6 +27,10 @@ function otpP0aReloadConfig(array $overrides = []): void
         'OTP_P0A_PRIMARY_CHANNEL',
         'OTP_P0A_FALLBACK_MODE',
         'OTP_P0A_AUDIT_ENABLED',
+        'OTP_P0A_IDENTITY_MAX_REQUESTS',
+        'OTP_P0A_IP_MAX_REQUESTS',
+        'OTP_P0A_RATE_LIMIT_WINDOW_MINUTES',
+        'OTP_P0A_ABUSE_RETENTION_DAYS',
         'OTP_P0A_STEP_UP_GRANT_TTL_MINUTES',
         'OTP_P0A_STEP_UP_BIND_SANCTUM_TOKEN',
         'OTP_P0A_STEP_UP_BIND_PURPOSE',
@@ -196,4 +200,29 @@ test('legacy otp and akubica defaults remain unchanged for current flows', funct
 test('secure link contract defaults are prepared for DEC-007', function () {
     expect(config('otp.p0a.secure_links.ttl_minutes'))->toBe(60)
         ->and(config('otp.p0a.secure_links.max_opens'))->toBe(5);
+});
+
+test('p0a3 anti-abuse config defaults are safe and flag stays off', function () {
+    expect(config('otp.p0a.flags.anti_abuse_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.anti_abuse.identity_max_requests'))->toBe(4)
+        ->and(config('otp.p0a.anti_abuse.ip_max_requests'))->toBe(20)
+        ->and(config('otp.p0a.anti_abuse.rate_limit_window_minutes'))->toBe(30)
+        ->and(config('otp.p0a.anti_abuse.retention_days'))->toBe(30)
+        ->and(config('otp.p0a.policy.cooldown_seconds'))->toBe(60)
+        ->and(config('otp.p0a.policy.block_minutes'))->toBe(30)
+        ->and(config('otp.p0a.policy.max_resends'))->toBe(3);
+});
+
+test('p0a3 anti-abuse invalid env values fall back to safe defaults', function () {
+    otpP0aReloadConfig([
+        'OTP_P0A_IDENTITY_MAX_REQUESTS' => '0',
+        'OTP_P0A_IP_MAX_REQUESTS' => 'not-a-number',
+        'OTP_P0A_RATE_LIMIT_WINDOW_MINUTES' => '99999',
+        'OTP_P0A_ABUSE_RETENTION_DAYS' => '-5',
+    ]);
+
+    expect(config('otp.p0a.anti_abuse.identity_max_requests'))->toBe(4)
+        ->and(config('otp.p0a.anti_abuse.ip_max_requests'))->toBe(20)
+        ->and(config('otp.p0a.anti_abuse.rate_limit_window_minutes'))->toBe(30)
+        ->and(config('otp.p0a.anti_abuse.retention_days'))->toBe(30);
 });

@@ -95,7 +95,7 @@ return [
             /** Fallback controlado a correo (P0-A3+). */
             'email_fallback_enabled' => $otpEnvBool('OTP_P0A_EMAIL_FALLBACK_ENABLED', false),
 
-            /** Cooldown, tope de reenvíos, intentos y bloqueo (P0-A4+). */
+            /** Cooldown, tope de reenvíos, intentos y bloqueo (P0-A3+). OFF = no wiring productivo. */
             'anti_abuse_enabled' => $otpEnvBool('OTP_P0A_ANTI_ABUSE_ENABLED', false),
 
             /** Aplicar vigencia Sanctum de 3 horas (P0-A6+). No altera sanctum.expiration. */
@@ -173,6 +173,34 @@ return [
         'secure_links' => [
             'ttl_minutes' => $otpEnvInt('OTP_P0A_SECURE_LINK_TTL_MINUTES', 60, 1, 1440),
             'max_opens' => $otpEnvInt('OTP_P0A_SECURE_LINK_MAX_OPENS', 5, 1, 100),
+        ],
+
+        /*
+        |--------------------------------------------------------------------------
+        | Anti-abuse (P0-A3) — infrastructure only; gate productive callers on
+        | flags.anti_abuse_enabled. Cooldown / max_resends / block_minutes /
+        | max_attempts remain under policy.* above.
+        |--------------------------------------------------------------------------
+        |
+        | identity_max_requests: hard ceiling per identity+purpose window
+        |   (effective max = min(this, 1 + policy.max_resends)).
+        | ip_max_requests: ceiling per hashed IP+purpose window.
+        | rate_limit_window_minutes: sliding/reset window for counters.
+        | retention_days: documented purge horizon for otp_abuse_events
+        |   (command otp:purge-abuse-events exists; NOT scheduled in prod yet).
+        |
+        */
+
+        'anti_abuse' => [
+            'identity_max_requests' => $otpEnvInt('OTP_P0A_IDENTITY_MAX_REQUESTS', 4, 1, 100),
+            'ip_max_requests' => $otpEnvInt('OTP_P0A_IP_MAX_REQUESTS', 20, 1, 500),
+            'rate_limit_window_minutes' => $otpEnvInt(
+                'OTP_P0A_RATE_LIMIT_WINDOW_MINUTES',
+                30,
+                1,
+                1440
+            ),
+            'retention_days' => $otpEnvInt('OTP_P0A_ABUSE_RETENTION_DAYS', 30, 1, 365),
         ],
     ],
 
