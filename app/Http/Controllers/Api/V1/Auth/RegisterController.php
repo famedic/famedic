@@ -7,14 +7,21 @@ use App\Actions\Api\V1\Auth\IssueAuthOtpAction;
 use App\Actions\Api\V1\Auth\RegisterAkubicaCustomerAction;
 use App\Actions\Api\V1\Auth\VerifyAuthOtpAction;
 use App\Exceptions\Api\V1\Auth\AuthOtpVerificationException;
+use App\Exceptions\Otp\OtpChallengeException;
+use App\Exceptions\Otp\OtpConfigurationException;
+use App\Exceptions\Otp\OtpIdentityNormalizationException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\RegisterRequest;
 use App\Http\Requests\Api\V1\Auth\RegisterVerifyCodeRequest;
+use App\Http\Requests\Api\V1\Auth\SecureRegisterRequest;
 use App\Http\Requests\Api\V1\Auth\SecureRegisterResendCodeRequest;
+use App\Http\Responses\Api\V1\OtpExceptionHttpMapper;
 use App\Http\Responses\ApiResponse;
 use App\Models\OtpCode;
 use App\Models\User;
+use App\Services\Otp\Registration\AkubicaRegisterOtpService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Propaganistas\LaravelPhone\PhoneNumber;
 
@@ -25,11 +32,63 @@ class RegisterController extends Controller
         private VerifyAuthOtpAction $verifyAuthOtpAction,
         private RegisterAkubicaCustomerAction $registerAkubicaCustomerAction,
         private IssueAkubicaTokenAction $issueAkubicaTokenAction,
+        private AkubicaRegisterOtpService $akubicaRegisterOtpService,
+        private OtpExceptionHttpMapper $otpExceptionHttpMapper,
     ) {}
 
-    public function store(RegisterRequest $request): JsonResponse
+    public function store(Request $request): JsonResponse
     {
-        $data = $request->validated();
+        if (AkubicaRegisterOtpService::isEnabled()) {
+            return $this->storeP0a($request);
+        }
+
+        return $this->storeLegacy($request);
+    }
+
+    public function verifyCode(RegisterVerifyCodeRequest $request): JsonResponse
+    {
+        if (AkubicaRegisterOtpService::isEnabled()) {
+            // P0-A5.5 will wire secure verify + account creation.
+            return ApiResponse::error(
+                'FEATURE_DISABLED',
+                'La verificacion OTP P0-A de registro no esta habilitada.',
+                503,
+            );
+        }
+
+        return $this->verifyCodeLegacy($request);
+    }
+
+    public function resendCode(SecureRegisterResendCodeRequest $request): JsonResponse
+    {
+        if (! AkubicaRegisterOtpService::isEnabled()) {
+            return ApiResponse::error(
+                'FEATURE_DISABLED',
+                'El reenvio OTP P0-A de registro no esta habilitado.',
+                503,
+            );
+        }
+
+        try {
+            $this->akubicaRegisterOtpService->assertConfigurationReady();
+            $payload = $this->akubicaRegisterOtpService->resend(
+                $request->validated('challenge_id'),
+                $request->ip(),
+            );
+        } catch (OtpConfigurationException|OtpChallengeException $e) {
+            return $this->otpExceptionHttpMapper->toResponse($e);
+        }
+
+        return ApiResponse::success($payload, null, 202);
+    }
+
+    private function storeLegacy(Request $request): JsonResponse
+    {
+        $form = RegisterRequest::createFrom($request);
+        $form->setContainer(app())->setRedirector(app('redirect'));
+        $form->validateResolved();
+
+        $data = $form->validated();
         $email = strtolower($data['email']);
         $phoneCountry = $data['phone_country'] ?? 'MX';
 
@@ -65,7 +124,6 @@ class RegisterController extends Controller
             );
         } catch (\Throwable $e) {
             Log::error('akubica_register_request_code_failed', [
-                'email' => $email,
                 'error' => $e->getMessage(),
             ]);
 
@@ -79,7 +137,32 @@ class RegisterController extends Controller
         return ApiResponse::success($result);
     }
 
-    public function verifyCode(RegisterVerifyCodeRequest $request): JsonResponse
+    private function storeP0a(Request $request): JsonResponse
+    {
+        $form = SecureRegisterRequest::createFrom($request);
+        $form->setContainer(app())->setRedirector(app('redirect'));
+        $form->validateResolved();
+
+        try {
+            $this->akubicaRegisterOtpService->assertConfigurationReady();
+            $payload = $this->akubicaRegisterOtpService->request(
+                $form->registrationIdentity(),
+                $request->ip(),
+            );
+        } catch (OtpConfigurationException|OtpChallengeException $e) {
+            return $this->otpExceptionHttpMapper->toResponse($e);
+        } catch (OtpIdentityNormalizationException $e) {
+            return ApiResponse::error(
+                'VALIDATION_ERROR',
+                'Los datos de registro no son validos.',
+                422,
+            );
+        }
+
+        return ApiResponse::success($payload, null, 202);
+    }
+
+    private function verifyCodeLegacy(RegisterVerifyCodeRequest $request): JsonResponse
     {
         $email = strtolower($request->validated('email'));
         $code = $request->validated('code');
@@ -120,7 +203,6 @@ class RegisterController extends Controller
             $user = ($this->registerAkubicaCustomerAction)($payload);
         } catch (\Throwable $e) {
             Log::error('akubica_register_verify_failed', [
-                'email' => $email,
                 'error' => $e->getMessage(),
             ]);
 
@@ -137,19 +219,6 @@ class RegisterController extends Controller
             ...$tokenData,
             'user' => $this->formatUser($user),
         ]);
-    }
-
-    /**
-     * P0-A5.2 placeholder: secure register resend is not implemented yet.
-     * Always returns FEATURE_DISABLED (safe with flag OFF; no fake success).
-     */
-    public function resendCode(SecureRegisterResendCodeRequest $request): JsonResponse
-    {
-        return ApiResponse::error(
-            'FEATURE_DISABLED',
-            'El reenvio OTP P0-A de registro no esta habilitado.',
-            503,
-        );
     }
 
     private function phoneAlreadyRegistered(string $phone, string $phoneCountry): bool

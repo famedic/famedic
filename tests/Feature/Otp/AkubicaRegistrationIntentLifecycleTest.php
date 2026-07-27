@@ -209,6 +209,7 @@ test('p0a53 expired pending cannot be consumed', function () {
 test('p0a53 second create for same email supersedes previous pending', function () {
     $service = app(AkubicaRegistrationIntentService::class);
     $first = $service->createPending(p0a53Identity('same.email@ejemplo.test', '5512345710'));
+    $this->travel(61)->seconds();
     $second = $service->createPending(p0a53Identity('same.email@ejemplo.test', '5512345711'));
 
     $old = AkubicaRegistrationIntent::query()->findOrFail($first->intent->id);
@@ -409,6 +410,7 @@ test('p0a53 terminal transitions clear ciphertext and reject illegal follow-ups'
         ->toBeNull();
 
     $first = $service->createPending(p0a53Identity('term.s@ejemplo.test', '5512345727'));
+    $this->travel(61)->seconds();
     $service->createPending(p0a53Identity('term.s@ejemplo.test', '5512345728'));
     expect(fn () => $service->consume((int) $first->intent->id))
         ->toThrow(RegistrationIntentInvalidStateException::class);

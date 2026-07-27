@@ -14,16 +14,17 @@ use App\Models\AkubicaRegistrationIntent;
 use App\Models\OtpChallenge;
 use App\Services\Otp\CreateOtpChallengeData;
 use App\Services\Otp\OtpAbuseKeyHasher;
-use App\Services\Otp\OtpChallengeService;
+use App\Services\Otp\OtpAbusePolicy;
+use App\Services\Otp\OtpRequestContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
  * P0-A5.3 — Internal persistence/lifecycle for secure registration intents.
  *
- * NOT wired to public controllers. Does not send mail/SMS, create users, emit
- * tokens, or write decoy Redis keys. OtpChallengeService::create is used for
- * challenge rows only (no delivery).
+ * Wired to public register request/resend in P0-A5.4 via AkubicaRegisterOtpService.
+ * Does not send mail/SMS, create users, emit tokens, or write decoy Redis keys.
+ * Challenges are issued through OtpAbusePolicy::issue (no delivery).
  *
  * Expiration source of truth: intent.expires_at is set equal to challenge.expires_at
  * at creation (register TTL). Payload gates use intent status + intent.expires_at
@@ -40,51 +41,69 @@ final class AkubicaRegistrationIntentService
     public const SUBJECT_TYPE = 'email_fp';
 
     public function __construct(
-        private readonly OtpChallengeService $challengeService,
+        private readonly OtpAbusePolicy $abusePolicy,
         private readonly AkubicaRegistrationPayloadCipher $cipher,
         private readonly OtpAbuseKeyHasher $hasher,
     ) {
     }
 
     /**
-     * Atomically create otp_challenge + encrypted intent. No delivery.
+     * Atomically create otp_challenge (via anti-abuse issue) + encrypted intent.
+     * No delivery of OTP plaintext (plain code retained only in creation result).
      *
      * @throws RegistrationIntentPayloadException
+     * @throws \App\Exceptions\Otp\OtpRateLimitExceededException
+     * @throws \App\Exceptions\Otp\OtpTemporarilyBlockedException
      */
-    public function createPending(RegistrationIdentity $identity): AkubicaRegistrationIntentCreationResult
-    {
+    public function createPending(
+        RegistrationIdentity $identity,
+        ?string $clientIp = null,
+    ): AkubicaRegistrationIntentCreationResult {
         $payload = AkubicaRegistrationPayload::fromIdentity($identity);
         $ciphertext = $this->cipher->encrypt($payload);
         $emailFp = $this->emailFingerprint($identity->email);
         $ttlMinutes = AkubicaRegistrationPolicy::ttlMinutes();
         $maxAttempts = AkubicaRegistrationPolicy::maxAttempts();
-
-        $masked = $this->maskEmail($identity->email->value());
+        $emailValue = $identity->email->value();
+        $masked = $this->maskEmail($emailValue);
 
         return DB::transaction(function () use (
-            $identity,
             $payload,
             $ciphertext,
             $emailFp,
             $ttlMinutes,
             $maxAttempts,
             $masked,
+            $emailValue,
+            $clientIp,
         ) {
-            $challengeResult = $this->challengeService->create(new CreateOtpChallengeData(
-                purpose: P0aOtpPurpose::AkubicaRegister,
-                channel: P0aOtpChannel::Email,
-                ttlMinutes: $ttlMinutes,
-                userId: null,
-                subjectType: self::SUBJECT_TYPE,
-                subjectKey: $emailFp,
-                destinationNormalized: null,
-                destinationMasked: $masked,
-                contextType: self::CONTEXT_TYPE,
-                contextId: null,
-                invalidatePreviousActive: true,
-                meta: ['flow' => 'akubica_register'],
-                maxAttempts: $maxAttempts,
-            ));
+            $challengeResult = $this->abusePolicy->issue(
+                new CreateOtpChallengeData(
+                    purpose: P0aOtpPurpose::AkubicaRegister,
+                    channel: P0aOtpChannel::Email,
+                    ttlMinutes: $ttlMinutes,
+                    userId: null,
+                    subjectType: self::SUBJECT_TYPE,
+                    subjectKey: $emailFp,
+                    destinationNormalized: null,
+                    destinationMasked: $masked,
+                    contextType: self::CONTEXT_TYPE,
+                    contextId: null,
+                    invalidatePreviousActive: true,
+                    meta: ['flow' => 'akubica_register'],
+                    maxAttempts: $maxAttempts,
+                ),
+                new OtpRequestContext(
+                    purpose: P0aOtpPurpose::AkubicaRegister,
+                    userId: null,
+                    subjectType: 'email',
+                    subjectKey: $emailValue,
+                    contextType: self::CONTEXT_TYPE,
+                    contextId: null,
+                    channel: P0aOtpChannel::Email,
+                    clientIp: $clientIp,
+                ),
+            );
 
             $challenge = $challengeResult->challenge;
             $expiresAt = $challenge->expires_at instanceof Carbon

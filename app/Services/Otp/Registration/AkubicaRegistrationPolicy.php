@@ -40,7 +40,7 @@ final class AkubicaRegistrationPolicy
     }
 
     /**
-     * Always false in P0-A5.2: no delivery, no intents, no verify provisioning.
+     * Always false until delivery + verify provisioning + activation gates (P0-A5.5+).
      */
     public static function isPatientReady(): bool
     {
