@@ -12,6 +12,8 @@ use App\Exceptions\Otp\OtpConfigurationException;
 use App\Exceptions\Otp\OtpInvalidCodeException;
 use App\Exceptions\Otp\OtpRateLimitExceededException;
 use App\Exceptions\Otp\OtpTemporarilyBlockedException;
+use App\Exceptions\Otp\OtpTemporaryUnavailableException;
+use App\Exceptions\Otp\RegistrationCompletedLoginRequiredException;
 use App\Exceptions\Otp\RegistrationIntentException;
 use App\Exceptions\Otp\RegistrationIntentExpiredException;
 use App\Exceptions\Otp\RegistrationIntentInvalidStateException;
@@ -31,6 +33,28 @@ final class OtpExceptionHttpMapper
     {
         if ($e instanceof OtpRateLimitExceededException || $e instanceof OtpTemporarilyBlockedException) {
             return $this->rateLimitResponse($e->decision);
+        }
+
+        if ($e instanceof OtpTemporaryUnavailableException) {
+            $retryAfter = max(1, $e->retryAfterSeconds);
+            $response = ApiResponse::error(
+                'OTP_TEMPORARY_UNAVAILABLE',
+                'El servicio OTP esta temporalmente no disponible. Intenta de nuevo.',
+                503,
+                null,
+                ['retry_after' => $retryAfter],
+            );
+            $response->headers->set('Retry-After', (string) $retryAfter);
+
+            return $response;
+        }
+
+        if ($e instanceof RegistrationCompletedLoginRequiredException) {
+            return ApiResponse::error(
+                'LOGIN_REQUIRED',
+                'El registro se completo. Solicita un codigo de inicio de sesion.',
+                409,
+            );
         }
 
         if ($e instanceof OtpConfigurationException) {

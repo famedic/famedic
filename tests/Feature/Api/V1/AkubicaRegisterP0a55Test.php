@@ -339,10 +339,13 @@ test('p0a55 token issuance failure leaves consumed registration without second t
         $mock->shouldReceive('__invoke')->once()->andThrow(new RuntimeException('forced token failure'));
     });
 
+    // P0-A5.7A / D11: controlled LOGIN_REQUIRED (recover via P0-A4 login), never INTERNAL_ERROR.
     $this->postJson('/api/v1/auth/register/verify-code', [
         'challenge_id' => $start['challenge_id'],
         'code' => '888888',
-    ])->assertStatus(500);
+    ])
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'LOGIN_REQUIRED');
 
     expect(User::query()->where('email', 'token.fail.p0a55@ejemplo.test')->exists())->toBeTrue()
         ->and(PersonalAccessToken::query()->count())->toBe(0);

@@ -138,7 +138,7 @@ final class AkubicaRegistrationIntentService
                 challenge: $challenge->fresh(),
                 plainCode: $challengeResult->plainCode(),
             );
-        });
+        }, \App\Services\Otp\OtpRateLimitService::TRANSACTION_ATTEMPTS);
     }
 
     /**

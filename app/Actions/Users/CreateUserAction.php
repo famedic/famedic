@@ -31,8 +31,8 @@ class CreateUserAction
             'maternal_lastname' => $maternalLastname,
             'birth_date' => $birthDate?->toDateString(),
             'gender' => $gender?->value,
-            'phone' => $phone && $phoneCountry ? str_replace(' ', '', (new PhoneNumber($phone, $phoneCountry))->formatNational()) : null,
-            'phone_country' => $phoneCountry,
+            'phone' => $this->normalizeStoredPhone($phone, $phoneCountry),
+            'phone_country' => $this->normalizeStoredPhoneCountry($phone, $phoneCountry),
             'email' => $email,
             'password' => $password ? Hash::make($password) : null,
             'documentation_accepted_at' => $documentationAccepted ? now() : null,
@@ -49,5 +49,28 @@ class CreateUserAction
         }
 
         return $user;
+    }
+
+    private function normalizeStoredPhone(?string $phone, ?string $phoneCountry): ?string
+    {
+        $phone = is_string($phone) ? trim($phone) : null;
+        $phoneCountry = is_string($phoneCountry) ? trim($phoneCountry) : null;
+
+        if ($phone === null || $phone === '' || $phoneCountry === null || $phoneCountry === '') {
+            return null;
+        }
+
+        return str_replace(' ', '', (new PhoneNumber($phone, $phoneCountry))->formatNational());
+    }
+
+    private function normalizeStoredPhoneCountry(?string $phone, ?string $phoneCountry): ?string
+    {
+        $normalizedPhone = $this->normalizeStoredPhone($phone, $phoneCountry);
+
+        if ($normalizedPhone === null) {
+            return null;
+        }
+
+        return strtoupper(trim((string) $phoneCountry));
     }
 }

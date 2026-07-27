@@ -17,13 +17,17 @@ use App\Exceptions\Otp\OtpConfigurationException;
 use App\Exceptions\Otp\OtpIdentityNormalizationException;
 use App\Exceptions\Otp\OtpInvalidCodeException;
 use App\Exceptions\Otp\OtpRateLimitExceededException;
+use App\Exceptions\Otp\OtpTemporaryUnavailableException;
+use App\Exceptions\Otp\RegistrationCompletedLoginRequiredException;
 use App\Exceptions\Otp\RegistrationIntentPayloadException;
 use App\Models\AkubicaRegistrationIntent;
 use App\Models\OtpChallenge;
 use App\Models\User;
+use App\Services\Otp\MysqlContentionClassifier;
 use App\Services\Otp\OtpRateLimitDecision;
 use App\Services\Otp\OtpRateLimitService;
 use App\Services\Otp\OtpRequestContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -31,10 +35,11 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
- * P0-A5.4/5.5 — Secure registration request/resend/verify + decoy (flag-gated).
+ * P0-A5.4/5.5/5.7A — Secure registration request/resend/verify + decoy (flag-gated).
  *
  * Does NOT send Notification/Mail/SMS. Verify creates User/RA/Customer atomically
  * with challenge+intent consume; Sanctum token is issued only after commit.
+ * Token failure after commit → LOGIN_REQUIRED (recover via P0-A4 login).
  *
  * Flag matrix:
  * - akubica_register_enabled=false → callers use legacy RegisterController path.
@@ -51,6 +56,7 @@ final class AkubicaRegisterOtpService
         private readonly IssueAkubicaTokenAction $issueAkubicaTokenAction,
         private readonly OtpRateLimitService $rateLimits,
         private readonly AkubicaRegistrationPayloadCipher $cipher,
+        private readonly MysqlContentionClassifier $contentionClassifier,
     ) {
     }
 
@@ -114,7 +120,14 @@ final class AkubicaRegisterOtpService
             return $this->decoyRequestResponse($identity->email->value());
         }
 
-        $result = $this->intentService->createPending($identity, $clientIp);
+        try {
+            $result = $this->intentService->createPending($identity, $clientIp);
+        } catch (QueryException|UniqueConstraintViolationException $e) {
+            $this->rethrowContention($e);
+        } catch (\Throwable $e) {
+            $this->rethrowIfContention($e);
+            throw $e;
+        }
 
         return $this->challengeResponsePayload(
             $result->challenge,
@@ -147,11 +160,26 @@ final class AkubicaRegisterOtpService
             throw new OtpChallengeMismatchException;
         }
 
-        $payload = $this->intentService->readPayload((int) $intent->id);
-        $result = $this->intentService->createPending(
-            $payload->toRegistrationIdentity(),
-            $clientIp,
-        );
+        try {
+            $payload = $this->intentService->readPayload((int) $intent->id);
+            $result = $this->intentService->createPending(
+                $payload->toRegistrationIdentity(),
+                $clientIp,
+            );
+        } catch (\App\Exceptions\Otp\RegistrationIntentInvalidStateException|
+            \App\Exceptions\Otp\RegistrationIntentExpiredException|
+            \App\Exceptions\Otp\RegistrationIntentNotFoundException
+        ) {
+            // Concurrent verify/consume won the race — safe public contract.
+            throw new OtpChallengeInvalidatedException(
+                'El codigo ya no es valido. Solicita uno nuevo.',
+            );
+        } catch (QueryException|UniqueConstraintViolationException $e) {
+            $this->rethrowContention($e);
+        } catch (\Throwable $e) {
+            $this->rethrowIfContention($e);
+            throw $e;
+        }
 
         return $this->challengeResponsePayload(
             $result->challenge,
@@ -187,9 +215,16 @@ final class AkubicaRegisterOtpService
 
         $context = $this->requestContextFromChallenge($challenge, $clientIp, $challengePublicId);
 
-        $outcome = DB::transaction(function () use ($challengePublicId, $code) {
-            return $this->verifyAndProvisionLocked($challengePublicId, $code);
-        }, OtpRateLimitService::TRANSACTION_ATTEMPTS);
+        try {
+            $outcome = DB::transaction(function () use ($challengePublicId, $code) {
+                return $this->verifyAndProvisionLocked($challengePublicId, $code);
+            }, OtpRateLimitService::TRANSACTION_ATTEMPTS);
+        } catch (QueryException|UniqueConstraintViolationException $e) {
+            $this->rethrowContention($e);
+        } catch (\Throwable $e) {
+            $this->rethrowIfContention($e);
+            throw $e;
+        }
 
         if (isset($outcome['error'])) {
             $this->throwVerifyOutcomeError($outcome, $context, $challengePublicId);
@@ -197,7 +232,13 @@ final class AkubicaRegisterOtpService
 
         /** @var User $user */
         $user = $outcome['user'];
-        $tokenData = ($this->issueAkubicaTokenAction)($user);
+
+        try {
+            $tokenData = ($this->issueAkubicaTokenAction)($user);
+        } catch (\Throwable) {
+            // Account + consume already committed (D11): recover via login OTP.
+            throw new RegistrationCompletedLoginRequiredException;
+        }
 
         return [
             ...$tokenData,
@@ -330,13 +371,14 @@ final class AkubicaRegisterOtpService
                 'full_name' => $payload->fullName,
                 'phone_country' => $payload->phone->countryCode(),
             ]);
-        } catch (UniqueConstraintViolationException) {
+        } catch (UniqueConstraintViolationException $e) {
             $this->invalidateIntentAndChallenge(
                 $intent,
                 $challenge,
                 AkubicaRegistrationIntentInvalidationReason::InconsistentAssociation,
             );
 
+            // Phone or email uniqueness — never enumerate which (anti-enumeration).
             return ['error' => OtpInvalidCodeException::class];
         }
 
@@ -625,6 +667,47 @@ final class AkubicaRegisterOtpService
             availableAt: now()->addSeconds($retryAfter),
             purpose: P0aOtpPurpose::AkubicaRegister->value,
         );
+    }
+
+    /**
+     * Map MySQL contention / uniqueness to the safe OTP public contract.
+     * Never rethrows QueryException (no SQLSTATE / index / PII leakage).
+     *
+     * @throws OtpTemporaryUnavailableException
+     * @throws OtpInvalidCodeException
+     */
+    private function rethrowContention(\Throwable $e): never
+    {
+        $classified = $this->contentionClassifier->classify($e);
+
+        if ($classified['kind'] === MysqlContentionClassifier::KIND_DEADLOCK
+            || $classified['kind'] === MysqlContentionClassifier::KIND_LOCK_WAIT_TIMEOUT) {
+            throw new OtpTemporaryUnavailableException;
+        }
+
+        if ($classified['kind'] === MysqlContentionClassifier::KIND_DUPLICATE_KEY) {
+            // Concurrent phone/email uniqueness — never reveal which field.
+            throw new OtpInvalidCodeException;
+        }
+
+        throw new OtpTemporaryUnavailableException;
+    }
+
+    /**
+     * Walk the exception chain for driver contention wrapped by other throwables.
+     *
+     * @throws OtpTemporaryUnavailableException
+     * @throws OtpInvalidCodeException
+     */
+    private function rethrowIfContention(\Throwable $e): void
+    {
+        $cursor = $e;
+        while ($cursor !== null) {
+            if ($cursor instanceof QueryException || $cursor instanceof UniqueConstraintViolationException) {
+                $this->rethrowContention($cursor);
+            }
+            $cursor = $cursor->getPrevious();
+        }
     }
 
     private function maskEmail(string $email): string
