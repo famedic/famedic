@@ -15,6 +15,7 @@ use App\Http\Requests\Api\V1\Auth\RegisterRequest;
 use App\Http\Requests\Api\V1\Auth\RegisterVerifyCodeRequest;
 use App\Http\Requests\Api\V1\Auth\SecureRegisterRequest;
 use App\Http\Requests\Api\V1\Auth\SecureRegisterResendCodeRequest;
+use App\Http\Requests\Api\V1\Auth\SecureRegisterVerifyCodeRequest;
 use App\Http\Responses\Api\V1\OtpExceptionHttpMapper;
 use App\Http\Responses\ApiResponse;
 use App\Models\OtpCode;
@@ -45,18 +46,47 @@ class RegisterController extends Controller
         return $this->storeLegacy($request);
     }
 
-    public function verifyCode(RegisterVerifyCodeRequest $request): JsonResponse
+    public function verifyCode(Request $request): JsonResponse
     {
         if (AkubicaRegisterOtpService::isEnabled()) {
-            // P0-A5.5 will wire secure verify + account creation.
+            return $this->verifyCodeP0a($request);
+        }
+
+        $form = RegisterVerifyCodeRequest::createFrom($request);
+        $form->setContainer(app())->setRedirector(app('redirect'));
+        $form->validateResolved();
+
+        return $this->verifyCodeLegacy($form);
+    }
+
+    private function verifyCodeP0a(Request $request): JsonResponse
+    {
+        $form = SecureRegisterVerifyCodeRequest::createFrom($request);
+        $form->setContainer(app())->setRedirector(app('redirect'));
+        $form->validateResolved();
+
+        try {
+            $this->akubicaRegisterOtpService->assertConfigurationReady();
+            $payload = $this->akubicaRegisterOtpService->verify(
+                $form->validated('challenge_id'),
+                $form->validated('code'),
+                $request->ip(),
+            );
+        } catch (OtpConfigurationException|OtpChallengeException $e) {
+            return $this->otpExceptionHttpMapper->toResponse($e);
+        } catch (\Throwable $e) {
+            Log::error('akubica_register_verify_p0a_failed', [
+                'error' => $e->getMessage(),
+            ]);
+
             return ApiResponse::error(
-                'FEATURE_DISABLED',
-                'La verificacion OTP P0-A de registro no esta habilitada.',
-                503,
+                'INTERNAL_ERROR',
+                'Error interno del servidor.',
+                500,
             );
         }
 
-        return $this->verifyCodeLegacy($request);
+        return ApiResponse::success($payload);
     }
 
     public function resendCode(SecureRegisterResendCodeRequest $request): JsonResponse

@@ -12,6 +12,11 @@ use App\Exceptions\Otp\OtpConfigurationException;
 use App\Exceptions\Otp\OtpInvalidCodeException;
 use App\Exceptions\Otp\OtpRateLimitExceededException;
 use App\Exceptions\Otp\OtpTemporarilyBlockedException;
+use App\Exceptions\Otp\RegistrationIntentException;
+use App\Exceptions\Otp\RegistrationIntentExpiredException;
+use App\Exceptions\Otp\RegistrationIntentInvalidStateException;
+use App\Exceptions\Otp\RegistrationIntentNotFoundException;
+use App\Exceptions\Otp\RegistrationIntentPayloadException;
 use App\Http\Responses\ApiResponse;
 use App\Services\Otp\OtpRateLimitDecision;
 use Illuminate\Http\JsonResponse;
@@ -84,6 +89,46 @@ final class OtpExceptionHttpMapper
         }
 
         if ($e instanceof OtpChallengeMismatchException) {
+            return ApiResponse::error(
+                'INVALID_CODE',
+                'El codigo ingresado no es valido.',
+                422,
+            );
+        }
+
+        if ($e instanceof RegistrationIntentExpiredException) {
+            return ApiResponse::error(
+                'CODE_EXPIRED',
+                'El codigo expiro. Solicita uno nuevo.',
+                422,
+            );
+        }
+
+        if ($e instanceof RegistrationIntentNotFoundException) {
+            return ApiResponse::error(
+                'NO_ACTIVE_CODE',
+                'No hay un codigo activo para esta solicitud.',
+                422,
+            );
+        }
+
+        if ($e instanceof RegistrationIntentPayloadException) {
+            return ApiResponse::error(
+                'INVALID_CODE',
+                'El codigo ingresado no es valido.',
+                422,
+            );
+        }
+
+        if ($e instanceof RegistrationIntentInvalidStateException) {
+            return ApiResponse::error(
+                'CODE_INVALIDATED',
+                'El codigo ya no es valido. Solicita uno nuevo.',
+                422,
+            );
+        }
+
+        if ($e instanceof RegistrationIntentException) {
             return ApiResponse::error(
                 'INVALID_CODE',
                 'El codigo ingresado no es valido.',

@@ -257,18 +257,17 @@ test('p0a54 resend of never issued uuid returns no active code', function () {
         ->assertJsonPath('error.code', 'NO_ACTIVE_CODE');
 });
 
-test('p0a54 verify remains disabled while secure register flag is on', function () {
-    p0a54EnableSecureRegister();
+test('p0a54 verify with incomplete flags returns configuration error', function () {
+    config()->set('otp.p0a.flags.akubica_register_enabled', true);
+    config()->set('otp.p0a.flags.infrastructure_enabled', true);
+    config()->set('otp.p0a.flags.anti_abuse_enabled', false);
 
     $this->postJson('/api/v1/auth/register/verify-code', [
-        'email' => 'verify.block@ejemplo.test',
+        'challenge_id' => '00000000-0000-4000-8000-000000000055',
         'code' => '123456',
     ])
         ->assertStatus(503)
-        ->assertJsonPath('error.code', 'FEATURE_DISABLED');
-
-    expect(User::query()->where('email', 'verify.block@ejemplo.test')->exists())->toBeFalse()
-        ->and(PersonalAccessToken::query()->count())->toBe(0);
+        ->assertJsonPath('error.code', 'OTP_CONFIGURATION_INVALID');
 });
 
 test('p0a54 invalid register body returns 422 without creating intent', function () {

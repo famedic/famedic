@@ -199,6 +199,37 @@ final class AkubicaRegistrationIntentService
     }
 
     /**
+     * P0-A5.5 — Mark PENDING → CONSUMED and erase ciphertext without re-checking
+     * challenge unconsumed. Caller must already validate OTP and consume the
+     * challenge in the same outer transaction (design §7 verify→create order).
+     *
+     * @throws RegistrationIntentInvalidStateException
+     */
+    public function markConsumedClearingCiphertext(int $intentId): void
+    {
+        $intent = $this->lockIntent($intentId);
+        $this->assertReadable($intent);
+
+        $updated = AkubicaRegistrationIntent::query()
+            ->where('id', $intent->id)
+            ->where('status', AkubicaRegistrationIntentStatus::Pending)
+            ->whereNotNull('encrypted_payload')
+            ->where('expires_at', '>', now())
+            ->update([
+                'status' => AkubicaRegistrationIntentStatus::Consumed,
+                'consumed_at' => now(),
+                'encrypted_payload' => null,
+                'invalidated_at' => null,
+                'invalidation_reason' => null,
+            ]);
+
+        if ($updated !== 1) {
+            $intent->refresh();
+            $this->throwForTerminalOrExpired($intent);
+        }
+    }
+
+    /**
      * Expire a single pending intent (idempotent if already EXPIRED).
      */
     public function expire(int $intentId): void

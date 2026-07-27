@@ -2,23 +2,39 @@
 
 namespace App\Services\Otp\Registration;
 
+use App\Actions\Api\V1\Auth\IssueAkubicaTokenAction;
+use App\Actions\Api\V1\Auth\RegisterAkubicaCustomerAction;
+use App\Enums\AkubicaRegistrationIntentInvalidationReason;
+use App\Enums\AkubicaRegistrationIntentStatus;
 use App\Enums\P0aOtpChannel;
 use App\Enums\P0aOtpPurpose;
+use App\Exceptions\Otp\OtpChallengeConsumedException;
+use App\Exceptions\Otp\OtpChallengeExpiredException;
+use App\Exceptions\Otp\OtpChallengeInvalidatedException;
 use App\Exceptions\Otp\OtpChallengeMismatchException;
 use App\Exceptions\Otp\OtpChallengeNotFoundException;
 use App\Exceptions\Otp\OtpConfigurationException;
 use App\Exceptions\Otp\OtpIdentityNormalizationException;
+use App\Exceptions\Otp\OtpInvalidCodeException;
 use App\Exceptions\Otp\OtpRateLimitExceededException;
+use App\Exceptions\Otp\RegistrationIntentPayloadException;
+use App\Models\AkubicaRegistrationIntent;
 use App\Models\OtpChallenge;
+use App\Models\User;
 use App\Services\Otp\OtpRateLimitDecision;
+use App\Services\Otp\OtpRateLimitService;
+use App\Services\Otp\OtpRequestContext;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
- * P0-A5.4 — Secure registration request/resend + decoy (flag-gated).
+ * P0-A5.4/5.5 — Secure registration request/resend/verify + decoy (flag-gated).
  *
- * Does NOT send Notification/Mail/SMS. Does NOT verify OTP or create accounts
- * (P0-A5.5). Decoy store is separate from login P0-A4.
+ * Does NOT send Notification/Mail/SMS. Verify creates User/RA/Customer atomically
+ * with challenge+intent consume; Sanctum token is issued only after commit.
  *
  * Flag matrix:
  * - akubica_register_enabled=false → callers use legacy RegisterController path.
@@ -31,6 +47,10 @@ final class AkubicaRegisterOtpService
         private readonly AkubicaRegistrationIntentService $intentService,
         private readonly RegistrationCollisionResolver $collisionResolver,
         private readonly AkubicaRegisterOtpDecoyStore $decoyStore,
+        private readonly RegisterAkubicaCustomerAction $registerAkubicaCustomerAction,
+        private readonly IssueAkubicaTokenAction $issueAkubicaTokenAction,
+        private readonly OtpRateLimitService $rateLimits,
+        private readonly AkubicaRegistrationPayloadCipher $cipher,
     ) {
     }
 
@@ -140,6 +160,296 @@ final class AkubicaRegisterOtpService
     }
 
     /**
+     * Verify OTP, create User+RegularAccount+Customer atomically, then issue token.
+     *
+     * TX order (design §7): lock challenge → validate OTP → decrypt intent →
+     * re-check collisions → create accounts → consume challenge → consume intent
+     * (erase ciphertext). Token is issued only after commit.
+     *
+     * @return array{token: string, token_type: string, expires_in: int, expires_at: string, user: array<string, mixed>}
+     */
+    public function verify(string $challengePublicId, string $code, ?string $clientIp): array
+    {
+        $this->assertConfigurationReady();
+
+        $challenge = OtpChallenge::query()->where('public_id', $challengePublicId)->first();
+        if ($challenge === null) {
+            $this->verifyDecoy($challengePublicId, $code);
+        }
+
+        assert($challenge instanceof OtpChallenge);
+
+        if ($challenge->purpose !== P0aOtpPurpose::AkubicaRegister->value
+            || $challenge->context_type !== AkubicaRegistrationIntentService::CONTEXT_TYPE
+        ) {
+            throw new OtpChallengeMismatchException;
+        }
+
+        $context = $this->requestContextFromChallenge($challenge, $clientIp, $challengePublicId);
+
+        $outcome = DB::transaction(function () use ($challengePublicId, $code) {
+            return $this->verifyAndProvisionLocked($challengePublicId, $code);
+        }, OtpRateLimitService::TRANSACTION_ATTEMPTS);
+
+        if (isset($outcome['error'])) {
+            $this->throwVerifyOutcomeError($outcome, $context, $challengePublicId);
+        }
+
+        /** @var User $user */
+        $user = $outcome['user'];
+        $tokenData = ($this->issueAkubicaTokenAction)($user);
+
+        return [
+            ...$tokenData,
+            'user' => [
+                'id' => $user->id,
+                'email' => $user->email,
+                'name' => trim($user->full_name) ?: $user->name,
+            ],
+        ];
+    }
+
+    /**
+     * @return array{user: User}|array{error: class-string, message?: string, attempts_exhausted?: bool, challenge_id?: int}
+     */
+    private function verifyAndProvisionLocked(string $publicId, string $code): array
+    {
+        /** @var OtpChallenge|null $challenge */
+        $challenge = OtpChallenge::query()
+            ->where('public_id', $publicId)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $challenge) {
+            return ['error' => OtpChallengeNotFoundException::class];
+        }
+
+        if ($challenge->purpose !== P0aOtpPurpose::AkubicaRegister->value
+            || $challenge->context_type !== AkubicaRegistrationIntentService::CONTEXT_TYPE
+        ) {
+            return ['error' => OtpChallengeMismatchException::class];
+        }
+
+        if ($challenge->isConsumed()) {
+            return ['error' => OtpChallengeConsumedException::class];
+        }
+
+        if ($challenge->isInvalidated()) {
+            return ['error' => OtpChallengeInvalidatedException::class];
+        }
+
+        if ($challenge->isExpired()) {
+            return ['error' => OtpChallengeExpiredException::class];
+        }
+
+        if ((int) $challenge->failed_attempts >= (int) $challenge->max_attempts) {
+            return [
+                'error' => OtpChallengeInvalidatedException::class,
+                'message' => 'Se agotaron los intentos del desafio OTP.',
+                'attempts_exhausted' => true,
+                'challenge_id' => (int) $challenge->id,
+            ];
+        }
+
+        if (! Hash::check($code, (string) $challenge->code_hash)) {
+            $challenge->increment('failed_attempts');
+            $challenge->refresh();
+
+            if ((int) $challenge->failed_attempts >= (int) $challenge->max_attempts) {
+                $challenge->update([
+                    'invalidated_at' => now(),
+                    'invalidated_reason' => 'attempts_exhausted',
+                ]);
+
+                return [
+                    'error' => OtpChallengeInvalidatedException::class,
+                    'message' => 'Se agotaron los intentos del desafio OTP.',
+                    'attempts_exhausted' => true,
+                    'challenge_id' => (int) $challenge->id,
+                ];
+            }
+
+            return ['error' => OtpInvalidCodeException::class];
+        }
+
+        /** @var AkubicaRegistrationIntent|null $intent */
+        $intent = AkubicaRegistrationIntent::query()
+            ->where('otp_challenge_id', $challenge->id)
+            ->lockForUpdate()
+            ->first();
+
+        if ($intent === null) {
+            return ['error' => OtpChallengeMismatchException::class];
+        }
+
+        if ($intent->status !== AkubicaRegistrationIntentStatus::Pending) {
+            return $this->mapIntentTerminalToChallengeError($intent);
+        }
+
+        if ($intent->expires_at === null || $intent->expires_at->isPast()) {
+            return ['error' => OtpChallengeExpiredException::class];
+        }
+
+        if ($intent->encrypted_payload === null || $intent->encrypted_payload === '') {
+            $this->invalidateIntentAndChallenge(
+                $intent,
+                $challenge,
+                AkubicaRegistrationIntentInvalidationReason::CorruptedPayload,
+            );
+
+            return ['error' => OtpInvalidCodeException::class];
+        }
+
+        try {
+            $payload = $this->cipher->decrypt((string) $intent->encrypted_payload);
+        } catch (RegistrationIntentPayloadException|\InvalidArgumentException) {
+            $this->invalidateIntentAndChallenge(
+                $intent,
+                $challenge,
+                AkubicaRegistrationIntentInvalidationReason::CorruptedPayload,
+            );
+
+            return ['error' => OtpInvalidCodeException::class];
+        }
+
+        $collision = $this->collisionResolver->resolve($payload->email, $payload->phone);
+        if ($collision->kind !== RegistrationCollisionKind::Available) {
+            $this->invalidateIntentAndChallenge(
+                $intent,
+                $challenge,
+                AkubicaRegistrationIntentInvalidationReason::InconsistentAssociation,
+            );
+
+            return ['error' => OtpInvalidCodeException::class];
+        }
+
+        try {
+            $user = ($this->registerAkubicaCustomerAction)([
+                'email' => $payload->email->value(),
+                'phone' => $payload->phone->nationalNumber(),
+                'full_name' => $payload->fullName,
+                'phone_country' => $payload->phone->countryCode(),
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            $this->invalidateIntentAndChallenge(
+                $intent,
+                $challenge,
+                AkubicaRegistrationIntentInvalidationReason::InconsistentAssociation,
+            );
+
+            return ['error' => OtpInvalidCodeException::class];
+        }
+
+        $updated = OtpChallenge::query()
+            ->where('id', $challenge->id)
+            ->whereNull('consumed_at')
+            ->whereNull('invalidated_at')
+            ->where('expires_at', '>', now())
+            ->update(['consumed_at' => now()]);
+
+        if ($updated !== 1) {
+            throw new OtpChallengeConsumedException;
+        }
+
+        $intentConsumed = AkubicaRegistrationIntent::query()
+            ->where('id', $intent->id)
+            ->where('status', AkubicaRegistrationIntentStatus::Pending)
+            ->whereNotNull('encrypted_payload')
+            ->where('expires_at', '>', now())
+            ->update([
+                'status' => AkubicaRegistrationIntentStatus::Consumed,
+                'consumed_at' => now(),
+                'encrypted_payload' => null,
+                'invalidated_at' => null,
+                'invalidation_reason' => null,
+            ]);
+
+        if ($intentConsumed !== 1) {
+            throw new OtpChallengeConsumedException;
+        }
+
+        return ['user' => $user->fresh(['customer'])];
+    }
+
+    /**
+     * @param  array{error: class-string, message?: string, attempts_exhausted?: bool, challenge_id?: int}  $outcome
+     */
+    private function throwVerifyOutcomeError(array $outcome, OtpRequestContext $context, string $publicId): never
+    {
+        $class = $outcome['error'];
+        $message = $outcome['message'] ?? null;
+
+        if (! empty($outcome['attempts_exhausted'])) {
+            $challengeId = $outcome['challenge_id']
+                ?? OtpChallenge::query()->where('public_id', $publicId)->value('id');
+
+            $decision = $this->rateLimits->recordMaxAttemptsExhausted(
+                $context,
+                $challengeId !== null ? (int) $challengeId : null,
+            );
+
+            throw new OtpRateLimitExceededException($decision);
+        }
+
+        throw $message === null ? new $class : new $class($message);
+    }
+
+    /**
+     * @return array{error: class-string}
+     */
+    private function mapIntentTerminalToChallengeError(AkubicaRegistrationIntent $intent): array
+    {
+        return match ($intent->status) {
+            AkubicaRegistrationIntentStatus::Consumed => ['error' => OtpChallengeConsumedException::class],
+            AkubicaRegistrationIntentStatus::Expired => ['error' => OtpChallengeExpiredException::class],
+            AkubicaRegistrationIntentStatus::Invalidated,
+            AkubicaRegistrationIntentStatus::Superseded => ['error' => OtpChallengeInvalidatedException::class],
+            default => ['error' => OtpChallengeMismatchException::class],
+        };
+    }
+
+    private function invalidateIntentAndChallenge(
+        AkubicaRegistrationIntent $intent,
+        OtpChallenge $challenge,
+        AkubicaRegistrationIntentInvalidationReason $reason,
+    ): void {
+        AkubicaRegistrationIntent::query()
+            ->where('id', $intent->id)
+            ->where('status', AkubicaRegistrationIntentStatus::Pending)
+            ->update([
+                'status' => AkubicaRegistrationIntentStatus::Invalidated,
+                'invalidated_at' => now(),
+                'invalidation_reason' => $reason,
+                'encrypted_payload' => null,
+            ]);
+
+        if ($challenge->invalidated_at === null && $challenge->consumed_at === null) {
+            $challenge->update([
+                'invalidated_at' => now(),
+                'invalidated_reason' => 'registration_collision',
+            ]);
+        }
+    }
+
+    private function requestContextFromChallenge(
+        OtpChallenge $challenge,
+        ?string $clientIp,
+        string $publicId,
+    ): OtpRequestContext {
+        return new OtpRequestContext(
+            purpose: P0aOtpPurpose::AkubicaRegister,
+            userId: null,
+            subjectType: $challenge->subject_type ?? AkubicaRegistrationIntentService::SUBJECT_TYPE,
+            subjectKey: (string) ($challenge->subject_key ?? ''),
+            contextType: AkubicaRegistrationIntentService::CONTEXT_TYPE,
+            contextId: $challenge->context_id,
+            channel: P0aOtpChannel::tryFrom((string) $challenge->channel) ?? P0aOtpChannel::Email,
+            clientIp: $clientIp,
+            existingChallengePublicId: $publicId,
+        );
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function decoyRequestResponse(string $requestedEmail): array
@@ -174,6 +484,53 @@ final class AkubicaRegisterOtpService
             'expires_at' => $expiresAt->utc()->format('Y-m-d\TH:i:s\Z'),
             'resend_available_at' => $resendAvailableAt->utc()->format('Y-m-d\TH:i:s\Z'),
         ];
+    }
+
+    /**
+     * Decoy verify: never succeeds; public errors mirror a real active challenge.
+     *
+     * @throws OtpChallengeNotFoundException
+     * @throws OtpChallengeInvalidatedException
+     * @throws OtpChallengeExpiredException
+     * @throws OtpRateLimitExceededException
+     * @throws OtpInvalidCodeException
+     */
+    private function verifyDecoy(string $publicId, string $code): never
+    {
+        $decoy = $this->decoyStore->get($publicId);
+        if ($decoy === null) {
+            throw new OtpChallengeNotFoundException;
+        }
+
+        $invalidatedReason = $decoy['invalidation_reason'] ?? $decoy['invalidated_reason'] ?? null;
+
+        if ($decoy['invalidated_at'] !== null) {
+            if ($invalidatedReason === 'attempts_exhausted') {
+                throw new OtpRateLimitExceededException($this->maxAttemptsDecision());
+            }
+
+            throw new OtpChallengeInvalidatedException;
+        }
+
+        if ($decoy['expires_at'] <= now()->getTimestamp()) {
+            throw new OtpChallengeExpiredException;
+        }
+
+        unset($code);
+
+        $decoy['failed_attempts'] = (int) $decoy['failed_attempts'] + 1;
+
+        if ($decoy['failed_attempts'] >= (int) $decoy['max_attempts']) {
+            $decoy['invalidated_at'] = now()->getTimestamp();
+            $decoy['invalidation_reason'] = 'attempts_exhausted';
+            $this->decoyStore->put($publicId, $decoy);
+
+            throw new OtpRateLimitExceededException($this->maxAttemptsDecision());
+        }
+
+        $this->decoyStore->put($publicId, $decoy);
+
+        throw new OtpInvalidCodeException;
     }
 
     /**
@@ -253,6 +610,21 @@ final class AkubicaRegisterOtpService
             'expires_at' => $challenge->expires_at?->utc()->format('Y-m-d\TH:i:s\Z'),
             'resend_available_at' => $resendAvailableAt->utc()->format('Y-m-d\TH:i:s\Z'),
         ];
+    }
+
+    private function maxAttemptsDecision(): OtpRateLimitDecision
+    {
+        $retryAfter = max(1, (int) config('otp.p0a.anti_abuse.block_minutes', 15) * 60);
+
+        return OtpRateLimitDecision::deny(
+            errorCode: OtpRateLimitDecision::CODE_MAX_ATTEMPTS,
+            publicMessage: 'Se agotaron los intentos. Solicita un codigo nuevo.',
+            decision: 'max_attempts',
+            scope: OtpRateLimitDecision::SCOPE_CHALLENGE,
+            retryAfterSeconds: $retryAfter,
+            availableAt: now()->addSeconds($retryAfter),
+            purpose: P0aOtpPurpose::AkubicaRegister->value,
+        );
     }
 
     private function maskEmail(string $email): string
