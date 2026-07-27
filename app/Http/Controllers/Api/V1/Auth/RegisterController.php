@@ -10,6 +10,7 @@ use App\Exceptions\Api\V1\Auth\AuthOtpVerificationException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\RegisterRequest;
 use App\Http\Requests\Api\V1\Auth\RegisterVerifyCodeRequest;
+use App\Http\Requests\Api\V1\Auth\SecureRegisterResendCodeRequest;
 use App\Http\Responses\ApiResponse;
 use App\Models\OtpCode;
 use App\Models\User;
@@ -136,6 +137,19 @@ class RegisterController extends Controller
             ...$tokenData,
             'user' => $this->formatUser($user),
         ]);
+    }
+
+    /**
+     * P0-A5.2 placeholder: secure register resend is not implemented yet.
+     * Always returns FEATURE_DISABLED (safe with flag OFF; no fake success).
+     */
+    public function resendCode(SecureRegisterResendCodeRequest $request): JsonResponse
+    {
+        return ApiResponse::error(
+            'FEATURE_DISABLED',
+            'El reenvio OTP P0-A de registro no esta habilitado.',
+            503,
+        );
     }
 
     private function phoneAlreadyRegistered(string $phone, string $phoneCountry): bool

@@ -48,6 +48,10 @@ Route::middleware(['force.json', 'api.token.guard'])->name('api.v1.')->group(fun
         Route::post('register/verify-code', [RegisterController::class, 'verifyCode'])
             ->middleware('throttle:akubica-otp')
             ->name('register.verify-code');
+
+        Route::post('register/resend-code', [RegisterController::class, 'resendCode'])
+            ->middleware('throttle:akubica-otp')
+            ->name('register.resend-code');
     });
 
     // ── Auth: revocar token (solo Sanctum, sin api.customer) ───────────

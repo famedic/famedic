@@ -65,6 +65,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(AkubicaLoginOtpDecoyStore::class);
         $this->app->bind(AkubicaLoginOtpService::class);
         $this->app->singleton(OtpExceptionHttpMapper::class);
+        $this->app->singleton(\App\Services\Otp\Registration\EmailNormalizer::class);
+        $this->app->singleton(\App\Services\Otp\Registration\MexicoPhoneNormalizer::class);
+        $this->app->bind(\App\Services\Otp\Registration\RegistrationCollisionResolver::class);
 
         $this->app->register(\App\Providers\EfevooPayServiceProvider::class);
         $this->app->register(\App\Providers\ActiveCampaignServiceProvider::class);

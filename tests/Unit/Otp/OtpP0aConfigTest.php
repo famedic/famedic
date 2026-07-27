@@ -13,11 +13,13 @@ function otpP0aReloadConfig(array $overrides = []): void
         'OTP_P0A_EMAIL_FALLBACK_ENABLED',
         'OTP_P0A_ANTI_ABUSE_ENABLED',
         'OTP_P0A_AKUBICA_LOGIN_ENABLED',
+        'OTP_P0A_AKUBICA_REGISTER_ENABLED',
         'OTP_P0A_SANCTUM_3H_ENABLED',
         'OTP_P0A_STEP_UP_RESULTS_ENABLED',
         'OTP_P0A_STEP_UP_INVOICES_ENABLED',
         'OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED',
         'OTP_P0A_TTL_MINUTES',
+        'OTP_P0A_REGISTER_TTL_MINUTES',
         'OTP_P0A_LENGTH',
         'OTP_P0A_MAX_ATTEMPTS',
         'OTP_P0A_COOLDOWN_SECONDS',
@@ -82,6 +84,7 @@ test('p0a breaking feature flags are disabled by default', function () {
         ->and(config('otp.p0a.flags.email_fallback_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.anti_abuse_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.akubica_login_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.flags.akubica_register_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.sanctum_3h_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.step_up_results_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.step_up_invoices_enabled'))->toBeFalse()
@@ -232,4 +235,30 @@ test('p0a3 anti-abuse invalid env values fall back to safe defaults', function (
 test('p0a4 akubica login flag is disabled by default', function () {
     expect(config('otp.p0a.flags.akubica_login_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.anti_abuse_enabled'))->toBeFalse();
+});
+
+test('p0a5 akubica register flag and policy defaults are safe', function () {
+    expect(config('otp.p0a.flags.akubica_register_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.registration.purpose'))->toBe('akubica_register')
+        ->and(config('otp.p0a.registration.ttl_minutes'))->toBe(10)
+        ->and(config('otp.p0a.registration.length'))->toBe(6)
+        ->and(config('otp.p0a.registration.max_attempts'))->toBe(5)
+        ->and(config('otp.p0a.registration.cooldown_seconds'))->toBe(60)
+        ->and(config('otp.p0a.registration.max_resends'))->toBe(3)
+        ->and(config('otp.p0a.registration.delivery_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.registration.requires_infrastructure'))->toBeTrue()
+        ->and(config('otp.p0a.registration.requires_anti_abuse'))->toBeTrue()
+        ->and(config('otp.p0a.policy.ttl_minutes'))->toBe(5)
+        ->and(config('otp.p0a.sanctum.current_expiration_minutes'))->toBe(1440)
+        ->and(config('sanctum.expiration'))->toBe(1440);
+});
+
+test('p0a5 register ttl env override does not change login policy ttl', function () {
+    otpP0aReloadConfig([
+        'OTP_P0A_REGISTER_TTL_MINUTES' => '12',
+        'OTP_P0A_TTL_MINUTES' => '5',
+    ]);
+
+    expect(config('otp.p0a.registration.ttl_minutes'))->toBe(12)
+        ->and(config('otp.p0a.policy.ttl_minutes'))->toBe(5);
 });

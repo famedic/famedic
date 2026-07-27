@@ -105,6 +105,14 @@ return [
              */
             'akubica_login_enabled' => $otpEnvBool('OTP_P0A_AKUBICA_LOGIN_ENABLED', false),
 
+            /**
+             * Registro Akubica vía otp_challenges + P0-A3 (P0-A5+).
+             * Requiere infrastructure_enabled + anti_abuse_enabled.
+             * OFF = registro legacy (otp_codes + 409) intacto.
+             * No activa delivery ni wiring completo hasta fases posteriores.
+             */
+            'akubica_register_enabled' => $otpEnvBool('OTP_P0A_AKUBICA_REGISTER_ENABLED', false),
+
             /** Aplicar vigencia Sanctum de 3 horas (P0-A6+). No altera sanctum.expiration. */
             'sanctum_3h_enabled' => $otpEnvBool('OTP_P0A_SANCTUM_3H_ENABLED', false),
 
@@ -208,6 +216,35 @@ return [
                 1440
             ),
             'retention_days' => $otpEnvInt('OTP_P0A_ABUSE_RETENTION_DAYS', 30, 1, 365),
+        ],
+
+        /*
+        |--------------------------------------------------------------------------
+        | Akubica register policy (P0-A5) — independent TTL; flag OFF by default
+        |--------------------------------------------------------------------------
+        |
+        | ttl_minutes defaults to 10 (approved for register), not the login/policy
+        | default of 5. length / max_attempts / cooldown / max_resends reuse the
+        | approved P0-A2/P0-A3 policy defaults via the same env keys.
+        | delivery_enabled is hard-false until a later delivery block.
+        |
+        */
+
+        'registration' => [
+            'purpose' => 'akubica_register',
+            'channel' => 'email',
+            'ttl_minutes' => $otpEnvInt('OTP_P0A_REGISTER_TTL_MINUTES', 10, 1, 60),
+            'length' => $otpEnvInt('OTP_P0A_LENGTH', 6, 4, 10),
+            'max_attempts' => $otpEnvInt('OTP_P0A_MAX_ATTEMPTS', 5, 1, 20),
+            'cooldown_seconds' => $otpEnvInt('OTP_P0A_COOLDOWN_SECONDS', 60, 1, 3600),
+            'resend_window_minutes' => $otpEnvInt('OTP_P0A_RESEND_WINDOW_MINUTES', 30, 1, 1440),
+            'max_resends' => $otpEnvInt('OTP_P0A_MAX_RESENDS', 3, 0, 20),
+            'block_minutes' => $otpEnvInt('OTP_P0A_BLOCK_MINUTES', 30, 1, 1440),
+            'requires_infrastructure' => true,
+            'requires_anti_abuse' => true,
+            /** Hard-disabled in P0-A5.2; delivery is out of scope. */
+            'delivery_enabled' => false,
+            'rate_limit_name' => 'akubica-otp',
         ],
     ],
 
