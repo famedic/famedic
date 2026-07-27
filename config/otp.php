@@ -98,6 +98,13 @@ return [
             /** Cooldown, tope de reenvíos, intentos y bloqueo (P0-A3+). OFF = no wiring productivo. */
             'anti_abuse_enabled' => $otpEnvBool('OTP_P0A_ANTI_ABUSE_ENABLED', false),
 
+            /**
+             * Login Akubica vía otp_challenges + P0-A3 (P0-A4+).
+             * Requiere anti_abuse_enabled=true; si login=true y anti_abuse=false → error de configuración.
+             * OFF = login legacy (otp_codes + Notification) intacto.
+             */
+            'akubica_login_enabled' => $otpEnvBool('OTP_P0A_AKUBICA_LOGIN_ENABLED', false),
+
             /** Aplicar vigencia Sanctum de 3 horas (P0-A6+). No altera sanctum.expiration. */
             'sanctum_3h_enabled' => $otpEnvBool('OTP_P0A_SANCTUM_3H_ENABLED', false),
 

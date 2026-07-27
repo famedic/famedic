@@ -12,6 +12,7 @@ function otpP0aReloadConfig(array $overrides = []): void
         'OTP_P0A_SMS_DELIVERY_ENABLED',
         'OTP_P0A_EMAIL_FALLBACK_ENABLED',
         'OTP_P0A_ANTI_ABUSE_ENABLED',
+        'OTP_P0A_AKUBICA_LOGIN_ENABLED',
         'OTP_P0A_SANCTUM_3H_ENABLED',
         'OTP_P0A_STEP_UP_RESULTS_ENABLED',
         'OTP_P0A_STEP_UP_INVOICES_ENABLED',
@@ -80,6 +81,7 @@ test('p0a breaking feature flags are disabled by default', function () {
         ->and(config('otp.p0a.flags.sms_delivery_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.email_fallback_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.anti_abuse_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.flags.akubica_login_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.sanctum_3h_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.step_up_results_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.step_up_invoices_enabled'))->toBeFalse()
@@ -225,4 +227,9 @@ test('p0a3 anti-abuse invalid env values fall back to safe defaults', function (
         ->and(config('otp.p0a.anti_abuse.ip_max_requests'))->toBe(20)
         ->and(config('otp.p0a.anti_abuse.rate_limit_window_minutes'))->toBe(30)
         ->and(config('otp.p0a.anti_abuse.retention_days'))->toBe(30);
+});
+
+test('p0a4 akubica login flag is disabled by default', function () {
+    expect(config('otp.p0a.flags.akubica_login_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.flags.anti_abuse_enabled'))->toBeFalse();
 });

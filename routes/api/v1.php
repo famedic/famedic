@@ -37,6 +37,10 @@ Route::middleware(['force.json', 'api.token.guard'])->name('api.v1.')->group(fun
             ->middleware('throttle:akubica-otp')
             ->name('login.verify-code');
 
+        Route::post('login/resend-code', [LoginController::class, 'resendCode'])
+            ->middleware('throttle:akubica-otp')
+            ->name('login.resend-code');
+
         Route::post('register', [RegisterController::class, 'store'])
             ->middleware('throttle:akubica-otp')
             ->name('register');

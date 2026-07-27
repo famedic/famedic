@@ -18,10 +18,13 @@ use Laravel\Cashier\Cashier;
 use Stripe\StripeClient;
 use App\Services\ConstanciaFiscalService;
 use App\Contracts\Otp\OtpCodeGenerator;
+use App\Services\Otp\AkubicaLoginOtpDecoyStore;
+use App\Services\Otp\AkubicaLoginOtpService;
 use App\Services\Otp\OtpAbuseKeyHasher;
 use App\Services\Otp\OtpAbusePolicy;
 use App\Services\Otp\OtpRateLimitService;
 use App\Services\Otp\SecureOtpCodeGenerator;
+use App\Http\Responses\Api\V1\OtpExceptionHttpMapper;
 //use App\Services\EfevooPayService;
 /*
 use App\Services\EfevooPayFactoryService;
@@ -59,6 +62,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(OtpAbuseKeyHasher::class);
         $this->app->bind(OtpRateLimitService::class);
         $this->app->bind(OtpAbusePolicy::class);
+        $this->app->singleton(AkubicaLoginOtpDecoyStore::class);
+        $this->app->bind(AkubicaLoginOtpService::class);
+        $this->app->singleton(OtpExceptionHttpMapper::class);
 
         $this->app->register(\App\Providers\EfevooPayServiceProvider::class);
         $this->app->register(\App\Providers\ActiveCampaignServiceProvider::class);
