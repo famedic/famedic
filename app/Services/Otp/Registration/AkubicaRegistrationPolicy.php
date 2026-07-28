@@ -52,6 +52,16 @@ final class AkubicaRegistrationPolicy
         return (bool) config('otp.p0a.registration.delivery_enabled', false);
     }
 
+    public static function smsDeliveryEnabled(): bool
+    {
+        return (bool) config('otp.p0a.flags.sms_delivery_enabled', false);
+    }
+
+    public static function emailFallbackEnabled(): bool
+    {
+        return (bool) config('otp.p0a.flags.email_fallback_enabled', false);
+    }
+
     public static function ttlMinutes(): int
     {
         return (int) config('otp.p0a.registration.ttl_minutes', 10);
@@ -84,6 +94,6 @@ final class AkubicaRegistrationPolicy
 
     public static function channel(): string
     {
-        return (string) config('otp.p0a.registration.channel', 'email');
+        return (string) config('otp.p0a.registration.channel', 'sms');
     }
 }

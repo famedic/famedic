@@ -65,7 +65,8 @@ final class AkubicaRegistrationIntentService
         $ttlMinutes = AkubicaRegistrationPolicy::ttlMinutes();
         $maxAttempts = AkubicaRegistrationPolicy::maxAttempts();
         $emailValue = $identity->email->value();
-        $masked = $this->maskEmail($emailValue);
+        $phoneE164 = $identity->phone->e164();
+        $masked = $this->maskPhone($phoneE164 ?? $identity->phone->nationalNumber());
 
         return DB::transaction(function () use (
             $payload,
@@ -75,17 +76,18 @@ final class AkubicaRegistrationIntentService
             $maxAttempts,
             $masked,
             $emailValue,
+            $phoneE164,
             $clientIp,
         ) {
             $challengeResult = $this->abusePolicy->issue(
                 new CreateOtpChallengeData(
                     purpose: P0aOtpPurpose::AkubicaRegister,
-                    channel: P0aOtpChannel::Email,
+                    channel: P0aOtpChannel::Sms,
                     ttlMinutes: $ttlMinutes,
                     userId: null,
                     subjectType: self::SUBJECT_TYPE,
                     subjectKey: $emailFp,
-                    destinationNormalized: null,
+                    destinationNormalized: $phoneE164,
                     destinationMasked: $masked,
                     contextType: self::CONTEXT_TYPE,
                     contextId: null,
@@ -100,7 +102,7 @@ final class AkubicaRegistrationIntentService
                     subjectKey: $emailValue,
                     contextType: self::CONTEXT_TYPE,
                     contextId: null,
-                    channel: P0aOtpChannel::Email,
+                    channel: P0aOtpChannel::Sms,
                     clientIp: $clientIp,
                 ),
             );
@@ -491,5 +493,12 @@ final class AkubicaRegistrationIntentService
         $prefix = $local !== '' ? substr($local, 0, 1) : '*';
 
         return $prefix.'***@'.$domain;
+    }
+
+    private function maskPhone(string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+
+        return $digits === '' ? '***' : '***'.substr($digits, -4);
     }
 }

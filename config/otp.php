@@ -232,7 +232,7 @@ return [
 
         'registration' => [
             'purpose' => 'akubica_register',
-            'channel' => 'email',
+            'channel' => 'sms',
             'ttl_minutes' => $otpEnvInt('OTP_P0A_REGISTER_TTL_MINUTES', 10, 1, 60),
             'length' => $otpEnvInt('OTP_P0A_LENGTH', 6, 4, 10),
             'max_attempts' => $otpEnvInt('OTP_P0A_MAX_ATTEMPTS', 5, 1, 20),
@@ -242,9 +242,21 @@ return [
             'block_minutes' => $otpEnvInt('OTP_P0A_BLOCK_MINUTES', 30, 1, 1440),
             'requires_infrastructure' => true,
             'requires_anti_abuse' => true,
-            /** Hard-disabled in P0-A5.2; delivery is out of scope. */
-            'delivery_enabled' => false,
+            'delivery_enabled' => $otpEnvBool('OTP_P0A_SMS_DELIVERY_ENABLED', false),
             'rate_limit_name' => 'akubica-otp',
+        ],
+
+        'delivery' => [
+            'driver' => env('OTP_P0A_DELIVERY_DRIVER', 'null'),
+            'connect_timeout_seconds' => (int) env('OTP_P0A_DELIVERY_CONNECT_TIMEOUT', 3),
+            'request_timeout_seconds' => (int) env('OTP_P0A_DELIVERY_REQUEST_TIMEOUT', 8),
+            'max_retries' => (int) env('OTP_P0A_DELIVERY_MAX_RETRIES', 1),
+            'backoff_ms' => (int) env('OTP_P0A_DELIVERY_BACKOFF_MS', 500),
+            'redis_connection' => env('OTP_P0A_DELIVERY_REDIS_CONNECTION', 'default'),
+            'redis_key_prefix' => env('OTP_P0A_DELIVERY_REDIS_PREFIX', 'otp:p0a'),
+            'redis_key_version' => 'v1',
+            'reservation_ttl_seconds' => (int) env('OTP_P0A_DELIVERY_RESERVATION_TTL', 600),
+            'provider_alias' => 'vonage',
         ],
     ],
 

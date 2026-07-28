@@ -54,6 +54,11 @@ class OtpAbuseKeyHasher
         return $this->hmac('ip|v1|'.$normalized);
     }
 
+    public function hashOpaque(string $namespace, string $material): string
+    {
+        return $this->hmac($namespace.'|'.$this->normalizeSubjectKey($material));
+    }
+
     /**
      * Canonical identity definition for anti-abuse:
      * purpose + user_id (if any) + subject_type/key + context_type/id.

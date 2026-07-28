@@ -25,6 +25,15 @@ use App\Services\Otp\OtpAbusePolicy;
 use App\Services\Otp\OtpRateLimitService;
 use App\Services\Otp\SecureOtpCodeGenerator;
 use App\Http\Responses\Api\V1\OtpExceptionHttpMapper;
+use App\Contracts\Otp\OtpDeliveryProvider;
+use App\Services\Otp\Delivery\AkubicaSecureOtpDeliveryOrchestrator;
+use App\Services\Otp\Delivery\ArrayOtpDeliveryReservationStore;
+use App\Services\Otp\Delivery\FakeOtpDeliveryProvider;
+use App\Services\Otp\Delivery\NullOtpDeliveryProvider;
+use App\Services\Otp\Delivery\OtpDeliveryObservability;
+use App\Services\Otp\Delivery\OtpDeliveryReservationStore;
+use App\Services\Otp\Delivery\RedisOtpDeliveryReservationStore;
+use App\Services\Otp\Delivery\VonageOtpDeliveryProvider;
 //use App\Services\EfevooPayService;
 /*
 use App\Services\EfevooPayFactoryService;
@@ -72,6 +81,27 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(\App\Services\Otp\Registration\AkubicaRegistrationIntentService::class);
         $this->app->singleton(\App\Services\Otp\Registration\AkubicaRegisterOtpDecoyStore::class);
         $this->app->bind(\App\Services\Otp\Registration\AkubicaRegisterOtpService::class);
+        $this->app->singleton(OtpDeliveryObservability::class);
+        $this->app->singleton(FakeOtpDeliveryProvider::class);
+        $this->app->bind(OtpDeliveryReservationStore::class, function ($app) {
+            if (config('otp.p0a.delivery.driver') === 'fake' || $app->environment('testing')) {
+                if (config('otp.p0a.delivery.reservation_store', 'auto') === 'redis') {
+                    return $app->make(RedisOtpDeliveryReservationStore::class);
+                }
+
+                return $app->make(ArrayOtpDeliveryReservationStore::class);
+            }
+
+            return $app->make(RedisOtpDeliveryReservationStore::class);
+        });
+        $this->app->bind(OtpDeliveryProvider::class, function ($app) {
+            return match (config('otp.p0a.delivery.driver', 'null')) {
+                'vonage' => $app->make(VonageOtpDeliveryProvider::class),
+                'fake' => $app->make(FakeOtpDeliveryProvider::class),
+                default => $app->make(NullOtpDeliveryProvider::class),
+            };
+        });
+        $this->app->bind(AkubicaSecureOtpDeliveryOrchestrator::class);
 
         $this->app->register(\App\Providers\EfevooPayServiceProvider::class);
         $this->app->register(\App\Providers\ActiveCampaignServiceProvider::class);

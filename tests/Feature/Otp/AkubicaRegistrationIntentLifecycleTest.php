@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 use App\Enums\AkubicaRegistrationIntentInvalidationReason;
 use App\Enums\AkubicaRegistrationIntentStatus;
@@ -78,7 +78,8 @@ test('p0a53 create pending encrypts payload and links challenge atomically', fun
 
     expect($intent->status)->toBe(AkubicaRegistrationIntentStatus::Pending)
         ->and($challenge->purpose)->toBe(P0aOtpPurpose::AkubicaRegister->value)
-        ->and($challenge->destination_normalized)->toBeNull()
+        ->and($challenge->destination_normalized)->toBe('+525512345702')
+        ->and($challenge->destination_masked)->toBe('***5702')
         ->and($intent->otp_challenge_id)->toBe($challenge->id)
         ->and($intent->expires_at->equalTo($challenge->expires_at))->toBeTrue()
         ->and($intent->expires_at->greaterThan(now()->addMinutes(9)))->toBeTrue()
@@ -328,7 +329,7 @@ test('p0a53 read and consume reject incoherent challenges', function () {
     OtpChallenge::query()->where('id', $expiredCh->challenge->id)->update([
         'expires_at' => now()->subMinute(),
     ]);
-    // Intent row still PENDING with future expires_at — challenge governs.
+    // Intent row still PENDING with future expires_at â€” challenge governs.
     expect(fn () => $service->readPayload((int) $expiredCh->intent->id))
         ->toThrow(RegistrationIntentExpiredException::class);
 });

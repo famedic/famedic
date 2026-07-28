@@ -24,6 +24,7 @@ use App\Models\AkubicaRegistrationIntent;
 use App\Models\OtpChallenge;
 use App\Models\User;
 use App\Services\Otp\MysqlContentionClassifier;
+use App\Services\Otp\Delivery\AkubicaSecureOtpDeliveryOrchestrator;
 use App\Services\Otp\OtpRateLimitDecision;
 use App\Services\Otp\OtpRateLimitService;
 use App\Services\Otp\OtpRequestContext;
@@ -35,16 +36,16 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
- * P0-A5.4/5.5/5.7A — Secure registration request/resend/verify + decoy (flag-gated).
+ * P0-A5.4/5.5/5.7A â€” Secure registration request/resend/verify + decoy (flag-gated).
  *
- * Does NOT send Notification/Mail/SMS. Verify creates User/RA/Customer atomically
+ * OTP delivery is gated by `sms_delivery` / `delivery_enabled` and runs synchronously after `createPending` commit. Verify creates User/RA/Customer atomically
  * with challenge+intent consume; Sanctum token is issued only after commit.
- * Token failure after commit → LOGIN_REQUIRED (recover via P0-A4 login).
+ * Token failure after commit â†’ LOGIN_REQUIRED (recover via P0-A4 login).
  *
  * Flag matrix:
- * - akubica_register_enabled=false → callers use legacy RegisterController path.
- * - true + infrastructure + anti_abuse → this service.
- * - true without deps → OtpConfigurationException (never fail open).
+ * - akubica_register_enabled=false â†’ callers use legacy RegisterController path.
+ * - true + infrastructure + anti_abuse â†’ this service.
+ * - true without deps â†’ OtpConfigurationException (never fail open).
  */
 final class AkubicaRegisterOtpService
 {
@@ -57,6 +58,7 @@ final class AkubicaRegisterOtpService
         private readonly OtpRateLimitService $rateLimits,
         private readonly AkubicaRegistrationPayloadCipher $cipher,
         private readonly MysqlContentionClassifier $contentionClassifier,
+        private readonly AkubicaSecureOtpDeliveryOrchestrator $deliveryOrchestrator,
     ) {
     }
 
@@ -98,7 +100,7 @@ final class AkubicaRegisterOtpService
      * @return array<string, mixed>
      *
      * @throws OtpConfigurationException
-     * @throws OtpIdentityNormalizationException ambiguous phone → 422 upstream
+     * @throws OtpIdentityNormalizationException ambiguous phone â†’ 422 upstream
      * @throws OtpRateLimitExceededException
      */
     public function request(RegistrationIdentity $identity, ?string $clientIp): array
@@ -117,7 +119,7 @@ final class AkubicaRegisterOtpService
         }
 
         if ($collision->kind->shouldUseDecoy()) {
-            return $this->decoyRequestResponse($identity->email->value());
+            return $this->decoyRequestResponse($identity);
         }
 
         try {
@@ -128,6 +130,8 @@ final class AkubicaRegisterOtpService
             $this->rethrowIfContention($e);
             throw $e;
         }
+
+        $this->dispatchDelivery($result, $identity);
 
         return $this->challengeResponsePayload(
             $result->challenge,
@@ -162,15 +166,16 @@ final class AkubicaRegisterOtpService
 
         try {
             $payload = $this->intentService->readPayload((int) $intent->id);
+            $identity = $payload->toRegistrationIdentity();
             $result = $this->intentService->createPending(
-                $payload->toRegistrationIdentity(),
+                $identity,
                 $clientIp,
             );
         } catch (\App\Exceptions\Otp\RegistrationIntentInvalidStateException|
             \App\Exceptions\Otp\RegistrationIntentExpiredException|
             \App\Exceptions\Otp\RegistrationIntentNotFoundException
         ) {
-            // Concurrent verify/consume won the race — safe public contract.
+            // Concurrent verify/consume won the race â€” safe public contract.
             throw new OtpChallengeInvalidatedException(
                 'El codigo ya no es valido. Solicita uno nuevo.',
             );
@@ -181,6 +186,8 @@ final class AkubicaRegisterOtpService
             throw $e;
         }
 
+        $this->dispatchDelivery($result, $identity);
+
         return $this->challengeResponsePayload(
             $result->challenge,
             AkubicaRegistrationPolicy::cooldownSeconds(),
@@ -190,8 +197,8 @@ final class AkubicaRegisterOtpService
     /**
      * Verify OTP, create User+RegularAccount+Customer atomically, then issue token.
      *
-     * TX order (design §7): lock challenge → validate OTP → decrypt intent →
-     * re-check collisions → create accounts → consume challenge → consume intent
+     * TX order (design Â§7): lock challenge â†’ validate OTP â†’ decrypt intent â†’
+     * re-check collisions â†’ create accounts â†’ consume challenge â†’ consume intent
      * (erase ciphertext). Token is issued only after commit.
      *
      * @return array{token: string, token_type: string, expires_in: int, expires_at: string, user: array<string, mixed>}
@@ -378,7 +385,7 @@ final class AkubicaRegisterOtpService
                 AkubicaRegistrationIntentInvalidationReason::InconsistentAssociation,
             );
 
-            // Phone or email uniqueness — never enumerate which (anti-enumeration).
+            // Phone or email uniqueness â€” never enumerate which (anti-enumeration).
             return ['error' => OtpInvalidCodeException::class];
         }
 
@@ -494,18 +501,17 @@ final class AkubicaRegisterOtpService
     /**
      * @return array<string, mixed>
      */
-    public function decoyRequestResponse(string $requestedEmail): array
+    public function decoyRequestResponse(RegistrationIdentity $identity): array
     {
         $this->assertConfigurationReady();
 
         $ttlMinutes = AkubicaRegistrationPolicy::ttlMinutes();
         $cooldown = AkubicaRegistrationPolicy::cooldownSeconds();
         $now = now();
-        $email = strtolower(trim($requestedEmail));
         $publicId = (string) Str::uuid();
         $expiresAt = $now->copy()->addMinutes($ttlMinutes);
         $resendAvailableAt = $now->copy()->addSeconds($cooldown);
-        $masked = $this->maskEmail($email);
+        $masked = $this->maskPhone($identity->phone->e164() ?? $identity->phone->nationalNumber());
 
         $this->decoyStore->put($publicId, [
             'destination_masked' => $masked,
@@ -521,7 +527,7 @@ final class AkubicaRegisterOtpService
             'requires_otp' => true,
             'challenge_id' => $publicId,
             'purpose' => P0aOtpPurpose::AkubicaRegister->value,
-            'channel' => P0aOtpChannel::Email->value,
+            'channel' => P0aOtpChannel::Sms->value,
             'destination_masked' => $masked,
             'expires_at' => $expiresAt->utc()->format('Y-m-d\TH:i:s\Z'),
             'resend_available_at' => $resendAvailableAt->utc()->format('Y-m-d\TH:i:s\Z'),
@@ -628,7 +634,7 @@ final class AkubicaRegisterOtpService
             'requires_otp' => true,
             'challenge_id' => $newId,
             'purpose' => P0aOtpPurpose::AkubicaRegister->value,
-            'channel' => P0aOtpChannel::Email->value,
+            'channel' => P0aOtpChannel::Sms->value,
             'destination_masked' => $previous['destination_masked'],
             'expires_at' => $expiresAt->utc()->format('Y-m-d\TH:i:s\Z'),
             'resend_available_at' => $resendAvailableAt->utc()->format('Y-m-d\TH:i:s\Z'),
@@ -686,7 +692,7 @@ final class AkubicaRegisterOtpService
         }
 
         if ($classified['kind'] === MysqlContentionClassifier::KIND_DUPLICATE_KEY) {
-            // Concurrent phone/email uniqueness — never reveal which field.
+            // Concurrent phone/email uniqueness â€” never reveal which field.
             throw new OtpInvalidCodeException;
         }
 
@@ -720,5 +726,26 @@ final class AkubicaRegisterOtpService
         $prefix = $local !== '' ? substr($local, 0, 1) : '*';
 
         return $prefix.'***@'.$domain;
+    }
+
+    private function dispatchDelivery(AkubicaRegistrationIntentCreationResult $result, RegistrationIdentity $identity): void
+    {
+        if (! AkubicaRegistrationPolicy::deliveryEnabled()) {
+            return;
+        }
+
+        $this->deliveryOrchestrator->deliverRegisterSafely(
+            $result->challenge,
+            $result->plainCode(),
+            $identity,
+            (string) Str::uuid(),
+        );
+    }
+
+    private function maskPhone(string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+
+        return $digits === '' ? '***' : '***'.substr($digits, -4);
     }
 }

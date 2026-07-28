@@ -83,7 +83,7 @@ test('p0a54 available identity returns 202 challenge without user or delivery', 
     $response->assertStatus(202)
         ->assertJsonPath('data.requires_otp', true)
         ->assertJsonPath('data.purpose', 'akubica_register')
-        ->assertJsonPath('data.channel', 'email')
+        ->assertJsonPath('data.channel', 'sms')
         ->assertJsonStructure([
             'data' => [
                 'requires_otp',
