@@ -216,7 +216,7 @@ test('p0a57a migration preflight throws when duplicates exist', function () {
         'phone_country' => 'MX',
     ]);
 
-    $migration = require database_path('migrations/2026_07_27_210000_add_users_phone_country_phone_unique.php');
+    $migration = require database_path('migrations/2026_07_28_130000_add_users_phone_country_phone_unique.php');
 
     expect(fn () => $migration->up())->toThrow(RuntimeException::class, 'Cannot add users_phone_country_phone_unique');
 });

@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\Migrations\MinimumTableContract;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('otp_challenges')) {
+            MinimumTableContract::assertCompatible('otp_challenges', $this->contract());
+
+            return;
+        }
+
         Schema::create('otp_challenges', function (Blueprint $table) {
             $table->id();
             $table->uuid('public_id')->unique();
@@ -44,8 +51,53 @@ return new class extends Migration
         });
     }
 
+    /**
+     * Conservative no-op rollback under schema drift.
+     *
+     * up() may accept a pre-existing compatible table without creating it.
+     * Without a durable authorship record, dropIfExists would destroy that
+     * table and its data on migrate:rollback. The table is therefore retained.
+     */
     public function down(): void
     {
-        Schema::dropIfExists('otp_challenges');
+        // Intentionally non-destructive under schema drift.
+    }
+
+    /**
+     * @return array{
+     *     columns: array<string, array{types: list<string>, nullable?: bool|null}>,
+     *     indexes: list<array{name: string, columns: list<string>, unique?: bool}>,
+     *     foreign_keys: list<array{columns: list<string>, referenced_table: string, referenced_columns: list<string>, on_delete?: string|list<string>}>
+     * }
+     */
+    private function contract(): array
+    {
+        return [
+            'columns' => [
+                'id' => ['types' => ['bigint', 'integer'], 'nullable' => false],
+                'public_id' => ['types' => ['uuid', 'string', 'varchar', 'char'], 'nullable' => false],
+                'user_id' => ['types' => ['bigint', 'integer'], 'nullable' => true],
+                'purpose' => ['types' => ['string', 'varchar', 'char'], 'nullable' => false],
+                'channel' => ['types' => ['string', 'varchar', 'char'], 'nullable' => false],
+                'code_hash' => ['types' => ['string', 'varchar', 'char'], 'nullable' => false],
+                'expires_at' => ['types' => ['timestamp', 'datetime'], 'nullable' => false],
+                'failed_attempts' => ['types' => ['tinyint', 'integer', 'smallint'], 'nullable' => false],
+                'max_attempts' => ['types' => ['tinyint', 'integer', 'smallint'], 'nullable' => false],
+            ],
+            'indexes' => [
+                ['name' => 'otp_challenges_public_id_unique', 'columns' => ['public_id'], 'unique' => true],
+                ['name' => 'otp_challenges_user_purpose_expires_index', 'columns' => ['user_id', 'purpose', 'expires_at']],
+                ['name' => 'otp_challenges_subject_purpose_expires_index', 'columns' => ['subject_type', 'subject_key', 'purpose', 'expires_at']],
+                ['name' => 'otp_challenges_purpose_context_expires_index', 'columns' => ['purpose', 'context_type', 'context_id', 'expires_at']],
+            ],
+            'foreign_keys' => [
+                [
+                    'columns' => ['user_id'],
+                    'referenced_table' => 'users',
+                    'referenced_columns' => ['id'],
+                    'on_delete' => ['set null', 'null'],
+                ],
+            ],
+        ];
     }
 };
