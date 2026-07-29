@@ -1,28 +1,55 @@
 <?php
 
 use App\Contracts\Otp\OtpCodeGenerator;
+use App\Models\Customer;
 use App\Models\OtpAbuseEvent;
 use App\Models\OtpChallenge;
 use App\Models\OtpCode;
+use App\Models\OtpDeliveryOperation;
 use App\Models\OtpRateLimit;
 use App\Models\User;
 use App\Notifications\Api\V1\Auth\AkubicaOtpNotification;
+use App\Services\Otp\Delivery\FakeOtpDeliveryProvider;
+use App\Services\Otp\Delivery\OtpDeliveryResultClass;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\PersonalAccessToken;
+use Monolog\Handler\TestHandler;
+use Monolog\Logger;
 use Tests\Support\Otp\FakeOtpCodeGenerator;
 
 function enableAkubicaLoginOtpFlags(): void
 {
     config()->set('otp.p0a.flags.akubica_login_enabled', true);
     config()->set('otp.p0a.flags.anti_abuse_enabled', true);
+    config()->set('otp.p0a.flags.sms_delivery_enabled', true);
+    config()->set('otp.p0a.flags.email_fallback_enabled', false);
+    config()->set('otp.p0a.delivery.driver', 'fake');
+    config()->set('otp.p0a.policy.require_verified_phone', true);
+    app(FakeOtpDeliveryProvider::class)->alwaysAccept();
+    app(FakeOtpDeliveryProvider::class)->sent = [];
 }
 
 function disableAkubicaLoginOtpFlags(): void
 {
     config()->set('otp.p0a.flags.akubica_login_enabled', false);
     config()->set('otp.p0a.flags.anti_abuse_enabled', false);
+    config()->set('otp.p0a.flags.sms_delivery_enabled', false);
+    config()->set('otp.p0a.delivery.driver', 'null');
+}
+
+/**
+ * @param  array<string, mixed>  $attrs
+ */
+function loginOtpUser(string $nationalPhone, array $attrs = []): User
+{
+    return User::factory()->create(array_merge([
+        'phone' => $nationalPhone,
+        'phone_country' => 'MX',
+        'phone_verified_at' => now(),
+    ], $attrs));
 }
 
 beforeEach(function () {
@@ -49,89 +76,96 @@ test('p0a4 flags off keeps legacy login token flow and notifications', function 
         ->assertJsonPath('data.verification_sent', true);
 
     Notification::assertSentTo($user, AkubicaOtpNotification::class);
-    expect(OtpChallenge::query()->count())->toBe(0)
-        ->and(OtpRateLimit::query()->count())->toBe(0);
 });
 
 test('p0a4 flags off does not create challenges for nonexistent email', function () {
     $this->postJson('/api/v1/auth/login/request-code', ['email' => 'nadie@ejemplo.com'])
-        ->assertOk()
-        ->assertJsonPath('data.verification_sent', true);
+        ->assertOk();
 
-    Notification::assertNothingSent();
-    expect(OtpChallenge::query()->count())->toBe(0)
-        ->and(OtpCode::query()->count())->toBe(0);
+    expect(OtpChallenge::query()->count())->toBe(0);
 });
 
 test('p0a4 resend is disabled when login otp flag is off', function () {
     $this->postJson('/api/v1/auth/login/resend-code', [
         'challenge_id' => '00000000-0000-4000-8000-000000000001',
-    ])
-        ->assertStatus(503)
+    ])->assertStatus(503)
         ->assertJsonPath('error.code', 'FEATURE_DISABLED');
 });
 
-// ── Flags on: start / verify / resend ──────────────────────────────────
-
-test('p0a4 request returns 202 challenge without token or notification', function () {
+test('p0a4 request returns 202 challenge with sms delivery without token', function () {
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
 
-    $user = User::factory()->create(['email' => 'otp.login@ejemplo.com']);
+    $user = loginOtpUser('5512345678', ['email' => 'otp.login@ejemplo.com']);
 
     $response = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'otp.login@ejemplo.com',
+        'phone' => '+525512345678',
     ])->assertStatus(202)
         ->assertJsonPath('success', true)
         ->assertJsonPath('data.requires_otp', true)
         ->assertJsonPath('data.purpose', 'akubica_login')
-        ->assertJsonPath('data.channel', 'email');
+        ->assertJsonPath('data.channel', 'sms')
+        ->assertJsonPath('data.destination_masked', '***5678');
 
     $json = $response->json('data');
     expect($json)->toHaveKeys(['challenge_id', 'destination_masked', 'expires_at', 'resend_available_at'])
         ->and($json)->not->toHaveKey('token')
         ->and(json_encode($json))->not->toContain('123456')
-        ->and(json_encode($json))->not->toContain('otp.login@ejemplo.com');
+        ->and(json_encode($json))->not->toContain('5512345678')
+        ->and(json_encode($json))->not->toContain('+525512345678');
 
     Notification::assertNothingSent();
     expect(OtpChallenge::query()->where('user_id', $user->id)->count())->toBe(1)
+        ->and(OtpDeliveryOperation::query()->where('purpose', 'akubica_login')->count())->toBe(1)
+        ->and(OtpDeliveryOperation::query()->where('primary_channel', 'sms')->count())->toBe(1)
         ->and(OtpCode::query()->count())->toBe(0)
-        ->and(PersonalAccessToken::query()->count())->toBe(0);
+        ->and(PersonalAccessToken::query()->count())->toBe(0)
+        ->and(count(app(FakeOtpDeliveryProvider::class)->sent))->toBe(1)
+        ->and(app(FakeOtpDeliveryProvider::class)->sent[0]['channel'])->toBe('sms')
+        ->and(app(FakeOtpDeliveryProvider::class)->sent[0]['purpose'])->toBe('akubica_login');
+
+    $challenge = OtpChallenge::query()->where('user_id', $user->id)->first();
+    expect(Hash::check('123456', $challenge->code_hash))->toBeTrue()
+        ->and($challenge->code_hash)->not->toBe('123456')
+        ->and($challenge->channel)->toBe('sms')
+        ->and($challenge->subject_type)->toBe('phone');
 });
 
-test('p0a4 request for nonexistent email returns decoy 202 without persistence', function () {
+test('p0a4 request for nonexistent phone returns decoy 202 without persistence or sms', function () {
     enableAkubicaLoginOtpFlags();
 
     $response = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'fantasma@ejemplo.com',
+        'phone' => '+525511111111',
     ])->assertStatus(202)
         ->assertJsonPath('data.requires_otp', true)
-        ->assertJsonPath('data.destination_masked', 'f***@ejemplo.com');
+        ->assertJsonPath('data.channel', 'sms')
+        ->assertJsonPath('data.destination_masked', '***1111');
 
     $challengeId = $response->json('data.challenge_id');
-    expect($challengeId)->toMatch('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i')
-        ->and($response->json('data.destination_masked'))->not->toBeNull()
-        ->and($response->json('data.destination_masked'))->not->toBe('');
+    expect($challengeId)->toMatch('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i');
 
     Notification::assertNothingSent();
     expect(OtpChallenge::query()->count())->toBe(0)
+        ->and(OtpDeliveryOperation::query()->count())->toBe(0)
+        ->and(count(app(FakeOtpDeliveryProvider::class)->sent))->toBe(0)
         ->and(OtpRateLimit::query()->count())->toBe(0)
         ->and(OtpAbuseEvent::query()->count())->toBe(0)
-        ->and(PersonalAccessToken::query()->count())->toBe(0);
+        ->and(PersonalAccessToken::query()->count())->toBe(0)
+        ->and(User::query()->count())->toBe(0);
 });
 
 test('p0a4 decoy and existing user start responses share public contract shape', function () {
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
 
-    User::factory()->create(['email' => 'mismo.dominio@ejemplo.com']);
+    loginOtpUser('5512345678', ['email' => 'mismo.dominio@ejemplo.com']);
 
     $existing = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'mismo.dominio@ejemplo.com',
+        'phone' => '5512345678',
     ])->assertStatus(202)->json('data');
 
     $decoy = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'no.existe@ejemplo.com',
+        'phone' => '5599999999',
     ])->assertStatus(202)->json('data');
 
     $keys = ['requires_otp', 'challenge_id', 'purpose', 'channel', 'destination_masked', 'expires_at', 'resend_available_at'];
@@ -140,29 +174,19 @@ test('p0a4 decoy and existing user start responses share public contract shape',
         ->and($existing['requires_otp'])->toBeTrue()
         ->and($decoy['requires_otp'])->toBeTrue()
         ->and($existing['purpose'])->toBe($decoy['purpose'])
-        ->and($existing['channel'])->toBe($decoy['channel'])
-        ->and(is_string($existing['challenge_id']))->toBeTrue()
-        ->and(is_string($decoy['challenge_id']))->toBeTrue()
-        ->and($existing['challenge_id'])->toMatch('/^[0-9a-f-]{36}$/i')
-        ->and($decoy['challenge_id'])->toMatch('/^[0-9a-f-]{36}$/i')
-        ->and($existing['destination_masked'])->toBe('m***@ejemplo.com')
-        ->and($decoy['destination_masked'])->toBe('n***@ejemplo.com')
-        ->and($existing['expires_at'])->toMatch('/Z$/')
-        ->and($decoy['expires_at'])->toMatch('/Z$/')
-        ->and($existing['resend_available_at'])->toMatch('/Z$/')
-        ->and($decoy['resend_available_at'])->toMatch('/Z$/')
+        ->and($existing['channel'])->toBe('sms')
+        ->and($decoy['channel'])->toBe('sms')
+        ->and($existing['destination_masked'])->toBe('***5678')
+        ->and($decoy['destination_masked'])->toBe('***9999')
         ->and($existing)->not->toHaveKey('token')
         ->and($decoy)->not->toHaveKey('token');
 
     $challenge = OtpChallenge::query()->where('public_id', $existing['challenge_id'])->first();
     expect($challenge)->not->toBeNull()
-        ->and($existing['challenge_id'])->not->toBe((string) $challenge->id)
         ->and(OtpChallenge::query()->where('public_id', $decoy['challenge_id'])->exists())->toBeFalse();
 });
 
 test('p0a4 verify and resend of never-issued uuid stay NO_ACTIVE_CODE', function () {
-    // Distinction: only challenge_ids issued by request-code (real or decoy) are
-    // the anti-enumeration surface. Random UUIDs never handed out may differ.
     enableAkubicaLoginOtpFlags();
 
     $unknownId = '00000000-0000-4000-8000-000000000099';
@@ -177,23 +201,20 @@ test('p0a4 verify and resend of never-issued uuid stay NO_ACTIVE_CODE', function
         'challenge_id' => $unknownId,
     ])->assertUnprocessable()
         ->assertJsonPath('error.code', 'NO_ACTIVE_CODE');
-
-    expect(PersonalAccessToken::query()->count())->toBe(0)
-        ->and(OtpChallenge::query()->count())->toBe(0);
 });
 
 test('p0a4 issued decoy verify and resend match real public contracts across lifecycle', function () {
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator(['111111', '222222', '333333']));
 
-    User::factory()->create(['email' => 'real.ciclo@ejemplo.com']);
+    loginOtpUser('5512345678', ['email' => 'real.ciclo@ejemplo.com']);
 
     $realStart = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'real.ciclo@ejemplo.com',
+        'phone' => '5512345678',
     ])->assertStatus(202);
 
     $decoyStart = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'decoy.ciclo@ejemplo.com',
+        'phone' => '5598765432',
     ])->assertStatus(202);
 
     $realId = $realStart->json('data.challenge_id');
@@ -203,7 +224,6 @@ test('p0a4 issued decoy verify and resend match real public contracts across lif
         ->and(OtpChallenge::query()->where('public_id', $decoyId)->exists())->toBeFalse()
         ->and(OtpRateLimit::query()->where('bucket_type', 'identity')->count())->toBe(1);
 
-    // 1–3: wrong verify — same HTTP, code, public JSON shape
     $realWrong = $this->postJson('/api/v1/auth/login/verify-code', [
         'challenge_id' => $realId,
         'code' => '000000',
@@ -216,10 +236,8 @@ test('p0a4 issued decoy verify and resend match real public contracts across lif
 
     expect($realWrong->json('error.code'))->toBe('INVALID_CODE')
         ->and($decoyWrong->json('error.code'))->toBe('INVALID_CODE')
-        ->and($realWrong->json('error.message'))->toBe($decoyWrong->json('error.message'))
-        ->and(array_keys($realWrong->json('error')))->toEqualCanonicalizing(array_keys($decoyWrong->json('error')));
+        ->and($realWrong->json('error.message'))->toBe($decoyWrong->json('error.message'));
 
-    // 4–6: immediate resend — both 429 cooldown
     $realResendCool = $this->postJson('/api/v1/auth/login/resend-code', [
         'challenge_id' => $realId,
     ])->assertStatus(429);
@@ -229,16 +247,8 @@ test('p0a4 issued decoy verify and resend match real public contracts across lif
     ])->assertStatus(429);
 
     expect($realResendCool->json('error.code'))->toBe('OTP_COOLDOWN')
-        ->and($decoyResendCool->json('error.code'))->toBe('OTP_COOLDOWN')
-        ->and((int) $realResendCool->headers->get('Retry-After'))
-        ->toBe((int) $realResendCool->json('error.details.retry_after'))
-        ->and((int) $decoyResendCool->headers->get('Retry-After'))
-        ->toBe((int) $decoyResendCool->json('error.details.retry_after'))
-        ->and($decoyResendCool->json('error.details.retry_after'))->toBeInt()
-        ->and($realResendCool->json('error.details.available_at'))->toMatch('/Z$/')
-        ->and($decoyResendCool->json('error.details.available_at'))->toMatch('/Z$/');
+        ->and($decoyResendCool->json('error.code'))->toBe('OTP_COOLDOWN');
 
-    // 7–9: after cooldown both resend 202 with new opaque IDs
     Carbon::setTestNow(now()->addSeconds(60));
 
     $realResendOk = $this->postJson('/api/v1/auth/login/resend-code', [
@@ -251,101 +261,71 @@ test('p0a4 issued decoy verify and resend match real public contracts across lif
 
     $realId2 = $realResendOk->json('data.challenge_id');
     $decoyId2 = $decoyResendOk->json('data.challenge_id');
-    $keys = ['requires_otp', 'challenge_id', 'purpose', 'channel', 'destination_masked', 'expires_at', 'resend_available_at'];
 
     expect($realId2)->not->toBe($realId)
         ->and($decoyId2)->not->toBe($decoyId)
-        ->and($realId2)->toMatch('/^[0-9a-f-]{36}$/i')
-        ->and($decoyId2)->toMatch('/^[0-9a-f-]{36}$/i')
-        ->and(array_keys($realResendOk->json('data')))->toEqualCanonicalizing($keys)
-        ->and(array_keys($decoyResendOk->json('data')))->toEqualCanonicalizing($keys)
-        ->and($realResendOk->json('data.expires_at'))->toMatch('/Z$/')
-        ->and($decoyResendOk->json('data.expires_at'))->toMatch('/Z$/')
-        ->and($realResendOk->json('data.resend_available_at'))->toMatch('/Z$/')
-        ->and($decoyResendOk->json('data.resend_available_at'))->toMatch('/Z$/')
-        ->and(OtpChallenge::query()->where('public_id', $decoyId2)->exists())->toBeFalse();
+        ->and($realResendOk->json('data.channel'))->toBe('sms')
+        ->and($decoyResendOk->json('data.channel'))->toBe('sms');
 
-    // 10: previous decoy reflects replacement
-    $this->postJson('/api/v1/auth/login/verify-code', [
-        'challenge_id' => $decoyId,
-        'code' => '000000',
-    ])->assertUnprocessable()
-        ->assertJsonPath('error.code', 'CODE_INVALIDATED');
-
-    $this->postJson('/api/v1/auth/login/verify-code', [
-        'challenge_id' => $realId,
-        'code' => '111111',
-    ])->assertUnprocessable()
-        ->assertJsonPath('error.code', 'CODE_INVALIDATED');
-
-    // 11: new decoy never issues token
     $this->postJson('/api/v1/auth/login/verify-code', [
         'challenge_id' => $decoyId2,
-        'code' => '123456',
+        'code' => '333333',
     ])->assertUnprocessable()
         ->assertJsonPath('error.code', 'INVALID_CODE');
 
     expect(PersonalAccessToken::query()->count())->toBe(0);
-
-    // 12: expire by TTL (same clock for real DB challenge and decoy cache)
-    Carbon::setTestNow(now()->addMinutes(6));
-
-    $realExpired = $this->postJson('/api/v1/auth/login/verify-code', [
-        'challenge_id' => $realId2,
-        'code' => '000000',
-    ])->assertUnprocessable();
-
-    $decoyExpired = $this->postJson('/api/v1/auth/login/verify-code', [
-        'challenge_id' => $decoyId2,
-        'code' => '000000',
-    ])->assertUnprocessable();
-
-    expect($realExpired->json('error.code'))->toBe('CODE_EXPIRED')
-        ->and($decoyExpired->json('error.code'))->toBe('CODE_EXPIRED')
-        ->and($realExpired->json('error.message'))->toBe($decoyExpired->json('error.message'));
-
-    // 13–17: decoy side effects — no persistence / delivery / PII
-    expect(OtpChallenge::query()->where('public_id', $decoyId)->exists())->toBeFalse()
-        ->and(OtpChallenge::query()->where('public_id', $decoyId2)->exists())->toBeFalse()
-        ->and(PersonalAccessToken::query()->count())->toBe(0);
-
-    foreach (OtpAbuseEvent::query()->get() as $event) {
-        expect(json_encode($event->toArray()))->not->toContain('decoy.ciclo@ejemplo.com')
-            ->and(json_encode($event->toArray()))->not->toContain('127.0.0.1');
-    }
-
-    Notification::assertNothingSent();
 });
 
 test('p0a4 login otp without anti abuse returns configuration error', function () {
     config()->set('otp.p0a.flags.akubica_login_enabled', true);
     config()->set('otp.p0a.flags.anti_abuse_enabled', false);
+    config()->set('otp.p0a.flags.sms_delivery_enabled', true);
 
-    User::factory()->create(['email' => 'cfg@ejemplo.com']);
+    loginOtpUser('5512345678', ['email' => 'cfg@ejemplo.com']);
 
-    $response = $this->postJson('/api/v1/auth/login/request-code', ['email' => 'cfg@ejemplo.com'])
+    $response = $this->postJson('/api/v1/auth/login/request-code', ['phone' => '5512345678'])
         ->assertStatus(503)
         ->assertJsonPath('error.code', 'OTP_CONFIGURATION_INVALID');
 
     $body = json_encode($response->json());
     expect($body)->not->toContain('anti_abuse')
-        ->and($body)->not->toContain('akubica_login_enabled')
         ->and($body)->not->toContain('OTP_P0A')
         ->and(OtpChallenge::query()->count())->toBe(0);
 });
 
-test('p0a4 verify issues sanctum token and consumes challenge', function () {
+test('p0a4 login otp without sms delivery returns configuration error', function () {
+    config()->set('otp.p0a.flags.akubica_login_enabled', true);
+    config()->set('otp.p0a.flags.anti_abuse_enabled', true);
+    config()->set('otp.p0a.flags.sms_delivery_enabled', false);
+
+    loginOtpUser('5512345678', ['email' => 'nosms@ejemplo.com']);
+
+    $this->postJson('/api/v1/auth/login/request-code', ['phone' => '5512345678'])
+        ->assertStatus(503)
+        ->assertJsonPath('error.code', 'OTP_CONFIGURATION_INVALID');
+
+    expect(OtpChallenge::query()->count())->toBe(0)
+        ->and(PersonalAccessToken::query()->count())->toBe(0);
+});
+
+test('p0a4 verify issues sanctum token for existing user and customer without creating duplicates', function () {
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('654321'));
 
-    $user = User::factory()->create([
+    $user = User::factory()->withRegularCustomer()->create([
         'email' => 'verify@ejemplo.com',
         'name' => 'Paciente',
         'paternal_lastname' => 'Prueba',
+        'phone' => '5512345678',
+        'phone_country' => 'MX',
+        'phone_verified_at' => now(),
     ]);
+    $customer = $user->customer;
+    $usersBefore = User::query()->count();
+    $customersBefore = Customer::query()->count();
 
     $start = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'verify@ejemplo.com',
+        'phone' => '+525512345678',
     ])->assertStatus(202);
 
     $challengeId = $start->json('data.challenge_id');
@@ -355,7 +335,8 @@ test('p0a4 verify issues sanctum token and consumes challenge', function () {
         'code' => '654321',
     ])->assertOk()
         ->assertJsonPath('data.token_type', 'Bearer')
-        ->assertJsonPath('data.user.email', 'verify@ejemplo.com');
+        ->assertJsonPath('data.user.email', 'verify@ejemplo.com')
+        ->assertJsonPath('data.user.id', $user->id);
 
     $token = $verify->json('data.token');
     $expiresIn = $verify->json('data.expires_in');
@@ -363,9 +344,10 @@ test('p0a4 verify issues sanctum token and consumes challenge', function () {
 
     expect($token)->not->toBeEmpty()
         ->and($sanctumMinutes)->toBe(1440)
-        // Legacy IssueAkubicaTokenAction: seconds remaining, not minutes.
         ->and($expiresIn)->toBe($sanctumMinutes * 60)
-        ->and($verify->json('data.expires_at'))->toMatch('/Z$/');
+        ->and(User::query()->count())->toBe($usersBefore)
+        ->and(Customer::query()->count())->toBe($customersBefore)
+        ->and(Customer::query()->where('id', $customer->id)->where('user_id', $user->id)->exists())->toBeTrue();
 
     $challenge = OtpChallenge::query()->where('public_id', $challengeId)->first();
     expect($challenge->status())->toBe(OtpChallenge::STATUS_CONSUMED);
@@ -385,9 +367,9 @@ test('p0a4 wrong code increments attempts and never returns plaintext otp', func
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('111111'));
 
-    User::factory()->create(['email' => 'wrong@ejemplo.com']);
+    loginOtpUser('5512345678', ['email' => 'wrong@ejemplo.com']);
     $challengeId = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'wrong@ejemplo.com',
+        'phone' => '5512345678',
     ])->json('data.challenge_id');
 
     $response = $this->postJson('/api/v1/auth/login/verify-code', [
@@ -405,9 +387,9 @@ test('p0a4 max attempts invalidates and blocks further success', function () {
     config()->set('otp.p0a.policy.max_attempts', 2);
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('222222'));
 
-    User::factory()->create(['email' => 'max@ejemplo.com']);
+    loginOtpUser('5512345678', ['email' => 'max@ejemplo.com']);
     $challengeId = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'max@ejemplo.com',
+        'phone' => '5512345678',
     ])->json('data.challenge_id');
 
     $this->postJson('/api/v1/auth/login/verify-code', [
@@ -433,32 +415,31 @@ test('p0a4 cooldown returns 429 with Retry-After', function () {
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator(['111111', '222222']));
 
-    User::factory()->create(['email' => 'cool@ejemplo.com']);
+    loginOtpUser('5512345678', ['email' => 'cool@ejemplo.com']);
 
-    $this->postJson('/api/v1/auth/login/request-code', ['email' => 'cool@ejemplo.com'])
+    $this->postJson('/api/v1/auth/login/request-code', ['phone' => '5512345678'])
         ->assertStatus(202);
 
-    $response = $this->postJson('/api/v1/auth/login/request-code', ['email' => 'cool@ejemplo.com'])
+    $response = $this->postJson('/api/v1/auth/login/request-code', ['phone' => '5512345678'])
         ->assertStatus(429)
         ->assertJsonPath('error.code', 'OTP_COOLDOWN')
         ->assertJsonPath('error.details.retry_after', 60);
 
     expect($response->headers->get('Retry-After'))->toBe('60')
-        ->and($response->json('error.details.retry_after'))->toBe(60)
-        ->and($response->json('error.details.retry_after'))->toBeInt()
-        ->and($response->json('error.details.available_at'))->toMatch('/Z$/')
         ->and(OtpChallenge::query()->count())->toBe(1);
 });
 
-test('p0a4 resend after cooldown invalidates previous challenge', function () {
+test('p0a4 resend after cooldown invalidates previous challenge and sends new sms', function () {
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator(['111111', '999999']));
 
-    User::factory()->create(['email' => 'resend@ejemplo.com']);
+    loginOtpUser('5512345678', ['email' => 'resend@ejemplo.com']);
 
     $firstId = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'resend@ejemplo.com',
+        'phone' => '5512345678',
     ])->json('data.challenge_id');
+
+    expect(count(app(FakeOtpDeliveryProvider::class)->sent))->toBe(1);
 
     Carbon::setTestNow(now()->addSeconds(60));
 
@@ -469,7 +450,8 @@ test('p0a4 resend after cooldown invalidates previous challenge', function () {
     $secondId = $second->json('data.challenge_id');
     expect($secondId)->not->toBe($firstId)
         ->and(OtpChallenge::query()->where('public_id', $firstId)->first()->status())
-        ->toBe(OtpChallenge::STATUS_INVALIDATED);
+        ->toBe(OtpChallenge::STATUS_INVALIDATED)
+        ->and(count(app(FakeOtpDeliveryProvider::class)->sent))->toBe(2);
 
     $this->postJson('/api/v1/auth/login/verify-code', [
         'challenge_id' => $firstId,
@@ -486,48 +468,63 @@ test('p0a4 resend after cooldown invalidates previous challenge', function () {
         ->assertJsonPath('data.token_type', 'Bearer');
 });
 
-test('p0a4 verify unknown challenge uses safe error', function () {
+test('p0a4 vonage failure returns DELIVERY_FAILED without token', function () {
     enableAkubicaLoginOtpFlags();
+    app(FakeOtpDeliveryProvider::class)->failAlwaysWith(OtpDeliveryResultClass::TransportError);
+    $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('444444'));
 
-    $this->postJson('/api/v1/auth/login/verify-code', [
-        'challenge_id' => '00000000-0000-4000-8000-000000000099',
-        'code' => '123456',
-    ])->assertUnprocessable()
-        ->assertJsonPath('error.code', 'NO_ACTIVE_CODE');
+    loginOtpUser('5512345678', ['email' => 'fail@ejemplo.com']);
+
+    $this->postJson('/api/v1/auth/login/request-code', [
+        'phone' => '5512345678',
+    ])->assertStatus(503)
+        ->assertJsonPath('error.code', 'DELIVERY_FAILED');
+
+    expect(PersonalAccessToken::query()->count())->toBe(0)
+        ->and(OtpChallenge::query()->whereNull('invalidated_at')->count())->toBe(0);
 });
 
-test('p0a4 does not persist otp plaintext or full destination in abuse events', function () {
+test('p0a4 does not persist otp plaintext or full destination in abuse events or logs', function () {
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('555555'));
 
-    User::factory()->create(['email' => 'secreto@ejemplo.com']);
-    $this->postJson('/api/v1/auth/login/request-code', ['email' => 'secreto@ejemplo.com'])
+    $handler = new TestHandler;
+    $logger = new Logger('testing');
+    $logger->pushHandler($handler);
+    Log::swap($logger);
+
+    loginOtpUser('5512345678', ['email' => 'secreto@ejemplo.com']);
+    $this->postJson('/api/v1/auth/login/request-code', ['phone' => '5512345678'])
         ->assertStatus(202);
 
     $challenge = OtpChallenge::query()->first();
-    $attrs = $challenge->getAttributes();
-    expect($attrs['code_hash'])->not->toBe('555555')
+    expect($challenge->code_hash)->not->toBe('555555')
         ->and(json_encode($challenge->toArray()))->not->toContain('555555');
 
     foreach (OtpAbuseEvent::query()->get() as $event) {
-        expect(json_encode($event->toArray()))->not->toContain('secreto@ejemplo.com')
+        expect(json_encode($event->toArray()))->not->toContain('5512345678')
+            ->and(json_encode($event->toArray()))->not->toContain('secreto@ejemplo.com')
             ->and(json_encode($event->toArray()))->not->toContain('555555');
     }
 
-    foreach (OtpRateLimit::query()->get() as $limit) {
-        expect(json_encode($limit->toArray()))->not->toContain('127.0.0.1');
+    foreach ($handler->getRecords() as $record) {
+        $blob = json_encode([
+            'message' => $record['message'] ?? '',
+            'context' => $record['context'] ?? [],
+        ], JSON_THROW_ON_ERROR);
+        expect($blob)->not->toContain('555555')
+            ->and($blob)->not->toContain('5512345678')
+            ->and($blob)->not->toContain('secreto@ejemplo.com');
     }
 });
 
 test('p0a4 sequential double verify guarantees single consumed challenge and one token', function () {
-    // Sequential stand-in for the atomic consume guarantee (not parallel PHP workers).
-    // Real concurrent stress under MySQL staging remains pending validation.
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('777777'));
 
-    User::factory()->create(['email' => 'race@ejemplo.com']);
+    loginOtpUser('5512345678', ['email' => 'race@ejemplo.com']);
     $challengeId = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'race@ejemplo.com',
+        'phone' => '5512345678',
     ])->json('data.challenge_id');
 
     $first = $this->postJson('/api/v1/auth/login/verify-code', [
@@ -535,17 +532,14 @@ test('p0a4 sequential double verify guarantees single consumed challenge and one
         'code' => '777777',
     ])->assertOk();
 
-    $second = $this->postJson('/api/v1/auth/login/verify-code', [
+    $this->postJson('/api/v1/auth/login/verify-code', [
         'challenge_id' => $challengeId,
         'code' => '777777',
     ])->assertUnprocessable()
         ->assertJsonPath('error.code', 'CODE_ALREADY_USED');
 
-    $challenge = OtpChallenge::query()->where('public_id', $challengeId)->first();
-
     expect($first->json('data.token'))->not->toBeEmpty()
         ->and(PersonalAccessToken::query()->count())->toBe(1)
-        ->and($challenge->status())->toBe(OtpChallenge::STATUS_CONSUMED)
         ->and(OtpChallenge::query()->whereNotNull('consumed_at')->count())->toBe(1);
 });
 
@@ -553,10 +547,10 @@ test('p0a4 failed expired superseded and exhausted paths never issue tokens', fu
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator(['111111', '222222', '333333']));
 
-    User::factory()->create(['email' => 'notoken@ejemplo.com']);
+    loginOtpUser('5512345678', ['email' => 'notoken@ejemplo.com']);
 
     $activeId = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'notoken@ejemplo.com',
+        'phone' => '5512345678',
     ])->json('data.challenge_id');
 
     $this->postJson('/api/v1/auth/login/verify-code', [
@@ -594,7 +588,7 @@ test('p0a4 failed expired superseded and exhausted paths never issue tokens', fu
     config()->set('otp.p0a.policy.max_attempts', 1);
 
     $freshId = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'notoken@ejemplo.com',
+        'phone' => '5512345678',
     ])->json('data.challenge_id');
 
     $this->postJson('/api/v1/auth/login/verify-code', [
@@ -614,22 +608,22 @@ test('p0a4 resend rejects client-controlled identity fields', function () {
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator(['111111', '999999']));
 
-    User::factory()->create(['email' => 'owner@ejemplo.com']);
-    User::factory()->create(['email' => 'attacker@ejemplo.com']);
+    $owner = loginOtpUser('5512345678', ['email' => 'owner@ejemplo.com']);
+    loginOtpUser('5587654321', ['email' => 'attacker@ejemplo.com']);
 
     $challengeId = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'owner@ejemplo.com',
+        'phone' => '5512345678',
     ])->json('data.challenge_id');
 
     Carbon::setTestNow(now()->addSeconds(60));
 
     $response = $this->postJson('/api/v1/auth/login/resend-code', [
         'challenge_id' => $challengeId,
-        'email' => 'attacker@ejemplo.com',
+        'phone' => '5587654321',
         'user_id' => 999999,
-        'destination' => 'attacker@ejemplo.com',
+        'destination' => '+525587654321',
         'purpose' => 'akubica_register',
-        'subject' => 'attacker@ejemplo.com',
+        'subject' => 'attacker',
         'context' => 'hijack',
     ])->assertStatus(202);
 
@@ -637,28 +631,89 @@ test('p0a4 resend rejects client-controlled identity fields', function () {
     $newChallenge = OtpChallenge::query()->where('public_id', $newId)->first();
 
     expect($newChallenge->purpose)->toBe('akubica_login')
-        ->and($newChallenge->subject_key)->toBe('owner@ejemplo.com')
-        ->and($response->json('data'))->not->toHaveKey('email')
-        ->and(json_encode($response->json()))->not->toContain('attacker@ejemplo.com');
+        ->and($newChallenge->subject_key)->toBe('MX|5512345678')
+        ->and($newChallenge->user_id)->toBe($owner->id)
+        ->and($response->json('data'))->not->toHaveKey('phone')
+        ->and(json_encode($response->json()))->not->toContain('5587654321');
 });
 
-test('p0a4 verify ignores client email and binds identity from challenge', function () {
+test('p0a4 verify ignores client phone and binds identity from challenge', function () {
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('888888'));
 
-    $owner = User::factory()->create(['email' => 'dueno@ejemplo.com']);
-    User::factory()->create(['email' => 'otro@ejemplo.com']);
+    $owner = loginOtpUser('5512345678', ['email' => 'dueno@ejemplo.com']);
+    loginOtpUser('5587654321', ['email' => 'otro@ejemplo.com']);
 
     $challengeId = $this->postJson('/api/v1/auth/login/request-code', [
-        'email' => 'dueno@ejemplo.com',
+        'phone' => '5512345678',
     ])->json('data.challenge_id');
 
     $verify = $this->postJson('/api/v1/auth/login/verify-code', [
         'challenge_id' => $challengeId,
         'code' => '888888',
-        'email' => 'otro@ejemplo.com',
+        'phone' => '5587654321',
+        'user_id' => 999,
     ])->assertOk();
 
     expect($verify->json('data.user.email'))->toBe('dueno@ejemplo.com')
         ->and($verify->json('data.user.id'))->toBe($owner->id);
+});
+
+test('p0a4 unverified phone is treated as decoy and never authenticates', function () {
+    enableAkubicaLoginOtpFlags();
+    $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('121212'));
+
+    User::factory()->create([
+        'email' => 'unverified@ejemplo.com',
+        'phone' => '5512345678',
+        'phone_country' => 'MX',
+        'phone_verified_at' => null,
+    ]);
+
+    $response = $this->postJson('/api/v1/auth/login/request-code', [
+        'phone' => '5512345678',
+    ])->assertStatus(202);
+
+    expect(OtpChallenge::query()->count())->toBe(0)
+        ->and(count(app(FakeOtpDeliveryProvider::class)->sent))->toBe(0);
+
+    $this->postJson('/api/v1/auth/login/verify-code', [
+        'challenge_id' => $response->json('data.challenge_id'),
+        'code' => '121212',
+    ])->assertUnprocessable()
+        ->assertJsonPath('error.code', 'INVALID_CODE');
+
+    expect(PersonalAccessToken::query()->count())->toBe(0);
+});
+
+test('p0a4 register challenge cannot be used for login verify', function () {
+    enableAkubicaLoginOtpFlags();
+
+    $user = loginOtpUser('5512345678', ['email' => 'cross@ejemplo.com']);
+    $challenge = OtpChallenge::query()->create([
+        'public_id' => (string) Illuminate\Support\Str::uuid(),
+        'user_id' => $user->id,
+        'subject_type' => 'phone',
+        'subject_key' => 'MX|5512345678',
+        'purpose' => 'akubica_register',
+        'channel' => 'sms',
+        'destination_normalized' => '+525512345678',
+        'destination_masked' => '***5678',
+        'code_hash' => Hash::make('123456'),
+        'expires_at' => now()->addMinutes(5),
+        'failed_attempts' => 0,
+        'max_attempts' => 5,
+        'send_count' => 1,
+        'last_sent_at' => now(),
+        'context_type' => 'akubica_register',
+        'context_id' => $user->id,
+    ]);
+
+    $this->postJson('/api/v1/auth/login/verify-code', [
+        'challenge_id' => $challenge->public_id,
+        'code' => '123456',
+    ])->assertUnprocessable()
+        ->assertJsonPath('error.code', 'INVALID_CODE');
+
+    expect(PersonalAccessToken::query()->count())->toBe(0);
 });

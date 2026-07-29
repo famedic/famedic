@@ -1,0 +1,2280 @@
+{
+  "info": {
+    "_postman_id": "famedic-akubica-api-v1-s15",
+    "name": "Famedic Akubica API v1",
+    "description": "# Famedic Akubica API v1\n\nColección Postman para la API pública Akubica de Famedic (`/api/v1`).\n\n## Propósito\n\nValidar de punta a punta el flujo QA de registro OTP por SMS (P0-A), login legacy, catálogo, carrito, checkout, pedidos, resultados y facturas contra environments Local / Staging / Production.\n\n## Base URL\n\n`base_url` **incluye** el prefijo `/api/v1` (ej. `https://staging.famedic.com.mx/api/v1`). No concatenar `/api/v1` otra vez en las rutas.\n\nDefinir `base_url` en el **environment** (en la colección queda vacío).\n\n## Orden de módulos\n\n1. Registro nuevo usuario (OTP SMS P0-A)\n2. Login usuario existente (OTP SMS P0-A cuando LOGIN+SMS flags ON; legacy email si OFF)\n3. Perfil usuario\n4. Catálogo laboratorio (público)\n5. Carrito\n6. Cupones\n7. Contactos / pacientes\n8. Direcciones\n9. Checkout prepare y draft\n10. Citas laboratorio\n11. Payment link\n12. Pedidos\n13. Resultados\n14. Facturas\n15. Solicitud factura\n16. Descargas Bearer-native (PDF)\n17. Features desactivadas (pueden responder 503)\n\n## Autenticación\n\n- **Público (noauth):** `catalog/*`, `auth/register*`, `auth/login/request-code`, `auth/login/verify-code`, `auth/login/resend-code`\n- **Bearer `{{access_token}}`:** resto de endpoints, incluido `DELETE auth/token`\n\nTras verify OTP exitoso, guardar `data.token` en `access_token`.\n\n## Registro OTP P0-A (SMS)\n\nFlujo carpeta **01** (orden estricto 01.1 → 01.6):\n\n1. Solicitar OTP por SMS (`POST /auth/register`) → 202 + `challenge_id`\n2. Verificar OTP incorrecto → 422 `INVALID_CODE`\n3. Verificar OTP correcto (`{{correct_otp}}` manual desde SMS) → 200 + token + user (crea User+Customer; **no** hay endpoint complete separado)\n4. Reutilizar challenge consumido → 422\n5. Registro con teléfono duplicado → 202 señuelo (`duplicate_challenge_id`) sin segundo SMS\n6. Verificar challenge señuelo → 422 `INVALID_CODE`\n\nCompletar a mano en el environment: `test_email`, `test_phone`, `duplicate_test_email`, `correct_otp`.\n\n## Warning Production\n\n**No ejecutar requests de escritura en Production sin autorización explícita.** Preferir Staging.\n\n## Stop conditions\n\nDetener la corrida / fallar el test si:\n\n- Status **500** (nunca aceptar en silencio)\n- Error `DELIVERY_FAILED` en registro SMS (Vonage / delivery)\n- **OTP leak** en body de respuesta (dígitos OTP como `\"code\"` en JSON)\n\n## Seguridad / PII\n\nNo guardar PII real en la colección. Environments trackeados llevan email/phone/OTP/token **vacíos**. No commitear secrets.\n\n## Referencia\n\n## Login OTP P0-A (SMS)\n\nFlujo carpeta **02** (requiere LOGIN + ANTI_ABUSE + SMS_DELIVERY):\n\n1. Solicitar OTP login por SMS (`POST /auth/login/request-code` con `phone`) → 202\n2. Verificar OTP incorrecto → 422\n3. Verificar OTP correcto (`login_correct_otp` manual) → 200 + token\n4. Reutilizar challenge consumido → 422\n5. Reenviar OTP (tras cooldown) → 202\n6. Teléfono inexistente → 202 señuelo\n7. Verificar señuelo → 422\n\nSi login P0-A está **off**: body legacy `{email}`; `resend-code` → 503 FEATURE_DISABLED.\n\nCommit base: `26a1dd8` (`feature/apis-akubica`). Actualizado: 2026-07-29.\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "test_email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "duplicate_test_email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "test_phone",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "test_full_name",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incorrect_otp",
+      "value": "000000",
+      "type": "string"
+    },
+    {
+      "key": "correct_otp",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otp_challenge_public_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "duplicate_challenge_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customer_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "brand",
+      "value": "olab",
+      "type": "string"
+    },
+    {
+      "key": "category_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "laboratory_test_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cart_item_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "coupon_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "contact_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "address_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tax_profile_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "order_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invoice_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "appointment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "expires_in_minutes",
+      "value": "60",
+      "type": "string"
+    },
+    {
+      "key": "login_phone",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "login_incorrect_otp",
+      "value": "000000",
+      "type": "string"
+    },
+    {
+      "key": "login_correct_otp",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "login_challenge_public_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "login_decoy_challenge_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "unknown_login_phone",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Registro nuevo usuario",
+      "description": "## Registro nuevo usuario (OTP SMS P0-A)\n\nFlujo completo de registro vía SMS (Vonage). Orden estricto **01.1 → 01.6**.\n\n**Prereq:** `test_email`, `test_phone`, `duplicate_test_email`, `test_full_name` en environment; tras 01.1 completar `correct_otp` manualmente.\n**Vars out:** `otp_challenge_public_id`, `access_token`, `user_id`, `customer_id`, `duplicate_challenge_id`.\n\nStop: 500, `DELIVERY_FAILED`, OTP leak.",
+      "item": [
+        {
+          "name": "01.1 - Solicitar OTP por SMS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/register",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{test_email}}\",\n  \"phone\": \"{{test_phone}}\",\n  \"full_name\": \"{{test_full_name}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "P0-A register SMS via Vonage. Expected **202** + `data.challenge_id`.\n\nStop on `DELIVERY_FAILED` (503). Never accept 500 silently.\n`phone_country` es opcional (omitido). Completar `correct_otp` manualmente tras SMS."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+                  "pm.test('Response is JSON', function () {",
+                  "  pm.expect(ct.includes('application/json') || pm.response.text().trim().startsWith('{')).to.be.true;",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Status 202 OR 503 DELIVERY_FAILED (never 500)', function () {",
+                  "  const code = pm.response.code;",
+                  "  pm.expect(code).to.not.eql(500);",
+                  "  if (code === 503) {",
+                  "    const errCode = json?.error?.code || json?.code;",
+                  "    pm.expect(errCode).to.eql('DELIVERY_FAILED');",
+                  "    // Explicit fail to stop the run: SMS delivery failed",
+                  "    pm.expect.fail('DELIVERY_FAILED: SMS no entregado (Vonage). Detener flujo 01.x');",
+                  "  }",
+                  "  pm.expect(code).to.eql(202);",
+                  "});",
+                  "if (pm.response.code === 202) {",
+                  "  pm.test('data.challenge_id present', function () {",
+                  "    pm.expect(json?.data?.challenge_id).to.be.ok;",
+                  "  });",
+                  "  if (json?.data?.challenge_id) {",
+                  "    pm.environment.set('otp_challenge_public_id', json.data.challenge_id);",
+                  "  }",
+                  "}",
+                  "pm.test('No OTP leak as code digits in body', function () {",
+                  "  const text = pm.response.text() || '';",
+                  "  // Fail if a field named code holds 4-8 digits (OTP leak)",
+                  "  const leak = /\"code\"\\s*:\\s*\"\\d{4,8}\"/i.test(text) || /\"otp\"\\s*:\\s*\"\\d{4,8}\"/i.test(text);",
+                  "  pm.expect(leak).to.be.false;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.2 - Verificar OTP incorrecto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/register/verify-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{otp_challenge_public_id}}\",\n  \"code\": \"{{incorrect_otp}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Verifica que un OTP incorrecto (`incorrect_otp=000000`) responde 422 `INVALID_CODE` sin token."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 422', function () { pm.expect(pm.response.code).to.eql(422); });",
+                  "pm.test('error.code INVALID_CODE', function () {",
+                  "  const errCode = json?.error?.code || json?.code;",
+                  "  pm.expect(errCode).to.eql('INVALID_CODE');",
+                  "});",
+                  "pm.test('No data.token', function () {",
+                  "  pm.expect(json?.data?.token).to.not.be.ok;",
+                  "});",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.3 - Verificar OTP correcto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/register/verify-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{otp_challenge_public_id}}\",\n  \"code\": \"{{correct_otp}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "OTP correcto (`correct_otp` manual desde SMS). Crea **User + Customer + token**.\nNo hay endpoint `complete` separado. Guarda `access_token` y `user_id`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "pm.test('data.token present', function () { pm.expect(json?.data?.token).to.be.ok; });",
+                  "pm.test('data.user.id present', function () { pm.expect(json?.data?.user?.id).to.be.ok; });",
+                  "if (json?.data?.token) { pm.environment.set('access_token', json.data.token); }",
+                  "if (json?.data?.user?.id) { pm.environment.set('user_id', String(json.data.user.id)); }",
+                  "if (json?.data?.user?.customer_id) { pm.environment.set('customer_id', String(json.data.user.customer_id)); }",
+                  "else if (json?.data?.customer?.id) { pm.environment.set('customer_id', String(json.data.customer.id)); }",
+                  "pm.test('OTP not leaked in body', function () {",
+                  "  const text = pm.response.text() || '';",
+                  "  const leak = /\"code\"\\s*:\\s*\"\\d{4,8}\"/i.test(text);",
+                  "  pm.expect(leak).to.be.false;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.4 - Reutilizar challenge consumido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/register/verify-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{otp_challenge_public_id}}\",\n  \"code\": \"{{correct_otp}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Reintento con challenge ya consumido. Esperado 422 (CODE_ALREADY_USED / INVALID_CODE / CODE_INVALIDATED / NO_ACTIVE_CODE)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const allowed = ['CODE_ALREADY_USED', 'INVALID_CODE', 'CODE_INVALIDATED', 'NO_ACTIVE_CODE'];",
+                  "pm.test('Status 422', function () { pm.expect(pm.response.code).to.eql(422); });",
+                  "pm.test('error.code in consumed-challenge set', function () {",
+                  "  const errCode = json?.error?.code || json?.code;",
+                  "  pm.expect(allowed).to.include(errCode);",
+                  "});",
+                  "pm.test('No token', function () { pm.expect(json?.data?.token).to.not.be.ok; });",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.5 - Solicitar registro con teléfono duplicado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/register",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{duplicate_test_email}}\",\n  \"phone\": \"{{test_phone}}\",\n  \"full_name\": \"{{test_full_name}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Teléfono ya registrado: responde **202** con challenge señuelo.\nGuarda solo `duplicate_challenge_id` (NO sobrescribe `otp_challenge_public_id`).\nNo debe reenviar un segundo SMS real."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 202', function () { pm.expect(pm.response.code).to.eql(202); });",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "pm.test('data.challenge_id present', function () {",
+                  "  pm.expect(json?.data?.challenge_id).to.be.ok;",
+                  "});",
+                  "if (json?.data?.challenge_id) {",
+                  "  pm.environment.set('duplicate_challenge_id', json.data.challenge_id);",
+                  "  // Do NOT overwrite otp_challenge_public_id",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.6 - Verificar challenge señuelo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/register/verify-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{duplicate_challenge_id}}\",\n  \"code\": \"{{incorrect_otp}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Verify del challenge señuelo (teléfono duplicado). Esperado 422 `INVALID_CODE` sin token."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 422', function () { pm.expect(pm.response.code).to.eql(422); });",
+                  "pm.test('error.code INVALID_CODE', function () {",
+                  "  const errCode = json?.error?.code || json?.code;",
+                  "  pm.expect(errCode).to.eql('INVALID_CODE');",
+                  "});",
+                  "pm.test('No token', function () { pm.expect(json?.data?.token).to.not.be.ok; });",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Login usuario existente",
+      "description": "## Login usuario existente (OTP SMS P0-A)\n\n**Flags:** OTP_P0A_AKUBICA_LOGIN_ENABLED + ANTI_ABUSE + SMS_DELIVERY.\nSeparado del registro (01). Vars: login_phone, login_correct_otp (manual), login_incorrect_otp, unknown_login_phone. Out: login_challenge_public_id, login_decoy_challenge_id, access_token, user_id.\nNo sobrescribir login_challenge_public_id en anti-enumeración. No console.log de OTP/teléfono/token.",
+      "item": [
+        {
+          "name": "02.1 - Solicitar OTP de login por SMS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/request-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "OTP login por SMS. Body solo phone. Guarda login_challenge_public_id. Stop si DELIVERY_FAILED.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{login_phone}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "pm.test('Stop on DELIVERY_FAILED', function () {",
+                  "  const errCode = json?.error?.code || json?.code;",
+                  "  pm.expect(errCode).to.not.eql('DELIVERY_FAILED');",
+                  "});",
+                  "if (pm.response.code === 202) {",
+                  "  pm.test('channel sms', function () { pm.expect(json?.data?.channel).to.eql('sms'); });",
+                  "  pm.test('purpose akubica_login', function () { pm.expect(json?.data?.purpose).to.eql('akubica_login'); });",
+                  "  pm.test('No OTP in body', function () {",
+                  "    const text = pm.response.text();",
+                  "    const leak = /\\\"code\\\"\\s*:\\s*\\\"\\d{4,8}\\\"/i.test(text);",
+                  "    pm.expect(leak).to.be.false;",
+                  "  });",
+                  "  if (json?.data?.challenge_id) {",
+                  "    pm.environment.set('login_challenge_public_id', json.data.challenge_id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.2 - Verificar OTP incorrecto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/verify-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "OTP incorrecto. Espera 422 INVALID_CODE sin token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{login_challenge_public_id}}\",\n  \"code\": \"{{login_incorrect_otp}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 422', function () { pm.expect(pm.response.code).to.eql(422); });",
+                  "pm.test('INVALID_CODE', function () {",
+                  "  pm.expect(json?.error?.code || json?.code).to.eql('INVALID_CODE');",
+                  "});",
+                  "pm.test('No token', function () { pm.expect(json?.data?.token).to.not.be.ok; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.3 - Verificar OTP correcto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/verify-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "OTP correcto (manual desde SMS). Autentica User existente. Guarda access_token y user_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{login_challenge_public_id}}\",\n  \"code\": \"{{login_correct_otp}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "if (json?.data?.token) { pm.environment.set('access_token', json.data.token); }",
+                  "if (json?.data?.user?.id) { pm.environment.set('user_id', String(json.data.user.id)); }",
+                  "if (json?.data?.user?.customer_id) { pm.environment.set('customer_id', String(json.data.user.customer_id)); }",
+                  "pm.test('Token when 200', function () {",
+                  "  if (pm.response.code === 200) { pm.expect(json?.data?.token).to.be.ok; }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.4 - Reutilizar challenge consumido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/verify-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Reuso challenge consumido → 422 sin token nuevo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{login_challenge_public_id}}\",\n  \"code\": \"{{login_correct_otp}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 422', function () { pm.expect(pm.response.code).to.eql(422); });",
+                  "pm.test('No token', function () { pm.expect(json?.data?.token).to.not.be.ok; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.5 - Reenviar OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/resend-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Reenvío tras cooldown. 429 si cooldown; 202 actualiza login_challenge_public_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{login_challenge_public_id}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "if (pm.response.code === 202 && json?.data?.challenge_id) {",
+                  "  pm.environment.set('login_challenge_public_id', json.data.challenge_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.6 - Solicitar login con teléfono inexistente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/request-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Anti-enumeración 202. Guarda solo login_decoy_challenge_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{unknown_login_phone}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 202', function () { pm.expect(pm.response.code).to.eql(202); });",
+                  "pm.test('channel sms', function () { pm.expect(json?.data?.channel).to.eql('sms'); });",
+                  "if (json?.data?.challenge_id) {",
+                  "  pm.environment.set('login_decoy_challenge_id', json.data.challenge_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.7 - Verificar challenge señuelo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/verify-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Señuelo nunca entrega token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{login_decoy_challenge_id}}\",\n  \"code\": \"{{login_correct_otp}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 422', function () { pm.expect(pm.response.code).to.eql(422); });",
+                  "pm.test('No token', function () { pm.expect(json?.data?.token).to.not.be.ok; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.8 - Revoke token",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/token",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Revoca token Bearer access_token."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Perfil usuario",
+      "item": [
+        {
+          "name": "GET Family",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/user/family"
+          }
+        },
+        {
+          "name": "GET Contacts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/user/contacts"
+          }
+        },
+        {
+          "name": "GET Addresses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/user/addresses"
+          }
+        },
+        {
+          "name": "GET Tax profiles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/user/tax-profiles"
+          }
+        },
+        {
+          "name": "GET Payment methods",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/user/payment-methods"
+          }
+        }
+      ],
+      "description": "## Perfil usuario\n\nLectura de family, contacts, addresses, tax-profiles y payment-methods.\n\n**Prereq:** `access_token` válido.\n**Vars in:** `access_token`.\n**Vars out:** opcionalmente IDs al inspeccionar respuesta."
+    },
+    {
+      "name": "04 - Catálogo laboratorio",
+      "item": [
+        {
+          "name": "GET Laboratory brands",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/laboratory-brands",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "GET Test categories",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const categories = j?.data?.categories;",
+                  "if (Array.isArray(categories) && categories.length && categories[0]?.id) {",
+                  "  pm.environment.set('category_id', String(categories[0].id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/laboratory-test-categories?brand={{brand}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "laboratory-test-categories"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "{{brand}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "GET Laboratory tests",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const items = j?.data?.laboratory_tests;",
+                  "if (Array.isArray(items) && items.length && items[0]?.id) {",
+                  "  pm.environment.set('laboratory_test_id', String(items[0].id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/laboratory-tests?brand={{brand}}&search=glucosa&category_id=&page=1&per_page=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "laboratory-tests"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "{{brand}}"
+                },
+                {
+                  "key": "search",
+                  "value": "glucosa"
+                },
+                {
+                  "key": "category_id",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "20"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "GET Laboratory stores",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/laboratory-stores?brand={{brand}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "laboratory-stores"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "{{brand}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "GET Laboratory test detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/laboratory-tests/{{laboratory_test_id}}",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ],
+      "description": "## Catálogo laboratorio (público)\n\nEndpoints de catálogo **sin** Authorization.\n\n**Prereq:** ninguno (auth noauth).\n**Vars in:** `brand` (default `olab`), `laboratory_test_id`, `category_id`.\n**Vars out:** `laboratory_test_id` / `category_id` para carrito."
+    },
+    {
+      "name": "05 - Carrito",
+      "item": [
+        {
+          "name": "POST Add cart item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j?.data?.items?.length) pm.environment.set('cart_item_id', j.data.items[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"laboratory_test_id\": {{laboratory_test_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/cart/items"
+          }
+        },
+        {
+          "name": "GET Cart",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cart?brand={{brand}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cart"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "{{brand}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Cart totals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cart/totals?brand={{brand}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cart",
+                "totals"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "{{brand}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE Cart item",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/cart/items/{{cart_item_id}}"
+          }
+        },
+        {
+          "name": "DELETE Clear cart",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cart?brand={{brand}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cart"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "{{brand}}"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "description": "## Carrito\n\nAlta/consulta/borrado de ítems y totales.\n\n**Prereq:** `access_token`, `brand`, `laboratory_test_id`.\n**Vars in/out:** `cart_item_id`."
+    },
+    {
+      "name": "06 - Cupones",
+      "item": [
+        {
+          "name": "GET Cart coupon",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cart/coupon?brand={{brand}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cart",
+                "coupon"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "{{brand}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST Apply coupon",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"code\": \"{{coupon_code}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/cart/coupon"
+          }
+        },
+        {
+          "name": "DELETE Remove coupon",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cart/coupon?brand={{brand}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cart",
+                "coupon"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "{{brand}}"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "description": "## Cupones\n\nAplicar / consultar / remover cupón del carrito.\n\n**Prereq:** carrito con ítems; `coupon_code`.\n**Vars in:** `brand`, `coupon_code`, `access_token`."
+    },
+    {
+      "name": "07 - Contactos pacientes",
+      "item": [
+        {
+          "name": "POST Create contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); if (j?.data?.id) pm.environment.set('contact_id', j.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Juan\",\n  \"paternal_lastname\": \"Pérez\",\n  \"maternal_lastname\": \"López\",\n  \"phone\": \"{{test_phone}}\",\n  \"phone_country\": \"MX\",\n  \"birth_date\": \"1990-05-20\",\n  \"gender\": \"male\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/user/contacts"
+          }
+        },
+        {
+          "name": "GET Contacts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/user/contacts"
+          }
+        }
+      ],
+      "description": "## Contactos / pacientes\n\nCrear y listar contactos del usuario.\n\n**Prereq:** `access_token`.\n**Vars out:** `contact_id`."
+    },
+    {
+      "name": "08 - Direcciones",
+      "item": [
+        {
+          "name": "POST Create address",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); if (j?.data?.id) pm.environment.set('address_id', j.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"street\": \"Av. Constitución\",\n  \"number\": \"100\",\n  \"neighborhood\": \"Centro\",\n  \"state\": \"Nuevo León\",\n  \"city\": \"Monterrey\",\n  \"zipcode\": \"64000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/user/addresses"
+          }
+        },
+        {
+          "name": "GET Addresses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/user/addresses"
+          }
+        }
+      ],
+      "description": "## Direcciones\n\nCrear y listar direcciones.\n\n**Prereq:** `access_token`.\n**Vars out:** `address_id`."
+    },
+    {
+      "name": "09 - Checkout prepare y draft",
+      "item": [
+        {
+          "name": "GET Checkout prepare",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/checkout/prepare?brand={{brand}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "checkout",
+                "prepare"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "{{brand}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST Sync draft",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"contact_id\": {{contact_id}},\n  \"address_id\": {{address_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/checkout/draft"
+          }
+        }
+      ],
+      "description": "## Checkout prepare y draft\n\nPreparar checkout y sincronizar draft.\n\n**Prereq:** carrito, `contact_id`, `address_id`, `access_token`, `brand`."
+    },
+    {
+      "name": "10 - Citas laboratorio",
+      "item": [
+        {
+          "name": "GET Requirements",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/laboratory-appointments/requirements?brand={{brand}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "laboratory-appointments",
+                "requirements"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "{{brand}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Appointments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/laboratory-appointments?brand={{brand}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "laboratory-appointments"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "{{brand}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST Create appointment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"contact_id\": {{contact_id}},\n  \"address_id\": {{address_id}},\n  \"scheduled_at\": \"2026-12-01T10:00:00-06:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/laboratory-appointments"
+          }
+        }
+      ],
+      "description": "## Citas laboratorio\n\nRequirements, listado y creación de citas.\n\n**Prereq:** checkout draft / datos de paciente; `brand`.\n**Vars out:** `appointment_id`."
+    },
+    {
+      "name": "11 - Payment link",
+      "item": [
+        {
+          "name": "POST Payment link",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"expires_in_minutes\": 60\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/checkout/payment-link"
+          }
+        }
+      ],
+      "description": "## Payment link\n\nGenerar link de pago del checkout.\n\n**Prereq:** draft listo; `access_token`, `brand`."
+    },
+    {
+      "name": "12 - Pedidos",
+      "item": [
+        {
+          "name": "GET List orders",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const items = j?.data?.items || j?.data?.data || j?.data;",
+                  "if (Array.isArray(items) && items.length && items[0]?.id) {",
+                  "  pm.environment.set('order_id', String(items[0].id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders?per_page=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Order status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/status"
+          }
+        },
+        {
+          "name": "GET Order products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/products"
+          }
+        }
+      ],
+      "description": "## Pedidos\n\nListar pedidos, status y products.\n\n**Prereq:** `access_token`.\n**Vars in/out:** `order_id`."
+    },
+    {
+      "name": "13 - Resultados",
+      "item": [
+        {
+          "name": "GET List results",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/orders/results"
+          }
+        },
+        {
+          "name": "GET Order results",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/results"
+          }
+        }
+      ],
+      "description": "## Resultados\n\nListar resultados globales y por pedido.\n\n**Prereq:** `access_token`, `order_id` con resultados."
+    },
+    {
+      "name": "14 - Facturas",
+      "item": [
+        {
+          "name": "GET List invoices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/orders/invoices"
+          }
+        },
+        {
+          "name": "GET Order invoices",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const items = j?.data?.items || j?.data?.invoices || j?.data;",
+                  "if (Array.isArray(items) && items.length && items[0]?.id) {",
+                  "  pm.environment.set('invoice_id', String(items[0].id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/invoices"
+          }
+        }
+      ],
+      "description": "## Facturas\n\nListar facturas globales y por pedido.\n\n**Prereq:** `access_token`, `order_id`.\n**Vars out:** `invoice_id`."
+    },
+    {
+      "name": "15 - Solicitud factura",
+      "item": [
+        {
+          "name": "POST Tax profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j?.data?.id) pm.environment.set('tax_profile_id', String(j.data.id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rfc\": \"XAXX010101000\",\n  \"business_name\": \"Empresa Demo SA de CV\",\n  \"tax_regime\": \"601\",\n  \"postal_code\": \"64000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/user/tax-profiles"
+          }
+        },
+        {
+          "name": "GET Invoice request status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/invoice-request/status"
+          }
+        },
+        {
+          "name": "POST Invoice request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tax_profile_id\": {{tax_profile_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/orders/{{order_id}}/invoice-request"
+          }
+        }
+      ],
+      "description": "## Solicitud factura\n\nTax profile + invoice-request status/create.\n\n**Prereq:** `access_token`, `order_id`.\n**Vars out:** `tax_profile_id`."
+    },
+    {
+      "name": "16 - Descargas Bearer-native",
+      "item": [
+        {
+          "name": "GET Download result PDF",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/pdf"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/results/download"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+                  "pm.test('PDF download: 200/401/404 (no JSON parse required)', function () {",
+                  "  pm.expect([200, 401, 404]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Content-Type suggests PDF or octet-stream', function () {",
+                  "    const ok = ct.includes('pdf') || ct.includes('octet-stream') || ct.includes('application/');",
+                  "    pm.expect(ok).to.be.true;",
+                  "  });",
+                  "}",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Download invoice PDF",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/pdf"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/invoices/{{invoice_id}}/download"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+                  "pm.test('PDF download: 200/401/404 (no JSON parse required)', function () {",
+                  "  pm.expect([200, 401, 404]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Content-Type suggests PDF or octet-stream', function () {",
+                  "    const ok = ct.includes('pdf') || ct.includes('octet-stream') || ct.includes('application/');",
+                  "    pm.expect(ok).to.be.true;",
+                  "  });",
+                  "}",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "## Descargas Bearer-native (PDF)\n\nDescarga de PDF de resultados/facturas. **No** exigir Content-Type JSON ni parseo JSON.\n\n**Prereq:** `access_token`, `order_id`, `invoice_id` (factura).\nTests: status 200/401/404 o Content-Type pdf; skip parse JSON."
+    },
+    {
+      "name": "17 - Features desactivadas",
+      "item": [
+        {
+          "name": "GET Medication 503",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Farmacia desactivada responde 503', () => pm.response.to.have.status(503));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/medications/1",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "PUT Cancel order 503",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cancelación desactivada responde 503', () => pm.response.to.have.status(503));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/orders/{{order_id}}/cancel"
+          }
+        }
+      ],
+      "description": "## Features desactivadas\n\nEndpoints que pueden responder **503** (medications, cancel order).\n\nÚtil para documentar features off en el environment actual."
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection prerequest: intentionally minimal"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level: fail hard on HTTP 500 for JSON responses; skip binary/PDF",
+          "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+          "const isBinary = ct.includes('pdf') || ct.includes('octet-stream');",
+          "if (isBinary) { return; }",
+          "",
+          "let bodyText = '';",
+          "try { bodyText = pm.response.text() || ''; } catch (e) { bodyText = ''; }",
+          "const looksJson = ct.includes('application/json') || (bodyText.trim().startsWith('{') || bodyText.trim().startsWith('['));",
+          "if (!looksJson) { return; }",
+          "",
+          "let json = null;",
+          "try { json = pm.response.json(); } catch (e) {",
+          "  // Non-parseable despite JSON-ish hints: still fail on 500",
+          "  pm.test('No HTTP 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+          "  return;",
+          "}",
+          "",
+          "pm.test('No HTTP 500', function () {",
+          "  pm.expect(pm.response.code).to.not.eql(500);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "header": [
+    {
+      "key": "Accept",
+      "value": "application/json",
+      "type": "text"
+    }
+  ]
+}

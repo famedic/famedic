@@ -10,28 +10,33 @@ use App\Exceptions\Otp\OtpChallengeInvalidatedException;
 use App\Exceptions\Otp\OtpChallengeMismatchException;
 use App\Exceptions\Otp\OtpChallengeNotFoundException;
 use App\Exceptions\Otp\OtpConfigurationException;
+use App\Exceptions\Otp\OtpDeliveryFailedException;
 use App\Exceptions\Otp\OtpInvalidCodeException;
 use App\Exceptions\Otp\OtpRateLimitExceededException;
 use App\Models\OtpChallenge;
 use App\Models\User;
+use App\Services\Otp\Delivery\AkubicaSecureOtpDeliveryOrchestrator;
+use App\Services\Otp\Delivery\OtpDeliveryOutcome;
+use App\Services\Otp\Registration\MexicoPhoneNormalizer;
+use App\Services\Otp\Registration\PhoneIdentity;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
  * P0-A4 — Akubica login OTP orchestration (flag-gated).
  *
- * Does NOT send Notification/Mail/SMS. Delivery adapters remain deferred.
+ * When enabled: existing users authenticate via SMS OTP (Vonage) using phone
+ * identity. Never creates User/Customer. Never falls back to email silently.
  *
  * Flag matrix:
- * - akubica_login_enabled=false → callers must use legacy otp_codes path.
- * - akubica_login_enabled=true + anti_abuse_enabled=true → this service.
- * - akubica_login_enabled=true + anti_abuse_enabled=false → OtpConfigurationException
- *   (never fail open without anti-abuse).
+ * - akubica_login_enabled=false → callers must use legacy otp_codes email path.
+ * - akubica_login_enabled=true + anti_abuse_enabled=true + sms_delivery_enabled=true → this service.
+ * - Missing anti_abuse or sms_delivery → OtpConfigurationException (never fail open).
  *
- * Decoy lifecycle (Cache): issued challenge_ids for unknown emails mimic real
+ * Decoy lifecycle (Cache): issued challenge_ids for unknown phones mimic real
  * verify/resend public contracts without creating User, otp_challenges, tokens,
- * or anti-abuse buckets. Never-issued random UUIDs may still return NO_ACTIVE_CODE;
- * that is intentional and documented (only request-code-issued IDs are the oracle surface).
+ * delivery ops, or anti-abuse buckets.
  */
 class AkubicaLoginOtpService
 {
@@ -41,6 +46,8 @@ class AkubicaLoginOtpService
         private readonly OtpAbusePolicy $abusePolicy,
         private readonly IssueAkubicaTokenAction $issueAkubicaTokenAction,
         private readonly AkubicaLoginOtpDecoyStore $decoyStore,
+        private readonly AkubicaSecureOtpDeliveryOrchestrator $deliveryOrchestrator,
+        private readonly MexicoPhoneNormalizer $phoneNormalizer,
     ) {
     }
 
@@ -67,30 +74,72 @@ class AkubicaLoginOtpService
                 'OTP_CONFIGURATION_INVALID',
             );
         }
+
+        if (! (bool) config('otp.p0a.flags.sms_delivery_enabled', false)) {
+            throw new OtpConfigurationException(
+                'akubica_login_enabled requiere sms_delivery_enabled.',
+                'OTP_CONFIGURATION_INVALID',
+            );
+        }
+    }
+
+    /**
+     * Normalize phone for login request. Public for controller validation path.
+     *
+     * @throws \App\Exceptions\Otp\OtpIdentityNormalizationException
+     */
+    public function normalizePhone(string $rawPhone, ?string $phoneCountry = null): PhoneIdentity
+    {
+        return $this->phoneNormalizer->normalize($rawPhone, $phoneCountry);
+    }
+
+    /**
+     * Resolve at most one eligible existing user for login. Zero or many → null (decoy).
+     */
+    public function findEligibleUser(PhoneIdentity $phone): ?User
+    {
+        $users = $this->findUsersByPhone($phone);
+        if ($users->count() !== 1) {
+            return null;
+        }
+
+        /** @var User $user */
+        $user = $users->first();
+
+        if ((bool) config('otp.p0a.policy.require_verified_phone', true)
+            && $user->phone_verified_at === null
+        ) {
+            return null;
+        }
+
+        return $user;
     }
 
     /**
      * Start login OTP for an existing user. Missing users are handled by decoyRequestResponse().
      *
      * @return array<string, mixed>
+     *
+     * @throws OtpDeliveryFailedException
      */
-    public function request(User $user, ?string $clientIp): array
+    public function request(User $user, PhoneIdentity $phone, ?string $clientIp): array
     {
         $this->assertConfigurationReady();
 
-        $email = strtolower(trim((string) $user->email));
+        $subjectKey = $phone->comparisonKey();
+        $destination = (string) $phone->e164();
         $ttlMinutes = (int) config('otp.p0a.policy.ttl_minutes', 5);
         $cooldown = (int) config('otp.p0a.policy.cooldown_seconds', 60);
 
         $data = new CreateOtpChallengeData(
             purpose: P0aOtpPurpose::AkubicaLogin,
-            channel: P0aOtpChannel::Email,
+            channel: P0aOtpChannel::Sms,
             ttlMinutes: $ttlMinutes,
             userId: $user->id,
-            subjectType: 'email',
-            subjectKey: $email,
-            destinationNormalized: $email,
-            destinationMasked: null,
+            subjectType: 'phone',
+            subjectKey: $subjectKey,
+            destinationNormalized: $destination,
+            destinationMasked: $this->maskPhone($destination),
             contextType: self::CONTEXT_TYPE,
             contextId: $user->id,
             invalidatePreviousActive: true,
@@ -101,39 +150,36 @@ class AkubicaLoginOtpService
         $context = new OtpRequestContext(
             purpose: P0aOtpPurpose::AkubicaLogin,
             userId: $user->id,
-            subjectType: 'email',
-            subjectKey: $email,
+            subjectType: 'phone',
+            subjectKey: $subjectKey,
             contextType: self::CONTEXT_TYPE,
             contextId: $user->id,
-            channel: P0aOtpChannel::Email,
+            channel: P0aOtpChannel::Sms,
             clientIp: $clientIp,
         );
 
         $result = $this->abusePolicy->issue($data, $context);
+        $this->dispatchDelivery($result->challenge, $result->plainCode(), $destination);
 
-        return $this->challengeResponsePayload($result->challenge, $cooldown);
+        return $this->challengeResponsePayload($result->challenge->fresh(), $cooldown);
     }
 
     /**
-     * Anti-enumeration decoy when the email does not belong to a user.
-     *
-     * Issues an opaque UUID into ephemeral cache so later verify/resend mimic a real
-     * challenge cycle. No User / otp_challenge / token / abuse bucket is created.
+     * Anti-enumeration decoy when the phone does not belong to an eligible user.
      *
      * @return array<string, mixed>
      */
-    public function decoyRequestResponse(string $requestedEmail): array
+    public function decoyRequestResponse(PhoneIdentity $phone): array
     {
         $this->assertConfigurationReady();
 
         $ttlMinutes = (int) config('otp.p0a.policy.ttl_minutes', 5);
         $cooldown = (int) config('otp.p0a.policy.cooldown_seconds', 60);
         $now = now();
-        $email = strtolower(trim($requestedEmail));
         $publicId = (string) Str::uuid();
         $expiresAt = $now->copy()->addMinutes($ttlMinutes);
         $resendAvailableAt = $now->copy()->addSeconds($cooldown);
-        $masked = $this->maskEmailForPublicResponse($email);
+        $masked = $this->maskPhone((string) ($phone->e164() ?? $phone->nationalNumber()));
 
         $this->decoyStore->put($publicId, [
             'destination_masked' => $masked,
@@ -149,7 +195,7 @@ class AkubicaLoginOtpService
             'requires_otp' => true,
             'challenge_id' => $publicId,
             'purpose' => P0aOtpPurpose::AkubicaLogin->value,
-            'channel' => P0aOtpChannel::Email->value,
+            'channel' => P0aOtpChannel::Sms->value,
             'destination_masked' => $masked,
             'expires_at' => $expiresAt->utc()->format('Y-m-d\TH:i:s\Z'),
             'resend_available_at' => $resendAvailableAt->utc()->format('Y-m-d\TH:i:s\Z'),
@@ -158,14 +204,6 @@ class AkubicaLoginOtpService
 
     /**
      * Verify OTP and issue Sanctum token only after atomic challenge consume.
-     *
-     * Consume is atomic inside OtpChallengeService (lockForUpdate + conditional
-     * UPDATE where consumed_at IS NULL). createToken runs *after* that transaction
-     * commits — there is a failure window: challenge consumed, no token returned.
-     * Recovery: client must request/resend a new challenge (OTP cannot be reused).
-     *
-     * `expires_in` comes from IssueAkubicaTokenAction: seconds until expires_at
-     * (Sanctum config expiration is minutes; the JSON field is remaining seconds).
      *
      * @return array{token: string, token_type: string, expires_in: int, expires_at: string, user: array<string, mixed>}
      */
@@ -195,7 +233,7 @@ class AkubicaLoginOtpService
             subjectKey: $challenge->subject_key,
             contextType: self::CONTEXT_TYPE,
             contextId: $challenge->context_id ?? $userId,
-            channel: P0aOtpChannel::tryFrom((string) $challenge->channel) ?? P0aOtpChannel::Email,
+            channel: P0aOtpChannel::tryFrom((string) $challenge->channel) ?? P0aOtpChannel::Sms,
             clientIp: $clientIp,
             existingChallengePublicId: $challengePublicId,
         );
@@ -204,6 +242,12 @@ class AkubicaLoginOtpService
 
         $user = User::query()->find($userId);
         if (! $user) {
+            throw new OtpChallengeMismatchException('El codigo ingresado no es valido.');
+        }
+
+        if ((bool) config('otp.p0a.policy.require_verified_phone', true)
+            && $user->phone_verified_at === null
+        ) {
             throw new OtpChallengeMismatchException('El codigo ingresado no es valido.');
         }
 
@@ -221,6 +265,8 @@ class AkubicaLoginOtpService
 
     /**
      * @return array<string, mixed>
+     *
+     * @throws OtpDeliveryFailedException
      */
     public function resend(string $challengePublicId, ?string $clientIp): array
     {
@@ -243,19 +289,20 @@ class AkubicaLoginOtpService
             throw new OtpChallengeMismatchException;
         }
 
-        $email = strtolower(trim((string) $user->email));
+        $subjectKey = (string) $previous->subject_key;
+        $destination = (string) $previous->destination_normalized;
         $ttlMinutes = (int) config('otp.p0a.policy.ttl_minutes', 5);
         $cooldown = (int) config('otp.p0a.policy.cooldown_seconds', 60);
 
         $data = new CreateOtpChallengeData(
             purpose: P0aOtpPurpose::AkubicaLogin,
-            channel: P0aOtpChannel::Email,
+            channel: P0aOtpChannel::Sms,
             ttlMinutes: $ttlMinutes,
             userId: $user->id,
-            subjectType: 'email',
-            subjectKey: $email,
-            destinationNormalized: $email,
-            destinationMasked: null,
+            subjectType: 'phone',
+            subjectKey: $subjectKey,
+            destinationNormalized: $destination,
+            destinationMasked: $previous->destination_masked ?? $this->maskPhone($destination),
             contextType: self::CONTEXT_TYPE,
             contextId: $user->id,
             invalidatePreviousActive: true,
@@ -266,28 +313,27 @@ class AkubicaLoginOtpService
         $context = new OtpRequestContext(
             purpose: P0aOtpPurpose::AkubicaLogin,
             userId: $user->id,
-            subjectType: 'email',
-            subjectKey: $email,
+            subjectType: 'phone',
+            subjectKey: $subjectKey,
             contextType: self::CONTEXT_TYPE,
             contextId: $user->id,
-            channel: P0aOtpChannel::Email,
+            channel: P0aOtpChannel::Sms,
             clientIp: $clientIp,
             existingChallengePublicId: $challengePublicId,
         );
 
         $result = $this->abusePolicy->resend($data, $context);
+        $this->dispatchDelivery($result->challenge, $result->plainCode(), $destination);
 
-        return $this->challengeResponsePayload($result->challenge, $cooldown);
+        return $this->challengeResponsePayload($result->challenge->fresh(), $cooldown);
     }
 
     /**
-     * Decoy verify: never succeeds; public errors mirror a real active challenge.
-     *
-     * @throws OtpChallengeNotFoundException never-issued UUID
-     * @throws OtpChallengeInvalidatedException superseded
+     * @throws OtpChallengeNotFoundException
+     * @throws OtpChallengeInvalidatedException
      * @throws OtpChallengeExpiredException
-     * @throws OtpRateLimitExceededException max attempts
-     * @throws OtpInvalidCodeException wrong code (always for active decoys)
+     * @throws OtpRateLimitExceededException
+     * @throws OtpInvalidCodeException
      */
     private function verifyDecoy(string $publicId, string $code): never
     {
@@ -308,7 +354,6 @@ class AkubicaLoginOtpService
             throw new OtpChallengeExpiredException;
         }
 
-        // Decoys never hold a real OTP — any code is incorrect.
         unset($code);
 
         $decoy['failed_attempts'] = (int) $decoy['failed_attempts'] + 1;
@@ -379,7 +424,7 @@ class AkubicaLoginOtpService
             'requires_otp' => true,
             'challenge_id' => $newId,
             'purpose' => P0aOtpPurpose::AkubicaLogin->value,
-            'channel' => P0aOtpChannel::Email->value,
+            'channel' => P0aOtpChannel::Sms->value,
             'destination_masked' => $previous['destination_masked'],
             'expires_at' => $expiresAt->utc()->format('Y-m-d\TH:i:s\Z'),
             'resend_available_at' => $resendAvailableAt->utc()->format('Y-m-d\TH:i:s\Z'),
@@ -423,17 +468,72 @@ class AkubicaLoginOtpService
     }
 
     /**
-     * Same masking used by OtpChallengeService for email channels (public contract parity).
+     * @throws OtpDeliveryFailedException
+     * @throws OtpConfigurationException
      */
-    private function maskEmailForPublicResponse(string $email): string
+    private function dispatchDelivery(OtpChallenge $challenge, string $plainCode, string $phoneE164): void
     {
-        if (! str_contains($email, '@')) {
-            return '***';
+        $outcome = $this->deliveryOrchestrator->deliverLoginSafely(
+            $challenge,
+            $plainCode,
+            $phoneE164,
+            (string) Str::uuid(),
+        );
+
+        if ($outcome === OtpDeliveryOutcome::Succeeded
+            || $outcome === OtpDeliveryOutcome::DuplicateSuppressed
+        ) {
+            return;
         }
 
-        [$local, $domain] = explode('@', $email, 2);
-        $prefix = substr($local, 0, 1);
+        // Skipped or Failed: login must not leave a usable challenge without SMS.
+        $this->invalidateAfterDeliveryFailure($challenge);
 
-        return $prefix.'***@'.$domain;
+        throw new OtpDeliveryFailedException;
+    }
+
+    private function invalidateAfterDeliveryFailure(OtpChallenge $challenge): void
+    {
+        if ($challenge->invalidated_at === null && $challenge->consumed_at === null) {
+            $challenge->update([
+                'invalidated_at' => now(),
+                'invalidated_reason' => 'delivery_failed',
+            ]);
+        }
+    }
+
+    private function maskPhone(string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+
+        return $digits === '' ? '***' : '***'.substr($digits, -4);
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    private function findUsersByPhone(PhoneIdentity $phone): Collection
+    {
+        $national = $phone->nationalNumber();
+        $country = $phone->countryCode();
+        $legacyTrunk = '1'.$national;
+
+        $query = User::query()
+            ->where(function ($q) use ($national, $legacyTrunk) {
+                $q->where('phone', $national)
+                    ->orWhere('phone', $legacyTrunk)
+                    ->orWhere('phone', '+52'.$national)
+                    ->orWhere('phone', '+521'.$national)
+                    ->orWhere('phone', '52'.$national)
+                    ->orWhere('phone', '521'.$national);
+            });
+
+        $query->where(function ($q) use ($country) {
+            $q->where('phone_country', $country)
+                ->orWhereNull('phone_country')
+                ->orWhere('phone_country', '');
+        });
+
+        return $query->get();
     }
 }

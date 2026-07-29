@@ -8,6 +8,7 @@ use App\Actions\Api\V1\Auth\VerifyAuthOtpAction;
 use App\Exceptions\Api\V1\Auth\AuthOtpVerificationException;
 use App\Exceptions\Otp\OtpChallengeException;
 use App\Exceptions\Otp\OtpConfigurationException;
+use App\Exceptions\Otp\OtpIdentityNormalizationException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\LoginOtpResendRequest;
 use App\Http\Requests\Api\V1\Auth\LoginRequestCodeRequest;
@@ -84,7 +85,6 @@ class LoginController extends Controller
             );
         } catch (\Throwable $e) {
             Log::error('akubica_login_request_code_failed', [
-                'email' => $email,
                 'error' => $e->getMessage(),
             ]);
 
@@ -100,21 +100,31 @@ class LoginController extends Controller
 
     private function requestCodeP0a(LoginRequestCodeRequest $request): JsonResponse
     {
-        $email = strtolower($request->validated('email'));
-        $user = User::query()->where('email', $email)->first();
-
         try {
             $this->akubicaLoginOtpService->assertConfigurationReady();
 
-            if (! $user) {
+            $phone = $this->akubicaLoginOtpService->normalizePhone(
+                (string) $request->validated('phone'),
+                $request->validated('phone_country') ?? null,
+            );
+
+            $user = $this->akubicaLoginOtpService->findEligibleUser($phone);
+
+            if ($user === null) {
                 return ApiResponse::success(
-                    $this->akubicaLoginOtpService->decoyRequestResponse($email),
+                    $this->akubicaLoginOtpService->decoyRequestResponse($phone),
                     null,
                     202,
                 );
             }
 
-            $payload = $this->akubicaLoginOtpService->request($user, $request->ip());
+            $payload = $this->akubicaLoginOtpService->request($user, $phone, $request->ip());
+        } catch (OtpIdentityNormalizationException $e) {
+            return ApiResponse::error(
+                'VALIDATION_ERROR',
+                'Los datos de inicio de sesion no son validos.',
+                422,
+            );
         } catch (OtpConfigurationException|OtpChallengeException $e) {
             return $this->otpExceptionHttpMapper->toResponse($e);
         }

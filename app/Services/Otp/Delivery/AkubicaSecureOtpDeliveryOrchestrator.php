@@ -33,6 +33,48 @@ final class AkubicaSecureOtpDeliveryOrchestrator
             return OtpDeliveryOutcome::Skipped;
         }
 
+        return $this->deliverSmsPrimary(
+            challenge: $challenge,
+            plainCode: $plainCode,
+            phoneE164: $identity->phone->e164(),
+            correlationId: $correlationId,
+            allowEmailFallback: true,
+            fallbackIdentity: $identity,
+        );
+    }
+
+    /**
+     * Login OTP delivery: SMS only via Vonage (or configured provider).
+     * Never falls back to email — silent email fallback is forbidden for login.
+     */
+    public function deliverLoginSafely(
+        OtpChallenge $challenge,
+        string $plainCode,
+        string $phoneE164,
+        string $correlationId,
+    ): OtpDeliveryOutcome {
+        if (! (bool) config('otp.p0a.flags.sms_delivery_enabled', false)) {
+            return OtpDeliveryOutcome::Skipped;
+        }
+
+        return $this->deliverSmsPrimary(
+            challenge: $challenge,
+            plainCode: $plainCode,
+            phoneE164: $phoneE164,
+            correlationId: $correlationId,
+            allowEmailFallback: false,
+            fallbackIdentity: null,
+        );
+    }
+
+    private function deliverSmsPrimary(
+        OtpChallenge $challenge,
+        string $plainCode,
+        ?string $phoneE164,
+        string $correlationId,
+        bool $allowEmailFallback,
+        ?RegistrationIdentity $fallbackIdentity,
+    ): OtpDeliveryOutcome {
         if (app()->environment('production') && in_array(config('otp.p0a.delivery.driver', 'null'), ['null', 'fake'], true)) {
             throw new \App\Exceptions\Otp\OtpConfigurationException(
                 'La entrega SMS OTP no esta configurada.',
@@ -88,15 +130,17 @@ final class AkubicaSecureOtpDeliveryOrchestrator
             return OtpDeliveryOutcome::Failed;
         }
 
-        $phone = $identity->phone->e164();
+        $phone = $phoneE164;
         if ($phone === null || $phone === '') {
-            if (AkubicaRegistrationPolicy::emailFallbackEnabled()
-                && $this->deliverEmail($operation, $operationKey, $ttl, $plainCode, $identity, $challenge->purpose, $correlationId, (string) $challenge->public_id)
+            if ($allowEmailFallback
+                && $fallbackIdentity !== null
+                && AkubicaRegistrationPolicy::emailFallbackEnabled()
+                && $this->deliverEmail($operation, $operationKey, $ttl, $plainCode, $fallbackIdentity, $challenge->purpose, $correlationId, (string) $challenge->public_id)
             ) {
                 return OtpDeliveryOutcome::Succeeded;
             }
 
-            if (! AkubicaRegistrationPolicy::emailFallbackEnabled()) {
+            if (! ($allowEmailFallback && AkubicaRegistrationPolicy::emailFallbackEnabled())) {
                 $operation->update([
                     'status' => 'suppressed',
                     'result_class' => OtpDeliveryResultClass::Suppressed->value,
@@ -136,8 +180,12 @@ final class AkubicaSecureOtpDeliveryOrchestrator
             return OtpDeliveryOutcome::Succeeded;
         }
 
-        if ($result->resultClass->isFallbackEligible() && AkubicaRegistrationPolicy::emailFallbackEnabled()) {
-            if ($this->deliverEmail($operation, $operationKey, $ttl, $plainCode, $identity, $challenge->purpose, $correlationId, (string) $challenge->public_id)) {
+        if ($allowEmailFallback
+            && $fallbackIdentity !== null
+            && $result->resultClass->isFallbackEligible()
+            && AkubicaRegistrationPolicy::emailFallbackEnabled()
+        ) {
+            if ($this->deliverEmail($operation, $operationKey, $ttl, $plainCode, $fallbackIdentity, $challenge->purpose, $correlationId, (string) $challenge->public_id)) {
                 return OtpDeliveryOutcome::Succeeded;
             }
 

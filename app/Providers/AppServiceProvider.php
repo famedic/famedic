@@ -132,7 +132,13 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('akubica-otp', function (Request $request) {
-            $key = $request->ip().'|'.(string) $request->input('email');
+            $identity = (string) (
+                $request->input('email')
+                ?: $request->input('phone')
+                ?: $request->input('challenge_id')
+                ?: ''
+            );
+            $key = $request->ip().'|'.$identity;
 
             return Limit::perMinute(5)->by($key);
         });
