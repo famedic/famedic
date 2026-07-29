@@ -179,17 +179,32 @@ test('p0a57b sms timeout with email fallback sends mail notification', function 
     Notification::assertSentOnDemand(AkubicaSecureRegisterOtpMailNotification::class);
 });
 
-test('p0a57b permanent sms failure without fallback does not send mail', function () {
+test('p0a57b permanent sms failure without fallback returns delivery failed', function () {
     p0a57bEnableSecureRegister();
     p0a57bEnableDelivery();
     config()->set('otp.p0a.flags.email_fallback_enabled', false);
     app(FakeOtpDeliveryProvider::class)->failAlwaysWith(OtpDeliveryResultClass::ProviderPermanentFailure);
 
     $payload = p0a57bRequestRegister('perm.fail.p0a57b@ejemplo.test', '+52 55 1234 5707', '666666');
-    $payload['response']->assertStatus(202);
+    $payload['response']->assertStatus(503)
+        ->assertJsonPath('error.code', 'DELIVERY_FAILED')
+        ->assertJsonMissingPath('data.challenge_id');
 
-    expect(OtpDeliveryOperation::query()->first()->status)->toBe('sms_permanent_failed');
+    $operation = OtpDeliveryOperation::query()->latest('id')->first();
+    expect($operation)->not->toBeNull()
+        ->and($operation->status)->toBe('sms_permanent_failed');
     Notification::assertNothingSent();
+
+    $challenge = OtpChallenge::query()->find($operation->otp_challenge_id);
+    expect($challenge)->not->toBeNull()
+        ->and($challenge->invalidated_at)->not->toBeNull()
+        ->and($challenge->invalidated_reason)->toBe('delivery_failed');
+
+    $intent = AkubicaRegistrationIntent::query()->where('otp_challenge_id', $challenge->id)->first();
+    expect($intent)->not->toBeNull()
+        ->and($intent->status->value)->toBe('INVALIDATED')
+        ->and($intent->invalidation_reason->value)->toBe('delivery_failed')
+        ->and($intent->encrypted_payload)->toBeNull();
 });
 
 test('p0a57b reservation store unavailable returns otp temporary unavailable', function () {

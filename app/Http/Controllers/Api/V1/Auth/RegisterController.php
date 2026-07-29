@@ -21,6 +21,7 @@ use App\Http\Responses\ApiResponse;
 use App\Models\OtpCode;
 use App\Models\User;
 use App\Services\Otp\Registration\AkubicaRegisterOtpService;
+use App\Services\Otp\Registration\AkubicaRegistrationPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -39,7 +40,7 @@ class RegisterController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        if (AkubicaRegisterOtpService::isEnabled()) {
+        if ($this->shouldUseSecureRegister()) {
             return $this->storeP0a($request);
         }
 
@@ -48,7 +49,7 @@ class RegisterController extends Controller
 
     public function verifyCode(Request $request): JsonResponse
     {
-        if (AkubicaRegisterOtpService::isEnabled()) {
+        if ($this->shouldUseSecureRegister()) {
             return $this->verifyCodeP0a($request);
         }
 
@@ -91,7 +92,7 @@ class RegisterController extends Controller
 
     public function resendCode(SecureRegisterResendCodeRequest $request): JsonResponse
     {
-        if (! AkubicaRegisterOtpService::isEnabled()) {
+        if (! $this->shouldUseSecureRegister()) {
             return ApiResponse::error(
                 'FEATURE_DISABLED',
                 'El reenvio OTP P0-A de registro no esta habilitado.',
@@ -110,6 +111,17 @@ class RegisterController extends Controller
         }
 
         return ApiResponse::success($payload, null, 202);
+    }
+
+    /**
+     * Secure register only when register flag AND infrastructure are ON.
+     * Infrastructure OFF ignores akubica_register_enabled (legacy path).
+     * Remaining deps (anti_abuse) are enforced inside assertConfigurationReady().
+     */
+    private function shouldUseSecureRegister(): bool
+    {
+        return AkubicaRegisterOtpService::isEnabled()
+            && AkubicaRegistrationPolicy::infrastructureEnabled();
     }
 
     private function storeLegacy(Request $request): JsonResponse

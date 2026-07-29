@@ -14,6 +14,7 @@ use App\Exceptions\Otp\OtpChallengeInvalidatedException;
 use App\Exceptions\Otp\OtpChallengeMismatchException;
 use App\Exceptions\Otp\OtpChallengeNotFoundException;
 use App\Exceptions\Otp\OtpConfigurationException;
+use App\Exceptions\Otp\OtpDeliveryFailedException;
 use App\Exceptions\Otp\OtpIdentityNormalizationException;
 use App\Exceptions\Otp\OtpInvalidCodeException;
 use App\Exceptions\Otp\OtpRateLimitExceededException;
@@ -25,6 +26,7 @@ use App\Models\OtpChallenge;
 use App\Models\User;
 use App\Services\Otp\MysqlContentionClassifier;
 use App\Services\Otp\Delivery\AkubicaSecureOtpDeliveryOrchestrator;
+use App\Services\Otp\Delivery\OtpDeliveryOutcome;
 use App\Services\Otp\OtpRateLimitDecision;
 use App\Services\Otp\OtpRateLimitService;
 use App\Services\Otp\OtpRequestContext;
@@ -728,18 +730,59 @@ final class AkubicaRegisterOtpService
         return $prefix.'***@'.$domain;
     }
 
+    /**
+     * @throws OtpDeliveryFailedException
+     * @throws OtpConfigurationException
+     * @throws OtpTemporaryUnavailableException
+     */
     private function dispatchDelivery(AkubicaRegistrationIntentCreationResult $result, RegistrationIdentity $identity): void
     {
         if (! AkubicaRegistrationPolicy::deliveryEnabled()) {
             return;
         }
 
-        $this->deliveryOrchestrator->deliverRegisterSafely(
+        $outcome = $this->deliveryOrchestrator->deliverRegisterSafely(
             $result->challenge,
             $result->plainCode(),
             $identity,
             (string) Str::uuid(),
         );
+
+        if ($outcome === OtpDeliveryOutcome::Succeeded
+            || $outcome === OtpDeliveryOutcome::DuplicateSuppressed
+            || $outcome === OtpDeliveryOutcome::Skipped
+        ) {
+            return;
+        }
+
+        $this->invalidateAfterDeliveryFailure($result);
+
+        throw new OtpDeliveryFailedException;
+    }
+
+    private function invalidateAfterDeliveryFailure(AkubicaRegistrationIntentCreationResult $result): void
+    {
+        $challenge = $result->challenge;
+        $intent = $result->intent;
+
+        if ($intent !== null) {
+            AkubicaRegistrationIntent::query()
+                ->where('id', $intent->id)
+                ->where('status', AkubicaRegistrationIntentStatus::Pending)
+                ->update([
+                    'status' => AkubicaRegistrationIntentStatus::Invalidated,
+                    'invalidated_at' => now(),
+                    'invalidation_reason' => AkubicaRegistrationIntentInvalidationReason::DeliveryFailed,
+                    'encrypted_payload' => null,
+                ]);
+        }
+
+        if ($challenge->invalidated_at === null && $challenge->consumed_at === null) {
+            $challenge->update([
+                'invalidated_at' => now(),
+                'invalidated_reason' => 'delivery_failed',
+            ]);
+        }
     }
 
     private function maskPhone(string $phone): string

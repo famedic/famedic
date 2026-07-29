@@ -12,6 +12,7 @@ final class OtpDeliveryObservability
         $allowed = [
             'environment', 'purpose', 'channel', 'provider_alias', 'result_class',
             'attempt_number', 'http_status_class', 'application_error_code', 'duration_bucket',
+            'correlation_id', 'otp_challenge_public_id',
         ];
         $context = array_intersect_key($dims, array_flip($allowed));
         $context['environment'] ??= app()->environment();

@@ -12,4 +12,5 @@ enum AkubicaRegistrationIntentInvalidationReason: string
     case CorruptedPayload = 'corrupted_payload';
     case ChallengeInvalidated = 'challenge_invalidated';
     case InconsistentAssociation = 'inconsistent_association';
+    case DeliveryFailed = 'delivery_failed';
 }

@@ -9,6 +9,7 @@ use App\Exceptions\Otp\OtpChallengeInvalidatedException;
 use App\Exceptions\Otp\OtpChallengeMismatchException;
 use App\Exceptions\Otp\OtpChallengeNotFoundException;
 use App\Exceptions\Otp\OtpConfigurationException;
+use App\Exceptions\Otp\OtpDeliveryFailedException;
 use App\Exceptions\Otp\OtpInvalidCodeException;
 use App\Exceptions\Otp\OtpRateLimitExceededException;
 use App\Exceptions\Otp\OtpTemporarilyBlockedException;
@@ -61,6 +62,14 @@ final class OtpExceptionHttpMapper
             return ApiResponse::error(
                 'OTP_CONFIGURATION_INVALID',
                 'El inicio de sesion OTP no esta disponible.',
+                503,
+            );
+        }
+
+        if ($e instanceof OtpDeliveryFailedException) {
+            return ApiResponse::error(
+                'DELIVERY_FAILED',
+                'No se pudo enviar el codigo de verificacion.',
                 503,
             );
         }

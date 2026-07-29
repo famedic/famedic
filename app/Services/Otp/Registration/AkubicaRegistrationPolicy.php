@@ -40,7 +40,8 @@ final class AkubicaRegistrationPolicy
     }
 
     /**
-     * Always false until delivery + verify provisioning + activation gates (P0-A5.5+).
+     * Always false until product signs off patient-ready gates (delivery+ops).
+     * Secure register may operate with flags; this method remains a release gate.
      */
     public static function isPatientReady(): bool
     {
