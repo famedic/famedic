@@ -22,8 +22,8 @@ final class AkubicaSecureRegisterOtpMailNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Tu código de verificación Akubica')
-            ->line("Tu código de verificación para completar tu registro en Akubica es: {$this->code}")
+            ->subject('Tu código de verificación Famedic')
+            ->line("Tu código de verificación para completar tu registro en Famedic es: {$this->code}")
             ->line('El código expira en 10 minutos.')
             ->line('Es de un solo uso. No lo compartas con nadie.');
     }

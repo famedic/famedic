@@ -25,11 +25,11 @@ class AkubicaOtpNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $context = $this->purpose === OtpCode::PURPOSE_AKUBICA_REGISTER
-            ? 'completar tu registro en Akubica'
-            : 'iniciar sesión en Akubica';
+            ? 'completar tu registro en Famedic'
+            : 'iniciar sesión en Famedic';
 
         return (new MailMessage)
-            ->subject('Tu código de verificación Akubica')
+            ->subject('Tu código de verificación Famedic')
             ->line("Tu código de verificación para {$context} es: {$this->otp}")
             ->line("El código expira en {$this->expiryMinutes} minutos.")
             ->line('Es de un solo uso. No lo compartas con nadie.');

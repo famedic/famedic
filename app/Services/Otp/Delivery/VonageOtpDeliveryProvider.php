@@ -41,7 +41,7 @@ final class VonageOtpDeliveryProvider implements OtpDeliveryProvider
                 $client->sms()->send(new SMS(
                     $request->destinationE164OrEmail,
                     $from,
-                    "Tu codigo de verificacion Akubica es: {$request->plainCode}. Valido por 10 minutos.",
+                    "Tu codigo de verificacion Famedic es: {$request->plainCode}. Valido por 10 minutos.",
                 ));
 
                 return new OtpDeliveryResult(OtpDeliveryResultClass::Accepted, '2xx', $attempt, $this->elapsed($started), $this->alias());
