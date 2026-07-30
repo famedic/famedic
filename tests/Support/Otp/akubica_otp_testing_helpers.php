@@ -29,6 +29,8 @@ function akubicaOtpPhpunitBaselineEnv(): array
         'OTP_P0A_SECURE_LINKS_RESULTS_ENABLED' => 'false',
         'OTP_P0A_SECURE_LINKS_INVOICES_ENABLED' => 'false',
         'OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED' => 'false',
+        'OTP_P0A_STEP_UP_BEARER_RESULTS_ENABLED' => 'false',
+        'OTP_P0A_STEP_UP_BEARER_INVOICES_ENABLED' => 'false',
         'OTP_P0A_SANCTUM_3H_ENABLED' => 'false',
         'OTP_P0A_DELIVERY_DRIVER' => 'fake',
     ];
@@ -78,11 +80,41 @@ function disableAllAkubicaOtpFeatures(): void
     config()->set('otp.p0a.flags.secure_links_results_enabled', false);
     config()->set('otp.p0a.flags.secure_links_invoices_enabled', false);
     config()->set('otp.p0a.flags.step_up_bearer_downloads_enabled', false);
+    config()->set('otp.p0a.flags.step_up_bearer_results_enabled', false);
+    config()->set('otp.p0a.flags.step_up_bearer_invoices_enabled', false);
     config()->set('otp.p0a.flags.sanctum_3h_enabled', false);
     config()->set('otp.p0a.delivery.driver', 'fake');
     config()->set('otp.p0a.secure_links.ttl_minutes', 60);
     config()->set('otp.p0a.secure_links.max_opens', 5);
     refreshAkubicaOtpDeliveryBinding();
+}
+
+function enableBearerStepUpResultsEnforcement(): void
+{
+    config()->set('otp.p0a.flags.step_up_bearer_results_enabled', true);
+    config()->set('otp.p0a.flags.step_up_bearer_downloads_enabled', false);
+    config()->set('otp.p0a.step_up.bind_to_sanctum_token', true);
+    config()->set('otp.p0a.step_up.bind_to_purpose', true);
+    config()->set('otp.p0a.step_up.bind_to_resource', true);
+}
+
+function enableBearerStepUpInvoicesEnforcement(): void
+{
+    config()->set('otp.p0a.flags.step_up_bearer_invoices_enabled', true);
+    config()->set('otp.p0a.flags.step_up_bearer_downloads_enabled', false);
+    config()->set('otp.p0a.step_up.bind_to_sanctum_token', true);
+    config()->set('otp.p0a.step_up.bind_to_purpose', true);
+    config()->set('otp.p0a.step_up.bind_to_resource', true);
+}
+
+function enableBearerStepUpMasterEnforcement(): void
+{
+    config()->set('otp.p0a.flags.step_up_bearer_downloads_enabled', true);
+    config()->set('otp.p0a.flags.step_up_bearer_results_enabled', false);
+    config()->set('otp.p0a.flags.step_up_bearer_invoices_enabled', false);
+    config()->set('otp.p0a.step_up.bind_to_sanctum_token', true);
+    config()->set('otp.p0a.step_up.bind_to_purpose', true);
+    config()->set('otp.p0a.step_up.bind_to_resource', true);
 }
 
 function enableLoginOtpWithFakeDelivery(): void

@@ -2199,7 +2199,7 @@
     },
     {
       "name": "18 - Resultados step-up y secure links",
-      "description": "## P0-B2 Resultados: step-up OTP + secure link\n\nOrden: 18.1 → 18.6. Requiere flags STEP_UP_RESULTS + SECURE_LINKS_RESULTS + ANTI_ABUSE + SMS.\n\n**Vars:** `order_id` (pedido propio con resultados), `results_correct_otp` (manual), `results_step_up_challenge_id`, `results_step_up_grant_id`, `results_secure_download_url`.\n\nNo commitear OTP, URL real ni token opaco. Production: vars vacías; no ejecutar escritura sin autorización (sin guard técnico runtime).",
+      "description": "## P0-B2 + P0-B4 Resultados: step-up OTP, secure link y enforcement Bearer\n\nOrden: 18.1 → 18.6 (secure link) → 18.7–18.9 (Bearer + X-Step-Up-Grant).\n\nRequiere flags STEP_UP_RESULTS + SECURE_LINKS_RESULTS + ANTI_ABUSE + SMS.\nEnforcement Bearer (P0-B4): `OTP_P0A_STEP_UP_BEARER_RESULTS_ENABLED` y/o `OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED`.\n\nHeader: `X-Step-Up-Grant: {{results_step_up_grant_id}}` (no query string).\n\n**Vars:** `order_id`, `results_correct_otp` (manual), `results_step_up_challenge_id`, `results_step_up_grant_id`, `results_secure_download_url`.\n\n18.7 sin grant: 200 si enforcement OFF, 403 STEP_UP_REQUIRED si ON.\nSecure link (18.4) no requiere Bearer ni X-Step-Up-Grant.\n\nNo commitear OTP, URL real ni token opaco. Production: vars vacías; no ejecutar escritura sin autorización.",
       "item": [
         {
           "name": "18.1 - Solicitar step-up OTP resultados",
@@ -2454,12 +2454,166 @@
             },
             "description": "Tras TTL (staging target 5 min) espera 410 SECURE_LINK_EXPIRED. Ejecutar manualmente."
           }
+        },
+        {
+          "name": "18.7 - Bearer download resultados SIN X-Step-Up-Grant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "pm.test('Expected status (see description for enforcement ON/OFF)', function () {",
+                  "  pm.expect([200, 403, 401, 404, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 403) {",
+                  "  try {",
+                  "    const json = pm.response.json();",
+                  "    pm.test('STEP_UP error code when forbidden', function () {",
+                  "      pm.expect(['STEP_UP_REQUIRED', 'STEP_UP_GRANT_INVALID', 'STEP_UP_EXPIRED', 'STEP_UP_REVOKED']).to.include(json?.error?.code);",
+                  "    });",
+                  "  } catch (e) { /* binary body */ }",
+                  "}",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Content-Type suggests PDF or octet-stream', function () {",
+                  "    const ok = ct.includes('pdf') || ct.includes('octet-stream') || ct.includes('application/');",
+                  "    pm.expect(ok).to.be.true;",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/pdf"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/results/download",
+            "description": "P0-B4: descarga Bearer sin header X-Step-Up-Grant.\n\nEsperado: **200** si enforcement OFF (`OTP_P0A_STEP_UP_BEARER_*`); **403** `STEP_UP_REQUIRED` si enforcement ON (results o master).\n\nPrereq: access_token, order_id con resultados listos."
+          }
+        },
+        {
+          "name": "18.8 - Bearer download resultados CON X-Step-Up-Grant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "pm.test('Expected status (see description for enforcement ON/OFF)', function () {",
+                  "  pm.expect([200, 403, 401, 404, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 403) {",
+                  "  try {",
+                  "    const json = pm.response.json();",
+                  "    pm.test('STEP_UP error code when forbidden', function () {",
+                  "      pm.expect(['STEP_UP_REQUIRED', 'STEP_UP_GRANT_INVALID', 'STEP_UP_EXPIRED', 'STEP_UP_REVOKED']).to.include(json?.error?.code);",
+                  "    });",
+                  "  } catch (e) { /* binary body */ }",
+                  "}",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Content-Type suggests PDF or octet-stream', function () {",
+                  "    const ok = ct.includes('pdf') || ct.includes('octet-stream') || ct.includes('application/');",
+                  "    pm.expect(ok).to.be.true;",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/pdf"
+              },
+              {
+                "key": "X-Step-Up-Grant",
+                "value": "{{results_step_up_grant_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/results/download",
+            "description": "P0-B4: descarga Bearer con header `X-Step-Up-Grant: {{results_step_up_grant_id}}` (tras 18.2).\n\nCon enforcement ON y grant válido (purpose results, mismo user/PAT/recurso): **200** PDF. Grant reutilizable durante TTL (no se consume por Bearer).\n\nPrereq: results_step_up_grant_id de 18.2."
+          }
+        },
+        {
+          "name": "18.9 - Bearer download resultados con grant incorrecto (cross-purpose)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "pm.test('Expected status (see description for enforcement ON/OFF)', function () {",
+                  "  pm.expect([200, 403, 401, 404, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 403) {",
+                  "  try {",
+                  "    const json = pm.response.json();",
+                  "    pm.test('STEP_UP error code when forbidden', function () {",
+                  "      pm.expect(['STEP_UP_REQUIRED', 'STEP_UP_GRANT_INVALID', 'STEP_UP_EXPIRED', 'STEP_UP_REVOKED']).to.include(json?.error?.code);",
+                  "    });",
+                  "  } catch (e) { /* binary body */ }",
+                  "}",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Content-Type suggests PDF or octet-stream', function () {",
+                  "    const ok = ct.includes('pdf') || ct.includes('octet-stream') || ct.includes('application/');",
+                  "    pm.expect(ok).to.be.true;",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/pdf"
+              },
+              {
+                "key": "X-Step-Up-Grant",
+                "value": "{{invoice_step_up_grant_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/results/download",
+            "description": "P0-B4: grant **cross-purpose** — usa `invoice_step_up_grant_id` (purpose facturas) contra descarga de **resultados**.\n\nCon enforcement ON: **403** `STEP_UP_GRANT_INVALID` (purpose/resource binding).\nCon enforcement OFF: el header se ignora → **200** si ownership OK.\n\nNota: no usar grant de otro usuario/PAT/recurso; mismo patrón de fallo."
+          }
         }
       ]
     },
     {
       "name": "19 - Facturas step-up y secure links",
-      "description": "## P0-B3 Facturas: step-up OTP + secure link\n\nOrden: 19.1 → 19.6. Requiere flags STEP_UP_INVOICES + SECURE_LINKS_INVOICES + ANTI_ABUSE + SMS.\n\n**Vars:** `invoice_order_id`, `invoice_id` (factura propia), `invoice_correct_otp` (manual), `invoice_step_up_challenge_id`, `invoice_step_up_grant_id`, `invoice_secure_download_url`.\n\nNo commitear OTP, URL real ni token opaco. Production: vars vacías; no ejecutar escritura sin autorización (sin guard técnico runtime).",
+      "description": "## P0-B3 + P0-B4 Facturas: step-up OTP, secure link y enforcement Bearer\n\nOrden: 19.1 → 19.6 (secure link) → 19.7–19.9 (Bearer + X-Step-Up-Grant).\n\nRequiere flags STEP_UP_INVOICES + SECURE_LINKS_INVOICES + ANTI_ABUSE + SMS.\nEnforcement Bearer (P0-B4): `OTP_P0A_STEP_UP_BEARER_INVOICES_ENABLED` y/o `OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED`.\n\nHeader: `X-Step-Up-Grant: {{invoice_step_up_grant_id}}` (no query string).\n\n**Vars:** `invoice_order_id`, `invoice_id`, `invoice_correct_otp` (manual), `invoice_step_up_challenge_id`, `invoice_step_up_grant_id`, `invoice_secure_download_url`.\n\n19.7 sin grant: 200 si enforcement OFF, 403 STEP_UP_REQUIRED si ON.\nSecure link (19.4) no requiere Bearer ni X-Step-Up-Grant.\n\nNo commitear OTP, URL real ni token opaco. Production: vars vacías; no ejecutar escritura sin autorización.",
       "item": [
         {
           "name": "19.1 - Solicitar step-up OTP facturas",
@@ -2713,6 +2867,160 @@
               "type": "noauth"
             },
             "description": "Tras TTL (staging target 5 min) espera 410 SECURE_LINK_EXPIRED. Ejecutar manualmente."
+          }
+        },
+        {
+          "name": "19.7 - Bearer download factura SIN X-Step-Up-Grant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "pm.test('Expected status (see description for enforcement ON/OFF)', function () {",
+                  "  pm.expect([200, 403, 401, 404, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 403) {",
+                  "  try {",
+                  "    const json = pm.response.json();",
+                  "    pm.test('STEP_UP error code when forbidden', function () {",
+                  "      pm.expect(['STEP_UP_REQUIRED', 'STEP_UP_GRANT_INVALID', 'STEP_UP_EXPIRED', 'STEP_UP_REVOKED']).to.include(json?.error?.code);",
+                  "    });",
+                  "  } catch (e) { /* binary body */ }",
+                  "}",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Content-Type suggests PDF or octet-stream', function () {",
+                  "    const ok = ct.includes('pdf') || ct.includes('octet-stream') || ct.includes('application/');",
+                  "    pm.expect(ok).to.be.true;",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/pdf"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{invoice_order_id}}/invoices/{{invoice_id}}/download",
+            "description": "P0-B4: descarga Bearer sin header X-Step-Up-Grant.\n\nEsperado: **200** si enforcement OFF; **403** `STEP_UP_REQUIRED` si enforcement ON (invoices o master).\n\nPrereq: access_token, invoice_order_id, invoice_id."
+          }
+        },
+        {
+          "name": "19.8 - Bearer download factura CON X-Step-Up-Grant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "pm.test('Expected status (see description for enforcement ON/OFF)', function () {",
+                  "  pm.expect([200, 403, 401, 404, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 403) {",
+                  "  try {",
+                  "    const json = pm.response.json();",
+                  "    pm.test('STEP_UP error code when forbidden', function () {",
+                  "      pm.expect(['STEP_UP_REQUIRED', 'STEP_UP_GRANT_INVALID', 'STEP_UP_EXPIRED', 'STEP_UP_REVOKED']).to.include(json?.error?.code);",
+                  "    });",
+                  "  } catch (e) { /* binary body */ }",
+                  "}",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Content-Type suggests PDF or octet-stream', function () {",
+                  "    const ok = ct.includes('pdf') || ct.includes('octet-stream') || ct.includes('application/');",
+                  "    pm.expect(ok).to.be.true;",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/pdf"
+              },
+              {
+                "key": "X-Step-Up-Grant",
+                "value": "{{invoice_step_up_grant_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{invoice_order_id}}/invoices/{{invoice_id}}/download",
+            "description": "P0-B4: descarga Bearer con header `X-Step-Up-Grant: {{invoice_step_up_grant_id}}` (tras 19.2).\n\nCon enforcement ON y grant válido (purpose invoices): **200** PDF. Grant reutilizable durante TTL.\n\nPrereq: invoice_step_up_grant_id de 19.2."
+          }
+        },
+        {
+          "name": "19.9 - Bearer download factura con grant incorrecto (cross-purpose)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "pm.test('Expected status (see description for enforcement ON/OFF)', function () {",
+                  "  pm.expect([200, 403, 401, 404, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 403) {",
+                  "  try {",
+                  "    const json = pm.response.json();",
+                  "    pm.test('STEP_UP error code when forbidden', function () {",
+                  "      pm.expect(['STEP_UP_REQUIRED', 'STEP_UP_GRANT_INVALID', 'STEP_UP_EXPIRED', 'STEP_UP_REVOKED']).to.include(json?.error?.code);",
+                  "    });",
+                  "  } catch (e) { /* binary body */ }",
+                  "}",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Content-Type suggests PDF or octet-stream', function () {",
+                  "    const ok = ct.includes('pdf') || ct.includes('octet-stream') || ct.includes('application/');",
+                  "    pm.expect(ok).to.be.true;",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/pdf"
+              },
+              {
+                "key": "X-Step-Up-Grant",
+                "value": "{{results_step_up_grant_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{invoice_order_id}}/invoices/{{invoice_id}}/download",
+            "description": "P0-B4: grant **cross-purpose** — usa `results_step_up_grant_id` (purpose resultados) contra descarga de **factura**.\n\nCon enforcement ON: **403** `STEP_UP_GRANT_INVALID`.\nCon enforcement OFF: header ignorado → **200** si ownership OK."
           }
         }
       ]

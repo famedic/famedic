@@ -76,6 +76,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(\App\Services\Otp\StepUp\OtpStepUpGrantService::class);
         $this->app->bind(\App\Services\Otp\StepUp\AkubicaStepUpOtpService::class);
         $this->app->bind(\App\Services\Otp\StepUp\OtpSecureDownloadLinkService::class);
+        $this->app->bind(\App\Services\Otp\StepUp\BearerStepUpEnforcement::class);
         $this->app->singleton(OtpExceptionHttpMapper::class);
         $this->app->singleton(\App\Services\Otp\Registration\EmailNormalizer::class);
         $this->app->singleton(\App\Services\Otp\Registration\MexicoPhoneNormalizer::class);

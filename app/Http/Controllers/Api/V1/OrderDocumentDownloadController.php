@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
+use App\Services\Otp\StepUp\BearerStepUpEnforcement;
 use App\Support\Api\V1\LaboratoryOrderStatus;
 use App\Support\Api\V1\OrderDocumentDownloadSupport;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +17,7 @@ class OrderDocumentDownloadController extends Controller
         Request $request,
         int $orderId,
         OrderDocumentDownloadSupport $downloadSupport,
+        BearerStepUpEnforcement $stepUpEnforcement,
     ): Response|JsonResponse {
         $order = $downloadSupport->findCustomerOrder($request->user()->customer, $orderId);
 
@@ -25,6 +27,10 @@ class OrderDocumentDownloadController extends Controller
                 'Pedido no encontrado.',
                 404,
             );
+        }
+
+        if ($denied = $stepUpEnforcement->assertResultsGrant($request, (int) $order->id)) {
+            return $denied;
         }
 
         if (! LaboratoryOrderStatus::hasResults($order)) {
@@ -53,6 +59,7 @@ class OrderDocumentDownloadController extends Controller
         int $orderId,
         int $invoiceId,
         OrderDocumentDownloadSupport $downloadSupport,
+        BearerStepUpEnforcement $stepUpEnforcement,
     ): Response|JsonResponse {
         $order = $downloadSupport->findCustomerOrder($request->user()->customer, $orderId);
 
@@ -62,6 +69,19 @@ class OrderDocumentDownloadController extends Controller
                 'Pedido no encontrado.',
                 404,
             );
+        }
+
+        $invoice = $downloadSupport->findOwnedInvoice($order, $invoiceId);
+        if ($invoice === null) {
+            return ApiResponse::error(
+                'INVOICE_NOT_FOUND',
+                'Factura no encontrada.',
+                404,
+            );
+        }
+
+        if ($denied = $stepUpEnforcement->assertInvoicesGrant($request, (int) $invoice->id)) {
+            return $denied;
         }
 
         $resolved = $downloadSupport->resolveInvoicePdf($order, $invoiceId);

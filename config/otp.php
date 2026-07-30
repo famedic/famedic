@@ -122,15 +122,30 @@ return [
             /** Step-up OTP antes de ligas/acceso a facturas (P0-A7+). */
             'step_up_invoices_enabled' => $otpEnvBool('OTP_P0A_STEP_UP_INVOICES_ENABLED', false),
 
-            /** Exigir step-up también en descargas Bearer directas (P0-A7+). */
+            /**
+             * Master switch: enforce step-up on Bearer downloads for BOTH results and invoices (P0-B4).
+             * OR'd with the resource-specific flags below for gradual rollout.
+             */
             'step_up_bearer_downloads_enabled' => $otpEnvBool(
                 'OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED',
                 false
             ),
 
+            /** Enforce step-up on results Bearer download only (P0-B4). */
+            'step_up_bearer_results_enabled' => $otpEnvBool(
+                'OTP_P0A_STEP_UP_BEARER_RESULTS_ENABLED',
+                false
+            ),
+
+            /** Enforce step-up on invoice Bearer download only (P0-B4). */
+            'step_up_bearer_invoices_enabled' => $otpEnvBool(
+                'OTP_P0A_STEP_UP_BEARER_INVOICES_ENABLED',
+                false
+            ),
+
             /**
              * Emit/consume opaque secure download links for results (P0-B2).
-             * Independent of step_up_bearer_downloads_enabled (Bearer stays ungated).
+             * Independent of Bearer step-up enforcement.
              */
             'secure_links_results_enabled' => $otpEnvBool(
                 'OTP_P0A_SECURE_LINKS_RESULTS_ENABLED',

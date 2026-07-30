@@ -70,6 +70,16 @@ Requiere flags: `OTP_P0A_AKUBICA_LOGIN_ENABLED`, `OTP_P0A_ANTI_ABUSE_ENABLED`, `
 
 Si login P0-A está **off**: el mismo endpoint acepta body legacy `{ "email" }` y `resend-code` responde `503 FEATURE_DISABLED`.
 
+## P0-B4 — Enforcement Bearer (`X-Step-Up-Grant`)
+
+Carpetas **18** (resultados) y **19** (facturas): tras el flujo step-up/secure-link, requests **18.7–18.9** / **19.7–19.9** documentan descarga Bearer.
+
+- Header: `X-Step-Up-Grant: {{results_step_up_grant_id}}` o `{{invoice_step_up_grant_id}}` (no query string).
+- Sin header: **200** si enforcement OFF; **403** `STEP_UP_REQUIRED` si ON (`OTP_P0A_STEP_UP_BEARER_*`).
+- Grant cross-purpose / inválido con enforcement ON → **403** `STEP_UP_GRANT_INVALID`.
+- Secure link GET (18.4 / 19.4) sigue sin Bearer ni step-up header.
+- Vars `results_step_up_grant_id` / `invoice_step_up_grant_id` vacías en environments trackeados.
+
 ## Variables QA — Secure links / resultados (carpeta 18)
 
 - `results_step_up_challenge_id` — challenge id del step-up (se llena en el flujo 18)

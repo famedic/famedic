@@ -50,6 +50,10 @@ class OrderInvoiceResource extends JsonResource
             if ((bool) config('otp.p0a.flags.secure_links_invoices_enabled', false)) {
                 $data['secure_link_supported'] = true;
             }
+            // P0-B4: nest requires_step_up under download when Bearer enforcement is active.
+            if (\App\Services\Otp\StepUp\BearerStepUpEnforcement::isInvoicesEnforcementEnabled()) {
+                $data['download']['requires_step_up'] = true;
+            }
         }
 
         if ($this->includeOrderStudyName) {

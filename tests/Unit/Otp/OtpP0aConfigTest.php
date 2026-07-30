@@ -18,6 +18,8 @@ function otpP0aReloadConfig(array $overrides = []): void
         'OTP_P0A_STEP_UP_RESULTS_ENABLED',
         'OTP_P0A_STEP_UP_INVOICES_ENABLED',
         'OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED',
+        'OTP_P0A_STEP_UP_BEARER_RESULTS_ENABLED',
+        'OTP_P0A_STEP_UP_BEARER_INVOICES_ENABLED',
         'OTP_P0A_SECURE_LINKS_RESULTS_ENABLED',
         'OTP_P0A_SECURE_LINKS_INVOICES_ENABLED',
         'OTP_P0A_DELIVERY_DRIVER',
@@ -95,6 +97,8 @@ test('p0a breaking feature flags are disabled by default', function () {
         ->and(config('otp.p0a.flags.step_up_results_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.step_up_invoices_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.step_up_bearer_downloads_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.flags.step_up_bearer_results_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.flags.step_up_bearer_invoices_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.secure_links_results_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.secure_links_invoices_enabled'))->toBeFalse();
 });
@@ -200,6 +204,8 @@ test('step-up grant ttl defaults to 10 minutes without enabling step-up', functi
         ->and(config('otp.p0a.flags.step_up_results_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.step_up_invoices_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.step_up_bearer_downloads_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.flags.step_up_bearer_results_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.flags.step_up_bearer_invoices_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.secure_links_results_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.secure_links_invoices_enabled'))->toBeFalse();
 });
@@ -306,4 +312,22 @@ test('p0t1 otp.php file default for delivery driver remains null when env cleare
     otpP0aReloadConfig();
 
     expect(config('otp.p0a.delivery.driver'))->toBe('null');
+});
+
+test('p0b4 bearer enforcement flags default off and master or specific enables', function () {
+    otpP0aReloadConfig();
+
+    expect(config('otp.p0a.flags.step_up_bearer_downloads_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.flags.step_up_bearer_results_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.flags.step_up_bearer_invoices_enabled'))->toBeFalse()
+        ->and(\App\Services\Otp\StepUp\BearerStepUpEnforcement::isResultsEnforcementEnabled())->toBeFalse()
+        ->and(\App\Services\Otp\StepUp\BearerStepUpEnforcement::isInvoicesEnforcementEnabled())->toBeFalse();
+
+    otpP0aReloadConfig(['OTP_P0A_STEP_UP_BEARER_RESULTS_ENABLED' => 'true']);
+    expect(\App\Services\Otp\StepUp\BearerStepUpEnforcement::isResultsEnforcementEnabled())->toBeTrue()
+        ->and(\App\Services\Otp\StepUp\BearerStepUpEnforcement::isInvoicesEnforcementEnabled())->toBeFalse();
+
+    otpP0aReloadConfig(['OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED' => 'true']);
+    expect(\App\Services\Otp\StepUp\BearerStepUpEnforcement::isResultsEnforcementEnabled())->toBeTrue()
+        ->and(\App\Services\Otp\StepUp\BearerStepUpEnforcement::isInvoicesEnforcementEnabled())->toBeTrue();
 });

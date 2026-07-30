@@ -121,6 +121,24 @@ class LaboratoryOrderResults
         if ((bool) config('otp.p0a.flags.secure_links_results_enabled', false)) {
             $payload['secure_link_supported'] = true;
         }
+
+        // P0-B4: nest requires_step_up under download when Bearer enforcement is active.
+        if (\App\Services\Otp\StepUp\BearerStepUpEnforcement::isResultsEnforcementEnabled()
+            && isset($payload['download']) && is_array($payload['download'])
+        ) {
+            $payload['download']['requires_step_up'] = true;
+        }
+
+        if (isset($payload['results']) && is_array($payload['results'])) {
+            foreach ($payload['results'] as $i => $entry) {
+                if (! is_array($entry) || ! isset($entry['download']) || ! is_array($entry['download'])) {
+                    continue;
+                }
+                if (\App\Services\Otp\StepUp\BearerStepUpEnforcement::isResultsEnforcementEnabled()) {
+                    $payload['results'][$i]['download']['requires_step_up'] = true;
+                }
+            }
+        }
     }
 
     public static function latestResultsNotification(LaboratoryPurchase $purchase): ?LaboratoryNotification
