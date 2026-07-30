@@ -53,6 +53,27 @@ final class AkubicaSecureOtpDeliveryOrchestrator
         string $phoneE164,
         string $correlationId,
     ): OtpDeliveryOutcome {
+        return $this->deliverSmsOnlySafely($challenge, $plainCode, $phoneE164, $correlationId);
+    }
+
+    /**
+     * Step-up OTP delivery: SMS only. No silent email fallback.
+     */
+    public function deliverStepUpSafely(
+        OtpChallenge $challenge,
+        string $plainCode,
+        string $phoneE164,
+        string $correlationId,
+    ): OtpDeliveryOutcome {
+        return $this->deliverSmsOnlySafely($challenge, $plainCode, $phoneE164, $correlationId);
+    }
+
+    private function deliverSmsOnlySafely(
+        OtpChallenge $challenge,
+        string $plainCode,
+        string $phoneE164,
+        string $correlationId,
+    ): OtpDeliveryOutcome {
         if (! (bool) config('otp.p0a.flags.sms_delivery_enabled', false)) {
             return OtpDeliveryOutcome::Skipped;
         }

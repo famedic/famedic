@@ -152,8 +152,12 @@ return [
 
         /*
         |--------------------------------------------------------------------------
-        | Step-up grant (DEC-006) — config only; no persistence/validation yet
+        | Step-up grant (DEC-006 / P0-B1) — persisted in otp_step_up_grants
         |--------------------------------------------------------------------------
+        |
+        | Wired for results step-up request/verify when step_up_results_enabled.
+        | Downloads and secure links remain ungated until later P0-B blocks.
+        |
         */
 
         'step_up' => [

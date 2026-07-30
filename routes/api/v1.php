@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\LaboratoryAppointmentController;
 use App\Http\Controllers\Api\V1\OrderDocumentDownloadController;
 use App\Http\Controllers\Api\V1\OrderInvoiceRequestController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\OrderResultsStepUpController;
 use App\Http\Controllers\Api\V1\UserAddressController;
 use App\Http\Controllers\Api\V1\UserContactController;
 use App\Http\Controllers\Api\V1\UserController;
@@ -116,6 +117,13 @@ Route::middleware(['force.json', 'api.token.guard'])->name('api.v1.')->group(fun
                 ->name('results.download');
             Route::get('{order_id}/invoices/{invoice_id}/download', [OrderDocumentDownloadController::class, 'downloadInvoice'])
                 ->name('invoices.download');
+
+            Route::post('{order_id}/results/step-up/request', [OrderResultsStepUpController::class, 'request'])
+                ->middleware('throttle:akubica-otp')
+                ->name('results.step-up.request');
+            Route::post('{order_id}/results/step-up/verify', [OrderResultsStepUpController::class, 'verify'])
+                ->middleware('throttle:akubica-otp')
+                ->name('results.step-up.verify');
 
             Route::get('{order_id}/invoice-request/status', [OrderInvoiceRequestController::class, 'status'])
                 ->name('invoice-request.status');
