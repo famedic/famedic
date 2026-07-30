@@ -20,6 +20,8 @@ function otpP0aReloadConfig(array $overrides = []): void
         'OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED',
         'OTP_P0A_SECURE_LINKS_RESULTS_ENABLED',
         'OTP_P0A_SECURE_LINKS_INVOICES_ENABLED',
+        'OTP_P0A_DELIVERY_DRIVER',
+        'OTP_P0A_SMS_DELIVERY_PROVIDER',
         'OTP_P0A_TTL_MINUTES',
         'OTP_P0A_REGISTER_TTL_MINUTES',
         'OTP_P0A_LENGTH',
@@ -73,11 +75,13 @@ function otpP0aReloadConfig(array $overrides = []): void
 }
 
 beforeEach(function () {
+    // Clear OTP env so assertions exercise otp.php file defaults (not phpunit.xml).
     otpP0aReloadConfig();
 });
 
 afterEach(function () {
-    otpP0aReloadConfig();
+    // Restore PHPUnit testing baseline so later suites are not contaminated.
+    otpP0aReloadConfig(akubicaOtpPhpunitBaselineEnv());
 });
 
 test('p0a breaking feature flags are disabled by default', function () {
@@ -269,4 +273,37 @@ test('p0a5 register ttl env override does not change login policy ttl', function
 
     expect(config('otp.p0a.registration.ttl_minutes'))->toBe(12)
         ->and(config('otp.p0a.policy.ttl_minutes'))->toBe(5);
+});
+
+test('p0t1 delivery driver env selects provider and obsolete provider env is ignored', function () {
+    otpP0aReloadConfig([
+        'OTP_P0A_DELIVERY_DRIVER' => 'fake',
+        'OTP_P0A_SMS_DELIVERY_PROVIDER' => 'vonage',
+    ]);
+
+    expect(config('otp.p0a.delivery.driver'))->toBe('fake')
+        ->and(config('otp.p0a.sms_delivery.provider'))->toBeNull();
+
+    refreshAkubicaOtpDeliveryBinding();
+    expect(app(\App\Contracts\Otp\OtpDeliveryProvider::class))
+        ->toBeInstanceOf(\App\Services\Otp\Delivery\FakeOtpDeliveryProvider::class)
+        ->and(app(\App\Contracts\Otp\OtpDeliveryProvider::class)->alias())->toBe('fake');
+
+    otpP0aReloadConfig([
+        'OTP_P0A_DELIVERY_DRIVER' => 'null',
+        'OTP_P0A_SMS_DELIVERY_PROVIDER' => 'vonage',
+    ]);
+    refreshAkubicaOtpDeliveryBinding();
+
+    // Laravel Env casts the string "null" to PHP null; binding still resolves Null provider.
+    expect(config('otp.p0a.delivery.driver'))->toBeNull()
+        ->and(app(\App\Contracts\Otp\OtpDeliveryProvider::class))
+        ->toBeInstanceOf(\App\Services\Otp\Delivery\NullOtpDeliveryProvider::class)
+        ->and(app(\App\Contracts\Otp\OtpDeliveryProvider::class)->alias())->toBe('null');
+});
+
+test('p0t1 otp.php file default for delivery driver remains null when env cleared', function () {
+    otpP0aReloadConfig();
+
+    expect(config('otp.p0a.delivery.driver'))->toBe('null');
 });

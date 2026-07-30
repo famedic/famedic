@@ -23,9 +23,7 @@ use Tests\Support\Otp\FakeOtpCodeGenerator;
 
 function p0a57aEnableSecureRegister(): void
 {
-    config()->set('otp.p0a.flags.akubica_register_enabled', true);
-    config()->set('otp.p0a.flags.infrastructure_enabled', true);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', true);
+    enableRegisterOtpWithoutDelivery();
 }
 
 /**
@@ -50,9 +48,7 @@ function p0a57aRequestRegister(string $email, string $phone, string $code = '123
 
 beforeEach(function () {
     Notification::fake();
-    config()->set('otp.p0a.flags.akubica_register_enabled', false);
-    config()->set('otp.p0a.flags.infrastructure_enabled', false);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', false);
+    disableAllAkubicaOtpFeatures();
 });
 
 // ── A. Normalization / uniqueness ──────────────────────────────────────

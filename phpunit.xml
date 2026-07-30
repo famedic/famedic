@@ -29,5 +29,25 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+
+        <!--
+          P0-T1: deterministic Akubica OTP baseline for PHPUnit/Pest.
+          force=true so personal .env / Forge / shell exports cannot leak.
+          Suites that exercise P0-A/P0-B must enable flags explicitly (config()->set).
+          Do NOT introduce OTP_P0A_SMS_DELIVERY_PROVIDER (ignored by application code).
+        -->
+        <env name="OTP_P0A_INFRASTRUCTURE_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_AKUBICA_REGISTER_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_AKUBICA_LOGIN_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_SMS_DELIVERY_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_EMAIL_FALLBACK_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_ANTI_ABUSE_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_STEP_UP_RESULTS_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_STEP_UP_INVOICES_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_SECURE_LINKS_RESULTS_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_SECURE_LINKS_INVOICES_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_SANCTUM_3H_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_DELIVERY_DRIVER" value="fake" force="true"/>
     </php>
 </phpunit>

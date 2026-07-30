@@ -22,22 +22,12 @@ use Tests\Support\Otp\FakeOtpCodeGenerator;
 
 function enableAkubicaLoginOtpFlags(): void
 {
-    config()->set('otp.p0a.flags.akubica_login_enabled', true);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', true);
-    config()->set('otp.p0a.flags.sms_delivery_enabled', true);
-    config()->set('otp.p0a.flags.email_fallback_enabled', false);
-    config()->set('otp.p0a.delivery.driver', 'fake');
-    config()->set('otp.p0a.policy.require_verified_phone', true);
-    app(FakeOtpDeliveryProvider::class)->alwaysAccept();
-    app(FakeOtpDeliveryProvider::class)->sent = [];
+    enableLoginOtpWithFakeDelivery();
 }
 
 function disableAkubicaLoginOtpFlags(): void
 {
-    config()->set('otp.p0a.flags.akubica_login_enabled', false);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', false);
-    config()->set('otp.p0a.flags.sms_delivery_enabled', false);
-    config()->set('otp.p0a.delivery.driver', 'null');
+    disableAllAkubicaOtpFeatures();
 }
 
 /**

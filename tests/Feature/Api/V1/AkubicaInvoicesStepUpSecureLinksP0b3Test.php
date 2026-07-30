@@ -18,40 +18,17 @@ use Tests\Support\Otp\FakeOtpCodeGenerator;
 
 function enableAkubicaInvoiceStepUpFlags(): void
 {
-    config()->set('otp.p0a.flags.step_up_invoices_enabled', true);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', true);
-    config()->set('otp.p0a.flags.sms_delivery_enabled', true);
-    config()->set('otp.p0a.flags.email_fallback_enabled', false);
-    config()->set('otp.p0a.flags.akubica_login_enabled', false);
-    config()->set('otp.p0a.flags.akubica_register_enabled', false);
-    config()->set('otp.p0a.delivery.driver', 'fake');
-    config()->set('otp.p0a.policy.require_verified_phone', true);
-    config()->set('otp.p0a.policy.max_attempts', 5);
-    config()->set('otp.p0a.policy.ttl_minutes', 5);
-    config()->set('otp.p0a.policy.cooldown_seconds', 60);
-    config()->set('otp.p0a.step_up.bind_to_sanctum_token', true);
-    app(FakeOtpDeliveryProvider::class)->alwaysAccept();
-    app(FakeOtpDeliveryProvider::class)->sent = [];
+    enableInvoiceStepUpWithFakeDelivery();
 }
 
 function enableAkubicaInvoiceSecureLinkFlags(): void
 {
-    enableAkubicaInvoiceStepUpFlags();
-    config()->set('otp.p0a.flags.secure_links_invoices_enabled', true);
-    config()->set('otp.p0a.flags.secure_links_results_enabled', false);
-    config()->set('otp.p0a.secure_links.ttl_minutes', 5);
-    config()->set('otp.p0a.secure_links.max_opens', 1);
+    enableInvoiceSecureLinks();
 }
 
 function disableAkubicaInvoiceP0b3Flags(): void
 {
-    config()->set('otp.p0a.flags.step_up_invoices_enabled', false);
-    config()->set('otp.p0a.flags.secure_links_invoices_enabled', false);
-    config()->set('otp.p0a.flags.secure_links_results_enabled', false);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', false);
-    config()->set('otp.p0a.flags.sms_delivery_enabled', false);
-    config()->set('otp.p0a.flags.akubica_login_enabled', false);
-    config()->set('otp.p0a.delivery.driver', 'null');
+    disableAllAkubicaOtpFeatures();
 }
 
 /**

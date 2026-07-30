@@ -12,16 +12,12 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 function p0a54EnableSecureRegister(): void
 {
-    config()->set('otp.p0a.flags.akubica_register_enabled', true);
-    config()->set('otp.p0a.flags.infrastructure_enabled', true);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', true);
+    enableRegisterOtpWithoutDelivery();
 }
 
 beforeEach(function () {
     Notification::fake();
-    config()->set('otp.p0a.flags.akubica_register_enabled', false);
-    config()->set('otp.p0a.flags.infrastructure_enabled', false);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', false);
+    disableAllAkubicaOtpFeatures();
 });
 
 test('p0a54 flags off keep legacy register 409 and otp notification', function () {

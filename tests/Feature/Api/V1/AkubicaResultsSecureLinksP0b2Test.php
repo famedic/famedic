@@ -13,19 +13,12 @@ use Illuminate\Support\Str;
 
 function enableAkubicaSecureLinksResultsFlags(): void
 {
-    config()->set('otp.p0a.flags.secure_links_results_enabled', true);
-    config()->set('otp.p0a.flags.step_up_results_enabled', true);
-    config()->set('otp.p0a.step_up.bind_to_sanctum_token', true);
-    config()->set('otp.p0a.step_up.bind_to_purpose', true);
-    config()->set('otp.p0a.step_up.bind_to_resource', true);
-    config()->set('otp.p0a.secure_links.ttl_minutes', 5);
-    config()->set('otp.p0a.secure_links.max_opens', 1);
+    enableResultsSecureLinks();
 }
 
 function disableAkubicaSecureLinksResultsFlags(): void
 {
-    config()->set('otp.p0a.flags.secure_links_results_enabled', false);
-    config()->set('otp.p0a.flags.step_up_results_enabled', false);
+    disableAllAkubicaOtpFeatures();
 }
 
 /**

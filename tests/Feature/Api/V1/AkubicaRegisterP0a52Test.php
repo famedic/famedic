@@ -14,7 +14,7 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 beforeEach(function () {
     Notification::fake();
-    config()->set('otp.p0a.flags.akubica_register_enabled', false);
+    disableAllAkubicaOtpFeatures();
 });
 
 test('p0a52 flags off keep legacy register contract including 409 enumeration', function () {

@@ -22,28 +22,17 @@ use Tests\Support\Otp\FakeOtpCodeGenerator;
 
 function p0a57cEnableSecureRegister(): void
 {
-    config()->set('otp.p0a.flags.akubica_register_enabled', true);
-    config()->set('otp.p0a.flags.infrastructure_enabled', true);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', true);
+    enableRegisterOtpWithoutDelivery();
 }
 
 function p0a57cEnableDelivery(): void
 {
-    config()->set('otp.p0a.registration.delivery_enabled', true);
-    config()->set('otp.p0a.flags.sms_delivery_enabled', true);
-    config()->set('otp.p0a.delivery.driver', 'fake');
-    app(FakeOtpDeliveryProvider::class)->alwaysAccept();
+    enableRegisterOtpWithFakeDelivery();
 }
 
 beforeEach(function () {
     Notification::fake();
-    config()->set('otp.p0a.flags.akubica_register_enabled', false);
-    config()->set('otp.p0a.flags.infrastructure_enabled', false);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', false);
-    config()->set('otp.p0a.registration.delivery_enabled', false);
-    config()->set('otp.p0a.flags.sms_delivery_enabled', false);
-    config()->set('otp.p0a.flags.email_fallback_enabled', false);
-    config()->set('otp.p0a.delivery.driver', 'null');
+    disableAllAkubicaOtpFeatures();
     app(FakeOtpDeliveryProvider::class)->alwaysAccept();
 });
 

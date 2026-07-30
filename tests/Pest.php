@@ -25,6 +25,19 @@ uses(TestCase::class, RefreshDatabase::class)->in('Feature');
 
 uses(TestCase::class)->in('Unit');
 
+require_once __DIR__.'/Support/Otp/akubica_otp_testing_helpers.php';
+
+/*
+|--------------------------------------------------------------------------
+| P0-T1 — Reset Akubica OTP flags before each API V1 feature test
+|--------------------------------------------------------------------------
+| phpunit.xml already forces legacy-safe env defaults. This beforeEach also
+| clears in-process config()->set leaks between suites in the same process.
+*/
+uses()->beforeEach(function () {
+    disableAllAkubicaOtpFeatures();
+})->in('Feature/Api/V1');
+
 /*
 |--------------------------------------------------------------------------
 | Expectations

@@ -20,9 +20,7 @@ use Tests\Support\Otp\FakeOtpCodeGenerator;
 
 function p0a55EnableSecureRegister(): void
 {
-    config()->set('otp.p0a.flags.akubica_register_enabled', true);
-    config()->set('otp.p0a.flags.infrastructure_enabled', true);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', true);
+    enableRegisterOtpWithoutDelivery();
 }
 
 /**
@@ -47,9 +45,7 @@ function p0a55RequestRegister(string $email, string $phone, string $code = '1234
 
 beforeEach(function () {
     Notification::fake();
-    config()->set('otp.p0a.flags.akubica_register_enabled', false);
-    config()->set('otp.p0a.flags.infrastructure_enabled', false);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', false);
+    disableAllAkubicaOtpFeatures();
 });
 
 // ── A. Feature gating ──────────────────────────────────────────────────

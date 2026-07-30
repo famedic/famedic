@@ -14,26 +14,12 @@ use Tests\Support\Otp\FakeOtpCodeGenerator;
 
 function enableAkubicaStepUpResultsFlags(): void
 {
-    config()->set('otp.p0a.flags.step_up_results_enabled', true);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', true);
-    config()->set('otp.p0a.flags.sms_delivery_enabled', true);
-    config()->set('otp.p0a.flags.email_fallback_enabled', false);
-    config()->set('otp.p0a.delivery.driver', 'fake');
-    config()->set('otp.p0a.policy.require_verified_phone', true);
-    config()->set('otp.p0a.step_up.grant_ttl_minutes', 10);
-    config()->set('otp.p0a.step_up.bind_to_sanctum_token', true);
-    config()->set('otp.p0a.step_up.bind_to_purpose', true);
-    config()->set('otp.p0a.step_up.bind_to_resource', true);
-    app(FakeOtpDeliveryProvider::class)->alwaysAccept();
-    app(FakeOtpDeliveryProvider::class)->sent = [];
+    enableResultsStepUpWithFakeDelivery();
 }
 
 function disableAkubicaStepUpResultsFlags(): void
 {
-    config()->set('otp.p0a.flags.step_up_results_enabled', false);
-    config()->set('otp.p0a.flags.anti_abuse_enabled', false);
-    config()->set('otp.p0a.flags.sms_delivery_enabled', false);
-    config()->set('otp.p0a.delivery.driver', 'null');
+    disableAllAkubicaOtpFeatures();
 }
 
 /**
