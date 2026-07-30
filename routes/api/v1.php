@@ -11,7 +11,9 @@ use App\Http\Controllers\Api\V1\LaboratoryAppointmentController;
 use App\Http\Controllers\Api\V1\OrderDocumentDownloadController;
 use App\Http\Controllers\Api\V1\OrderInvoiceRequestController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\OrderResultsSecureLinkController;
 use App\Http\Controllers\Api\V1\OrderResultsStepUpController;
+use App\Http\Controllers\Api\V1\SecureDownloadController;
 use App\Http\Controllers\Api\V1\UserAddressController;
 use App\Http\Controllers\Api\V1\UserContactController;
 use App\Http\Controllers\Api\V1\UserController;
@@ -60,6 +62,12 @@ Route::middleware(['force.json', 'api.token.guard'])->name('api.v1.')->group(fun
         Route::delete('auth/token', [TokenController::class, 'destroy'])
             ->name('auth.token.revoke');
     });
+
+    // ── Secure downloads (opaque token; no Bearer) ────────────────────────
+    Route::get('secure-downloads/{token}', [SecureDownloadController::class, 'show'])
+        ->where('token', '[A-Fa-f0-9]{64}')
+        ->middleware('throttle:60,1')
+        ->name('secure-downloads.show');
 
     // ── Catálogo laboratorio (público, sin Bearer token) ─────────────────
     Route::prefix('catalog')->name('catalog.')->group(function () {
@@ -124,6 +132,9 @@ Route::middleware(['force.json', 'api.token.guard'])->name('api.v1.')->group(fun
             Route::post('{order_id}/results/step-up/verify', [OrderResultsStepUpController::class, 'verify'])
                 ->middleware('throttle:akubica-otp')
                 ->name('results.step-up.verify');
+            Route::post('{order_id}/results/secure-link', [OrderResultsSecureLinkController::class, 'store'])
+                ->middleware('throttle:60,1')
+                ->name('results.secure-link');
 
             Route::get('{order_id}/invoice-request/status', [OrderInvoiceRequestController::class, 'status'])
                 ->name('invoice-request.status');

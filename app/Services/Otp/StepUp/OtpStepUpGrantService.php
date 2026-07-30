@@ -5,6 +5,7 @@ namespace App\Services\Otp\StepUp;
 use App\Enums\P0aOtpPurpose;
 use App\Exceptions\Otp\OtpConfigurationException;
 use App\Models\OtpChallenge;
+use App\Models\OtpSecureDownloadLink;
 use App\Models\OtpStepUpGrant;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -195,6 +196,12 @@ class OtpStepUpGrantService
         if ($grant->revoked_at === null) {
             $grant->update(['revoked_at' => now()]);
         }
+
+        // Explicit grant revoke also revokes issued secure links (P0-B2 policy).
+        OtpSecureDownloadLink::query()
+            ->where('otp_step_up_grant_id', $grant->id)
+            ->whereNull('revoked_at')
+            ->update(['revoked_at' => now()]);
     }
 
     public function revokeByPublicId(string $publicId): bool

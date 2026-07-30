@@ -127,6 +127,15 @@ return [
                 'OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED',
                 false
             ),
+
+            /**
+             * Emit/consume opaque secure download links for results (P0-B2).
+             * Independent of step_up_bearer_downloads_enabled (Bearer stays ungated).
+             */
+            'secure_links_results_enabled' => $otpEnvBool(
+                'OTP_P0A_SECURE_LINKS_RESULTS_ENABLED',
+                false
+            ),
         ],
 
         /*
@@ -185,8 +194,14 @@ return [
 
         /*
         |--------------------------------------------------------------------------
-        | Secure links contract (DEC-007) — prepare only; implement later
+        | Secure links (DEC-007 / P0-B2) — otp_secure_download_links
         |--------------------------------------------------------------------------
+        |
+        | Code defaults remain TTL=60 / max_opens=5 for backward compatibility.
+        | Staging P0-B2 target: OTP_P0A_SECURE_LINK_TTL_MINUTES=5 and
+        | OTP_P0A_SECURE_LINK_MAX_OPENS=1 (set explicitly in environment).
+        | Gate emission/download with flags.secure_links_results_enabled.
+        |
         */
 
         'secure_links' => [

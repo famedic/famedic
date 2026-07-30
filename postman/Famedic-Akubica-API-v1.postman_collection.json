@@ -155,6 +155,26 @@
       "key": "unknown_login_phone",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "results_step_up_challenge_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "results_step_up_grant_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "results_secure_download_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "results_correct_otp",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -2151,6 +2171,205 @@
         }
       ],
       "description": "## Descargas Bearer-native (PDF)\n\nDescarga de PDF de resultados/facturas. **No** exigir Content-Type JSON ni parseo JSON.\n\n**Prereq:** `access_token`, `order_id`, `invoice_id` (factura).\nTests: status 200/401/404 o Content-Type pdf; skip parse JSON."
+    },
+    {
+      "name": "18 - Resultados step-up y secure links",
+      "description": "## P0-B2 Resultados: step-up OTP + secure link\n\nOrden: 18.1 → 18.6. Requiere flags STEP_UP_RESULTS + SECURE_LINKS_RESULTS + ANTI_ABUSE + SMS.\n\n**Vars:** `order_id` (pedido propio con resultados), `results_correct_otp` (manual), `results_step_up_challenge_id`, `results_step_up_grant_id`, `results_secure_download_url`.\n\nNo commitear OTP, URL real ni token opaco. Production: vars vacías; no ejecutar escritura sin autorización (sin guard técnico runtime).",
+      "item": [
+        {
+          "name": "18.1 - Solicitar step-up OTP resultados",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "if (pm.response.code === 202) {",
+                  "  const json = pm.response.json();",
+                  "  pm.test('purpose step_up_results', function () { pm.expect(json?.data?.purpose).to.eql('step_up_results'); });",
+                  "  if (json?.data?.challenge_id) { pm.environment.set('results_step_up_challenge_id', json.data.challenge_id); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/orders/{{order_id}}/results/step-up/request",
+            "description": "Step-up SMS. Completar results_correct_otp manualmente tras SMS."
+          }
+        },
+        {
+          "name": "18.2 - Verificar step-up OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.test('grant metadata', function () {",
+                  "    pm.expect(json?.data?.grant_id).to.be.a('string');",
+                  "    pm.expect(json?.data?.purpose).to.eql('step_up_results');",
+                  "  });",
+                  "  if (json?.data?.grant_id) { pm.environment.set('results_step_up_grant_id', json.data.grant_id); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{results_step_up_challenge_id}}\",\n  \"code\": \"{{results_correct_otp}}\"\n}\n",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/orders/{{order_id}}/results/step-up/verify",
+            "description": "OTP correcto → grant_id. No URL de descarga."
+          }
+        },
+        {
+          "name": "18.3 - Generar secure link",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.test('secure link fields', function () {",
+                  "    pm.expect(json?.data?.url).to.be.a('string');",
+                  "    pm.expect(json?.data?.max_opens).to.be.a('number');",
+                  "  });",
+                  "  pm.test('No token_hash in body', function () {",
+                  "    pm.expect(pm.response.text()).to.not.match(/token_hash/i);",
+                  "  });",
+                  "  if (json?.data?.url) { pm.environment.set('results_secure_download_url', json.data.url); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_id\": \"{{results_step_up_grant_id}}\"\n}\n",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/orders/{{order_id}}/results/secure-link",
+            "description": "Emite liga opaca. Guardar URL solo en environment local (no commitear)."
+          }
+        },
+        {
+          "name": "18.4 - Abrir secure link (sin Bearer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+                  "pm.test('Not 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('PDF content type', function () {",
+                  "    pm.expect(ct.includes('pdf') || ct.includes('octet-stream')).to.be.true;",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/pdf" }
+            ],
+            "url": "{{results_secure_download_url}}",
+            "auth": { "type": "noauth" },
+            "description": "Descarga pública con token opaco en URL. Sin Authorization."
+          }
+        },
+        {
+          "name": "18.5 - Reabrir liga consumida",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Consumed/exhausted → 410', function () {",
+                  "  pm.expect([410, 404, 503]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 410) {",
+                  "  const json = pm.response.json();",
+                  "  pm.test('SECURE_LINK_CONSUMED or EXPIRED', function () {",
+                  "    pm.expect(['SECURE_LINK_CONSUMED', 'SECURE_LINK_EXPIRED', 'SECURE_LINK_REVOKED']).to.include(json?.error?.code);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": "{{results_secure_download_url}}",
+            "auth": { "type": "noauth" },
+            "description": "Con max_opens=1 espera 410 SECURE_LINK_CONSUMED."
+          }
+        },
+        {
+          "name": "18.6 - Liga expirada (documentado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Documented expiry check: 410/404/503 acceptable', function () {",
+                  "  pm.expect([410, 404, 503, 200]).to.include(pm.response.code);",
+                  "});",
+                  "// Manual: wait TTL minutes or expire row in staging DB before running."
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": "{{results_secure_download_url}}",
+            "auth": { "type": "noauth" },
+            "description": "Tras TTL (staging target 5 min) espera 410 SECURE_LINK_EXPIRED. Ejecutar manualmente."
+          }
+        }
+      ]
     },
     {
       "name": "17 - Features desactivadas",

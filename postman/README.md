@@ -70,6 +70,13 @@ Requiere flags: `OTP_P0A_AKUBICA_LOGIN_ENABLED`, `OTP_P0A_ANTI_ABUSE_ENABLED`, `
 
 Si login P0-A está **off**: el mismo endpoint acepta body legacy `{ "email" }` y `resend-code` responde `503 FEATURE_DISABLED`.
 
+## Variables QA — Secure links / resultados (carpeta 18)
+
+- `results_step_up_challenge_id` — challenge id del step-up (se llena en el flujo 18)
+- `results_step_up_grant_id` — grant id tras OTP step-up correcto
+- `results_secure_download_url` — URL de descarga segura (secret; nunca commitear)
+- `results_correct_otp` — OTP del SMS step-up (secret; manual; nunca desde BD/logs)
+
 ## Seguridad
 
 - No PII real en git; secrets vacíos en environments trackeados

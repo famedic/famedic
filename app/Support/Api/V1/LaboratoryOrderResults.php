@@ -75,6 +75,7 @@ class LaboratoryOrderResults
                 'type' => 'bearer',
                 'url' => $downloadSupport->resultBearerDownloadUrl($purchase),
             ];
+            self::appendSecureAccessMetadata($payload);
 
             return $payload;
         }
@@ -101,8 +102,25 @@ class LaboratoryOrderResults
         $payload['has_pdf'] = $resultEntry['has_pdf'];
         $payload['download_url'] = $resultEntry['download_url'];
         $payload['download'] = $resultEntry['download'];
+        self::appendSecureAccessMetadata($payload);
 
         return $payload;
+    }
+
+    /**
+     * Additive metadata when P0-B flags are ON. Does not remove download.url / download_url.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private static function appendSecureAccessMetadata(array &$payload): void
+    {
+        if ((bool) config('otp.p0a.flags.step_up_results_enabled', false)) {
+            $payload['requires_step_up'] = true;
+        }
+
+        if ((bool) config('otp.p0a.flags.secure_links_results_enabled', false)) {
+            $payload['secure_link_supported'] = true;
+        }
     }
 
     public static function latestResultsNotification(LaboratoryPurchase $purchase): ?LaboratoryNotification
