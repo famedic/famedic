@@ -3,7 +3,7 @@
 Colección y environments para la API Akubica (`/api/v1`).
 
 - **Rama:** `feature/apis-akubica`
-- **Actualizado:** 2026-07-29
+- **Actualizado:** 2026-07-30
 - **Schemas:** Collection v2.1.0 · Environment v2.1.0
 
 ## Importar en Postman
@@ -76,6 +76,15 @@ Si login P0-A está **off**: el mismo endpoint acepta body legacy `{ "email" }` 
 - `results_step_up_grant_id` — grant id tras OTP step-up correcto
 - `results_secure_download_url` — URL de descarga segura (secret; nunca commitear)
 - `results_correct_otp` — OTP del SMS step-up (secret; manual; nunca desde BD/logs)
+
+## Variables QA — Secure links / facturas (carpeta 19)
+
+- `invoice_order_id` — pedido propio con factura
+- `invoice_id` — id de factura del pedido
+- `invoice_step_up_challenge_id` — challenge id del step-up (se llena en el flujo 19)
+- `invoice_step_up_grant_id` — grant id tras OTP step-up correcto
+- `invoice_secure_download_url` — URL de descarga segura (secret; nunca commitear)
+- `invoice_correct_otp` — OTP del SMS step-up (secret; manual; nunca desde BD/logs)
 
 ## Seguridad
 

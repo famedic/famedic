@@ -42,6 +42,14 @@ class OrderInvoiceResource extends JsonResource
                 'url' => app(OrderDocumentDownloadSupport::class)
                     ->invoiceBearerDownloadUrl($this->order, $this->invoice),
             ];
+
+            // Additive P0-B metadata. Legacy download.url / download_url remain until a later deprecation phase.
+            if ((bool) config('otp.p0a.flags.step_up_invoices_enabled', false)) {
+                $data['requires_step_up'] = true;
+            }
+            if ((bool) config('otp.p0a.flags.secure_links_invoices_enabled', false)) {
+                $data['secure_link_supported'] = true;
+            }
         }
 
         if ($this->includeOrderStudyName) {

@@ -19,6 +19,7 @@ function otpP0aReloadConfig(array $overrides = []): void
         'OTP_P0A_STEP_UP_INVOICES_ENABLED',
         'OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED',
         'OTP_P0A_SECURE_LINKS_RESULTS_ENABLED',
+        'OTP_P0A_SECURE_LINKS_INVOICES_ENABLED',
         'OTP_P0A_TTL_MINUTES',
         'OTP_P0A_REGISTER_TTL_MINUTES',
         'OTP_P0A_LENGTH',
@@ -90,7 +91,8 @@ test('p0a breaking feature flags are disabled by default', function () {
         ->and(config('otp.p0a.flags.step_up_results_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.step_up_invoices_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.step_up_bearer_downloads_enabled'))->toBeFalse()
-        ->and(config('otp.p0a.flags.secure_links_results_enabled'))->toBeFalse();
+        ->and(config('otp.p0a.flags.secure_links_results_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.flags.secure_links_invoices_enabled'))->toBeFalse();
 });
 
 test('p0a target policy values are available with approved defaults', function () {
@@ -194,7 +196,8 @@ test('step-up grant ttl defaults to 10 minutes without enabling step-up', functi
         ->and(config('otp.p0a.flags.step_up_results_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.step_up_invoices_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.step_up_bearer_downloads_enabled'))->toBeFalse()
-        ->and(config('otp.p0a.flags.secure_links_results_enabled'))->toBeFalse();
+        ->and(config('otp.p0a.flags.secure_links_results_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.flags.secure_links_invoices_enabled'))->toBeFalse();
 });
 
 test('legacy otp and akubica defaults remain unchanged for current flows', function () {
@@ -208,7 +211,8 @@ test('legacy otp and akubica defaults remain unchanged for current flows', funct
 test('secure link contract defaults are prepared for DEC-007', function () {
     expect(config('otp.p0a.secure_links.ttl_minutes'))->toBe(60)
         ->and(config('otp.p0a.secure_links.max_opens'))->toBe(5)
-        ->and(config('otp.p0a.flags.secure_links_results_enabled'))->toBeFalse();
+        ->and(config('otp.p0a.flags.secure_links_results_enabled'))->toBeFalse()
+        ->and(config('otp.p0a.flags.secure_links_invoices_enabled'))->toBeFalse();
 });
 
 test('p0a3 anti-abuse config defaults are safe and flag stays off', function () {

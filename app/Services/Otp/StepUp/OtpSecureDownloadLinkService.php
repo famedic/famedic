@@ -5,6 +5,7 @@ namespace App\Services\Otp\StepUp;
 use App\Enums\P0aOtpPurpose;
 use App\Exceptions\Otp\SecureDownloadLinkException;
 use App\Models\Customer;
+use App\Models\Invoice;
 use App\Models\LaboratoryPurchase;
 use App\Models\OtpSecureDownloadLink;
 use App\Models\OtpStepUpGrant;
@@ -16,15 +17,14 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
- * P0-B2 — Opaque secure download links for laboratory results PDFs.
+ * P0-B2/B3 — Opaque secure download links for results and invoice PDFs.
  *
- * Grant policy:
- * - Issue requires an active (non-expired, non-revoked) step_up_results grant.
+ * Grant policy (shared):
+ * - Issue requires an active grant for the matching purpose/resource.
  * - Download requires the related grant is not explicitly revoked.
- * - Grant TTL expiry after issue does NOT invalidate an already-issued link
- *   (link has its own expires_at).
+ * - Grant TTL expiry after issue does NOT invalidate an already-issued link.
  * - Explicit grant revoke stamps revoked_at on issued links.
- * - Logout / PAT delete does NOT auto-revoke issued links (short TTL risk documented).
+ * - Logout / PAT delete does NOT auto-revoke issued links (short TTL risk).
  */
 class OtpSecureDownloadLinkService
 {
@@ -37,6 +37,11 @@ class OtpSecureDownloadLinkService
     public static function isResultsEnabled(): bool
     {
         return (bool) config('otp.p0a.flags.secure_links_results_enabled', false);
+    }
+
+    public static function isInvoicesEnabled(): bool
+    {
+        return (bool) config('otp.p0a.flags.secure_links_invoices_enabled', false);
     }
 
     public function ttlMinutes(): int
@@ -52,6 +57,11 @@ class OtpSecureDownloadLinkService
     public function findOwnedOrder(Customer $customer, int $orderId): ?LaboratoryPurchase
     {
         return $this->downloadSupport->findCustomerOrder($customer, $orderId);
+    }
+
+    public function findOwnedInvoice(LaboratoryPurchase $order, int $invoiceId): ?Invoice
+    {
+        return $this->downloadSupport->findOwnedInvoice($order, $invoiceId);
     }
 
     /**
@@ -77,7 +87,7 @@ class OtpSecureDownloadLinkService
         $resourceType = OtpStepUpGrant::RESOURCE_LABORATORY_PURCHASE;
         $resourceId = (int) $order->id;
 
-        $grant = $this->grantService->findValid(
+        $grant = $this->requireValidGrant(
             $grantPublicId,
             (int) $user->id,
             $purpose,
@@ -85,14 +95,6 @@ class OtpSecureDownloadLinkService
             $resourceId,
             $personalAccessTokenId,
         );
-
-        if ($grant === null) {
-            throw new SecureDownloadLinkException(
-                'El grant de step-up no es valido.',
-                'STEP_UP_GRANT_INVALID',
-                422,
-            );
-        }
 
         if (! LaboratoryOrderStatus::hasResults($order)) {
             throw new SecureDownloadLinkException(
@@ -111,6 +113,173 @@ class OtpSecureDownloadLinkService
             );
         }
 
+        return $this->persistLink($user, $grant, $purpose, $resourceType, $resourceId, $personalAccessTokenId);
+    }
+
+    /**
+     * @return array{url: string, expires_at: string, max_opens: int}
+     *
+     * @throws SecureDownloadLinkException
+     */
+    public function issueInvoicesLink(
+        User $user,
+        LaboratoryPurchase $order,
+        Invoice $invoice,
+        string $grantPublicId,
+        ?int $personalAccessTokenId,
+    ): array {
+        if (! self::isInvoicesEnabled()) {
+            throw new SecureDownloadLinkException(
+                'Las ligas seguras de facturas no estan habilitadas.',
+                'FEATURE_DISABLED',
+                503,
+            );
+        }
+
+        $purpose = P0aOtpPurpose::StepUpInvoices->value;
+        $resourceType = OtpStepUpGrant::RESOURCE_INVOICE;
+        $resourceId = (int) $invoice->id;
+
+        $grant = $this->requireValidGrant(
+            $grantPublicId,
+            (int) $user->id,
+            $purpose,
+            $resourceType,
+            $resourceId,
+            $personalAccessTokenId,
+        );
+
+        $resolved = $this->downloadSupport->resolveInvoicePdf($order, $resourceId);
+        if (isset($resolved['error'])) {
+            $code = $resolved['error'] === 'INVOICE_NOT_FOUND'
+                ? 'INVOICE_NOT_FOUND'
+                : 'INVOICE_NOT_READY';
+            $status = $code === 'INVOICE_NOT_FOUND' ? 404 : 409;
+
+            throw new SecureDownloadLinkException(
+                $code === 'INVOICE_NOT_FOUND'
+                    ? 'Factura no encontrada.'
+                    : 'La factura aun no esta disponible.',
+                $code,
+                $status,
+            );
+        }
+
+        return $this->persistLink($user, $grant, $purpose, $resourceType, $resourceId, $personalAccessTokenId);
+    }
+
+    /**
+     * @return array{content: string, filename: string}
+     *
+     * @throws SecureDownloadLinkException
+     */
+    public function consumeAndResolvePdf(string $plainToken): array
+    {
+        if (! self::isResultsEnabled() && ! self::isInvoicesEnabled()) {
+            throw new SecureDownloadLinkException(
+                'Las ligas seguras no estan habilitadas.',
+                'FEATURE_DISABLED',
+                503,
+            );
+        }
+
+        $tokenHash = $this->hashToken($plainToken);
+        $link = OtpSecureDownloadLink::query()->where('token_hash', $tokenHash)->first();
+
+        if ($link === null) {
+            throw new SecureDownloadLinkException(
+                'Liga segura no encontrada.',
+                'SECURE_LINK_NOT_FOUND',
+                404,
+            );
+        }
+
+        $this->assertPurposeEnabled($link);
+        $this->assertLinkUsable($link);
+
+        try {
+            $resolved = $this->resolvePdfForLink($link);
+        } catch (SecureDownloadLinkException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::warning('otp_secure_link_storage_failed', [
+                'public_id' => $link->public_id,
+                'error_class' => $e::class,
+            ]);
+
+            throw new SecureDownloadLinkException(
+                'El documento no esta disponible temporalmente.',
+                'DOCUMENT_STORAGE_UNAVAILABLE',
+                503,
+            );
+        }
+
+        if (isset($resolved['error'])) {
+            throw new SecureDownloadLinkException(
+                $this->notReadyMessage($link),
+                $this->notReadyCode($link),
+                409,
+            );
+        }
+
+        $this->consumeOpenAtomically((int) $link->id);
+
+        return [
+            'content' => $resolved['content'],
+            'filename' => $resolved['filename'],
+        ];
+    }
+
+    public function revokeForGrant(OtpStepUpGrant $grant): int
+    {
+        return OtpSecureDownloadLink::query()
+            ->where('otp_step_up_grant_id', $grant->id)
+            ->whereNull('revoked_at')
+            ->update(['revoked_at' => now()]);
+    }
+
+    /**
+     * @throws SecureDownloadLinkException
+     */
+    private function requireValidGrant(
+        string $grantPublicId,
+        int $userId,
+        string $purpose,
+        string $resourceType,
+        int $resourceId,
+        ?int $personalAccessTokenId,
+    ): OtpStepUpGrant {
+        $grant = $this->grantService->findValid(
+            $grantPublicId,
+            $userId,
+            $purpose,
+            $resourceType,
+            $resourceId,
+            $personalAccessTokenId,
+        );
+
+        if ($grant === null) {
+            throw new SecureDownloadLinkException(
+                'El grant de step-up no es valido.',
+                'STEP_UP_GRANT_INVALID',
+                422,
+            );
+        }
+
+        return $grant;
+    }
+
+    /**
+     * @return array{url: string, expires_at: string, max_opens: int}
+     */
+    private function persistLink(
+        User $user,
+        OtpStepUpGrant $grant,
+        string $purpose,
+        string $resourceType,
+        int $resourceId,
+        ?int $personalAccessTokenId,
+    ): array {
         $plainToken = $this->generateOpaqueToken();
         $tokenHash = $this->hashToken($plainToken);
         $now = now();
@@ -149,90 +318,90 @@ class OtpSecureDownloadLinkService
     }
 
     /**
-     * Resolve PDF and atomically consume one open. PDF is resolved before consume
-     * so RESULT_NOT_READY / storage failures do not burn the link.
-     *
-     * @return array{content: string, filename: string}
+     * @return array{content: string, filename: string}|array{error: string}
      *
      * @throws SecureDownloadLinkException
      */
-    public function consumeAndResolvePdf(string $plainToken): array
+    private function resolvePdfForLink(OtpSecureDownloadLink $link): array
     {
-        if (! self::isResultsEnabled()) {
+        if ($link->purpose === P0aOtpPurpose::StepUpResults->value
+            && $link->resource_type === OtpStepUpGrant::RESOURCE_LABORATORY_PURCHASE
+        ) {
+            $order = LaboratoryPurchase::query()
+                ->withTrashed()
+                ->find((int) $link->resource_id);
+
+            if ($order === null) {
+                return ['error' => 'RESULT_NOT_READY'];
+            }
+
+            return $this->downloadSupport->resolveResultPdf($order);
+        }
+
+        if ($link->purpose === P0aOtpPurpose::StepUpInvoices->value
+            && $link->resource_type === OtpStepUpGrant::RESOURCE_INVOICE
+        ) {
+            $invoice = Invoice::query()
+                ->withTrashed()
+                ->find((int) $link->resource_id);
+
+            if ($invoice === null
+                || $invoice->invoiceable_type !== LaboratoryPurchase::class
+            ) {
+                return ['error' => 'INVOICE_NOT_READY'];
+            }
+
+            $order = LaboratoryPurchase::query()
+                ->withTrashed()
+                ->find((int) $invoice->invoiceable_id);
+
+            if ($order === null) {
+                return ['error' => 'INVOICE_NOT_READY'];
+            }
+
+            return $this->downloadSupport->resolveInvoicePdf($order, (int) $invoice->id);
+        }
+
+        // Unknown purpose/resource pairing — do not leak document type.
+        throw new SecureDownloadLinkException(
+            'Liga segura no encontrada.',
+            'SECURE_LINK_NOT_FOUND',
+            404,
+        );
+    }
+
+    /**
+     * @throws SecureDownloadLinkException
+     */
+    private function assertPurposeEnabled(OtpSecureDownloadLink $link): void
+    {
+        $enabled = match ($link->purpose) {
+            P0aOtpPurpose::StepUpResults->value => self::isResultsEnabled(),
+            P0aOtpPurpose::StepUpInvoices->value => self::isInvoicesEnabled(),
+            default => false,
+        };
+
+        if (! $enabled) {
             throw new SecureDownloadLinkException(
-                'Las ligas seguras de resultados no estan habilitadas.',
+                'Las ligas seguras no estan habilitadas.',
                 'FEATURE_DISABLED',
                 503,
             );
         }
-
-        $tokenHash = $this->hashToken($plainToken);
-        $link = OtpSecureDownloadLink::query()->where('token_hash', $tokenHash)->first();
-
-        if ($link === null) {
-            throw new SecureDownloadLinkException(
-                'Liga segura no encontrada.',
-                'SECURE_LINK_NOT_FOUND',
-                404,
-            );
-        }
-
-        $this->assertLinkUsable($link);
-
-        $order = LaboratoryPurchase::query()
-            ->withTrashed()
-            ->find((int) $link->resource_id);
-
-        if ($order === null
-            || $link->resource_type !== OtpStepUpGrant::RESOURCE_LABORATORY_PURCHASE
-        ) {
-            throw new SecureDownloadLinkException(
-                'El resultado aun no esta disponible.',
-                'RESULT_NOT_READY',
-                409,
-            );
-        }
-
-        try {
-            $resolved = $this->downloadSupport->resolveResultPdf($order);
-        } catch (\Throwable $e) {
-            Log::warning('otp_secure_link_storage_failed', [
-                'public_id' => $link->public_id,
-                'error_class' => $e::class,
-            ]);
-
-            throw new SecureDownloadLinkException(
-                'El documento no esta disponible temporalmente.',
-                'DOCUMENT_STORAGE_UNAVAILABLE',
-                503,
-            );
-        }
-
-        if (isset($resolved['error'])) {
-            throw new SecureDownloadLinkException(
-                'El resultado aun no esta disponible.',
-                'RESULT_NOT_READY',
-                409,
-            );
-        }
-
-        // Atomic consume after bytes are in memory (response() streams from memory).
-        // If the HTTP client disconnects mid-transfer, the open is already counted —
-        // acceptable for short TTL / max_opens staging target.
-        $this->consumeOpenAtomically((int) $link->id);
-
-        return [
-            'content' => $resolved['content'],
-            'filename' => $resolved['filename'],
-        ];
     }
 
-    public function revokeForGrant(OtpStepUpGrant $grant): int
+    private function notReadyCode(OtpSecureDownloadLink $link): string
     {
-        return OtpSecureDownloadLink::query()
-            ->where('otp_step_up_grant_id', $grant->id)
-            ->whereNull('revoked_at')
-            ->update(['revoked_at' => now()]);
+        return $link->purpose === P0aOtpPurpose::StepUpInvoices->value
+            ? 'INVOICE_NOT_READY'
+            : 'RESULT_NOT_READY';
+    }
+
+    private function notReadyMessage(OtpSecureDownloadLink $link): string
+    {
+        return $link->purpose === P0aOtpPurpose::StepUpInvoices->value
+            ? 'La factura aun no esta disponible.'
+            : 'El resultado aun no esta disponible.';
     }
 
     /**

@@ -23,6 +23,22 @@ class OrderDocumentDownloadSupport
             ->find($orderId);
     }
 
+    public function findOwnedInvoice(LaboratoryPurchase $order, int $invoiceId): ?Invoice
+    {
+        $invoice = Invoice::query()
+            ->withTrashed()
+            ->find($invoiceId);
+
+        if ($invoice === null
+            || $invoice->invoiceable_type !== LaboratoryPurchase::class
+            || (int) $invoice->invoiceable_id !== (int) $order->id
+        ) {
+            return null;
+        }
+
+        return $invoice;
+    }
+
     public function resultBearerDownloadUrl(LaboratoryPurchase $order): string
     {
         return route('api.v1.orders.results.download', [

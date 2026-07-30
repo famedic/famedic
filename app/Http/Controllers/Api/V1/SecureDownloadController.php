@@ -20,14 +20,6 @@ class SecureDownloadController extends Controller
 
     public function show(string $token): Response|JsonResponse
     {
-        if (! OtpSecureDownloadLinkService::isResultsEnabled()) {
-            return ApiResponse::error(
-                'FEATURE_DISABLED',
-                'Las ligas seguras de resultados no estan habilitadas.',
-                503,
-            );
-        }
-
         try {
             $resolved = $this->secureLinkService->consumeAndResolvePdf($token);
         } catch (SecureDownloadLinkException $e) {

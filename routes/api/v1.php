@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\V1\LaboratoryAppointmentController;
 use App\Http\Controllers\Api\V1\OrderDocumentDownloadController;
 use App\Http\Controllers\Api\V1\OrderInvoiceRequestController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\OrderInvoicesSecureLinkController;
+use App\Http\Controllers\Api\V1\OrderInvoicesStepUpController;
 use App\Http\Controllers\Api\V1\OrderResultsSecureLinkController;
 use App\Http\Controllers\Api\V1\OrderResultsStepUpController;
 use App\Http\Controllers\Api\V1\SecureDownloadController;
@@ -125,6 +127,16 @@ Route::middleware(['force.json', 'api.token.guard'])->name('api.v1.')->group(fun
                 ->name('results.download');
             Route::get('{order_id}/invoices/{invoice_id}/download', [OrderDocumentDownloadController::class, 'downloadInvoice'])
                 ->name('invoices.download');
+
+            Route::post('{order_id}/invoices/{invoice_id}/step-up/request', [OrderInvoicesStepUpController::class, 'request'])
+                ->middleware('throttle:akubica-otp')
+                ->name('invoices.step-up.request');
+            Route::post('{order_id}/invoices/{invoice_id}/step-up/verify', [OrderInvoicesStepUpController::class, 'verify'])
+                ->middleware('throttle:akubica-otp')
+                ->name('invoices.step-up.verify');
+            Route::post('{order_id}/invoices/{invoice_id}/secure-link', [OrderInvoicesSecureLinkController::class, 'store'])
+                ->middleware('throttle:60,1')
+                ->name('invoices.secure-link');
 
             Route::post('{order_id}/results/step-up/request', [OrderResultsStepUpController::class, 'request'])
                 ->middleware('throttle:akubica-otp')

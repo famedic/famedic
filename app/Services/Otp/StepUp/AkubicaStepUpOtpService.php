@@ -24,13 +24,15 @@ use App\Support\Api\V1\OrderDocumentDownloadSupport;
 use Illuminate\Support\Str;
 
 /**
- * P0-B1 — Step-up OTP for sensitive Akubica resources (results first).
+ * P0-B1/B3 — Step-up OTP for sensitive Akubica resources (results + invoices).
  *
  * Does not gate downloads yet. Issues otp_step_up_grants after SMS verify.
  */
 class AkubicaStepUpOtpService
 {
     public const CONTEXT_TYPE_LABORATORY_PURCHASE = 'laboratory_purchase';
+
+    public const CONTEXT_TYPE_INVOICE = 'invoice';
 
     public function __construct(
         private readonly OtpAbusePolicy $abusePolicy,
@@ -86,9 +88,29 @@ class AkubicaStepUpOtpService
         }
     }
 
+    /**
+     * @throws OtpConfigurationException
+     */
+    public function assertInvoicesConfigurationReady(): void
+    {
+        if (! self::isInvoicesEnabled()) {
+            throw new OtpConfigurationException(
+                'El step-up OTP de facturas no esta habilitado.',
+                'OTP_CONFIGURATION_INVALID',
+            );
+        }
+
+        $this->assertSharedInfrastructureReady();
+    }
+
     public function findOwnedOrder(Customer $customer, int $orderId): ?LaboratoryPurchase
     {
         return $this->orderOwnership->findCustomerOrder($customer, $orderId);
+    }
+
+    public function findOwnedInvoice(LaboratoryPurchase $order, int $invoiceId): ?\App\Models\Invoice
+    {
+        return $this->orderOwnership->findOwnedInvoice($order, $invoiceId);
     }
 
     /**
@@ -155,6 +177,46 @@ class AkubicaStepUpOtpService
             resourceId: $resourceId,
             personalAccessTokenId: $personalAccessTokenId,
             clientIp: $clientIp,
+            metaExtra: [
+                'order_id' => (int) $order->id,
+            ],
+        );
+    }
+
+    /**
+     * Request step-up OTP for an owned invoice (bound to order + invoice).
+     *
+     * @return array<string, mixed>
+     *
+     * @throws OtpDeliveryFailedException
+     * @throws OtpConfigurationException
+     * @throws OtpIdentityNormalizationException
+     */
+    public function requestInvoicesStepUp(
+        User $user,
+        LaboratoryPurchase $order,
+        \App\Models\Invoice $invoice,
+        ?int $personalAccessTokenId,
+        ?string $clientIp,
+    ): array {
+        $this->assertInvoicesConfigurationReady();
+
+        $phone = $this->resolveAuthenticatedPhone($user);
+        $purpose = P0aOtpPurpose::StepUpInvoices;
+        $resourceType = OtpStepUpGrant::RESOURCE_INVOICE;
+        $resourceId = (int) $invoice->id;
+
+        return $this->request(
+            user: $user,
+            phone: $phone,
+            purpose: $purpose,
+            resourceType: $resourceType,
+            resourceId: $resourceId,
+            personalAccessTokenId: $personalAccessTokenId,
+            clientIp: $clientIp,
+            metaExtra: [
+                'order_id' => (int) $order->id,
+            ],
         );
     }
 
@@ -188,6 +250,7 @@ class AkubicaStepUpOtpService
             resourceType: $resourceType,
             resourceId: $resourceId,
             clientIp: $clientIp,
+            expectedOrderId: (int) $order->id,
         );
 
         $grant = $this->grantService->issue(
@@ -203,6 +266,51 @@ class AkubicaStepUpOtpService
     }
 
     /**
+     * @return array{grant_id: string, purpose: string, resource_type: string, resource_id: int, expires_at: string}
+     *
+     * @throws OtpConfigurationException
+     * @throws OtpChallengeMismatchException
+     */
+    public function verifyInvoicesStepUp(
+        User $user,
+        LaboratoryPurchase $order,
+        \App\Models\Invoice $invoice,
+        string $challengePublicId,
+        string $code,
+        ?int $personalAccessTokenId,
+        ?string $clientIp,
+    ): array {
+        $this->assertInvoicesConfigurationReady();
+
+        $purpose = P0aOtpPurpose::StepUpInvoices;
+        $resourceType = OtpStepUpGrant::RESOURCE_INVOICE;
+        $resourceId = (int) $invoice->id;
+
+        $challenge = $this->verifyChallenge(
+            user: $user,
+            challengePublicId: $challengePublicId,
+            code: $code,
+            purpose: $purpose,
+            resourceType: $resourceType,
+            resourceId: $resourceId,
+            clientIp: $clientIp,
+            expectedOrderId: (int) $order->id,
+        );
+
+        $grant = $this->grantService->issue(
+            challenge: $challenge,
+            purpose: $purpose->value,
+            resourceType: $resourceType,
+            resourceId: $resourceId,
+            userId: (int) $user->id,
+            personalAccessTokenId: $personalAccessTokenId,
+        );
+
+        return $this->grantService->toPublicPayload($grant);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metaExtra
      * @return array<string, mixed>
      *
      * @throws OtpDeliveryFailedException
@@ -215,6 +323,7 @@ class AkubicaStepUpOtpService
         int $resourceId,
         ?int $personalAccessTokenId,
         ?string $clientIp,
+        array $metaExtra = [],
     ): array {
         unset($personalAccessTokenId);
 
@@ -235,11 +344,11 @@ class AkubicaStepUpOtpService
             contextType: $resourceType,
             contextId: $resourceId,
             invalidatePreviousActive: true,
-            meta: [
+            meta: array_merge([
                 'flow' => 'step_up',
                 'resource_type' => $resourceType,
                 'resource_id' => $resourceId,
-            ],
+            ], $metaExtra),
             maxAttempts: (int) config('otp.p0a.policy.max_attempts', 5),
         );
 
@@ -268,6 +377,7 @@ class AkubicaStepUpOtpService
         string $resourceType,
         int $resourceId,
         ?string $clientIp,
+        ?int $expectedOrderId = null,
     ): OtpChallenge {
         $challenge = OtpChallenge::query()->where('public_id', $challengePublicId)->first();
         if ($challenge === null) {
@@ -280,6 +390,13 @@ class AkubicaStepUpOtpService
             || (int) $challenge->user_id !== (int) $user->id
         ) {
             throw new OtpChallengeMismatchException;
+        }
+
+        if ($expectedOrderId !== null) {
+            $metaOrderId = data_get($challenge->meta, 'order_id');
+            if ($metaOrderId !== null && (int) $metaOrderId !== $expectedOrderId) {
+                throw new OtpChallengeMismatchException;
+            }
         }
 
         $context = new OtpRequestContext(

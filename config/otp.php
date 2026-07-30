@@ -136,6 +136,15 @@ return [
                 'OTP_P0A_SECURE_LINKS_RESULTS_ENABLED',
                 false
             ),
+
+            /**
+             * Emit/consume opaque secure download links for invoices (P0-B3).
+             * Independent of results secure links and Bearer enforcement.
+             */
+            'secure_links_invoices_enabled' => $otpEnvBool(
+                'OTP_P0A_SECURE_LINKS_INVOICES_ENABLED',
+                false
+            ),
         ],
 
         /*
