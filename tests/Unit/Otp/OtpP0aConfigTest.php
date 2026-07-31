@@ -15,6 +15,8 @@ function otpP0aReloadConfig(array $overrides = []): void
         'OTP_P0A_AKUBICA_LOGIN_ENABLED',
         'OTP_P0A_AKUBICA_REGISTER_ENABLED',
         'OTP_P0A_SANCTUM_3H_ENABLED',
+        'OTP_P0A_SANCTUM_TOKEN_TTL_MINUTES',
+        'OTP_P0A_SANCTUM_TARGET_EXPIRATION_MINUTES',
         'OTP_P0A_STEP_UP_RESULTS_ENABLED',
         'OTP_P0A_STEP_UP_INVOICES_ENABLED',
         'OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED',
@@ -253,6 +255,21 @@ test('p0a3 anti-abuse invalid env values fall back to safe defaults', function (
 test('p0a4 akubica login flag is disabled by default', function () {
     expect(config('otp.p0a.flags.akubica_login_enabled'))->toBeFalse()
         ->and(config('otp.p0a.flags.anti_abuse_enabled'))->toBeFalse();
+});
+
+test('p0c1 sanctum token ttl env prefers TOKEN_TTL over TARGET', function () {
+    otpP0aReloadConfig([
+        'OTP_P0A_SANCTUM_TOKEN_TTL_MINUTES' => '90',
+        'OTP_P0A_SANCTUM_TARGET_EXPIRATION_MINUTES' => '180',
+    ]);
+
+    expect(config('otp.p0a.sanctum.target_expiration_minutes'))->toBe(90);
+
+    otpP0aReloadConfig([
+        'OTP_P0A_SANCTUM_TARGET_EXPIRATION_MINUTES' => '200',
+    ]);
+
+    expect(config('otp.p0a.sanctum.target_expiration_minutes'))->toBe(200);
 });
 
 test('p0a5 akubica register flag and policy defaults are safe', function () {

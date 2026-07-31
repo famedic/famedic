@@ -117,6 +117,12 @@ function enableBearerStepUpMasterEnforcement(): void
     config()->set('otp.p0a.step_up.bind_to_resource', true);
 }
 
+function enableSanctum3hTokenExpiration(?int $ttlMinutes = 180): void
+{
+    config()->set('otp.p0a.flags.sanctum_3h_enabled', true);
+    config()->set('otp.p0a.sanctum.target_expiration_minutes', $ttlMinutes);
+}
+
 function enableLoginOtpWithFakeDelivery(): void
 {
     config()->set('otp.p0a.flags.akubica_login_enabled', true);

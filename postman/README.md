@@ -96,6 +96,11 @@ Carpetas **18** (resultados) y **19** (facturas): tras el flujo step-up/secure-l
 - `invoice_secure_download_url` — URL de descarga segura (secret; nunca commitear)
 - `invoice_correct_otp` — OTP del SMS step-up (secret; manual; nunca desde BD/logs)
 
+
+## P0-C1 — Token Sanctum (expiración)
+
+Con Sanctum 3h ON (`OTP_P0A_SANCTUM_3H_ENABLED`), `expires_in` ≈ **10800** segundos (180 min). Los verify de login/registro guardan `akubica_token_expires_at` / `akubica_token_expires_in` si vienen en la respuesta. **No hay refresh token**: al expirar, repetir el flujo de login OTP.
+
 ## Seguridad
 
 - No PII real en git; secrets vacíos en environments trackeados

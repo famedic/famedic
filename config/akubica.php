@@ -23,17 +23,18 @@ return [
 
     'token_name' => 'akubica',
 
-    /*
-    | Effective token TTL advertised in API responses today (24h).
+        /*
+    | Effective token TTL advertised in API responses when sanctum_3h is OFF (24h).
     | Sanctum Guard expiration remains config('sanctum.expiration') = 1440.
-    | P0-A target (180) is config('otp.p0a.sanctum.target_expiration_minutes')
-    | and only applies when otp.p0a.flags.sanctum_3h_enabled is true (P0-A6).
+    | When OTP_P0A_SANCTUM_3H_ENABLED is ON (P0-C1), IssueAkubicaTokenAction persists
+    | PAT expires_at using otp.p0a.sanctum.target_expiration_minutes (default 180)
+    | without changing sanctum.expiration for non-Akubica tokens.
     */
     'token_ttl_minutes' => (int) env('AKUBICA_TOKEN_TTL_MINUTES', 1440),
 
     /*
-    | Documented target for when OTP_P0A_SANCTUM_3H_ENABLED is activated.
-    | Does not alter IssueAkubicaTokenAction or sanctum.expiration in P0-A1.
+    | Mirror of otp.p0a.sanctum.target_expiration_minutes for documentation / legacy reads.
+    | Prefer OTP_P0A_SANCTUM_TOKEN_TTL_MINUTES / TARGET under config/otp.php for P0-C1.
     */
     'token_ttl_minutes_p0a_target' => (int) env('AKUBICA_TOKEN_TTL_MINUTES_P0A_TARGET', 180),
 

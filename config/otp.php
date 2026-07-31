@@ -57,6 +57,13 @@ if (! in_array($fallbackMode, ['never', 'on_sms_failure', 'user_authorized'], tr
     $fallbackMode = 'on_sms_failure';
 }
 
+$sanctumTokenTtlEnvKey = (
+    env('OTP_P0A_SANCTUM_TOKEN_TTL_MINUTES') !== null
+    && env('OTP_P0A_SANCTUM_TOKEN_TTL_MINUTES') !== ''
+)
+    ? 'OTP_P0A_SANCTUM_TOKEN_TTL_MINUTES'
+    : 'OTP_P0A_SANCTUM_TARGET_EXPIRATION_MINUTES';
+
 return [
 
     /*
@@ -207,8 +214,13 @@ return [
         */
 
         'sanctum' => [
+            /**
+             * TTL for new Akubica PATs when sanctum_3h_enabled is ON (P0-C1).
+             * Prefer OTP_P0A_SANCTUM_TOKEN_TTL_MINUTES; fall back to historical
+             * OTP_P0A_SANCTUM_TARGET_EXPIRATION_MINUTES for compatibility.
+             */
             'target_expiration_minutes' => $otpEnvInt(
-                'OTP_P0A_SANCTUM_TARGET_EXPIRATION_MINUTES',
+                $sanctumTokenTtlEnvKey,
                 180,
                 1,
                 10080
