@@ -34,6 +34,15 @@ private_base64.txt
 docs/ACTIVECAMPAIGN_PRUEBAS.md
 docs/ACTIVECAMPAIGN_TAGS.md
 /docs/*
+# P0-D1 — versionar solo documentación Akubica relevante (no todo /docs)
+!/docs/Akubica/
+/docs/Akubica/**
+!/docs/Akubica/README.md
+!/docs/Akubica/akubica-openapi.yaml
+!/docs/Akubica/api-v1-*.md
+!/docs/Akubica/p0-*.md
+!/docs/Akubica/openapi-changelog-v1.2.0.md
+# Binarios, evidencias, .docx, RAR e históricos no listados arriba siguen ignorados
 desktop.ini
 /backups/*
 start-dev.bat

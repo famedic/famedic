@@ -210,6 +210,11 @@
       "key": "akubica_token_expires_in",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "allow_production_writes",
+      "value": "false",
+      "type": "string"
     }
   ],
   "item": [
@@ -3124,7 +3129,31 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// Collection prerequest: intentionally minimal"
+          "// P0-D1 — Production write guard (technical, not just a warning)",
+          "const envName = (pm.environment.name || '').toLowerCase();",
+          "const isProduction = envName.includes('production') || envName.includes('prod');",
+          "if (!isProduction) { return; }",
+          "",
+          "const allow = String(pm.environment.get('allow_production_writes') || 'false').toLowerCase();",
+          "const writesAllowed = allow === 'true' || allow === '1' || allow === 'yes';",
+          "",
+          "const method = String(pm.request.method || 'GET').toUpperCase();",
+          "const url = (typeof pm.request.url === 'object' && pm.request.url.toString)",
+          "  ? pm.request.url.toString()",
+          "  : String(pm.request.url || '');",
+          "const path = url.replace(/^https?:\\/\\/[^/]+/i, '').split('?')[0].toLowerCase();",
+          "",
+          "const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);",
+          "const sensitiveGet = path.includes('/secure-downloads/')",
+          "  || path.endsWith('/download')",
+          "  || path.includes('/download');",
+          "",
+          "if ((isMutation || sensitiveGet) && !writesAllowed) {",
+          "  throw new Error(",
+          "    'PRODUCTION GUARD: bloqueado. Environment Production + allow_production_writes!=true. '",
+          "    + 'Solo GET no sensibles permitidos. Set allow_production_writes=true solo con autorización explícita.'",
+          "  );",
+          "}"
         ]
       }
     },

@@ -1,0 +1,2224 @@
+openapi: 3.1.0
+
+info:
+  title: Famedic API — Integración Akubica
+  version: 1.2.0
+  description: |
+    API REST `/api/v1` para el asistente virtual **Akubica / LeoV**.
+
+    ## Autenticación
+
+    - **Público:** `auth/*` OTP, `catalog/*`, `GET /secure-downloads/{token}`.
+    - **Bearer Sanctum:** resto de endpoints (`Authorization: Bearer <token>`).
+    - **Step-up (condicional):** descargas Bearer de resultados/facturas pueden exigir
+      header `X-Step-Up-Grant: <grant_public_id>` cuando los flags de enforcement están ON.
+    - **Secure download:** token opaco de 64 hex en el path. **No** es API key reutilizable.
+      Tratar la URL como secreto temporal: HTTPS, no logs, no persistencia, consumo limitado.
+
+    OTP de login/registro P0-A usa **SMS** (Vonage) cuando los flags están ON.
+    Con flags OFF, login/register conservan el contrato legacy por email.
+
+    Tokens Akubica: con `OTP_P0A_SANCTUM_3H_ENABLED=true`, `expires_in` ≈ 10800 (180 min).
+    **No hay refresh token** — rehacer login OTP al expirar.
+
+    ## Envelope
+
+    Éxito: `{ "success": true, "data": {} }`
+    Error: `{ "success": false, "error": { "code", "message", "fields?", "details?" } }`
+
+    ## Ownership
+
+    Recursos ajenos → **404 soft-deny** (`ORDER_NOT_FOUND`, `INVOICE_NOT_FOUND`, …).
+    Ítem de carrito ajeno → **403**.
+
+    ## Fuera de OpenAPI
+
+    Mantenimiento `akubica:prune-otp` no es HTTP; ver runbook P0-C2.
+
+    Documentación: `docs/Akubica/README.md`.
+  contact:
+    name: Famedic — Equipo de desarrollo
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://staging.famedic.com.mx/api/v1
+    description: Staging
+  - url: https://famedic.com.mx/api/v1
+    description: Producción
+  - url: http://localhost:8080/api/v1
+    description: Desarrollo local
+
+tags:
+  - name: Auth
+    description: OTP SMS/legacy y tokens Bearer
+  - name: SecureDownloads
+    description: Descarga pública por token opaco
+  - name: Catalog
+    description: Catálogo laboratorio (público)
+  - name: Cart
+    description: Carrito y cupones
+  - name: Checkout
+    description: Prepare, draft y payment link
+  - name: Appointments
+    description: Citas de laboratorio
+  - name: Orders
+    description: Pedidos, resultados, facturas, step-up y descargas
+  - name: User
+    description: Perfil, contactos, direcciones, tax profiles
+
+security: []
+
+paths:
+  /auth/login/request-code:
+    post:
+      tags: [Auth]
+      operationId: authLoginRequestCode
+      summary: Solicitar OTP de login
+      description: |
+        **P0-A ON:** body `{ "phone": "+52..." }` → `202` + `OtpChallenge` (SMS).
+        Teléfono inexistente → misma forma `202` (señuelo; sin SMS).
+        **Legacy OFF:** body `{ "email" }` → `200` genérico (anti-enumeración).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/LoginRequestCodeSms'
+                - $ref: '#/components/schemas/LoginRequestCodeLegacy'
+            examples:
+              sms:
+                value:
+                  phone: '+520000000000'
+              legacy:
+                value:
+                  email: usuario.ejemplo@example.com
+      responses:
+        '200':
+          description: Legacy — solicitud procesada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '202':
+          description: P0-A — challenge creado (o señuelo)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OtpChallenge'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/DeliveryOrConfigFailed'
+
+  /auth/login/verify-code:
+    post:
+      tags: [Auth]
+      operationId: authLoginVerifyCode
+      summary: Verificar OTP de login y emitir token
+      description: |
+        **P0-A:** `{ "challenge_id", "code" }` → token + user.
+        **Legacy:** `{ "email", "code" }`.
+        `expires_in` refleja TTL efectivo (≈10800 s con Sanctum 3h ON).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/LoginVerifyCodeSms'
+                - $ref: '#/components/schemas/LoginVerifyCodeLegacy'
+      responses:
+        '200':
+          description: Token emitido
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TokenResponse'
+        '422':
+          $ref: '#/components/responses/OtpVerifyError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/DeliveryOrConfigFailed'
+
+  /auth/login/resend-code:
+    post:
+      tags: [Auth]
+      operationId: authLoginResendCode
+      summary: Reenviar OTP de login (P0-A)
+      description: |
+        Solo con login P0-A ON. Body `{ "challenge_id" }`.
+        Con flags OFF → `503 FEATURE_DISABLED`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpResendRequest'
+      responses:
+        '202':
+          description: Challenge actualizado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OtpChallenge'
+        '422':
+          $ref: '#/components/responses/OtpVerifyError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/FeatureDisabled'
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      operationId: authRegister
+      summary: Iniciar registro (OTP)
+      description: |
+        **P0-A ON:** `email`, `phone`, `full_name` → `202` + challenge SMS (o señuelo si teléfono duplicado).
+        **Legacy:** puede responder 409 email/phone ya registrados.
+        Usuario se crea solo tras verify exitoso.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Legacy — OTP iniciado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '202':
+          description: P0-A — challenge
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OtpChallenge'
+        '409':
+          description: Legacy — email/teléfono ya registrados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/DeliveryOrConfigFailed'
+
+  /auth/register/verify-code:
+    post:
+      tags: [Auth]
+      operationId: authRegisterVerifyCode
+      summary: Verificar OTP de registro y emitir token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/RegisterVerifyCodeSms'
+                - $ref: '#/components/schemas/RegisterVerifyCodeLegacy'
+      responses:
+        '200':
+          description: Registro completado + token
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TokenResponse'
+        '409':
+          description: LOGIN_REQUIRED u otros conflictos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '422':
+          $ref: '#/components/responses/OtpVerifyError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/DeliveryOrConfigFailed'
+
+  /auth/register/resend-code:
+    post:
+      tags: [Auth]
+      operationId: authRegisterResendCode
+      summary: Reenviar OTP de registro (P0-A)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpResendRequest'
+      responses:
+        '202':
+          description: Challenge actualizado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OtpChallenge'
+        '422':
+          $ref: '#/components/responses/OtpVerifyError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/FeatureDisabled'
+
+  /auth/token:
+    delete:
+      tags: [Auth]
+      operationId: authRevokeToken
+      summary: Revocar token Bearer actual (logout)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Token revocado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /secure-downloads/{token}:
+    get:
+      tags: [SecureDownloads]
+      operationId: secureDownloadShow
+      summary: Descargar PDF mediante token opaco
+      description: |
+        **Sin Bearer.** Token de 64 hex. Secreto temporal.
+        Errores: `SECURE_LINK_*`, `RESULT_NOT_READY`, `INVOICE_NOT_READY`, `FEATURE_DISABLED`.
+      parameters:
+        - $ref: '#/components/parameters/SecureDownloadToken'
+      responses:
+        '200':
+          description: PDF binario
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: SECURE_LINK_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '409':
+          description: RESULT_NOT_READY / INVOICE_NOT_READY
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '410':
+          description: SECURE_LINK_EXPIRED / CONSUMED / REVOKED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          $ref: '#/components/responses/FeatureDisabled'
+
+  /catalog/laboratory-brands:
+    get:
+      tags: [Catalog]
+      operationId: catalogLaboratoryBrands
+      summary: Listar marcas de laboratorio
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Marcas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+
+  /catalog/laboratory-tests:
+    get:
+      tags: [Catalog]
+      operationId: catalogLaboratoryTests
+      summary: Listar estudios
+      parameters:
+        - name: brand
+          in: query
+          schema:
+            $ref: '#/components/schemas/LaboratoryBrand'
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: category_id
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            maximum: 50
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+
+  /catalog/laboratory-test-categories:
+    get:
+      tags: [Catalog]
+      operationId: catalogLaboratoryTestCategories
+      summary: Listar categorías
+      parameters:
+        - name: brand
+          in: query
+          schema:
+            $ref: '#/components/schemas/LaboratoryBrand'
+      responses:
+        '200':
+          description: Categorías
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+
+  /catalog/laboratory-stores:
+    get:
+      tags: [Catalog]
+      operationId: catalogLaboratoryStores
+      summary: Listar sucursales
+      parameters:
+        - name: brand
+          in: query
+          schema:
+            $ref: '#/components/schemas/LaboratoryBrand'
+        - name: state
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sucursales
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+
+  /catalog/laboratory-tests/{laboratory_test_id}:
+    get:
+      tags: [Catalog]
+      operationId: catalogShowLaboratoryTest
+      summary: Detalle de estudio
+      parameters:
+        - $ref: '#/components/parameters/LaboratoryTestId'
+      responses:
+        '200':
+          description: Estudio
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LaboratoryTest'
+        '404':
+          description: LAB_TEST_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /catalog/medications/{medication_id}:
+    get:
+      tags: [Catalog]
+      operationId: catalogShowMedication
+      summary: Medicamento (deshabilitado)
+      description: Responde `503 CATALOG_UNAVAILABLE` en el estado actual.
+      parameters:
+        - $ref: '#/components/parameters/MedicationId'
+      responses:
+        '503':
+          description: CATALOG_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /cart:
+    get:
+      tags: [Cart]
+      operationId: cartIndex
+      summary: Ver carrito
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BrandRequired'
+      responses:
+        '200':
+          description: Carrito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    delete:
+      tags: [Cart]
+      operationId: cartClear
+      summary: Vaciar carrito
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BrandRequired'
+      responses:
+        '200':
+          description: Carrito vaciado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /cart/totals:
+    get:
+      tags: [Cart]
+      operationId: cartTotals
+      summary: Totales del carrito
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BrandRequired'
+      responses:
+        '200':
+          description: Totales
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /cart/items:
+    post:
+      tags: [Cart]
+      operationId: cartItemsStore
+      summary: Agregar ítem
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [laboratory_test_id, brand]
+              properties:
+                laboratory_test_id:
+                  type: integer
+                brand:
+                  $ref: '#/components/schemas/LaboratoryBrand'
+      responses:
+        '201':
+          description: Ítem agregado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: LAB_TEST_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '409':
+          description: ITEM_ALREADY_IN_CART
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /cart/items/{cart_item_id}:
+    delete:
+      tags: [Cart]
+      operationId: cartItemsDestroy
+      summary: Eliminar ítem
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CartItemId'
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: CART_ITEM_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /cart/coupon:
+    get:
+      tags: [Cart]
+      operationId: cartCouponShow
+      summary: Cupón aplicado
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BrandRequired'
+      responses:
+        '200':
+          description: Cupón
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags: [Cart]
+      operationId: cartCouponApply
+      summary: Aplicar cupón
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brand, code]
+              properties:
+                brand:
+                  $ref: '#/components/schemas/LaboratoryBrand'
+                code:
+                  type: string
+      responses:
+        '200':
+          description: Aplicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: COUPON_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '409':
+          description: EMPTY_CART / COUPON_EXPIRED / COUPON_NOT_APPLICABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+    delete:
+      tags: [Cart]
+      operationId: cartCouponRemove
+      summary: Quitar cupón
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BrandRequired'
+      responses:
+        '200':
+          description: Removido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /checkout/prepare:
+    get:
+      tags: [Checkout]
+      operationId: checkoutPrepare
+      summary: Preparar checkout
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BrandRequired'
+      responses:
+        '200':
+          description: Payload prepare
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /checkout/draft:
+    post:
+      tags: [Checkout]
+      operationId: checkoutDraft
+      summary: Sincronizar draft de checkout
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brand]
+              properties:
+                brand:
+                  $ref: '#/components/schemas/LaboratoryBrand'
+                contact_id:
+                  type: integer
+                address_id:
+                  type: integer
+                requires_invoice:
+                  type: boolean
+                tax_profile_id:
+                  type: integer
+                notes:
+                  type: string
+                appointment_id:
+                  type: integer
+      responses:
+        '200':
+          description: Draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '409':
+          description: EMPTY_CART
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /checkout/payment-link:
+    post:
+      tags: [Checkout]
+      operationId: checkoutPaymentLink
+      summary: Generar payment link
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brand]
+              properties:
+                brand:
+                  $ref: '#/components/schemas/LaboratoryBrand'
+                expires_in_minutes:
+                  type: integer
+                  minimum: 5
+                  maximum: 1440
+      responses:
+        '200':
+          description: Link de pago
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '409':
+          description: EMPTY_CART / CHECKOUT_NOT_READY / APPOINTMENT_REQUIRED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /laboratory-appointments/requirements:
+    get:
+      tags: [Appointments]
+      operationId: appointmentsRequirements
+      summary: Requisitos de cita
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BrandRequired'
+      responses:
+        '200':
+          description: Requisitos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /laboratory-appointments:
+    get:
+      tags: [Appointments]
+      operationId: appointmentsIndex
+      summary: Listar citas
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Citas paginadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags: [Appointments]
+      operationId: appointmentsStore
+      summary: Crear cita
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brand, contact_id, address_id, scheduled_at]
+              properties:
+                brand:
+                  $ref: '#/components/schemas/LaboratoryBrand'
+                contact_id:
+                  type: integer
+                address_id:
+                  type: integer
+                scheduled_at:
+                  type: string
+                  format: date-time
+                notes:
+                  type: string
+      responses:
+        '201':
+          description: Cita creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '409':
+          description: EMPTY_CART / APPOINTMENT_NOT_REQUIRED / APPOINTMENT_ALREADY_EXISTS
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /laboratory-appointments/{appointment_id}:
+    delete:
+      tags: [Appointments]
+      operationId: appointmentsDestroy
+      summary: Eliminar cita propia
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: appointment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Eliminada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: APPOINTMENT_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /orders:
+    get:
+      tags: [Orders]
+      operationId: ordersIndex
+      summary: Listar pedidos
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Pedidos + Pagination
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          orders:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Order'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /orders/results:
+    get:
+      tags: [Orders]
+      operationId: ordersResultsIndex
+      summary: Listar resultados agregados
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Resultados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /orders/invoices:
+    get:
+      tags: [Orders]
+      operationId: ordersInvoicesIndex
+      summary: Listar facturas agregadas
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Facturas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /orders/{order_id}/products:
+    get:
+      tags: [Orders]
+      operationId: ordersProducts
+      summary: Productos del pedido
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Productos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+
+  /orders/{order_id}/status:
+    get:
+      tags: [Orders]
+      operationId: ordersStatus
+      summary: Estado del pedido
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Estado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+
+  /orders/{order_id}/cancel:
+    put:
+      tags: [Orders]
+      operationId: ordersCancel
+      summary: Cancelar pedido (deshabilitado)
+      description: Responde `503 FEATURE_DISABLED`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '503':
+          $ref: '#/components/responses/FeatureDisabled'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /orders/{order_id}/results:
+    get:
+      tags: [Orders]
+      operationId: ordersResults
+      summary: Metadata de resultados del pedido
+      description: |
+        Incluye metadata de descarga Bearer. Con flags ON puede exponer
+        `requires_step_up` / `secure_link_supported`. Ownership 404 soft-deny.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Result metadata
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Result'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+
+  /orders/{order_id}/results/download:
+    get:
+      tags: [Orders]
+      operationId: ordersResultsDownload
+      summary: Descargar PDF resultados (Bearer)
+      description: |
+        PDF binario. Ownership 404. `409 RESULT_NOT_READY`.
+        Con enforcement ON exige `X-Step-Up-Grant` válido para purpose `step_up_results`.
+        OFF → descarga solo con Bearer + ownership.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/StepUpGrantHeader'
+      responses:
+        '200':
+          description: PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/StepUpForbidden'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+        '409':
+          description: RESULT_NOT_READY
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /orders/{order_id}/results/step-up/request:
+    post:
+      tags: [Orders]
+      operationId: ordersResultsStepUpRequest
+      summary: Solicitar OTP step-up resultados
+      description: Body vacío. Teléfono del usuario autenticado. `202` + OtpChallenge.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '202':
+          description: Challenge
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OtpChallenge'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/FeatureDisabled'
+
+  /orders/{order_id}/results/step-up/verify:
+    post:
+      tags: [Orders]
+      operationId: ordersResultsStepUpVerify
+      summary: Verificar OTP step-up resultados → grant
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepUpVerifyRequest'
+      responses:
+        '200':
+          description: Grant
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OtpGrant'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+        '422':
+          $ref: '#/components/responses/OtpVerifyError'
+        '503':
+          $ref: '#/components/responses/FeatureDisabled'
+
+  /orders/{order_id}/results/secure-link:
+    post:
+      tags: [Orders]
+      operationId: ordersResultsSecureLink
+      summary: Emitir secure link de resultados
+      description: |
+        Requiere `grant_id` válido. Respuesta `201` SecureLink.
+        La `url` es secreto temporal — no loguear ni persistir.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecureLinkIssueRequest'
+      responses:
+        '201':
+          description: Liga emitida
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SecureLink'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+        '409':
+          description: RESULT_NOT_READY
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '422':
+          description: STEP_UP_GRANT_INVALID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          $ref: '#/components/responses/FeatureDisabled'
+
+  /orders/{order_id}/invoices:
+    get:
+      tags: [Orders]
+      operationId: ordersInvoices
+      summary: Facturas del pedido
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Invoices
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          invoices:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+
+  /orders/{order_id}/invoices/{invoice_id}/download:
+    get:
+      tags: [Orders]
+      operationId: ordersInvoiceDownload
+      summary: Descargar PDF factura (Bearer)
+      description: |
+        Con enforcement ON exige `X-Step-Up-Grant` para purpose `step_up_invoices`.
+        `409 INVOICE_NOT_READY`. Soft-deny 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/InvoiceId'
+        - $ref: '#/components/parameters/StepUpGrantHeader'
+      responses:
+        '200':
+          description: PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/StepUpForbidden'
+        '404':
+          description: ORDER_NOT_FOUND / INVOICE_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '409':
+          description: INVOICE_NOT_READY
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /orders/{order_id}/invoices/{invoice_id}/step-up/request:
+    post:
+      tags: [Orders]
+      operationId: ordersInvoiceStepUpRequest
+      summary: Solicitar OTP step-up factura
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/InvoiceId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '202':
+          description: Challenge
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OtpChallenge'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: ORDER_NOT_FOUND / INVOICE_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          $ref: '#/components/responses/FeatureDisabled'
+
+  /orders/{order_id}/invoices/{invoice_id}/step-up/verify:
+    post:
+      tags: [Orders]
+      operationId: ordersInvoiceStepUpVerify
+      summary: Verificar OTP step-up factura → grant
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/InvoiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepUpVerifyRequest'
+      responses:
+        '200':
+          description: Grant
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OtpGrant'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: ORDER_NOT_FOUND / INVOICE_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '422':
+          $ref: '#/components/responses/OtpVerifyError'
+        '503':
+          $ref: '#/components/responses/FeatureDisabled'
+
+  /orders/{order_id}/invoices/{invoice_id}/secure-link:
+    post:
+      tags: [Orders]
+      operationId: ordersInvoiceSecureLink
+      summary: Emitir secure link de factura
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/InvoiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecureLinkIssueRequest'
+      responses:
+        '201':
+          description: Liga emitida
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SecureLink'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: ORDER_NOT_FOUND / INVOICE_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '409':
+          description: INVOICE_NOT_READY
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '422':
+          description: STEP_UP_GRANT_INVALID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          $ref: '#/components/responses/FeatureDisabled'
+
+  /orders/{order_id}/invoice-request/status:
+    get:
+      tags: [Orders]
+      operationId: ordersInvoiceRequestStatus
+      summary: Estado de solicitud de factura
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+
+  /orders/{order_id}/invoice-request:
+    post:
+      tags: [Orders]
+      operationId: ordersInvoiceRequestStore
+      summary: Solicitar factura
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tax_profile_id]
+              properties:
+                tax_profile_id:
+                  type: integer
+                cfdi_use:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                notes:
+                  type: string
+      responses:
+        '201':
+          description: Solicitud creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+        '409':
+          description: INVOICE_ALREADY_EXISTS / INVOICE_REQUEST_ALREADY_EXISTS / ORDER_NOT_INVOICEABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /user/family:
+    get:
+      tags: [User]
+      operationId: userFamily
+      summary: Cuentas familiares
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Family
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /user/payment-methods:
+    get:
+      tags: [User]
+      operationId: userPaymentMethods
+      summary: Métodos de pago (sin datos sensibles)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Payment methods
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /user/tax-profiles:
+    get:
+      tags: [User]
+      operationId: userTaxProfilesIndex
+      summary: Listar perfiles fiscales
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Tax profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags: [User]
+      operationId: userTaxProfilesStore
+      summary: Crear perfil fiscal
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /user/tax-profiles/{tax_profile_id}:
+    put:
+      tags: [User]
+      operationId: userTaxProfilesUpdate
+      summary: Actualizar perfil fiscal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tax_profile_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: TAX_PROFILE_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+    delete:
+      tags: [User]
+      operationId: userTaxProfilesDestroy
+      summary: Eliminar perfil fiscal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tax_profile_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: TAX_PROFILE_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /user/addresses:
+    get:
+      tags: [User]
+      operationId: userAddressesIndex
+      summary: Listar direcciones
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Addresses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags: [User]
+      operationId: userAddressesStore
+      summary: Crear dirección
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /user/addresses/{address_id}:
+    put:
+      tags: [User]
+      operationId: userAddressesUpdate
+      summary: Actualizar dirección
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: address_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: ADDRESS_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+    delete:
+      tags: [User]
+      operationId: userAddressesDestroy
+      summary: Eliminar dirección
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: address_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Eliminada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: ADDRESS_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /user/contacts:
+    get:
+      tags: [User]
+      operationId: userContactsIndex
+      summary: Listar contactos
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Contacts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags: [User]
+      operationId: userContactsStore
+      summary: Crear contacto
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /user/contacts/{contact_id}:
+    put:
+      tags: [User]
+      operationId: userContactsUpdate
+      summary: Actualizar contacto
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: contact_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: CONTACT_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+    delete:
+      tags: [User]
+      operationId: userContactsDestroy
+      summary: Eliminar contacto
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: contact_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: CONTACT_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum
+      description: |
+        Token Sanctum Akubica. TTL anunciado en `expires_in`/`expires_at`.
+        Con `OTP_P0A_SANCTUM_3H_ENABLED` ≈ 180 minutos. Sin refresh token.
+    StepUpGrantHeader:
+      type: apiKey
+      in: header
+      name: X-Step-Up-Grant
+      description: |
+        Public id del grant step-up. Solo para descargas Bearer cuando enforcement ON.
+        No usar como API key global. No enviar en query string.
+
+  parameters:
+    OrderId:
+      name: order_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    InvoiceId:
+      name: invoice_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    LaboratoryTestId:
+      name: laboratory_test_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    MedicationId:
+      name: medication_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    CartItemId:
+      name: cart_item_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    BrandRequired:
+      name: brand
+      in: query
+      required: true
+      schema:
+        $ref: '#/components/schemas/LaboratoryBrand'
+    SecureDownloadToken:
+      name: token
+      in: path
+      required: true
+      description: Token opaco 64 hex (secreto temporal; no API key)
+      schema:
+        type: string
+        pattern: '^[A-Fa-f0-9]{64}$'
+    StepUpGrantHeader:
+      name: X-Step-Up-Grant
+      in: header
+      required: false
+      description: Requerido cuando enforcement Bearer está ON
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Unauthenticated:
+      description: UNAUTHENTICATED
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Forbidden:
+      description: FORBIDDEN
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    ValidationError:
+      description: VALIDATION_ERROR
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    TooManyRequests:
+      description: TOO_MANY_REQUESTS / OTP cooldown
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    FeatureDisabled:
+      description: FEATURE_DISABLED / OTP_CONFIGURATION_INVALID
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    DeliveryOrConfigFailed:
+      description: DELIVERY_FAILED / OTP_CONFIGURATION_INVALID
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    OtpVerifyError:
+      description: INVALID_CODE / NO_ACTIVE_CODE / CODE_EXPIRED / CODE_ALREADY_USED / …
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    OrderNotFound:
+      description: ORDER_NOT_FOUND (soft-deny)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    StepUpForbidden:
+      description: STEP_UP_REQUIRED / STEP_UP_GRANT_INVALID / STEP_UP_EXPIRED / STEP_UP_REVOKED
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+
+  schemas:
+    ApiSuccessResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data: {}
+
+    ApiErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            fields:
+              type: object
+              additionalProperties: true
+            details:
+              type: object
+              additionalProperties: true
+
+    SuccessResponse:
+      $ref: '#/components/schemas/ApiSuccessResponse'
+    ErrorResponse:
+      $ref: '#/components/schemas/ApiErrorResponse'
+
+    LaboratoryBrand:
+      type: string
+      enum: [olab, azul, jenner, liacsa]
+
+    Pagination:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+        last_page:
+          type: integer
+
+    OtpChallenge:
+      type: object
+      description: Challenge OTP (sin código en claro)
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        purpose:
+          type: string
+          enum: [akubica_login, akubica_register, step_up_results, step_up_invoices]
+        channel:
+          type: string
+          enum: [sms, email]
+        destination_masked:
+          type: string
+        resource_type:
+          type: string
+          nullable: true
+        resource_id:
+          type: integer
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+        resend_available_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    OtpGrant:
+      type: object
+      description: Grant step-up reutilizable dentro de su TTL
+      properties:
+        grant_id:
+          type: string
+          format: uuid
+        purpose:
+          type: string
+          enum: [step_up_results, step_up_invoices]
+        resource_type:
+          type: string
+        resource_id:
+          type: integer
+        expires_at:
+          type: string
+          format: date-time
+
+    SecureLink:
+      type: object
+      description: |
+        Liga opaca. `url` es secreto temporal — HTTPS, no logs, no persistencia.
+        Puede consumirse una sola vez si `max_opens=1`.
+      properties:
+        url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+        max_opens:
+          type: integer
+
+    TokenResponse:
+      type: object
+      required: [token, token_type, expires_in, expires_at]
+      properties:
+        token:
+          type: string
+          description: Plaintext Sanctum — no loguear
+        token_type:
+          type: string
+          const: Bearer
+        expires_in:
+          type: integer
+          description: Segundos (≈10800 con Sanctum 3h ON)
+        expires_at:
+          type: string
+          format: date-time
+        user:
+          type: object
+          properties:
+            id:
+              type: integer
+            email:
+              type: string
+              format: email
+            name:
+              type: string
+
+    AuthTokenData:
+      $ref: '#/components/schemas/TokenResponse'
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        study_status:
+          type: string
+        study_status_label:
+          type: string
+        study_name:
+          type: string
+        total_cents:
+          type: integer
+        is_cancelled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    Result:
+      type: object
+      properties:
+        order_id:
+          type: integer
+        results_available:
+          type: boolean
+        requires_step_up:
+          type: boolean
+        secure_link_supported:
+          type: boolean
+        download:
+          type: object
+          additionalProperties: true
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        uuid:
+          type: string
+          nullable: true
+        status:
+          type: string
+        issued_at:
+          type: string
+          format: date-time
+          nullable: true
+        requires_step_up:
+          type: boolean
+        secure_link_supported:
+          type: boolean
+        download:
+          type: object
+          additionalProperties: true
+
+    LaboratoryTest:
+      type: object
+      properties:
+        id:
+          type: integer
+        gda_id:
+          type: string
+        name:
+          type: string
+        brand:
+          $ref: '#/components/schemas/LaboratoryBrand'
+        price_cents:
+          type: integer
+        requires_appointment:
+          type: boolean
+        available:
+          type: boolean
+
+    LoginRequestCodeSms:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+          description: E.164
+        phone_country:
+          type: string
+          default: MX
+
+    LoginRequestCodeLegacy:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    LoginVerifyCodeSms:
+      type: object
+      required: [challenge_id, code]
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          pattern: '^[0-9]{4,10}$'
+
+    LoginVerifyCodeLegacy:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+
+    RegisterRequest:
+      type: object
+      required: [email, phone, full_name]
+      properties:
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        full_name:
+          type: string
+        phone_country:
+          type: string
+          default: MX
+
+    RegisterVerifyCodeSms:
+      type: object
+      required: [challenge_id, code]
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+
+    RegisterVerifyCodeLegacy:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+
+    OtpResendRequest:
+      type: object
+      required: [challenge_id]
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+
+    StepUpVerifyRequest:
+      type: object
+      required: [challenge_id, code]
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+
+    SecureLinkIssueRequest:
+      type: object
+      required: [grant_id]
+      additionalProperties: false
+      properties:
+        grant_id:
+          type: string
+          format: uuid
