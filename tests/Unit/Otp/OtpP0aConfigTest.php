@@ -49,6 +49,14 @@ function otpP0aReloadConfig(array $overrides = []): void
         'OTP_P0A_SANCTUM_TARGET_EXPIRATION_MINUTES',
         'OTP_P0A_SECURE_LINK_TTL_MINUTES',
         'OTP_P0A_SECURE_LINK_MAX_OPENS',
+        'OTP_P0A_CLEANUP_ENABLED',
+        'OTP_P0A_CLEANUP_CHALLENGES_RETENTION_DAYS',
+        'OTP_P0A_CLEANUP_DELIVERIES_RETENTION_DAYS',
+        'OTP_P0A_CLEANUP_RATE_LIMITS_RETENTION_DAYS',
+        'OTP_P0A_CLEANUP_GRANTS_RETENTION_DAYS',
+        'OTP_P0A_CLEANUP_SECURE_LINKS_RETENTION_DAYS',
+        'OTP_P0A_CLEANUP_DEFAULT_BATCH',
+        'OTP_P0A_CLEANUP_SCHEDULE_TIME',
         'SANCTUM_TOKEN_EXPIRATION',
         'AKUBICA_OTP_TTL_MINUTES',
         'AKUBICA_TOKEN_TTL_MINUTES',
@@ -347,4 +355,41 @@ test('p0b4 bearer enforcement flags default off and master or specific enables',
     otpP0aReloadConfig(['OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED' => 'true']);
     expect(\App\Services\Otp\StepUp\BearerStepUpEnforcement::isResultsEnforcementEnabled())->toBeTrue()
         ->and(\App\Services\Otp\StepUp\BearerStepUpEnforcement::isInvoicesEnforcementEnabled())->toBeTrue();
+});
+
+test('p0c2 cleanup defaults are off with approved retention days', function () {
+    otpP0aReloadConfig();
+
+    expect(config('otp.p0a.cleanup.enabled'))->toBeFalse()
+        ->and(config('otp.p0a.cleanup.challenges_retention_days'))->toBe(30)
+        ->and(config('otp.p0a.cleanup.deliveries_retention_days'))->toBe(30)
+        ->and(config('otp.p0a.cleanup.rate_limits_retention_days'))->toBe(7)
+        ->and(config('otp.p0a.cleanup.grants_retention_days'))->toBe(30)
+        ->and(config('otp.p0a.cleanup.secure_links_retention_days'))->toBe(30)
+        ->and(config('otp.p0a.cleanup.default_batch'))->toBe(1000)
+        ->and(config('otp.p0a.cleanup.schedule_time'))->toBe('03:00');
+});
+
+test('p0c2 cleanup retention env overrides and invalid values fall back', function () {
+    otpP0aReloadConfig([
+        'OTP_P0A_CLEANUP_ENABLED' => 'true',
+        'OTP_P0A_CLEANUP_CHALLENGES_RETENTION_DAYS' => '45',
+        'OTP_P0A_CLEANUP_RATE_LIMITS_RETENTION_DAYS' => '3',
+        'OTP_P0A_CLEANUP_DEFAULT_BATCH' => '500',
+    ]);
+
+    expect(config('otp.p0a.cleanup.enabled'))->toBeTrue()
+        ->and(config('otp.p0a.cleanup.challenges_retention_days'))->toBe(45)
+        ->and(config('otp.p0a.cleanup.rate_limits_retention_days'))->toBe(3)
+        ->and(config('otp.p0a.cleanup.default_batch'))->toBe(500);
+
+    otpP0aReloadConfig([
+        'OTP_P0A_CLEANUP_CHALLENGES_RETENTION_DAYS' => '0',
+        'OTP_P0A_CLEANUP_RATE_LIMITS_RETENTION_DAYS' => 'not-a-number',
+        'OTP_P0A_CLEANUP_DEFAULT_BATCH' => '99999',
+    ]);
+
+    expect(config('otp.p0a.cleanup.challenges_retention_days'))->toBe(30)
+        ->and(config('otp.p0a.cleanup.rate_limits_retention_days'))->toBe(7)
+        ->and(config('otp.p0a.cleanup.default_batch'))->toBe(1000);
 });

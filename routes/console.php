@@ -13,3 +13,25 @@ if (config('services.activecampaign.tag_abandoned_carts_enabled', true)) {
         ->everyFifteenMinutes()
         ->withoutOverlapping(10);
 }
+
+/*
+|--------------------------------------------------------------------------
+| P0-C2 OTP prune — only when otp.p0a.cleanup.enabled is true
+|--------------------------------------------------------------------------
+|
+| Default OFF. Uses withoutOverlapping only (no single-server schedule lock:
+| CACHE_STORE may be local/database without a confirmed shared lock store).
+| If Forge (or another host) already schedules this command, keep the flag
+| OFF here or remove the Forge entry — do not double-run.
+| PAT prune remains separate: php artisan sanctum:prune-expired --hours=24
+|
+*/
+if (config('otp.p0a.cleanup.enabled', false)) {
+    $scheduleTime = (string) config('otp.p0a.cleanup.schedule_time', '03:00');
+    $batch = (int) config('otp.p0a.cleanup.default_batch', 1000);
+
+    Schedule::command("akubica:prune-otp --force --batch={$batch}")
+        ->dailyAt($scheduleTime)
+        ->withoutOverlapping(120)
+        ->name('akubica-prune-otp');
+}

@@ -101,6 +101,10 @@ Carpetas **18** (resultados) y **19** (facturas): tras el flujo step-up/secure-l
 
 Con Sanctum 3h ON (`OTP_P0A_SANCTUM_3H_ENABLED`), `expires_in` ≈ **10800** segundos (180 min). Los verify de login/registro guardan `akubica_token_expires_at` / `akubica_token_expires_in` si vienen en la respuesta. **No hay refresh token**: al expirar, repetir el flujo de login OTP.
 
+## P0-C2 — Retención de grants y secure links (mantenimiento)
+
+El mantenimiento `akubica:prune-otp` (ops; no hay requests admin en esta colección) elimina solo filas **terminales** fuera de retención (p. ej. 30 días). **No afecta grants ni links activos.** Las URLs de descarga ya consumidas/revocadas/expiradas no se pueden recuperar tras el prune. Los tokens Sanctum se limpian aparte (`sanctum:prune-expired`), no desde Postman.
+
 ## Seguridad
 
 - No PII real en git; secrets vacíos en environments trackeados

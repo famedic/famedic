@@ -313,6 +313,55 @@ return [
             'reservation_ttl_seconds' => (int) env('OTP_P0A_DELIVERY_RESERVATION_TTL', 600),
             'provider_alias' => 'vonage',
         ],
+
+        /*
+        |--------------------------------------------------------------------------
+        | Cleanup / pruning (P0-C2) — akubica:prune-otp
+        |--------------------------------------------------------------------------
+        |
+        | Default OFF. Does not change auth, TTL, or secure-link behavior.
+        | Retention starts after terminality (expired/consumed/revoked/final),
+        | not at the moment of expiry. Active rows are never deleted.
+        | Challenges with akubica_registration_intents are skipped (RESTRICT FK).
+        | PAT prune remains sanctum:prune-expired (separate; not scheduled here).
+        |
+        */
+
+        'cleanup' => [
+            'enabled' => $otpEnvBool('OTP_P0A_CLEANUP_ENABLED', false),
+            'challenges_retention_days' => $otpEnvInt(
+                'OTP_P0A_CLEANUP_CHALLENGES_RETENTION_DAYS',
+                30,
+                1,
+                3650
+            ),
+            'deliveries_retention_days' => $otpEnvInt(
+                'OTP_P0A_CLEANUP_DELIVERIES_RETENTION_DAYS',
+                30,
+                1,
+                3650
+            ),
+            'rate_limits_retention_days' => $otpEnvInt(
+                'OTP_P0A_CLEANUP_RATE_LIMITS_RETENTION_DAYS',
+                7,
+                1,
+                3650
+            ),
+            'grants_retention_days' => $otpEnvInt(
+                'OTP_P0A_CLEANUP_GRANTS_RETENTION_DAYS',
+                30,
+                1,
+                3650
+            ),
+            'secure_links_retention_days' => $otpEnvInt(
+                'OTP_P0A_CLEANUP_SECURE_LINKS_RETENTION_DAYS',
+                30,
+                1,
+                3650
+            ),
+            'default_batch' => $otpEnvInt('OTP_P0A_CLEANUP_DEFAULT_BATCH', 1000, 1, 10000),
+            'schedule_time' => env('OTP_P0A_CLEANUP_SCHEDULE_TIME', '03:00'),
+        ],
     ],
 
 ];
