@@ -16,6 +16,8 @@ Esta carpeta documenta el contrato real para integración **Akubica / LeoV**. No
 | [`api-v1-feature-flags.md`](./api-v1-feature-flags.md) | Flags P0-A/B/C, defaults, staging/prod, rollback |
 | [`api-v1-errors.md`](./api-v1-errors.md) | Códigos HTTP y de dominio reales |
 | [`openapi-changelog-v1.2.0.md`](./openapi-changelog-v1.2.0.md) | Cambios OpenAPI v1.1.0 → v1.2.0 |
+| [`p0-e1-qa-staging-production-readiness.md`](./p0-e1-qa-staging-production-readiness.md) | Readiness + rollout gradual |
+| [`p0-e2-staging-qa-evidence.md`](./p0-e2-staging-qa-evidence.md) | Matriz evidencia QA manual staging |
 | [`p0-a-registro-sms-fallback.md`](./p0-a-registro-sms-fallback.md) | Registro OTP SMS + fallback email |
 | [`p0-a-login-sms.md`](./p0-a-login-sms.md) | Login OTP SMS |
 | [`p0-b1-step-up-grants.md`](./p0-b1-step-up-grants.md) | Step-up OTP + grants |
