@@ -19,7 +19,12 @@ class UpdateTaxProfileAction
         ?UploadedFile $fiscalCertificate = null,
         ?array $extractedData = null
     ): TaxProfile {
-        
+        if ($taxProfile->isUsed()) {
+            throw new \InvalidArgumentException(
+                'Este perfil fiscal ya fue utilizado en una solicitud de factura y no puede modificarse.'
+            );
+        }
+
         if ($rfc !== $taxProfile->rfc) {
             $existingProfile = $taxProfile->customer->taxProfiles()
                 ->where('rfc', Str::upper($rfc))

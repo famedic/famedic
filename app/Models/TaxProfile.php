@@ -76,7 +76,7 @@ class TaxProfile extends Model
      */
     public function presentForPatient(): static
     {
-        $this->setVisible([
+        $visible = [
             'id',
             'name',
             'rfc',
@@ -88,7 +88,15 @@ class TaxProfile extends Model
             'formatted_tax_regime',
             'formatted_cfdi_use',
             'formatted_activity_label',
-        ]);
+        ];
+
+        // Solo cuando el esquema tiene invoice_requests (suites aisladas pueden omitirla).
+        if (\Illuminate\Support\Facades\Schema::hasTable('invoice_requests')) {
+            $this->setAttribute('is_used', $this->isUsed());
+            $visible[] = 'is_used';
+        }
+
+        $this->setVisible($visible);
 
         return $this;
     }

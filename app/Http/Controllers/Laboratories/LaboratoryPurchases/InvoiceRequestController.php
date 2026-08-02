@@ -55,22 +55,8 @@ class InvoiceRequestController extends Controller
 
         $cfdiUse = $request->validated('cfdi_use');
 
-        // Efecto histórico de laboratorio: sincroniza cfdi_use del perfil vivo.
-        // El snapshot usa el valor elegido vía parámetro (no depende solo del perfil).
-        if ($taxProfile->cfdi_use !== $cfdiUse) {
-            Log::info('Actualizando CFDI use del perfil fiscal (laboratorio)', [
-                'tax_profile_id' => $taxProfile->id,
-                'customer_id' => $taxProfile->customer_id,
-                'operation' => 'laboratory_invoice_request_profile_cfdi_sync',
-            ]);
+        // CFDI elegido solo en el snapshot (CreateInvoiceRequestAction). No mutar el perfil vivo.
 
-            $taxProfile->update([
-                'cfdi_use' => $cfdiUse,
-            ]);
-        }
-
-        // 2. EJECUTAR LA ACCIÓN PRINCIPAL - Crear solicitud de factura
-        // --------------------------------------------------------------
         Log::info('Ejecutando CreateInvoiceRequestAction', [
             'laboratory_purchase_id' => $laboratoryPurchase->id,
             'tax_profile_id' => $taxProfile->id,
