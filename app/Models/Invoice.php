@@ -24,10 +24,28 @@ class Invoice extends Model
         return $this->morphTo()->withTrashed();
     }
 
+    /**
+     * Prepara el modelo para props de paciente: oculta paths de Storage
+     * y expone solo URLs de rutas autorizadas.
+     */
+    public function presentForPatient(): static
+    {
+        $hasXml = filled($this->attributes['invoice_xml'] ?? null);
+
+        $this->makeHidden(['invoice', 'invoice_xml']);
+        $this->setAttribute('invoice_url', route('invoice', ['invoice' => $this->id]));
+        $this->setAttribute(
+            'invoice_xml_url',
+            $hasXml ? route('invoice.xml', ['invoice' => $this->id]) : null
+        );
+
+        return $this;
+    }
+
     protected function hasInvoiceXml(): Attribute
     {
         return Attribute::make(
-            get: fn () => filled($this->invoice_xml)
+            get: fn () => filled($this->attributes['invoice_xml'] ?? null)
         );
     }
 

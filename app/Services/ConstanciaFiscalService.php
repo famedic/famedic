@@ -17,45 +17,69 @@ class ConstanciaFiscalService
     
     public function procesarConstancia(UploadedFile $archivo)
     {
+        $startedAt = microtime(true);
+
         try {
-            Log::info('=== PROCESANDO CONSTANCIA FISCAL ===');
-            Log::info('Archivo:', [
-                'nombre' => $archivo->getClientOriginalName(),
-                'tamaño' => $archivo->getSize(),
-                'mime' => $archivo->getMimeType()
+            Log::info('Procesando constancia fiscal', [
+                'operation' => 'constancia_extract',
+                'user_id' => auth()->id(),
+                'customer_id' => auth()->user()?->customer?->id,
+                'mime_type' => $archivo->getMimeType(),
+                'size_bytes' => $archivo->getSize(),
             ]);
-            
+
             // 1. Parsear el PDF
             $pdf = $this->parser->parseContent($archivo->get());
             $texto = $pdf->getText();
-            
-            // Guardar el texto completo para debugging
-            $textoCompleto = $texto;
-            Log::info('Texto completo del PDF (primeros 2000 chars):', ['texto' => substr($texto, 0, 2000)]);
-            
+
             // 2. Extraer información
             $datos = $this->extraerDatos($texto);
-            
+
             // 3. Validar datos mínimos
             if (empty($datos['rfc'])) {
-                throw new \Exception('No se pudo extraer el RFC del documento');
+                Log::warning('Extracción de constancia sin RFC detectable', [
+                    'operation' => 'constancia_extract',
+                    'user_id' => auth()->id(),
+                    'customer_id' => auth()->user()?->customer?->id,
+                    'result' => 'rfc_missing',
+                    'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => 'No pudimos extraer los datos de la constancia. Puedes capturarlos manualmente.',
+                ];
             }
-            
-            Log::info('Datos extraídos exitosamente:', $datos);
-            
+
+            Log::info('Extracción de constancia completada', [
+                'operation' => 'constancia_extract',
+                'user_id' => auth()->id(),
+                'customer_id' => auth()->user()?->customer?->id,
+                'result' => 'success',
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                'fields_present' => array_keys(array_filter(
+                    $datos,
+                    fn ($value) => $value !== null && $value !== ''
+                )),
+            ]);
+
             return [
                 'success' => true,
-                'data' => $datos
+                'data' => $datos,
             ];
-            
-        } catch (\Exception $e) {
-            Log::error('Error procesando constancia fiscal: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
+        } catch (\Throwable $e) {
+            Log::error('Error procesando constancia fiscal', [
+                'operation' => 'constancia_extract',
+                'user_id' => auth()->id(),
+                'customer_id' => auth()->user()?->customer?->id,
+                'result' => 'exception',
+                'exception_class' => $e::class,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
             ]);
-            
+
             return [
                 'success' => false,
-                'error' => 'Error al procesar el PDF: ' . $e->getMessage()
+                'error' => 'No pudimos extraer los datos de la constancia. Puedes capturarlos manualmente.',
             ];
         }
     }
@@ -76,9 +100,7 @@ class ConstanciaFiscalService
         
         // Normalizar texto
         $textoNormalizado = $this->normalizarTexto($texto);
-        
-        Log::info('Texto normalizado (primeros 1000 chars):', ['texto' => substr($textoNormalizado, 0, 1000)]);
-        
+
         // 1. Extraer RFC
         $rfc = $this->extraerRFC($textoNormalizado);
         if ($rfc) {
@@ -142,7 +164,6 @@ class ConstanciaFiscalService
                     
                     // Validar formato básico de RFC
                     if (preg_match('/^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3}$/', $rfc)) {
-                        Log::info("RFC encontrado con patrón {$patron}: {$rfc}");
                         return [
                             'rfc' => $rfc,
                             'confianza' => $confianza

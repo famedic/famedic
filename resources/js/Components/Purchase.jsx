@@ -96,9 +96,12 @@ export default function Purchase({
 					{purchase.invoice && (
 						<div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
 							<Anchor
-								href={route("invoice", {
-									invoice: purchase.invoice,
-								})}
+								href={
+									purchase.invoice.invoice_url ||
+									route("invoice", {
+										invoice: purchase.invoice,
+									})
+								}
 								target="_blank"
 								rel="noopener noreferrer"
 							>
@@ -107,11 +110,15 @@ export default function Purchase({
 									Ver PDF
 								</Button>
 							</Anchor>
-							{purchase.invoice.invoice_xml && (
+							{(purchase.invoice.has_invoice_xml ||
+								purchase.invoice.invoice_xml_url) && (
 								<Anchor
-									href={route("invoice.xml", {
-										invoice: purchase.invoice,
-									})}
+									href={
+										purchase.invoice.invoice_xml_url ||
+										route("invoice.xml", {
+											invoice: purchase.invoice,
+										})
+									}
 									target="_blank"
 									rel="noopener noreferrer"
 								>

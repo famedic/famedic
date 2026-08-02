@@ -68,13 +68,16 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 				</Badge>
 			</div>
 
-			{hasInvoice && (
+					{hasInvoice && (
 				<div className="space-y-3">
 					<div className="flex flex-col gap-2 sm:flex-row">
 						<Anchor
-							href={route("invoice", {
-								invoice: invoiceRecord?.id ?? invoiceRecord,
-							})}
+							href={
+								invoiceRecord?.invoice_url ||
+								route("invoice", {
+									invoice: invoiceRecord?.id ?? invoiceRecord,
+								})
+							}
 							target="_blank"
 							className="flex-1"
 						>
@@ -83,11 +86,15 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 								Descargar PDF
 							</Button>
 						</Anchor>
-						{invoiceRecord?.invoice_xml && (
+						{(invoiceRecord?.has_invoice_xml ||
+							invoiceRecord?.invoice_xml_url) && (
 							<Anchor
-								href={route("invoice.xml", {
-									invoice: invoiceRecord?.id ?? invoiceRecord,
-								})}
+								href={
+									invoiceRecord?.invoice_xml_url ||
+									route("invoice.xml", {
+										invoice: invoiceRecord?.id ?? invoiceRecord,
+									})
+								}
 								target="_blank"
 								className="flex-1"
 							>

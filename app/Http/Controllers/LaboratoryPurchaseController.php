@@ -325,7 +325,10 @@ class LaboratoryPurchaseController extends Controller
         );
 
         return Inertia::render('LaboratoryPurchase', [
-            'laboratoryPurchase' => $laboratoryPurchase,
+            'laboratoryPurchase' => tap($laboratoryPurchase, function (LaboratoryPurchase $purchase) {
+                $purchase->invoice?->presentForPatient();
+                $purchase->invoiceRequest?->makeHidden(['fiscal_certificate']);
+            }),
             'isCancelled' => $laboratoryPurchase->trashed(),
             'hasSampleCollected' => $hasSampleCollected,
             'hasResultsAvailable' => $hasResultsAvailable,
@@ -333,7 +336,9 @@ class LaboratoryPurchaseController extends Controller
             'latestResultsAt' => $latestResultsAt,
             'hasResultsPdfCached' => $hasResultsPdfCached,
             'is_new_result' => $isNewResult,
-            'taxProfiles' => auth()->guard()->user()->customer->taxProfiles,
+            'taxProfiles' => auth()->guard()->user()->customer->taxProfiles
+                ->map->presentForPatient()
+                ->values(),
             'daysLeftToRequestInvoice' => $nowInMonterrey->lt($lastDayOfPurchaseMonth)
                 ? (int)ceil($nowInMonterrey->diffInDays($lastDayOfPurchaseMonth, false))
                 : 0,

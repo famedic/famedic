@@ -182,9 +182,12 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 											<TableCell className="text-right">
 												<div className="inline-flex flex-wrap justify-end gap-2">
 													<a
-														href={route("invoice", {
-															invoice: invoice,
-														})}
+														href={
+															invoice.invoice_url ||
+															route("invoice", {
+																invoice: invoice,
+															})
+														}
 														target="_blank"
 													>
 														<Button
@@ -204,15 +207,19 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 															Ver PDF
 														</Button>
 													</a>
-													{invoice.invoice_xml && (
+													{(invoice.has_invoice_xml ||
+														invoice.invoice_xml_url) && (
 														<a
-															href={route(
-																"invoice.xml",
-																{
-																	invoice:
-																		invoice,
-																},
-															)}
+															href={
+																invoice.invoice_xml_url ||
+																route(
+																	"invoice.xml",
+																	{
+																		invoice:
+																			invoice,
+																	},
+																)
+															}
 															target="_blank"
 														>
 															<Button

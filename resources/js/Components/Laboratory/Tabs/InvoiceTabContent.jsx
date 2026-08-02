@@ -54,8 +54,11 @@ export default function InvoiceTabContent({ purchase }) {
                                 Factura generada
                             </Text>
                         </div>
-                        <Anchor
-                            href={route("invoice", { invoice: purchase.invoice })}
+						<Anchor
+                            href={
+								purchase.invoice?.invoice_url ||
+								route("invoice", { invoice: purchase.invoice })
+							}
                             target="_blank"
                             rel="noopener noreferrer"
                         >

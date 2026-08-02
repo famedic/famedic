@@ -293,6 +293,9 @@ class InvoiceXmlSupportIsolatedTest extends TestCase
         $request->setUserResolver(fn () => $purchase->customer->user);
         $request->laboratory_purchase = $purchase;
 
+        // Validar con las rules() del FormRequest. No invocar withValidator():
+        // ese hook solo existe si se define en la clase y lo ejecuta Laravel
+        // durante el ciclo normal de FormRequest, no desde tests.
         $validator = Validator::make(
             array_merge($request->all(), $files),
             $request->rules(),
@@ -300,7 +303,6 @@ class InvoiceXmlSupportIsolatedTest extends TestCase
             $request->attributes(),
         );
 
-        $request->withValidator($validator);
         $validator->passes();
 
         return $validator;

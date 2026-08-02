@@ -43,8 +43,6 @@ class TaxProfile extends Model
         'fecha_inscripcion' => 'date',
     ];
 
-    protected $guarded = [];
-
     protected $appends = [
         'formatted_tax_regime',
         'formatted_cfdi_use',
@@ -54,6 +52,28 @@ class TaxProfile extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    /**
+     * Serialización segura para props de paciente: solo campos del wizard/listado.
+     * No expone paths de Storage ni metadatos internos de la constancia.
+     */
+    public function presentForPatient(): static
+    {
+        $this->setVisible([
+            'id',
+            'name',
+            'rfc',
+            'zipcode',
+            'tax_regime',
+            'cfdi_use',
+            'tipo_persona',
+            'formatted_tax_regime',
+            'formatted_cfdi_use',
+            'formatted_activity_label',
+        ]);
+
+        return $this;
     }
 
     protected function formattedTaxRegime(): Attribute

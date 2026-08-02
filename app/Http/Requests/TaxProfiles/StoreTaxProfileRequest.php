@@ -8,9 +8,9 @@ use Illuminate\Validation\Rule;
 
 class StoreTaxProfileRequest extends FormRequest
 {
-    public function authorize()
+    public function authorize(): bool
     {
-        return true;
+        return $this->user()?->customer !== null;
     }
 
     public function rules()

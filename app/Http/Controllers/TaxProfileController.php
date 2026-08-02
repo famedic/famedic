@@ -15,6 +15,7 @@ use App\Models\LaboratoryPurchase;
 use App\Models\OnlinePharmacyPurchase;
 use App\Models\TaxProfile;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class TaxProfileController extends Controller
@@ -22,42 +23,16 @@ class TaxProfileController extends Controller
     public function index(Request $request)
     {
         return Inertia::render('TaxProfiles', [
-            'taxProfiles' => $request->user()->customer->taxProfiles,
-            'invoices' => Invoice::whereHasMorph(
-                'invoiceable',
-                [LaboratoryPurchase::class, OnlinePharmacyPurchase::class],
-                function ($query) use ($request) {
-                    $query->where('customer_id', $request->user()->customer->id);
-                }
-            )->with([
-                        'invoiceable' => function ($query) {
-                            $query->morphWith([
-                                LaboratoryPurchase::class => ['laboratoryPurchaseItems'],
-                                OnlinePharmacyPurchase::class => ['onlinePharmacyPurchaseItems'],
-                            ]);
-                        },
-                    ])->paginate(),
+            'taxProfiles' => $this->patientTaxProfiles($request),
+            'invoices' => $this->patientInvoicesPaginator($request),
         ]);
     }
 
     public function create(Request $request)
     {
         return Inertia::render('TaxProfiles', [
-            'taxProfiles' => $request->user()->customer->taxProfiles,
-            'invoices' => Invoice::whereHasMorph(
-                'invoiceable',
-                [LaboratoryPurchase::class, OnlinePharmacyPurchase::class],
-                function ($query) use ($request) {
-                    $query->where('customer_id', $request->user()->customer->id);
-                }
-            )->with([
-                        'invoiceable' => function ($query) {
-                            $query->morphWith([
-                                LaboratoryPurchase::class => ['laboratoryPurchaseItems'],
-                                OnlinePharmacyPurchase::class => ['onlinePharmacyPurchaseItems'],
-                            ]);
-                        },
-                    ])->paginate(),
+            'taxProfiles' => $this->patientTaxProfiles($request),
+            'invoices' => $this->patientInvoicesPaginator($request),
             'taxRegimes' => config('taxregimes.regimes'),
         ]);
     }
@@ -65,16 +40,12 @@ class TaxProfileController extends Controller
 
     public function store(StoreTaxProfileRequest $request, CreateTaxProfileAction $action)
     {
-        \Log::info('=== TAX PROFILE STORE ===');
-
         try {
-            // Obtener datos extraídos
             $extractedData = null;
             if ($request->has('extracted_data')) {
                 $extractedData = json_decode($request->input('extracted_data'), true);
             }
 
-            // Ejecutar el action
             $taxProfile = $action(
                 name: $request->name,
                 rfc: $request->rfc,
@@ -85,12 +56,16 @@ class TaxProfileController extends Controller
                 extractedData: $extractedData
             );
 
-            \Log::info('Tax profile created successfully', ['id' => $taxProfile->id]);
+            Log::info('Perfil fiscal creado', [
+                'operation' => 'tax_profile_store',
+                'user_id' => $request->user()->id,
+                'customer_id' => $request->user()->customer->id,
+                'tax_profile_id' => $taxProfile->id,
+                'result' => 'success',
+            ]);
 
-            // Limpiar datos de sesión
             session()->forget('extracted_tax_data');
 
-            // IMPORTANTE: Siempre devolver JSON para peticiones AJAX
             if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
                 return response()->json([
                     'success' => true,
@@ -104,44 +79,36 @@ class TaxProfileController extends Controller
                 ]);
             }
 
-            // Solo redirigir normalmente si no es AJAX
             return redirect()->route('tax-profiles.index')
                 ->with('success', 'Perfil fiscal creado exitosamente.');
-
         } catch (\Exception $e) {
-            \Log::error('Error in store: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
+            Log::error('Error al crear perfil fiscal', [
+                'operation' => 'tax_profile_store',
+                'user_id' => $request->user()->id,
+                'customer_id' => $request->user()->customer->id,
+                'result' => 'exception',
+                'exception_class' => $e::class,
             ]);
 
-            // Devolver error en JSON para AJAX
             if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Error al crear el perfil fiscal: ' . $e->getMessage(),
-                    'error' => config('app.debug') ? [
-                        'message' => $e->getMessage(),
-                        'file' => $e->getFile(),
-                        'line' => $e->getLine(),
-                    ] : null
+                    'message' => 'Error al crear el perfil fiscal.',
                 ], 500);
             }
 
-            return back()->withErrors(['error' => 'Error al crear el perfil fiscal: ' . $e->getMessage()]);
+            return back()->withErrors(['error' => 'Error al crear el perfil fiscal.']);
         }
     }
 
     public function update(UpdateTaxProfileRequest $request, TaxProfile $taxProfile, UpdateTaxProfileAction $action)
     {
-        \Log::info('=== TAX PROFILE UPDATE ===', ['id' => $taxProfile->id]);
-
         try {
-            // Obtener datos extraídos
             $extractedData = null;
             if ($request->has('extracted_data')) {
                 $extractedData = json_decode($request->input('extracted_data'), true);
             }
 
-            // Ejecutar el action
             $action(
                 name: $request->name,
                 rfc: $request->rfc,
@@ -155,9 +122,14 @@ class TaxProfileController extends Controller
 
             session()->forget('extracted_tax_data');
 
-            \Log::info('Tax profile updated successfully', ['id' => $taxProfile->id]);
+            Log::info('Perfil fiscal actualizado', [
+                'operation' => 'tax_profile_update',
+                'user_id' => $request->user()->id,
+                'customer_id' => $request->user()->customer->id,
+                'tax_profile_id' => $taxProfile->id,
+                'result' => 'success',
+            ]);
 
-            // Siempre devolver JSON para AJAX
             if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
                 return response()->json([
                     'success' => true,
@@ -173,55 +145,45 @@ class TaxProfileController extends Controller
 
             return redirect()->route('tax-profiles.index')
                 ->with('success', 'Perfil fiscal actualizado exitosamente.');
-
         } catch (\Exception $e) {
-            \Log::error('Error in update: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
-                'tax_profile_id' => $taxProfile->id
+            Log::error('Error al actualizar perfil fiscal', [
+                'operation' => 'tax_profile_update',
+                'user_id' => $request->user()->id,
+                'customer_id' => $request->user()->customer->id,
+                'tax_profile_id' => $taxProfile->id,
+                'result' => 'exception',
+                'exception_class' => $e::class,
             ]);
 
             if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Error al actualizar el perfil fiscal: ' . $e->getMessage(),
-                    'error' => config('app.debug') ? [
-                        'message' => $e->getMessage(),
-                        'file' => $e->getFile(),
-                        'line' => $e->getLine(),
-                    ] : null
+                    'message' => 'Error al actualizar el perfil fiscal.',
                 ], 500);
             }
 
-            return back()->withErrors(['error' => 'Error al actualizar el perfil fiscal: ' . $e->getMessage()]);
+            return back()->withErrors(['error' => 'Error al actualizar el perfil fiscal.']);
         }
     }
 
     public function edit(EditTaxProfileRequest $request, TaxProfile $taxProfile)
     {
         return Inertia::render('TaxProfiles', [
-            'taxProfiles' => $request->user()->customer->taxProfiles,
-            'invoices' => Invoice::whereHasMorph(
-                'invoiceable',
-                [LaboratoryPurchase::class, OnlinePharmacyPurchase::class],
-                function ($query) use ($request) {
-                    $query->where('customer_id', $request->user()->customer->id);
-                }
-            )->with([
-                        'invoiceable' => function ($query) {
-                            $query->morphWith([
-                                LaboratoryPurchase::class => ['laboratoryPurchaseItems'],
-                                OnlinePharmacyPurchase::class => ['onlinePharmacyPurchaseItems'],
-                            ]);
-                        },
-                    ])->paginate(),
-            'taxProfile' => $taxProfile,
+            'taxProfiles' => $this->patientTaxProfiles($request),
+            'invoices' => $this->patientInvoicesPaginator($request),
+            'taxProfile' => $taxProfile->presentForPatient(),
             'taxRegimes' => config('taxregimes.regimes'),
         ]);
     }
 
     public function destroy(DestroyTaxProfileRequest $request, TaxProfile $taxProfile, DestroyTaxProfileAction $action)
     {
-        \Log::info('Deleting tax profile:', ['id' => $taxProfile->id]);
+        Log::info('Eliminando perfil fiscal', [
+            'operation' => 'tax_profile_destroy',
+            'user_id' => $request->user()->id,
+            'customer_id' => $request->user()->customer->id,
+            'tax_profile_id' => $taxProfile->id,
+        ]);
 
         $action($taxProfile);
 
@@ -231,98 +193,76 @@ class TaxProfileController extends Controller
 
     public function extractData(Request $request)
     {
-        \Log::info('=== EXTRACT DATA START ===');
-        \Log::info('Session info:', [
-            'session_id' => session()->getId(),
-            'user_id' => auth()->id(),
-            'user_email' => auth()->user()->email ?? null,
-        ]);
-
         try {
-            // Validar archivo
             $request->validate([
                 'fiscal_certificate' => 'required|file|mimes:pdf|max:5120',
             ]);
 
             $file = $request->file('fiscal_certificate');
 
-            \Log::info('Archivo recibido para extracción:', [
-                'nombre' => $file->getClientOriginalName(),
-                'tamaño' => $file->getSize(),
+            Log::info('Solicitud de extracción de constancia recibida', [
+                'operation' => 'constancia_extract_request',
+                'user_id' => auth()->id(),
+                'customer_id' => auth()->user()?->customer?->id,
                 'mime_type' => $file->getMimeType(),
-                'extension' => $file->getClientOriginalExtension(),
+                'size_bytes' => $file->getSize(),
             ]);
 
-            // Usar el servicio real para procesar el PDF
             $service = app(ConstanciaFiscalService::class);
-
-            \Log::info('Starting PDF processing...');
             $startTime = microtime(true);
-
             $resultado = $service->procesarConstancia($file);
-
             $processingTime = microtime(true) - $startTime;
-            \Log::info('PDF processing completed', [
-                'success' => $resultado['success'],
-                'processing_time' => round($processingTime, 2) . ' seconds'
-            ]);
 
-            if (!$resultado['success']) {
-                \Log::error('Error processing PDF:', ['error' => $resultado['error']]);
+            if (! ($resultado['success'] ?? false)) {
+                Log::warning('Extracción de constancia fallida', [
+                    'operation' => 'constancia_extract_request',
+                    'user_id' => auth()->id(),
+                    'customer_id' => auth()->user()?->customer?->id,
+                    'result' => 'failure',
+                    'duration_ms' => (int) round($processingTime * 1000),
+                ]);
 
                 return response()->json([
                     'success' => false,
                     'message' => $resultado['error']
+                        ?? 'No pudimos extraer los datos de la constancia. Puedes capturarlos manualmente.',
+                    'data' => null,
                 ], 422);
             }
 
-            \Log::info('Data extracted successfully:', $resultado['data']);
+            Log::info('Extracción de constancia respondida al cliente', [
+                'operation' => 'constancia_extract_request',
+                'user_id' => auth()->id(),
+                'customer_id' => auth()->user()?->customer?->id,
+                'result' => 'success',
+                'duration_ms' => (int) round($processingTime * 1000),
+            ]);
 
             return response()->json([
                 'success' => true,
+                'message' => 'Datos extraídos correctamente. Revisa y confirma antes de guardar.',
                 'data' => $resultado['data'],
-                'debug' => [
-                    'processing_time' => round($processingTime, 2) . ' seconds',
-                    'session_id' => session()->getId(),
-                ]
             ]);
-
         } catch (\Illuminate\Validation\ValidationException $e) {
-            \Log::error('Validation error in extractData:', $e->errors());
+            return response()->json([
+                'success' => false,
+                'message' => 'El archivo de constancia no es válido. Debe ser un PDF de máximo 5 MB.',
+                'data' => null,
+            ], 422);
+        } catch (\Throwable $e) {
+            Log::error('Error inesperado en extractData', [
+                'operation' => 'constancia_extract_request',
+                'user_id' => auth()->id(),
+                'customer_id' => auth()->user()?->customer?->id,
+                'result' => 'exception',
+                'exception_class' => $e::class,
+            ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Error de validación: ' . implode(', ', $e->validator->errors()->all())
+                'message' => 'No pudimos extraer los datos de la constancia. Puedes capturarlos manualmente.',
+                'data' => null,
             ], 422);
-
-        } catch (\Exception $e) {
-            \Log::error('Error in extractData: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
-
-            // Fallback: devolver datos de prueba si hay error
-            $testData = [
-                'rfc' => 'XAXX010101000',
-                'nombre' => 'PUBLICO EN GENERAL',
-                'razon_social' => 'PUBLICO EN GENERAL',
-                'codigo_postal' => '64000',
-                'regimen_fiscal' => 'Régimen de Incorporación Fiscal',
-                'tipo_persona' => 'fisica',
-                'fecha_emision' => now()->format('Y-m-d'),
-                'estatus_sat' => 'Vigente',
-                'tipo_persona_confianza' => 95,
-                'error_original' => $e->getMessage(),
-            ];
-
-            \Log::warning('Returning fallback test data due to error');
-
-            return response()->json([
-                'success' => true, // Aún success para que el frontend pueda usar los datos
-                'data' => $testData,
-                'warning' => 'Se usaron datos de prueba debido a un error en el procesamiento: ' . $e->getMessage()
-            ]);
         }
     }
 
@@ -394,13 +334,33 @@ class TaxProfileController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Error: ' . $e->getMessage(),
-                'error_details' => [
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                    'trace' => $e->getTraceAsString()
-                ]
+                'message' => 'Error al verificar el servicio de extracción.',
             ], 500);
         }
+    }
+
+    private function patientTaxProfiles(Request $request)
+    {
+        return $request->user()->customer->taxProfiles
+            ->map->presentForPatient()
+            ->values();
+    }
+
+    private function patientInvoicesPaginator(Request $request)
+    {
+        return Invoice::whereHasMorph(
+            'invoiceable',
+            [LaboratoryPurchase::class, OnlinePharmacyPurchase::class],
+            function ($query) use ($request) {
+                $query->where('customer_id', $request->user()->customer->id);
+            }
+        )->with([
+            'invoiceable' => function ($query) {
+                $query->morphWith([
+                    LaboratoryPurchase::class => ['laboratoryPurchaseItems'],
+                    OnlinePharmacyPurchase::class => ['onlinePharmacyPurchaseItems'],
+                ]);
+            },
+        ])->paginate()->through(fn (Invoice $invoice) => $invoice->presentForPatient());
     }
 }

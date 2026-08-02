@@ -13,6 +13,7 @@ class CreateInvoiceRequestAction
     public function __invoke(
         Model $model,
         TaxProfile $taxProfile,
+        ?string $cfdiUse = null,
     ): InvoiceRequest {
         DB::beginTransaction();
 
@@ -30,7 +31,7 @@ class CreateInvoiceRequestAction
                 'rfc' => $taxProfile->rfc,
                 'zipcode' => $taxProfile->zipcode,
                 'tax_regime' => $taxProfile->tax_regime,
-                'cfdi_use' => $taxProfile->cfdi_use,
+                'cfdi_use' => $cfdiUse ?? $taxProfile->cfdi_use,
                 'fiscal_certificate' => $fiscalCertificatePath,
             ];
 
