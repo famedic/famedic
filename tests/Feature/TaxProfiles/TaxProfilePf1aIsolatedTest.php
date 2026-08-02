@@ -620,6 +620,7 @@ class TaxProfilePf1aIsolatedTest extends TestCase
         Schema::create('tax_profiles', function (Blueprint $table) {
             $table->id();
             $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
+            $table->boolean('is_default')->default(false);
             $table->string('name');
             $table->string('rfc')->nullable();
             $table->string('zipcode')->nullable();
@@ -689,6 +690,10 @@ class TaxProfilePf1aIsolatedTest extends TestCase
 
         Schema::create('invoice_requests', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('tax_profile_id')
+                ->nullable()
+                ->constrained('tax_profiles')
+                ->nullOnDelete();
             $table->morphs('invoice_requestable', 'invoice_requestable_index');
             $table->string('name');
             $table->string('rfc');

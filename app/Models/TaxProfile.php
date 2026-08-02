@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 
@@ -37,6 +38,7 @@ class TaxProfile extends Model
     ];
 
     protected $casts = [
+        'is_default' => 'boolean',
         'tipo_persona_confianza' => 'integer',
         'verificado_automaticamente' => 'boolean',
         'fecha_verificacion' => 'datetime',
@@ -54,6 +56,20 @@ class TaxProfile extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function invoiceRequests(): HasMany
+    {
+        return $this->hasMany(InvoiceRequest::class);
+    }
+
+    /**
+     * Un perfil se considera utilizado si existe cualquier solicitud vinculada,
+     * incluida soft-deleted.
+     */
+    public function isUsed(): bool
+    {
+        return $this->invoiceRequests()->withTrashed()->exists();
+    }
+
     /**
      * Serialización segura para props de paciente: solo campos del wizard/listado.
      * No expone paths de Storage ni metadatos internos de la constancia.
@@ -68,6 +84,7 @@ class TaxProfile extends Model
             'tax_regime',
             'cfdi_use',
             'tipo_persona',
+            'is_default',
             'formatted_tax_regime',
             'formatted_cfdi_use',
             'formatted_activity_label',
