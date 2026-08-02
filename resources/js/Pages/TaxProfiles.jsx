@@ -12,12 +12,15 @@ import {
 	CheckCircleIcon,
 	UserIcon,
 	ClockIcon,
+	EyeIcon,
 } from "@heroicons/react/24/outline";
-import { PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { PencilIcon, TrashIcon, StarIcon } from "@heroicons/react/24/outline";
 import TaxProfileForm from "@/Pages/TaxProfiles/TaxProfileForm";
 import TaxProfileDeleteConfirmation from "@/Pages/TaxProfiles/TaxProfileDeleteConfirmation";
+import TaxProfileViewModal from "@/Pages/TaxProfiles/TaxProfileViewModal";
 import TaxProfilesInfoPanel from "@/Pages/TaxProfiles/TaxProfilesInfoPanel";
 import { useState } from "react";
+import { useForm } from "@inertiajs/react";
 import SettingsCard from "@/Components/SettingsCard";
 import {
 	Table,
@@ -42,6 +45,7 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 		route().current("tax-profiles.edit");
 
 	const [taxProfileToDelete, setTaxProfileToDelete] = useState(null);
+	const [taxProfileToView, setTaxProfileToView] = useState(null);
 
 	return (
 		<SettingsLayout title="Mis perfiles fiscales">
@@ -52,10 +56,10 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 							Mis perfiles fiscales
 						</GradientHeading>
 						<Badge color="blue" className="whitespace-nowrap">
-							{taxProfiles.length} perfil{taxProfiles.length !== 1 ? 'es' : ''}
+							{taxProfiles.length} perfil{taxProfiles.length !== 1 ? "es" : ""}
 						</Badge>
 					</div>
-					
+
 					<div className="flex items-center gap-3">
 						<Button
 							dusk="createTaxProfile"
@@ -72,8 +76,7 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 
 				<TaxProfilesInfoPanel />
 
-				{/* Botón de agregar perfil - Ahora después de las recomendaciones */}
-				<div className="flex justify-center my-4">
+				<div className="my-4 flex justify-center">
 					<Button
 						dusk="createTaxProfileMain"
 						preserveState
@@ -88,16 +91,16 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 
 				<Divider className="my-6" />
 
-				{/* Lista de perfiles fiscales */}
 				<div className="mb-8">
 					<Subheading className="mb-4 flex items-center gap-2">
 						<UserIcon className="h-5 w-5" />
 						Tus perfiles fiscales
 					</Subheading>
-					
+
 					<TaxProfilesList
 						taxProfiles={taxProfiles}
 						setTaxProfileToDelete={setTaxProfileToDelete}
+						setTaxProfileToView={setTaxProfileToView}
 					/>
 				</div>
 
@@ -261,102 +264,182 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 					close={() => setTaxProfileToDelete(null)}
 					taxProfile={taxProfileToDelete}
 				/>
+
+				<TaxProfileViewModal
+					isOpen={!!taxProfileToView}
+					close={() => setTaxProfileToView(null)}
+					taxProfile={taxProfileToView}
+				/>
 			</div>
 		</SettingsLayout>
 	);
 }
 
-function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
+function TaxProfilesList({
+	taxProfiles,
+	setTaxProfileToDelete,
+	setTaxProfileToView,
+}) {
 	return (
 		<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-			{taxProfiles.map((taxProfile) => (
+			{taxProfiles.map((taxProfile) => {
+				const isUsed = taxProfile.is_used === true;
+				const isDefault = taxProfile.is_default === true;
+
+				return (
 					<SettingsCard
 						key={taxProfile.id}
 						className="h-full !max-w-none rounded-xl shadow-sm transition-shadow hover:shadow-md"
 						actions={
-							<div className="flex gap-2 mt-4">
-								<Button
-									dusk={`deleteTaxProfile-${taxProfile.id}`}
-									onClick={() =>
-										setTaxProfileToDelete(taxProfile)
-									}
-									outline
-									className="flex-1 justify-center"
-								>
-									<TrashIcon className="h-4 w-4 stroke-red-400 mr-2" />
-									Eliminar
-								</Button>
-								<Button
-									outline
-									dusk={`editTaxProfile-${taxProfile.id}`}
-									preserveState
-									preserveScroll
-									href={route("tax-profiles.edit", {
-										tax_profile: taxProfile,
-									})}
-									className="flex-1 justify-center"
-								>
-									<PencilIcon className="h-4 w-4 mr-2" />
-									Editar
-								</Button>
+							<div className="mt-4 flex flex-col gap-2">
+								<div className="flex flex-col gap-2 sm:flex-row">
+									<Button
+										dusk={`deactivateTaxProfile-${taxProfile.id}`}
+										onClick={() =>
+											setTaxProfileToDelete(taxProfile)
+										}
+										outline
+										className="flex-1 justify-center"
+										aria-label={`Desactivar perfil fiscal ${taxProfile.name}`}
+									>
+										<TrashIcon className="mr-2 h-4 w-4 stroke-red-400" />
+										Desactivar
+									</Button>
+									{isUsed ? (
+										<Button
+											outline
+											dusk={`viewTaxProfile-${taxProfile.id}`}
+											type="button"
+											onClick={() =>
+												setTaxProfileToView(taxProfile)
+											}
+											className="flex-1 justify-center"
+											aria-label={`Ver datos del perfil fiscal ${taxProfile.name}`}
+										>
+											<EyeIcon className="mr-2 h-4 w-4" />
+											Ver datos
+										</Button>
+									) : (
+										<Button
+											outline
+											dusk={`editTaxProfile-${taxProfile.id}`}
+											preserveState
+											preserveScroll
+											href={route("tax-profiles.edit", {
+												tax_profile: taxProfile,
+											})}
+											className="flex-1 justify-center"
+											aria-label={`Editar perfil fiscal ${taxProfile.name}`}
+										>
+											<PencilIcon className="mr-2 h-4 w-4" />
+											Editar
+										</Button>
+									)}
+								</div>
+								{!isDefault && (
+									<SetDefaultTaxProfileButton
+										taxProfile={taxProfile}
+									/>
+								)}
 							</div>
 						}
 					>
 						<div className="space-y-4">
 							<div>
+								<div className="mb-2 flex flex-wrap gap-2">
+									{isDefault && (
+										<Badge color="emerald">
+											Predeterminado
+										</Badge>
+									)}
+									{isUsed && (
+										<Badge color="zinc">
+											Utilizado en facturación
+										</Badge>
+									)}
+								</div>
 								<Subheading className="mb-1 line-clamp-1">
 									{taxProfile.name}
 								</Subheading>
 								<Code className="text-sm">{taxProfile.rfc}</Code>
+								{isUsed && (
+									<p
+										id={`tax-profile-used-help-${taxProfile.id}`}
+										className="mt-2 text-xs text-zinc-600 dark:text-slate-400"
+									>
+										Sus datos fiscales ya no pueden
+										modificarse. Puedes seguir usándolo o
+										crear otro perfil.
+									</p>
+								)}
 								{taxProfile.formatted_activity_label && (
 									<p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-										<ClockIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-										<span>{taxProfile.formatted_activity_label}</span>
+										<ClockIcon
+											className="h-3.5 w-3.5 shrink-0"
+											aria-hidden
+										/>
+										<span>
+											{taxProfile.formatted_activity_label}
+										</span>
 									</p>
 								)}
 							</div>
-							
+
 							<div className="space-y-2">
-								<div className="flex items-center justify-between">
-									<span className="text-sm text-gray-600 dark:text-slate-400">Código Postal:</span>
+								<div className="flex items-center justify-between gap-2">
+									<span className="text-sm text-gray-600 dark:text-slate-400">
+										Código Postal:
+									</span>
 									<span className="font-medium text-zinc-900 dark:text-white">
 										CP {taxProfile.zipcode}
 									</span>
 								</div>
-								
-								<div className="flex items-center justify-between">
-									<span className="text-sm text-gray-600">Tipo Persona:</span>
-									{taxProfile.tipo_persona === 'fisica' ? (
+
+								<div className="flex items-center justify-between gap-2">
+									<span className="text-sm text-gray-600">
+										Tipo Persona:
+									</span>
+									{taxProfile.tipo_persona === "fisica" ? (
 										<Badge color="green" className="text-xs">
 											Persona Física
 										</Badge>
-									) : taxProfile.tipo_persona === 'moral' ? (
+									) : taxProfile.tipo_persona === "moral" ? (
 										<Badge color="red" className="text-xs">
 											Persona Moral
 										</Badge>
 									) : (
-										<Badge color="gray" className="text-xs">
+										<Badge color="zinc" className="text-xs">
 											No especificado
 										</Badge>
 									)}
 								</div>
-								
-								<div className="pt-2 border-t border-gray-100">
-									<p className="text-sm text-gray-600 mb-1">Régimen Fiscal:</p>
-									<Badge color="slate" className="w-full justify-center text-sm py-1.5">
+
+								<div className="border-t border-gray-100 pt-2">
+									<p className="mb-1 text-sm text-gray-600">
+										Régimen Fiscal:
+									</p>
+									<Badge
+										color="slate"
+										className="w-full justify-center py-1.5 text-sm"
+									>
 										{taxProfile.formatted_tax_regime}
 									</Badge>
 								</div>
-								
+
 								<div className="pt-2">
-									<p className="text-sm text-gray-600 mb-1">Uso CFDI:</p>
-									<Badge color="slate" className="w-full justify-center text-sm py-1.5">
+									<p className="mb-1 text-sm text-gray-600">
+										Uso CFDI:
+									</p>
+									<Badge
+										color="slate"
+										className="w-full justify-center py-1.5 text-sm"
+									>
 										{taxProfile.formatted_cfdi_use}
 									</Badge>
 								</div>
-								
+
 								{taxProfile.verificado_automaticamente && (
-									<div className="pt-3 mt-3 border-t border-green-100">
+									<div className="mt-3 border-t border-green-100 pt-3">
 										<div className="flex items-center gap-2 text-green-600">
 											<CheckCircleIcon className="h-4 w-4" />
 											<span className="text-xs font-medium">
@@ -366,38 +449,48 @@ function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
 									</div>
 								)}
 							</div>
-							
+
 							<div className="pt-4">
 								<a
-									href={route("tax-profiles.fiscal-certificate", {
-										tax_profile: taxProfile,
-									})}
+									href={route(
+										"tax-profiles.fiscal-certificate",
+										{
+											tax_profile: taxProfile,
+										},
+									)}
 									target="_blank"
+									rel="noreferrer"
 									className="block"
 								>
-									<Button type="button" outline className="w-full justify-center">
-										<DocumentTextIcon className="h-4 w-4 mr-2" />
+									<Button
+										type="button"
+										outline
+										className="w-full justify-center"
+									>
+										<DocumentTextIcon className="mr-2 h-4 w-4" />
 										Ver constancia fiscal
 									</Button>
 								</a>
 							</div>
 						</div>
 					</SettingsCard>
-			))}
+				);
+			})}
 
 			{taxProfiles.length === 0 && (
 				<div className="col-span-1 md:col-span-2 lg:col-span-3">
 					<SettingsCard>
-						<div className="text-center py-8">
-							<div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+						<div className="py-8 text-center">
+							<div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
 								<UserIcon className="h-8 w-8 text-gray-400" />
 							</div>
 							<Subheading className="mb-2">
 								Sin perfiles fiscales
 							</Subheading>
-							<Text className="text-gray-500 mb-6">
-								Aún no has agregado ningún perfil fiscal. 
-								Agrega tu primer perfil para poder facturar tus compras.
+							<Text className="mb-6 text-gray-500">
+								Aún no has agregado ningún perfil fiscal. Agrega
+								tu primer perfil para poder facturar tus
+								compras.
 							</Text>
 							<Button
 								dusk="createFirstTaxProfile"
@@ -406,7 +499,7 @@ function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
 								href={route("tax-profiles.create")}
 								className="mx-auto"
 							>
-								<PlusIcon className="h-5 w-5 mr-2" />
+								<PlusIcon className="mr-2 h-5 w-5" />
 								Agregar mi primer perfil
 							</Button>
 						</div>
@@ -414,6 +507,40 @@ function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
 				</div>
 			)}
 		</div>
+	);
+}
+
+function SetDefaultTaxProfileButton({ taxProfile }) {
+	const { patch, processing } = useForm({});
+
+	const handleSetDefault = () => {
+		if (processing) {
+			return;
+		}
+
+		patch(
+			route("tax-profiles.set-default", {
+				tax_profile: taxProfile,
+			}),
+			{
+				preserveScroll: true,
+			},
+		);
+	};
+
+	return (
+		<Button
+			type="button"
+			outline
+			dusk={`setDefaultTaxProfile-${taxProfile.id}`}
+			onClick={handleSetDefault}
+			disabled={processing}
+			className="w-full justify-center"
+			aria-label={`Usar ${taxProfile.name} como perfil predeterminado`}
+		>
+			<StarIcon className="mr-2 h-4 w-4" />
+			{processing ? "Actualizando…" : "Usar como predeterminado"}
+		</Button>
 	);
 }
 

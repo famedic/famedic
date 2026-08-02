@@ -95,9 +95,9 @@ class OnlinePharmacyPurchaseController extends Controller
 
         return Inertia::render('OnlinePharmacyPurchase', [
             'onlinePharmacyPurchase' => $onlinePharmacyPurchase,
-            'taxProfiles' => auth()->user()->customer->taxProfiles
-                ->map->presentForPatient()
-                ->values(),
+            'taxProfiles' => \App\Models\TaxProfile::presentCollectionForPatient(
+                auth()->user()->customer
+            ),
             'daysLeftToRequestInvoice' => now()->lt($onlinePharmacyPurchase->created_at->addDays(30))
                 ? (int) now()->diffInDays($onlinePharmacyPurchase->created_at->addDays(30))
                 : 0,

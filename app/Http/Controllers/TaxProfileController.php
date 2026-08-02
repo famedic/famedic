@@ -147,6 +147,24 @@ class TaxProfileController extends Controller
 
             return redirect()->route('tax-profiles.index')
                 ->with('success', 'Perfil fiscal actualizado exitosamente.');
+        } catch (\InvalidArgumentException $e) {
+            Log::warning('Actualización de perfil fiscal rechazada', [
+                'operation' => 'tax_profile_update',
+                'user_id' => $request->user()->id,
+                'customer_id' => $request->user()->customer->id,
+                'tax_profile_id' => $taxProfile->id,
+                'result' => 'rejected',
+                'exception_class' => $e::class,
+            ]);
+
+            if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
+            return back()->withErrors(['error' => $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('Error al actualizar perfil fiscal', [
                 'operation' => 'tax_profile_update',
@@ -369,9 +387,7 @@ class TaxProfileController extends Controller
 
     private function patientTaxProfiles(Request $request)
     {
-        return $request->user()->customer->taxProfiles
-            ->map->presentForPatient()
-            ->values();
+        return TaxProfile::presentCollectionForPatient($request->user()->customer);
     }
 
     private function patientInvoicesPaginator(Request $request)

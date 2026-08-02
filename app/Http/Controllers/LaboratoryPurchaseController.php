@@ -336,9 +336,9 @@ class LaboratoryPurchaseController extends Controller
             'latestResultsAt' => $latestResultsAt,
             'hasResultsPdfCached' => $hasResultsPdfCached,
             'is_new_result' => $isNewResult,
-            'taxProfiles' => auth()->guard()->user()->customer->taxProfiles
-                ->map->presentForPatient()
-                ->values(),
+            'taxProfiles' => \App\Models\TaxProfile::presentCollectionForPatient(
+                auth()->guard()->user()->customer
+            ),
             'daysLeftToRequestInvoice' => $nowInMonterrey->lt($lastDayOfPurchaseMonth)
                 ? (int)ceil($nowInMonterrey->diffInDays($lastDayOfPurchaseMonth, false))
                 : 0,

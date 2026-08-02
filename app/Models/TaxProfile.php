@@ -92,13 +92,39 @@ class TaxProfile extends Model
 
         // Solo cuando el esquema tiene invoice_requests (suites aisladas pueden omitirla).
         if (\Illuminate\Support\Facades\Schema::hasTable('invoice_requests')) {
-            $this->setAttribute('is_used', $this->isUsed());
+            // Preferir withExists (incl. trashed) cuando el loader lo aportó; si no, isUsed().
+            $isUsed = array_key_exists('used_invoice_requests_exist', $this->attributes)
+                ? (bool) $this->attributes['used_invoice_requests_exist']
+                : $this->isUsed();
+
+            $this->setAttribute('is_used', $isUsed);
             $visible[] = 'is_used';
         }
 
         $this->setVisible($visible);
 
         return $this;
+    }
+
+    /**
+     * Colección de perfiles activos del customer lista para props Inertia de paciente.
+     * Usa withExists (con soft-deleted) para evitar N+1 de isUsed() sin cambiar su semántica pública.
+     */
+    public static function presentCollectionForPatient(Customer $customer): \Illuminate\Support\Collection
+    {
+        $query = $customer->taxProfiles();
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('invoice_requests')) {
+            $query->withExists([
+                'invoiceRequests as used_invoice_requests_exist' => function ($relationQuery) {
+                    $relationQuery->withTrashed();
+                },
+            ]);
+        }
+
+        return $query->get()
+            ->map->presentForPatient()
+            ->values();
     }
 
     protected function formattedTaxRegime(): Attribute

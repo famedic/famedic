@@ -12,6 +12,7 @@ import {
 	DocumentTextIcon,
 	ReceiptPercentIcon,
 } from "@heroicons/react/24/outline";
+import { getDefaultTaxProfileId } from "@/lib/taxProfileSelection";
 
 const CFDI_OPTIONS = [
 	{ value: "G03", label: "G03", description: "Gastos en general" },
@@ -31,8 +32,9 @@ const CFDI_OPTIONS = [
 
 export default function InvoiceSection({ purchase, inlineForm = false }) {
 	const { daysLeftToRequestInvoice, taxProfiles = [] } = usePage().props;
+	// Preselección solo en el valor inicial de useForm: no se reescribe en re-renders.
 	const { data, setData, post, processing, errors } = useForm({
-		tax_profile: null,
+		tax_profile: getDefaultTaxProfileId(taxProfiles),
 		cfdi_use: "",
 	});
 

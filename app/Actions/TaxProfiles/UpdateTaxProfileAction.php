@@ -21,7 +21,7 @@ class UpdateTaxProfileAction
     ): TaxProfile {
         if ($taxProfile->isUsed()) {
             throw new \InvalidArgumentException(
-                'Este perfil fiscal ya fue utilizado en una solicitud de factura y no puede modificarse.'
+                'Este perfil ya no se puede modificar porque fue utilizado en una solicitud de factura. Puedes usarlo en nuevas solicitudes o crear otro perfil con datos distintos.'
             );
         }
 
