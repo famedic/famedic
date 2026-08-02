@@ -105,6 +105,9 @@ Route::middleware([
     Route::resource('tax-profiles', TaxProfileController::class)
         ->except(['show', 'extract-data']);
 
+    Route::patch('tax-profiles/{tax_profile}/default', [TaxProfileController::class, 'setDefault'])
+        ->name('tax-profiles.set-default');
+
     Route::get('tax-profiles/{tax_profile}/fiscal-certificate', FiscalCertificateController::class)
         ->name('tax-profiles.fiscal-certificate');
 });

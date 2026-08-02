@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Services\ConstanciaFiscalService;
 use App\Actions\TaxProfiles\CreateTaxProfileAction;
 use App\Actions\TaxProfiles\DestroyTaxProfileAction;
+use App\Actions\TaxProfiles\SetDefaultTaxProfileAction;
 use App\Actions\TaxProfiles\UpdateTaxProfileAction;
 use App\Http\Requests\TaxProfiles\DestroyTaxProfileRequest;
 use App\Http\Requests\TaxProfiles\EditTaxProfileRequest;
+use App\Http\Requests\TaxProfiles\SetDefaultTaxProfileRequest;
 use App\Http\Requests\TaxProfiles\StoreTaxProfileRequest;
 use App\Http\Requests\TaxProfiles\UpdateTaxProfileRequest;
 use App\Models\Invoice;
@@ -178,7 +180,7 @@ class TaxProfileController extends Controller
 
     public function destroy(DestroyTaxProfileRequest $request, TaxProfile $taxProfile, DestroyTaxProfileAction $action)
     {
-        Log::info('Eliminando perfil fiscal', [
+        Log::info('Desactivando perfil fiscal', [
             'operation' => 'tax_profile_destroy',
             'user_id' => $request->user()->id,
             'customer_id' => $request->user()->customer->id,
@@ -188,7 +190,33 @@ class TaxProfileController extends Controller
         $action($taxProfile);
 
         return redirect()->route('tax-profiles.index')
-            ->flashMessage('Perfil fiscal eliminado exitosamente.');
+            ->flashMessage('Perfil fiscal desactivado exitosamente.');
+    }
+
+    public function setDefault(
+        SetDefaultTaxProfileRequest $request,
+        TaxProfile $taxProfile,
+        SetDefaultTaxProfileAction $action
+    ) {
+        Log::info('Estableciendo perfil fiscal predeterminado', [
+            'operation' => 'tax_profile_set_default',
+            'user_id' => $request->user()->id,
+            'customer_id' => $request->user()->customer->id,
+            'tax_profile_id' => $taxProfile->id,
+        ]);
+
+        $action($taxProfile);
+
+        if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Perfil fiscal establecido como predeterminado.',
+                'redirect' => route('tax-profiles.index'),
+            ]);
+        }
+
+        return redirect()->route('tax-profiles.index')
+            ->flashMessage('Perfil fiscal establecido como predeterminado.');
     }
 
     public function extractData(Request $request)
