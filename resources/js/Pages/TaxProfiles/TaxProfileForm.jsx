@@ -5,6 +5,12 @@ import {
 	DialogBody,
 	DialogActions,
 } from "@/Components/Catalyst/dialog";
+import {
+	Alert,
+	AlertTitle,
+	AlertDescription,
+	AlertActions,
+} from "@/Components/Catalyst/alert";
 import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Button } from "@/Components/Catalyst/button";
@@ -106,6 +112,7 @@ export default function TaxProfileForm({ isOpen }) {
 	const [infoMessage, setInfoMessage] = useState(null);
 	const [isSaving, setIsSaving] = useState(false);
 	const [saveStep, setSaveStep] = useState("");
+	const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
 	const resetFormData = (profile) => ({
 		name: profile?.name || "",
@@ -125,7 +132,11 @@ export default function TaxProfileForm({ isOpen }) {
 	const fileInputRef = useRef(null);
 	const manualFileInputRef = useRef(null);
 	const extractInFlightRef = useRef(false);
+	const saveInFlightRef = useRef(false);
 	const abortControllerRef = useRef(null);
+	const abortReasonRef = useRef(null); // 'user' | 'timeout' | null
+	const extractionGenerationRef = useRef(0);
+	const initialFormSnapshotRef = useRef(null);
 	const messageCycleRef = useRef(null);
 	const slowNoticeTimeoutRef = useRef(null);
 
@@ -140,15 +151,83 @@ export default function TaxProfileForm({ isOpen }) {
 		}
 	};
 
+	const abortExtractionSilently = () => {
+		if (!abortControllerRef.current) return;
+		abortReasonRef.current = "user";
+		extractionGenerationRef.current += 1;
+		abortControllerRef.current.abort();
+		abortControllerRef.current = null;
+		// Invalidar generación evita que el finally tardío restaure estado;
+		// limpiar aquí porque el finally de esa generación ya no tocará UI.
+		stopExtractionMessageCycle();
+		setProcessingPdf(false);
+		setShowSlowNotice(false);
+		extractInFlightRef.current = false;
+	};
+
+	/**
+	 * Rebuild extracted_data for store: user-visible corrections win;
+	 * whitelist only persisted metadata keys; force tipo_persona=fisica.
+	 */
+	const buildStoreExtractedData = () => {
+		if (!extractedData || typeof extractedData !== "object") {
+			return null;
+		}
+
+		return {
+			rfc: data.rfc || null,
+			nombre: data.name || null,
+			razon_social: data.name || null,
+			codigo_postal: data.zipcode || null,
+			codigo_postal_original: data.zipcode || null,
+			regimen_fiscal:
+				extractedData.regimen_fiscal_original ||
+				extractedData.regimen_fiscal ||
+				data.tax_regime ||
+				null,
+			regimen_fiscal_original:
+				extractedData.regimen_fiscal_original ||
+				extractedData.regimen_fiscal ||
+				null,
+			tax_regime: data.tax_regime || null,
+			domicilio_fiscal: extractedData.domicilio_fiscal || null,
+			fecha_emision: extractedData.fecha_emision || null,
+			fecha_emision_constancia:
+				extractedData.fecha_emision_constancia ||
+				extractedData.fecha_emision ||
+				null,
+			fecha_inscripcion: extractedData.fecha_inscripcion || null,
+			estatus_sat: extractedData.estatus_sat || null,
+			actividades_economicas: extractedData.actividades_economicas || null,
+			tipo_persona: "fisica",
+			tipo_persona_confianza:
+				typeof extractedData.tipo_persona_confianza === "number"
+					? extractedData.tipo_persona_confianza
+					: null,
+			tipo_persona_detectado_por:
+				extractedData.tipo_persona_detectado_por || null,
+		};
+	};
+
 	useEffect(() => {
 		if (!isOpen) return;
 
 		const isEditMode = route().current("tax-profiles.edit") || false;
+		const nextForm = resetFormData(taxProfile || {});
 
 		setCachedTaxRegimes(taxRegimes || {});
 		setCachedTaxProfile(taxProfile || null);
 		setCachedEditMode(isEditMode);
-		setData(resetFormData(taxProfile || {}));
+		setData(nextForm);
+		initialFormSnapshotRef.current = isEditMode
+			? {
+					name: nextForm.name,
+					rfc: nextForm.rfc,
+					zipcode: nextForm.zipcode,
+					tax_regime: nextForm.tax_regime,
+					cfdi_use: nextForm.cfdi_use,
+				}
+			: null;
 
 		setUploadedFile(null);
 		setIsDragging(false);
@@ -161,16 +240,15 @@ export default function TaxProfileForm({ isOpen }) {
 		setInfoMessage(null);
 		setIsSaving(false);
 		setSaveStep("");
+		setShowDiscardConfirm(false);
+		saveInFlightRef.current = false;
 
 		extractInFlightRef.current = false;
-		if (abortControllerRef.current) {
-			abortControllerRef.current.abort();
-			abortControllerRef.current = null;
-		}
+		abortExtractionSilently();
 		stopExtractionMessageCycle();
+		abortReasonRef.current = null;
 
 		if (isEditMode && taxProfile) {
-			// Edición: ir directo a revisión con los datos actuales; la constancia es opcional.
 			setEntryMode(ENTRY_MODES.MANUAL);
 			setIsModeSelected(true);
 			setActiveStep(STEPS.REVIEW);
@@ -185,8 +263,9 @@ export default function TaxProfileForm({ isOpen }) {
 	useEffect(() => {
 		return () => {
 			stopExtractionMessageCycle();
-			abortControllerRef.current?.abort();
+			abortExtractionSilently();
 		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	const encontrarRegimenPorTexto = (textoRegimen) => {
@@ -252,6 +331,10 @@ export default function TaxProfileForm({ isOpen }) {
 	};
 
 	const applySelectedFile = (file) => {
+		if (processingPdf) {
+			abortExtractionSilently();
+		}
+
 		const validationError = validateSelectedFile(file);
 		if (validationError) {
 			setError("fiscal_certificate", validationError);
@@ -263,6 +346,7 @@ export default function TaxProfileForm({ isOpen }) {
 		setExtractedData(null);
 		setMissingFields([]);
 		setWarnings([]);
+		setData("confirm_data", false);
 		setUploadedFile(file);
 		setData("fiscal_certificate", file);
 	};
@@ -308,6 +392,9 @@ export default function TaxProfileForm({ isOpen }) {
 	};
 
 	const handleRemoveFile = () => {
+		if (processingPdf) {
+			abortExtractionSilently();
+		}
 		setUploadedFile(null);
 		setExtractedData(null);
 		setMissingFields([]);
@@ -332,6 +419,7 @@ export default function TaxProfileForm({ isOpen }) {
 		setData("rfc", "");
 		setData("zipcode", "");
 		setData("tax_regime", null);
+		setData("confirm_data", false);
 		setExtractionError(
 			mapTaxProfileExtractionError(TAX_PROFILE_EXTRACTION_CODES.LEGAL_ENTITY_NOT_ALLOWED)
 		);
@@ -355,6 +443,10 @@ export default function TaxProfileForm({ isOpen }) {
 			setError("fiscal_certificate", validationError);
 			return;
 		}
+
+		const generation = extractionGenerationRef.current + 1;
+		extractionGenerationRef.current = generation;
+		abortReasonRef.current = null;
 
 		extractInFlightRef.current = true;
 		setProcessingPdf(true);
@@ -383,7 +475,12 @@ export default function TaxProfileForm({ isOpen }) {
 
 		const controller = new AbortController();
 		abortControllerRef.current = controller;
-		const abortTimeoutId = setTimeout(() => controller.abort(), EXTRACTION_TIMEOUT_MS);
+		const abortTimeoutId = setTimeout(() => {
+			abortReasonRef.current = "timeout";
+			controller.abort();
+		}, EXTRACTION_TIMEOUT_MS);
+
+		const isCurrentGeneration = () => generation === extractionGenerationRef.current;
 
 		try {
 			const formData = new FormData();
@@ -406,13 +503,18 @@ export default function TaxProfileForm({ isOpen }) {
 				signal: controller.signal,
 			});
 
+			if (!isCurrentGeneration()) return;
+
 			let result = null;
 			try {
 				result = await response.json();
 			} catch {
+				if (!isCurrentGeneration()) return;
 				applyExtractionError(mapTaxProfileExtractionError(null, null, response.status));
 				return;
 			}
+
+			if (!isCurrentGeneration()) return;
 
 			if (response.ok && result?.success) {
 				const mapped = mapExtractionResponseToTaxProfileForm(result.data, encontrarRegimenPorTexto);
@@ -451,21 +553,29 @@ export default function TaxProfileForm({ isOpen }) {
 				mapTaxProfileExtractionError(result?.code, result?.message, response.status)
 			);
 		} catch (error) {
+			if (!isCurrentGeneration()) return;
+
 			if (error?.name === "AbortError") {
+				// Cierre/cancelación/reemplazo deliberado: no mostrar error al paciente.
+				if (abortReasonRef.current === "user") {
+					return;
+				}
 				applyExtractionError(
 					mapTaxProfileExtractionError(TAX_PROFILE_EXTRACTION_CODES.EXTRACTION_TIMEOUT)
 				);
 			} else {
-				// No exponer error.message crudo del navegador/proveedor.
 				applyExtractionError(mapTaxProfileExtractionError(null));
 			}
 		} finally {
 			clearTimeout(abortTimeoutId);
 			stopExtractionMessageCycle();
-			setShowSlowNotice(false);
-			setProcessingPdf(false);
-			extractInFlightRef.current = false;
-			abortControllerRef.current = null;
+			if (isCurrentGeneration()) {
+				setShowSlowNotice(false);
+				setProcessingPdf(false);
+				extractInFlightRef.current = false;
+				abortControllerRef.current = null;
+				abortReasonRef.current = null;
+			}
 		}
 	};
 
@@ -560,12 +670,16 @@ export default function TaxProfileForm({ isOpen }) {
 
 	const handleReplaceCertificate = () => {
 		if (!cachedEditMode && entryMode === ENTRY_MODES.AUTOMATIC) {
+			if (processingPdf) {
+				abortExtractionSilently();
+			}
 			setUploadedFile(null);
 			setData("fiscal_certificate", null);
 			setExtractedData(null);
 			setMissingFields([]);
 			setWarnings([]);
 			setExtractionError(null);
+			setData("confirm_data", false);
 			clearErrors("fiscal_certificate");
 			setActiveStep(STEPS.UPLOAD);
 			return;
@@ -581,11 +695,27 @@ export default function TaxProfileForm({ isOpen }) {
 		if (uploadedFile) return true;
 		if (extractedData) return true;
 		if (extractionError) return true;
-		if (data.name || data.rfc || data.zipcode || data.tax_regime) return true;
-		return false;
+		if (!cachedEditMode && isModeSelected && entryMode === ENTRY_MODES.MANUAL) {
+			return true;
+		}
+
+		if (cachedEditMode && initialFormSnapshotRef.current) {
+			const initial = initialFormSnapshotRef.current;
+			return (
+				data.name !== initial.name ||
+				data.rfc !== initial.rfc ||
+				data.zipcode !== initial.zipcode ||
+				data.tax_regime !== initial.tax_regime ||
+				(data.cfdi_use || "G03") !== (initial.cfdi_use || "G03")
+			);
+		}
+
+		return !!(data.name || data.rfc || data.zipcode || data.tax_regime);
 	};
 
 	const closeDialog = () => {
+		abortExtractionSilently();
+		setShowDiscardConfirm(false);
 		setUploadedFile(null);
 		setExtractedData(null);
 		setMissingFields([]);
@@ -595,6 +725,7 @@ export default function TaxProfileForm({ isOpen }) {
 		clearErrors();
 		setActiveStep(STEPS.UPLOAD);
 		setIsModeSelected(false);
+		initialFormSnapshotRef.current = null;
 
 		router.get(
 			route("tax-profiles.index"),
@@ -604,13 +735,11 @@ export default function TaxProfileForm({ isOpen }) {
 	};
 
 	const requestClose = () => {
-		if (processingPdf) return;
+		if (processingPdf || isSaving) return;
 
 		if (isDirty()) {
-			const confirmed = window.confirm(
-				"Si cierras, se descartarán los datos no guardados. ¿Deseas continuar?"
-			);
-			if (!confirmed) return;
+			setShowDiscardConfirm(true);
+			return;
 		}
 
 		closeDialog();
@@ -627,6 +756,8 @@ export default function TaxProfileForm({ isOpen }) {
 			handleNextStep();
 			return;
 		}
+
+		if (isSaving || saveInFlightRef.current) return;
 
 		setInfoMessage(null);
 		clearErrors();
@@ -664,8 +795,14 @@ export default function TaxProfileForm({ isOpen }) {
 			return;
 		}
 
-		// Constancia obligatoria al crear; en edición se conserva la existente.
-		if (!cachedEditMode && (!uploadedFile || !data.fiscal_certificate)) {
+		const certificateFile =
+			data.fiscal_certificate instanceof File
+				? data.fiscal_certificate
+				: uploadedFile instanceof File
+					? uploadedFile
+					: null;
+
+		if (!cachedEditMode && !certificateFile) {
 			setError("fiscal_certificate", "Debe subir una constancia fiscal");
 			setInfoMessage({ type: "error", message: "Debe subir una constancia fiscal." });
 			return;
@@ -676,10 +813,10 @@ export default function TaxProfileForm({ isOpen }) {
 			return;
 		}
 
+		saveInFlightRef.current = true;
 		setIsSaving(true);
 		setSaveStep("Validando datos...");
 
-		// Deja que React pinte el estado de carga antes del trabajo pesado.
 		await new Promise((resolve) => {
 			requestAnimationFrame(() => requestAnimationFrame(resolve));
 		});
@@ -691,16 +828,16 @@ export default function TaxProfileForm({ isOpen }) {
 			formData.append("zipcode", data.zipcode);
 			formData.append("tax_regime", data.tax_regime);
 			formData.append("cfdi_use", data.cfdi_use || "G03");
-			formData.append("entry_mode", entryMode);
 
-			if (data.fiscal_certificate) {
-				formData.append("fiscal_certificate", data.fiscal_certificate);
+			if (certificateFile) {
+				formData.append("fiscal_certificate", certificateFile);
 			}
 
 			formData.append("confirm_data", data.confirm_data ? "1" : "0");
 
-			if (extractedData) {
-				formData.append("extracted_data", JSON.stringify(extractedData));
+			const storeExtracted = buildStoreExtractedData();
+			if (storeExtracted) {
+				formData.append("extracted_data", JSON.stringify(storeExtracted));
 			}
 
 			const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
@@ -825,6 +962,7 @@ export default function TaxProfileForm({ isOpen }) {
 		} finally {
 			setIsSaving(false);
 			setSaveStep("");
+			saveInFlightRef.current = false;
 		}
 	};
 
@@ -1376,11 +1514,6 @@ export default function TaxProfileForm({ isOpen }) {
 							)}
 						</Listbox>
 						{errors.tax_regime && <ErrorMessage>{errors.tax_regime}</ErrorMessage>}
-						{data.tax_regime && cachedTaxRegimes?.[data.tax_regime] && (
-							<p className="mt-1 text-xs text-gray-500">
-								{cachedTaxRegimes[data.tax_regime].description}
-							</p>
-						)}
 					</Field>
 
 					{extractedData && (
@@ -1524,6 +1657,29 @@ export default function TaxProfileForm({ isOpen }) {
 					{renderContent()}
 				</form>
 			</Dialog>
+
+			<Alert
+				open={showDiscardConfirm}
+				onClose={() => setShowDiscardConfirm(false)}
+			>
+				<AlertTitle>¿Descartar los cambios?</AlertTitle>
+				<AlertDescription>
+					Si cierras, se descartarán los datos no guardados. ¿Deseas continuar?
+				</AlertDescription>
+				<AlertActions>
+					<Button
+						autoFocus
+						plain
+						type="button"
+						onClick={() => setShowDiscardConfirm(false)}
+					>
+						Seguir editando
+					</Button>
+					<Button type="button" color="red" onClick={closeDialog}>
+						Descartar
+					</Button>
+				</AlertActions>
+			</Alert>
 		</>
 	);
 }
