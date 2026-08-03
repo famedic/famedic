@@ -18,6 +18,7 @@ import BillingTrendChart from "@/Components/Admin/LaboratoryBilling/BillingTrend
 import BillingComplianceChart from "@/Components/Admin/LaboratoryBilling/BillingComplianceChart";
 import BillingStatusBadge from "@/Components/Admin/LaboratoryBilling/BillingStatusBadge";
 import BillingPanel from "@/Components/Admin/LaboratoryBilling/BillingPanel";
+import BillingPurchaseLink from "@/Components/Admin/LaboratoryBilling/BillingPurchaseLink";
 import BillingLoadingBlock from "@/Components/Admin/LaboratoryBilling/BillingLoadingBlock";
 import {
 	billingChartGridClass,
@@ -343,7 +344,12 @@ export default function Reports({
 													{row.patient_name}
 												</TableCell>
 												<TableCell>
-													{row.purchase?.folio || row.purchase?.id || "—"}
+													<BillingPurchaseLink
+														href={row.detail_url || row.purchase?.show_url}
+														label={
+															row.purchase?.folio || row.purchase?.id || null
+														}
+													/>
 												</TableCell>
 												<TableCell>
 													{row.billing?.days_overdue ?? "—"} d

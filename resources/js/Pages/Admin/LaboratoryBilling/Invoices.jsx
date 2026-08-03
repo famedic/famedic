@@ -21,6 +21,7 @@ import UpdateButton from "@/Components/Admin/UpdateButton";
 import BillingNav from "@/Components/Admin/LaboratoryBilling/BillingNav";
 import BillingDateRangeFilter from "@/Components/Admin/LaboratoryBilling/BillingDateRangeFilter";
 import { BillingDocumentStatus } from "@/Components/Admin/LaboratoryBilling/BillingStatusBadge";
+import BillingPurchaseLink from "@/Components/Admin/LaboratoryBilling/BillingPurchaseLink";
 import BillingLoadingBlock from "@/Components/Admin/LaboratoryBilling/BillingLoadingBlock";
 import { billingMutedTextClass, billingSecondaryTextClass } from "@/Components/Admin/LaboratoryBilling/billingUi";
 
@@ -145,7 +146,12 @@ export default function Invoices({ invoices, filters = {} }) {
 									{invoices.data.map((row) => (
 										<TableRow key={row.id}>
 											<TableCell>
-												{row.purchase?.folio || row.purchase?.id || "—"}
+												<BillingPurchaseLink
+													href={row.detail_url || row.purchase?.show_url}
+													label={
+														row.purchase?.folio || row.purchase?.id || null
+													}
+												/>
 											</TableCell>
 											<TableCell className="!text-zinc-950 dark:!text-white">
 												{row.patient_name || "—"}

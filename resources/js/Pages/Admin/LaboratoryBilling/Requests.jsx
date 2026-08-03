@@ -24,6 +24,7 @@ import BillingDateRangeFilter from "@/Components/Admin/LaboratoryBilling/Billing
 import BillingStatusBadge, {
 	BillingDocumentStatus,
 } from "@/Components/Admin/LaboratoryBilling/BillingStatusBadge";
+import BillingPurchaseLink from "@/Components/Admin/LaboratoryBilling/BillingPurchaseLink";
 import BillingLoadingBlock from "@/Components/Admin/LaboratoryBilling/BillingLoadingBlock";
 import { billingMutedTextClass, billingSecondaryTextClass } from "@/Components/Admin/LaboratoryBilling/billingUi";
 
@@ -215,7 +216,12 @@ export default function Requests({
 												</div>
 											</TableCell>
 											<TableCell>
-												{row.purchase?.folio || row.purchase?.id || "—"}
+												<BillingPurchaseLink
+													href={row.detail_url || row.purchase?.show_url}
+													label={
+														row.purchase?.folio || row.purchase?.id || null
+													}
+												/>
 											</TableCell>
 											<TableCell>{row.formatted_requested_at || "—"}</TableCell>
 											<TableCell>{row.billing?.days_elapsed ?? "—"}</TableCell>

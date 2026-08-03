@@ -21,6 +21,7 @@ import TaxProfileStatusBadge from "@/Components/Admin/LaboratoryBilling/TaxProfi
 import BillingTrendChart from "@/Components/Admin/LaboratoryBilling/BillingTrendChart";
 import BillingStatusBadge from "@/Components/Admin/LaboratoryBilling/BillingStatusBadge";
 import BillingPanel from "@/Components/Admin/LaboratoryBilling/BillingPanel";
+import BillingPurchaseLink from "@/Components/Admin/LaboratoryBilling/BillingPurchaseLink";
 import {
 	billingMutedTextClass,
 	billingSecondaryTextClass,
@@ -205,8 +206,13 @@ export default function TaxProfileShow({ taxProfile, filters = {} }) {
 									<TableBody>
 										{taxProfile.recent_requests.map((row) => (
 											<TableRow key={row.id}>
-												<TableCell className="!text-zinc-950 dark:!text-white">
-													{row.purchase?.folio || row.purchase?.id || "—"}
+												<TableCell>
+													<BillingPurchaseLink
+														href={row.detail_url || row.purchase?.show_url}
+														label={
+															row.purchase?.folio || row.purchase?.id || null
+														}
+													/>
 												</TableCell>
 												<TableCell>
 													{row.formatted_requested_at || "—"}

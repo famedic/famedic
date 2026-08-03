@@ -18,6 +18,7 @@ import BillingTrendChart from "@/Components/Admin/LaboratoryBilling/BillingTrend
 import BillingComplianceChart from "@/Components/Admin/LaboratoryBilling/BillingComplianceChart";
 import BillingStatusBadge from "@/Components/Admin/LaboratoryBilling/BillingStatusBadge";
 import BillingPanel from "@/Components/Admin/LaboratoryBilling/BillingPanel";
+import BillingPurchaseLink from "@/Components/Admin/LaboratoryBilling/BillingPurchaseLink";
 import BillingLoadingBlock, {
 	BillingMetricSkeleton,
 } from "@/Components/Admin/LaboratoryBilling/BillingLoadingBlock";
@@ -194,12 +195,17 @@ export default function Dashboard({
 												<TableCell className="!text-zinc-950 dark:!text-white">
 													{row.patient_name || "—"}
 												</TableCell>
-												<TableCell>
-													{row.purchase?.folio || row.purchase?.id || "—"}
-												</TableCell>
-												<TableCell>
-													{row.billing?.days_overdue ?? "—"} d
-												</TableCell>
+											<TableCell>
+												<BillingPurchaseLink
+													href={row.detail_url || row.purchase?.show_url}
+													label={
+														row.purchase?.folio || row.purchase?.id || null
+													}
+												/>
+											</TableCell>
+											<TableCell>
+												{row.billing?.days_overdue ?? "—"} d
+											</TableCell>
 												<TableCell>
 													<BillingStatusBadge
 														status={row.billing?.status}
