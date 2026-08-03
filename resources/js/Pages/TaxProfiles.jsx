@@ -20,7 +20,7 @@ import TaxProfileDeleteConfirmation from "@/Pages/TaxProfiles/TaxProfileDeleteCo
 import TaxProfileViewModal from "@/Pages/TaxProfiles/TaxProfileViewModal";
 import TaxProfilesInfoPanel from "@/Pages/TaxProfiles/TaxProfilesInfoPanel";
 import { useState } from "react";
-import { useForm } from "@inertiajs/react";
+import { router, useForm } from "@inertiajs/react";
 import SettingsCard from "@/Components/SettingsCard";
 import {
 	Table,
@@ -322,14 +322,22 @@ function TaxProfilesList({
 									) : (
 										<Button
 											outline
+											type="button"
 											dusk={`editTaxProfile-${taxProfile.id}`}
-											preserveState
-											preserveScroll
-											href={route("tax-profiles.edit", {
-												tax_profile: taxProfile,
-											})}
 											className="flex-1 justify-center"
 											aria-label={`Editar perfil fiscal ${taxProfile.name}`}
+											onClick={() =>
+												router.visit(
+													route("tax-profiles.edit", {
+														tax_profile:
+															taxProfile.id,
+													}),
+													{
+														preserveState: true,
+														preserveScroll: true,
+													},
+												)
+											}
 										>
 											<PencilIcon className="mr-2 h-4 w-4" />
 											Editar
@@ -367,9 +375,9 @@ function TaxProfilesList({
 										id={`tax-profile-used-help-${taxProfile.id}`}
 										className="mt-2 text-xs text-zinc-600 dark:text-slate-400"
 									>
-										Sus datos fiscales ya no pueden
-										modificarse. Puedes seguir usándolo o
-										crear otro perfil.
+										Este perfil fiscal ya fue utilizado en
+										una solicitud de factura y no puede
+										editarse.
 									</p>
 								)}
 								{taxProfile.formatted_activity_label && (
@@ -514,13 +522,13 @@ function SetDefaultTaxProfileButton({ taxProfile }) {
 	const { patch, processing } = useForm({});
 
 	const handleSetDefault = () => {
-		if (processing) {
+		if (processing || taxProfile.is_default === true) {
 			return;
 		}
 
 		patch(
 			route("tax-profiles.set-default", {
-				tax_profile: taxProfile,
+				tax_profile: taxProfile.id,
 			}),
 			{
 				preserveScroll: true,
@@ -535,6 +543,7 @@ function SetDefaultTaxProfileButton({ taxProfile }) {
 			dusk={`setDefaultTaxProfile-${taxProfile.id}`}
 			onClick={handleSetDefault}
 			disabled={processing}
+			aria-busy={processing}
 			className="w-full justify-center"
 			aria-label={`Usar ${taxProfile.name} como perfil predeterminado`}
 		>

@@ -68,6 +68,12 @@ class TaxProfileController extends Controller
 
             session()->forget('extracted_tax_data');
 
+            // Inertia must receive a redirect; the TaxProfileForm fetch API expects JSON.
+            if ($request->header('X-Inertia')) {
+                return redirect()->route('tax-profiles.index')
+                    ->flashMessage('Perfil fiscal creado exitosamente.');
+            }
+
             if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
                 return response()->json([
                     'success' => true,
@@ -82,7 +88,7 @@ class TaxProfileController extends Controller
             }
 
             return redirect()->route('tax-profiles.index')
-                ->with('success', 'Perfil fiscal creado exitosamente.');
+                ->flashMessage('Perfil fiscal creado exitosamente.');
         } catch (\Exception $e) {
             Log::error('Error al crear perfil fiscal', [
                 'operation' => 'tax_profile_store',
@@ -91,6 +97,10 @@ class TaxProfileController extends Controller
                 'result' => 'exception',
                 'exception_class' => $e::class,
             ]);
+
+            if ($request->header('X-Inertia')) {
+                return back()->withErrors(['error' => 'Error al crear el perfil fiscal.']);
+            }
 
             if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
                 return response()->json([
@@ -132,6 +142,12 @@ class TaxProfileController extends Controller
                 'result' => 'success',
             ]);
 
+            // Inertia must receive a redirect; the TaxProfileForm fetch API expects JSON.
+            if ($request->header('X-Inertia')) {
+                return redirect()->route('tax-profiles.index')
+                    ->flashMessage('Perfil fiscal actualizado exitosamente.');
+            }
+
             if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
                 return response()->json([
                     'success' => true,
@@ -146,7 +162,7 @@ class TaxProfileController extends Controller
             }
 
             return redirect()->route('tax-profiles.index')
-                ->with('success', 'Perfil fiscal actualizado exitosamente.');
+                ->flashMessage('Perfil fiscal actualizado exitosamente.');
         } catch (\InvalidArgumentException $e) {
             Log::warning('Actualización de perfil fiscal rechazada', [
                 'operation' => 'tax_profile_update',
@@ -156,6 +172,10 @@ class TaxProfileController extends Controller
                 'result' => 'rejected',
                 'exception_class' => $e::class,
             ]);
+
+            if ($request->header('X-Inertia')) {
+                return back()->withErrors(['error' => $e->getMessage()]);
+            }
 
             if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
                 return response()->json([
@@ -174,6 +194,10 @@ class TaxProfileController extends Controller
                 'result' => 'exception',
                 'exception_class' => $e::class,
             ]);
+
+            if ($request->header('X-Inertia')) {
+                return back()->withErrors(['error' => 'Error al actualizar el perfil fiscal.']);
+            }
 
             if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
                 return response()->json([
@@ -225,14 +249,8 @@ class TaxProfileController extends Controller
 
         $action($taxProfile);
 
-        if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
-            return response()->json([
-                'success' => true,
-                'message' => 'Perfil fiscal establecido como predeterminado.',
-                'redirect' => route('tax-profiles.index'),
-            ]);
-        }
-
+        // Always return an Inertia-compatible redirect. This endpoint is only
+        // invoked via Inertia (useForm().patch); plain JSON breaks the client.
         return redirect()->route('tax-profiles.index')
             ->flashMessage('Perfil fiscal establecido como predeterminado.');
     }

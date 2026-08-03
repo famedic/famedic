@@ -8,7 +8,7 @@ class EditTaxProfileRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->can('update', $this->tax_profile);
+        return $this->user()->can('update', $this->route('tax_profile'));
     }
 
     public function rules(): array

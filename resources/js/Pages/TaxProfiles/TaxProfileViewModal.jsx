@@ -29,9 +29,8 @@ export default function TaxProfileViewModal({ isOpen, close, taxProfile }) {
 			<DialogTitle>Datos del perfil fiscal</DialogTitle>
 			{isUsed && (
 				<DialogDescription className="text-left">
-					Este perfil ya fue utilizado en una solicitud de factura. Para
-					proteger tu historial fiscal, sus datos y constancia ya no pueden
-					modificarse.
+					Este perfil fiscal ya fue utilizado en una solicitud de factura
+					y no puede editarse.
 				</DialogDescription>
 			)}
 			<DialogBody>

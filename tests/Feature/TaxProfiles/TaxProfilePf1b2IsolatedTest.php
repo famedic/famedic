@@ -345,6 +345,84 @@ class TaxProfilePf1b2IsolatedTest extends TestCase
     }
 
     #[Test]
+    public function inertia_set_default_responde_redirect_no_json_y_flash(): void
+    {
+        [$user, $a, $customer] = $this->makeCustomerWithProfile('inertia-default@test.local');
+        $a->forceFill(['is_default' => true])->save();
+        $b = $customer->taxProfiles()->create([
+            'name' => 'B',
+            'rfc' => 'XAXX010101000',
+            'zipcode' => '64000',
+            'tax_regime' => '612',
+            'cfdi_use' => 'G03',
+            'fiscal_certificate' => 'fiscal-certificates/b.pdf',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withHeaders([
+                'X-Inertia' => 'true',
+                'X-Requested-With' => 'XMLHttpRequest',
+                'Accept' => 'text/html, application/xhtml+xml',
+            ])
+            ->patch(route('tax-profiles.set-default', ['tax_profile' => $b->id]));
+
+        $response->assertRedirect(route('tax-profiles.index'));
+        $response->assertSessionHas('flashMessage', [
+            'type' => 'success',
+            'message' => 'Perfil fiscal establecido como predeterminado.',
+        ]);
+
+        $this->assertStringNotContainsString(
+            'application/json',
+            (string) $response->headers->get('Content-Type')
+        );
+        $this->assertFalse(
+            data_get(json_decode($response->getContent(), true), 'success') === true
+        );
+
+        $this->assertTrue($b->fresh()->is_default);
+        $this->assertFalse($a->fresh()->is_default);
+        $this->assertSame(
+            1,
+            TaxProfile::query()
+                ->where('customer_id', $customer->id)
+                ->whereNull('deleted_at')
+                ->where('is_default', true)
+                ->count()
+        );
+    }
+
+    #[Test]
+    public function xhr_set_default_sin_inertia_tambien_redirige_no_json(): void
+    {
+        [$user, $a, $customer] = $this->makeCustomerWithProfile('xhr-default@test.local');
+        $a->forceFill(['is_default' => true])->save();
+        $b = $customer->taxProfiles()->create([
+            'name' => 'B',
+            'rfc' => 'XAXX010101000',
+            'zipcode' => '64000',
+            'tax_regime' => '612',
+            'cfdi_use' => 'G03',
+            'fiscal_certificate' => 'fiscal-certificates/b.pdf',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withHeaders([
+                'X-Requested-With' => 'XMLHttpRequest',
+                'Accept' => 'application/json',
+            ])
+            ->patch(route('tax-profiles.set-default', ['tax_profile' => $b->id]));
+
+        $response->assertRedirect(route('tax-profiles.index'));
+        $this->assertNotEquals(
+            'application/json',
+            $response->headers->get('Content-Type')
+        );
+        $this->assertTrue($b->fresh()->is_default);
+        $this->assertFalse($a->fresh()->is_default);
+    }
+
+    #[Test]
     public function http_set_default_ajeno_responde_403(): void
     {
         [, $profile] = $this->makeCustomerWithProfile('owner-http@test.local');

@@ -289,6 +289,119 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
     }
 
     #[Test]
+    public function perfil_no_usado_puede_abrirse_para_edicion_y_actualizarse(): void
+    {
+        $rfc12 = 'ABC010101AAA';
+        [$user, $profile] = $this->makeCustomerWithProfile('edit-ok@test.local', [
+            'rfc' => $rfc12,
+        ]);
+        Storage::put($profile->fiscal_certificate, '%PDF');
+
+        $this->assertTrue((new TaxProfilePolicy)->update($user, $profile->fresh()));
+        $this->assertFalse($profile->fresh()->isUsed());
+
+        $this->actingAs($user)
+            ->get(route('tax-profiles.edit', ['tax_profile' => $profile->id]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('TaxProfiles')
+                ->has('taxProfile')
+                ->where('taxProfile.id', $profile->id)
+                ->where('taxProfile.rfc', $rfc12)
+                ->has('taxRegimes')
+            );
+
+        $this->actingAs($user)
+            ->putJson(route('tax-profiles.update', ['tax_profile' => $profile->id]), [
+                'name' => 'Nombre Actualizado',
+                'rfc' => $rfc12,
+                'zipcode' => '64000',
+                'tax_regime' => '612',
+                'cfdi_use' => 'G03',
+            ])
+            ->assertOk()
+            ->assertJson([
+                'success' => true,
+                'message' => 'Perfil fiscal actualizado exitosamente.',
+            ]);
+
+        $this->assertSame('Nombre Actualizado', $profile->fresh()->name);
+        $this->assertSame($rfc12, $profile->fresh()->rfc);
+    }
+
+    #[Test]
+    public function perfil_usado_no_puede_abrirse_para_edicion(): void
+    {
+        [$user, $profile, $customer] = $this->makeCustomerWithProfile('edit-used@test.local');
+        Storage::put($profile->fiscal_certificate, '%PDF');
+        app(CreateInvoiceRequestAction::class)($this->makeLaboratoryPurchase($customer), $profile, 'G03');
+
+        $this->assertFalse((new TaxProfilePolicy)->update($user, $profile->fresh()));
+
+        $this->actingAs($user)
+            ->get(route('tax-profiles.edit', ['tax_profile' => $profile->id]))
+            ->assertForbidden();
+    }
+
+    #[Test]
+    public function cliente_ajeno_no_puede_editar_ni_set_default(): void
+    {
+        [, $profile] = $this->makeCustomerWithProfile('owner-edit@test.local');
+        [$intruder] = $this->makeCustomerWithProfile('intruder-edit@test.local');
+
+        $this->actingAs($intruder)
+            ->get(route('tax-profiles.edit', ['tax_profile' => $profile->id]))
+            ->assertForbidden();
+
+        $this->actingAs($intruder)
+            ->put(route('tax-profiles.update', ['tax_profile' => $profile->id]), [
+                'name' => 'Hack',
+                'rfc' => 'ABC010101AAA',
+                'zipcode' => '64000',
+                'tax_regime' => '612',
+                'cfdi_use' => 'G03',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($intruder)
+            ->patch(route('tax-profiles.set-default', ['tax_profile' => $profile->id]))
+            ->assertForbidden();
+    }
+
+    #[Test]
+    public function update_valida_campos_requeridos(): void
+    {
+        [$user, $profile] = $this->makeCustomerWithProfile('update-val@test.local', [
+            'rfc' => 'ABC010101AAA',
+        ]);
+
+        $this->actingAs($user)
+            ->putJson(route('tax-profiles.update', ['tax_profile' => $profile->id]), [
+                'name' => '',
+                'rfc' => 'INVALID',
+                'zipcode' => '12',
+                'tax_regime' => '',
+                'cfdi_use' => 'NOPE',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['name', 'rfc', 'zipcode', 'tax_regime', 'cfdi_use']);
+
+        $this->assertSame('Persona Fiscal', $profile->fresh()->name);
+    }
+
+    #[Test]
+    public function frontend_set_default_impide_doble_envio_mientras_procesa(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/TaxProfiles.jsx'));
+
+        $this->assertStringContainsString('if (processing || taxProfile.is_default === true)', $source);
+        $this->assertStringContainsString('disabled={processing}', $source);
+        $this->assertStringContainsString('aria-busy={processing}', $source);
+        $this->assertStringContainsString('router.visit(', $source);
+        $this->assertStringContainsString('tax-profiles.edit', $source);
+    }
+
+    #[Test]
     public function action_update_de_usado_via_controller_responde_422_si_policy_permite(): void
     {
         // UpdateTaxProfileRequest usa size:12,13 → en la práctica exige longitud 12.
@@ -535,6 +648,7 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
     {
         Schema::disableForeignKeyConstraints();
         foreach ([
+            'notifications',
             'invoices',
             'invoice_requests',
             'online_pharmacy_purchases',
@@ -575,6 +689,10 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
             $table->string('cfdi_use')->nullable();
             $table->string('fiscal_certificate')->nullable();
             $table->string('razon_social')->nullable();
+            $table->string('hash_constancia')->nullable();
+            $table->string('codigo_postal_original')->nullable();
+            $table->string('regimen_fiscal_original')->nullable();
+            $table->string('tipo_persona')->nullable();
             $table->softDeletes();
             $table->timestamps();
         });
@@ -651,6 +769,17 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
             $table->softDeletes();
         });
 
+        // Requerido por HandleInertiaRequests::getInAppNotificationFeed en GET Inertia.
+        Schema::create('notifications', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id');
+            $table->string('type')->nullable();
+            $table->string('title')->nullable();
+            $table->text('message')->nullable();
+            $table->boolean('is_read')->default(false);
+            $table->timestamps();
+        });
+
         Schema::enableForeignKeyConstraints();
     }
 
@@ -658,6 +787,7 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
     {
         Schema::disableForeignKeyConstraints();
         foreach ([
+            'notifications',
             'invoices',
             'invoice_requests',
             'online_pharmacy_purchases',

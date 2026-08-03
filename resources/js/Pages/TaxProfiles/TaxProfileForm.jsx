@@ -122,15 +122,29 @@ export default function TaxProfileForm({ isOpen }) {
 			setInfoMessage(null);
 			setCurrentStep(null);
 			setUploadProgress(0);
-			setActiveStep(STEPS.UPLOAD);
 			setIsEditing(false);
 			setIsSaving(false);
 			setSaveStep("");
-			setEntryMode(ENTRY_MODES.AUTOMATIC);
-			setFileRequired(true);
-			setIsModeSelected(false);
 
-			console.log("✅ Estado inicializado - activeStep:", STEPS.UPLOAD, "entryMode:", ENTRY_MODES.AUTOMATIC);
+			if (isEditMode && taxProfile) {
+				// Edición: ir directo a revisión con datos actuales; constancia opcional.
+				setEntryMode(ENTRY_MODES.MANUAL);
+				setFileRequired(false);
+				setIsModeSelected(true);
+				setActiveStep(STEPS.REVIEW);
+			} else {
+				setEntryMode(ENTRY_MODES.AUTOMATIC);
+				setFileRequired(true);
+				setIsModeSelected(false);
+				setActiveStep(STEPS.UPLOAD);
+			}
+
+			console.log(
+				"✅ Estado inicializado - activeStep:",
+				isEditMode ? STEPS.REVIEW : STEPS.UPLOAD,
+				"entryMode:",
+				isEditMode ? ENTRY_MODES.MANUAL : ENTRY_MODES.AUTOMATIC,
+			);
 		}
 
 	}, [isOpen, taxProfile, taxRegimes, setData]);
@@ -605,8 +619,11 @@ export default function TaxProfileForm({ isOpen }) {
 				return;
 			}
 
-			// Constancia obligatoria en ambos modos antes del resumen
-			if (!uploadedFile || !data.fiscal_certificate) {
+			// Constancia obligatoria al crear; en edición se conserva la existente.
+			if (
+				!cachedEditMode &&
+				(!uploadedFile || !data.fiscal_certificate)
+			) {
 				console.log("❌ No se ha subido constancia fiscal");
 				setError("fiscal_certificate", "Debe subir una constancia fiscal");
 				setInfoMessage({
@@ -625,6 +642,10 @@ export default function TaxProfileForm({ isOpen }) {
 		console.log("⬅️ handlePrevStep llamado, activeStep actual:", activeStep);
 
 		if (activeStep === STEPS.REVIEW) {
+			if (cachedEditMode) {
+				closeDialog();
+				return;
+			}
 			console.log("🔄 Regresando a UPLOAD desde REVIEW");
 			setActiveStep(STEPS.UPLOAD);
 
@@ -659,8 +680,8 @@ export default function TaxProfileForm({ isOpen }) {
 
 		try {
 			// Validaciones finales antes de enviar
-			// Requerir archivo en ambos modos
-			if (!data.fiscal_certificate) {
+			// Crear exige constancia; editar puede conservar la existente.
+			if (!cachedEditMode && !data.fiscal_certificate) {
 				setError("fiscal_certificate", "Debe subir una constancia fiscal");
 				setIsSaving(false);
 				return;
@@ -684,8 +705,10 @@ export default function TaxProfileForm({ isOpen }) {
 			formData.append('cfdi_use', data.cfdi_use || 'G03');
 			formData.append('entry_mode', entryMode);
 
-			// Agregar archivo (obligatorio en ambos modos)
-			formData.append('fiscal_certificate', data.fiscal_certificate);
+			// Agregar archivo solo si el usuario subió uno nuevo
+			if (data.fiscal_certificate) {
+				formData.append('fiscal_certificate', data.fiscal_certificate);
+			}
 
 			formData.append('confirm_data', data.confirm_data ? '1' : '0');
 
@@ -704,7 +727,9 @@ export default function TaxProfileForm({ isOpen }) {
 
 			if (cachedEditMode && cachedTaxProfile) {
 				formData.append('_method', 'PUT');
-				url = route("tax-profiles.update", { tax_profile: cachedTaxProfile });
+				url = route("tax-profiles.update", {
+					tax_profile: cachedTaxProfile.id,
+				});
 			}
 
 			console.log('🌐 Enviando a:', url);
@@ -1205,34 +1230,40 @@ export default function TaxProfileForm({ isOpen }) {
 				<DialogTitle>
 					{entryMode === ENTRY_MODES.MANUAL ? (
 						<>
-							<button
-								type="button"
-								onClick={() => {
-									// Regresar al paso anterior
-									if (uploadedFile) {
-										// Si ya tiene archivo, regresar a UPLOAD
-										setActiveStep(STEPS.UPLOAD);
-									} else {
-										// Si no tiene archivo, regresar a selección de modo
-										setActiveStep(STEPS.UPLOAD);
-										setIsModeSelected(true);
-									}
-								}}
-								className="flex items-center text-sm text-gray-500 hover:text-gray-700 mb-2"
-							>
-								<ArrowLeftIcon className="h-4 w-4 mr-1" />
-								Volver
-							</button>
-							Completa tu información fiscal
+							{!cachedEditMode && (
+								<button
+									type="button"
+									onClick={() => {
+										// Regresar al paso anterior
+										if (uploadedFile) {
+											// Si ya tiene archivo, regresar a UPLOAD
+											setActiveStep(STEPS.UPLOAD);
+										} else {
+											// Si no tiene archivo, regresar a selección de modo
+											setActiveStep(STEPS.UPLOAD);
+											setIsModeSelected(true);
+										}
+									}}
+									className="flex items-center text-sm text-gray-500 hover:text-gray-700 mb-2"
+								>
+									<ArrowLeftIcon className="h-4 w-4 mr-1" />
+									Volver
+								</button>
+							)}
+							{cachedEditMode
+								? "Edita tu información fiscal"
+								: "Completa tu información fiscal"}
 						</>
 					) : (
 						<>Revisa y completa tu información</>
 					)}
 				</DialogTitle>
 				<DialogDescription>
-					{entryMode === ENTRY_MODES.MANUAL
-						? "Ingresa manualmente tus datos fiscales"
-						: "Verifica los datos extraídos y completa los campos faltantes"}
+					{cachedEditMode
+						? "Actualiza los datos de tu perfil. La constancia fiscal solo es necesaria si deseas reemplazarla."
+						: entryMode === ENTRY_MODES.MANUAL
+							? "Ingresa manualmente tus datos fiscales"
+							: "Verifica los datos extraídos y completa los campos faltantes"}
 				</DialogDescription>
 
 				<DialogBody className="space-y-6">
@@ -1480,7 +1511,9 @@ export default function TaxProfileForm({ isOpen }) {
 										<div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
 											<DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
 											<p className="text-sm text-gray-600 mb-4">
-												Sube tu constancia fiscal en PDF (máximo 5MB)
+												{cachedEditMode
+													? "Opcional: reemplaza tu constancia fiscal en PDF (máximo 5MB)"
+													: "Sube tu constancia fiscal en PDF (máximo 5MB)"}
 											</p>
 											<Button
 												type="button"
