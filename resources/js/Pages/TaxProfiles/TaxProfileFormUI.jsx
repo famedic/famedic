@@ -10,9 +10,8 @@ import {
 } from "@heroicons/react/24/outline";
 
 const STEPPER_STEPS = [
-	{ id: 1, label: "Nuevo perfil" },
-	{ id: 2, label: "Revisar datos" },
-	{ id: 3, label: "Confirmar" },
+	{ id: 1, label: "Método" },
+	{ id: 2, label: "Revisar y guardar" },
 ];
 
 export function TaxProfileModalCloseButton({ onClose, disabled }) {
@@ -197,17 +196,40 @@ export function TaxProfileEntryModeCard({
 	);
 }
 
-export function TaxProfileCompactAlert({ children }) {
+export function TaxProfileCompactAlert({ children, tone = "amber" }) {
+	const tones = {
+		amber: {
+			wrap: "border-amber-500/20 bg-amber-500/[0.06] dark:border-amber-500/25 dark:bg-amber-500/[0.08]",
+			icon: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+			text: "text-amber-900/90 dark:text-amber-100/90",
+		},
+		blue: {
+			wrap: "border-blue-500/20 bg-blue-500/[0.06] dark:border-blue-500/25 dark:bg-blue-500/[0.08]",
+			icon: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+			text: "text-blue-900/90 dark:text-blue-100/90",
+		},
+		red: {
+			wrap: "border-red-500/20 bg-red-500/[0.06] dark:border-red-500/25 dark:bg-red-500/[0.08]",
+			icon: "bg-red-500/15 text-red-600 dark:text-red-400",
+			text: "text-red-900/90 dark:text-red-100/90",
+		},
+	};
+	const styles = tones[tone] ?? tones.amber;
+
 	return (
 		<div
 			className={clsx(
 				"flex items-start gap-2.5 rounded-lg border px-3 py-2.5 sm:px-4 sm:py-3",
-				"border-amber-500/20 bg-amber-500/[0.06]",
-				"dark:border-amber-500/25 dark:bg-amber-500/[0.08]",
+				styles.wrap,
 			)}
 			role="note"
 		>
-			<span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400">
+			<span
+				className={clsx(
+					"mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md",
+					styles.icon,
+				)}
+			>
 				<svg
 					className="h-3.5 w-3.5"
 					fill="none"
@@ -223,10 +245,20 @@ export function TaxProfileCompactAlert({ children }) {
 					/>
 				</svg>
 			</span>
-			<p className="text-xs leading-relaxed text-amber-900/90 dark:text-amber-100/90 sm:text-sm">
+			<div className={clsx("text-xs leading-relaxed sm:text-sm", styles.text)}>
 				{children}
-			</p>
+			</div>
 		</div>
+	);
+}
+
+export function TaxProfilePhysicalPersonNotice() {
+	return (
+		<TaxProfileCompactAlert tone="blue">
+			Actualmente, Famedic solo emite facturas a personas físicas. No es posible
+			registrar perfiles fiscales ni solicitar facturas a nombre de personas
+			morales.
+		</TaxProfileCompactAlert>
 	);
 }
 
@@ -238,13 +270,13 @@ const TRUST_ITEMS = [
 	},
 	{
 		icon: BoltIcon,
-		title: "Proceso rápido",
-		description: "Completa en minutos",
+		title: "Proceso guiado",
+		description: "Revisa antes de guardar",
 	},
 	{
 		icon: BuildingLibraryIcon,
-		title: "Verificado por SAT",
-		description: "Información 100% válida",
+		title: "Solo personas físicas",
+		description: "Facturación a tu nombre",
 	},
 ];
 

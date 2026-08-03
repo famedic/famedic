@@ -5,7 +5,7 @@ import {
 	DialogBody,
 	DialogActions,
 } from "@/Components/Catalyst/dialog";
-import { Description, Field, Label } from "@/Components/Catalyst/fieldset";
+import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Button } from "@/Components/Catalyst/button";
 import { usePage, useForm, router } from "@inertiajs/react";
@@ -16,9 +16,7 @@ import {
 	DocumentTextIcon,
 	CheckCircleIcon,
 	ExclamationTriangleIcon,
-	PencilIcon,
 	ArrowUpTrayIcon,
-	XMarkIcon,
 	ChevronRightIcon,
 	DocumentArrowUpIcon,
 	PencilSquareIcon,
@@ -32,59 +30,89 @@ import {
 import {
 	TaxProfileModalCloseButton,
 	TaxProfileFormStepper,
-	TaxProfilePageHeading,
 	TaxProfileEntryModeCard,
 	TaxProfileCompactAlert,
-	TaxProfileTrustIndicators,
-	TaxProfileModalFooter,
+	TaxProfilePhysicalPersonNotice,
 } from "@/Pages/TaxProfiles/TaxProfileFormUI";
+import {
+	mapExtractionResponseToTaxProfileForm,
+	formatFileSize,
+	isPdfFile,
+	MAX_TAX_CERTIFICATE_BYTES,
+} from "@/lib/mapExtractionResponseToTaxProfileForm";
+import {
+	mapTaxProfileExtractionError,
+	TAX_PROFILE_EXTRACTION_CODES,
+} from "@/lib/taxProfileExtractionErrors";
+import {
+	normalizeRfcInput,
+	classifyRfcForIndividualProfile,
+	rfcHintMessage,
+} from "@/lib/taxProfileRfcHints";
 
-// Definimos los pasos del proceso
+// Pasos del proceso. La revisión final incluye la confirmación y el guardado.
 const STEPS = {
 	UPLOAD: 1,
 	REVIEW: 2,
-	CONFIRM: 3,
 };
 
 // Modos de entrada de datos
 const ENTRY_MODES = {
-	AUTOMATIC: 'automatic',
-	MANUAL: 'manual'
+	AUTOMATIC: "automatic",
+	MANUAL: "manual",
 };
 
-export default function TaxProfileForm({ isOpen }) {
-	console.log("🔵 TaxProfileForm - Componente montado, isOpen:", isOpen);
+const FIELD_LABELS = {
+	name: "Nombre",
+	rfc: "RFC",
+	zipcode: "Código postal",
+	tax_regime: "Régimen fiscal",
+};
 
+const EXTRACTION_MESSAGES = [
+	"Validando la constancia…",
+	"Extrayendo los datos fiscales…",
+	"Preparando la información para que la revises…",
+];
+
+const EXTRACTION_MESSAGE_INTERVAL_MS = 2600;
+const EXTRACTION_SLOW_NOTICE_MS = 12000;
+const EXTRACTION_TIMEOUT_MS = 45000;
+
+export default function TaxProfileForm({ isOpen }) {
 	const { taxProfile, taxRegimes } = usePage().props;
-	console.log("📋 Props recibidas - taxProfile:", taxProfile, "taxRegimes:", Object.keys(taxRegimes || {}).length);
 
 	const [cachedTaxRegimes, setCachedTaxRegimes] = useState(taxRegimes || {});
 	const [cachedEditMode, setCachedEditMode] = useState(
 		route().current("tax-profiles.edit") || false
 	);
 	const [cachedTaxProfile, setCachedTaxProfile] = useState(taxProfile || null);
-	const [extractedData, setExtractedData] = useState(null);
-	const [processingPdf, setProcessingPdf] = useState(false);
-	const [uploadedFile, setUploadedFile] = useState(null);
-	const [infoMessage, setInfoMessage] = useState(null);
-	const [currentStep, setCurrentStep] = useState(null);
-	const [uploadProgress, setUploadProgress] = useState(0);
+
 	const [activeStep, setActiveStep] = useState(STEPS.UPLOAD);
-	const [isEditing, setIsEditing] = useState(false);
+	const [entryMode, setEntryMode] = useState(ENTRY_MODES.AUTOMATIC);
+	const [isModeSelected, setIsModeSelected] = useState(false);
+
+	const [uploadedFile, setUploadedFile] = useState(null);
+	const [isDragging, setIsDragging] = useState(false);
+	const [processingPdf, setProcessingPdf] = useState(false);
+	const [extractionMessage, setExtractionMessage] = useState(EXTRACTION_MESSAGES[0]);
+	const [showSlowNotice, setShowSlowNotice] = useState(false);
+	const [extractionError, setExtractionError] = useState(null);
+
+	const [extractedData, setExtractedData] = useState(null);
+	const [missingFields, setMissingFields] = useState([]);
+	const [warnings, setWarnings] = useState([]);
+
+	const [infoMessage, setInfoMessage] = useState(null);
 	const [isSaving, setIsSaving] = useState(false);
 	const [saveStep, setSaveStep] = useState("");
 
-	// Nuevo estado para el modo de entrada
-	const [entryMode, setEntryMode] = useState(ENTRY_MODES.AUTOMATIC);
-	const [fileRequired, setFileRequired] = useState(true);
-	const [isModeSelected, setIsModeSelected] = useState(false);
-
-	const resetFormData = (taxProfile) => ({
-		name: taxProfile?.name || "",
-		rfc: taxProfile?.rfc || "",
-		zipcode: taxProfile?.zipcode || "",
-		tax_regime: taxProfile?.tax_regime || null,
-		cfdi_use: taxProfile?.cfdi_use || "G03",
+	const resetFormData = (profile) => ({
+		name: profile?.name || "",
+		rfc: profile?.rfc || "",
+		zipcode: profile?.zipcode || "",
+		tax_regime: profile?.tax_regime || null,
+		cfdi_use: profile?.cfdi_use || "G03",
 		fiscal_certificate: null,
 		confirm_data: false,
 	});
@@ -96,394 +124,76 @@ export default function TaxProfileForm({ isOpen }) {
 	// Refs
 	const fileInputRef = useRef(null);
 	const manualFileInputRef = useRef(null);
-	const activeStepRef = useRef(activeStep);
+	const extractInFlightRef = useRef(false);
+	const abortControllerRef = useRef(null);
+	const messageCycleRef = useRef(null);
+	const slowNoticeTimeoutRef = useRef(null);
 
-	// Actualizar ref cuando activeStep cambie
-	useEffect(() => {
-		activeStepRef.current = activeStep;
-	}, [activeStep]);
-
-	useEffect(() => {
-		console.log("🔄 useEffect - isOpen cambió a:", isOpen);
-
-		if (isOpen) {
-			console.log("🚀 INICIALIZANDO FORMULARIO (diálogo abierto)");
-
-			const isEditMode = route().current("tax-profiles.edit") || false;
-			console.log("📝 Modo edición detectado:", isEditMode);
-
-			// Resetear todo al abrir
-			setCachedTaxRegimes(taxRegimes || {});
-			setCachedTaxProfile(taxProfile || null);
-			setCachedEditMode(isEditMode);
-			setData(resetFormData(taxProfile || {}));
-			setExtractedData(null);
-			setUploadedFile(null);
-			setInfoMessage(null);
-			setCurrentStep(null);
-			setUploadProgress(0);
-			setIsEditing(false);
-			setIsSaving(false);
-			setSaveStep("");
-
-			if (isEditMode && taxProfile) {
-				// Edición: ir directo a revisión con datos actuales; constancia opcional.
-				setEntryMode(ENTRY_MODES.MANUAL);
-				setFileRequired(false);
-				setIsModeSelected(true);
-				setActiveStep(STEPS.REVIEW);
-			} else {
-				setEntryMode(ENTRY_MODES.AUTOMATIC);
-				setFileRequired(true);
-				setIsModeSelected(false);
-				setActiveStep(STEPS.UPLOAD);
-			}
-
-			console.log(
-				"✅ Estado inicializado - activeStep:",
-				isEditMode ? STEPS.REVIEW : STEPS.UPLOAD,
-				"entryMode:",
-				isEditMode ? ENTRY_MODES.MANUAL : ENTRY_MODES.AUTOMATIC,
-			);
+	const stopExtractionMessageCycle = () => {
+		if (messageCycleRef.current) {
+			clearInterval(messageCycleRef.current);
+			messageCycleRef.current = null;
 		}
+		if (slowNoticeTimeoutRef.current) {
+			clearTimeout(slowNoticeTimeoutRef.current);
+			slowNoticeTimeoutRef.current = null;
+		}
+	};
 
+	useEffect(() => {
+		if (!isOpen) return;
+
+		const isEditMode = route().current("tax-profiles.edit") || false;
+
+		setCachedTaxRegimes(taxRegimes || {});
+		setCachedTaxProfile(taxProfile || null);
+		setCachedEditMode(isEditMode);
+		setData(resetFormData(taxProfile || {}));
+
+		setUploadedFile(null);
+		setIsDragging(false);
+		setProcessingPdf(false);
+		setShowSlowNotice(false);
+		setExtractionError(null);
+		setExtractedData(null);
+		setMissingFields([]);
+		setWarnings([]);
+		setInfoMessage(null);
+		setIsSaving(false);
+		setSaveStep("");
+
+		extractInFlightRef.current = false;
+		if (abortControllerRef.current) {
+			abortControllerRef.current.abort();
+			abortControllerRef.current = null;
+		}
+		stopExtractionMessageCycle();
+
+		if (isEditMode && taxProfile) {
+			// Edición: ir directo a revisión con los datos actuales; la constancia es opcional.
+			setEntryMode(ENTRY_MODES.MANUAL);
+			setIsModeSelected(true);
+			setActiveStep(STEPS.REVIEW);
+		} else {
+			setEntryMode(ENTRY_MODES.AUTOMATIC);
+			setIsModeSelected(false);
+			setActiveStep(STEPS.UPLOAD);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [isOpen, taxProfile, taxRegimes, setData]);
 
-	// Debug para cambios de estado importantes
 	useEffect(() => {
-		console.log("📊 Estado actualizado:", {
-			activeStep,
-			entryMode,
-			uploadedFile: uploadedFile?.name,
-			extractedData: !!extractedData,
-			processingPdf,
-			isModeSelected
-		});
-	}, [activeStep, entryMode, uploadedFile, extractedData, processingPdf, isModeSelected]);
-
-	// Función para cambiar el modo de entrada
-	const handleEntryModeChange = (mode) => {
-		console.log("🔄 Cambiando modo de entrada a:", mode);
-		setEntryMode(mode);
-		setIsModeSelected(true);
-
-		// En ambos modos el archivo es obligatorio
-		setFileRequired(true);
-		clearErrors("fiscal_certificate");
-
-		// Resetear archivo si cambia de modo
-		if (uploadedFile) {
-			setUploadedFile(null);
-			setExtractedData(null);
-			setData("fiscal_certificate", null);
-		}
-	};
-
-	// Función para procesar archivo (común para selección y pegado) - SOLO PARA MODO AUTOMÁTICO
-	const handleFileProcess = async (file, fromPaste = false) => {
-		console.log("📄 handleFileProcess llamado con archivo:", file.name, "fromPaste:", fromPaste);
-
-		if (!file) {
-			console.log("❌ No hay archivo");
-			return;
-		}
-
-		if (file.type !== "application/pdf") {
-			console.log("❌ Tipo de archivo inválido:", file.type);
-			setError("fiscal_certificate", "Solo se aceptan archivos PDF");
-			return;
-		}
-
-		if (file.size > 5 * 1024 * 1024) {
-			console.log("❌ Archivo muy grande:", file.size);
-			setError("fiscal_certificate", "El archivo no debe superar 5MB");
-			return;
-		}
-
-		// Reset estados
-		console.log("🔄 Iniciando procesamiento de PDF");
-		setProcessingPdf(true);
-		setCurrentStep("Validando archivo...");
-		setUploadProgress(10);
-		setInfoMessage(null);
-		clearErrors("fiscal_certificate");
-
-		try {
-			// Paso 1: Preparar datos
-			console.log("📦 Preparando datos para enviar");
-			setCurrentStep("Preparando para enviar...");
-			setUploadProgress(20);
-			await new Promise((resolve) => setTimeout(resolve, 300));
-
-			const formData = new FormData();
-			formData.append("fiscal_certificate", file);
-
-			// Obtener CSRF token
-			const metaTag = document.querySelector('meta[name="csrf-token"]');
-			if (!metaTag) {
-				console.log("❌ CSRF token no encontrado");
-				console.log("🔔 Error de seguridad. Por favor, recarga la página.");
-				throw new Error("CSRF_TOKEN_NOT_FOUND");
-			}
-			const csrfToken = metaTag.getAttribute("content");
-			formData.append("_token", csrfToken);
-
-			// Paso 2: Enviar al servidor
-			console.log("🌐 Enviando archivo al servidor...");
-			setCurrentStep("Enviando archivo...");
-			setUploadProgress(40);
-
-			const controller = new AbortController();
-			const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-			const url = route("tax-profiles.extract-data");
-			console.log("📤 Enviando a URL:", url);
-
-			const response = await fetch(url, {
-				method: "POST",
-				body: formData,
-				credentials: "include",
-				headers: {
-					"X-Requested-With": "XMLHttpRequest",
-					Accept: "application/json",
-					"X-CSRF-TOKEN": csrfToken,
-				},
-				signal: controller.signal,
-			});
-
-			clearTimeout(timeoutId);
-			console.log("📥 Respuesta recibida:", response.status, response.statusText);
-
-			// Leer respuesta
-			const responseText = await response.text();
-			console.log("📄 Texto de respuesta (primeros 500 chars):", responseText.substring(0, 500));
-
-			// Parsear JSON
-			let result;
-			try {
-				result = JSON.parse(responseText);
-				console.log("✅ JSON parseado correctamente:", result.success ? "Éxito" : "Error");
-			} catch (jsonError) {
-				console.error("❌ Error parseando JSON:", jsonError);
-				console.log("🔔 Respuesta inválida del servidor.");
-				throw new Error("INVALID_JSON_RESPONSE");
-			}
-
-			// Verificar resultado
-			setUploadProgress(80);
-			setCurrentStep("Extrayendo información...");
-
-			if (response.ok && result.success) {
-				console.log("✅ Procesamiento exitoso, datos extraídos:", result.data);
-				setUploadProgress(100);
-				setCurrentStep("¡Completado!");
-
-				// Guardar datos y archivo
-				setExtractedData(result.data);
-				setUploadedFile(file);
-				setData("fiscal_certificate", file);
-
-				// Rellenar campos
-				if (result.data.rfc) setData("rfc", result.data.rfc);
-				if (result.data.razon_social || result.data.nombre) {
-					setData(
-						"name",
-						result.data.razon_social || result.data.nombre
-					);
-				}
-				if (result.data.codigo_postal)
-					setData("zipcode", result.data.codigo_postal);
-				if (result.data.regimen_fiscal) {
-					const regimenEncontrado = encontrarRegimenPorTexto(
-						result.data.regimen_fiscal
-					);
-					if (regimenEncontrado)
-						setData("tax_regime", regimenEncontrado);
-				}
-
-				clearErrors();
-
-				// Mostrar mensaje de éxito
-				console.log("🔔 Archivo procesado:", fromPaste
-					? "Archivo pegado y procesado exitosamente. Revisa los datos."
-					: "La información se extrajo correctamente. Revisa los datos.");
-
-				setInfoMessage({
-					type: "success",
-					message: fromPaste
-						? "Archivo pegado y procesado exitosamente. Revisa los datos."
-						: "La información se extrajo correctamente. Revisa los datos."
-				});
-
-				// Avanzar al paso de revisión después de un breve retraso
-				console.log("⏰ Programando cambio a paso REVIEW en 800ms...");
-				setTimeout(() => {
-					console.log("🔄 Cambiando a paso REVIEW ahora");
-					setProcessingPdf(false);
-					setCurrentStep(null);
-					setUploadProgress(0);
-					setActiveStep(STEPS.REVIEW);
-
-					// Enfocar el primer campo para mejor UX
-					setTimeout(() => {
-						const firstInput = document.querySelector('input[dusk="name"]');
-						if (firstInput && !isEditing) {
-							firstInput.focus();
-						}
-					}, 100);
-				}, 800);
-
-			} else {
-				console.log("❌ Error en respuesta del servidor:", result?.message);
-				console.log("🔔 Error al procesar el archivo:", result?.message || `Error ${response.status}`);
-
-				// Manejar error pero mantener el archivo subido
-				setUploadedFile(file);
-				setData("fiscal_certificate", file);
-
-				// Mostrar mensaje de error pero permitir continuar
-				setInfoMessage({
-					type: "warning",
-					message: "No se pudo extraer información automáticamente. Complete los datos manualmente."
-				});
-
-				// Cambiar al paso 2 inmediatamente
-				setProcessingPdf(false);
-				setCurrentStep(null);
-				setUploadProgress(0);
-				setActiveStep(STEPS.REVIEW);
-			}
-		} catch (error) {
-			console.error("💥 Error en extracción:", error.name, error.message);
-
-			// Mostrar notificación de error específico
-			let errorMessage = "Ocurrió un error al procesar el archivo.";
-			if (error.message === "CSRF_TOKEN_NOT_FOUND") {
-				errorMessage = "Error de seguridad. Por favor, recarga la página.";
-			} else if (error.message === "INVALID_JSON_RESPONSE") {
-				errorMessage = "Respuesta inválida del servidor.";
-			} else if (error.name === "AbortError") {
-				errorMessage = "Tiempo de espera agotado. El archivo es muy grande o hay problemas de conexión.";
-			}
-
-			// Fallback: subir archivo sin extracción
-			console.log("🔄 Usando fallback: subiendo archivo sin extracción");
-			setData("fiscal_certificate", file);
-			setUploadedFile(file);
-
-			// Cambiar al paso 2 inmediatamente
-			setProcessingPdf(false);
-			setCurrentStep(null);
-			setUploadProgress(0);
-			setActiveStep(STEPS.REVIEW);
-
-			// Mostrar mensaje informativo
-			console.log("🔔 Archivo subido:", fromPaste
-				? "Archivo pegado. Completa los datos manualmente."
-				: "Completa los datos manualmente.");
-
-			setInfoMessage({
-				type: "warning",
-				message: fromPaste
-					? "Archivo pegado. Completa los datos manualmente."
-					: "Completa los datos manualmente."
-			});
-
-			// También mostrar notificación del error si es relevante
-			if (error.message && !error.message.includes("timeout")) {
-				console.log("🔔 Nota técnica:", `No se pudo extraer información automáticamente: ${error.message}`);
-				setTimeout(() => {
-					setInfoMessage({
-						type: "info",
-						message: `No se pudo extraer información automáticamente: ${error.message}`
-					});
-				}, 1000);
-			}
-		}
-	};
-
-	// Función para manejar la selección de archivo EN MODO AUTOMÁTICO
-	const handleFileUpload = async (e) => {
-		console.log("📁 handleFileUpload llamado (modo automático)");
-		const file = e.target.files[0];
-		if (file) {
-			console.log("📄 Archivo seleccionado:", file.name);
-			await handleFileProcess(file, false);
-		} else {
-			console.log("❌ No se seleccionó ningún archivo");
-		}
-	};
-
-	// Función para manejar la selección de archivo EN MODO MANUAL
-	const handleManualFileUpload = (e) => {
-		console.log("📁 handleManualFileUpload llamado (modo manual)");
-		const file = e.target.files[0];
-		if (file) {
-			console.log("📄 Archivo seleccionado para modo manual:", file.name);
-
-			if (file.type !== "application/pdf") {
-				console.log("❌ Tipo de archivo inválido:", file.type);
-				setError("fiscal_certificate", "Solo se aceptan archivos PDF");
-				return;
-			}
-
-			if (file.size > 5 * 1024 * 1024) {
-				console.log("❌ Archivo muy grande:", file.size);
-				setError("fiscal_certificate", "El archivo no debe superar 5MB");
-				return;
-			}
-
-			setUploadedFile(file);
-			setData("fiscal_certificate", file);
-			clearErrors("fiscal_certificate");
-
-			console.log("✅ Archivo subido en modo manual:", file.name);
-		} else {
-			console.log("❌ No se seleccionó ningún archivo");
-		}
-	};
-
-	// Función para eliminar archivo subido
-	const handleRemoveFile = () => {
-		console.log("🗑️ Eliminando archivo subido");
-		setUploadedFile(null);
-		setExtractedData(null);
-		setData("fiscal_certificate", null);
-		clearErrors("fiscal_certificate");
-
-		// Resetear el input file correspondiente
-		if (entryMode === ENTRY_MODES.AUTOMATIC && fileInputRef.current) {
-			fileInputRef.current.value = '';
-		} else if (entryMode === ENTRY_MODES.MANUAL && manualFileInputRef.current) {
-			manualFileInputRef.current.value = '';
-		}
-	};
-
-	// Función de validación de RFC
-	const validarRFC = (rfc) => {
-		if (!rfc) return false;
-
-		// Eliminar espacios y convertir a mayúsculas
-		rfc = rfc.trim().toUpperCase();
-
-		// Patrones de RFC actualizados (más flexibles)
-		const patronFisica = /^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{2,3}$/; // 12-13 caracteres
-		const patronMoral = /^[A-ZÑ&]{3}[0-9]{6}[A-Z0-9]{3}$/; // 12 caracteres
-
-		// Validar longitud
-		if (rfc.length < 12 || rfc.length > 13) {
-			return false;
-		}
-
-		return patronFisica.test(rfc) || patronMoral.test(rfc);
-	};
+		return () => {
+			stopExtractionMessageCycle();
+			abortControllerRef.current?.abort();
+		};
+	}, []);
 
 	const encontrarRegimenPorTexto = (textoRegimen) => {
 		if (!textoRegimen || !cachedTaxRegimes) return null;
 
 		const textoLower = textoRegimen.toLowerCase();
 
-		// Mapeo de términos comunes basado en tu catálogo
 		const mapeoTerminos = {
 			sueldos: "605",
 			salarios: "605",
@@ -509,289 +219,545 @@ export default function TaxProfileForm({ isOpen }) {
 			actividades: "612",
 		};
 
-		// Buscar por términos
 		for (const [termino, clave] of Object.entries(mapeoTerminos)) {
 			if (textoLower.includes(termino) && cachedTaxRegimes[clave]) {
-				console.log(
-					`Encontrado régimen por término "${termino}": ${clave}`
-				);
-				return clave; // Devuelve la clave (ej: "605")
+				return clave;
 			}
 		}
 
-		// Buscar por nombre de régimen en el catálogo
 		for (const [key, regimen] of Object.entries(cachedTaxRegimes)) {
-			const regimenLower = regimen.name.toLowerCase();
+			const regimenLower = (regimen?.name || "").toLowerCase();
 			if (
-				textoLower.includes(regimenLower) ||
-				regimenLower.includes(textoLower)
+				regimenLower &&
+				(textoLower.includes(regimenLower) || regimenLower.includes(textoLower))
 			) {
-				console.log(
-					`Encontrado régimen por nombre: ${key} - ${regimen.name}`
-				);
-				return key; // Devuelve la clave
+				return key;
 			}
 		}
 
-		console.log(`No se encontró régimen para: ${textoRegimen}`);
 		return null;
 	};
 
+	// ------------------------------------------------------------------
+	// Selección / validación de archivo
+	// ------------------------------------------------------------------
+
+	const validateSelectedFile = (file) => {
+		if (!file) return "Selecciona un archivo.";
+		if (!isPdfFile(file)) return "Solo se aceptan archivos PDF.";
+		if (file.size > MAX_TAX_CERTIFICATE_BYTES) {
+			return `El archivo no debe superar ${formatFileSize(MAX_TAX_CERTIFICATE_BYTES)}.`;
+		}
+		return null;
+	};
+
+	const applySelectedFile = (file) => {
+		const validationError = validateSelectedFile(file);
+		if (validationError) {
+			setError("fiscal_certificate", validationError);
+			return;
+		}
+
+		clearErrors("fiscal_certificate");
+		setExtractionError(null);
+		setExtractedData(null);
+		setMissingFields([]);
+		setWarnings([]);
+		setUploadedFile(file);
+		setData("fiscal_certificate", file);
+	};
+
+	const handleFileInputChange = (e) => {
+		const file = e.target.files?.[0];
+		e.target.value = "";
+		if (file) applySelectedFile(file);
+	};
+
+	const handleManualFileInputChange = (e) => {
+		const file = e.target.files?.[0];
+		e.target.value = "";
+		if (!file) return;
+
+		const validationError = validateSelectedFile(file);
+		if (validationError) {
+			setError("fiscal_certificate", validationError);
+			return;
+		}
+
+		clearErrors("fiscal_certificate");
+		setUploadedFile(file);
+		setData("fiscal_certificate", file);
+	};
+
+	const handleDragOver = (e) => {
+		e.preventDefault();
+		if (!processingPdf) setIsDragging(true);
+	};
+
+	const handleDragLeave = (e) => {
+		e.preventDefault();
+		setIsDragging(false);
+	};
+
+	const handleDrop = (e) => {
+		e.preventDefault();
+		setIsDragging(false);
+		if (processingPdf) return;
+		const file = e.dataTransfer.files?.[0];
+		if (file) applySelectedFile(file);
+	};
+
+	const handleRemoveFile = () => {
+		setUploadedFile(null);
+		setExtractedData(null);
+		setMissingFields([]);
+		setWarnings([]);
+		setExtractionError(null);
+		setData("fiscal_certificate", null);
+		clearErrors("fiscal_certificate");
+
+		if (fileInputRef.current) fileInputRef.current.value = "";
+		if (manualFileInputRef.current) manualFileInputRef.current.value = "";
+	};
+
+	// ------------------------------------------------------------------
+	// Extracción automática (PF-IA.2: POST tax-profiles.extract-data)
+	// ------------------------------------------------------------------
+
+	const handleBlockedExtraction = () => {
+		setExtractedData(null);
+		setMissingFields([]);
+		setWarnings([]);
+		setData("name", "");
+		setData("rfc", "");
+		setData("zipcode", "");
+		setData("tax_regime", null);
+		setExtractionError(
+			mapTaxProfileExtractionError(TAX_PROFILE_EXTRACTION_CODES.LEGAL_ENTITY_NOT_ALLOWED)
+		);
+	};
+
+	const applyExtractionError = (mappedError) => {
+		setExtractionError(mappedError);
+		if (mappedError.clearExtractedData) {
+			setExtractedData(null);
+			setMissingFields([]);
+			setWarnings([]);
+		}
+	};
+
+	const startExtraction = async () => {
+		if (extractInFlightRef.current || processingPdf) return;
+		if (!uploadedFile) return;
+
+		const validationError = validateSelectedFile(uploadedFile);
+		if (validationError) {
+			setError("fiscal_certificate", validationError);
+			return;
+		}
+
+		extractInFlightRef.current = true;
+		setProcessingPdf(true);
+		setExtractionError(null);
+		setShowSlowNotice(false);
+		setExtractionMessage(EXTRACTION_MESSAGES[0]);
+		clearErrors("fiscal_certificate");
+		setExtractedData(null);
+		setMissingFields([]);
+		setWarnings([]);
+		setData("name", "");
+		setData("rfc", "");
+		setData("zipcode", "");
+		setData("tax_regime", null);
+		setData("confirm_data", false);
+
+		let messageIndex = 0;
+		messageCycleRef.current = setInterval(() => {
+			messageIndex = (messageIndex + 1) % EXTRACTION_MESSAGES.length;
+			setExtractionMessage(EXTRACTION_MESSAGES[messageIndex]);
+		}, EXTRACTION_MESSAGE_INTERVAL_MS);
+
+		slowNoticeTimeoutRef.current = setTimeout(() => {
+			setShowSlowNotice(true);
+		}, EXTRACTION_SLOW_NOTICE_MS);
+
+		const controller = new AbortController();
+		abortControllerRef.current = controller;
+		const abortTimeoutId = setTimeout(() => controller.abort(), EXTRACTION_TIMEOUT_MS);
+
+		try {
+			const formData = new FormData();
+			formData.append("fiscal_certificate", uploadedFile);
+
+			const csrfToken = document
+				.querySelector('meta[name="csrf-token"]')
+				?.getAttribute("content");
+			if (csrfToken) formData.append("_token", csrfToken);
+
+			const response = await fetch(route("tax-profiles.extract-data"), {
+				method: "POST",
+				body: formData,
+				credentials: "include",
+				headers: {
+					"X-Requested-With": "XMLHttpRequest",
+					Accept: "application/json",
+					...(csrfToken ? { "X-CSRF-TOKEN": csrfToken } : {}),
+				},
+				signal: controller.signal,
+			});
+
+			let result = null;
+			try {
+				result = await response.json();
+			} catch {
+				applyExtractionError(mapTaxProfileExtractionError(null, null, response.status));
+				return;
+			}
+
+			if (response.ok && result?.success) {
+				const mapped = mapExtractionResponseToTaxProfileForm(result.data, encontrarRegimenPorTexto);
+
+				if (mapped.status === "rejected_legal_entity") {
+					handleBlockedExtraction();
+					return;
+				}
+
+				if (!mapped.confirmable) {
+					setExtractionError(
+						mapTaxProfileExtractionError(TAX_PROFILE_EXTRACTION_CODES.EXTRACTION_FAILED)
+					);
+					return;
+				}
+
+				if (mapped.form.name) setData("name", mapped.form.name);
+				if (mapped.form.rfc) setData("rfc", mapped.form.rfc);
+				if (mapped.form.zipcode) setData("zipcode", mapped.form.zipcode);
+				if (mapped.form.tax_regime) setData("tax_regime", mapped.form.tax_regime);
+
+				setExtractedData(mapped.extractedPayload);
+				setMissingFields(mapped.missingFields);
+				setWarnings(mapped.warnings);
+				setExtractionError(null);
+				setActiveStep(STEPS.REVIEW);
+				return;
+			}
+
+			if (result?.code === TAX_PROFILE_EXTRACTION_CODES.LEGAL_ENTITY_NOT_ALLOWED) {
+				handleBlockedExtraction();
+				return;
+			}
+
+			applyExtractionError(
+				mapTaxProfileExtractionError(result?.code, result?.message, response.status)
+			);
+		} catch (error) {
+			if (error?.name === "AbortError") {
+				applyExtractionError(
+					mapTaxProfileExtractionError(TAX_PROFILE_EXTRACTION_CODES.EXTRACTION_TIMEOUT)
+				);
+			} else {
+				// No exponer error.message crudo del navegador/proveedor.
+				applyExtractionError(mapTaxProfileExtractionError(null));
+			}
+		} finally {
+			clearTimeout(abortTimeoutId);
+			stopExtractionMessageCycle();
+			setShowSlowNotice(false);
+			setProcessingPdf(false);
+			extractInFlightRef.current = false;
+			abortControllerRef.current = null;
+		}
+	};
+
+	const handleRetryWithNewFile = () => {
+		setUploadedFile(null);
+		setData("fiscal_certificate", null);
+		setExtractedData(null);
+		setMissingFields([]);
+		setWarnings([]);
+		setExtractionError(null);
+		setData("name", "");
+		setData("rfc", "");
+		setData("zipcode", "");
+		setData("tax_regime", null);
+		setData("confirm_data", false);
+		setIsModeSelected(true);
+		setEntryMode(ENTRY_MODES.AUTOMATIC);
+		setActiveStep(STEPS.UPLOAD);
+		if (fileInputRef.current) fileInputRef.current.value = "";
+	};
+
+	const handleSwitchToManual = () => {
+		// Conserva el archivo (si lo hay) para el envío final, pero descarta
+		// cualquier metadato de la extracción automática.
+		setEntryMode(ENTRY_MODES.MANUAL);
+		setExtractionError(null);
+		setExtractedData(null);
+		setMissingFields([]);
+		setWarnings([]);
+		setActiveStep(STEPS.REVIEW);
+	};
+
+	// ------------------------------------------------------------------
+	// Navegación entre pasos
+	// ------------------------------------------------------------------
+
+	const handleEntryModeChange = (mode) => {
+		setEntryMode(mode);
+		setIsModeSelected(true);
+		clearErrors("fiscal_certificate");
+		setExtractionError(null);
+
+		if (uploadedFile) {
+			setUploadedFile(null);
+			setExtractedData(null);
+			setMissingFields([]);
+			setWarnings([]);
+			setData("fiscal_certificate", null);
+		}
+	};
+
+	const handleBackToModeSelection = () => {
+		if (processingPdf) return;
+		setIsModeSelected(false);
+		setUploadedFile(null);
+		setData("fiscal_certificate", null);
+		setExtractedData(null);
+		setMissingFields([]);
+		setWarnings([]);
+		setExtractionError(null);
+		clearErrors();
+	};
+
 	const handleNextStep = () => {
-		console.log("➡️ handleNextStep llamado, activeStep actual:", activeStep);
+		if (activeStep !== STEPS.UPLOAD) return;
 
-		if (activeStep === STEPS.UPLOAD) {
-			// Si estamos en el paso de selección de modo
-			if (!isModeSelected) {
-				console.log("❌ No se ha seleccionado un modo");
-				setInfoMessage({
-					type: "error",
-					message: "Por favor selecciona un método para ingresar tus datos"
-				});
-				return;
-			}
-
-			// Si ya seleccionó modo pero aún no ha subido archivo (en modo automático)
-			if (entryMode === ENTRY_MODES.AUTOMATIC && !uploadedFile) {
-				console.log("❌ No se ha subido archivo en modo automático");
-				setError("fiscal_certificate", "Debe subir una constancia fiscal");
-				return;
-			}
-
-			// Avanzar al siguiente paso
-			console.log("✅ Avanzando a REVIEW");
-			setActiveStep(STEPS.REVIEW);
-
-		} else if (activeStep === STEPS.REVIEW) {
-			console.log("📋 Validando datos en paso REVIEW");
-
-			// Validar campos requeridos antes de avanzar
-			const requiredFields = {
-				name: data.name,
-				rfc: data.rfc,
-				zipcode: data.zipcode,
-				tax_regime: data.tax_regime
-			};
-
-			const missingFields = Object.entries(requiredFields)
-				.filter(([_, value]) => !value)
-				.map(([key]) => key);
-
-			if (missingFields.length > 0) {
-				console.log("❌ Campos incompletos:", missingFields);
-				console.log("🔔 Complete todos los campos requeridos antes de continuar.");
-
-				// Mostrar errores en los campos faltantes
-				missingFields.forEach(field => {
-					setError(field, `Este campo es requerido`);
-				});
-
-				setInfoMessage({
-					type: "error",
-					message: "Complete todos los campos requeridos antes de continuar."
-				});
-				return;
-			}
-
-			// Validar RFC
-			if (data.rfc && !validarRFC(data.rfc)) {
-				console.log("❌ RFC inválido:", data.rfc);
-				setError("rfc", "Formato RFC inválido");
-				console.log("🔔 Verifique el formato de su RFC.");
-
-				setInfoMessage({
-					type: "error",
-					message: "Verifique el formato de su RFC."
-				});
-				return;
-			}
-
-			// Validar código postal
-			if (data.zipcode && !/^\d{5}$/.test(data.zipcode)) {
-				console.log("❌ Código postal inválido:", data.zipcode);
-				setError("zipcode", "Debe tener 5 dígitos");
-				console.log("🔔 El código postal debe tener 5 dígitos.");
-
-				setInfoMessage({
-					type: "error",
-					message: "El código postal debe tener 5 dígitos."
-				});
-				return;
-			}
-
-			// Constancia obligatoria al crear; en edición se conserva la existente.
-			if (
-				!cachedEditMode &&
-				(!uploadedFile || !data.fiscal_certificate)
-			) {
-				console.log("❌ No se ha subido constancia fiscal");
-				setError("fiscal_certificate", "Debe subir una constancia fiscal");
-				setInfoMessage({
-					type: "error",
-					message: "Debe subir una constancia fiscal"
-				});
-				return;
-			}
-
-			console.log("✅ Todos los campos válidos, avanzando a CONFIRM");
-			setActiveStep(STEPS.CONFIRM);
+		if (!isModeSelected) {
+			setInfoMessage({
+				type: "error",
+				message: "Selecciona un método para ingresar tus datos.",
+			});
+			return;
 		}
+
+		if (entryMode === ENTRY_MODES.MANUAL) {
+			setActiveStep(STEPS.REVIEW);
+			return;
+		}
+
+		// Modo automático: al seleccionar la tarjeta ya se muestra la subida.
+		setIsModeSelected(true);
 	};
 
-	const handlePrevStep = () => {
-		console.log("⬅️ handlePrevStep llamado, activeStep actual:", activeStep);
+	const handleBackFromReview = () => {
+		if (isSaving) return;
+		if (cachedEditMode) {
+			requestClose();
+			return;
+		}
+		setActiveStep(STEPS.UPLOAD);
+	};
 
-		if (activeStep === STEPS.REVIEW) {
-			if (cachedEditMode) {
-				closeDialog();
-				return;
-			}
-			console.log("🔄 Regresando a UPLOAD desde REVIEW");
+	const handleReplaceCertificate = () => {
+		if (!cachedEditMode && entryMode === ENTRY_MODES.AUTOMATIC) {
+			setUploadedFile(null);
+			setData("fiscal_certificate", null);
+			setExtractedData(null);
+			setMissingFields([]);
+			setWarnings([]);
+			setExtractionError(null);
+			clearErrors("fiscal_certificate");
 			setActiveStep(STEPS.UPLOAD);
-
-		} else if (activeStep === STEPS.CONFIRM) {
-			console.log("🔄 Regresando a REVIEW desde CONFIRM");
-			setActiveStep(STEPS.REVIEW);
+			return;
 		}
+		manualFileInputRef.current?.click();
 	};
 
-	// Función para enviar el formulario
+	// ------------------------------------------------------------------
+	// Cierre / descarte
+	// ------------------------------------------------------------------
+
+	const isDirty = () => {
+		if (uploadedFile) return true;
+		if (extractedData) return true;
+		if (extractionError) return true;
+		if (data.name || data.rfc || data.zipcode || data.tax_regime) return true;
+		return false;
+	};
+
+	const closeDialog = () => {
+		setUploadedFile(null);
+		setExtractedData(null);
+		setMissingFields([]);
+		setWarnings([]);
+		setExtractionError(null);
+		setInfoMessage(null);
+		clearErrors();
+		setActiveStep(STEPS.UPLOAD);
+		setIsModeSelected(false);
+
+		router.get(
+			route("tax-profiles.index"),
+			{},
+			{ preserveState: true, preserveScroll: true }
+		);
+	};
+
+	const requestClose = () => {
+		if (processingPdf) return;
+
+		if (isDirty()) {
+			const confirmed = window.confirm(
+				"Si cierras, se descartarán los datos no guardados. ¿Deseas continuar?"
+			);
+			if (!confirmed) return;
+		}
+
+		closeDialog();
+	};
+
+	// ------------------------------------------------------------------
+	// Guardado (tax-profiles.store / tax-profiles.update)
+	// ------------------------------------------------------------------
+
 	const submit = async (e) => {
 		e.preventDefault();
 
-		// Solo guardar en el paso de confirmación; en otros pasos avanzar
-		if (activeStep !== STEPS.CONFIRM) {
+		if (activeStep !== STEPS.REVIEW) {
 			handleNextStep();
 			return;
 		}
 
-		console.log('=== GUARDANDO PERFIL FISCAL ===');
-
-		// Resetear estados
 		setInfoMessage(null);
 		clearErrors();
+
+		const requiredFields = {
+			name: data.name,
+			rfc: data.rfc,
+			zipcode: data.zipcode,
+			tax_regime: data.tax_regime,
+		};
+
+		const missingRequired = Object.entries(requiredFields)
+			.filter(([, value]) => !value)
+			.map(([key]) => key);
+
+		if (missingRequired.length > 0) {
+			missingRequired.forEach((field) => setError(field, "Este campo es requerido"));
+			setInfoMessage({
+				type: "error",
+				message: "Completa todos los campos requeridos antes de continuar.",
+			});
+			return;
+		}
+
+		const rfcClassification = classifyRfcForIndividualProfile(data.rfc);
+		if (rfcClassification !== "individual") {
+			setError("rfc", rfcHintMessage(data.rfc) || "Formato de RFC inválido.");
+			setInfoMessage({ type: "error", message: "Verifica el formato de tu RFC." });
+			return;
+		}
+
+		if (!/^\d{5}$/.test(data.zipcode)) {
+			setError("zipcode", "Debe tener 5 dígitos");
+			setInfoMessage({ type: "error", message: "El código postal debe tener 5 dígitos." });
+			return;
+		}
+
+		// Constancia obligatoria al crear; en edición se conserva la existente.
+		if (!cachedEditMode && (!uploadedFile || !data.fiscal_certificate)) {
+			setError("fiscal_certificate", "Debe subir una constancia fiscal");
+			setInfoMessage({ type: "error", message: "Debe subir una constancia fiscal." });
+			return;
+		}
+
+		if (extractedData && !data.confirm_data) {
+			setError("confirm_data", "Debe confirmar que los datos extraídos son correctos");
+			return;
+		}
+
 		setIsSaving(true);
 		setSaveStep("Validando datos...");
 
-		// Permitir que React pinte el estado de carga antes del trabajo pesado
+		// Deja que React pinte el estado de carga antes del trabajo pesado.
 		await new Promise((resolve) => {
 			requestAnimationFrame(() => requestAnimationFrame(resolve));
 		});
 
 		try {
-			// Validaciones finales antes de enviar
-			// Crear exige constancia; editar puede conservar la existente.
-			if (!cachedEditMode && !data.fiscal_certificate) {
-				setError("fiscal_certificate", "Debe subir una constancia fiscal");
-				setIsSaving(false);
-				return;
-			}
-
-			if (extractedData && !data.confirm_data) {
-				setError(
-					"confirm_data",
-					"Debe confirmar que los datos extraídos son correctos",
-				);
-				setIsSaving(false);
-				return;
-			}
-
-			// Preparar FormData
 			const formData = new FormData();
-			formData.append('name', data.name);
-			formData.append('rfc', data.rfc);
-			formData.append('zipcode', data.zipcode);
-			formData.append('tax_regime', data.tax_regime);
-			formData.append('cfdi_use', data.cfdi_use || 'G03');
-			formData.append('entry_mode', entryMode);
+			formData.append("name", data.name);
+			formData.append("rfc", data.rfc);
+			formData.append("zipcode", data.zipcode);
+			formData.append("tax_regime", data.tax_regime);
+			formData.append("cfdi_use", data.cfdi_use || "G03");
+			formData.append("entry_mode", entryMode);
 
-			// Agregar archivo solo si el usuario subió uno nuevo
 			if (data.fiscal_certificate) {
-				formData.append('fiscal_certificate', data.fiscal_certificate);
+				formData.append("fiscal_certificate", data.fiscal_certificate);
 			}
 
-			formData.append('confirm_data', data.confirm_data ? '1' : '0');
+			formData.append("confirm_data", data.confirm_data ? "1" : "0");
 
 			if (extractedData) {
-				formData.append('extracted_data', JSON.stringify(extractedData));
+				formData.append("extracted_data", JSON.stringify(extractedData));
 			}
 
 			const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
 			if (csrfToken) {
-				formData.append('_token', csrfToken);
+				formData.append("_token", csrfToken);
 			}
 
-			// Determinar URL
 			let url = route("tax-profiles.store");
-			let method = 'POST';
+			let method = "POST";
 
 			if (cachedEditMode && cachedTaxProfile) {
-				formData.append('_method', 'PUT');
+				formData.append("_method", "PUT");
 				url = route("tax-profiles.update", {
 					tax_profile: cachedTaxProfile.id,
 				});
 			}
 
-			console.log('🌐 Enviando a:', url);
+			setSaveStep("Enviando al servidor...");
 
-			setSaveStep('Enviando al servidor...');
-
-			// Hacer la petición
 			const response = await fetch(url, {
 				method: method,
 				body: formData,
 				headers: {
-					'Accept': 'application/json',
-					'X-Requested-With': 'XMLHttpRequest',
+					Accept: "application/json",
+					"X-Requested-With": "XMLHttpRequest",
 				},
 			});
-
-			console.log('📡 Respuesta:', response.status, response.statusText);
 
 			const usedProfileLockMessage =
 				"Este perfil ya no se puede modificar porque fue utilizado en una solicitud de factura. Puedes usarlo en nuevas solicitudes o crear otro perfil con datos distintos.";
 
-			// Leer respuesta
 			const responseText = await response.text();
 
 			const isUsedProfileLockStatus =
 				cachedEditMode &&
 				(response.status === 403 || response.status === 422);
 
-			// Intentar parsear JSON
 			try {
 				const result = JSON.parse(responseText);
-				console.log('📋 Resultado:', result);
 
 				if (response.ok && result.success) {
-					// Éxito - Mostrar mensaje de éxito
-					const successTitle = cachedEditMode
-						? '¡Perfil actualizado!'
-						: '¡Perfil creado exitosamente!';
-
 					const successMessage = cachedEditMode
-						? 'Tu perfil fiscal ha sido actualizado correctamente.'
-						: 'Tu perfil fiscal ha sido creado correctamente.';
-
-					console.log(`🔔 ${successTitle}: ${successMessage}`);
+						? "Tu perfil fiscal ha sido actualizado correctamente."
+						: "Tu perfil fiscal ha sido creado correctamente.";
 
 					setInfoMessage({
 						type: "success",
-						message: successMessage
+						message: successMessage,
 					});
 
-					// Redirigir después de 2 segundos (para que el usuario vea el mensaje)
 					setTimeout(() => {
 						router.visit(route("tax-profiles.index"), {
 							preserveState: true,
 							preserveScroll: true,
 						});
-					}, 2000);
-
+					}, 1500);
 				} else {
-					// Error del servidor
-					console.error('❌ Error del servidor:', result);
-
 					const lockFromBody =
 						isUsedProfileLockStatus ||
 						(cachedEditMode &&
@@ -806,56 +772,38 @@ export default function TaxProfileForm({ isOpen }) {
 							message: usedProfileLockMessage,
 						});
 					} else if (result.errors) {
-						// Mostrar errores de validación de Laravel
-						Object.keys(result.errors).forEach(key => {
+						Object.keys(result.errors).forEach((key) => {
 							setError(key, result.errors[key][0]);
 						});
 
-						console.log('🔔 Por favor corrija los errores en el formulario.');
-
 						setInfoMessage({
 							type: "error",
-							message: 'Por favor corrija los errores en el formulario.'
+							message: "Por favor corrija los errores en el formulario.",
 						});
-
 					} else if (result.message) {
-						// Mostrar mensaje de error general
-						console.log(`🔔 Error: ${result.message}`);
-
 						setInfoMessage({
 							type: "error",
-							message: result.message
+							message: result.message,
 						});
 
-						// Si el error es sobre RFC duplicado, mostrarlo en el campo
-						if (result.message.includes('RFC') || result.message.includes('rfc')) {
-							setError('rfc', result.message);
+						if (result.message.toLowerCase().includes("rfc")) {
+							setError("rfc", result.message);
 						}
 					}
 				}
-
-			} catch (jsonError) {
-				console.error('❌ Error parseando JSON:', jsonError);
-				console.log('📄 Texto de respuesta:', responseText.substring(0, 500));
-
-				// Si no es JSON pero la respuesta fue exitosa, asumir éxito
+			} catch {
 				if (response.ok) {
-					console.log('⚠️ Respuesta exitosa no-JSON');
-					console.log('🔔 La operación se completó correctamente.');
-
 					setInfoMessage({
 						type: "success",
-						message: 'La operación se completó correctamente.'
+						message: "La operación se completó correctamente.",
 					});
 
-					// Redirigir después de 2 segundos
 					setTimeout(() => {
 						router.visit(route("tax-profiles.index"), {
 							preserveState: true,
 							preserveScroll: true,
 						});
-					}, 2000);
-
+					}, 1500);
 				} else if (isUsedProfileLockStatus) {
 					setInfoMessage({
 						type: "error",
@@ -863,178 +811,132 @@ export default function TaxProfileForm({ isOpen }) {
 						message: usedProfileLockMessage,
 					});
 				} else {
-					console.log('🔔 Error del servidor. Por favor intente nuevamente.');
-
 					setInfoMessage({
 						type: "error",
-						message: 'Por favor intente nuevamente.'
+						message: "Ocurrió un error en el servidor. Por favor intente nuevamente.",
 					});
 				}
 			}
-
-		} catch (error) {
-			console.error('💥 Error de red:', error);
-			console.log('🔔 Error de conexión. Verifique su internet e intente nuevamente.');
-
+		} catch {
 			setInfoMessage({
 				type: "error",
-				message: 'Verifique su internet e intente nuevamente.'
+				message: "Verifique su internet e intente nuevamente.",
 			});
-
 		} finally {
 			setIsSaving(false);
-			setSaveStep('');
+			setSaveStep("");
 		}
 	};
 
-	const closeDialog = () => {
-		console.log("❌ Cerrando diálogo");
-		router.get(
-			route("tax-profiles.index"),
-			{},
-			{ preserveState: true, preserveScroll: true }
+	// ------------------------------------------------------------------
+	// Render: banner informativo genérico
+	// ------------------------------------------------------------------
+
+	const renderInfoMessage = () => {
+		if (!infoMessage) return null;
+
+		return (
+			<div
+				className={`rounded-lg p-4 ${infoMessage.type === "success"
+					? "bg-green-50 border border-green-200"
+					: infoMessage.type === "error"
+						? "bg-red-50 border border-red-200"
+						: "bg-yellow-50 border border-yellow-200"
+					}`}
+				role="alert"
+			>
+				<div className="flex items-start">
+					{infoMessage.type === "success" ? (
+						<CheckCircleIcon className="h-5 w-5 text-green-400 mr-2 shrink-0" />
+					) : (
+						<ExclamationTriangleIcon className="h-5 w-5 text-red-400 mr-2 shrink-0" />
+					)}
+					<div className="min-w-0 space-y-3">
+						<span className="font-medium block">{infoMessage.message}</span>
+						{infoMessage.code === "used_profile_lock" && (
+							<div className="flex flex-col gap-2 sm:flex-row">
+								<Button
+									type="button"
+									outline
+									onClick={() =>
+										router.visit(route("tax-profiles.index"), {
+											preserveScroll: true,
+										})
+									}
+								>
+									Volver al listado
+								</Button>
+								<Button
+									type="button"
+									href={route("tax-profiles.create")}
+									preserveState
+									preserveScroll
+								>
+									Crear otro perfil
+								</Button>
+							</div>
+						)}
+					</div>
+				</div>
+			</div>
 		);
 	};
 
-	// Paso 1: Selección de modo de entrada
-	const renderModeSelectionStep = () => {
-		console.log("🖼️ Renderizando paso de selección de modo, isModeSelected:", isModeSelected);
+	// ------------------------------------------------------------------
+	// Paso: selección de modo de entrada
+	// ------------------------------------------------------------------
 
+	const renderModeSelectionStep = () => {
 		return (
 			<>
 				<DialogTitle>
-					{cachedEditMode
-						? "Actualizar perfil fiscal"
-						: "Nuevo perfil fiscal"}
+					{cachedEditMode ? "Actualizar perfil fiscal" : "Nuevo perfil fiscal"}
 				</DialogTitle>
 				<DialogDescription>
-					Selecciona cómo deseas ingresar tu información fiscal
+					Selecciona cómo deseas ingresar tu información fiscal.
 				</DialogDescription>
 
 				<DialogBody className="space-y-6">
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-						{/* Opción 1: Modo Automático */}
-						<div
-							className={`p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${entryMode === ENTRY_MODES.AUTOMATIC
-								? 'border-blue-500 bg-blue-50'
-								: 'border-gray-200 bg-white hover:border-gray-300'}`}
-							onClick={() => handleEntryModeChange(ENTRY_MODES.AUTOMATIC)}
-						>
-							<div className="text-center mb-4">
-								<div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
-									<DocumentArrowUpIcon className="h-8 w-8 text-blue-600" />
-								</div>
-								<h3 className="text-lg font-semibold text-gray-900 mb-2">
-									Extracción Automática
-								</h3>
-								<p className="text-sm text-gray-600">
-									Recomendado
-								</p>
-							</div>
+					<TaxProfilePhysicalPersonNotice />
 
-							<div className="space-y-3">
-								<div className="flex items-start">
-									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-									<span className="text-sm text-gray-700">
-										Sube tu constancia fiscal (PDF)
-									</span>
-								</div>
-								<div className="flex items-start">
-									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-									<span className="text-sm text-gray-700">
-										Analisis automático
-									</span>
-								</div>
-								<div className="flex items-start">
-									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-									<span className="text-sm text-gray-700">
-										Revisa y confirma
-									</span>
-								</div>
-							</div>
+					{renderInfoMessage()}
 
-							{entryMode === ENTRY_MODES.AUTOMATIC && (
-								<div className="mt-6 text-center">
-									<div className="text-sm font-medium text-blue-700 mb-2">
-										✓ Seleccionado
-									</div>
-									<p className="text-xs text-gray-500">
-										Haz clic en "Continuar" para subir tu archivo
-									</p>
-								</div>
-							)}
-						</div>
-
-						{/* Opción 2: Modo Manual */}
-						<div
-							className={`p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${entryMode === ENTRY_MODES.MANUAL
-								? 'border-green-500 bg-green-50'
-								: 'border-gray-200 bg-white hover:border-gray-300'}`}
-							onClick={() => handleEntryModeChange(ENTRY_MODES.MANUAL)}
-						>
-							<div className="text-center mb-4">
-								<div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
-									<PencilSquareIcon className="h-8 w-8 text-green-600" />
-								</div>
-								<h3 className="text-lg font-semibold text-gray-900 mb-2">
-									Llenado Manual
-								</h3>
-								<p className="text-sm text-gray-600">
-									Sus datos fiscales
-								</p>
-							</div>
-
-							<div className="space-y-3">
-								<div className="flex items-start">
-									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-									<span className="text-sm text-gray-700">
-										Ingresa tus datos manualmente
-									</span>
-								</div>
-								<div className="flex items-start">
-									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-									<span className="text-sm text-gray-700">
-										Sube tu constancia fiscal (PDF)
-									</span>
-								</div>
-								<div className="flex items-start">
-									<CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-									<span className="text-sm text-gray-700">
-										Útil si la lectura automática no reconoce tu .PDF
-									</span>
-								</div>
-							</div>
-
-							{entryMode === ENTRY_MODES.MANUAL && (
-								<div className="mt-6 text-center">
-									<div className="text-sm font-medium text-green-700 mb-2">
-										✓ Seleccionado
-									</div>
-									<p className="text-xs text-gray-500">
-										Haz clic en "Continuar" para ingresar tus datos
-									</p>
-								</div>
-							)}
-						</div>
+					<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+						<TaxProfileEntryModeCard
+							selected={entryMode === ENTRY_MODES.AUTOMATIC}
+							onSelect={() => handleEntryModeChange(ENTRY_MODES.AUTOMATIC)}
+							icon={DocumentArrowUpIcon}
+							title="Subir Constancia de Situación Fiscal"
+							subtitle="Carga tu constancia y completaremos los datos automáticamente para que los revises."
+							features={[
+								"Sube tu constancia en PDF",
+								"Revisa y confirma los datos antes de guardar",
+							]}
+							accent="blue"
+						/>
+						<TaxProfileEntryModeCard
+							selected={entryMode === ENTRY_MODES.MANUAL}
+							onSelect={() => handleEntryModeChange(ENTRY_MODES.MANUAL)}
+							icon={PencilSquareIcon}
+							title="Capturar datos manualmente"
+							subtitle="Ingresa directamente la información de tu perfil fiscal."
+							features={[
+								"Ingresa tus datos manualmente",
+								"Sube tu constancia en PDF",
+							]}
+							accent="emerald"
+						/>
 					</div>
-
 				</DialogBody>
 
 				<DialogActions>
-					<Button
-						autoFocus
-						dusk="cancel"
-						plain
-						type="button"
-						onClick={closeDialog}
-						disabled={processingPdf || isSaving}
-					>
+					<Button autoFocus dusk="cancel" plain type="button" onClick={requestClose}>
 						Cancelar
 					</Button>
 					<Button
 						type="button"
 						onClick={handleNextStep}
-						disabled={!isModeSelected || processingPdf || isSaving}
+						disabled={!isModeSelected}
 					>
 						Continuar
 						<ChevronRightIcon className="ml-2 h-4 w-4" />
@@ -1044,24 +946,47 @@ export default function TaxProfileForm({ isOpen }) {
 		);
 	};
 
-	// Paso 1B: Subir archivo (solo para modo automático)
-	const renderUploadStep = () => {
-		console.log("🖼️ Renderizando paso UPLOAD (modo automático)");
+	// ------------------------------------------------------------------
+	// Paso: constancia bloqueada (persona moral detectada)
+	// ------------------------------------------------------------------
 
+	const renderBlockedStep = () => {
+		return (
+			<>
+				<DialogTitle>{extractionError.title}</DialogTitle>
+				<DialogDescription>{extractionError.message}</DialogDescription>
+
+				<DialogBody className="space-y-4">
+					<TaxProfileCompactAlert tone="red">
+						{extractionError.message}
+					</TaxProfileCompactAlert>
+				</DialogBody>
+
+				<DialogActions>
+					<Button dusk="cancel" plain type="button" onClick={requestClose}>
+						Cancelar
+					</Button>
+					<Button type="button" onClick={handleRetryWithNewFile}>
+						Cargar otra constancia
+					</Button>
+				</DialogActions>
+			</>
+		);
+	};
+
+	// ------------------------------------------------------------------
+	// Paso: subir constancia (modo automático)
+	// ------------------------------------------------------------------
+
+	const renderUploadStep = () => {
 		return (
 			<>
 				<DialogTitle>
 					<button
 						type="button"
-						onClick={() => {
-							// Regresar a la selección de modo
-							setActiveStep(STEPS.UPLOAD);
-							setUploadedFile(null);
-							setExtractedData(null);
-							setData("fiscal_certificate", null);
-							clearErrors();
-						}}
-						className="flex items-center text-sm text-gray-500 hover:text-gray-700 mb-2"
+						onClick={handleBackToModeSelection}
+						className="flex items-center text-sm text-gray-500 hover:text-gray-700 mb-2 disabled:opacity-50"
+						disabled={processingPdf}
 					>
 						<ArrowLeftIcon className="h-4 w-4 mr-1" />
 						Cambiar método
@@ -1069,131 +994,153 @@ export default function TaxProfileForm({ isOpen }) {
 					Sube tu constancia fiscal
 				</DialogTitle>
 				<DialogDescription>
-					Sube el archivo PDF de tu constancia para extraer automáticamente tus datos
+					Sube el PDF de tu Constancia de Situación Fiscal. Después de subirlo, extraeremos tus datos para que los revises.
 				</DialogDescription>
 
 				<DialogBody className="space-y-6">
-					<Field>
-						<div className="space-y-4">
-							{uploadedFile && (
-									<div className="rounded-xl border-2 border-solid border-green-200 bg-green-50 p-8 text-center">
-										<div className="space-y-4">
-												<div className="flex items-center justify-center">
-													<div className="p-3 bg-green-100 rounded-full">
-														<CheckCircleIcon className="h-10 w-10 text-green-600" />
-													</div>
-												</div>
-												<div>
-													<h4 className="font-semibold text-green-800 text-lg">
-														¡Archivo listo!
-													</h4>
-													<p className="text-sm text-green-600 mt-1">
-														{uploadedFile.name}
-													</p>
-													<p className="text-xs text-green-500 mt-1">
-														{(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
-													</p>
-												</div>
-												<Button
-													type="button"
-													onClick={handleRemoveFile}
-													className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700"
-													disabled={processingPdf || isSaving}
-												>
-													<XMarkIcon className="h-4 w-4" />
-													Cambiar archivo
-												</Button>
-											</div>
-									</div>
-								)}
+					<TaxProfilePhysicalPersonNotice />
 
-							{processingPdf && (
-								<div className="space-y-2">
-									<div className="w-full bg-gray-200 rounded-full h-2.5">
-										<div
-											className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-											style={{ width: `${uploadProgress}%` }}
-										></div>
-									</div>
-									<div className="flex justify-between text-sm text-gray-600">
-										<span>{currentStep || "Procesando..."}</span>
-										<span>{uploadProgress}%</span>
-									</div>
+					{!uploadedFile && (
+						<div
+							role="button"
+							tabIndex={0}
+							aria-label="Zona para seleccionar o soltar la constancia fiscal en PDF"
+							onDragOver={handleDragOver}
+							onDragLeave={handleDragLeave}
+							onDrop={handleDrop}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									fileInputRef.current?.click();
+								}
+							}}
+							className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${isDragging
+								? "border-blue-400 bg-blue-50"
+								: "border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/40"
+								}`}
+						>
+							<div className="mx-auto max-w-sm">
+								<div className="w-12 h-12 mx-auto mb-3 flex items-center justify-center bg-blue-100 rounded-full">
+									<ArrowUpTrayIcon className="h-6 w-6 text-blue-600" />
 								</div>
-							)}
-
-							{errors.fiscal_certificate && (
-								<ErrorMessage>{errors.fiscal_certificate}</ErrorMessage>
-							)}
-						</div>
-					</Field>
-
-					{!uploadedFile && !processingPdf && (
-						<div className="rounded-xl border border-slate-200 bg-slate-50/80 p-6 dark:border-slate-700 dark:bg-slate-800/40">
-							<div className="mx-auto max-w-sm text-center">
-								<div className="text-center p-4">
-									<div className="w-12 h-12 mx-auto mb-3 flex items-center justify-center bg-blue-100 rounded-full">
-										<ArrowUpTrayIcon className="h-6 w-6 text-blue-600" />
-									</div>
-									<p className="text-base font-semibold text-slate-900 dark:text-white">
-										Selecciona tu constancia fiscal
-									</p>
-									<p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-										Busca el archivo PDF en tu computadora
-									</p>
-									<Button
-										type="button"
-										onClick={() => fileInputRef.current?.click()}
-										className="mt-5 inline-flex items-center gap-2"
-										disabled={processingPdf || isSaving}
-									>
-										<ArrowUpTrayIcon className="h-4 w-4" />
-										Seleccionar archivo
-									</Button>
-									<input
-										ref={fileInputRef}
-										type="file"
-										className="hidden"
-										accept="application/pdf"
-										onChange={handleFileUpload}
-										disabled={processingPdf || isSaving}
-									/>
-								</div>
+								<p className="text-base font-semibold text-slate-900 dark:text-white">
+									Arrastra tu constancia aquí
+								</p>
+								<p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+									o selecciona el archivo PDF desde tu computadora
+								</p>
+								<Button
+									type="button"
+									onClick={() => fileInputRef.current?.click()}
+									className="mt-5 inline-flex items-center gap-2"
+								>
+									<ArrowUpTrayIcon className="h-4 w-4" />
+									Seleccionar archivo
+								</Button>
+								<input
+									ref={fileInputRef}
+									type="file"
+									className="hidden"
+									accept="application/pdf"
+									onChange={handleFileInputChange}
+								/>
 							</div>
-							<div className="mt-4 pt-4 border-t border-gray-200">
-								<p className="text-xs text-gray-500">
-									<strong>Requisitos:</strong> Solo archivos PDF • Máximo 5MB • Constancia emitida en los últimos 3 meses
+							<div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700">
+								<p className="text-xs text-gray-500 dark:text-slate-400">
+									Solo archivos PDF · Máximo {formatFileSize(MAX_TAX_CERTIFICATE_BYTES)}
 								</p>
 							</div>
 						</div>
 					)}
 
-					{/* Opción para cambiar a modo manual si hay problemas */}
-					{uploadedFile && !processingPdf && (
-						<div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-							<div className="flex items-center justify-between">
-								<div>
-									<p className="text-sm text-gray-700">
-										¿Problemas con la extracción automática?
-									</p>
-									<p className="text-xs text-gray-500 mt-1">
-										Puedes cambiar al modo manual si no se extraen los datos correctamente
-									</p>
+					{errors.fiscal_certificate && (
+						<ErrorMessage>{errors.fiscal_certificate}</ErrorMessage>
+					)}
+
+					{uploadedFile && (
+						<div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800/40">
+							<div className="flex items-center justify-between gap-3">
+								<div className="flex min-w-0 items-center gap-3">
+									<div className="p-2 bg-blue-100 rounded-lg shrink-0">
+										<DocumentTextIcon className="h-6 w-6 text-blue-600" />
+									</div>
+									<div className="min-w-0">
+										<p className="truncate text-sm font-medium text-slate-900 dark:text-white">
+											{uploadedFile.name}
+										</p>
+										<p className="text-xs text-slate-500 dark:text-slate-400">
+											{formatFileSize(uploadedFile.size)}
+										</p>
+									</div>
 								</div>
 								<Button
 									type="button"
 									plain
-									onClick={() => {
-										setEntryMode(ENTRY_MODES.MANUAL);
-										// Mantener el archivo subido
-										setActiveStep(STEPS.REVIEW);
-									}}
-									disabled={processingPdf || isSaving}
+									onClick={handleRemoveFile}
+									disabled={processingPdf}
 								>
-									Cambiar a modo manual
+									Cambiar archivo
 								</Button>
 							</div>
+
+							{!processingPdf && !extractionError && (
+								<div className="mt-4 flex flex-wrap items-center gap-4">
+									<Button type="button" onClick={startExtraction} disabled={processingPdf}>
+										Extraer datos
+									</Button>
+									<button
+										type="button"
+										onClick={handleSwitchToManual}
+										className="text-sm text-slate-500 underline hover:text-slate-700 dark:text-slate-400"
+									>
+										Prefiero capturar mis datos manualmente
+									</button>
+								</div>
+							)}
+
+							{processingPdf && (
+								<div className="mt-4 space-y-3">
+									<div className="flex items-center gap-3">
+										<ArrowPathIcon
+											className="h-5 w-5 shrink-0 animate-spin text-blue-600"
+											aria-hidden
+										/>
+										<span role="status" aria-live="polite" className="text-sm text-slate-700 dark:text-slate-300">
+											{extractionMessage}
+										</span>
+									</div>
+									<div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+										<div className="h-full w-full animate-pulse rounded-full bg-gradient-to-r from-blue-400 via-blue-600 to-blue-400" />
+									</div>
+									{showSlowNotice && (
+										<p className="text-xs text-amber-600 dark:text-amber-400" role="status" aria-live="polite">
+											Está tomando más tiempo de lo esperado. Puedes esperar, reintentar o capturar tus datos manualmente.
+										</p>
+									)}
+								</div>
+							)}
 						</div>
+					)}
+
+					{extractionError && extractionError.variant !== "blocked" && (
+						<TaxProfileCompactAlert tone="red">
+							<div className="space-y-2">
+								<p className="font-medium">{extractionError.title}</p>
+								<p>{extractionError.message}</p>
+								<div className="flex flex-wrap gap-2 pt-1">
+									{extractionError.allowRetry && (
+										<Button type="button" outline onClick={startExtraction}>
+											Reintentar
+										</Button>
+									)}
+									{extractionError.allowManual && (
+										<Button type="button" outline onClick={handleSwitchToManual}>
+											Capturar manualmente
+										</Button>
+									)}
+								</div>
+							</div>
+						</TaxProfileCompactAlert>
 					)}
 				</DialogBody>
 
@@ -1203,578 +1150,241 @@ export default function TaxProfileForm({ isOpen }) {
 						dusk="cancel"
 						plain
 						type="button"
-						onClick={closeDialog}
-						disabled={processingPdf || isSaving}
+						onClick={requestClose}
+						disabled={processingPdf}
 					>
 						Cancelar
-					</Button>
-					<Button
-						type="button"
-						disabled={!uploadedFile || processingPdf || isSaving}
-						onClick={handleNextStep}
-					>
-						Continuar
-						<ChevronRightIcon className="ml-2 h-4 w-4" />
 					</Button>
 				</DialogActions>
 			</>
 		);
 	};
 
-	// Paso 2: Revisar y editar información (común para ambos modos)
+	// ------------------------------------------------------------------
+	// Paso: revisar y confirmar (común a ambos modos y a edición)
+	// ------------------------------------------------------------------
+
 	const renderReviewStep = () => {
-		console.log("🖼️ Renderizando paso REVIEW, entryMode:", entryMode);
+		const rfcClassification = classifyRfcForIndividualProfile(data.rfc);
+		const rfcHint = !errors.rfc ? rfcHintMessage(data.rfc) : null;
+		const rfcHintTone =
+			rfcClassification === "moral" || rfcClassification === "invalid"
+				? "text-red-600"
+				: "text-amber-600";
 
 		return (
 			<>
 				<DialogTitle>
-					{entryMode === ENTRY_MODES.MANUAL ? (
-						<>
-							{!cachedEditMode && (
-								<button
-									type="button"
-									onClick={() => {
-										// Regresar al paso anterior
-										if (uploadedFile) {
-											// Si ya tiene archivo, regresar a UPLOAD
-											setActiveStep(STEPS.UPLOAD);
-										} else {
-											// Si no tiene archivo, regresar a selección de modo
-											setActiveStep(STEPS.UPLOAD);
-											setIsModeSelected(true);
-										}
-									}}
-									className="flex items-center text-sm text-gray-500 hover:text-gray-700 mb-2"
-								>
-									<ArrowLeftIcon className="h-4 w-4 mr-1" />
-									Volver
-								</button>
-							)}
-							{cachedEditMode
-								? "Edita tu información fiscal"
-								: "Completa tu información fiscal"}
-						</>
-					) : (
-						<>Revisa y completa tu información</>
-					)}
-				</DialogTitle>
-				<DialogDescription>
-					{cachedEditMode
-						? "Actualiza los datos de tu perfil. La constancia fiscal solo es necesaria si deseas reemplazarla."
-						: entryMode === ENTRY_MODES.MANUAL
-							? "Ingresa manualmente tus datos fiscales"
-							: "Verifica los datos extraídos y completa los campos faltantes"}
-				</DialogDescription>
-
-				<DialogBody className="space-y-6">
-					{/* Mostrar información del archivo */}
-					{uploadedFile && (
-						<FileInfo file={uploadedFile} onRemove={handleRemoveFile} />
-					)}
-
-					{/* Mensaje informativo */}
-					{infoMessage && (
-						<div
-							className={`rounded-lg p-4 ${infoMessage.type === "success"
-								? "bg-green-50 border border-green-200"
-								: infoMessage.type === "error"
-									? "bg-red-50 border border-red-200"
-									: "bg-yellow-50 border border-yellow-200"
-								}`}
-							role="alert"
-						>
-							<div className="flex items-start">
-								{infoMessage.type === "success" ? (
-									<CheckCircleIcon className="h-5 w-5 text-green-400 mr-2 shrink-0" />
-								) : infoMessage.type === "error" ? (
-									<ExclamationTriangleIcon className="h-5 w-5 text-red-400 mr-2 shrink-0" />
-								) : (
-									<ExclamationTriangleIcon className="h-5 w-5 text-yellow-400 mr-2 shrink-0" />
-								)}
-								<div className="min-w-0 space-y-3">
-									<span className="font-medium block">
-										{infoMessage.message}
-									</span>
-									{infoMessage.code === "used_profile_lock" && (
-										<div className="flex flex-col gap-2 sm:flex-row">
-											<Button
-												type="button"
-												outline
-												onClick={() =>
-													router.visit(route("tax-profiles.index"), {
-														preserveScroll: true,
-													})
-												}
-											>
-												Volver al listado
-											</Button>
-											<Button
-												type="button"
-												href={route("tax-profiles.create")}
-												preserveState
-												preserveScroll
-											>
-												Crear otro perfil
-											</Button>
-										</div>
-									)}
-								</div>
-							</div>
-						</div>
-					)}
-
-					{/* Mostrar resumen de datos extraídos solo en modo automático */}
-					{extractedData && entryMode === ENTRY_MODES.AUTOMATIC && (
-						<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-							<h4 className="font-semibold text-blue-800 mb-2 flex items-center">
-								<DocumentTextIcon className="h-5 w-5 mr-2" />
-								Resumen de datos extraídos
-							</h4>
-							<div className="grid grid-cols-2 gap-3 text-sm">
-								<div>
-									<SimpleLabel>RFC:</SimpleLabel>
-									<div className="font-mono">
-										{extractedData.rfc || "No detectado"}
-									</div>
-								</div>
-								<div>
-									<SimpleLabel>Régimen:</SimpleLabel>
-									<div>
-										{extractedData.regimen_fiscal ||
-											"No detectado"}
-									</div>
-								</div>
-							</div>
-							<button
-								type="button"
-								onClick={() => {
-									console.log("✏️ Cambiando modo edición a:", !isEditing);
-									setIsEditing(!isEditing);
-								}}
-								className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center"
-								disabled={isSaving}
-							>
-								<PencilIcon className="h-4 w-4 mr-1" />
-								{isEditing ? "Ver resumen" : "Editar datos"}
-							</button>
-						</div>
-					)}
-
-					{/* Campos del formulario - Siempre editables en modo manual, en modo automático solo si isEditing es true */}
-					{(isEditing || !extractedData || entryMode === ENTRY_MODES.MANUAL) ? (
-						<>
-							<Field>
-								<Label>Nombre*</Label>
-								<Input
-									dusk="name"
-									required
-									invalid={!!errors.name}
-									value={data.name}
-									onChange={(e) =>
-										setData("name", e.target.value)
-									}
-									type="text"
-									autoComplete="given-name"
-									disabled={isSaving}
-									placeholder="Ej: Juan Pérez García"
-								/>
-								{errors.name && (
-									<ErrorMessage>{errors.name}</ErrorMessage>
-								)}
-							</Field>
-
-							<Field>
-								<Label>RFC *</Label>
-								<Input
-									dusk="rfc"
-									required
-									invalid={!!errors.rfc}
-									value={data.rfc}
-									onChange={(e) => {
-										const value = e.target.value
-											.toUpperCase()
-											.replace(/[^A-Z0-9&Ñ]/g, "");
-										setData("rfc", value);
-										clearErrors("rfc");
-
-										// Validación en tiempo real
-										if (value && !validarRFC(value)) {
-											setError("rfc", "Formato RFC inválido");
-										}
-									}}
-									type="text"
-									disabled={isSaving}
-									placeholder="Ej: MEBE931209BI2 (13 caracteres) o ABC123456XYZ (12 caracteres)"
-								/>
-								{errors.rfc && (
-									<ErrorMessage>{errors.rfc}</ErrorMessage>
-								)}
-								{data.rfc && !errors.rfc && (
-									<p className="text-xs text-gray-500 mt-1">
-										{data.rfc.length === 12
-											? "Persona Moral (12 caracteres)"
-											: data.rfc.length === 13
-												? "Persona Física (13 caracteres)"
-												: "Formato: XXXX999999XXX o XXX999999XXX"}
-									</p>
-								)}
-							</Field>
-
-							<Field>
-								<Label>Código postal *</Label>
-								<Input
-									dusk="zipcode"
-									required
-									invalid={!!errors.zipcode}
-									type="text"
-									autoComplete="postal-code"
-									value={data.zipcode}
-									onChange={(e) => {
-										const value = e.target.value
-											.replace(/\D/g, "")
-											.slice(0, 5);
-										setData("zipcode", value);
-										clearErrors("zipcode");
-
-										// Validación en tiempo real
-										if (value && !/^\d{5}$/.test(value)) {
-											setError(
-												"zipcode",
-												"Debe tener 5 dígitos"
-											);
-										}
-									}}
-									disabled={isSaving}
-									placeholder="Ej: 64000"
-								/>
-								{errors.zipcode && (
-									<ErrorMessage>{errors.zipcode}</ErrorMessage>
-								)}
-							</Field>
-
-							<Field>
-								<Label>Régimen fiscal *</Label>
-								<Listbox
-									invalid={!!errors.tax_regime}
-									placeholder="Selecciona un régimen fiscal"
-									value={data.tax_regime}
-									onChange={(value) => {
-										console.log(
-											"Régimen seleccionado:",
-											value,
-											cachedTaxRegimes?.[value]
-										);
-										setData("tax_regime", value);
-										clearErrors("tax_regime");
-									}}
-									disabled={isSaving}
-								>
-									{Object.keys(cachedTaxRegimes || {}).length >
-										0 ? (
-										Object.entries(cachedTaxRegimes).map(
-											([key, regimen]) => (
-												<ListboxOption key={key} value={key}>
-													<ListboxLabel>{`${key} - ${regimen?.name ||
-														"Desconocido"
-														}`}</ListboxLabel>
-												</ListboxOption>
-											)
-										)
-									) : (
-										<ListboxOption value="" disabled>
-											<ListboxLabel>
-												Cargando regímenes...
-											</ListboxLabel>
-										</ListboxOption>
-									)}
-								</Listbox>
-								{errors.tax_regime && (
-									<ErrorMessage>{errors.tax_regime}</ErrorMessage>
-								)}
-								{data.tax_regime &&
-									cachedTaxRegimes?.[data.tax_regime] && (
-										<p className="text-xs text-gray-500 mt-1">
-											{
-												cachedTaxRegimes[data.tax_regime]
-													.description
-											}
-										</p>
-									)}
-							</Field>
-
-							{/* Subida de archivo en modo manual (si aún no se ha subido) */}
-							{entryMode === ENTRY_MODES.MANUAL && !uploadedFile && (
-								<Field>
-
-
-									<div className="space-y-3">
-										<div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-											<DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-											<p className="text-sm text-gray-600 mb-4">
-												{cachedEditMode
-													? "Opcional: reemplaza tu constancia fiscal en PDF (máximo 5MB)"
-													: "Sube tu constancia fiscal en PDF (máximo 5MB)"}
-											</p>
-											<Button
-												type="button"
-												onClick={(e) => {
-													e.stopPropagation();
-													manualFileInputRef.current?.click();
-												}}
-												className="inline-flex items-center gap-2"
-												disabled={isSaving}
-											>
-												<ArrowUpTrayIcon className="h-4 w-4" />
-												Seleccionar archivo
-												<input
-													ref={manualFileInputRef}
-													type="file"
-													className="hidden"
-													accept="application/pdf"
-													onChange={handleManualFileUpload}
-													disabled={isSaving}
-												/>
-											</Button>
-										</div>
-										{errors.fiscal_certificate && (
-											<ErrorMessage>{errors.fiscal_certificate}</ErrorMessage>
-										)}
-									</div>
-								</Field>
-							)}
-
-							<Field className="hidden">
-								<Label>Uso del CFDI *</Label>
-								<select
-									value={data.cfdi_use}
-									onChange={(e) =>
-										setData("cfdi_use", e.target.value)
-									}
-									className="block w-full rounded-lg border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-									disabled={isSaving}
-								>
-									<option value="G03">
-										G03 - Gastos en general
-									</option>
-									<option value="G01">
-										G01 - Adquisición de mercancías
-									</option>
-									<option value="G02">
-										G02 - Devoluciones, descuentos o
-										bonificaciones
-									</option>
-									<option value="P01">P01 - Por definir</option>
-									<option value="D01">
-										D01 - Honorarios médicos, dentales y gastos
-										hospitalarios
-									</option>
-									<option value="D02">
-										D02 - Gastos de funeral
-									</option>
-									<option value="D03">D03 - Donativos</option>
-									<option value="D04">
-										D04 - Intereses reales efectivamente pagados
-										por créditos hipotecarios
-									</option>
-									<option value="D05">
-										D05 - Aportaciones voluntarias al SAR
-									</option>
-									<option value="D06">
-										D06 - Primas por seguros de gastos médicos
-									</option>
-									<option value="D07">
-										D07 - Gastos de transportación escolar
-										obligatoria
-									</option>
-									<option value="D08">
-										D08 - Depósitos en cuentas para el ahorro
-									</option>
-									<option value="D09">
-										D09 - Pagos por servicios educativos
-										(colegiaturas)
-									</option>
-								</select>
-								<Description>
-									Para gastos médicos use "G03 - Gastos en
-									general".
-								</Description>
-							</Field>
-						</>
-					) : (
-						<div className="space-y-4">
-							<div className="grid grid-cols-2 gap-4">
-								<div className="bg-gray-50 p-4 rounded-lg">
-									<SimpleLabel>RFC</SimpleLabel>
-									<div className="font-mono text-lg">
-										{data.rfc || "No ingresado"}
-									</div>
-								</div>
-								<div className="bg-gray-50 p-4 rounded-lg">
-									<SimpleLabel>Código Postal</SimpleLabel>
-									<div className="text-lg">
-										{data.zipcode || "No ingresado"}
-									</div>
-								</div>
-							</div>
-							<div className="bg-gray-50 p-4 rounded-lg">
-								<SimpleLabel>Régimen Fiscal</SimpleLabel>
-								<div className="text-lg">
-									{data.tax_regime && cachedTaxRegimes?.[data.tax_regime]
-										? `${data.tax_regime} - ${cachedTaxRegimes[data.tax_regime]
-											.name
-										}`
-										: "No seleccionado"}
-								</div>
-								{data.tax_regime &&
-									cachedTaxRegimes?.[data.tax_regime] && (
-										<p className="text-sm text-gray-600 mt-2">
-											{
-												cachedTaxRegimes[data.tax_regime]
-													.description
-											}
-										</p>
-									)}
-							</div>
-							<div className="bg-gray-50 p-4 rounded-lg hidden">
-								<SimpleLabel>Uso del CFDI</SimpleLabel>
-								<div className="text-lg">
-									{data.cfdi_use || "G03"}
-								</div>
-							</div>
-						</div>
-					)}
-				</DialogBody>
-
-				<DialogActions>
-					<Button
-						plain
-						type="button"
-						onClick={handlePrevStep}
-						disabled={isSaving}
-					>
-						{entryMode === ENTRY_MODES.AUTOMATIC ? "Cambiar archivo" : "Volver"}
-					</Button>
-					<div className="flex gap-2">
-						{extractedData && entryMode === ENTRY_MODES.AUTOMATIC && (
-							<Button
-								plain
-								type="button"
-								onClick={() => setIsEditing(!isEditing)}
-								disabled={isSaving}
-							>
-								{isEditing ? "Ver resumen" : "Editar datos"}
-							</Button>
-						)}
-						<Button
+					{!cachedEditMode && (
+						<button
 							type="button"
-							onClick={handleNextStep}
+							onClick={handleBackFromReview}
+							className="flex items-center text-sm text-gray-500 hover:text-gray-700 mb-2"
 							disabled={isSaving}
 						>
-							Continuar
-							<ChevronRightIcon className="ml-2 h-4 w-4" />
-						</Button>
-					</div>
-				</DialogActions>
-			</>
-		);
-	};
-
-	// Paso 3: Confirmar y guardar (común para ambos modos)
-	const renderConfirmStep = () => {
-		console.log("🖼️ Renderizando paso CONFIRM, entryMode:", entryMode);
-
-		return (
-			<>
-				<DialogTitle>Confirma tu información</DialogTitle>
+							<ArrowLeftIcon className="h-4 w-4 mr-1" />
+							Volver
+						</button>
+					)}
+					Revisa tus datos fiscales
+				</DialogTitle>
 				<DialogDescription>
-					Verifica que todos los datos sean correctos antes de guardar
+					Revisa que los datos coincidan con tu Constancia de Situación Fiscal antes de guardar el perfil.
 				</DialogDescription>
 
 				<DialogBody className="space-y-6">
-					<TaxProfileCompactAlert>
-						<strong className="font-medium">¡Importante!</strong> Los datos
-						que confirmes se utilizarán para solicitar tus facturas.
-						Asegúrate de que sean correctos; errores podrían afectar la
-						validez fiscal de tus compras.
-					</TaxProfileCompactAlert>
+					<TaxProfilePhysicalPersonNotice />
 
-					<div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
-						<h4 className="font-semibold text-gray-800 mb-4">
-							Resumen de tu perfil fiscal
-						</h4>
-						<div className="space-y-4">
-							<div className="grid grid-cols-2 gap-4">
-								<div>
-									<SimpleLabel className="text-gray-500">
-										RFC
-									</SimpleLabel>
-									<div className="font-mono">{data.rfc}</div>
-								</div>
-								<div>
-									<SimpleLabel className="text-gray-500">
-										Nombre
-									</SimpleLabel>
-									<div className="font-medium">{data.name}</div>
-								</div>
-							</div>
-							<div className="grid grid-cols-2 gap-4">
-								<div>
-									<SimpleLabel className="text-gray-500">
-										Código Postal
-									</SimpleLabel>
-									<div>{data.zipcode}</div>
-								</div>
-								<div>
-									<SimpleLabel className="text-gray-500">
-										Régimen Fiscal
-									</SimpleLabel>
-									<div>
-										{cachedTaxRegimes?.[data.tax_regime]
-											? `${data.tax_regime} - ${cachedTaxRegimes[data.tax_regime]
-												.name
-											}`
-											: data.tax_regime}
-									</div>
-									{cachedTaxRegimes?.[data.tax_regime] && (
-										<p className="text-sm text-gray-600 mt-1">
-											{
-												cachedTaxRegimes[data.tax_regime]
-													.description
-											}
-										</p>
-									)}
-								</div>
-							</div>
-							<div className="hidden">
-								<SimpleLabel className="text-gray-500">
-									Uso del CFDI
-								</SimpleLabel>
-								<div>{data.cfdi_use || "G03"}</div>
-							</div>
-						</div>
-					</div>
+					{renderInfoMessage()}
 
-					{/* Información del archivo */}
-					{uploadedFile && (
-						<div className="bg-green-50 border border-green-200 rounded-lg p-4">
-							<div className="flex items-center space-x-3">
-								<div className="p-2 bg-green-100 rounded-lg">
-									<DocumentTextIcon className="h-6 w-6 text-green-600" />
+					{warnings.length > 0 && (
+						<TaxProfileCompactAlert tone="amber">
+							<div className="space-y-1">
+								<p className="font-medium">Revisa estos puntos antes de guardar:</p>
+								<ul className="list-disc space-y-0.5 pl-4">
+									{warnings.map((warning, index) => (
+										<li key={index}>{warning}</li>
+									))}
+								</ul>
+							</div>
+						</TaxProfileCompactAlert>
+					)}
+
+					{missingFields.length > 0 && (
+						<TaxProfileCompactAlert tone="amber">
+							<div className="space-y-2">
+								<p className="font-medium">
+									No pudimos detectar estos campos automáticamente. Complétalos manualmente:
+								</p>
+								<div className="flex flex-wrap gap-2">
+									{missingFields.map((field) => (
+										<span
+											key={field}
+											className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-200"
+										>
+											{FIELD_LABELS[field] || field}
+											<span className="rounded-full bg-amber-200 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:bg-amber-500/30 dark:text-amber-100">
+												Pendiente
+											</span>
+										</span>
+									))}
 								</div>
-								<div>
-									<h4 className="font-medium text-green-800 text-sm">
-										Archivo adjunto
-									</h4>
-									<p className="text-xs text-green-700 mt-1">
-										{uploadedFile.name} • {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+							</div>
+						</TaxProfileCompactAlert>
+					)}
+
+					{uploadedFile ? (
+						<div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+							<div className="flex min-w-0 items-center gap-3">
+								<div className="p-2 bg-blue-100 rounded-lg shrink-0">
+									<DocumentTextIcon className="h-5 w-5 text-blue-600" />
+								</div>
+								<div className="min-w-0">
+									<p className="truncate text-sm font-medium text-slate-900 dark:text-white">
+										{uploadedFile.name}
+									</p>
+									<p className="text-xs text-slate-500 dark:text-slate-400">
+										{formatFileSize(uploadedFile.size)}
 									</p>
 								</div>
 							</div>
+							<Button type="button" plain onClick={handleReplaceCertificate} disabled={isSaving}>
+								Reemplazar constancia
+							</Button>
+							<input
+								ref={manualFileInputRef}
+								type="file"
+								className="hidden"
+								accept="application/pdf"
+								onChange={handleManualFileInputChange}
+							/>
+						</div>
+					) : (
+						<div className="space-y-2">
+							<div className="rounded-lg border-2 border-dashed border-gray-300 p-6 text-center dark:border-slate-700">
+								<DocumentTextIcon className="mx-auto mb-3 h-10 w-10 text-gray-400" />
+								<p className="mb-4 text-sm text-gray-600 dark:text-slate-400">
+									{cachedEditMode
+										? `Opcional: sube tu constancia fiscal en PDF (máximo ${formatFileSize(MAX_TAX_CERTIFICATE_BYTES)}) para reemplazar la actual.`
+										: `Sube tu constancia fiscal en PDF (máximo ${formatFileSize(MAX_TAX_CERTIFICATE_BYTES)}).`}
+								</p>
+								<Button
+									type="button"
+									onClick={() => manualFileInputRef.current?.click()}
+									className="inline-flex items-center gap-2"
+									disabled={isSaving}
+								>
+									<ArrowUpTrayIcon className="h-4 w-4" />
+									Seleccionar archivo
+								</Button>
+								<input
+									ref={manualFileInputRef}
+									type="file"
+									className="hidden"
+									accept="application/pdf"
+									onChange={handleManualFileInputChange}
+								/>
+							</div>
+							{errors.fiscal_certificate && (
+								<ErrorMessage>{errors.fiscal_certificate}</ErrorMessage>
+							)}
 						</div>
 					)}
 
-					{extractedData && entryMode === ENTRY_MODES.AUTOMATIC && (
-						<div className="border-t pt-4">
+					<Field>
+						<Label>Nombre *</Label>
+						<Input
+							dusk="name"
+							required
+							invalid={!!errors.name}
+							value={data.name}
+							onChange={(e) => {
+								setData("name", e.target.value);
+								clearErrors("name");
+							}}
+							type="text"
+							autoComplete="given-name"
+							disabled={isSaving}
+							placeholder="Ej: Juan Pérez García"
+						/>
+						{errors.name && <ErrorMessage>{errors.name}</ErrorMessage>}
+					</Field>
+
+					<Field>
+						<Label>RFC *</Label>
+						<Input
+							dusk="rfc"
+							required
+							invalid={!!errors.rfc}
+							value={data.rfc}
+							onChange={(e) => {
+								setData("rfc", normalizeRfcInput(e.target.value));
+								clearErrors("rfc");
+							}}
+							type="text"
+							disabled={isSaving}
+							placeholder="Ej: MEBE931209BI2"
+						/>
+						{errors.rfc && <ErrorMessage>{errors.rfc}</ErrorMessage>}
+						{rfcHint && (
+							<p className={`mt-1 text-xs ${rfcHintTone}`}>{rfcHint}</p>
+						)}
+					</Field>
+
+					<Field>
+						<Label>Código postal *</Label>
+						<Input
+							dusk="zipcode"
+							required
+							invalid={!!errors.zipcode}
+							type="text"
+							autoComplete="postal-code"
+							value={data.zipcode}
+							onChange={(e) => {
+								const value = e.target.value.replace(/\D/g, "").slice(0, 5);
+								setData("zipcode", value);
+								clearErrors("zipcode");
+							}}
+							disabled={isSaving}
+							placeholder="Ej: 64000"
+						/>
+						{errors.zipcode && <ErrorMessage>{errors.zipcode}</ErrorMessage>}
+					</Field>
+
+					<Field>
+						<Label>Régimen fiscal *</Label>
+						<Listbox
+							invalid={!!errors.tax_regime}
+							placeholder="Selecciona un régimen fiscal"
+							value={data.tax_regime}
+							onChange={(value) => {
+								setData("tax_regime", value);
+								clearErrors("tax_regime");
+							}}
+							disabled={isSaving}
+						>
+							{Object.keys(cachedTaxRegimes || {}).length > 0 ? (
+								Object.entries(cachedTaxRegimes).map(([key, regimen]) => (
+									<ListboxOption key={key} value={key}>
+										<ListboxLabel>{`${key} - ${regimen?.name || "Desconocido"}`}</ListboxLabel>
+									</ListboxOption>
+								))
+							) : (
+								<ListboxOption value="" disabled>
+									<ListboxLabel>Cargando regímenes...</ListboxLabel>
+								</ListboxOption>
+							)}
+						</Listbox>
+						{errors.tax_regime && <ErrorMessage>{errors.tax_regime}</ErrorMessage>}
+						{data.tax_regime && cachedTaxRegimes?.[data.tax_regime] && (
+							<p className="mt-1 text-xs text-gray-500">
+								{cachedTaxRegimes[data.tax_regime].description}
+							</p>
+						)}
+					</Field>
+
+					{extractedData && (
+						<div className="border-t border-slate-200 pt-4 dark:border-slate-700">
 							<label className="flex items-start space-x-3">
 								<input
 									type="checkbox"
@@ -1788,18 +1398,13 @@ export default function TaxProfileForm({ isOpen }) {
 								/>
 								<div>
 									<span className="font-medium text-slate-900 dark:text-white">
-										Confirmo que los datos extraídos de mi
-										constancia son correctos
+										Confirmo que los datos extraídos de mi constancia son correctos
 									</span>
 									<p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-										He verificado que toda la información
-										coincide con mi constancia de situación
-										fiscal y está actualizada.
+										He verificado que la información coincide con mi Constancia de Situación Fiscal.
 									</p>
 									{errors.confirm_data && (
-										<p className="mt-1 text-sm text-red-600">
-											{errors.confirm_data}
-										</p>
+										<p className="mt-1 text-sm text-red-600">{errors.confirm_data}</p>
 									)}
 								</div>
 							</label>
@@ -1808,58 +1413,36 @@ export default function TaxProfileForm({ isOpen }) {
 				</DialogBody>
 
 				<DialogActions>
-					<Button
-						plain
-						type="button"
-						onClick={handlePrevStep}
-						disabled={isSaving}
-					>
-						Volver a editar
+					<Button plain type="button" onClick={handleBackFromReview} disabled={isSaving}>
+						Volver
 					</Button>
-					<div className="flex gap-2">
-						<Button
-							dusk="saveTaxProfile"
-							type="submit"
-							disabled={
-								isSaving ||
-								(extractedData && !data.confirm_data)
-							}
-							aria-busy={isSaving}
-							aria-live="polite"
-							className={`min-w-[11.5rem] transition-opacity ${
-								isSaving ? "cursor-wait opacity-90" : ""
+					<Button
+						dusk="saveTaxProfile"
+						type="submit"
+						disabled={isSaving || (!!extractedData && !data.confirm_data)}
+						aria-busy={isSaving}
+						aria-live="polite"
+						className={`min-w-[11.5rem] transition-opacity ${isSaving ? "cursor-wait opacity-90" : ""
 							}`}
-						>
-							{isSaving ? (
-								<span className="inline-flex items-center justify-center gap-2">
-									<ArrowPathIcon
-										className="h-4 w-4 shrink-0 animate-spin"
-										aria-hidden
-									/>
-									<span>Guardando...</span>
-								</span>
-							) : (
-								<span>
-									{cachedEditMode
-										? "Actualizar perfil"
-										: "Guardar perfil fiscal"}
-								</span>
-							)}
-						</Button>
-					</div>
+					>
+						{isSaving ? (
+							<span className="inline-flex items-center justify-center gap-2">
+								<ArrowPathIcon className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+								<span>Guardando...</span>
+							</span>
+						) : (
+							<span>{cachedEditMode ? "Actualizar perfil" : "Guardar perfil fiscal"}</span>
+						)}
+					</Button>
 				</DialogActions>
 			</>
 		);
 	};
 
-	// Componente Label personalizado para usar fuera de Field
-	const SimpleLabel = ({ children, className = "" }) => (
-		<div className={`text-sm font-medium text-gray-700 ${className}`}>
-			{children}
-		</div>
-	);
+	// ------------------------------------------------------------------
+	// Overlay de guardado
+	// ------------------------------------------------------------------
 
-	// Componente para mostrar progreso de guardado
 	const SavingProgress = () => (
 		<div
 			className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-[2px]"
@@ -1883,9 +1466,7 @@ export default function TaxProfileForm({ isOpen }) {
 						id="saving-progress-title"
 						className="text-lg font-semibold text-slate-900 dark:text-white"
 					>
-						{cachedEditMode
-							? "Actualizando perfil fiscal..."
-							: "Guardando perfil fiscal..."}
+						{cachedEditMode ? "Actualizando perfil fiscal..." : "Guardando perfil fiscal..."}
 					</h3>
 					<p
 						id="saving-progress-desc"
@@ -1904,73 +1485,37 @@ export default function TaxProfileForm({ isOpen }) {
 		</div>
 	);
 
-	// Componente para mostrar información del archivo subido
-	const FileInfo = ({ file, onRemove }) => (
-		<div className="bg-green-50 border border-green-200 rounded-lg p-4">
-			<div className="flex items-center justify-between">
-				<div className="flex items-center space-x-3">
-					<div className="p-2 bg-green-100 rounded-lg">
-						<DocumentTextIcon className="h-6 w-6 text-green-600" />
-					</div>
-					<div>
-						<h4 className="font-medium text-green-800 text-sm">
-							Archivo listo para procesar
-						</h4>
-						<p className="text-xs text-green-700 mt-1">
-							{file.name} • {(file.size / 1024 / 1024).toFixed(2)} MB
-						</p>
-					</div>
-				</div>
-				<button
-					type="button"
-					onClick={onRemove}
-					className="p-1 hover:bg-red-100 rounded-full transition-colors"
-					disabled={processingPdf || isSaving}
-				>
-					<XMarkIcon className="h-5 w-5 text-red-500" />
-				</button>
-			</div>
-		</div>
-	);
+	// ------------------------------------------------------------------
+	// Render principal
+	// ------------------------------------------------------------------
 
-	// Renderizar contenido basado en el paso activo y modo seleccionado
 	const renderContent = () => {
-		console.log("🎬 renderContent llamado, activeStep:", activeStep, "isModeSelected:", isModeSelected, "entryMode:", entryMode);
+		if (extractionError?.variant === "blocked") {
+			return renderBlockedStep();
+		}
 
 		if (activeStep === STEPS.UPLOAD) {
-			// Si ya seleccionó modo automático y no ha subido archivo, mostrar pantalla de subida
 			if (isModeSelected && entryMode === ENTRY_MODES.AUTOMATIC) {
 				return renderUploadStep();
 			}
-			// Si ya seleccionó modo manual, ir directamente a review
-			if (isModeSelected && entryMode === ENTRY_MODES.MANUAL) {
-				setTimeout(() => setActiveStep(STEPS.REVIEW), 0);
-				return null;
-			}
-			// Mostrar selección de modo
 			return renderModeSelectionStep();
-		} else if (activeStep === STEPS.REVIEW) {
+		}
+
+		if (activeStep === STEPS.REVIEW) {
 			return renderReviewStep();
-		} else if (activeStep === STEPS.CONFIRM) {
-			return renderConfirmStep();
 		}
 
 		return renderModeSelectionStep();
 	};
 
-	console.log("🏁 Renderizando componente principal, activeStep:", activeStep);
-
 	return (
 		<>
 			{isSaving && <SavingProgress />}
-			<Dialog
-				open={isOpen}
-				onClose={isSaving ? () => { } : closeDialog}
-			>
+			<Dialog open={isOpen} onClose={isSaving || processingPdf ? () => { } : requestClose}>
 				<form dusk="taxProfileForm" onSubmit={submit}>
 					<div className="relative border-b border-slate-200/80 px-6 pb-5 pt-6 dark:border-slate-800">
 						<TaxProfileModalCloseButton
-							onClose={closeDialog}
+							onClose={requestClose}
 							disabled={isSaving || processingPdf}
 						/>
 						<TaxProfileFormStepper activeStep={activeStep} />
