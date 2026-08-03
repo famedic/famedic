@@ -16,8 +16,17 @@ class Invoice extends Model
 
     protected $appends = [
         'formatted_created_at',
+        'formatted_completed_at',
+        'formatted_updated_at',
         'has_invoice_xml',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'completed_at' => 'datetime',
+        ];
+    }
 
     public function invoiceable(): MorphTo
     {
@@ -42,6 +51,12 @@ class Invoice extends Model
         return $this;
     }
 
+    public function isDocumentComplete(): bool
+    {
+        return filled($this->attributes['invoice'] ?? null)
+            && filled($this->attributes['invoice_xml'] ?? null);
+    }
+
     protected function hasInvoiceXml(): Attribute
     {
         return Attribute::make(
@@ -53,6 +68,20 @@ class Invoice extends Model
     {
         return Attribute::make(
             get: fn () => localizedDate($this->created_at)?->isoFormat('D MMM Y h:mm a')
+        );
+    }
+
+    protected function formattedCompletedAt(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => localizedDate($this->completed_at)?->isoFormat('D MMM Y h:mm a')
+        );
+    }
+
+    protected function formattedUpdatedAt(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => localizedDate($this->updated_at)?->isoFormat('D MMM Y h:mm a')
         );
     }
 }

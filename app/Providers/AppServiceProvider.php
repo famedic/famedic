@@ -94,6 +94,10 @@ class AppServiceProvider extends ServiceProvider
             return (bool) $user->administrator?->hasRole('superadmin');
         });
 
+        Gate::define('access-laboratory-billing', function ($user): bool {
+            return app(\App\Services\LaboratoryBilling\LaboratoryBillingAccess::class)->allows($user);
+        });
+
         Route::bind('laboratory_purchase', function ($value) {
             return LaboratoryPurchase::withTrashed()->findOrFail($value);
         });

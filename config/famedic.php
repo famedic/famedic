@@ -92,6 +92,15 @@ return [
     ],
 
     /**
+     * Facturación administrativa de laboratorios.
+     * Umbral de atraso en días naturales desde invoice_requests.created_at.
+     * Las solicitudes completas (PDF+XML) nunca se consideran atrasadas.
+     */
+    'laboratory_billing' => [
+        'invoice_delay_threshold_days' => (int) env('INVOICE_DELAY_THRESHOLD_DAYS', 3),
+    ],
+
+    /**
      * URL base (sin barra final) para imágenes públicas en correos, p. ej. /images/logo.png.
      * Por defecto https://famedic.com.mx para que los logos carguen desde producción aunque el envío
      * sea desde otro entorno. Sobrescribe con FAMEDIC_EMAIL_PUBLIC_URL si necesitas otro host.

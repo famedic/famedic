@@ -12,6 +12,7 @@ use App\Notifications\PurchaseInvoiceUploaded;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -48,6 +49,7 @@ class InvoiceXmlSupportIsolatedTest extends TestCase
 
     protected function tearDown(): void
     {
+        Carbon::setTestNow();
         $this->dropSchema();
 
         if (! empty($this->storageRoot) && is_dir($this->storageRoot)) {
@@ -84,6 +86,7 @@ class InvoiceXmlSupportIsolatedTest extends TestCase
 
         $this->assertNotNull($invoice->invoice);
         $this->assertNull($invoice->invoice_xml);
+        $this->assertNull($invoice->completed_at);
         $this->assertTrue(Storage::exists($invoice->invoice));
         Notification::assertSentTo($purchase->customer->user, PurchaseInvoiceUploaded::class);
     }
@@ -101,8 +104,134 @@ class InvoiceXmlSupportIsolatedTest extends TestCase
 
         $this->assertNotNull($invoice->invoice);
         $this->assertNotNull($invoice->invoice_xml);
+        $this->assertNotNull($invoice->completed_at);
         $this->assertTrue(Storage::exists($invoice->invoice));
         $this->assertTrue(Storage::exists($invoice->invoice_xml));
+    }
+
+    #[Test]
+    public function first_complete_upload_preserves_created_at_and_sets_completed_at(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-10 12:00:00', 'America/Monterrey'));
+        $purchase = $this->makePurchase();
+
+        $invoice = app(CreateInvoiceAction::class)(
+            $purchase,
+            UploadedFile::fake()->create('factura.pdf', 100, 'application/pdf'),
+            UploadedFile::fake()->create('factura.xml', 20, 'application/xml'),
+        );
+
+        $this->assertNotNull($invoice->created_at);
+        $this->assertNotNull($invoice->completed_at);
+        $this->assertTrue($invoice->created_at->equalTo($invoice->completed_at));
+    }
+
+    #[Test]
+    public function replacing_pdf_keeps_created_at_completed_at_and_xml(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-01 10:00:00', 'America/Monterrey'));
+        $purchase = $this->makePurchase();
+        $existingPdf = 'invoices/old.pdf';
+        $existingXml = 'invoices/old.xml';
+        Storage::put($existingPdf, 'pdf');
+        Storage::put($existingXml, 'xml');
+
+        $purchase->invoice()->create([
+            'invoice' => $existingPdf,
+            'invoice_xml' => $existingXml,
+            'completed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $original = $purchase->fresh()->invoice;
+        $createdAt = $original->created_at->copy();
+        $completedAt = $original->completed_at->copy();
+
+        Carbon::setTestNow(Carbon::parse('2026-08-10 15:00:00', 'America/Monterrey'));
+
+        $invoice = app(CreateInvoiceAction::class)(
+            $purchase->fresh(['invoice', 'customer.user']),
+            UploadedFile::fake()->create('nuevo.pdf', 100, 'application/pdf'),
+            null,
+        );
+
+        $this->assertTrue($createdAt->equalTo($invoice->created_at));
+        $this->assertTrue($completedAt->equalTo($invoice->completed_at));
+        $this->assertTrue($invoice->updated_at->gt($completedAt));
+        $this->assertNotSame($existingPdf, $invoice->getRawOriginal('invoice'));
+        $this->assertSame($existingXml, $invoice->getRawOriginal('invoice_xml'));
+    }
+
+    #[Test]
+    public function replacing_xml_keeps_created_at_completed_at_and_pdf(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-01 10:00:00', 'America/Monterrey'));
+        $purchase = $this->makePurchase();
+        $existingPdf = 'invoices/keep.pdf';
+        $existingXml = 'invoices/replace.xml';
+        Storage::put($existingPdf, 'pdf');
+        Storage::put($existingXml, 'xml');
+
+        $purchase->invoice()->create([
+            'invoice' => $existingPdf,
+            'invoice_xml' => $existingXml,
+            'completed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $original = $purchase->fresh()->invoice;
+        $createdAt = $original->created_at->copy();
+        $completedAt = $original->completed_at->copy();
+
+        Carbon::setTestNow(Carbon::parse('2026-08-10 15:00:00', 'America/Monterrey'));
+
+        $invoice = app(CreateInvoiceAction::class)(
+            $purchase->fresh(['invoice', 'customer.user']),
+            null,
+            UploadedFile::fake()->create('nuevo.xml', 20, 'application/xml'),
+        );
+
+        $this->assertTrue($createdAt->equalTo($invoice->created_at));
+        $this->assertTrue($completedAt->equalTo($invoice->completed_at));
+        $this->assertTrue($invoice->updated_at->gt($completedAt));
+        $this->assertSame($existingPdf, $invoice->getRawOriginal('invoice'));
+        $this->assertNotSame($existingXml, $invoice->getRawOriginal('invoice_xml'));
+    }
+
+    #[Test]
+    public function historical_incomplete_sets_completed_at_when_missing_document_arrives(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-01 10:00:00', 'America/Monterrey'));
+        $purchase = $this->makePurchase();
+        $existingPdf = 'invoices/existing.pdf';
+        Storage::put($existingPdf, 'pdf');
+
+        $purchase->invoice()->create([
+            'invoice' => $existingPdf,
+            'invoice_xml' => null,
+            'completed_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertNull($purchase->fresh()->invoice->completed_at);
+
+        Carbon::setTestNow(Carbon::parse('2026-08-10 12:00:00', 'America/Monterrey'));
+
+        $invoice = app(CreateInvoiceAction::class)(
+            $purchase->fresh(['invoice', 'customer.user']),
+            null,
+            UploadedFile::fake()->create('factura.xml', 20, 'application/xml'),
+        );
+
+        $this->assertSame($existingPdf, $invoice->getRawOriginal('invoice'));
+        $this->assertNotNull($invoice->invoice_xml);
+        $this->assertNotNull($invoice->completed_at);
+        $this->assertTrue(
+            $invoice->completed_at->equalTo(Carbon::parse('2026-08-10 12:00:00', 'America/Monterrey'))
+        );
     }
 
     #[Test]
@@ -124,6 +253,7 @@ class InvoiceXmlSupportIsolatedTest extends TestCase
 
         $this->assertSame($existingPdf, $invoice->invoice);
         $this->assertNotNull($invoice->invoice_xml);
+        $this->assertNotNull($invoice->completed_at);
         $this->assertTrue(Storage::exists($existingPdf));
         $this->assertTrue(Storage::exists($invoice->invoice_xml));
     }
@@ -140,6 +270,7 @@ class InvoiceXmlSupportIsolatedTest extends TestCase
         $purchase->invoice()->create([
             'invoice' => $existingPdf,
             'invoice_xml' => $existingXml,
+            'completed_at' => now(),
         ]);
 
         $invoice = app(CreateInvoiceAction::class)(
@@ -166,6 +297,7 @@ class InvoiceXmlSupportIsolatedTest extends TestCase
         $purchase->invoice()->create([
             'invoice' => $existingPdf,
             'invoice_xml' => $existingXml,
+            'completed_at' => now(),
         ]);
 
         $invoice = app(CreateInvoiceAction::class)(
@@ -402,6 +534,7 @@ class InvoiceXmlSupportIsolatedTest extends TestCase
             $table->morphs('invoiceable');
             $table->string('invoice');
             $table->string('invoice_xml')->nullable();
+            $table->timestamp('completed_at')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

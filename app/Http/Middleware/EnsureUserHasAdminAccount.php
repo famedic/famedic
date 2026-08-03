@@ -96,6 +96,11 @@ class EnsureUserHasAdminAccount
                                 Route::currentRouteName() === 'admin.laboratory-purchases.vendor-payments.show' ||
                                 Route::currentRouteName() === 'admin.laboratory-purchases.vendor-payments.edit',
                         ] : null,
+                        app(\App\Services\LaboratoryBilling\LaboratoryBillingAccess::class)->allows($request->user()) ? [
+                            'label' => 'Facturación',
+                            'url' => route('admin.laboratory-billing.dashboard'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-billing.'),
+                        ] : null,
                     ])),
                 ],
                 [

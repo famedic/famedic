@@ -71,6 +71,8 @@ export default function InvoiceDialog({
 	const selectedPdfName = data.invoice?.name ?? null;
 	const selectedXmlName = data.invoice_xml?.name ?? null;
 	const hasBothFiles = Boolean(data.invoice && data.invoice_xml);
+	const hasAnyFile = Boolean(data.invoice || data.invoice_xml);
+	const canSubmit = hasInvoice ? hasAnyFile : hasBothFiles;
 
 	const submit = (e) => {
 		e.preventDefault();
@@ -79,9 +81,16 @@ export default function InvoiceDialog({
 			return;
 		}
 
-		if (!hasBothFiles) {
+		if (!hasInvoice && !hasBothFiles) {
 			setSelectionError(
 				"Debes seleccionar un archivo PDF y un archivo XML para guardar la factura.",
+			);
+			return;
+		}
+
+		if (hasInvoice && !hasAnyFile) {
+			setSelectionError(
+				"Debes seleccionar al menos un archivo PDF o XML para actualizar la factura.",
 			);
 			return;
 		}
@@ -152,9 +161,21 @@ export default function InvoiceDialog({
 		const pdfFile = pdfFiles[0] ?? null;
 		const xmlFile = xmlFiles[0] ?? null;
 
-		if (!pdfFile || !xmlFile) {
+		if (!hasInvoice && (!pdfFile || !xmlFile)) {
 			setSelectionError(
 				"Debes seleccionar un archivo PDF y un archivo XML en la misma operación.",
+			);
+			e.target.value = "";
+			setData({
+				invoice: null,
+				invoice_xml: null,
+			});
+			return;
+		}
+
+		if (hasInvoice && !pdfFile && !xmlFile) {
+			setSelectionError(
+				"Debes seleccionar al menos un archivo PDF o XML.",
 			);
 			e.target.value = "";
 			setData({
@@ -210,7 +231,7 @@ export default function InvoiceDialog({
 					</DialogTitle>
 					<DialogDescription>
 						{hasInvoice
-							? "Visualiza la factura o actualiza el PDF y el XML juntos. Ambos archivos son obligatorios."
+							? "Puedes reemplazar el PDF, el XML o ambos. Solo se actualizan los archivos que envíes."
 							: "Selecciona el PDF y el XML de la factura en una misma operación. Ambos archivos son obligatorios."}
 					</DialogDescription>
 					<DialogBody className="space-y-6">
@@ -298,8 +319,9 @@ export default function InvoiceDialog({
 									onChange={handleFilesChange}
 								/>
 								<Description className="mt-1">
-									Selecciona un PDF y un XML juntos.
-									Obligatorios. PDF máx. 10MB • XML máx. 5MB
+									{hasInvoice
+										? "Puedes seleccionar PDF, XML o ambos. PDF máx. 10MB • XML máx. 5MB"
+										: "Selecciona un PDF y un XML juntos. Obligatorios. PDF máx. 10MB • XML máx. 5MB"}
 								</Description>
 
 								{(selectedPdfName || selectedXmlName) && (
@@ -352,7 +374,7 @@ export default function InvoiceDialog({
 						{(!showChangeInvoiceButton || !invoiceRoute) && (
 							<Button
 								type="submit"
-								disabled={processing || !hasBothFiles}
+								disabled={processing || !canSubmit}
 							>
 								Guardar
 								{processing && (

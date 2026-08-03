@@ -18,6 +18,12 @@ use App\Http\Controllers\Admin\LaboratoryAppointmentController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
 use App\Http\Controllers\Admin\LaboratoryNotificationController;
 use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
+use App\Http\Controllers\Admin\LaboratoryBilling\DashboardController;
+use App\Http\Controllers\Admin\LaboratoryBilling\ExportController as LaboratoryBillingExportController;
+use App\Http\Controllers\Admin\LaboratoryBilling\InvoicesController;
+use App\Http\Controllers\Admin\LaboratoryBilling\ReportsController;
+use App\Http\Controllers\Admin\LaboratoryBilling\RequestsController;
+use App\Http\Controllers\Admin\LaboratoryBilling\TaxProfilesController as TaxProfilesBillingController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseChartController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\DevAssistanceRequestController as LaboratoryDevAssistanceRequestController;
@@ -116,6 +122,18 @@ Route::prefix('admin')->middleware([
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request/{dev_assistance_request}/resolved', LaboratoryResolvedDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.resolved');
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request/{dev_assistance_request}/unresolved', LaboratoryUnresolvedDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.unresolved');
         Route::post('laboratory-purchases/export', ExportLaboratoryPurchasesController::class)->name('laboratory-purchases.export');
+
+        Route::prefix('laboratory-billing')->name('laboratory-billing.')->group(function () {
+            Route::get('/', DashboardController::class)->name('dashboard');
+            Route::get('/requests', RequestsController::class)->name('requests');
+            Route::get('/invoices', InvoicesController::class)->name('invoices');
+            Route::get('/tax-profiles', [TaxProfilesBillingController::class, 'index'])->name('tax-profiles.index');
+            Route::get('/tax-profiles/{tax_profile}', [TaxProfilesBillingController::class, 'show'])->name('tax-profiles.show');
+            Route::get('/reports', ReportsController::class)->name('reports');
+            Route::get('/export/requests', [LaboratoryBillingExportController::class, 'requests'])->name('export.requests');
+            Route::get('/export/invoices', [LaboratoryBillingExportController::class, 'invoices'])->name('export.invoices');
+            Route::get('/export/tax-profiles', [LaboratoryBillingExportController::class, 'taxProfiles'])->name('export.tax-profiles');
+        });
 
         // ===== RUTAS NUEVAS PARA NOTIFICACIONES DE LABORATORIO =====
         Route::resource('laboratory-notifications', LaboratoryNotificationController::class)->only(['index', 'show']);

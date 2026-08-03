@@ -77,6 +77,7 @@ export default function LaboratoryPurchase({
 	couponReversal = null,
 	showDeleteButton,
 	canResendConfirmationEmail,
+	canUploadInvoice = false,
 	hasSampleCollected,
 	hasResultsAvailable,
 	hasManualResults = false,
@@ -91,6 +92,7 @@ export default function LaboratoryPurchase({
 				laboratoryPurchase={laboratoryPurchase}
 				showDeleteButton={showDeleteButton}
 				canResendConfirmationEmail={canResendConfirmationEmail}
+				canUploadInvoice={canUploadInvoice}
 				hasSampleCollected={hasSampleCollected}
 				hasResultsAvailable={hasResultsAvailable}
 				hasManualResults={hasManualResults}
@@ -122,6 +124,7 @@ function Header({
 	laboratoryPurchase,
 	showDeleteButton,
 	canResendConfirmationEmail,
+	canUploadInvoice = false,
 	hasSampleCollected,
 	hasResultsAvailable,
 	hasManualResults,
@@ -317,6 +320,7 @@ function Header({
 					</div>
 				)}
 
+				{canUploadInvoice && (
 				<InvoiceDialog
 					storeRoute={route("admin.laboratory-purchases.invoice", {
 						laboratory_purchase: laboratoryPurchase.id,
@@ -338,6 +342,7 @@ function Header({
 					invoiceRequest={laboratoryPurchase.invoice_request}
 					hasInvoice={!!laboratoryPurchase.invoice}
 				/>
+				)}
 
 				<ResultsDialog
 					storeRoute={route("admin.laboratory-purchases.results", {

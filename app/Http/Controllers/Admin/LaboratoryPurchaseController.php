@@ -85,6 +85,7 @@ class LaboratoryPurchaseController extends Controller
             'couponReversal' => $laboratoryPurchase->getCouponReversalSummary(),
             'showDeleteButton' => $request->user()->can('delete', $laboratoryPurchase),
             'canResendConfirmationEmail' => $request->user()->administrator?->hasPermissionTo('laboratory-purchases.manage') ?? false,
+            'canUploadInvoice' => $request->user()->can('uploadInvoice', $laboratoryPurchase),
 
             'hasSampleCollected' => $laboratoryPurchase->hasSampleCollected(),
             'hasResultsAvailable' => $laboratoryPurchase->hasResultsAvailable(),

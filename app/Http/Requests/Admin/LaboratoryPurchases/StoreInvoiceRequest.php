@@ -8,11 +8,32 @@ class StoreInvoiceRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->can('update', $this->laboratory_purchase);
+        return $this->user()->can('uploadInvoice', $this->laboratory_purchase);
     }
 
     public function rules(): array
     {
+        $isUpdate = $this->laboratory_purchase?->invoice !== null;
+
+        if ($isUpdate) {
+            return [
+                'invoice' => [
+                    'nullable',
+                    'required_without:invoice_xml',
+                    'file',
+                    'mimes:pdf',
+                    'max:10240',
+                ],
+                'invoice_xml' => [
+                    'nullable',
+                    'required_without:invoice',
+                    'file',
+                    'extensions:xml',
+                    'max:5120',
+                ],
+            ];
+        }
+
         return [
             'invoice' => [
                 'required',

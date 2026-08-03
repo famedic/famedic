@@ -38,15 +38,20 @@ class CreateInvoiceAction
             $previousXmlPath = null;
 
             if (! $existingInvoice) {
-                $newInvoice = $model->invoice()->create([
-                    'invoice' => $newPdfPath,
-                    'invoice_xml' => $newXmlPath,
-                ]);
-            } else {
-                $updates = [
-                    'created_at' => now(),
-                    'updated_at' => now(),
+                $pdfPath = $newPdfPath;
+                $xmlPath = $newXmlPath;
+                $attributes = [
+                    'invoice' => $pdfPath,
+                    'invoice_xml' => $xmlPath,
                 ];
+
+                if ($this->isCompletePaths($pdfPath, $xmlPath)) {
+                    $attributes['completed_at'] = now();
+                }
+
+                $newInvoice = $model->invoice()->create($attributes);
+            } else {
+                $updates = [];
 
                 if ($newPdfPath) {
                     $previousPdfPath = $existingInvoice->invoice;
@@ -58,8 +63,26 @@ class CreateInvoiceAction
                     $updates['invoice_xml'] = $newXmlPath;
                 }
 
-                $existingInvoice->update($updates);
-                $newInvoice = $existingInvoice;
+                $resultingPdf = array_key_exists('invoice', $updates)
+                    ? $updates['invoice']
+                    : $existingInvoice->getRawOriginal('invoice');
+                $resultingXml = array_key_exists('invoice_xml', $updates)
+                    ? $updates['invoice_xml']
+                    : $existingInvoice->getRawOriginal('invoice_xml');
+
+                if (
+                    blank($existingInvoice->completed_at)
+                    && $this->isCompletePaths($resultingPdf, $resultingXml)
+                ) {
+                    $updates['completed_at'] = now();
+                }
+
+                // Conserva created_at original; updated_at lo gestiona Eloquent.
+                if ($updates !== []) {
+                    $existingInvoice->update($updates);
+                }
+
+                $newInvoice = $existingInvoice->fresh();
             }
 
             DB::commit();
@@ -94,5 +117,10 @@ class CreateInvoiceAction
 
             throw $e;
         }
+    }
+
+    private function isCompletePaths(?string $pdfPath, ?string $xmlPath): bool
+    {
+        return filled($pdfPath) && filled($xmlPath);
     }
 }
