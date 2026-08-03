@@ -157,21 +157,19 @@ class TaxProfilePf1aIsolatedTest extends TestCase
         [$user] = $this->makeCustomerWithTaxProfile();
         $this->actingAs($user);
 
-        $this->app->instance(ConstanciaFiscalService::class, new class extends ConstanciaFiscalService
-        {
-            public function __construct() {}
+        $mock = \Mockery::mock(\App\Actions\TaxProfiles\ExtractTaxProfileFromConstanciaAction::class);
+        $mock->shouldReceive('__invoke')
+            ->once()
+            ->andThrow(\App\Exceptions\TaxProfiles\ConstanciaExtractionException::extractionFailed());
+        $this->app->instance(\App\Actions\TaxProfiles\ExtractTaxProfileFromConstanciaAction::class, $mock);
 
-            public function procesarConstancia($archivo): array
-            {
-                return [
-                    'success' => false,
-                    'error' => 'No pudimos extraer los datos de la constancia. Puedes capturarlos manualmente.',
-                ];
-            }
-        });
+        $pdf = UploadedFile::fake()->createWithContent(
+            'constancia.pdf',
+            "%PDF-1.4\n".str_repeat('contenido de prueba de constancia fiscal ', 10)
+        );
 
         $response = $this->postJson(route('tax-profiles.extract-data'), [
-            'fiscal_certificate' => UploadedFile::fake()->create('constancia.pdf', 100, 'application/pdf'),
+            'fiscal_certificate' => $pdf,
         ]);
 
         $response->assertStatus(422);
@@ -195,14 +193,19 @@ class TaxProfilePf1aIsolatedTest extends TestCase
         $this->actingAs($user);
         $before = TaxProfile::count();
 
-        $mock = \Mockery::mock(ConstanciaFiscalService::class);
-        $mock->shouldReceive('procesarConstancia')
+        $mock = \Mockery::mock(\App\Actions\TaxProfiles\ExtractTaxProfileFromConstanciaAction::class);
+        $mock->shouldReceive('__invoke')
             ->once()
             ->andThrow(new \RuntimeException('texto secreto del PDF ABC123'));
-        $this->app->instance(ConstanciaFiscalService::class, $mock);
+        $this->app->instance(\App\Actions\TaxProfiles\ExtractTaxProfileFromConstanciaAction::class, $mock);
+
+        $pdf = UploadedFile::fake()->createWithContent(
+            'constancia.pdf',
+            "%PDF-1.4\n".str_repeat('contenido de prueba de constancia fiscal ', 10)
+        );
 
         $response = $this->postJson(route('tax-profiles.extract-data'), [
-            'fiscal_certificate' => UploadedFile::fake()->create('constancia.pdf', 100, 'application/pdf'),
+            'fiscal_certificate' => $pdf,
         ]);
 
         $response->assertStatus(422);
@@ -240,12 +243,12 @@ class TaxProfilePf1aIsolatedTest extends TestCase
         $this->assertFalse($result['success']);
         $this->assertArrayNotHasKey('data', $result);
 
-        Log::shouldHaveReceived('error')->withArgs(function ($message, $context) {
+        Log::shouldHaveReceived('warning')->withArgs(function ($message, $context) {
             $encoded = json_encode([$message, $context]);
 
             return ! str_contains($encoded, 'MEBE931209BI2')
                 && ! str_contains($encoded, 'texto fiscal')
-                && ($context['exception_class'] ?? null) !== null;
+                && ($context['result'] ?? null) !== null;
         });
     }
 
@@ -344,7 +347,7 @@ class TaxProfilePf1aIsolatedTest extends TestCase
     {
         [, $profile, $customer] = $this->makeCustomerWithTaxProfileFull('snapshot@test.local', [
             'name' => 'Original SA',
-            'rfc' => 'ORI010101ABC',
+            'rfc' => 'ORIX010101AB1',
             'cfdi_use' => 'G03',
         ]);
         $purchase = $this->makeLaboratoryPurchase($customer);
@@ -358,14 +361,14 @@ class TaxProfilePf1aIsolatedTest extends TestCase
 
         $profile->update([
             'name' => 'Nombre Nuevo',
-            'rfc' => 'NUE010101XYZ',
+            'rfc' => 'NUEX010101XY2',
             'cfdi_use' => 'D01',
         ]);
 
         $invoiceRequest->refresh();
 
         $this->assertSame('Original SA', $invoiceRequest->name);
-        $this->assertSame('ORI010101ABC', $invoiceRequest->rfc);
+        $this->assertSame('ORIX010101AB1', $invoiceRequest->rfc);
         $this->assertSame('G03', $invoiceRequest->cfdi_use);
     }
 

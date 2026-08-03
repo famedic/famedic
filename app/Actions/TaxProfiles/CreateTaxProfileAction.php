@@ -2,18 +2,22 @@
 
 namespace App\Actions\TaxProfiles;
 
+use App\Exceptions\TaxProfiles\ConstanciaExtractionException;
 use App\Models\Customer;
 use App\Models\TaxProfile;
+use App\Services\TaxProfiles\IndividualTaxpayerValidator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 class CreateTaxProfileAction
 {
     public function __construct(
         private readonly EnsureActiveDefaultTaxProfileAction $ensureActiveDefault,
+        private readonly IndividualTaxpayerValidator $taxpayerValidator,
     ) {}
 
     public function __invoke(
@@ -25,6 +29,17 @@ class CreateTaxProfileAction
         ?UploadedFile $fiscalCertificate = null,
         ?array $extractedData = null
     ): TaxProfile {
+        $rfc = Str::upper(trim($rfc));
+        $tipoPersona = is_string($extractedData['tipo_persona'] ?? null)
+            ? $extractedData['tipo_persona']
+            : null;
+
+        try {
+            $this->taxpayerValidator->assertIndividualForPersistence($rfc, $tipoPersona);
+        } catch (ConstanciaExtractionException $e) {
+            throw new InvalidArgumentException($e->publicMessage(), 0, $e);
+        }
+
         $newFilePath = null;
 
         try {
@@ -54,19 +69,19 @@ class CreateTaxProfileAction
             $taxProfileData = [
                 'name' => $name,
                 'razon_social' => $extractedData['razon_social'] ?? $name,
-                'rfc' => Str::upper($rfc),
+                'rfc' => $rfc,
                 'zipcode' => $zipcode,
-                'codigo_postal_original' => $extractedData['codigo_postal'] ?? $zipcode,
+                'codigo_postal_original' => $extractedData['codigo_postal'] ?? $extractedData['codigo_postal_original'] ?? $zipcode,
                 'tax_regime' => $taxRegime,
-                'regimen_fiscal_original' => $extractedData['regimen_fiscal'] ?? null,
+                'regimen_fiscal_original' => $extractedData['regimen_fiscal'] ?? $extractedData['regimen_fiscal_original'] ?? null,
                 'cfdi_use' => $cfdiUse ?? 'G03',
                 'fiscal_certificate' => $newFilePath,
                 'hash_constancia' => $hashConstancia,
-                'tipo_persona' => $extractedData['tipo_persona'] ?? $this->determinarTipoPersona($rfc),
-                'fecha_emision_constancia' => $extractedData['fecha_emision'] ?? null,
+                'tipo_persona' => 'fisica',
+                'fecha_emision_constancia' => $extractedData['fecha_emision'] ?? $extractedData['fecha_emision_constancia'] ?? null,
                 'estatus_sat' => $extractedData['estatus_sat'] ?? 'Desconocido',
                 'tipo_persona_confianza' => $extractedData['tipo_persona_confianza'] ?? 0,
-                'tipo_persona_detectado_por' => $extractedData ? 'sistema' : null,
+                'tipo_persona_detectado_por' => $extractedData ? ($extractedData['tipo_persona_detectado_por'] ?? 'sistema') : null,
                 'verificado_automaticamente' => ! empty($extractedData),
                 'fecha_verificacion' => ! empty($extractedData) ? now() : null,
                 'fecha_inscripcion' => $extractedData['fecha_inscripcion'] ?? null,
@@ -93,7 +108,6 @@ class CreateTaxProfileAction
                     ->where('is_default', true)
                     ->exists();
 
-                // Activos sin default: reparar primero para no desplazar un existente con el nuevo.
                 if ($activeCount > 0 && ! $hasActiveDefault) {
                     ($this->ensureActiveDefault)($customer);
                 }
@@ -111,35 +125,11 @@ class CreateTaxProfileAction
                 return $profile->fresh();
             });
         } catch (\Throwable $e) {
-            // Compensación síncrona: solo el archivo recién creado en este intento.
             if ($newFilePath && Storage::exists($newFilePath)) {
                 Storage::delete($newFilePath);
             }
 
             throw $e;
         }
-    }
-
-    protected function determinarTipoPersona(string $rfc): string
-    {
-        $rfc = Str::upper(trim($rfc));
-
-        if (strlen($rfc) === 12) {
-            return 'moral';
-        }
-
-        if (strlen($rfc) === 13) {
-            return 'fisica';
-        }
-
-        if (preg_match('/^[A-Z&Ñ]{4}\d{2}/', $rfc)) {
-            return 'fisica';
-        }
-
-        if (preg_match('/^[A-Z&Ñ]{3}\d{6}/', $rfc)) {
-            return 'moral';
-        }
-
-        return 'fisica';
     }
 }

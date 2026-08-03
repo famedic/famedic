@@ -7,18 +7,21 @@ use App\Models\LaboratoryPurchase;
 use App\Models\OnlinePharmacyPurchase;
 use App\Listeners\ApplyMailSafetyPolicy;
 use App\Listeners\LinkPendingCouponBeneficiaries;
+use App\Services\ConstanciaFiscalService;
 use App\Services\Tracking\Tracking;
 use Illuminate\Auth\Events\Verified;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Routing\Redirector;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Cashier\Cashier;
 use Stripe\StripeClient;
-use App\Services\ConstanciaFiscalService;
 //use App\Services\EfevooPayService;
 /*
 use App\Services\EfevooPayFactoryService;
@@ -80,6 +83,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        RateLimiter::for('tax-profile-extract', function (Request $request) {
+            return Limit::perMinute(5)->by((string) ($request->user()?->id ?: $request->ip()));
+        });
+
         Event::listen(Verified::class, LinkPendingCouponBeneficiaries::class);
         Event::listen(MessageSending::class, ApplyMailSafetyPolicy::class);
 

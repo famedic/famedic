@@ -237,6 +237,7 @@ return [
     'openai' => [
         'key' => env('OPENAI_API_KEY'),
         'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        'tax_profile_model' => env('OPENAI_TAX_PROFILE_MODEL') ?: null,
         'timeout' => (int) env('OPENAI_TIMEOUT', 60),
         'max_context_chars' => (int) env('OPENAI_MAX_CONTEXT_CHARS', 12000),
     ],

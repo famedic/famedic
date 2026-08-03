@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\ConstanciaFiscalService;
 use App\Actions\TaxProfiles\CreateTaxProfileAction;
 use App\Actions\TaxProfiles\DestroyTaxProfileAction;
+use App\Actions\TaxProfiles\ExtractTaxProfileFromConstanciaAction;
 use App\Actions\TaxProfiles\SetDefaultTaxProfileAction;
 use App\Actions\TaxProfiles\UpdateTaxProfileAction;
+use App\Exceptions\TaxProfiles\ConstanciaExtractionException;
 use App\Http\Requests\TaxProfiles\DestroyTaxProfileRequest;
 use App\Http\Requests\TaxProfiles\EditTaxProfileRequest;
+use App\Http\Requests\TaxProfiles\ExtractTaxProfileDataRequest;
 use App\Http\Requests\TaxProfiles\SetDefaultTaxProfileRequest;
 use App\Http\Requests\TaxProfiles\StoreTaxProfileRequest;
 use App\Http\Requests\TaxProfiles\UpdateTaxProfileRequest;
@@ -43,10 +45,7 @@ class TaxProfileController extends Controller
     public function store(StoreTaxProfileRequest $request, CreateTaxProfileAction $action)
     {
         try {
-            $extractedData = null;
-            if ($request->has('extracted_data')) {
-                $extractedData = json_decode($request->input('extracted_data'), true);
-            }
+            $extractedData = $request->decodedExtractedData();
 
             $taxProfile = $action(
                 name: $request->name,
@@ -89,6 +88,27 @@ class TaxProfileController extends Controller
 
             return redirect()->route('tax-profiles.index')
                 ->flashMessage('Perfil fiscal creado exitosamente.');
+        } catch (\InvalidArgumentException $e) {
+            Log::warning('Creación de perfil fiscal rechazada', [
+                'operation' => 'tax_profile_store',
+                'user_id' => $request->user()->id,
+                'customer_id' => $request->user()->customer->id,
+                'result' => 'rejected',
+                'exception_class' => $e::class,
+            ]);
+
+            if ($request->header('X-Inertia')) {
+                return back()->withErrors(['error' => $e->getMessage()]);
+            }
+
+            if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
+            return back()->withErrors(['error' => $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('Error al crear perfil fiscal', [
                 'operation' => 'tax_profile_store',
@@ -116,10 +136,7 @@ class TaxProfileController extends Controller
     public function update(UpdateTaxProfileRequest $request, TaxProfile $taxProfile, UpdateTaxProfileAction $action)
     {
         try {
-            $extractedData = null;
-            if ($request->has('extracted_data')) {
-                $extractedData = json_decode($request->input('extracted_data'), true);
-            }
+            $extractedData = $request->decodedExtractedData();
 
             $action(
                 name: $request->name,
@@ -255,151 +272,50 @@ class TaxProfileController extends Controller
             ->flashMessage('Perfil fiscal establecido como predeterminado.');
     }
 
-    public function extractData(Request $request)
-    {
+    public function extractData(
+        ExtractTaxProfileDataRequest $request,
+        ExtractTaxProfileFromConstanciaAction $action
+    ) {
+        $file = $request->file('fiscal_certificate');
+
+        Log::info('Solicitud de extracción de constancia recibida', [
+            'operation' => 'constancia_extract_request',
+            'user_id' => $request->user()->id,
+            'customer_id' => $request->user()->customer?->id,
+            'mime_type' => $file?->getMimeType(),
+            'size_bytes' => $file?->getSize(),
+        ]);
+
         try {
-            $request->validate([
-                'fiscal_certificate' => 'required|file|mimes:pdf|max:5120',
-            ]);
-
-            $file = $request->file('fiscal_certificate');
-
-            Log::info('Solicitud de extracción de constancia recibida', [
-                'operation' => 'constancia_extract_request',
-                'user_id' => auth()->id(),
-                'customer_id' => auth()->user()?->customer?->id,
-                'mime_type' => $file->getMimeType(),
-                'size_bytes' => $file->getSize(),
-            ]);
-
-            $service = app(ConstanciaFiscalService::class);
-            $startTime = microtime(true);
-            $resultado = $service->procesarConstancia($file);
-            $processingTime = microtime(true) - $startTime;
-
-            if (! ($resultado['success'] ?? false)) {
-                Log::warning('Extracción de constancia fallida', [
-                    'operation' => 'constancia_extract_request',
-                    'user_id' => auth()->id(),
-                    'customer_id' => auth()->user()?->customer?->id,
-                    'result' => 'failure',
-                    'duration_ms' => (int) round($processingTime * 1000),
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => $resultado['error']
-                        ?? 'No pudimos extraer los datos de la constancia. Puedes capturarlos manualmente.',
-                    'data' => null,
-                ], 422);
-            }
-
-            Log::info('Extracción de constancia respondida al cliente', [
-                'operation' => 'constancia_extract_request',
-                'user_id' => auth()->id(),
-                'customer_id' => auth()->user()?->customer?->id,
-                'result' => 'success',
-                'duration_ms' => (int) round($processingTime * 1000),
-            ]);
+            $result = $action($file);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Datos extraídos correctamente. Revisa y confirma antes de guardar.',
-                'data' => $resultado['data'],
+                'data' => $result->toHttpData(),
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ConstanciaExtractionException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'El archivo de constancia no es válido. Debe ser un PDF de máximo 5 MB.',
+                'code' => $e->errorCode,
+                'message' => $e->publicMessage(),
                 'data' => null,
-            ], 422);
+            ], $e->status);
         } catch (\Throwable $e) {
             Log::error('Error inesperado en extractData', [
                 'operation' => 'constancia_extract_request',
-                'user_id' => auth()->id(),
-                'customer_id' => auth()->user()?->customer?->id,
+                'user_id' => $request->user()->id,
+                'customer_id' => $request->user()->customer?->id,
                 'result' => 'exception',
                 'exception_class' => $e::class,
             ]);
 
             return response()->json([
                 'success' => false,
+                'code' => ConstanciaExtractionException::EXTRACTION_FAILED,
                 'message' => 'No pudimos extraer los datos de la constancia. Puedes capturarlos manualmente.',
                 'data' => null,
             ], 422);
-        }
-    }
-
-    public function testService(Request $request)
-    {
-        try {
-            \Log::info('=== INICIANDO PRUEBA DE SERVICIO ===');
-
-            // Verificar autenticación
-            if (!auth()->check()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
-            }
-
-            // Verificar si el servicio existe
-            \Log::info('Verificando clase ConstanciaFiscalService...');
-            if (!class_exists(\App\Services\ConstanciaFiscalService::class)) {
-                \Log::error('Clase ConstanciaFiscalService no existe');
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Clase ConstanciaFiscalService no existe'
-                ], 500);
-            }
-
-            // Verificar si smalot/pdfparser está instalado
-            \Log::info('Verificando librería PDF Parser...');
-            if (!class_exists('Smalot\PdfParser\Parser')) {
-                \Log::warning('Librería smalot/pdfparser no está instalada');
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Librería smalot/pdfparser no está instalada. Ejecuta: composer require smalot/pdfparser'
-                ], 500);
-            }
-
-            // Crear instancia del servicio
-            \Log::info('Creando instancia del servicio...');
-            $service = app(\App\Services\ConstanciaFiscalService::class);
-
-            // Verificar que se creó correctamente
-            if (!$service) {
-                \Log::error('No se pudo crear instancia del servicio');
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Error al crear instancia del servicio'
-                ], 500);
-            }
-
-            \Log::info('Servicio creado exitosamente: ' . get_class($service));
-
-            return response()->json([
-                'success' => true,
-                'message' => '¡Servicio listo y funcionando!',
-                'data' => [
-                    'service_class' => get_class($service),
-                    'parser_installed' => true,
-                    'user_authenticated' => auth()->check(),
-                    'user_id' => auth()->id(),
-                    'timestamp' => now()->toDateTimeString(),
-                    'laravel_version' => app()->version(),
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            \Log::error('Error en testService: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al verificar el servicio de extracción.',
-            ], 500);
         }
     }
 

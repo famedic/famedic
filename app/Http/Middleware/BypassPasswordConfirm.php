@@ -12,7 +12,6 @@ class BypassPasswordConfirm
         // Rutas que no requieren confirmación de contraseña
         $excludedRoutes = [
             'tax-profiles.extract-data',
-            'test.service',
             'debug.extract-data',
         ];
 

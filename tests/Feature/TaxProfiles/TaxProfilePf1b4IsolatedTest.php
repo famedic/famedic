@@ -291,9 +291,10 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
     #[Test]
     public function perfil_no_usado_puede_abrirse_para_edicion_y_actualizarse(): void
     {
-        $rfc12 = 'ABC010101AAA';
+        $rfc = 'ABCD010101AAA';
         [$user, $profile] = $this->makeCustomerWithProfile('edit-ok@test.local', [
-            'rfc' => $rfc12,
+            'rfc' => $rfc,
+            'tipo_persona' => 'fisica',
         ]);
         Storage::put($profile->fiscal_certificate, '%PDF');
 
@@ -307,14 +308,14 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
                 ->component('TaxProfiles')
                 ->has('taxProfile')
                 ->where('taxProfile.id', $profile->id)
-                ->where('taxProfile.rfc', $rfc12)
+                ->where('taxProfile.rfc', $rfc)
                 ->has('taxRegimes')
             );
 
         $this->actingAs($user)
             ->putJson(route('tax-profiles.update', ['tax_profile' => $profile->id]), [
                 'name' => 'Nombre Actualizado',
-                'rfc' => $rfc12,
+                'rfc' => $rfc,
                 'zipcode' => '64000',
                 'tax_regime' => '612',
                 'cfdi_use' => 'G03',
@@ -326,7 +327,7 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
             ]);
 
         $this->assertSame('Nombre Actualizado', $profile->fresh()->name);
-        $this->assertSame($rfc12, $profile->fresh()->rfc);
+        $this->assertSame($rfc, $profile->fresh()->rfc);
     }
 
     #[Test]
@@ -404,10 +405,10 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
     #[Test]
     public function action_update_de_usado_via_controller_responde_422_si_policy_permite(): void
     {
-        // UpdateTaxProfileRequest usa size:12,13 → en la práctica exige longitud 12.
-        $rfc12 = 'ABC010101AAA';
+        $rfc = 'ABCD010101AAA';
         [$user, $profile, $customer] = $this->makeCustomerWithProfile('http422@test.local', [
-            'rfc' => $rfc12,
+            'rfc' => $rfc,
+            'tipo_persona' => 'fisica',
         ]);
         Storage::put($profile->fiscal_certificate, '%PDF');
         app(CreateInvoiceRequestAction::class)($this->makeLaboratoryPurchase($customer), $profile, 'G03');
@@ -417,7 +418,7 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
         $this->actingAs($user)
             ->putJson(route('tax-profiles.update', ['tax_profile' => $profile->id]), [
                 'name' => 'Hack',
-                'rfc' => $rfc12,
+                'rfc' => $rfc,
                 'zipcode' => '64000',
                 'tax_regime' => '612',
                 'cfdi_use' => 'G03',
