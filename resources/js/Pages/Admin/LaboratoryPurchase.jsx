@@ -328,6 +328,13 @@ function Header({
 							})
 							: null
 					}
+					invoiceXmlRoute={
+						laboratoryPurchase.invoice?.invoice_xml
+							? route("invoice.xml", {
+								invoice: laboratoryPurchase.invoice.id,
+							})
+							: null
+					}
 					invoiceRequest={laboratoryPurchase.invoice_request}
 					hasInvoice={!!laboratoryPurchase.invoice}
 				/>

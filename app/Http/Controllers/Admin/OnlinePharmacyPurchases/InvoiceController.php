@@ -11,7 +11,11 @@ class InvoiceController extends Controller
 {
     public function __invoke(StoreInvoiceRequest $request, OnlinePharmacyPurchase $onlinePharmacyPurchase, CreateInvoiceAction $action)
     {
-        $action($onlinePharmacyPurchase, $request->file('invoice'));
+        $action(
+            $onlinePharmacyPurchase,
+            $request->file('invoice'),
+            $request->file('invoice_xml'),
+        );
 
         return redirect()->route('admin.online-pharmacy-purchases.show', [
             'online_pharmacy_purchase' => $onlinePharmacyPurchase,

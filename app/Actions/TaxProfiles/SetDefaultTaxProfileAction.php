@@ -7,18 +7,15 @@ use App\Models\TaxProfile;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
-class DestroyTaxProfileAction
+class SetDefaultTaxProfileAction
 {
     public function __construct(
         private readonly EnsureActiveDefaultTaxProfileAction $ensureActiveDefault,
     ) {}
 
-    /**
-     * Desactivación lógica (SoftDeletes). Conserva la constancia en Storage.
-     */
-    public function __invoke(TaxProfile $taxProfile): void
+    public function __invoke(TaxProfile $taxProfile): TaxProfile
     {
-        DB::transaction(function () use ($taxProfile) {
+        return DB::transaction(function () use ($taxProfile) {
             $customer = Customer::query()
                 ->whereKey($taxProfile->customer_id)
                 ->lockForUpdate()
@@ -35,14 +32,23 @@ class DestroyTaxProfileAction
                 throw new InvalidArgumentException('El perfil fiscal no está activo o no pertenece al paciente.');
             }
 
-            // Inactivo no es predeterminado operativo.
-            if ($profile->is_default) {
-                $profile->forceFill(['is_default' => false])->save();
+            TaxProfile::query()
+                ->where('customer_id', $customer->id)
+                ->whereNull('deleted_at')
+                ->where('id', '!=', $profile->id)
+                ->where('is_default', true)
+                ->orderBy('id')
+                ->each(function (TaxProfile $other): void {
+                    $other->forceFill(['is_default' => false])->save();
+                });
+
+            if (! $profile->is_default) {
+                $profile->forceFill(['is_default' => true])->save();
             }
 
-            $profile->delete();
+            ($this->ensureActiveDefault)($customer, $profile->fresh());
 
-            ($this->ensureActiveDefault)($customer);
+            return $profile->fresh();
         });
     }
 }

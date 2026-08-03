@@ -12,6 +12,9 @@ class FiscalCertificateController extends Controller
 {
     public function __invoke(ShowTaxProfileRequest $request, TaxProfile $taxProfile)
     {
+        abort_unless(filled($taxProfile->fiscal_certificate), 404);
+        abort_unless(Storage::exists($taxProfile->fiscal_certificate), 404);
+
         return Inertia::location(
             Storage::temporaryUrl(
                 $taxProfile->fiscal_certificate,

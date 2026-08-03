@@ -14,6 +14,12 @@ class TaxProfileFactory extends Factory
             'zipcode' => fake()->postcode(),
             'tax_regime' => fake()->sentence(),
             'cfdi_use' => fake()->sentence(),
+            'is_default' => false,
         ];
+    }
+
+    public function default(): static
+    {
+        return $this->state(fn () => ['is_default' => true]);
     }
 }

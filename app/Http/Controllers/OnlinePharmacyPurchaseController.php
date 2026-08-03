@@ -64,18 +64,42 @@ class OnlinePharmacyPurchaseController extends Controller
 
     public function index(Request $request)
     {
+        $onlinePharmacyPurchases = $request->user()->customer
+            ->onlinePharmacyPurchases()
+            ->with(['transactions', 'onlinePharmacyPurchaseItems', 'invoiceRequest', 'invoice'])
+            ->latest()
+            ->get();
+
+        $onlinePharmacyPurchases->each(function (OnlinePharmacyPurchase $purchase) {
+            $purchase->invoice?->presentForPatient();
+            $purchase->invoiceRequest?->makeHidden(['fiscal_certificate']);
+        });
+
         return Inertia::render('OnlinePharmacyPurchases', [
-            'onlinePharmacyPurchases' => $request->user()->customer->onlinePharmacyPurchases()->with(['transactions', 'onlinePharmacyPurchaseItems', 'invoiceRequest', 'invoice'])->latest()->get(),
+            'onlinePharmacyPurchases' => $onlinePharmacyPurchases,
         ]);
     }
 
     public function show(Request $request, OnlinePharmacyPurchase $onlinePharmacyPurchase)
     {
+        $this->authorize('view', $onlinePharmacyPurchase);
+
+        $onlinePharmacyPurchase->load([
+            'transactions',
+            'onlinePharmacyPurchaseItems',
+            'invoiceRequest',
+            'invoice',
+        ]);
+        $onlinePharmacyPurchase->invoice?->presentForPatient();
+        $onlinePharmacyPurchase->invoiceRequest?->makeHidden(['fiscal_certificate']);
+
         return Inertia::render('OnlinePharmacyPurchase', [
-            'onlinePharmacyPurchase' => $onlinePharmacyPurchase->load(['transactions', 'onlinePharmacyPurchaseItems', 'invoiceRequest', 'invoice']),
-            'taxProfiles' => auth()->user()->customer->taxProfiles,
+            'onlinePharmacyPurchase' => $onlinePharmacyPurchase,
+            'taxProfiles' => \App\Models\TaxProfile::presentCollectionForPatient(
+                auth()->user()->customer
+            ),
             'daysLeftToRequestInvoice' => now()->lt($onlinePharmacyPurchase->created_at->addDays(30))
-                ? (int)now()->diffInDays($onlinePharmacyPurchase->created_at->addDays(30))
+                ? (int) now()->diffInDays($onlinePharmacyPurchase->created_at->addDays(30))
                 : 0,
             ...session()->get('confetti') ? ['confetti' => true] : [],
         ]);

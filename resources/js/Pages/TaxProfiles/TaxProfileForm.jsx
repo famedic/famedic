@@ -723,8 +723,15 @@ export default function TaxProfileForm({ isOpen }) {
 
 			console.log('📡 Respuesta:', response.status, response.statusText);
 
+			const usedProfileLockMessage =
+				"Este perfil ya no se puede modificar porque fue utilizado en una solicitud de factura. Puedes usarlo en nuevas solicitudes o crear otro perfil con datos distintos.";
+
 			// Leer respuesta
 			const responseText = await response.text();
+
+			const isUsedProfileLockStatus =
+				cachedEditMode &&
+				(response.status === 403 || response.status === 422);
 
 			// Intentar parsear JSON
 			try {
@@ -760,8 +767,20 @@ export default function TaxProfileForm({ isOpen }) {
 					// Error del servidor
 					console.error('❌ Error del servidor:', result);
 
-					// Mostrar error específico si existe
-					if (result.errors) {
+					const lockFromBody =
+						isUsedProfileLockStatus ||
+						(cachedEditMode &&
+							typeof result.message === "string" &&
+							(result.message.includes("ya no se puede modificar") ||
+								result.message.includes("ya fue utilizado")));
+
+					if (lockFromBody) {
+						setInfoMessage({
+							type: "error",
+							code: "used_profile_lock",
+							message: usedProfileLockMessage,
+						});
+					} else if (result.errors) {
 						// Mostrar errores de validación de Laravel
 						Object.keys(result.errors).forEach(key => {
 							setError(key, result.errors[key][0]);
@@ -799,11 +818,6 @@ export default function TaxProfileForm({ isOpen }) {
 					console.log('⚠️ Respuesta exitosa no-JSON');
 					console.log('🔔 La operación se completó correctamente.');
 
-					// Mostrar mensaje de éxito
-					const successTitle = cachedEditMode
-						? '¡Perfil actualizado!'
-						: '¡Perfil creado exitosamente!';
-
 					setInfoMessage({
 						type: "success",
 						message: 'La operación se completó correctamente.'
@@ -817,6 +831,12 @@ export default function TaxProfileForm({ isOpen }) {
 						});
 					}, 2000);
 
+				} else if (isUsedProfileLockStatus) {
+					setInfoMessage({
+						type: "error",
+						code: "used_profile_lock",
+						message: usedProfileLockMessage,
+					});
 				} else {
 					console.log('🔔 Error del servidor. Por favor intente nuevamente.');
 
@@ -1230,18 +1250,44 @@ export default function TaxProfileForm({ isOpen }) {
 									? "bg-red-50 border border-red-200"
 									: "bg-yellow-50 border border-yellow-200"
 								}`}
+							role="alert"
 						>
-							<div className="flex items-center">
+							<div className="flex items-start">
 								{infoMessage.type === "success" ? (
-									<CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
+									<CheckCircleIcon className="h-5 w-5 text-green-400 mr-2 shrink-0" />
 								) : infoMessage.type === "error" ? (
-									<ExclamationTriangleIcon className="h-5 w-5 text-red-400 mr-2" />
+									<ExclamationTriangleIcon className="h-5 w-5 text-red-400 mr-2 shrink-0" />
 								) : (
-									<ExclamationTriangleIcon className="h-5 w-5 text-yellow-400 mr-2" />
+									<ExclamationTriangleIcon className="h-5 w-5 text-yellow-400 mr-2 shrink-0" />
 								)}
-								<span className="font-medium">
-									{infoMessage.message}
-								</span>
+								<div className="min-w-0 space-y-3">
+									<span className="font-medium block">
+										{infoMessage.message}
+									</span>
+									{infoMessage.code === "used_profile_lock" && (
+										<div className="flex flex-col gap-2 sm:flex-row">
+											<Button
+												type="button"
+												outline
+												onClick={() =>
+													router.visit(route("tax-profiles.index"), {
+														preserveScroll: true,
+													})
+												}
+											>
+												Volver al listado
+											</Button>
+											<Button
+												type="button"
+												href={route("tax-profiles.create")}
+												preserveState
+												preserveScroll
+											>
+												Crear otro perfil
+											</Button>
+										</div>
+									)}
+								</div>
 							</div>
 						</div>
 					)}

@@ -94,18 +94,41 @@ export default function Purchase({
 					)}
 
 					{purchase.invoice && (
-						<Anchor
-							href={route("invoice", {
-								invoice: purchase.invoice,
-							})}
-							target="_blank"
-							rel="noopener noreferrer"
-						>
-							<Button outline className="w-full">
-								<DocumentTextIcon />
-								Ver factura
-							</Button>
-						</Anchor>
+						<div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+							<Anchor
+								href={
+									purchase.invoice.invoice_url ||
+									route("invoice", {
+										invoice: purchase.invoice,
+									})
+								}
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								<Button outline className="w-full">
+									<DocumentTextIcon />
+									Ver PDF
+								</Button>
+							</Anchor>
+							{(purchase.invoice.has_invoice_xml ||
+								purchase.invoice.invoice_xml_url) && (
+								<Anchor
+									href={
+										purchase.invoice.invoice_xml_url ||
+										route("invoice.xml", {
+											invoice: purchase.invoice,
+										})
+									}
+									target="_blank"
+									rel="noopener noreferrer"
+								>
+									<Button outline className="w-full">
+										<DocumentTextIcon />
+										Ver XML
+									</Button>
+								</Anchor>
+							)}
+						</div>
 					)}
 
 					{/* Results Button */}

@@ -12,6 +12,7 @@ import {
 	DocumentTextIcon,
 	ReceiptPercentIcon,
 } from "@heroicons/react/24/outline";
+import { getDefaultTaxProfileId } from "@/lib/taxProfileSelection";
 
 const CFDI_OPTIONS = [
 	{ value: "G03", label: "G03", description: "Gastos en general" },
@@ -31,8 +32,9 @@ const CFDI_OPTIONS = [
 
 export default function InvoiceSection({ purchase, inlineForm = false }) {
 	const { daysLeftToRequestInvoice, taxProfiles = [] } = usePage().props;
+	// Preselección solo en el valor inicial de useForm: no se reescribe en re-renders.
 	const { data, setData, post, processing, errors } = useForm({
-		tax_profile: null,
+		tax_profile: getDefaultTaxProfileId(taxProfiles),
 		cfdi_use: "",
 	});
 
@@ -68,17 +70,43 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 				</Badge>
 			</div>
 
-			{hasInvoice && (
+					{hasInvoice && (
 				<div className="space-y-3">
-					<Anchor
-						href={route("invoice", { invoice: invoiceRecord?.id ?? invoiceRecord })}
-						target="_blank"
-					>
-						<Button outline className="w-full" type="button">
-							<ArrowDownTrayIcon className="size-4" />
-							Descargar factura
-						</Button>
-					</Anchor>
+					<div className="flex flex-col gap-2 sm:flex-row">
+						<Anchor
+							href={
+								invoiceRecord?.invoice_url ||
+								route("invoice", {
+									invoice: invoiceRecord?.id ?? invoiceRecord,
+								})
+							}
+							target="_blank"
+							className="flex-1"
+						>
+							<Button outline className="w-full" type="button">
+								<ArrowDownTrayIcon className="size-4" />
+								Descargar PDF
+							</Button>
+						</Anchor>
+						{(invoiceRecord?.has_invoice_xml ||
+							invoiceRecord?.invoice_xml_url) && (
+							<Anchor
+								href={
+									invoiceRecord?.invoice_xml_url ||
+									route("invoice.xml", {
+										invoice: invoiceRecord?.id ?? invoiceRecord,
+									})
+								}
+								target="_blank"
+								className="flex-1"
+							>
+								<Button outline className="w-full" type="button">
+									<ArrowDownTrayIcon className="size-4" />
+									Descargar XML
+								</Button>
+							</Anchor>
+						)}
+					</div>
 
 					<div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
 						<div className="flex items-center gap-2">

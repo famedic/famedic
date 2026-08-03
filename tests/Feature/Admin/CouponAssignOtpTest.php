@@ -247,6 +247,8 @@ test('hash OTP coincide con beneficiarios y tipos mixtos del request', function 
         $service->hashPayload($service->assignPayloadFromRequest($request)),
     );
 });
+
+test('OTP de laboratorio no permite verificar asignación de cupón', function () {
     $creator = makeCouponCreatorUser();
 
     $labOtp = app(AdminOtpService::class)->issue(

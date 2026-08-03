@@ -15,34 +15,63 @@ class CreateInvoiceAction
 {
     public function __invoke(
         Model $model,
-        UploadedFile $invoice
+        ?UploadedFile $invoice = null,
+        ?UploadedFile $invoiceXml = null,
     ): Invoice {
         DB::beginTransaction();
 
+        $newPdfPath = null;
+        $newXmlPath = null;
+
         try {
-            $filePath = $invoice->store('invoices');
             $existingInvoice = $model->invoice;
 
-            if (!$existingInvoice) {
+            if ($invoice) {
+                $newPdfPath = $invoice->store('invoices');
+            }
+
+            if ($invoiceXml) {
+                $newXmlPath = $invoiceXml->store('invoices');
+            }
+
+            $previousPdfPath = null;
+            $previousXmlPath = null;
+
+            if (! $existingInvoice) {
                 $newInvoice = $model->invoice()->create([
-                    'invoice' => $filePath
+                    'invoice' => $newPdfPath,
+                    'invoice_xml' => $newXmlPath,
                 ]);
             } else {
-                $previousPath = $existingInvoice->invoice;
-                $existingInvoice->update([
-                    'invoice' => $filePath,
+                $updates = [
                     'created_at' => now(),
                     'updated_at' => now(),
-                ]);
+                ];
+
+                if ($newPdfPath) {
+                    $previousPdfPath = $existingInvoice->invoice;
+                    $updates['invoice'] = $newPdfPath;
+                }
+
+                if ($newXmlPath) {
+                    $previousXmlPath = $existingInvoice->invoice_xml;
+                    $updates['invoice_xml'] = $newXmlPath;
+                }
+
+                $existingInvoice->update($updates);
                 $newInvoice = $existingInvoice;
             }
 
             DB::commit();
 
-            if ($existingInvoice) {
-                dispatch(function () use ($previousPath) {
-                    if (Storage::exists($previousPath)) {
-                        Storage::delete($previousPath);
+            if ($previousPdfPath || $previousXmlPath) {
+                dispatch(function () use ($previousPdfPath, $previousXmlPath) {
+                    if ($previousPdfPath && Storage::exists($previousPdfPath)) {
+                        Storage::delete($previousPdfPath);
+                    }
+
+                    if ($previousXmlPath && Storage::exists($previousXmlPath)) {
+                        Storage::delete($previousXmlPath);
                     }
                 })->afterResponse();
             }
@@ -54,9 +83,15 @@ class CreateInvoiceAction
             return $newInvoice;
         } catch (\Throwable $e) {
             DB::rollBack();
-            if (!empty($filePath) && Storage::exists($filePath)) {
-                Storage::delete($filePath);
+
+            if ($newPdfPath && Storage::exists($newPdfPath)) {
+                Storage::delete($newPdfPath);
             }
+
+            if ($newXmlPath && Storage::exists($newXmlPath)) {
+                Storage::delete($newXmlPath);
+            }
+
             throw $e;
         }
     }
