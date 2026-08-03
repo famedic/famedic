@@ -1031,37 +1031,37 @@ export default function TaxProfileForm({ isOpen }) {
 					{cachedEditMode ? "Actualizar perfil fiscal" : "Nuevo perfil fiscal"}
 				</DialogTitle>
 				<DialogDescription>
-					Selecciona cómo deseas ingresar tu información fiscal.
+					Elige cómo quieres registrar tu información fiscal.
 				</DialogDescription>
 
-				<DialogBody className="space-y-6">
+				<DialogBody className="space-y-5 sm:space-y-6">
 					<TaxProfilePhysicalPersonNotice />
 
 					{renderInfoMessage()}
 
-					<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+					<div
+						className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 sm:items-stretch"
+						role="group"
+						aria-label="Método para registrar el perfil fiscal"
+					>
 						<TaxProfileEntryModeCard
-							selected={entryMode === ENTRY_MODES.AUTOMATIC}
+							selected={isModeSelected && entryMode === ENTRY_MODES.AUTOMATIC}
 							onSelect={() => handleEntryModeChange(ENTRY_MODES.AUTOMATIC)}
 							icon={DocumentArrowUpIcon}
-							title="Subir Constancia de Situación Fiscal"
-							subtitle="Carga tu constancia y completaremos los datos automáticamente para que los revises."
-							features={[
-								"Sube tu constancia en PDF",
-								"Revisa y confirma los datos antes de guardar",
-							]}
+							title="Subir constancia fiscal"
+							subtitle="Extraeremos automáticamente tus datos desde el PDF. Podrás revisarlos antes de guardar."
+							features={["Más rápido", "Requiere un archivo PDF"]}
+							ctaLabel="Usar extracción automática"
 							accent="blue"
 						/>
 						<TaxProfileEntryModeCard
-							selected={entryMode === ENTRY_MODES.MANUAL}
+							selected={isModeSelected && entryMode === ENTRY_MODES.MANUAL}
 							onSelect={() => handleEntryModeChange(ENTRY_MODES.MANUAL)}
 							icon={PencilSquareIcon}
 							title="Capturar datos manualmente"
-							subtitle="Ingresa directamente la información de tu perfil fiscal."
-							features={[
-								"Ingresa tus datos manualmente",
-								"Sube tu constancia en PDF",
-							]}
+							subtitle="Completa directamente la información de tu perfil fiscal."
+							features={["Captura paso a paso", "Adjunta tu constancia al guardar"]}
+							ctaLabel="Capturar manualmente"
 							accent="emerald"
 						/>
 					</div>
@@ -1644,9 +1644,13 @@ export default function TaxProfileForm({ isOpen }) {
 	return (
 		<>
 			{isSaving && <SavingProgress />}
-			<Dialog open={isOpen} onClose={isSaving || processingPdf ? () => { } : requestClose}>
+			<Dialog
+				size="3xl"
+				open={isOpen}
+				onClose={isSaving || processingPdf ? () => { } : requestClose}
+			>
 				<form dusk="taxProfileForm" onSubmit={submit}>
-					<div className="relative border-b border-slate-200/80 px-6 pb-5 pt-6 dark:border-slate-800">
+					<div className="relative border-b border-slate-200/80 pb-5 pt-1 dark:border-slate-800 sm:pt-0">
 						<TaxProfileModalCloseButton
 							onClose={requestClose}
 							disabled={isSaving || processingPdf}
