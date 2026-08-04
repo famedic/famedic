@@ -36,6 +36,8 @@ final class AuditActorResolver
         'login',
         'register',
         'secure_download',
+        'secure_link_results_open',
+        'secure_link_invoices_open',
     ];
 
     public function __construct(

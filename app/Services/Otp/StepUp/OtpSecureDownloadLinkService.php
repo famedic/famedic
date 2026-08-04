@@ -65,7 +65,20 @@ class OtpSecureDownloadLinkService
     }
 
     /**
-     * @return array{url: string, expires_at: string, max_opens: int}
+     * @return array{
+     *     url: string,
+     *     expires_at: string,
+     *     max_opens: int,
+     *     audit: array{
+     *         secure_link_row_id: int,
+     *         step_up_row_id: int,
+     *         ttl_minutes: int,
+     *         max_opens: int,
+     *         purpose: string,
+     *         resource_type: string,
+     *         resource_id: int
+     *     }
+     * }
      *
      * @throws SecureDownloadLinkException
      */
@@ -117,7 +130,20 @@ class OtpSecureDownloadLinkService
     }
 
     /**
-     * @return array{url: string, expires_at: string, max_opens: int}
+     * @return array{
+     *     url: string,
+     *     expires_at: string,
+     *     max_opens: int,
+     *     audit: array{
+     *         secure_link_row_id: int,
+     *         step_up_row_id: int,
+     *         ttl_minutes: int,
+     *         max_opens: int,
+     *         purpose: string,
+     *         resource_type: string,
+     *         resource_id: int
+     *     }
+     * }
      *
      * @throws SecureDownloadLinkException
      */
@@ -169,7 +195,28 @@ class OtpSecureDownloadLinkService
     }
 
     /**
-     * @return array{content: string, filename: string}
+     * Consume one open and resolve PDF content.
+     *
+     * Order: validate link → resolve PDF → atomically increment open_count → return.
+     * Rejects before consume do not increment opens. Success means open_count was
+     * confirmed; the HTTP binary response is built by the controller afterward.
+     *
+     * @return array{
+     *     content: string,
+     *     filename: string,
+     *     audit: array{
+     *         purpose: string,
+     *         secure_link_row_id: int,
+     *         step_up_row_id: int,
+     *         resource_type: string,
+     *         resource_id: int,
+     *         laboratory_purchase_row_id: int|null,
+     *         order_row_id: int|null,
+     *         invoice_row_id: int|null,
+     *         open_number: int,
+     *         max_opens: int
+     *     }
+     * }
      *
      * @throws SecureDownloadLinkException
      */
@@ -194,13 +241,29 @@ class OtpSecureDownloadLinkService
             );
         }
 
-        $this->assertPurposeEnabled($link);
-        $this->assertLinkUsable($link);
+        $auditBase = $this->auditContextFromLink($link);
+
+        try {
+            $this->assertPurposeEnabled($link);
+            $this->assertLinkUsable($link);
+        } catch (SecureDownloadLinkException $e) {
+            throw new SecureDownloadLinkException(
+                $e->getMessage(),
+                $e->errorCode,
+                $e->httpStatus,
+                $auditBase,
+            );
+        }
 
         try {
             $resolved = $this->resolvePdfForLink($link);
         } catch (SecureDownloadLinkException $e) {
-            throw $e;
+            throw new SecureDownloadLinkException(
+                $e->getMessage(),
+                $e->errorCode,
+                $e->httpStatus,
+                $auditBase,
+            );
         } catch (\Throwable $e) {
             Log::warning('otp_secure_link_storage_failed', [
                 'public_id' => $link->public_id,
@@ -211,6 +274,7 @@ class OtpSecureDownloadLinkService
                 'El documento no esta disponible temporalmente.',
                 'DOCUMENT_STORAGE_UNAVAILABLE',
                 503,
+                $auditBase,
             );
         }
 
@@ -219,14 +283,18 @@ class OtpSecureDownloadLinkService
                 $this->notReadyMessage($link),
                 $this->notReadyCode($link),
                 409,
+                $auditBase,
             );
         }
 
-        $this->consumeOpenAtomically((int) $link->id);
+        $openNumber = $this->consumeOpenAtomically((int) $link->id);
 
         return [
             'content' => $resolved['content'],
             'filename' => $resolved['filename'],
+            'audit' => array_merge($auditBase, [
+                'open_number' => $openNumber,
+            ]),
         ];
     }
 
@@ -270,7 +338,20 @@ class OtpSecureDownloadLinkService
     }
 
     /**
-     * @return array{url: string, expires_at: string, max_opens: int}
+     * @return array{
+     *     url: string,
+     *     expires_at: string,
+     *     max_opens: int,
+     *     audit: array{
+     *         secure_link_row_id: int,
+     *         step_up_row_id: int,
+     *         ttl_minutes: int,
+     *         max_opens: int,
+     *         purpose: string,
+     *         resource_type: string,
+     *         resource_id: int
+     *     }
+     * }
      */
     private function persistLink(
         User $user,
@@ -314,6 +395,15 @@ class OtpSecureDownloadLinkService
             'url' => route('api.v1.secure-downloads.show', ['token' => $plainToken], absolute: true),
             'expires_at' => $link->expires_at->utc()->format('Y-m-d\TH:i:s\Z'),
             'max_opens' => $maxOpens,
+            'audit' => [
+                'secure_link_row_id' => (int) $link->id,
+                'step_up_row_id' => (int) $grant->id,
+                'ttl_minutes' => $ttl,
+                'max_opens' => $maxOpens,
+                'purpose' => $purpose,
+                'resource_type' => $resourceType,
+                'resource_id' => $resourceId,
+            ],
         ];
     }
 
@@ -444,11 +534,13 @@ class OtpSecureDownloadLinkService
     }
 
     /**
+     * Atomically consume one open. Returns the confirmed open_number (1-based).
+     *
      * @throws SecureDownloadLinkException
      */
-    private function consumeOpenAtomically(int $linkId): void
+    private function consumeOpenAtomically(int $linkId): int
     {
-        DB::transaction(function () use ($linkId): void {
+        return DB::transaction(function () use ($linkId): int {
             /** @var OtpSecureDownloadLink|null $locked */
             $locked = OtpSecureDownloadLink::query()
                 ->whereKey($linkId)
@@ -463,7 +555,18 @@ class OtpSecureDownloadLinkService
                 );
             }
 
-            $this->assertLinkUsable($locked);
+            $audit = $this->auditContextFromLink($locked);
+
+            try {
+                $this->assertLinkUsable($locked);
+            } catch (SecureDownloadLinkException $e) {
+                throw new SecureDownloadLinkException(
+                    $e->getMessage(),
+                    $e->errorCode,
+                    $e->httpStatus,
+                    $audit,
+                );
+            }
 
             $openCount = (int) $locked->open_count + 1;
             $attributes = [
@@ -476,7 +579,65 @@ class OtpSecureDownloadLinkService
             }
 
             $locked->update($attributes);
+
+            return $openCount;
         });
+    }
+
+    /**
+     * Safe internal identifiers for audit — never tokens, public ids, or URLs.
+     *
+     * @return array{
+     *     purpose: string,
+     *     secure_link_row_id: int,
+     *     step_up_row_id: int,
+     *     resource_type: string,
+     *     resource_id: int,
+     *     laboratory_purchase_row_id: int|null,
+     *     order_row_id: int|null,
+     *     invoice_row_id: int|null,
+     *     max_opens: int,
+     *     open_count: int
+     * }
+     */
+    private function auditContextFromLink(OtpSecureDownloadLink $link): array
+    {
+        $resourceType = (string) $link->resource_type;
+        $resourceId = (int) $link->resource_id;
+        $laboratoryPurchaseRowId = null;
+        $orderRowId = null;
+        $invoiceRowId = null;
+
+        if ($link->purpose === P0aOtpPurpose::StepUpResults->value
+            && $resourceType === OtpStepUpGrant::RESOURCE_LABORATORY_PURCHASE
+        ) {
+            $laboratoryPurchaseRowId = $resourceId;
+            $orderRowId = $resourceId;
+        } elseif ($link->purpose === P0aOtpPurpose::StepUpInvoices->value
+            && $resourceType === OtpStepUpGrant::RESOURCE_INVOICE
+        ) {
+            $invoiceRowId = $resourceId;
+            $invoice = Invoice::query()->withTrashed()->find($resourceId);
+            if ($invoice !== null
+                && $invoice->invoiceable_type === LaboratoryPurchase::class
+            ) {
+                $laboratoryPurchaseRowId = (int) $invoice->invoiceable_id;
+                $orderRowId = (int) $invoice->invoiceable_id;
+            }
+        }
+
+        return [
+            'purpose' => (string) $link->purpose,
+            'secure_link_row_id' => (int) $link->id,
+            'step_up_row_id' => (int) $link->otp_step_up_grant_id,
+            'resource_type' => $resourceType,
+            'resource_id' => $resourceId,
+            'laboratory_purchase_row_id' => $laboratoryPurchaseRowId,
+            'order_row_id' => $orderRowId,
+            'invoice_row_id' => $invoiceRowId,
+            'max_opens' => (int) $link->max_opens,
+            'open_count' => (int) $link->open_count,
+        ];
     }
 
     private function generateOpaqueToken(): string

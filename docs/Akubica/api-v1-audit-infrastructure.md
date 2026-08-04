@@ -1,10 +1,10 @@
-# API V1 — Auditoría transversal (bloque 1: infraestructura)
+# API V1 — Auditoría transversal
 
-**Estado:** infraestructura (bloque 1) + instrumentación Auth/OTP (bloque 2).  
+**Estado:** infraestructura (bloque 1) + Auth/OTP (bloque 2) + secure links / downloads (bloque 3).  
 **Flag default:** `API_V1_AUDIT_ENABLED=false`  
 **Tabla:** `api_v1_audit_events` (append-only)
 
-Secure links, downloads, checkout, carrito, citas, invoice-request, perfiles, contactos/direcciones, eventos de idempotencia y fallback global 5xx **siguen pendientes**.
+Checkout, carrito, payment links, citas, invoice-request, perfiles, contactos/direcciones, eventos de idempotencia y fallback global 5xx **siguen pendientes**.
 
 ---
 
@@ -46,37 +46,20 @@ Columnas principales: `event_name`, `occurred_at`, `correlation_id`, `related_co
 - **Sin** unique global sobre `correlation_id` (un request puede emitir varios eventos).
 - Prefijo estable de eventos: `api_v1.*`.
 
-### Índices (nombres &lt; 64 chars MySQL)
-
-| Nombre | Columnas |
-|--------|----------|
-| `api_v1_audit_events_occurred_at_index` | `occurred_at` |
-| `api_v1_audit_events_event_name_occurred_at_index` | `event_name`, `occurred_at` |
-| `api_v1_audit_events_customer_id_occurred_at_index` | `customer_id`, `occurred_at` |
-| `api_v1_audit_events_correlation_id_index` | `correlation_id` |
-| `api_v1_audit_events_resource_type_key_occurred_at_index` | `resource_type`, `resource_key`, `occurred_at` |
-| `api_v1_audit_events_actor_key_occurred_at_index` | `actor_key`, `occurred_at` |
-
-Migración: `database/migrations/2026_08_03_200000_create_api_v1_audit_events_table.php`  
-Compatible MySQL/SQLite vía `MinimumTableContract`.
+Migración: `database/migrations/2026_08_03_200000_create_api_v1_audit_events_table.php`.
 
 ---
 
-## 4. Append-only
+## 4. Append-only / Writer fail-soft
 
-Modelo: `App\Models\Api\V1\ApiV1AuditEvent`
+Modelo: `App\Models\Api\V1\ApiV1AuditEvent` — sin updates/deletes ordinarios.  
+Writer: `App\Services\Api\V1\Audit\AuditEventWriter` — `write()` fail-soft (no `report()`, no queue, no altera transacciones ajenas). Log sanitizado: `akubica_audit_write_failed` con `event_name`, `correlation_id`, `exception_class`.
 
-- `UPDATED_AT = null`
-- `save()` tras `exists` lanza `LogicException`
-- `update()` / `delete()` ordinarios lanzan `LogicException`
-- Sin endpoints CRUD
-- Columnas aceptadas por el writer: `ApiV1AuditEvent::WRITER_ATTRIBUTES`
-
-Cleanup físico se implementará en otro bloque (comando / retención).
+Con respuestas binarias (PDF): la falla de auditoría **no** altera status, body, `Content-Type`, `Content-Disposition` ni el efecto principal (creación/consumo del link).
 
 ---
 
-## 5. Modelo de actores
+## 5. Actores
 
 Resolver: `App\Services\Api\V1\Audit\AuditActorResolver`
 
@@ -84,231 +67,219 @@ Resolver: `App\Services\Api\V1\Audit\AuditActorResolver`
 |------|-------------|-------|
 | `customer` | `customer:{id}` | Incluye `customer_id`, `user_id`, `personal_access_token_id` si aplica. **Nunca** bearer. |
 | `public` | `public:{hmac}` | Requiere `purpose` + material **ya normalizado**. |
-| `system` | `system:{allowlisted}` | Solo keys allowlisted (`scheduler`, `console`, `maintenance`, `worker`). |
+| `system` | `system:{allowlisted}` | Solo keys allowlisted. |
 
-### HMAC — domain separation
+HMAC namespace: `audit|v1|actor|{purpose}` (domain separation; no reutiliza login/register/idempotency).
 
-Reutiliza `OtpAbuseKeyHasher::hashOpaque()` con namespace explícito:
+Purposes públicos usados:
 
-```
-audit|v1|actor|{purpose}
-```
+| Purpose | Uso |
+|---------|-----|
+| `login` / `register` | Auth OTP |
+| `secure_link_results_open` | Apertura pública results |
+| `secure_link_invoices_open` | Apertura pública invoices |
 
-**No** reutiliza el namespace de idempotencia (`idempotency|v1|...`).  
-Purpose distintos ⇒ digests distintos. El material original **nunca** se almacena.
-
-IP / User-Agent opcionales: `hashIp` / `hashUserAgent` (HMAC; nunca plaintext).
-
----
-
-## 6. Metadata — allowlist y redacción
-
-Normalizer: `App\Services\Api\V1\Audit\AuditMetadataNormalizer`  
-Definiciones: `App\Services\Api\V1\Audit\AuditEventDefinitions`
-
-Reglas:
-
-1. Allowlist **explícita por `event_name`** (unknown keys eliminadas).
-2. Keys en `snake_case`.
-3. Profundidad máxima 2; solo escalares y arrays planos de escalares.
-4. Máximo 2048 bytes del JSON final.
-5. **Sin truncamiento silencioso**: si excede el límite, se **descarta toda** la metadata (fail-soft) y se registra `akubica_audit_metadata_discarded`.
-6. Defensa adicional por nombre sensible (`token`, `secret`, `password`, `otp`, `code`, `authorization`, `bearer`, `cookie`, `key`, `grant`, …).
-7. Rechazo de `Model`, `Request`, `Response`, `Throwable`, `UploadedFile`, objetos y binarios.
-
-### Datos prohibidos (nunca persistir)
-
-OTP/code, Authorization/Bearer, password, Idempotency-Key original, secure-link token, `X-Step-Up-Grant` presentado, cookies, `APP_KEY`, PDF/XML/documentos, bodies completos, exception message / stack trace, `grant_public_id` completo (tratar como credencial).
-
-Para grants / challenges / links: preferir ID interno; si no hay ID seguro, HMAC con propósito. Nunca el valor presentado por el cliente.
-
-En este documento se listan eventos infra de prueba y los eventos Auth/OTP del bloque 2 (sección 11).
+Material de apertura: token opaco presentado (solo en memoria). **Nunca** se persiste el token, public ID, URL ni material HMAC original.
 
 ---
 
-## 7. Writer fail-soft
+## 6. Outcomes
 
-`App\Services\Api\V1\Audit\AuditEventWriter`
+| outcome | Uso |
+|---------|-----|
+| `succeeded` | Autorización y respuesta confirmadas |
+| `rejected` | Denegación esperada (seguridad, expiración, ownership, binding, …) |
+| `failed` | Falla conocida de infra/config (`FEATURE_DISABLED`, `DOCUMENT_STORAGE_UNAVAILABLE`, …) |
+| `uncertain` | Solo cuando no se puede afirmar el efecto final |
 
-| Método | Comportamiento |
-|--------|----------------|
-| `write()` | Si flag OFF → no-op. Si ON → normaliza + persiste. Captura fallos; **no** rompe la operación principal. |
-| `persistOrFail()` | Propaga excepciones (tests / internos). |
-
-Log de fallo:
-
-```
-Log::error('akubica_audit_write_failed', [
-  'event_name' => ...,
-  'correlation_id' => ...,
-  'exception_class' => ...,
-]);
-```
-
-**No** incluye exception message, SQL, bindings, payload ni metadata cruda.  
-**No** usa `report($e)` (puede filtrar contexto sensible).  
-**No** usa queue en esta fase.  
-**No** inicia / confirma / revierte transacciones ajenas.
-
-### Limitación transaccional
-
-Si la conexión actual está dentro de una transacción **ya fallida/abortada**, el `INSERT` puede fallar. `write()` lo traga y loguea. Cuando la atomicidad con un side-effect importe, emitir el evento **después** del commit de negocio (bloques de instrumentación posteriores).
+`http_status`, `error_code` y `retryable` reflejan el contrato P1-A6 (`ApiErrorRetryability`) **sin** mutar la respuesta.
 
 ---
 
-## 8. Contexto de request
+## 7. Middleware `api.audit`
 
-`App\Services\Api\V1\Audit\ApiV1AuditContext`
+Alias → `InitializeApiV1AuditContext`. Solo hidrata contexto; no escribe eventos.
 
-Estado por request (atributo `akubica.audit_context`), **sin** estáticos compartidos:
+### Rutas con `api.audit`
 
-- `correlation_id`, `route_name`, `method`
-- actor resuelto
-- `idempotency_record_id` / `idempotency_effect`
-- `related_correlation_id`
-- indicador de evento terminal emitido
-
-No escribe eventos por sí mismo.
-
----
-
-## 9. Middleware
-
-Alias: `api.audit` → `InitializeApiV1AuditContext`
-
-Solo crea/hidrata contexto. **No** inserta eventos, no lee bodies, no transforma responses, no cambia correlation ID.
-
-### Rutas con `api.audit` (bloque 2)
-
-Aplicado **solo** a Auth/OTP:
+**Bloque 2 — Auth/OTP:**
 
 - `auth/login/request-code|verify-code|resend-code`
 - `auth/register|register/verify-code|register/resend-code`
 - `orders/{id}/results/step-up/request|verify`
 - `orders/{id}/invoices/{id}/step-up/request|verify`
 
-Orden efectivo:
+**Bloque 3 — Secure links / downloads:**
+
+- `POST orders/{id}/results/secure-link` — tras `api.idempotency`
+- `POST orders/{id}/invoices/{id}/secure-link` — tras `api.idempotency`
+- `GET secure-downloads/{token}` — tras throttle
+- `GET orders/{id}/results/download`
+- `GET orders/{id}/invoices/{id}/download`
+
+Orden autenticado (creación):
 
 ```
 force.json → api.correlation → api.token.guard
-  → [auth:sanctum → api.customer]   # solo step-up
-  → throttle:akubica-otp
-  → [api.idempotency]               # request-code / register / step-up request
-  → api.audit
-  → controller
+  → auth:sanctum → api.customer
+  → throttle → api.idempotency → api.audit → controller
 ```
 
-**Replay idempotente:** `api.idempotency` corta antes de `api.audit` y del controller → **no** se duplica el evento semántico ni el SMS/challenge.
+Orden Bearer download:
+
+```
+… → auth:sanctum → api.customer → api.audit → controller
+```
+
+Orden público open:
+
+```
+force.json → api.correlation → api.token.guard → throttle → api.audit → controller
+```
+
+**Replay idempotente:** `api.idempotency` corta antes de `api.audit` → no duplica evento semántico ni crea otro link.
+
+**Antes de instrumentación:** 401 Sanctum / 403 sin customer / token malformado en ruta → **sin** evento de este bloque.
 
 ---
 
-## 10. Outcomes
+## 8. Bloque 2 — Eventos Auth/OTP
 
-Vocabulario estable (`AuditOutcome`):
+Emisor: `AuthOtpAuditRecorder`. Ver sección histórica / tests `AkubicaAuditAuthOtpP2Test`.
 
-| outcome | Uso |
-|---------|-----|
-| `succeeded` | Operación confirmada |
-| `rejected` | Rechazo esperado (código inválido, ownership, cooldown, …) |
-| `failed` | Fallo infra/delivery/config |
-| `uncertain` | Efecto parcial (p.ej. registro committed + `LOGIN_REQUIRED`) |
-
-`http_status`, `error_code` y `retryable` reflejan el contrato P1-A6 (`ApiErrorRetryability`) **sin** mutar la respuesta.
+Eventos: `api_v1.auth.*`, `api_v1.otp.step_up_*`.
 
 ---
 
-## 11. Bloque 2 — Eventos Auth/OTP
+## 9. Bloque 3 — Secure links y descargas PDF
 
-Emisor tipado: `App\Services\Api\V1\Audit\AuthOtpAuditRecorder`  
-Escritura en controllers **después** del éxito del service (post-commit) o tras mapear la excepción.
+Emisor: `App\Services\Api\V1\Audit\DocumentAccessAuditRecorder`
+
+### Hallazgos de dominio (código real)
+
+- Creación results: `POST /api/v1/orders/{order_id}/results/secure-link`
+- Creación invoices: `POST /api/v1/orders/{order_id}/invoices/{invoice_id}/secure-link`
+- Apertura pública (ambos): `GET /api/v1/secure-downloads/{token}` (token hex 64)
+- Descarga Bearer results: `GET /api/v1/orders/{order_id}/results/download`
+- Descarga Bearer invoices: `GET /api/v1/orders/{order_id}/invoices/{invoice_id}/download`
+- **Solo PDF** en estas rutas API V1 (no hay XML en este flujo).
+- Respuesta: `Illuminate\Http\Response` con contenido PDF en memoria (comportamiento preexistente; no se cambió a streaming).
+- Ownership: `customer->laboratoryPurchases()->withTrashed()->find($orderId)`.
+- Step-up Bearer: header `X-Step-Up-Grant`; flags `step_up_bearer_*` / master.
+- Secure link: hash SHA-256 del token; valida expiración, `max_opens`/`consumed_at`, revocación de link o grant, purpose flags.
+- **Incremento de aperturas:** después de resolver el PDF y **antes** de construir la respuesta HTTP; atómico con `lockForUpdate`. Rechazos previos **no** consumen aperturas.
+- Confirmación de creación: tras `OtpSecureDownloadLink::create` (sin transacción envolvente adicional).
 
 ### Eventos
 
-| event_name | Cuándo |
-|------------|--------|
-| `api_v1.auth.login_code_requested` | Login request-code (real o decoy) |
-| `api_v1.auth.login_code_resent` | Login resend-code |
-| `api_v1.auth.login_verified` | Login verify (éxito o rechazo relevante) |
-| `api_v1.auth.registration_code_requested` | `POST auth/register` |
-| `api_v1.auth.registration_code_resent` | Register resend |
-| `api_v1.auth.registration_completed` | Register verify (incluye `LOGIN_REQUIRED` → outcome `uncertain`) |
-| `api_v1.otp.step_up_requested` | Step-up request results/invoices (`purpose` en metadata) |
-| `api_v1.otp.step_up_verified` | Step-up verify + grant interno |
+| event_name | Hecho |
+|------------|-------|
+| `api_v1.results.secure_link_created` | Link results persistido (o rechazo relevante de creación) |
+| `api_v1.results.secure_link_opened` | Apertura pública results validada + open confirmado + respuesta PDF emitida (o rechazo con link conocido) |
+| `api_v1.results.downloaded` | Descarga Bearer results: auth/ownership/step-up/archivo OK y respuesta PDF emitida (o rechazo relevante) |
+| `api_v1.invoices.secure_link_created` | Análogo facturas |
+| `api_v1.invoices.secure_link_opened` | Análogo facturas |
+| `api_v1.invoices.downloaded` | Análogo facturas |
 
-**No hay** `step_up_resent`: el “resend” real es otro `request` tras cooldown.
+### Semántica
 
-### Matriz ruta → evento
+**`secure_link_created`:** éxito solo tras persistir el row. No guarda token, public ID, URL ni firma. Replay idempotente → sin segundo evento.
 
-| Ruta | Evento(s) |
-|------|-----------|
-| `POST …/login/request-code` | `login_code_requested` |
-| `POST …/login/resend-code` | `login_code_resent` |
-| `POST …/login/verify-code` | `login_verified` |
-| `POST …/auth/register` | `registration_code_requested` |
-| `POST …/register/resend-code` | `registration_code_resent` |
-| `POST …/register/verify-code` | `registration_completed` |
-| `POST …/results/step-up/request` | `step_up_requested` (purpose=results) |
-| `POST …/results/step-up/verify` | `step_up_verified` |
-| `POST …/invoices/…/step-up/request` | `step_up_requested` (purpose=invoices) |
-| `POST …/invoices/…/step-up/verify` | `step_up_verified` |
+**`secure_link_opened`:** link validado, PDF resuelto, `open_count` incrementado de forma confirmada, y el servidor **emitió** la respuesta binaria. No afirma que el cliente recibió todos los bytes. Un solo evento terminal por request pública (no se emite también `downloaded`).
 
-### Actores
+**`downloaded`:** Bearer + ownership (+ step-up si enforcement ON) + archivo disponible + respuesta binaria emitida. No afirma transferencia completa al cliente.
+
+**Token desconocido (`SECURE_LINK_NOT_FOUND`):** no se emite evento de purpose (no se puede clasificar results vs invoices sin oráculo).
+
+### Matriz ruta → evento terminal
+
+| Ruta | Evento terminal |
+|------|-----------------|
+| `POST …/results/secure-link` | `api_v1.results.secure_link_created` |
+| `POST …/invoices/…/secure-link` | `api_v1.invoices.secure_link_created` |
+| `GET …/secure-downloads/{token}` (results) | `api_v1.results.secure_link_opened` |
+| `GET …/secure-downloads/{token}` (invoices) | `api_v1.invoices.secure_link_opened` |
+| `GET …/results/download` | `api_v1.results.downloaded` |
+| `GET …/invoices/…/download` | `api_v1.invoices.downloaded` |
+
+### Actores (bloque 3)
 
 | Flujo | Actor |
 |-------|-------|
-| Login / register (pre-auth) | `public` + HMAC `audit\|v1\|actor\|login` o `…\|register` |
-| Login verify éxito / register completed | `customer:{id}` cuando user+customer confirmados |
-| Step-up | `customer` + PAT id si existe; nunca bearer |
+| Creación / Bearer download | `customer:{customer_id}` + PAT id si existe |
+| Apertura pública results | `public:{HMAC(secure_link_results_open, token)}` |
+| Apertura pública invoices | `public:{HMAC(secure_link_invoices_open, token)}` |
 
 ### Recursos / IDs
 
-- `challenge_row_id` = `otp_challenges.id` interno (nunca `public_id`).
-- Step-up: `resource_type` = `laboratory_purchase` \| `invoice`; `resource_key` = id interno.
-- `step_up_row_id` = `otp_step_up_grants.id` interno (nunca `grant_public_id`).
-- Ownership 404: se audita el id **intentado** de la URL; no se afirma existencia de recursos ajenos.
+| Dominio | `resource_type` | `resource_key` |
+|---------|-----------------|----------------|
+| Results | `laboratory_purchase` | id interno del pedido |
+| Invoices | `invoice` | id interno de la factura |
 
-### Metadata allowlist (Auth/OTP)
+Metadata / columnas seguras: `secure_link_row_id`, `step_up_row_id`, `laboratory_purchase_row_id`, `order_row_id`, `invoice_row_id`, `ttl_minutes`, `max_opens`, `open_number`, `purpose` (`results`\|`invoices`).
 
-`delivery_channel`, `delivery_result_class`, `is_resend`, `is_decoy`, `challenge_row_id`, `session_issued`, `purpose`, `order_row_id`, `laboratory_purchase_row_id`, `invoice_row_id`, `step_up_row_id`.
+**Cross-user / ownership 404:** no se persisten `resource_key` ni IDs del recurso ajeno.
 
-Keys renombradas para no chocar con la redacción por nombre (`grant_*` → `step_up_row_id`).
+**Rechazo de grant Bearer:** no se resuelve ni persiste `step_up_row_id` a partir del header inválido (evita filtrar existencia de grants ajenos). En éxito (o post-grant válido) sí se registra el id interno.
 
-### Flag OFF
+### Metadata allowlist (bloque 3)
 
-Auth/OTP funciona igual; **cero** inserts en `api_v1_audit_events`.
+Creación: `purpose`, `secure_link_row_id`, `step_up_row_id`, `laboratory_purchase_row_id`, `order_row_id`, `invoice_row_id`, `ttl_minutes`, `max_opens`.
 
-### 5xx
+Apertura: `purpose`, `secure_link_row_id`, `step_up_row_id`, `laboratory_purchase_row_id`, `order_row_id`, `invoice_row_id`, `open_number`, `max_opens`.
 
-Sin fallback global. Delivery/config usan outcome `failed` en el evento de la operación; no se guarda exception message/stack.
+Download: `purpose`, `step_up_row_id`, `laboratory_purchase_row_id`, `order_row_id`, `invoice_row_id`.
+
+**No** se incluye `document_format` (solo PDF en estas rutas). **No** `delivery_mode` (redundante con el event_name).
+
+Prohibido persistir: token, URL, public IDs, bearer, `X-Step-Up-Grant`, `grant_public_id`, paths, contenido PDF, OTP, phone, email, Idempotency-Key, bodies, exception messages.
+
+### Outcomes auditados (ejemplos)
+
+| Caso | outcome | error_code típico |
+|------|---------|-------------------|
+| Creación / open / download OK | succeeded | — |
+| Ownership | rejected | `ORDER_NOT_FOUND` / `INVOICE_NOT_FOUND` |
+| Grant inválido (issue) | rejected | `STEP_UP_GRANT_INVALID` |
+| Grant ausente/expirado/revocado (Bearer) | rejected | `STEP_UP_REQUIRED` / `STEP_UP_*` |
+| Link expirado / consumido / revocado | rejected | `SECURE_LINK_*` |
+| PDF no listo | rejected | `RESULT_NOT_READY` / `INVOICE_NOT_READY` |
+| Storage temporal | failed | `DOCUMENT_STORAGE_UNAVAILABLE` |
+| Feature flag off (cuando se alcanza con contexto) | failed | `FEATURE_DISABLED` |
 
 ### Idempotencia
 
-Primera ejecución → un evento semántico. Replay → cero eventos adicionales, cero SMS/challenge nuevos. Sin eventos `api_v1.idempotency.*` en este bloque.
+Endpoints de creación son idempotentes. Primera ejecución → 1 link + 1 evento. Replay → mismo body/status + `Idempotency-Replayed` + **0** eventos adicionales. Conflict → no inventa evento semántico extra (el de la primera ejecución permanece).
+
+### Limitaciones
+
+- Sin fallback global 5xx.
+- Token inexistente en apertura pública: sin evento (purpose desconocido).
+- 401/403 previos a `api.audit`: sin evento.
+- “Opened”/“downloaded” no confirman recepción completa de bytes en el cliente.
+- Ventana mínima entre `consumeOpenAtomically` y `pdfResponse`: el evento de éxito se escribe **después** de construir la respuesta PDF en el controller.
 
 ---
 
-## 12. Fuera de alcance (siguen pendientes)
+## 10. Fuera de alcance (siguen pendientes)
 
-- Secure links / apertura / downloads Bearer / PDF-XML.
 - Checkout, payment links, carrito, citas, invoice-request, perfiles, contactos, direcciones.
-- Eventos propios de idempotencia.
+- Eventos `api_v1.idempotency.*`.
 - Fallback transversal 5xx.
 - Cleanup / UI admin.
-- Paths legacy email OTP (flags OFF): no instrumentados.
+- Carga/reemplazo administrativo PDF/XML.
+- Paths legacy fuera de API V1.
 
 ---
 
-## 13. Clases clave
+## 11. Clases y tests clave
 
-| Pieza | Clase |
-|-------|-------|
+| Pieza | Clase / archivo |
+|-------|-----------------|
 | Modelo | `App\Models\Api\V1\ApiV1AuditEvent` |
-| Contexto | `App\Services\Api\V1\Audit\ApiV1AuditContext` |
-| Actor | `App\Services\Api\V1\Audit\AuditActorResolver` |
-| Metadata | `App\Services\Api\V1\Audit\AuditMetadataNormalizer` |
-| Writer | `App\Services\Api\V1\Audit\AuditEventWriter` |
 | Auth/OTP emitter | `App\Services\Api\V1\Audit\AuthOtpAuditRecorder` |
-| Outcomes | `App\Services\Api\V1\Audit\AuditOutcome` |
-| Middleware | `App\Http\Middleware\Api\V1\InitializeApiV1AuditContext` |
+| Document access emitter | `App\Services\Api\V1\Audit\DocumentAccessAuditRecorder` |
 | Tests infra | `tests/Feature/Api/V1/Audit/AkubicaAuditInfrastructureP1Test.php` |
 | Tests Auth/OTP | `tests/Feature/Api/V1/Audit/AkubicaAuditAuthOtpP2Test.php` |
+| Tests bloque 3 | `tests/Feature/Api/V1/Audit/AkubicaAuditDocumentAccessP3Test.php` |

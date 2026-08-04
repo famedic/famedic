@@ -68,7 +68,7 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
     // ── Secure downloads (opaque token; no Bearer) ────────────────────────
     Route::get('secure-downloads/{token}', [SecureDownloadController::class, 'show'])
         ->where('token', '[A-Fa-f0-9]{64}')
-        ->middleware('throttle:60,1')
+        ->middleware(['throttle:60,1', 'api.audit'])
         ->name('secure-downloads.show');
 
     // ── Catálogo laboratorio (público, sin Bearer token) ─────────────────
@@ -127,8 +127,10 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
             Route::get('invoices', [OrderController::class, 'invoicesIndex'])->name('invoices.index');
 
             Route::get('{order_id}/results/download', [OrderDocumentDownloadController::class, 'downloadResult'])
+                ->middleware('api.audit')
                 ->name('results.download');
             Route::get('{order_id}/invoices/{invoice_id}/download', [OrderDocumentDownloadController::class, 'downloadInvoice'])
+                ->middleware('api.audit')
                 ->name('invoices.download');
 
             Route::post('{order_id}/invoices/{invoice_id}/step-up/request', [OrderInvoicesStepUpController::class, 'request'])
@@ -138,7 +140,7 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
                 ->middleware(['throttle:akubica-otp', 'api.audit'])
                 ->name('invoices.step-up.verify');
             Route::post('{order_id}/invoices/{invoice_id}/secure-link', [OrderInvoicesSecureLinkController::class, 'store'])
-                ->middleware(['throttle:60,1', 'api.idempotency'])
+                ->middleware(['throttle:60,1', 'api.idempotency', 'api.audit'])
                 ->name('invoices.secure-link');
 
             Route::post('{order_id}/results/step-up/request', [OrderResultsStepUpController::class, 'request'])
@@ -148,7 +150,7 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
                 ->middleware(['throttle:akubica-otp', 'api.audit'])
                 ->name('results.step-up.verify');
             Route::post('{order_id}/results/secure-link', [OrderResultsSecureLinkController::class, 'store'])
-                ->middleware(['throttle:60,1', 'api.idempotency'])
+                ->middleware(['throttle:60,1', 'api.idempotency', 'api.audit'])
                 ->name('results.secure-link');
 
             Route::get('{order_id}/invoice-request/status', [OrderInvoiceRequestController::class, 'status'])

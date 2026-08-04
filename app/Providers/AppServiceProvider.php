@@ -75,6 +75,7 @@ class AppServiceProvider extends ServiceProvider
         });
         $this->app->singleton(\App\Services\Api\V1\Audit\AuditEventWriter::class);
         $this->app->singleton(\App\Services\Api\V1\Audit\AuthOtpAuditRecorder::class);
+        $this->app->singleton(\App\Services\Api\V1\Audit\DocumentAccessAuditRecorder::class);
         $this->app->bind(OtpRateLimitService::class);
         $this->app->bind(OtpAbusePolicy::class);
         $this->app->singleton(AkubicaLoginOtpDecoyStore::class);
