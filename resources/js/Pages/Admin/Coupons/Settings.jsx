@@ -20,7 +20,10 @@ import Modal from "@/Components/Catalyst/modal";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import { router, useForm, usePage } from "@inertiajs/react";
 import { AnimatePresence, motion } from "framer-motion";
+import CouponSectionCard from "@/Components/Admin/Coupon/CouponSectionCard";
+import CouponEmptyState from "@/Components/Admin/Coupon/CouponEmptyState";
 import { PlusIcon, TrashIcon, PencilSquareIcon } from "@heroicons/react/16/solid";
+import { TagIcon } from "@heroicons/react/24/outline";
 
 // Temporal: pestaña "Límites de créditos" oculta; los valores siguen yendo en el PUT con los actuales.
 const TABS = [
@@ -846,21 +849,31 @@ export default function Settings() {
 
 								{activeTab === "concepts" && (
 									<>
-										<div className={highlightedCardClass}>
-											<div className="flex flex-wrap items-start justify-between gap-3">
-												<div>
-													<Subheading level={3}>Conceptos</Subheading>
-												</div>
-												<Button
-													type="button"
-													onClick={() => openConceptModal()}
-												>
+										<CouponSectionCard
+											title="Conceptos"
+											description="Etiquetas reutilizables para clasificar créditos. «Otro» crea un concepto al guardar."
+											actions={
+												<Button type="button" onClick={() => openConceptModal()}>
 													<PlusIcon />
 													Nuevo concepto
 												</Button>
-											</div>
-
-											<div className="mt-5 overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
+											}
+											bodyClassName="!p-0"
+										>
+											{concepts.length === 0 ? (
+												<CouponEmptyState
+													icon={TagIcon}
+													title="Sin conceptos"
+													description="Crea el primero para organizar tus campañas de crédito."
+													action={
+														<Button type="button" onClick={() => openConceptModal()}>
+															<PlusIcon />
+															Nuevo concepto
+														</Button>
+													}
+												/>
+											) : (
+											<div className="overflow-x-auto">
 												<Table>
 													<TableHead>
 														<TableRow>
@@ -871,17 +884,7 @@ export default function Settings() {
 														</TableRow>
 													</TableHead>
 													<TableBody>
-														{concepts.length === 0 ? (
-															<TableRow>
-																<TableCell
-																	colSpan={4}
-																	className="text-zinc-500 dark:text-zinc-400"
-																>
-																	Aún no hay conceptos registrados.
-																</TableCell>
-															</TableRow>
-														) : (
-															concepts.map((concept) => (
+														{concepts.map((concept) => (
 																<TableRow key={concept.id}>
 																	<TableCell className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
 																		#{concept.id}
@@ -926,12 +929,12 @@ export default function Settings() {
 																		</div>
 																	</TableCell>
 																</TableRow>
-															))
-														)}
+															))}
 													</TableBody>
 												</Table>
 											</div>
-										</div>
+											)}
+										</CouponSectionCard>
 									</>
 								)}
 							</motion.div>

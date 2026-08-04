@@ -6,6 +6,11 @@ use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\OnlinePharmacyPurchase;
 use App\Services\Tracking\Tracking;
+use App\Listeners\ApplyMailSafetyPolicy;
+use App\Listeners\LinkPendingCouponBeneficiaries;
+use Illuminate\Auth\Events\Verified;
+use Illuminate\Mail\Events\MessageSending;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Redirector;
@@ -161,8 +166,19 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($key);
         });
 
+        RateLimiter::for('tax-profile-extract', function (Request $request) {
+            return Limit::perMinute(5)->by((string) ($request->user()?->id ?: $request->ip()));
+        });
+
+        Event::listen(Verified::class, LinkPendingCouponBeneficiaries::class);
+        Event::listen(MessageSending::class, ApplyMailSafetyPolicy::class);
+
         Gate::define('assign-autorizador-role', function ($user): bool {
             return (bool) $user->administrator?->hasRole('superadmin');
+        });
+
+        Gate::define('access-laboratory-billing', function ($user): bool {
+            return app(\App\Services\LaboratoryBilling\LaboratoryBillingAccess::class)->allows($user);
         });
 
         Route::bind('laboratory_purchase', function ($value) {

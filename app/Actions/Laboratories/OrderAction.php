@@ -19,6 +19,7 @@ use App\Services\Audit\Business\BusinessAuditActor;
 use App\Services\Audit\Business\BusinessAuditChannel;
 use App\Services\Audit\Business\LaboratoryOrderCreatedAuditHint;
 use App\Services\CouponApplicationService;
+use App\Services\PromoCodeService;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Notifications\FewDaysLeftToRequestInvoice;
 use Illuminate\Database\Eloquent\Collection;
@@ -33,6 +34,7 @@ class OrderAction
     private CreateGDAQuotationAction $createGDAQuotationAction;
     private RefundTransactionAction $refundTransactionAction;
     private CouponApplicationService $couponApplicationService;
+    private PromoCodeService $promoCodeService;
     private CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction;
     private FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction;
 
@@ -45,6 +47,7 @@ class OrderAction
         CreateGDAQuotationAction $createGDAQuotationAction,
         RefundTransactionAction $refundTransactionAction,
         CouponApplicationService $couponApplicationService,
+        PromoCodeService $promoCodeService,
         CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction,
         FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction
     ) {
@@ -54,6 +57,7 @@ class OrderAction
         $this->createGDAQuotationAction = $createGDAQuotationAction;
         $this->refundTransactionAction = $refundTransactionAction;
         $this->couponApplicationService = $couponApplicationService;
+        $this->promoCodeService = $promoCodeService;
         $this->createCouponBalanceTransactionAction = $createCouponBalanceTransactionAction;
         $this->fulfillLaboratoryCartOrderAction = $fulfillLaboratoryCartOrderAction;
     }
@@ -66,6 +70,7 @@ class OrderAction
         LaboratoryBrand $laboratoryBrand,
         int $totalCents,
         ?int $couponId = null,
+        ?string $promoValidationToken = null,
     ): LaboratoryPurchase {
 
         $this->laboratoryCartItems = $customer->laboratoryCartItems()
@@ -80,14 +85,32 @@ class OrderAction
             throw new UnmatchingTotalPriceException();
         }
 
+        if ($couponId !== null && $promoValidationToken !== null) {
+            throw new \InvalidArgumentException('No se puede combinar cupón asignado con código promocional.');
+        }
+
         $discountCents = 0;
-        if ($couponId !== null) {
+        $cartHash = $this->promoCodeService->buildLaboratoryCartHash($this->laboratoryCartItems, $calculatedTotalCents);
+
+        if ($promoValidationToken !== null) {
+            $redemption = $this->promoCodeService->resolveValidatedRedemption(
+                $customer->user,
+                $promoValidationToken,
+                $calculatedTotalCents,
+                $cartHash,
+            );
+            $discountCents = (int) $redemption->discount_cents;
+        } elseif ($couponId !== null) {
             $this->couponApplicationService->validateApplication(
                 $customer->user,
                 $couponId,
                 $calculatedTotalCents
             );
-            $discountCents = (int) Coupon::query()->findOrFail($couponId)->remaining_cents;
+            $coupon = Coupon::query()->findOrFail($couponId);
+            $discountCents = $this->couponApplicationService->resolveDiscountCents(
+                $coupon,
+                $calculatedTotalCents
+            );
         }
 
         $amountToChargeCents = $calculatedTotalCents - $discountCents;
@@ -127,13 +150,16 @@ class OrderAction
             } else {
                 $transaction = ($this->createCouponBalanceTransactionAction)(
                     $customer,
-                    (int) $couponId,
-                    $discountCents
+                    $couponId,
+                    $discountCents,
+                    $promoValidationToken,
                 );
             }
 
             if ($couponId !== null) {
                 $this->addCouponDetailsToTransaction($transaction, (int) $couponId, $discountCents, $calculatedTotalCents);
+            } elseif ($promoValidationToken !== null) {
+                $this->addPromoDetailsToTransaction($transaction, $promoValidationToken, $discountCents, $calculatedTotalCents);
             }
 
             $gdaBrandValue = request()->laboratory_brand->value ?? $laboratoryBrand->value;
@@ -156,8 +182,10 @@ class OrderAction
                 $laboratoryAppointment,
                 $this->laboratoryCartItems,
                 $gdaBrandValue,
-                $couponId,
-                $auditHint,
+                couponId: $couponId,
+                promoValidationToken: $promoValidationToken,
+                cartHash: $cartHash,
+                auditHint: $auditHint,
             );
         } catch (\Throwable $th) {
             if (DB::transactionLevel() > 0) {
@@ -186,6 +214,25 @@ class OrderAction
         $transaction->update([
             'details' => array_merge($details, [
                 'coupon_id' => $couponId,
+                'coupon_amount_cents' => $discountCents,
+                'original_total_cents' => $originalTotalCents,
+                'amount_charged_cents' => max(0, $originalTotalCents - $discountCents),
+            ]),
+        ]);
+    }
+
+    private function addPromoDetailsToTransaction(
+        Transaction $transaction,
+        string $promoValidationToken,
+        int $discountCents,
+        int $originalTotalCents
+    ): void {
+        $details = is_array($transaction->details) ? $transaction->details : [];
+
+        $transaction->update([
+            'details' => array_merge($details, [
+                'promo_validation_token' => $promoValidationToken,
+                'promo_discount_cents' => $discountCents,
                 'coupon_amount_cents' => $discountCents,
                 'original_total_cents' => $originalTotalCents,
                 'amount_charged_cents' => max(0, $originalTotalCents - $discountCents),

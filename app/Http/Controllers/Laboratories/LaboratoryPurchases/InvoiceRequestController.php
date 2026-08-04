@@ -33,42 +33,36 @@ class InvoiceRequestController extends Controller
         Log::info('Iniciando solicitud de factura', [
             'laboratory_purchase_id' => $laboratoryPurchase->id,
             'user_id' => auth()->id(),
+            'customer_id' => auth()->user()->customer->id,
             'tax_profile_id' => $request->tax_profile,
-            'cfdi_use' => $request->cfdi_use
+            'operation' => 'laboratory_invoice_request',
         ]);
 
         // 1. OBTENER Y ACTUALIZAR PERFIL FISCAL CON EL CFDI USE SELECCIONADO
         // --------------------------------------------------------------------
         $taxProfile = auth()->user()->customer->taxProfiles()->find($request->tax_profile);
-        
-        if (!$taxProfile) {
-            Log::error('Perfil fiscal no encontrado', [
-                'tax_profile_id' => $request->tax_profile,
-                'customer_id' => auth()->user()->customer->id
+
+        if (! $taxProfile) {
+            Log::warning('Solicitud de factura laboratorio: perfil fiscal no encontrado para el customer autenticado.', [
+                'user_id' => auth()->id(),
+                'customer_id' => auth()->user()->customer->id,
+                'laboratory_purchase_id' => $laboratoryPurchase->id,
+                'operation' => 'laboratory_invoice_request',
             ]);
+
             return redirect()->back()->withErrors(['tax_profile' => 'Perfil fiscal no encontrado.']);
         }
 
-        // Verificar si el CFDI use es diferente al registrado
-        if ($request->cfdi_use && $taxProfile->cfdi_use !== $request->cfdi_use) {
-            Log::info('Actualizando CFDI use del perfil fiscal', [
-                'tax_profile_id' => $taxProfile->id,
-                'old_cfdi_use' => $taxProfile->cfdi_use,
-                'new_cfdi_use' => $request->cfdi_use
-            ]);
-            
-            // Actualizar el perfil fiscal con el nuevo CFDI use
-            $taxProfile->update([
-                'cfdi_use' => $request->cfdi_use
-            ]);
-            
-            Log::info('Perfil fiscal actualizado exitosamente');
-        }
+        $cfdiUse = $request->validated('cfdi_use');
 
-        // 2. EJECUTAR LA ACCIÓN PRINCIPAL - Crear solicitud de factura
-        // --------------------------------------------------------------
-        Log::info('Ejecutando CreateInvoiceRequestAction');
-        $action($laboratoryPurchase, $taxProfile);
+        // CFDI elegido solo en el snapshot (CreateInvoiceRequestAction). No mutar el perfil vivo.
+
+        Log::info('Ejecutando CreateInvoiceRequestAction', [
+            'laboratory_purchase_id' => $laboratoryPurchase->id,
+            'tax_profile_id' => $taxProfile->id,
+            'operation' => 'laboratory_invoice_request',
+        ]);
+        $action($laboratoryPurchase, $taxProfile, $cfdiUse);
 
         // 3. NOTIFICACIONES A EQUIPO DE FACTURACIÓN (LaboratoryPurchaseInvoiceRequested → correo)
         // ---------------------------------------------------------------------------
@@ -133,19 +127,23 @@ class InvoiceRequestController extends Controller
         // 5. OBTENER NOMBRE DEL USO CFDI PARA EL MENSAJE FLASH
         // -----------------------------------------------------
         $cfdiUses = config('taxregimes.uses', []);
-        $cfdiUseName = $cfdiUses[$request->cfdi_use] ?? $request->cfdi_use;
-        
+        $cfdiUseName = $cfdiUses[$cfdiUse] ?? $cfdiUse;
+
         // 6. REDIRECCIONAR CON MENSAJE DE ÉXITO PERSONALIZADO
         // ----------------------------------------------------
-        $message = "Prueba - Se ha solicitado la factura y estará disponible después de 72 horas hábiles. ";
-        $message .= "Información del perfil fiscal: RFC: {$taxProfile->rfc}, Uso de CFDI: {$request->cfdi_use} - {$cfdiUseName}";
+        $message = 'Se ha solicitado la factura y estará disponible después de 72 horas hábiles. ';
+        $message .= "Uso de CFDI: {$cfdiUse} - {$cfdiUseName}";
 
-        // Si es entorno de prueba, agregar información adicional
         if ($isTestEnvironment) {
             $message .= " [Entorno de prueba: {$environment}]";
         }
 
-        Log::info('Redirigiendo con mensaje flash', ['message' => $message]);
+        Log::info('Solicitud de factura laboratorio completada', [
+            'laboratory_purchase_id' => $laboratoryPurchase->id,
+            'tax_profile_id' => $taxProfile->id,
+            'operation' => 'laboratory_invoice_request',
+            'result' => 'success',
+        ]);
 
         return redirect()->route('laboratory-purchases.show', [
             'laboratory_purchase' => $laboratoryPurchase,

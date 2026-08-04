@@ -43,9 +43,7 @@ Te compartimos tu comprobante e instrucciones para que puedas presentarte en suc
 <p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
     💳Método de pago: {{ $metodo_pago }}
 </p>
-<p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
-    💰Total pagado: {{ $total }}
-</p>
+@include('emails.laboratory.components.order-totals')
 <p style="margin:0 0 16px;color:#3d4852;font-size:16px;line-height:1.5;">
     🛒Fecha de compra: {{ $fecha_compra }}
 </p>

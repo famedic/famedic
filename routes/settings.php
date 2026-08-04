@@ -29,11 +29,11 @@ Route::middleware([
 
     // NO requieren password.confirm
     Route::post('/tax-profiles/extract-data', [TaxProfileController::class, 'extractData'])
+        ->middleware('throttle:tax-profile-extract')
         ->name('tax-profiles.extract-data')
         ->withoutMiddleware(['password.confirm']);
 
-    Route::get('/test-service', [TaxProfileController::class, 'testService'])
-        ->name('test.service');
+    // Route::get('/test-service', ...) removed in PF-IA.2 (was exposed to patients).
 
     // No requieren confirmación
     Route::resource('addresses', AddressController::class)->except('show');
@@ -104,6 +104,9 @@ Route::middleware([
     // Tax-profiles
     Route::resource('tax-profiles', TaxProfileController::class)
         ->except(['show', 'extract-data']);
+
+    Route::patch('tax-profiles/{tax_profile}/default', [TaxProfileController::class, 'setDefault'])
+        ->name('tax-profiles.set-default');
 
     Route::get('tax-profiles/{tax_profile}/fiscal-certificate', FiscalCertificateController::class)
         ->name('tax-profiles.fiscal-certificate');

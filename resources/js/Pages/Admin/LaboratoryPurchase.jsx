@@ -17,7 +17,7 @@ import {
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
 import { Badge } from "@/Components/Catalyst/badge";
-import { Text } from "@/Components/Catalyst/text";
+import { Text, Strong } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
 
 import {
@@ -42,6 +42,8 @@ import DevAssistanceButton from "@/Components/DevAssistance/DevAssistanceButton"
 import DevAssistanceDropdown from "@/Components/DevAssistance/DevAssistanceDropdown";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import PaymentDetails from "@/Components/PaymentDetails";
+import CouponReversalNotice from "@/Components/Admin/CouponReversalNotice";
+import { buildLaboratoryPurchaseTotals } from "@/lib/laboratoryPurchaseTotals";
 
 function normalizePackageFeatureLabels(raw) {
 	if (raw == null) return [];
@@ -72,8 +74,10 @@ function normalizePackageFeatureLabels(raw) {
 
 export default function LaboratoryPurchase({
 	laboratoryPurchase,
+	couponReversal = null,
 	showDeleteButton,
 	canResendConfirmationEmail,
+	canUploadInvoice = false,
 	hasSampleCollected,
 	hasResultsAvailable,
 	hasManualResults = false,
@@ -88,6 +92,7 @@ export default function LaboratoryPurchase({
 				laboratoryPurchase={laboratoryPurchase}
 				showDeleteButton={showDeleteButton}
 				canResendConfirmationEmail={canResendConfirmationEmail}
+				canUploadInvoice={canUploadInvoice}
 				hasSampleCollected={hasSampleCollected}
 				hasResultsAvailable={hasResultsAvailable}
 				hasManualResults={hasManualResults}
@@ -108,6 +113,8 @@ export default function LaboratoryPurchase({
 				/>
 			)}
 
+			<CouponReversalNotice couponReversal={couponReversal} />
+
 		</AdminLayout>
 	);
 }
@@ -117,6 +124,7 @@ function Header({
 	laboratoryPurchase,
 	showDeleteButton,
 	canResendConfirmationEmail,
+	canUploadInvoice = false,
 	hasSampleCollected,
 	hasResultsAvailable,
 	hasManualResults,
@@ -312,6 +320,7 @@ function Header({
 					</div>
 				)}
 
+				{canUploadInvoice && (
 				<InvoiceDialog
 					storeRoute={route("admin.laboratory-purchases.invoice", {
 						laboratory_purchase: laboratoryPurchase.id,
@@ -323,9 +332,17 @@ function Header({
 							})
 							: null
 					}
+					invoiceXmlRoute={
+						laboratoryPurchase.invoice?.invoice_xml
+							? route("invoice.xml", {
+								invoice: laboratoryPurchase.invoice.id,
+							})
+							: null
+					}
 					invoiceRequest={laboratoryPurchase.invoice_request}
 					hasInvoice={!!laboratoryPurchase.invoice}
 				/>
+				)}
 
 				<ResultsDialog
 					storeRoute={route("admin.laboratory-purchases.results", {
@@ -475,19 +492,6 @@ function Patient({ laboratoryPurchase }) {
 
 
 function Order({ laboratoryPurchase }) {
-	const transaction = laboratoryPurchase.transactions?.[0] ?? null;
-	const commissionCentsRaw = transaction?.details?.commission_cents;
-	const commissionCents = Number.isFinite(Number(commissionCentsRaw))
-		? Number(commissionCentsRaw)
-		: null;
-	const formattedCommission =
-		commissionCents === null
-			? null
-			: new Intl.NumberFormat("es-MX", {
-					style: "currency",
-					currency: "MXN",
-				}).format(commissionCents / 100);
-
 	return (
 
 		<div>
@@ -531,18 +535,35 @@ function Order({ laboratoryPurchase }) {
 
 				</DescriptionDetails>
 
-				<DescriptionTerm>Total</DescriptionTerm>
+				<DescriptionTerm>Subtotal</DescriptionTerm>
 
 				<DescriptionDetails>
-					{laboratoryPurchase.formatted_total}
+					{buildLaboratoryPurchaseTotals(laboratoryPurchase).subtotal}
 				</DescriptionDetails>
 
-				{formattedCommission !== null && (
+				{laboratoryPurchase.coupon_discount_cents > 0 && (
 					<>
-						<DescriptionTerm>Comisión</DescriptionTerm>
-						<DescriptionDetails>{formattedCommission}</DescriptionDetails>
+						<DescriptionTerm>Crédito a favor</DescriptionTerm>
+						<DescriptionDetails>
+							−{laboratoryPurchase.formatted_coupon_discount}
+						</DescriptionDetails>
 					</>
 				)}
+
+				<DescriptionTerm>Total pagado</DescriptionTerm>
+
+				<DescriptionDetails>
+					<Strong>
+						{laboratoryPurchase.formatted_net_total ??
+							buildLaboratoryPurchaseTotals(laboratoryPurchase).netTotal}
+					</Strong>
+					{laboratoryPurchase.coupon_discount_cents > 0 && (
+						<Text className="mt-2 block text-sm text-violet-800 dark:text-violet-200">
+							Se aplicó un crédito a favor de{" "}
+							{laboratoryPurchase.formatted_coupon_discount}.
+						</Text>
+					)}
+				</DescriptionDetails>
 
 			</DescriptionList>
 
@@ -601,7 +622,8 @@ function DeleteDialog({ laboratoryPurchase, className = "" }) {
 			destroy(
 				route("admin.laboratory-purchases.destroy", {
 					laboratory_purchase: laboratoryPurchase,
-				})
+				}),
+				{ preserveScroll: true }
 			);
 
 		}

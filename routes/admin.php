@@ -2,7 +2,11 @@
 
 use App\Http\Controllers\Admin\AdministratorController;
 use App\Http\Controllers\Admin\CouponConceptController;
+use App\Http\Controllers\Admin\CouponBeneficiaryController;
+use App\Http\Controllers\Admin\CouponAuthorizationController;
 use App\Http\Controllers\Admin\CouponController;
+use App\Http\Controllers\Admin\CouponCreationOtpController;
+use App\Http\Controllers\Admin\PromoCodeController;
 use App\Http\Controllers\Admin\CartController;
 use App\Http\Controllers\Admin\ConfigMonitorController;
 use App\Http\Controllers\Admin\ConfigMonitorMetadataController;
@@ -14,6 +18,12 @@ use App\Http\Controllers\Admin\LaboratoryAppointmentController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
 use App\Http\Controllers\Admin\LaboratoryNotificationController;
 use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
+use App\Http\Controllers\Admin\LaboratoryBilling\DashboardController;
+use App\Http\Controllers\Admin\LaboratoryBilling\ExportController as LaboratoryBillingExportController;
+use App\Http\Controllers\Admin\LaboratoryBilling\InvoicesController;
+use App\Http\Controllers\Admin\LaboratoryBilling\ReportsController;
+use App\Http\Controllers\Admin\LaboratoryBilling\RequestsController;
+use App\Http\Controllers\Admin\LaboratoryBilling\TaxProfilesController as TaxProfilesBillingController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseChartController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\DevAssistanceRequestController as LaboratoryDevAssistanceRequestController;
@@ -26,7 +36,11 @@ use App\Http\Controllers\Admin\LaboratoryResultController;
 use App\Http\Controllers\Admin\LaboratoryTestController;
 use App\Http\Controllers\Admin\LogsGeneralController;
 use App\Http\Controllers\Admin\MedicalAttentionSubscriptionController;
+use App\Http\Controllers\Admin\MurguiaDashboardController;
 use App\Http\Controllers\Admin\MurguiaMonitorController;
+use App\Http\Controllers\Admin\MurguiaReconciliationController;
+use App\Http\Controllers\Admin\MurguiaReportController;
+use App\Http\Controllers\Admin\MonitoringAiController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\DevAssistanceRequestController as OnlinePharmacyDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\InvoiceController as OnlinePharmacyPurchasesInvoiceController;
@@ -69,7 +83,9 @@ Route::prefix('admin')->middleware([
         Route::patch('users/{user}', [UserController::class, 'update'])->name('users.update');
         Route::post('users/{user}/verify-email', [UserController::class, 'verifyEmail'])->name('users.verify-email');
         Route::post('users/{user}/verify-phone', [UserController::class, 'verifyPhone'])->name('users.verify-phone');
+        Route::post('users/{user}/update-password', [UserController::class, 'updatePassword'])->name('users.update-password');
         Route::resource('users', UserController::class)->only(['index', 'show']);
+        Route::get('carts/dashboard', [\App\Http\Controllers\Admin\CartsDashboardController::class, 'index'])->name('carts.dashboard');
         Route::resource('carts', CartController::class)->only(['index', 'show']);
         Route::post('carts/export', ExportCartsController::class)->name('carts.export');
         Route::resource('roles', RoleController::class)->except('show');
@@ -107,6 +123,18 @@ Route::prefix('admin')->middleware([
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request/{dev_assistance_request}/resolved', LaboratoryResolvedDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.resolved');
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request/{dev_assistance_request}/unresolved', LaboratoryUnresolvedDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.unresolved');
         Route::post('laboratory-purchases/export', ExportLaboratoryPurchasesController::class)->name('laboratory-purchases.export');
+
+        Route::prefix('laboratory-billing')->name('laboratory-billing.')->group(function () {
+            Route::get('/', DashboardController::class)->name('dashboard');
+            Route::get('/requests', RequestsController::class)->name('requests');
+            Route::get('/invoices', InvoicesController::class)->name('invoices');
+            Route::get('/tax-profiles', [TaxProfilesBillingController::class, 'index'])->name('tax-profiles.index');
+            Route::get('/tax-profiles/{tax_profile}', [TaxProfilesBillingController::class, 'show'])->name('tax-profiles.show');
+            Route::get('/reports', ReportsController::class)->name('reports');
+            Route::get('/export/requests', [LaboratoryBillingExportController::class, 'requests'])->name('export.requests');
+            Route::get('/export/invoices', [LaboratoryBillingExportController::class, 'invoices'])->name('export.invoices');
+            Route::get('/export/tax-profiles', [LaboratoryBillingExportController::class, 'taxProfiles'])->name('export.tax-profiles');
+        });
 
         // ===== RUTAS NUEVAS PARA NOTIFICACIONES DE LABORATORIO =====
         Route::resource('laboratory-notifications', LaboratoryNotificationController::class)->only(['index', 'show']);
@@ -149,6 +177,10 @@ Route::prefix('admin')->middleware([
         Route::get('logs-general/manage', [LogsGeneralController::class, 'index'])->name('logs-general.manage');
         Route::get('logs-general/download', [LogsGeneralController::class, 'download'])->name('logs-general.download');
 
+        // Asistente IA de monitoreo
+        Route::get('monitoring-ai', [MonitoringAiController::class, 'index'])->name('monitoring-ai.index');
+        Route::post('monitoring-ai/ask', [MonitoringAiController::class, 'ask'])->name('monitoring-ai.ask');
+
         // Tokens de Efevoo
         Route::resource('efevoo-tokens', EfevooTokenController::class)->only(['index', 'show']);
 
@@ -170,11 +202,21 @@ Route::prefix('admin')->middleware([
             ->name('laboratory-notifications-monitor.fetch-results');
         Route::post('laboratory-notifications-monitor/order/{orderKey}/force-refresh-results', [LaboratoryNotificationMonitorController::class, 'forceRefreshResults'])
             ->name('laboratory-notifications-monitor.force-refresh-results');
+        Route::post('laboratory-notifications-monitor/order/{orderKey}/test-gda-consult', [LaboratoryNotificationMonitorController::class, 'testGdaConsult'])
+            ->name('laboratory-notifications-monitor.test-gda-consult');
         Route::get('laboratory-notifications-monitor/order/{orderKey}/download-results', [LaboratoryNotificationMonitorController::class, 'downloadResults'])
             ->name('laboratory-notifications-monitor.download-results');
         Route::get('laboratory-notifications-monitor/{gdaOrderId}', [LaboratoryNotificationMonitorController::class, 'show'])
             ->name('laboratory-notifications-monitor.show');
 
+        Route::get('coupons/beneficiaries/export', [CouponBeneficiaryController::class, 'export'])->name('coupons.beneficiaries.export');
+        Route::get('coupons/beneficiaries', [CouponBeneficiaryController::class, 'index'])->name('coupons.beneficiaries.index');
+        Route::get('coupons/promo-codes', [PromoCodeController::class, 'index'])->name('coupons.promo-codes.index');
+        Route::get('coupons/promo-codes/create', [PromoCodeController::class, 'create'])->name('coupons.promo-codes.create');
+        Route::post('coupons/promo-codes', [PromoCodeController::class, 'store'])->name('coupons.promo-codes.store');
+        Route::post('coupons/promo-codes/check-code', [PromoCodeController::class, 'checkCode'])->name('coupons.promo-codes.check-code');
+        Route::get('coupons/promo-codes/{promoCode}', [PromoCodeController::class, 'show'])->name('coupons.promo-codes.show');
+        Route::post('coupons/promo-codes/{promoCode}/deactivate', [PromoCodeController::class, 'deactivate'])->name('coupons.promo-codes.deactivate');
         Route::get('coupons/export', [CouponController::class, 'export'])->name('coupons.export');
         Route::get('coupons/settings', [CouponController::class, 'settings'])->name('coupons.settings');
         Route::put('coupons/settings', [CouponController::class, 'updateSettings'])->name('coupons.settings.update');
@@ -183,6 +225,20 @@ Route::prefix('admin')->middleware([
         Route::get('coupons/assign/bulk-template', [CouponController::class, 'downloadBulkAssignTemplate'])->name('coupons.assign.bulk-template');
         Route::get('coupons/users/lookup', [CouponController::class, 'lookupAssignableUser'])->name('coupons.users.lookup');
         Route::post('coupons/assign/preview-bulk', [CouponController::class, 'previewBulkAssignEmails'])->name('coupons.assign.preview-bulk');
+        Route::post('coupons/{coupon}/beneficiaries/preview', [CouponController::class, 'previewBeneficiaries'])->name('coupons.beneficiaries.preview');
+        Route::post('coupons/{coupon}/beneficiaries/preview-file', [CouponController::class, 'previewBeneficiariesFile'])->name('coupons.beneficiaries.preview-file');
+        Route::post('coupons/{coupon}/beneficiaries/confirm', [CouponController::class, 'confirmBeneficiaries'])->name('coupons.beneficiaries.confirm');
+        Route::post('coupons/{coupon}/beneficiaries/{beneficiary}/resend-invitation', [CouponController::class, 'resendBeneficiaryInvitation'])->name('coupons.beneficiaries.resend-invitation');
+        Route::post('coupons/{coupon}/beneficiaries/{beneficiary}/cancel', [CouponController::class, 'cancelBeneficiary'])->name('coupons.beneficiaries.cancel');
+        Route::post('coupons/assign/creation-otp/send', [CouponCreationOtpController::class, 'send'])->name('coupons.assign.creation-otp.send');
+        Route::post('coupons/assign/creation-otp/resend', [CouponCreationOtpController::class, 'resend'])->name('coupons.assign.creation-otp.resend');
+        Route::post('coupons/assign/creation-otp/verify', [CouponCreationOtpController::class, 'verify'])->name('coupons.assign.creation-otp.verify');
+        Route::get('coupons/authorizations', [CouponAuthorizationController::class, 'index'])->name('coupons.authorizations.index');
+        Route::get('coupons/authorizations/{coupon}', [CouponAuthorizationController::class, 'show'])->name('coupons.authorizations.show');
+        Route::post('coupons/authorizations/{coupon}/approval-otp/send', [CouponAuthorizationController::class, 'sendApprovalOtp'])->name('coupons.authorizations.approval-otp.send');
+        Route::post('coupons/authorizations/{coupon}/approval-otp/verify', [CouponAuthorizationController::class, 'verifyApprovalOtp'])->name('coupons.authorizations.approval-otp.verify');
+        Route::post('coupons/authorizations/{coupon}/approve', [CouponAuthorizationController::class, 'approve'])->name('coupons.authorizations.approve');
+        Route::post('coupons/authorizations/{coupon}/reject', [CouponAuthorizationController::class, 'reject'])->name('coupons.authorizations.reject');
         Route::post('coupons/assign', [CouponController::class, 'assign'])->name('coupons.assign.store');
         Route::get('coupons/import', [CouponController::class, 'importForm'])->name('coupons.import');
         Route::post('coupons/import', [CouponController::class, 'import'])->name('coupons.import.store');
@@ -193,6 +249,7 @@ Route::prefix('admin')->middleware([
         Route::delete('coupons/concepts/{couponConcept}', [CouponConceptController::class, 'destroy'])->name('coupons.concepts.destroy');
         Route::post('coupons/{coupon}/authorize', [CouponController::class, 'authorizeCoupon'])->name('coupons.authorize');
         Route::post('coupons/{coupon}/resend-authorization', [CouponController::class, 'resendAuthorization'])->name('coupons.resend-authorization');
+        Route::post('coupons/{coupon}/deactivate', [CouponController::class, 'deactivate'])->name('coupons.deactivate');
         Route::delete('coupons/{coupon}/assignments/{couponUser}', [CouponController::class, 'destroyAssignment'])->name('coupons.assignments.destroy');
         Route::resource('coupons', CouponController::class);
         Route::get('simulators', [SimulatorController::class, 'index'])->name('simulators.index');
@@ -229,6 +286,12 @@ Route::prefix('admin')->middleware([
         });
 
         Route::middleware('super.admin')->group(function () {
+            Route::get('murguia-dashboard', [MurguiaDashboardController::class, 'index'])->name('murguia-dashboard.index');
+            Route::get('murguia-reports', [MurguiaReportController::class, 'index'])->name('murguia-reports.index');
+            Route::get('murguia-reports/export', [MurguiaReportController::class, 'export'])->name('murguia-reports.export');
+            Route::get('murguia-reconciliation', [MurguiaReconciliationController::class, 'index'])->name('murguia-reconciliation.index');
+            Route::post('murguia-reconciliation/upload', [MurguiaReconciliationController::class, 'upload'])->name('murguia-reconciliation.upload');
+            Route::delete('murguia-reconciliation/preview', [MurguiaReconciliationController::class, 'clear'])->name('murguia-reconciliation.clear');
             Route::get('murguia-monitor', [MurguiaMonitorController::class, 'index'])->name('murguia-monitor.index');
             Route::get('murguia-monitor/{customer}', [MurguiaMonitorController::class, 'show'])->name('murguia-monitor.show');
             Route::post('murguia-monitor/{customer}/check-status', [MurguiaMonitorController::class, 'checkStatus'])->name('murguia-monitor.check-status');

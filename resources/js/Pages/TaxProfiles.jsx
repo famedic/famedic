@@ -3,22 +3,34 @@ import { GradientHeading } from "@/Components/Catalyst/heading";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Divider } from "@/Components/Catalyst/divider";
 import { Button } from "@/Components/Catalyst/button";
-import { Code, Text } from "@/Components/Catalyst/text";
+import { Code } from "@/Components/Catalyst/text";
 import { Subheading } from "@/Components/Catalyst/heading";
 import {
 	DocumentTextIcon,
 	PlusIcon,
 	QrCodeIcon,
 	CheckCircleIcon,
-	UserIcon,
 	ClockIcon,
+	EyeIcon,
+	DocumentDuplicateIcon,
+	EllipsisHorizontalIcon,
+	CheckIcon,
 } from "@heroicons/react/24/outline";
-import { PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { PencilIcon, TrashIcon, StarIcon } from "@heroicons/react/24/outline";
 import TaxProfileForm from "@/Pages/TaxProfiles/TaxProfileForm";
 import TaxProfileDeleteConfirmation from "@/Pages/TaxProfiles/TaxProfileDeleteConfirmation";
+import TaxProfileViewModal from "@/Pages/TaxProfiles/TaxProfileViewModal";
 import TaxProfilesInfoPanel from "@/Pages/TaxProfiles/TaxProfilesInfoPanel";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { router, useForm } from "@inertiajs/react";
 import SettingsCard from "@/Components/SettingsCard";
+import {
+	Dropdown,
+	DropdownButton,
+	DropdownItem,
+	DropdownLabel,
+	DropdownMenu,
+} from "@/Components/Catalyst/dropdown";
 import {
 	Table,
 	TableBody,
@@ -42,64 +54,50 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 		route().current("tax-profiles.edit");
 
 	const [taxProfileToDelete, setTaxProfileToDelete] = useState(null);
+	const [taxProfileToView, setTaxProfileToView] = useState(null);
 
 	return (
 		<SettingsLayout title="Mis perfiles fiscales">
 			<div className="space-y-6">
-				<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-					<div className="flex items-center gap-3">
-						<GradientHeading noDivider className="mb-0">
-							Mis perfiles fiscales
-						</GradientHeading>
-						<Badge color="blue" className="whitespace-nowrap">
-							{taxProfiles.length} perfil{taxProfiles.length !== 1 ? 'es' : ''}
-						</Badge>
+				<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+					<div className="min-w-0 space-y-1">
+						<div className="flex flex-wrap items-center gap-2">
+							<GradientHeading noDivider className="mb-0">
+								Mis perfiles fiscales
+							</GradientHeading>
+							{taxProfiles.length > 0 && (
+								<Badge color="blue" className="whitespace-nowrap">
+									{taxProfiles.length} perfil
+									{taxProfiles.length !== 1 ? "es" : ""}
+								</Badge>
+							)}
+						</div>
+						<p className="max-w-xl text-sm text-slate-500 dark:text-slate-400">
+							Administra los datos que utilizas para solicitar tus facturas.
+						</p>
 					</div>
-					
-					<div className="flex items-center gap-3">
-						<Button
-							dusk="createTaxProfile"
-							preserveState
-							preserveScroll
-							href={route("tax-profiles.create")}
-							className="flex items-center gap-2 whitespace-nowrap"
-						>
-							<PlusIcon className="h-5 w-5" />
-							Nuevo perfil
-						</Button>
-					</div>
+
+					<Button
+						dusk="createTaxProfile"
+						preserveState
+						preserveScroll
+						href={route("tax-profiles.create")}
+						className="w-full shrink-0 justify-center sm:w-auto"
+					>
+						<PlusIcon className="h-5 w-5" />
+						Agregar perfil fiscal
+					</Button>
 				</div>
 
 				<TaxProfilesInfoPanel />
 
-				{/* Botón de agregar perfil - Ahora después de las recomendaciones */}
-				<div className="flex justify-center my-4">
-					<Button
-						dusk="createTaxProfileMain"
-						preserveState
-						preserveScroll
-						href={route("tax-profiles.create")}
-						className="flex items-center gap-2 px-6 py-3 text-base"
-					>
-						<PlusIcon className="h-5 w-5" />
-						Agregar nuevo perfil fiscal
-					</Button>
-				</div>
+				<Divider className="my-2" />
 
-				<Divider className="my-6" />
-
-				{/* Lista de perfiles fiscales */}
-				<div className="mb-8">
-					<Subheading className="mb-4 flex items-center gap-2">
-						<UserIcon className="h-5 w-5" />
-						Tus perfiles fiscales
-					</Subheading>
-					
-					<TaxProfilesList
-						taxProfiles={taxProfiles}
-						setTaxProfileToDelete={setTaxProfileToDelete}
-					/>
-				</div>
+				<TaxProfilesList
+					taxProfiles={taxProfiles}
+					setTaxProfileToDelete={setTaxProfileToDelete}
+					setTaxProfileToView={setTaxProfileToView}
+				/>
 
 				{invoices.data.length > 0 && (
 					<>
@@ -180,29 +178,69 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 											</TableCell>
 
 											<TableCell className="text-right">
-												<a
-													href={route("invoice", {
-														invoice: invoice,
-													})}
-													target="_blank"
-												>
-													<Button
-														className="hidden dark:inline-flex"
-														type="button"
-														color="dark"
+												<div className="inline-flex flex-wrap justify-end gap-2">
+													<a
+														href={
+															invoice.invoice_url ||
+															route("invoice", {
+																invoice: invoice,
+															})
+														}
+														target="_blank"
 													>
-														<DocumentTextIcon />
-														Ver factura
-													</Button>
-													<Button
-														className="dark:hidden"
-														type="button"
-														color="white"
-													>
-														<DocumentTextIcon />
-														Ver factura
-													</Button>
-												</a>
+														<Button
+															className="hidden dark:inline-flex"
+															type="button"
+															color="dark"
+														>
+															<DocumentTextIcon />
+															Ver PDF
+														</Button>
+														<Button
+															className="dark:hidden"
+															type="button"
+															color="white"
+														>
+															<DocumentTextIcon />
+															Ver PDF
+														</Button>
+													</a>
+													{(invoice.has_invoice_xml ||
+														invoice.invoice_xml_url) && (
+														<a
+															href={
+																invoice.invoice_xml_url ||
+																route(
+																	"invoice.xml",
+																	{
+																		invoice:
+																			invoice,
+																	},
+																)
+															}
+															target="_blank"
+														>
+															<Button
+																className="hidden dark:inline-flex"
+																type="button"
+																color="dark"
+																outline
+															>
+																<DocumentTextIcon />
+																Ver XML
+															</Button>
+															<Button
+																className="dark:hidden"
+																type="button"
+																color="white"
+																outline
+															>
+																<DocumentTextIcon />
+																Ver XML
+															</Button>
+														</a>
+													)}
+												</div>
 											</TableCell>
 										</TableRow>
 									);
@@ -221,159 +259,307 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 					close={() => setTaxProfileToDelete(null)}
 					taxProfile={taxProfileToDelete}
 				/>
+
+				<TaxProfileViewModal
+					isOpen={!!taxProfileToView}
+					close={() => setTaxProfileToView(null)}
+					taxProfile={taxProfileToView}
+				/>
 			</div>
 		</SettingsLayout>
 	);
 }
 
-function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
-	return (
-		<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-			{taxProfiles.map((taxProfile) => (
-					<SettingsCard
-						key={taxProfile.id}
-						className="h-full !max-w-none rounded-xl shadow-sm transition-shadow hover:shadow-md"
-						actions={
-							<div className="flex gap-2 mt-4">
-								<Button
-									dusk={`deleteTaxProfile-${taxProfile.id}`}
-									onClick={() =>
-										setTaxProfileToDelete(taxProfile)
-									}
-									outline
-									className="flex-1 justify-center"
-								>
-									<TrashIcon className="h-4 w-4 stroke-red-400 mr-2" />
-									Eliminar
-								</Button>
-								<Button
-									outline
-									dusk={`editTaxProfile-${taxProfile.id}`}
-									preserveState
-									preserveScroll
-									href={route("tax-profiles.edit", {
-										tax_profile: taxProfile,
-									})}
-									className="flex-1 justify-center"
-								>
-									<PencilIcon className="h-4 w-4 mr-2" />
-									Editar
-								</Button>
-							</div>
-						}
-					>
-						<div className="space-y-4">
-							<div>
-								<Subheading className="mb-1 line-clamp-1">
-									{taxProfile.name}
-								</Subheading>
-								<Code className="text-sm">{taxProfile.rfc}</Code>
-								{taxProfile.formatted_activity_label && (
-									<p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-										<ClockIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-										<span>{taxProfile.formatted_activity_label}</span>
-									</p>
-								)}
-							</div>
-							
-							<div className="space-y-2">
-								<div className="flex items-center justify-between">
-									<span className="text-sm text-gray-600 dark:text-slate-400">Código Postal:</span>
-									<span className="font-medium text-zinc-900 dark:text-white">
-										CP {taxProfile.zipcode}
-									</span>
-								</div>
-								
-								<div className="flex items-center justify-between">
-									<span className="text-sm text-gray-600">Tipo Persona:</span>
-									{taxProfile.tipo_persona === 'fisica' ? (
-										<Badge color="green" className="text-xs">
-											Persona Física
-										</Badge>
-									) : taxProfile.tipo_persona === 'moral' ? (
-										<Badge color="red" className="text-xs">
-											Persona Moral
-										</Badge>
-									) : (
-										<Badge color="gray" className="text-xs">
-											No especificado
-										</Badge>
-									)}
-								</div>
-								
-								<div className="pt-2 border-t border-gray-100">
-									<p className="text-sm text-gray-600 mb-1">Régimen Fiscal:</p>
-									<Badge color="slate" className="w-full justify-center text-sm py-1.5">
-										{taxProfile.formatted_tax_regime}
-									</Badge>
-								</div>
-								
-								<div className="pt-2">
-									<p className="text-sm text-gray-600 mb-1">Uso CFDI:</p>
-									<Badge color="slate" className="w-full justify-center text-sm py-1.5">
-										{taxProfile.formatted_cfdi_use}
-									</Badge>
-								</div>
-								
-								{taxProfile.verificado_automaticamente && (
-									<div className="pt-3 mt-3 border-t border-green-100">
-										<div className="flex items-center gap-2 text-green-600">
-											<CheckCircleIcon className="h-4 w-4" />
-											<span className="text-xs font-medium">
-												Verificado automáticamente
-											</span>
-										</div>
-									</div>
-								)}
-							</div>
-							
-							<div className="pt-4">
-								<a
-									href={route("tax-profiles.fiscal-certificate", {
-										tax_profile: taxProfile,
-									})}
-									target="_blank"
-									className="block"
-								>
-									<Button type="button" outline className="w-full justify-center">
-										<DocumentTextIcon className="h-4 w-4 mr-2" />
-										Ver constancia fiscal
-									</Button>
-								</a>
-							</div>
-						</div>
-					</SettingsCard>
-			))}
+function TaxProfilesList({
+	taxProfiles,
+	setTaxProfileToDelete,
+	setTaxProfileToView,
+}) {
+	if (taxProfiles.length === 0) {
+		return <TaxProfilesEmptyState />;
+	}
 
-			{taxProfiles.length === 0 && (
-				<div className="col-span-1 md:col-span-2 lg:col-span-3">
-					<SettingsCard>
-						<div className="text-center py-8">
-							<div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-								<UserIcon className="h-8 w-8 text-gray-400" />
-							</div>
-							<Subheading className="mb-2">
-								Sin perfiles fiscales
-							</Subheading>
-							<Text className="text-gray-500 mb-6">
-								Aún no has agregado ningún perfil fiscal. 
-								Agrega tu primer perfil para poder facturar tus compras.
-							</Text>
-							<Button
-								dusk="createFirstTaxProfile"
-								preserveState
-								preserveScroll
-								href={route("tax-profiles.create")}
-								className="mx-auto"
-							>
-								<PlusIcon className="h-5 w-5 mr-2" />
-								Agregar mi primer perfil
-							</Button>
-						</div>
-					</SettingsCard>
-				</div>
-			)}
+	return (
+		<div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
+			{taxProfiles.map((taxProfile) => (
+				<TaxProfileCard
+					key={taxProfile.id}
+					taxProfile={taxProfile}
+					onDelete={() => setTaxProfileToDelete(taxProfile)}
+					onView={() => setTaxProfileToView(taxProfile)}
+				/>
+			))}
 		</div>
+	);
+}
+
+function TaxProfilesEmptyState() {
+	return (
+		<div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-6 py-12 text-center dark:border-slate-700 dark:bg-slate-900/40">
+			<div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-300">
+				<DocumentTextIcon className="h-7 w-7" aria-hidden />
+			</div>
+			<h3 className="text-base font-semibold text-slate-900 dark:text-white">
+				Aún no tienes perfiles fiscales
+			</h3>
+			<p className="mx-auto mt-2 max-w-md text-sm text-slate-500 dark:text-slate-400">
+				Agrega tus datos fiscales para utilizarlos cuando solicites una factura.
+			</p>
+			<Button
+				dusk="createFirstTaxProfile"
+				preserveState
+				preserveScroll
+				href={route("tax-profiles.create")}
+				className="mt-6"
+			>
+				<PlusIcon className="h-5 w-5" />
+				Agregar perfil fiscal
+			</Button>
+		</div>
+	);
+}
+
+function TaxProfileCard({ taxProfile, onDelete, onView }) {
+	const isUsed = taxProfile.is_used === true;
+	const isDefault = taxProfile.is_default === true;
+	const certificateUrl = route("tax-profiles.fiscal-certificate", {
+		tax_profile: taxProfile,
+	});
+
+	return (
+		<SettingsCard className="h-full !max-w-none rounded-xl border border-slate-200/80 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700/80">
+			<div className="flex h-full min-h-0 flex-col gap-4">
+				<div className="space-y-2">
+					<div className="flex flex-wrap gap-2">
+						{isDefault && <Badge color="emerald">Predeterminado</Badge>}
+						{isUsed && <Badge color="zinc">Utilizado en facturación</Badge>}
+					</div>
+
+					<h3 className="line-clamp-2 break-words text-base font-semibold leading-snug text-slate-900 dark:text-white">
+						{taxProfile.name}
+					</h3>
+
+					<div className="flex flex-wrap items-center gap-2">
+						<span className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+							RFC
+						</span>
+						<Code className="text-sm">{taxProfile.rfc}</Code>
+						<CopyRfcButton rfc={taxProfile.rfc} profileName={taxProfile.name} />
+					</div>
+
+					{isUsed && (
+						<p
+							id={`tax-profile-used-help-${taxProfile.id}`}
+							className="text-xs text-zinc-600 dark:text-slate-400"
+						>
+							Este perfil fiscal ya fue utilizado en una solicitud de factura y
+							no puede editarse.
+						</p>
+					)}
+				</div>
+
+				<dl className="space-y-2.5 border-t border-slate-100 pt-3 dark:border-slate-800">
+					<TaxProfileDetailRow
+						label="Código postal"
+						value={taxProfile.zipcode ? `CP ${taxProfile.zipcode}` : null}
+					/>
+					<TaxProfileDetailRow
+						label="Régimen fiscal"
+						value={taxProfile.formatted_tax_regime}
+					/>
+					{taxProfile.formatted_cfdi_use && (
+						<TaxProfileDetailRow
+							label="Uso de CFDI"
+							value={taxProfile.formatted_cfdi_use}
+						/>
+					)}
+					{taxProfile.formatted_activity_label && (
+						<TaxProfileDetailRow
+							label="Actualización"
+							value={taxProfile.formatted_activity_label}
+							icon={ClockIcon}
+						/>
+					)}
+				</dl>
+
+				{taxProfile.verificado_automaticamente && (
+					<div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+						<CheckCircleIcon className="h-4 w-4 shrink-0" aria-hidden />
+						<span className="text-xs font-medium">
+							Verificado automáticamente
+						</span>
+					</div>
+				)}
+
+				<div className="mt-auto flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+					<div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+						{!isDefault && (
+							<SetDefaultTaxProfileButton taxProfile={taxProfile} />
+						)}
+						{isUsed ? (
+							<Button
+								outline
+								dusk={`viewTaxProfile-${taxProfile.id}`}
+								type="button"
+								onClick={onView}
+								className="justify-center sm:w-auto"
+								aria-label={`Ver datos del perfil fiscal ${taxProfile.name}`}
+							>
+								<EyeIcon className="h-4 w-4" />
+								Ver datos
+							</Button>
+						) : (
+							<Button
+								outline
+								type="button"
+								dusk={`editTaxProfile-${taxProfile.id}`}
+								className="justify-center sm:w-auto"
+								aria-label={`Editar perfil fiscal ${taxProfile.name}`}
+								onClick={() =>
+									router.visit(
+										route("tax-profiles.edit", {
+											tax_profile: taxProfile.id,
+										}),
+										{
+											preserveState: true,
+											preserveScroll: true,
+										},
+									)
+								}
+							>
+								<PencilIcon className="h-4 w-4" />
+								Editar
+							</Button>
+						)}
+					</div>
+
+					<Dropdown>
+						<DropdownButton
+							plain
+							aria-label={`Más acciones para ${taxProfile.name}`}
+							className="justify-center sm:justify-start"
+						>
+							<EllipsisHorizontalIcon data-slot="icon" />
+							<span className="sm:sr-only">Más acciones</span>
+						</DropdownButton>
+						<DropdownMenu anchor="bottom end">
+							<DropdownItem href={certificateUrl} target="_blank" rel="noreferrer">
+								<DocumentTextIcon data-slot="icon" />
+								<DropdownLabel>Ver constancia</DropdownLabel>
+							</DropdownItem>
+							<DropdownItem
+								dusk={`deactivateTaxProfile-${taxProfile.id}`}
+								onClick={onDelete}
+							>
+								<TrashIcon data-slot="icon" className="stroke-red-500" />
+								<DropdownLabel>Desactivar</DropdownLabel>
+							</DropdownItem>
+						</DropdownMenu>
+					</Dropdown>
+				</div>
+			</div>
+		</SettingsCard>
+	);
+}
+
+function TaxProfileDetailRow({ label, value, icon: Icon }) {
+	if (!value) {
+		return null;
+	}
+
+	return (
+		<div className="flex items-start justify-between gap-3 text-sm">
+			<dt className="shrink-0 text-slate-500 dark:text-slate-400">{label}</dt>
+			<dd className="min-w-0 text-right font-medium text-slate-900 dark:text-white">
+				{Icon ? (
+					<span className="inline-flex items-start justify-end gap-1.5">
+						<Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+						<span className="break-words">{value}</span>
+					</span>
+				) : (
+					<span className="break-words">{value}</span>
+				)}
+			</dd>
+		</div>
+	);
+}
+
+function CopyRfcButton({ rfc, profileName }) {
+	const [copied, setCopied] = useState(false);
+
+	useEffect(() => {
+		if (!copied) return undefined;
+		const timer = setTimeout(() => setCopied(false), 2000);
+		return () => clearTimeout(timer);
+	}, [copied]);
+
+	const handleCopy = async () => {
+		if (!rfc) return;
+		try {
+			await navigator.clipboard.writeText(rfc);
+			setCopied(true);
+		} catch {
+			setCopied(false);
+		}
+	};
+
+	return (
+		<span className="inline-flex items-center gap-1.5">
+			<button
+				type="button"
+				onClick={handleCopy}
+				aria-label={`Copiar RFC de ${profileName}`}
+				className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+			>
+				{copied ? (
+					<CheckIcon className="h-4 w-4 text-emerald-500" aria-hidden />
+				) : (
+					<DocumentDuplicateIcon className="h-4 w-4" aria-hidden />
+				)}
+			</button>
+			<span className="sr-only" role="status" aria-live="polite">
+				{copied ? "RFC copiado" : ""}
+			</span>
+			{copied && (
+				<span className="text-xs font-medium text-emerald-600 dark:text-emerald-400" aria-hidden>
+					Copiado
+				</span>
+			)}
+		</span>
+	);
+}
+
+function SetDefaultTaxProfileButton({ taxProfile }) {
+	const { patch, processing } = useForm({});
+
+	const handleSetDefault = () => {
+		if (processing || taxProfile.is_default === true) {
+			return;
+		}
+
+		patch(
+			route("tax-profiles.set-default", {
+				tax_profile: taxProfile.id,
+			}),
+			{
+				preserveScroll: true,
+			},
+		);
+	};
+
+	return (
+		<Button
+			type="button"
+			dusk={`setDefaultTaxProfile-${taxProfile.id}`}
+			onClick={handleSetDefault}
+			disabled={processing}
+			aria-busy={processing}
+			className="justify-center sm:w-auto"
+			aria-label={`Usar ${taxProfile.name} como perfil predeterminado`}
+		>
+			<StarIcon className="h-4 w-4" />
+			{processing ? "Actualizando…" : "Usar como predeterminado"}
+		</Button>
 	);
 }
 

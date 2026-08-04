@@ -16,6 +16,7 @@ import {
 	SidebarLabel,
 	SidebarSection,
 } from "@/Components/Catalyst/sidebar";
+import { Badge } from "@/Components/Catalyst/badge";
 import {
 	ArrowRightStartOnRectangleIcon,
 	ChevronUpIcon,
@@ -32,6 +33,8 @@ import {
 	ClipboardDocumentListIcon,
 	HeartIcon,
 	BanknotesIcon,
+	IdentificationIcon,
+	SparklesIcon,
 } from "@heroicons/react/16/solid";
 import { Strong } from "@/Components/Catalyst/text";
 import ApplicationLogo from "@/Components/ApplicationLogo";
@@ -42,6 +45,21 @@ import {
 	DisclosureButton,
 	DisclosurePanel,
 } from "@headlessui/react";
+
+function NavItemBadge({ badge }) {
+	if (!badge) {
+		return null;
+	}
+
+	return (
+		<Badge
+			color="famedic-lime"
+			className="ml-auto shrink-0 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+		>
+			{badge}
+		</Badge>
+	);
+}
 
 export default function SideBar() {
 	const { auth, adminNavigation, adminUserNavigation } = usePage().props;
@@ -60,6 +78,8 @@ export default function SideBar() {
 		ClipboardDocumentListIcon: ClipboardDocumentListIcon,
 		HeartIcon: HeartIcon,
 		BanknotesIcon: BanknotesIcon,
+		IdentificationIcon: IdentificationIcon,
+		SparklesIcon: SparklesIcon,
 	};
 
 	return (
@@ -127,6 +147,7 @@ export default function SideBar() {
 														url,
 														current,
 														icon,
+														badge,
 													}) => {
 														const ItemIconComponent =
 															iconMap[icon];
@@ -141,6 +162,9 @@ export default function SideBar() {
 																<SidebarLabel>
 																	{label}
 																</SidebarLabel>
+																<NavItemBadge
+																	badge={badge}
+																/>
 															</SidebarItem>
 														);
 													},
@@ -152,7 +176,7 @@ export default function SideBar() {
 							);
 						}
 
-						const { label, url, current, icon } = navItem;
+						const { label, url, current, icon, badge } = navItem;
 						const IconComponent = iconMap[icon];
 						return (
 							<SidebarItem
@@ -163,6 +187,7 @@ export default function SideBar() {
 							>
 								{IconComponent && <IconComponent />}
 								<SidebarLabel>{label}</SidebarLabel>
+								<NavItemBadge badge={badge} />
 							</SidebarItem>
 						);
 					})}

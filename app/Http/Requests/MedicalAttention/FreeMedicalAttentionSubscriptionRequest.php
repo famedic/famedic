@@ -8,7 +8,11 @@ class FreeMedicalAttentionSubscriptionRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return !$this->user()->customer->medicalAttentionSubscriptions()->exists();
+        if (! config('famedic.medical_attention_trial_enabled')) {
+            return false;
+        }
+
+        return ! $this->user()->customer->medicalAttentionSubscriptions()->exists();
     }
 
     public function rules(): array

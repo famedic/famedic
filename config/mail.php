@@ -119,4 +119,30 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Mail Safe Mode (non-production)
+    |--------------------------------------------------------------------------
+    |
+    | In non-production environments, restrict outbound mail to an allowlist of
+    | recipients and domains. Production is always unrestricted regardless of
+    | these settings. When MAIL_SAFE_MODE is unset, safe mode defaults to on
+    | outside production (enforced in ApplyMailSafetyPolicy).
+    |
+    */
+
+    'safe_mode' => [
+        'enabled' => env('MAIL_SAFE_MODE'),
+        'allowed_recipients' => array_values(array_filter(array_map(
+            static fn (string $email): string => strtolower(trim($email)),
+            explode(',', (string) env('MAIL_ALLOWED_RECIPIENTS', ''))
+        ))),
+        'allowed_domains' => array_values(array_filter(array_map(
+            static fn (string $domain): string => strtolower(trim($domain)),
+            explode(',', (string) env('MAIL_ALLOWED_DOMAINS', ''))
+        ))),
+        'block_disallowed' => filter_var(env('MAIL_BLOCK_DISALLOWED', true), FILTER_VALIDATE_BOOL),
+        'log_blocked' => filter_var(env('MAIL_LOG_BLOCKED', true), FILTER_VALIDATE_BOOL),
+    ],
+
 ];

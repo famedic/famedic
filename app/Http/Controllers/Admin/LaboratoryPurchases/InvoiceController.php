@@ -11,7 +11,11 @@ class InvoiceController extends Controller
 {
     public function __invoke(StoreInvoiceRequest $request, LaboratoryPurchase $laboratoryPurchase, CreateInvoiceAction $action)
     {
-        $action($laboratoryPurchase, $request->file('invoice'));
+        $action(
+            $laboratoryPurchase,
+            $request->file('invoice'),
+            $request->file('invoice_xml'),
+        );
 
         return redirect()->route('admin.laboratory-purchases.show', [
             'laboratory_purchase' => $laboratoryPurchase,

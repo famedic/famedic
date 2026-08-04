@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\EfevooPayCommissionCalculator;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -47,6 +48,7 @@ class Transaction extends Model
     protected $appends = [
         'formatted_amount',
         'formatted_created_at',
+        'efevoo_commission_breakdown',
     ];
 
     protected function commissionCents(): Attribute
@@ -55,15 +57,40 @@ class Transaction extends Model
             get: function () {
                 $cachedCommission = $this->details['commission_cents'] ?? null;
 
-                if ($cachedCommission !== null && $cachedCommission > 0) {
-                    return $cachedCommission;
+                if ($cachedCommission !== null && (int) $cachedCommission > 0) {
+                    return (int) $cachedCommission;
+                }
+
+                if ($this->isEfevooPay()) {
+                    $charged = EfevooPayCommissionCalculator::resolveChargedAmountCents($this);
+                    if ($charged > 0) {
+                        return EfevooPayCommissionCalculator::calculate($charged)['total_cents'];
+                    }
                 }
 
                 if ($this->payment_method === 'stripe' && $this->reference_id) {
                     return $this->fetchAndCacheStripeCommission();
                 }
 
-                return $cachedCommission ?? 0;
+                return (int) ($cachedCommission ?? 0);
+            }
+        );
+    }
+
+    protected function efevooCommissionBreakdown(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if (! $this->isEfevooPay()) {
+                    return null;
+                }
+
+                $charged = EfevooPayCommissionCalculator::resolveChargedAmountCents($this);
+                if ($charged <= 0) {
+                    return null;
+                }
+
+                return EfevooPayCommissionCalculator::present($charged);
             }
         );
     }
@@ -182,6 +209,24 @@ class Transaction extends Model
     public function isEfevooPay(): bool
     {
         return $this->payment_method === 'efevoopay' || $this->gateway === 'efevoopay';
+    }
+
+    /**
+     * Comisión para exportaciones (Excel). EfevooPay usa el cálculo manual 2.9% + IVA;
+     * otros procesadores conservan su lógica existente.
+     */
+    public function exportCommissionCents(?int $fallbackChargedAmountCents = null): int
+    {
+        $efevooCommission = EfevooPayCommissionCalculator::commissionCentsForTransaction(
+            $this,
+            $fallbackChargedAmountCents,
+        );
+
+        if ($efevooCommission !== null) {
+            return $efevooCommission;
+        }
+
+        return $this->commission_cents;
     }
 
     public function isPayPal(): bool

@@ -4,6 +4,7 @@ use App\Http\Controllers\AkubicaCheckoutLinkController;
 use App\Http\Controllers\DocumentationAcceptController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\InvoiceXmlController;
 use App\Http\Controllers\InvoiceRequests\FiscalCertificateController;
 use App\Http\Controllers\LaboratoryPurchasePdfController;
 use App\Http\Controllers\PrivacyPolicyController;
@@ -53,6 +54,7 @@ Route::middleware([
     Route::get('/home', HomeController::class)->name('home');
     Route::get('/invoice-requests/{invoice_request}/fiscal-certificate', FiscalCertificateController::class)->name('invoice-requests.fiscal-certificate');
     Route::get('/invoice/{invoice}', InvoiceController::class)->name('invoice');
+    Route::get('/invoice/{invoice}/xml', InvoiceXmlController::class)->name('invoice.xml');
     Route::get('/vendor-payments/{vendor_payment}', VendorPaymentController::class)->name('vendor-payment');
     Route::get('/laboratory-purchases/{laboratory_purchase}/results', ResultsController::class)
         ->middleware(EnsureLabResultsOtpVerified::class)

@@ -62,6 +62,14 @@ function LaboratoryCartPanel({
 	selectedLaboratoryBrand,
 	setSelectedLaboratoryBrand,
 }) {
+	const brandsWithItems = Object.keys(laboratoryCarts || {}).filter(
+		(brand) => (laboratoryCarts[brand]?.length || 0) > 0,
+	);
+	const selectedBrandItems =
+		laboratoryCarts[selectedLaboratoryBrand] ?? [];
+	const hasItemsInOtherBrands =
+		selectedBrandItems.length === 0 && brandsWithItems.length > 0;
+
 	return (
 		<>
 			<div className="px-3.5 py-2.5 sm:px-3 sm:py-1.5">
@@ -79,6 +87,9 @@ function LaboratoryCartPanel({
 							([value, laboratoryBrand]) => (
 								<option key={value} value={value}>
 									{laboratoryBrand.name}
+									{(laboratoryCarts[value]?.length || 0) > 0
+										? ` (${laboratoryCarts[value].length})`
+										: ""}
 								</option>
 							),
 						)}
@@ -86,8 +97,16 @@ function LaboratoryCartPanel({
 				</Field>
 			</div>
 
-			{laboratoryCarts[selectedLaboratoryBrand]?.length > 0 ? (
-				laboratoryCarts[selectedLaboratoryBrand].map((cartItem) => (
+			{hasItemsInOtherBrands ? (
+				<DropdownItem className="pointer-events-none flex w-full">
+					<DropdownLabel>
+						Tienes estudios en{" "}
+						{laboratoryBrands[brandsWithItems[0]]?.name ??
+							brandsWithItems[0]}
+					</DropdownLabel>
+				</DropdownItem>
+			) : selectedBrandItems.length > 0 ? (
+				selectedBrandItems.map((cartItem) => (
 					<DropdownItem
 						key={cartItem.id}
 						className="pointer-events-none flex w-full"
@@ -119,16 +138,23 @@ function LaboratoryCartPanel({
 				<Button
 					className="w-full"
 					href={route(
-						laboratoryCarts[selectedLaboratoryBrand]?.length > 0
+						(brandsWithItems.length > 0
+							? brandsWithItems
+							: [selectedLaboratoryBrand]
+						).some(
+							(brand) =>
+								(laboratoryCarts[brand]?.length || 0) > 0,
+						)
 							? "laboratory.shopping-cart"
 							: "laboratory-tests",
 						{
-							laboratory_brand: selectedLaboratoryBrand,
+							laboratory_brand:
+								brandsWithItems[0] ?? selectedLaboratoryBrand,
 						},
 					)}
 					dusk="laboratoryShoppingCart"
 				>
-					{laboratoryCarts[selectedLaboratoryBrand]?.length > 0 ? (
+					{brandsWithItems.length > 0 ? (
 						<>
 							<ShoppingCartIcon />
 							Ir al carrito

@@ -273,3 +273,19 @@ function createAkubicaResultsNotification(
         'results_pdf_base64' => base64_encode($pdfContent),
     ]);
 }
+
+function medicalAttentionUser(array $customerAttributes = []): \App\Models\User
+{
+    $user = \App\Models\User::factory()
+        ->withCompleteProfile()
+        ->withRegularCustomer()
+        ->create([
+            'documentation_accepted_at' => now(),
+        ]);
+
+    if ($customerAttributes !== []) {
+        $user->customer->update($customerAttributes);
+    }
+
+    return $user->fresh(['customer']);
+}

@@ -34,7 +34,7 @@ class PurchaseInvoiceUploaded extends Notification
         return (new MailMessage)
             ->subject('Factura disponible en Famedic')
             ->line("La factura de tu orden de {$purchaseType} {$orderIdentifier} ya está disponible en Famedic.")
-            ->line('Puedes consultar y descargar tu factura en el siguiente enlace:')
+            ->line('Puedes consultar y descargar los archivos de tu factura (PDF y, si aplica, XML) en el siguiente enlace:')
             ->action('Ver factura', route($routeName, $this->purchase->id))
             ->line('Gracias por confiar en Famedic.');
     }

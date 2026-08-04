@@ -10,9 +10,8 @@ import {
 } from "@heroicons/react/24/outline";
 
 const STEPPER_STEPS = [
-	{ id: 1, label: "Nuevo perfil" },
-	{ id: 2, label: "Revisar datos" },
-	{ id: 3, label: "Confirmar" },
+	{ id: 1, label: "Método" },
+	{ id: 2, label: "Revisar y guardar" },
 ];
 
 export function TaxProfileModalCloseButton({ onClose, disabled }) {
@@ -118,20 +117,23 @@ export function TaxProfileEntryModeCard({
 	title,
 	subtitle,
 	features,
+	ctaLabel,
 	accent = "blue",
 }) {
 	const accentStyles = {
 		blue: {
 			selected:
-				"border-blue-500/80 bg-blue-500/[0.06] shadow-[0_0_0_1px_rgba(59,130,246,0.45),0_0_28px_-6px_rgba(59,130,246,0.4)]",
-			icon: "bg-blue-500/15 text-blue-400 ring-blue-500/25",
-			badge: "bg-blue-500/15 text-blue-300",
+				"border-blue-500 bg-blue-50/80 ring-1 ring-blue-500/30 dark:border-blue-400 dark:bg-blue-500/10 dark:ring-blue-400/30",
+			icon: "bg-blue-500/15 text-blue-600 ring-blue-500/25 dark:text-blue-300",
+			check: "bg-blue-600 text-white dark:bg-blue-500",
+			cta: "text-blue-700 dark:text-blue-300",
 		},
 		emerald: {
 			selected:
-				"border-emerald-500/70 bg-emerald-500/[0.06] shadow-[0_0_0_1px_rgba(16,185,129,0.4),0_0_28px_-6px_rgba(16,185,129,0.25)]",
-			icon: "bg-emerald-500/15 text-emerald-400 ring-emerald-500/25",
-			badge: "bg-emerald-500/15 text-emerald-300",
+				"border-emerald-500 bg-emerald-50/80 ring-1 ring-emerald-500/30 dark:border-emerald-400 dark:bg-emerald-500/10 dark:ring-emerald-400/30",
+			icon: "bg-emerald-500/15 text-emerald-600 ring-emerald-500/25 dark:text-emerald-300",
+			check: "bg-emerald-600 text-white dark:bg-emerald-500",
+			cta: "text-emerald-700 dark:text-emerald-300",
 		},
 	};
 
@@ -141,73 +143,111 @@ export function TaxProfileEntryModeCard({
 		<button
 			type="button"
 			onClick={onSelect}
+			aria-pressed={selected}
 			className={clsx(
-				"group relative flex w-full flex-col rounded-xl border p-4 text-left transition-all duration-300 sm:p-5",
-				"border-slate-200/80 bg-white/50 backdrop-blur-sm",
-				"hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-900/5",
-				"dark:border-slate-700/80 dark:bg-slate-800/30 dark:hover:border-slate-600 dark:hover:shadow-black/20",
+				"group relative flex h-full min-h-0 w-full flex-col rounded-xl border p-4 text-left transition-all duration-200 sm:p-5",
+				"border-slate-200 bg-white",
+				"hover:border-slate-300 hover:bg-slate-50/80",
+				"dark:border-slate-700 dark:bg-slate-800/40 dark:hover:border-slate-600 dark:hover:bg-slate-800/70",
 				"focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500",
-				selected && styles.selected,
+				selected ? styles.selected : "shadow-sm",
 			)}
 		>
 			{selected && (
 				<span
 					className={clsx(
-						"absolute right-3 top-3 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-						styles.badge,
+						"absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full",
+						styles.check,
 					)}
+					aria-hidden
 				>
-					Seleccionado
+					<CheckIcon className="h-3.5 w-3.5" strokeWidth={3} />
 				</span>
 			)}
 
-			<div className="flex items-start gap-3 sm:gap-4">
+			<div className="flex items-start gap-3 pr-8 sm:gap-3.5">
 				<span
 					className={clsx(
-						"flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 transition-transform duration-300 group-hover:scale-105",
+						"flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 sm:h-11 sm:w-11",
 						styles.icon,
 					)}
 				>
-					<Icon className="h-5 w-5" />
+					<Icon className="h-5 w-5" aria-hidden />
 				</span>
-				<div className="min-w-0 flex-1 pr-16 sm:pr-20">
-					<h3 className="text-base font-semibold text-slate-900 dark:text-white">
+				<div className="min-w-0 flex-1">
+					<h3 className="text-base font-semibold leading-snug text-slate-900 dark:text-white">
 						{title}
 					</h3>
-					<p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+					<p className="mt-1 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
 						{subtitle}
 					</p>
 				</div>
 			</div>
 
-			<ul className="mt-4 space-y-2 border-t border-slate-200/60 pt-4 dark:border-slate-700/60">
-				{features.map((feature) => (
-					<li
-						key={feature}
-						className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300"
-					>
-						<span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500 dark:text-emerald-400">
-							<CheckIcon className="h-2.5 w-2.5" strokeWidth={3} />
-						</span>
-						{feature}
-					</li>
-				))}
-			</ul>
+			{features?.length > 0 && (
+				<ul className="mt-4 space-y-2 border-t border-slate-200/70 pt-4 dark:border-slate-700/70">
+					{features.map((feature) => (
+						<li
+							key={feature}
+							className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"
+						>
+							<span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+								<CheckIcon className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
+							</span>
+							<span className="min-w-0 leading-snug">{feature}</span>
+						</li>
+					))}
+				</ul>
+			)}
+
+			{ctaLabel && (
+				<p
+					className={clsx(
+						"mt-auto pt-4 text-sm font-medium",
+						selected ? styles.cta : "text-slate-500 dark:text-slate-400",
+					)}
+				>
+					{ctaLabel}
+				</p>
+			)}
 		</button>
 	);
 }
 
-export function TaxProfileCompactAlert({ children }) {
+export function TaxProfileCompactAlert({ children, tone = "amber" }) {
+	const tones = {
+		amber: {
+			wrap: "border-amber-500/20 bg-amber-500/[0.06] dark:border-amber-500/25 dark:bg-amber-500/[0.08]",
+			icon: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+			text: "text-amber-900/90 dark:text-amber-100/90",
+		},
+		blue: {
+			wrap: "border-blue-500/20 bg-blue-500/[0.06] dark:border-blue-500/25 dark:bg-blue-500/[0.08]",
+			icon: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+			text: "text-blue-900/90 dark:text-blue-100/90",
+		},
+		red: {
+			wrap: "border-red-500/20 bg-red-500/[0.06] dark:border-red-500/25 dark:bg-red-500/[0.08]",
+			icon: "bg-red-500/15 text-red-600 dark:text-red-400",
+			text: "text-red-900/90 dark:text-red-100/90",
+		},
+	};
+	const styles = tones[tone] ?? tones.amber;
+
 	return (
 		<div
 			className={clsx(
 				"flex items-start gap-2.5 rounded-lg border px-3 py-2.5 sm:px-4 sm:py-3",
-				"border-amber-500/20 bg-amber-500/[0.06]",
-				"dark:border-amber-500/25 dark:bg-amber-500/[0.08]",
+				styles.wrap,
 			)}
 			role="note"
 		>
-			<span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400">
+			<span
+				className={clsx(
+					"mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md",
+					styles.icon,
+				)}
+			>
 				<svg
 					className="h-3.5 w-3.5"
 					fill="none"
@@ -223,10 +263,19 @@ export function TaxProfileCompactAlert({ children }) {
 					/>
 				</svg>
 			</span>
-			<p className="text-xs leading-relaxed text-amber-900/90 dark:text-amber-100/90 sm:text-sm">
+			<div className={clsx("text-xs leading-relaxed sm:text-sm", styles.text)}>
 				{children}
-			</p>
+			</div>
 		</div>
+	);
+}
+
+export function TaxProfilePhysicalPersonNotice() {
+	return (
+		<TaxProfileCompactAlert tone="blue">
+			Por el momento, Famedic solo permite registrar perfiles fiscales de personas
+			físicas.
+		</TaxProfileCompactAlert>
 	);
 }
 
@@ -238,13 +287,13 @@ const TRUST_ITEMS = [
 	},
 	{
 		icon: BoltIcon,
-		title: "Proceso rápido",
-		description: "Completa en minutos",
+		title: "Proceso guiado",
+		description: "Revisa antes de guardar",
 	},
 	{
 		icon: BuildingLibraryIcon,
-		title: "Verificado por SAT",
-		description: "Información 100% válida",
+		title: "Solo personas físicas",
+		description: "Facturación a tu nombre",
 	},
 ];
 

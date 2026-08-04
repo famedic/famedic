@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
 use App\Models\Cart;
 use App\Models\EfevooToken;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryCheckoutDraft;
+use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryTest;
+use App\Models\Transaction;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -42,6 +45,7 @@ class CartController extends Controller
                 'user.customer.laboratoryAppointments',
                 'user.customer.laboratoryCheckoutDrafts.contact',
                 'user.customer.laboratoryCheckoutDrafts.address',
+                'user.customer.laboratoryPurchases.transactions',
             ])
             ->withCount('items')
             ->adminMonitoringFilter($filters, $start, $end)
@@ -85,6 +89,7 @@ class CartController extends Controller
             'carts' => $carts,
             'filters' => $filters,
             'metrics' => $metrics,
+            'abandonedThresholdMinutes' => Cart::ABANDONED_AFTER_MINUTES,
             'canViewCartDetails' => $request->user()->administrator->hasPermissionTo('view cart details'),
             'canExport' => $request->user()->administrator->hasPermissionTo('view carts'),
         ]);
@@ -99,6 +104,7 @@ class CartController extends Controller
             'user.customer.laboratoryAppointments',
             'user.customer.laboratoryCheckoutDrafts.contact',
             'user.customer.laboratoryCheckoutDrafts.address',
+            'user.customer.laboratoryPurchases.transactions',
         ]);
 
         return Inertia::render('Admin/CartShow', [
@@ -126,8 +132,13 @@ class CartController extends Controller
             'total' => (string) $cart->total,
             'total_formatted' => formattedPrice((float) $cart->total),
             'display_status' => $display,
+            'display_status_label' => $cart->displayStatusLabel(),
             'updated_at' => $cart->updated_at?->toIso8601String(),
             'updated_at_human' => $cart->updated_at?->format('d/m/Y H:i'),
+            'inactive_for_minutes' => $cart->inactiveForMinutes(),
+            'inactive_for_label' => $cart->inactiveForLabel(),
+            'abandoned_at_human' => $cart->abandonedAt()?->timezone('America/Monterrey')->format('d/m/Y H:i'),
+            'abandoned_threshold_minutes' => Cart::ABANDONED_AFTER_MINUTES,
             'checkout_summary' => $cart->type === MonitoringCartType::Lab
                 ? $this->serializeCheckoutSummaryForRow($cart)
                 : null,
@@ -166,6 +177,12 @@ class CartController extends Controller
         });
 
         $purchase = $isLab ? $cart->relatedLaboratoryPurchase() : null;
+        $checkoutDrafts = $isLab ? $this->serializeCheckoutDrafts($cart) : [];
+        $appointments = $isLab
+            ? $cart->laboratoryAppointmentsForDisplay()->map(
+                fn (LaboratoryAppointment $appointment) => $this->serializeLaboratoryAppointmentForAdmin($appointment),
+            )->values()->all()
+            : [];
 
         return [
             'id' => $cart->id,
@@ -191,6 +208,9 @@ class CartController extends Controller
             'created_at_human' => $cart->created_at?->format('d/m/Y H:i'),
             'updated_at_human' => $cart->updated_at?->format('d/m/Y H:i'),
             'completed_at_human' => $cart->completed_at?->format('d/m/Y H:i'),
+            'inactive_for_minutes' => $cart->inactiveForMinutes(),
+            'inactive_for_label' => $cart->inactiveForLabel(),
+            'abandoned_at_human' => $cart->abandonedAt()?->timezone('America/Monterrey')->format('d/m/Y H:i'),
             'abandoned_threshold_minutes' => Cart::ABANDONED_AFTER_MINUTES,
             'related_laboratory_purchase' => $purchase ? [
                 'id' => $purchase->id,
@@ -199,15 +219,231 @@ class CartController extends Controller
                 'total_formatted' => $purchase->formatted_total ?? formattedPrice((float) $purchase->total),
                 'admin_url' => route('admin.laboratory-purchases.show', $purchase),
             ] : null,
-            'laboratory_appointments' => $isLab
-                ? $cart->laboratoryAppointmentsForDisplay()->map(
-                    fn (LaboratoryAppointment $appointment) => $this->serializeLaboratoryAppointmentForAdmin($appointment),
-                )->values()->all()
-                : [],
-            'checkout_drafts' => $isLab
-                ? $this->serializeCheckoutDrafts($cart)
-                : [],
+            'laboratory_appointments' => $appointments,
+            'checkout_drafts' => $checkoutDrafts,
+            'journey_steps' => $this->serializeJourneySteps($cart, $purchase, $checkoutDrafts),
+            'timeline' => $this->serializeCartTimeline($cart, $purchase, $appointments),
+            'other_user_carts' => $this->serializeOtherUserCarts($cart),
         ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $checkoutDrafts
+     * @return list<array{id: string, label: string, at: string|null, status: string}>
+     */
+    private function serializeJourneySteps(Cart $cart, ?LaboratoryPurchase $purchase, array $checkoutDrafts): array
+    {
+        $display = $cart->displayStatus();
+        $isCompleted = $display === 'completed';
+        $isAbandoned = $display === 'abandoned';
+        $hasCheckoutSignal = $checkoutDrafts !== []
+            || $purchase !== null
+            || $cart->hasAppointmentPendingConfirmation()
+            || $cart->hasAppointmentConfirmedPendingPayment();
+        $purchaseAt = $purchase?->created_at?->format('d/m/Y H:i');
+        $completedAt = $cart->completed_at?->format('d/m/Y H:i');
+        $checkoutAt = collect($checkoutDrafts)
+            ->pluck('updated_at_human')
+            ->filter()
+            ->first()
+            ?? $purchaseAt
+            ?? $cart->updated_at?->format('d/m/Y H:i');
+
+        $created = [
+            'id' => 'created',
+            'label' => 'Carrito creado',
+            'at' => $cart->created_at?->format('d/m/Y H:i'),
+            'status' => 'completed',
+        ];
+
+        $confirmationStatus = match (true) {
+            $isCompleted || $purchase !== null => 'completed',
+            $hasCheckoutSignal => 'current',
+            $isAbandoned => 'upcoming',
+            default => 'current',
+        };
+
+        $paymentStatus = match (true) {
+            $isCompleted || $purchase !== null => 'completed',
+            $cart->hasAppointmentConfirmedPendingPayment() => 'current',
+            $confirmationStatus === 'current' => 'upcoming',
+            default => 'upcoming',
+        };
+
+        $orderStatus = match (true) {
+            $isCompleted || $purchase !== null => 'completed',
+            $paymentStatus === 'completed' => 'current',
+            default => 'upcoming',
+        };
+
+        $monitoringStatus = match (true) {
+            $isCompleted => 'completed',
+            $isAbandoned => 'upcoming',
+            $orderStatus === 'completed' => 'current',
+            default => 'upcoming',
+        };
+
+        return [
+            $created,
+            [
+                'id' => 'confirmation',
+                'label' => 'Confirmación',
+                'at' => $hasCheckoutSignal || $isCompleted ? $checkoutAt : null,
+                'status' => $confirmationStatus,
+            ],
+            [
+                'id' => 'payment',
+                'label' => 'Pago',
+                'at' => $purchaseAt,
+                'status' => $paymentStatus,
+            ],
+            [
+                'id' => 'order_sent',
+                'label' => 'Pedido enviado',
+                'at' => $purchaseAt,
+                'status' => $orderStatus,
+            ],
+            [
+                'id' => 'monitoring',
+                'label' => 'Monitoreo',
+                'at' => $completedAt,
+                'status' => $monitoringStatus,
+            ],
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $appointments
+     * @return list<array{id: string, label: string, detail: string|null, at: string|null}>
+     */
+    private function serializeCartTimeline(Cart $cart, ?LaboratoryPurchase $purchase, array $appointments): array
+    {
+        $events = collect([
+            [
+                'id' => 'created',
+                'label' => 'Carrito creado',
+                'detail' => $cart->type === MonitoringCartType::Lab ? 'Laboratorio' : 'Farmacia',
+                'at' => $cart->created_at?->format('d/m/Y H:i'),
+                'sort' => $cart->created_at?->timestamp ?? 0,
+            ],
+        ]);
+
+        if ($cart->displayStatus() === 'abandoned' && $cart->abandonedAt()) {
+            $events->push([
+                'id' => 'abandoned',
+                'label' => 'Marcado como abandonado',
+                'detail' => 'Sin actividad ≥ '.$cart::ABANDONED_AFTER_MINUTES.' min',
+                'at' => $cart->abandonedAt()->timezone('America/Monterrey')->format('d/m/Y H:i'),
+                'sort' => $cart->abandonedAt()->timestamp,
+            ]);
+        }
+
+        foreach ($appointments as $appointment) {
+            if (! empty($appointment['request_saved_at'])) {
+                $events->push([
+                    'id' => 'appointment-request-'.$appointment['id'],
+                    'label' => 'Solicitud de cita',
+                    'detail' => $appointment['brand_label'] ?? null,
+                    'at' => $appointment['request_saved_at'],
+                    'sort' => $this->timelineSortKey($appointment['request_saved_at']),
+                ]);
+            }
+
+            if (! empty($appointment['is_confirmed']) && ! empty($appointment['confirmed_at_human'])) {
+                $events->push([
+                    'id' => 'appointment-confirmed-'.$appointment['id'],
+                    'label' => 'Cita confirmada',
+                    'detail' => $appointment['brand_label'] ?? null,
+                    'at' => $appointment['confirmed_at_human'],
+                    'sort' => $this->timelineSortKey($appointment['confirmed_at_human']),
+                ]);
+            }
+        }
+
+        if ($purchase) {
+            $events->push([
+                'id' => 'purchase',
+                'label' => 'Compra registrada',
+                'detail' => 'Pedido #'.$purchase->id,
+                'at' => $purchase->created_at?->format('d/m/Y H:i'),
+                'sort' => $purchase->created_at?->timestamp ?? 0,
+            ]);
+        }
+
+        if ($cart->completed_at) {
+            $events->push([
+                'id' => 'completed',
+                'label' => 'Carrito comprado',
+                'detail' => 'Monitoreo completado',
+                'at' => $cart->completed_at->format('d/m/Y H:i'),
+                'sort' => $cart->completed_at->timestamp,
+            ]);
+        } elseif ($cart->updated_at && ! $cart->created_at?->equalTo($cart->updated_at)) {
+            $events->push([
+                'id' => 'updated',
+                'label' => 'Última actividad',
+                'detail' => null,
+                'at' => $cart->updated_at->format('d/m/Y H:i'),
+                'sort' => $cart->updated_at->timestamp,
+            ]);
+        }
+
+        return $events
+            ->sortBy('sort')
+            ->values()
+            ->map(fn (array $event) => [
+                'id' => $event['id'],
+                'label' => $event['label'],
+                'detail' => $event['detail'],
+                'at' => $event['at'],
+            ])
+            ->all();
+    }
+
+    private function timelineSortKey(?string $humanDate): int
+    {
+        if (! filled($humanDate)) {
+            return 0;
+        }
+
+        try {
+            return Carbon::createFromFormat('d/m/Y H:i', $humanDate, 'America/Monterrey')->timestamp;
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function serializeOtherUserCarts(Cart $cart): array
+    {
+        if (! $cart->user_id) {
+            return [];
+        }
+
+        return Cart::query()
+            ->where('user_id', $cart->user_id)
+            ->where('id', '!=', $cart->id)
+            ->orderByDesc('updated_at')
+            ->limit(8)
+            ->get()
+            ->map(function (Cart $other) {
+                $status = $other->displayStatus();
+
+                return [
+                    'id' => $other->id,
+                    'type' => $other->type->value,
+                    'type_label' => $other->type === MonitoringCartType::Lab ? 'Laboratorio' : 'Farmacia',
+                    'display_status' => $status,
+                    'display_status_label' => $other->displayStatusLabel(),
+                    'total_formatted' => formattedPrice((float) $other->total),
+                    'updated_at_human' => $other->updated_at?->format('d/m/Y H:i'),
+                    'admin_url' => route('admin.carts.show', $other),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**
@@ -215,7 +451,17 @@ class CartController extends Controller
      */
     private function serializeCheckoutDrafts(Cart $cart): array
     {
-        return $this->mapCheckoutDrafts($cart, detailed: true);
+        $fromDrafts = $this->mapCheckoutDrafts($cart, detailed: true);
+
+        if ($fromDrafts !== []) {
+            return $fromDrafts;
+        }
+
+        if ($cart->status === MonitoringCartStatus::Completed) {
+            return $this->synthesizeCompletedCheckoutEntries($cart, detailed: true);
+        }
+
+        return [];
     }
 
     /**
@@ -223,7 +469,245 @@ class CartController extends Controller
      */
     private function serializeCheckoutSummaryForRow(Cart $cart): array
     {
-        return $this->mapCheckoutDrafts($cart, detailed: false);
+        $fromDrafts = $this->mapCheckoutDrafts($cart, detailed: false);
+
+        if ($fromDrafts !== []) {
+            return $fromDrafts;
+        }
+
+        if ($cart->status === MonitoringCartStatus::Completed) {
+            return $this->synthesizeCompletedCheckoutEntries($cart, detailed: false);
+        }
+
+        return [];
+    }
+
+    /**
+     * Tras la compra se eliminan los drafts de checkout; reconstruimos el avance
+     * desde la compra (y cita vinculada) para no mostrar "Sin avance" en Comprado.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function synthesizeCompletedCheckoutEntries(Cart $cart, bool $detailed): array
+    {
+        $customer = $cart->user?->customer;
+        if (! $customer) {
+            return [];
+        }
+
+        $brands = collect($cart->labBrands());
+
+        if ($brands->isEmpty()) {
+            $purchase = $cart->relatedLaboratoryPurchase();
+            if ($purchase?->brand) {
+                $brands = collect([[
+                    'value' => $purchase->brand->value,
+                    'label' => $purchase->brand->label(),
+                ]]);
+            }
+        }
+
+        if ($brands->isEmpty()) {
+            $entry = [
+                'id' => 'completed-checkout',
+                'brand_label' => null,
+                'checkout_step' => 'completed',
+                'checkout_step_label' => 'Completado',
+                'is_completed' => true,
+                'patient_name' => 'Registrado en compra',
+                'address_short' => 'Registrada',
+                'payment_method_label' => 'Pagado',
+                'appointment' => null,
+            ];
+
+            if ($detailed) {
+                $entry['updated_at_human'] = $cart->completed_at
+                    ?->timezone('America/Monterrey')
+                    ?->format('d/m/Y H:i');
+                $entry['patient'] = null;
+                $entry['address'] = null;
+            }
+
+            return [$entry];
+        }
+
+        return $brands
+            ->map(function (array $brand) use ($cart, $detailed) {
+                $brandEnum = LaboratoryBrand::from($brand['value']);
+                $purchase = $this->purchaseForBrand($cart, $brandEnum);
+                $appointment = $this->appointmentForCompletedCheckout($cart, $brandEnum, $purchase);
+
+                $patientName = $purchase?->full_name
+                    ?: ($appointment?->patient_full_name ?: null);
+                $addressShort = $this->purchaseAddressShort($purchase);
+                $paymentLabel = $this->transactionPaymentLabel($purchase?->transactions?->first());
+
+                // La compra ya ocurrió: el checkout se completó aunque el draft se haya borrado.
+                $patientName ??= 'Registrado en compra';
+                $addressShort ??= 'Registrada';
+                $paymentLabel ??= 'Pagado';
+
+                $appointmentData = $appointment
+                    ? $this->serializeLaboratoryAppointmentForAdmin($appointment, compact: ! $detailed)
+                    : null;
+
+                $entry = [
+                    'id' => 'completed-'.$brand['value'].($purchase ? '-'.$purchase->id : ''),
+                    'brand_label' => $brand['label'],
+                    'checkout_step' => 'completed',
+                    'checkout_step_label' => 'Completado',
+                    'is_completed' => true,
+                    'patient_name' => $patientName,
+                    'address_short' => $addressShort,
+                    'payment_method_label' => $paymentLabel,
+                    'appointment' => $appointmentData,
+                ];
+
+                if ($detailed) {
+                    $entry['updated_at_human'] = ($purchase?->created_at ?? $cart->completed_at)
+                        ?->timezone('America/Monterrey')
+                        ?->format('d/m/Y H:i');
+                    $entry['patient'] = $purchase ? [
+                        'full_name' => $purchase->full_name,
+                        'phone' => $purchase->full_phone ?? $purchase->phone,
+                        'formatted_birth_date' => $purchase->formatted_birth_date,
+                        'formatted_gender' => $purchase->formatted_gender,
+                    ] : ($appointment && filled($appointment->patient_name) ? [
+                        'full_name' => $appointment->patient_full_name,
+                        'phone' => null,
+                        'formatted_birth_date' => null,
+                        'formatted_gender' => null,
+                    ] : null);
+                    $entry['address'] = $purchase && $addressShort ? [
+                        'formatted_address' => $addressShort,
+                        'full_address' => $addressShort,
+                    ] : null;
+                }
+
+                return $entry;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function purchaseForBrand(Cart $cart, LaboratoryBrand $brand): ?LaboratoryPurchase
+    {
+        $customer = $cart->user?->customer;
+        if (! $customer) {
+            return null;
+        }
+
+        $purchases = $customer->relationLoaded('laboratoryPurchases')
+            ? $customer->laboratoryPurchases
+            : $customer->laboratoryPurchases()->with('transactions')->get();
+
+        $forBrand = $purchases->filter(
+            fn (LaboratoryPurchase $purchase) => $purchase->brand === $brand,
+        );
+
+        if ($cart->completed_at) {
+            $start = $cart->completed_at->copy()->subDay();
+            $end = $cart->completed_at->copy()->addDay();
+            $inWindow = $forBrand->filter(
+                fn (LaboratoryPurchase $purchase) => $purchase->created_at
+                    && $purchase->created_at->between($start, $end),
+            );
+
+            if ($inWindow->isNotEmpty()) {
+                return $inWindow->sortByDesc('created_at')->first();
+            }
+        }
+
+        return $forBrand->sortByDesc('created_at')->first();
+    }
+
+    private function appointmentForCompletedCheckout(
+        Cart $cart,
+        LaboratoryBrand $brand,
+        ?LaboratoryPurchase $purchase,
+    ): ?LaboratoryAppointment {
+        $customer = $cart->user?->customer;
+        if (! $customer) {
+            return null;
+        }
+
+        $appointments = $customer->relationLoaded('laboratoryAppointments')
+            ? $customer->laboratoryAppointments
+            : $customer->laboratoryAppointments()->get();
+
+        if ($purchase) {
+            $linked = $appointments->first(
+                fn (LaboratoryAppointment $appointment) => (int) $appointment->laboratory_purchase_id === (int) $purchase->id,
+            );
+
+            if ($linked) {
+                return $linked;
+            }
+        }
+
+        if ($cart->completed_at) {
+            $start = $cart->completed_at->copy()->subDay();
+            $end = $cart->completed_at->copy()->addDay();
+
+            return $appointments
+                ->filter(
+                    fn (LaboratoryAppointment $appointment) => $appointment->brand === $brand
+                        && $appointment->updated_at
+                        && $appointment->updated_at->between($start, $end),
+                )
+                ->sortByDesc('updated_at')
+                ->first();
+        }
+
+        return $this->appointmentForBrand($cart, $brand);
+    }
+
+    private function purchaseAddressShort(?LaboratoryPurchase $purchase): ?string
+    {
+        if ($purchase === null) {
+            return null;
+        }
+
+        $parts = array_filter([
+            trim("{$purchase->street} {$purchase->number}"),
+            $purchase->neighborhood,
+            $purchase->city,
+            $purchase->state,
+        ]);
+
+        $text = implode(', ', $parts);
+
+        if ($text === '') {
+            return null;
+        }
+
+        return mb_strlen($text) > 48
+            ? mb_substr($text, 0, 45).'…'
+            : $text;
+    }
+
+    private function transactionPaymentLabel(?Transaction $transaction): ?string
+    {
+        if ($transaction === null) {
+            return null;
+        }
+
+        $tokenInfo = $transaction->details['token_info'] ?? null;
+        if (is_array($tokenInfo) && filled($tokenInfo['card_last_four'] ?? null)) {
+            $brand = ucfirst(strtolower((string) ($tokenInfo['card_brand'] ?? 'Tarjeta')));
+
+            return sprintf('%s •••• %s', $brand, $tokenInfo['card_last_four']);
+        }
+
+        return match (strtolower((string) $transaction->payment_method)) {
+            'odessa' => 'Saldo a la Vista (Odessa)',
+            'paypal' => 'PayPal',
+            'coupon_balance' => 'Crédito a favor (cupón)',
+            'efevoopay' => 'Tarjeta',
+            default => filled($transaction->payment_method)
+                ? ucfirst((string) $transaction->payment_method)
+                : 'Pagado',
+        };
     }
 
     /**
@@ -353,7 +837,8 @@ class CartController extends Controller
         ];
 
         if ($compact) {
-            return collect($data)->only([
+            $result = collect($data)->only([
+                'brand_label',
                 'request_saved_at',
                 'callback_availability_range',
                 'callback_comment_short',
@@ -361,6 +846,11 @@ class CartController extends Controller
                 'has_phone_call_intent',
                 'phone_call_intent_at_human',
             ])->filter(fn ($value) => $value !== null && $value !== false)->all();
+
+            $result['is_confirmed'] = $data['is_confirmed'];
+            $result['has_linked_purchase'] = $data['has_linked_purchase'];
+
+            return $result;
         }
 
         return $data;
@@ -386,6 +876,7 @@ class CartController extends Controller
             'payment' => 'Método de pago',
             'appointment' => 'Cita',
             'confirmation' => 'Confirmación',
+            'completed' => 'Completado',
             default => $step,
         };
     }

@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Notifications\LaboratorySampleCollected;
 use App\Services\Laboratory\LabOrderNotificationGateService;
+use App\Support\GDA\GdaWebhookPayloadResolver;
 use App\Support\Laboratory\GdaSimulatorSettings;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -17,7 +18,8 @@ use Illuminate\Support\Facades\Schema;
 class HandleSampleCollectionNotificationAction
 {
     public function __construct(
-        protected LabOrderNotificationGateService $notificationGateService
+        protected LabOrderNotificationGateService $notificationGateService,
+        protected GdaWebhookPayloadResolver $payloadResolver,
     ) {
     }
 
@@ -30,6 +32,8 @@ class HandleSampleCollectionNotificationAction
             'quote_id' => $references['quote_id'] ?? null
         ]);
 
+        $resolved = $references['gda'] ?? $this->payloadResolver->resolve($data);
+
         // Actualizar la notificación
         $notification->update([
             'gda_status' => $data['status'],
@@ -37,13 +41,13 @@ class HandleSampleCollectionNotificationAction
         ]);
 
         // Actualizar quote si existe
-        $quote = $this->updateQuote($references, $data);
+        $quote = $this->updateQuote($references, $data, $resolved);
         
         // Actualizar purchase si existe
-        $purchase = $this->updatePurchase($references, $data);
+        $purchase = $this->updatePurchase($references, $data, $resolved);
 
         $studyExternalId = $this->extractStudyExternalId($data);
-        $gdaOrderId = (string) ($data['id'] ?? '');
+        $gdaOrderId = $this->payloadResolver->gateOrderId($resolved, $data);
 
         $gateResult = $this->notificationGateService->registerEvent(
             gdaOrderId: $gdaOrderId,
@@ -109,7 +113,7 @@ class HandleSampleCollectionNotificationAction
         return $data['requisition']['value'] ?? null;
     }
 
-    protected function updateQuote(array $references, array $data): ?LaboratoryQuote
+    protected function updateQuote(array $references, array $data, array $resolved): ?LaboratoryQuote
     {
         if (empty($references['quote_id'])) {
             return null;
@@ -123,14 +127,14 @@ class HandleSampleCollectionNotificationAction
         $quoteColumns = Schema::getColumnListing('laboratory_quotes');
         $updates = [];
 
-        // Actualizar campos de GDA en quote
-        if (in_array('gda_order_id', $quoteColumns) && empty($quote->gda_order_id)) {
-            $updates['gda_order_id'] = $data['id'];
-        }
-
-        if (in_array('gda_consecutivo', $quoteColumns) && empty($quote->gda_consecutivo)) {
-            $updates['gda_consecutivo'] = $data['id'];
-        }
+        $updates = array_merge(
+            $updates,
+            $this->payloadResolver->emptyGdaFieldUpdates(
+                $resolved,
+                $quote->gda_order_id ?? null,
+                $quote->gda_consecutivo ?? null
+            )
+        );
 
         if (isset($data['GDA_menssage']['acuse']) && in_array('gda_acuse', $quoteColumns)) {
             $updates['gda_acuse'] = $data['GDA_menssage']['acuse'];
@@ -171,7 +175,7 @@ class HandleSampleCollectionNotificationAction
         return $quote;
     }
 
-    protected function updatePurchase(array $references, array $data): ?LaboratoryPurchase
+    protected function updatePurchase(array $references, array $data, array $resolved): ?LaboratoryPurchase
     {
         if (empty($references['purchase_id'])) {
             return null;
@@ -184,14 +188,14 @@ class HandleSampleCollectionNotificationAction
 
         $updates = [];
 
-        // Actualizar campos de GDA
-        if (empty($purchase->gda_order_id)) {
-            $updates['gda_order_id'] = $data['id'];
-        }
-
-        if (empty($purchase->gda_consecutivo)) {
-            $updates['gda_consecutivo'] = $data['id'];
-        }
+        $updates = array_merge(
+            $updates,
+            $this->payloadResolver->emptyGdaFieldUpdates(
+                $resolved,
+                $purchase->gda_order_id ?? null,
+                $purchase->gda_consecutivo ?? null
+            )
+        );
 
         if (isset($data['GDA_menssage']['acuse'])) {
             $updates['gda_acuse'] = $data['GDA_menssage']['acuse'];
@@ -287,7 +291,10 @@ class HandleSampleCollectionNotificationAction
             $user->notify(new LaboratorySampleCollected(
                 laboratoryPurchase: $purchase,
                 laboratoryQuote: $quote,
-                gdaOrderId: $data['id']
+                gdaOrderId: $this->payloadResolver->gateOrderId(
+                    $references['gda'] ?? $this->payloadResolver->resolve($data),
+                    $data
+                )
             ));
 
             Log::info('Sample collection email sent', [

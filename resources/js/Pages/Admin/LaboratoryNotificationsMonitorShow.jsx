@@ -180,6 +180,13 @@ function OrderSummaryTab({
 				/>
 			</div>
 
+			{summary.sync_logs?.length > 0 && (
+				<div className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+					<Subheading>Logs de sincronización GDA</Subheading>
+					<SyncLogsTable logs={summary.sync_logs} />
+				</div>
+			)}
+
 			<div className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
 				<Subheading>Emails al paciente</Subheading>
 				<div className="flex flex-wrap gap-2">
@@ -339,6 +346,92 @@ function NotificationTable({ notifications, emptyMessage, showPdfColumn }) {
 				})}
 			</TableBody>
 		</Table>
+	);
+}
+
+function SyncLogsTable({ logs }) {
+	if (!logs || logs.length === 0) {
+		return <Text className="text-sm text-zinc-500">Sin registros de sincronización.</Text>;
+	}
+
+	return (
+		<div className="overflow-x-auto">
+			<Table>
+				<TableHead>
+					<TableRow>
+						<TableHeader>Notificación</TableHeader>
+						<TableHeader>Recibida</TableHeader>
+						<TableHeader>Acuse</TableHeader>
+						<TableHeader>Fuente</TableHeader>
+						<TableHeader>Archivo storage</TableHeader>
+						<TableHeader>Estado</TableHeader>
+						<TableHeader>Email</TableHeader>
+					</TableRow>
+				</TableHead>
+				<TableBody>
+					{logs.map((log) => (
+						<TableRow key={log.notification_id}>
+							<TableCell>
+								<Text className="text-xs">#{log.notification_id}</Text>
+								{log.gda_order_id && (
+									<Text className="text-xs text-zinc-400">{log.gda_order_id}</Text>
+								)}
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs">{formatDateTime(log.results_received_at)}</Text>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs font-mono">{log.gda_acuse ? log.gda_acuse.substring(0, 8) + "…" : "—"}</Text>
+							</TableCell>
+							<TableCell>
+								<Badge color={log.results_source === "storage" ? "emerald" : log.results_source ? "sky" : "slate"}>
+									{log.results_source || "—"}
+								</Badge>
+							</TableCell>
+							<TableCell>
+								{log.stored_in_storage ? (
+									<Badge color="emerald">Sí</Badge>
+								) : log.results_storage_error ? (
+									<Badge color="red">Error</Badge>
+								) : (
+									<Badge color="slate">No</Badge>
+								)}
+								{log.purchase_results_path && (
+									<Text className="text-xs text-zinc-400 mt-0.5 break-all">{log.purchase_results_path}</Text>
+								)}
+							</TableCell>
+							<TableCell>
+								<div className="space-y-0.5">
+									{log.skipped_manual_result && <Badge color="violet">Manual existente</Badge>}
+									{log.skipped_existing_result && <Badge color="zinc">Ya existía</Badge>}
+									{log.admin_forced_refresh_at && (
+										<Badge color="amber">Forzado {formatDateTime(log.admin_forced_refresh_at).split(",")[0]}</Badge>
+									)}
+									{log.results_storage_error && (
+										<Text className="text-xs text-red-500">{log.results_storage_error}</Text>
+									)}
+								</div>
+							</TableCell>
+							<TableCell>
+								{log.email_sent_at ? (
+									<div>
+										<Badge color="emerald">Enviado</Badge>
+										<Text className="text-xs text-zinc-400">{log.email_recipient}</Text>
+									</div>
+								) : log.email_error ? (
+									<div>
+										<Badge color="red">Error</Badge>
+										<Text className="text-xs text-red-400">{log.email_error}</Text>
+									</div>
+								) : (
+									<Text className="text-xs text-zinc-400">—</Text>
+								)}
+							</TableCell>
+						</TableRow>
+					))}
+				</TableBody>
+			</Table>
+		</div>
 	);
 }
 

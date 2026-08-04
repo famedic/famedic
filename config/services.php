@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__.'/activecampaign_env.php';
+
 return [
 
     /*
@@ -87,6 +89,13 @@ return [
 
     'gda' => [
         'url' => env('GDA_URL'),
+        /*
+         * URL completa del endpoint de consulta de PDF de resultados.
+         * GDA indicó una URL distinta a GDA_URL solo para este endpoint.
+         * Si está vacío, se usa el path legacy: {GDA_URL}infogda-fullV3/consult
+         */
+        'results_consult_url' => env('GDA_RESULTS_CONSULT_URL'),
+        'results_sync_queue' => env('GDA_RESULTS_SYNC_QUEUE', 'default'),
         'report_emails' => env('GDA_REPORT_EMAILS') ? explode(',', env('GDA_REPORT_EMAILS')) : [],
         'concierge_emails' => env('GDA_CONCIERGE_EMAILS') ? explode(',', env('GDA_CONCIERGE_EMAILS')) : [],
         'brands' => [
@@ -125,6 +134,8 @@ return [
 
     'odessa' => [
         'url' => env('ODESSA_URL'),
+        'public_key' => env('ODESSA_PUBLIC_KEY'),
+        'famedic_public_key' => env('FAMEDIC_PUBLIC_KEY'),
         'refund_report_emails' => env('ODESSA_REFUND_REPORT_EMAILS') ? explode(',', env('ODESSA_REFUND_REPORT_EMAILS')) : [],
     ],
 
@@ -139,6 +150,10 @@ return [
         'event_key' => env('ACTIVE_CAMPAIGN_EVENT_KEY'),
         'list_new_users' => env('ACTIVE_CAMPAIGN_LIST_NEW_USERS'),
         'tag_registro_web' => env('ACTIVE_CAMPAIGN_TAG_REGISTRO_WEB'),
+        'enabled' => filter_var(env('ACTIVE_CAMPAIGN_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'coupons_enabled' => filter_var(env('ACTIVE_CAMPAIGN_COUPONS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'coupons_expiring_enabled' => filter_var(env('ACTIVE_CAMPAIGN_COUPONS_EXPIRING_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'coupons_expiring_days' => (int) env('ACTIVE_CAMPAIGN_COUPONS_EXPIRING_DAYS', 14),
         'cart_abandoned_minutes' => (int) env('ACTIVE_CAMPAIGN_CART_ABANDONED_MINUTES', 60),
         'tag_abandoned_carts_enabled' => filter_var(
             env('ACTIVECAMPAIGN_TAG_ABANDONED_CARTS_ENABLED', true),
@@ -161,6 +176,48 @@ return [
         })(),
         'tag_lab_sample_collected' => env('ACTIVE_CAMPAIGN_TAG_LAB_SAMPLE_COLLECTED', 32),
         'tag_lab_results_available' => env('ACTIVE_CAMPAIGN_TAG_LAB_RESULTS_AVAILABLE', 33),
+        'tags' => [
+            'credit' => [
+                'available' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_CREDIT_AVAILABLE', 'FM-Credito-Disponible'),
+                'expiring' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_CREDIT_EXPIRING', 'FM-Credito-Por-Vencer'),
+                'used' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_CREDIT_USED', 'FM-Credito-Usado'),
+                'restored' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_CREDIT_RESTORED', 'FM-Credito-Restaurado'),
+                'revoked' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_CREDIT_REVOKED', 'FM-Credito-Revocado'),
+                'closed' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_CREDIT_CLOSED', 'FM-Credito-Cerrado'),
+            ],
+            'beneficiary' => [
+                'pending' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_BENEFICIARY_PENDING', 'FM-Beneficiario-Pendiente-Registro'),
+            ],
+            'benefit' => [
+                'activated' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_BENEFIT_ACTIVATED', 'FM-Beneficio-Activado'),
+            ],
+            'promo' => [
+                'validated' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_PROMO_VALIDATED', 'FM-Promo-Validada'),
+                'used' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_PROMO_USED', 'FM-Promo-Usada'),
+                'abandoned' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_PROMO_ABANDONED', 'FM-Promo-Abandonada'),
+            ],
+            'authorization' => [
+                'pending' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_AUTHORIZATION_PENDING', 'FM-Autorizacion-Pendiente'),
+            ],
+        ],
+        'fields' => [
+            'fm_user_id' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_USER_ID'),
+            'fm_customer_id' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_CUSTOMER_ID'),
+            'fm_credito_estado' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_CREDITO_ESTADO'),
+            'fm_credito_monto' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_CREDITO_MONTO'),
+            'fm_credito_restante' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_CREDITO_RESTANTE'),
+            'fm_credito_expira_at' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_CREDITO_EXPIRA_AT'),
+            'fm_credito_compra_minima' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_CREDITO_COMPRA_MINIMA'),
+            'fm_credito_campania' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_CREDITO_CAMPANIA'),
+            'fm_credito_tipo' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_CREDITO_TIPO'),
+            'fm_credito_ultimo_uso_at' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_CREDITO_ULTIMO_USO_AT'),
+            'fm_saldo_total' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_SALDO_TOTAL'),
+            'fm_saldo_aplicable' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_SALDO_APLICABLE'),
+            'fm_saldo_condicionado' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_SALDO_CONDICIONADO'),
+            'fm_promo_ultimo_codigo' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_PROMO_ULTIMO_CODIGO'),
+            'fm_promo_estado' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_PROMO_ESTADO'),
+            'fm_ultima_compra_lab_at' => active_campaign_env('ACTIVECAMPAIGN_FIELD_FM_ULTIMA_COMPRA_LAB_AT'),
+        ],
     ],
 
     /*
@@ -175,5 +232,13 @@ return [
         'skip_admin_mail' => env('SKIP_LABORATORY_INVOICE_REQUEST_MAIL', false),
         'test_notify_email' => env('LAB_INVOICE_REQUEST_TEST_EMAIL', 'emedina.externo@odessa.com.mx'),
         'allow_fallback_to_invoice_admins' => env('LAB_INVOICE_REQUEST_FALLBACK_TO_ADMINS', false),
+    ],
+
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        'tax_profile_model' => env('OPENAI_TAX_PROFILE_MODEL') ?: null,
+        'timeout' => (int) env('OPENAI_TIMEOUT', 60),
+        'max_context_chars' => (int) env('OPENAI_MAX_CONTEXT_CHARS', 12000),
     ],
 ];

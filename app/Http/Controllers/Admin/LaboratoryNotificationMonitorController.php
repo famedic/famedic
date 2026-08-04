@@ -2,16 +2,23 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Laboratories\ResolveConsultableGdaId;
 use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
+use App\Actions\Laboratories\GetGDAResultsAction;
+use App\Enums\LaboratoryBrand;
+use App\Exceptions\GdaConsultIdNotResolvableException;
+use App\Exceptions\GdaResultsNotAvailableException;
 use App\Http\Controllers\Controller;
 use App\Models\LabOrderEventState;
 use App\Models\LaboratoryNotification;
 use App\Models\User;
+use App\Support\GDA\GdaPayloadSanitizer;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class LaboratoryNotificationMonitorController extends Controller
@@ -107,7 +114,7 @@ class LaboratoryNotificationMonitorController extends Controller
 
         $orderKeys = collect($orders->items())->pluck('order_key')->all();
 
-        $ownersMap = LaboratoryNotification::query()
+        $notificationsGrouped = LaboratoryNotification::query()
             ->where(function (Builder $query) use ($orderKeys) {
                 $query->whereIn('gda_consecutivo', $orderKeys)
                     ->orWhereIn('gda_order_id', $orderKeys);
@@ -115,18 +122,53 @@ class LaboratoryNotificationMonitorController extends Controller
             ->with([
                 'user',
                 'laboratoryPurchase.customer.user',
+                'laboratoryPurchase.laboratoryPurchaseItems',
             ])
             ->get()
-            ->groupBy(fn (LaboratoryNotification $n) => (string) ($n->gda_consecutivo ?? $n->gda_order_id))
-            ->map(function ($group) {
-                $n = $group->first();
-                $user = $n->user ?: $n->laboratoryPurchase?->customer?->user;
+            ->groupBy(fn (LaboratoryNotification $n) => (string) ($n->gda_consecutivo ?? $n->gda_order_id));
 
-                return $user ? $this->formatOwner($user) : null;
-            });
+        $ownersMap = $notificationsGrouped->map(function ($group) {
+            $n = $group->first();
+            $user = $n->user ?: $n->laboratoryPurchase?->customer?->user;
 
-        $orders->getCollection()->transform(function ($row) use ($ownersMap) {
+            return $user ? $this->formatOwner($user) : null;
+        });
+
+        $purchaseInfoMap = $notificationsGrouped->map(function ($group) {
+            $purchase = $group->first(fn (LaboratoryNotification $n) => $n->laboratoryPurchase !== null)?->laboratoryPurchase;
+
+            if (! $purchase) {
+                return null;
+            }
+
+            return [
+                'brand' => $purchase->brand?->label(),
+                'patient_name' => trim(($purchase->name ?? '').' '.($purchase->paternal_lastname ?? '').' '.($purchase->maternal_lastname ?? '')),
+                'studies_count' => $purchase->laboratoryPurchaseItems->count(),
+                'formatted_total' => $purchase->formatted_total,
+                'folio' => $purchase->gda_order_id,
+                'purchase_id' => $purchase->id,
+                'studies' => $purchase->laboratoryPurchaseItems
+                    ->map(fn ($item) => [
+                        'id' => $item->id,
+                        'name' => $item->name,
+                        'gda_id' => $item->gda_id,
+                    ])
+                    ->values()
+                    ->all(),
+            ];
+        });
+
+        $orders->getCollection()->transform(function ($row) use ($ownersMap, $purchaseInfoMap) {
             $row['owner'] = $ownersMap[$row['order_key']] ?? null;
+            $purchaseInfo = $purchaseInfoMap[$row['order_key']] ?? null;
+            $row['brand'] = $purchaseInfo['brand'] ?? null;
+            $row['patient_name'] = $purchaseInfo['patient_name'] ?? null;
+            $row['studies_count'] = $purchaseInfo['studies_count'] ?? null;
+            $row['formatted_total'] = $purchaseInfo['formatted_total'] ?? null;
+            $row['folio'] = $purchaseInfo['folio'] ?? $row['gda_order_id'] ?? null;
+            $row['purchase_id'] = $purchaseInfo['purchase_id'] ?? null;
+            $row['studies'] = $purchaseInfo['studies'] ?? [];
 
             return $row;
         });
@@ -177,6 +219,25 @@ class LaboratoryNotificationMonitorController extends Controller
 
         try {
             $result = app(ResolveGdaResultsPdfAction::class)($notification);
+        } catch (GdaResultsNotAvailableException $e) {
+            $resultsNotifications = $this->notificationsForOrder($orderKey)
+                ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                ->values();
+
+            $resultsPdf = $this->buildResultsPdfSummary($resultsNotifications);
+            $hasStoredPdf = (bool) ($resultsPdf['has_pdf_in_storage'] ?? false);
+
+            return response()->json([
+                'success' => false,
+                'gda_not_available' => true,
+                'message' => $hasStoredPdf
+                    ? 'GDA respondió que el PDF no está disponible ahora en la API de consulta (ID '.$e->orderId.'). El archivo en storage/S3 no se modificó: usa «Descargar PDF».'
+                    : 'GDA respondió: No contiene resultados todavía. El PDF aún no está disponible en la API de consulta (ID '.$e->orderId.').',
+                'last_attempt_at' => now()->toISOString(),
+                'gda_message' => $e->gdaMessage,
+                'consult_order_id' => $e->orderId,
+                'results_pdf' => $resultsPdf,
+            ], 422);
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
@@ -193,8 +254,10 @@ class LaboratoryNotificationMonitorController extends Controller
             'cached' => $result['cached'],
             'refreshed' => $result['refreshed'],
             'message' => $result['refreshed']
-                ? 'PDF actualizado desde GDA y guardado en la base de datos.'
-                : 'El PDF ya estaba almacenado en la base de datos.',
+                ? 'PDF actualizado desde GDA y guardado en storage/S3.'
+                : (! empty($result['storage_path'])
+                    ? 'El PDF ya estaba almacenado en storage/S3.'
+                    : 'El PDF ya estaba almacenado en la base de datos.'),
             'pdf_base64' => $result['pdf_base64'],
             'results_pdf' => $this->buildResultsPdfSummary($resultsNotifications),
         ]);
@@ -219,6 +282,25 @@ class LaboratoryNotificationMonitorController extends Controller
 
         try {
             $result = app(ResolveGdaResultsPdfAction::class)->forceRefresh($notification);
+        } catch (GdaResultsNotAvailableException $e) {
+            $resultsNotifications = $this->notificationsForOrder($orderKey)
+                ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                ->values();
+
+            $resultsPdf = $this->buildResultsPdfSummary($resultsNotifications);
+            $hasStoredPdf = (bool) ($resultsPdf['has_pdf_in_storage'] ?? false);
+
+            return response()->json([
+                'success' => false,
+                'gda_not_available' => true,
+                'message' => $hasStoredPdf
+                    ? 'GDA respondió que el PDF no está disponible ahora en la API de consulta (ID '.$e->orderId.'). El archivo que ya tienes en storage/S3 no se modificó: usa «Descargar PDF» para revisarlo. Puedes reintentar «Forzar actualización» más tarde.'
+                    : 'GDA respondió: No contiene resultados todavía. El PDF aún no está disponible en la API de consulta (ID '.$e->orderId.').',
+                'last_attempt_at' => now()->toISOString(),
+                'gda_message' => $e->gdaMessage,
+                'consult_order_id' => $e->orderId,
+                'results_pdf' => $resultsPdf,
+            ], 422);
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
@@ -235,7 +317,7 @@ class LaboratoryNotificationMonitorController extends Controller
             'cached' => false,
             'refreshed' => true,
             'forced' => true,
-            'message' => 'PDF actualizado desde GDA. Se limpió la caché anterior en la base de datos.',
+            'message' => 'PDF actualizado desde GDA y guardado en storage/S3.',
             'pdf_base64' => $result['pdf_base64'],
             'results_pdf' => $this->buildResultsPdfSummary($resultsNotifications),
         ]);
@@ -255,22 +337,119 @@ class LaboratoryNotificationMonitorController extends Controller
             $resultsNotifications->first()?->gda_consecutivo ?? $orderKey
         );
 
-        if (! $notification || ! $notification->hasResults()) {
-            $notification = $resultsNotifications
+        if (! $notification) {
+            $notification = $resultsNotifications->sortByDesc('created_at')->first();
+        }
+
+        if (! $notification || ! $notification->hasAvailableResults()) {
+            abort(404, 'PDF no disponible.');
+        }
+
+        $purchase = $notification->laboratoryPurchase;
+
+        if ($purchase && ! empty($purchase->results) && Storage::exists($purchase->results)) {
+            $filename = 'resultados_'.($notification->gda_consecutivo ?? $notification->gda_order_id ?? $orderKey).'.pdf';
+
+            return Storage::download($purchase->results, $filename);
+        }
+
+        try {
+            $result = app(ResolveGdaResultsPdfAction::class)($notification);
+            $pdfContent = base64_decode($result['pdf_base64'], true);
+
+            if ($pdfContent === false || $pdfContent === '') {
+                abort(404, 'PDF no disponible.');
+            }
+
+            $filename = 'resultados_'.($notification->gda_consecutivo ?? $notification->gda_order_id ?? $orderKey).'.pdf';
+
+            return response($pdfContent)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'attachment; filename="'.$filename.'"');
+        } catch (\Throwable $e) {
+            abort(404, 'PDF no disponible: '.$e->getMessage());
+        }
+    }
+
+    public function testGdaConsult(Request $request, string $orderKey): JsonResponse
+    {
+        $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
+
+        $validated = $request->validate([
+            'notification_id' => ['nullable', 'integer'],
+            'payload' => ['required', 'array'],
+            'order_id' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $notifications = $this->notificationsForOrder($orderKey);
+        abort_if($notifications->isEmpty(), 404, 'Orden no encontrada.');
+
+        $notification = null;
+        if (! empty($validated['notification_id'])) {
+            $notification = $notifications->firstWhere('id', (int) $validated['notification_id']);
+        }
+
+        if (! $notification) {
+            $notification = $notifications
+                ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
                 ->sortByDesc('created_at')
-                ->first(fn (LaboratoryNotification $n) => $n->hasResults());
+                ->first()
+                ?? $notifications->sortByDesc('created_at')->first();
         }
 
-        if (! $notification || ! $notification->hasResults()) {
-            abort(404, 'PDF no disponible en la base de datos.');
+        $orderId = $validated['order_id']
+            ?: $this->preferredConsultOrderId(
+                $notification,
+                is_array($validated['payload']) ? $validated['payload'] : null,
+                $notification?->gda_order_id ?: $orderKey
+            );
+
+        try {
+            $debug = app(GetGDAResultsAction::class)->consultForDebug(
+                (string) $orderId,
+                $validated['payload']
+            );
+        } catch (GdaConsultIdNotResolvableException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'url' => app(GetGDAResultsAction::class)->resultsConsultUrl(),
+                'http_status' => null,
+                'resolved_id' => null,
+                'resolved_source' => null,
+                'brand_key' => null,
+                'requested_order_id' => (string) $orderId,
+                'request_payload' => GdaPayloadSanitizer::sanitizeForDebug($validated['payload']),
+                'response_payload' => null,
+                'has_pdf' => false,
+                'error' => $e->getMessage(),
+                'gda_not_available' => false,
+            ], 422);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'url' => app(GetGDAResultsAction::class)->resultsConsultUrl(),
+                'http_status' => null,
+                'resolved_id' => null,
+                'resolved_source' => null,
+                'brand_key' => null,
+                'requested_order_id' => (string) $orderId,
+                'request_payload' => GdaPayloadSanitizer::sanitizeForDebug($validated['payload']),
+                'response_payload' => null,
+                'has_pdf' => false,
+                'error' => $e->getMessage(),
+                'gda_not_available' => false,
+            ], 500);
         }
 
-        $pdfContent = base64_decode($notification->results_pdf_base64);
-        $filename = 'resultados_'.($notification->gda_consecutivo ?? $notification->gda_order_id ?? $orderKey).'.pdf';
-
-        return response($pdfContent)
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="'.$filename.'"');
+        return response()->json([
+            'success' => $debug['success'],
+            'message' => $debug['success']
+                ? 'Consulta a GDA completada. Revisa request/response abajo.'
+                : ($debug['error'] ?? 'La consulta a GDA no devolvió PDF.'),
+            ...$debug,
+        ], $debug['success'] ? 200 : 422);
     }
 
     private function baseNotificationsQuery(Carbon $startDate, Carbon $endDate, string $search = ''): Builder
@@ -338,6 +517,8 @@ class LaboratoryNotificationMonitorController extends Controller
 
         $ownerUser = $notifications->first()?->user ?: $notifications->first()?->laboratoryPurchase?->customer?->user;
         $first = $notifications->first();
+        $purchase = $notifications->first(fn (LaboratoryNotification $n) => $n->laboratoryPurchase !== null)?->laboratoryPurchase;
+        $brand = $this->formatBrand($purchase?->brand);
 
         $sampleNotifications = $notifications
             ->where('notification_type', LaboratoryNotification::TYPE_SAMPLE_COLLECTION)
@@ -350,10 +531,16 @@ class LaboratoryNotificationMonitorController extends Controller
         $eventState = $this->resolveEventState($first);
         $resultsPdf = $this->buildResultsPdfSummary($resultsNotifications);
 
+        $latestResultsNotification = $resultsNotifications
+            ->sortByDesc(fn (LaboratoryNotification $n) => $n->results_received_at ?? $n->created_at)
+            ->first();
+
         return [
             'orderKey' => $orderKey,
             'gdaOrderId' => $first->gda_order_id,
             'gdaConsecutivo' => $first->gda_consecutivo,
+            'folio' => $purchase?->gda_order_id ?: $first->gda_order_id,
+            'brand' => $brand,
             'owner' => $ownerUser ? $this->formatOwner($ownerUser) : null,
             'summary' => [
                 'sample_at' => $sampleAtTz?->toISOString(),
@@ -364,11 +551,140 @@ class LaboratoryNotificationMonitorController extends Controller
                 'total_notifications' => $notifications->count(),
                 'results_pdf' => $resultsPdf,
                 'emails' => $this->buildEmailSummary($notifications, $eventState, $tz),
+                'sync_logs' => $this->buildSyncLogs($notifications, $tz),
             ],
             'sampleNotifications' => $sampleNotifications->map(fn (LaboratoryNotification $n) => $this->formatNotification($n, $tz))->values(),
-            'resultsNotifications' => $resultsNotifications->map(fn (LaboratoryNotification $n) => $this->formatNotification($n, $tz))->values(),
+            'resultsNotifications' => $resultsNotifications->map(fn (LaboratoryNotification $n) => $this->formatNotification($n, $tz, includeConsultPreview: true))->values(),
             'notifications' => $notifications->map(fn (LaboratoryNotification $n) => $this->formatNotification($n, $tz))->values(),
+            'gdaTest' => $this->buildGdaTestDefaults(
+                $latestResultsNotification,
+                $purchase?->gda_order_id ?: ($first->gda_order_id ?: $orderKey)
+            ),
         ];
+    }
+
+    private function formatBrand(?LaboratoryBrand $brand): ?array
+    {
+        if (! $brand) {
+            return null;
+        }
+
+        return [
+            'value' => $brand->value,
+            'label' => $brand->label(),
+            'image_src' => '/images/gda/'.$brand->imageSrc(),
+        ];
+    }
+
+    private function buildGdaTestDefaults(?LaboratoryNotification $notification, string $fallbackOrderId): array
+    {
+        $consultUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
+
+        if (! $notification) {
+            return [
+                'notification_id' => null,
+                'order_id' => $fallbackOrderId,
+                'consult_url' => $consultUrl,
+                'payload' => null,
+                'consult_preview' => null,
+                'consult_preview_error' => 'No hay notificación de resultados para probar la consulta.',
+            ];
+        }
+
+        $payload = $this->notificationPayloadAsArray($notification);
+        $orderId = $this->preferredConsultOrderId($notification, $payload, $fallbackOrderId);
+        $consultPreview = $this->buildConsultPreview($orderId, $payload);
+
+        return [
+            'notification_id' => $notification->id,
+            'order_id' => $orderId,
+            'consult_url' => $consultPreview['preview']['url'] ?? $consultUrl,
+            'payload' => $payload ? GdaPayloadSanitizer::sanitizeForDebug($payload) : null,
+            'consult_preview' => $consultPreview['preview'] ?? null,
+            'consult_preview_error' => $consultPreview['error'] ?? null,
+        ];
+    }
+
+    /**
+     * Prefiere folio consultable de la compra / etiqueta gabinete sobre ServiceRequest.id numérico.
+     */
+    private function preferredConsultOrderId(
+        LaboratoryNotification $notification,
+        ?array $payload,
+        ?string $fallbackOrderId = null
+    ): string {
+        $resolver = app(ResolveConsultableGdaId::class);
+        $purchase = $notification->laboratoryPurchase;
+
+        $candidates = [
+            $purchase?->gda_order_id,
+            data_get($payload ?? [], 'code.coding.0.infogda_muestras.0.infogda_etiqueta'),
+            $notification->gda_order_id,
+            data_get($payload ?? [], 'id'),
+            data_get($payload ?? [], 'requisition.value'),
+            $fallbackOrderId,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if ($candidate === null || $candidate === '') {
+                continue;
+            }
+
+            $normalized = (string) $candidate;
+
+            if ($resolver->isConsultable($normalized)) {
+                return $normalized;
+            }
+        }
+
+        return (string) ($purchase?->gda_order_id
+            ?: $notification->gda_order_id
+            ?: $fallbackOrderId
+            ?: '');
+    }
+
+    /**
+     * @return array{preview: ?array, error: ?string}
+     */
+    private function buildConsultPreview(?string $orderId, ?array $payload): array
+    {
+        if (! $orderId || ! $payload) {
+            return [
+                'preview' => null,
+                'error' => 'Falta order_id o payload para preparar la consulta.',
+            ];
+        }
+
+        try {
+            $prepared = app(GetGDAResultsAction::class)->prepareConsultRequest($orderId, $payload);
+
+            return [
+                'preview' => [
+                    'url' => $prepared['url'],
+                    'resolved_id' => $prepared['resolved_id'],
+                    'resolved_source' => $prepared['resolved_source'],
+                    'brand_key' => $prepared['brand_key'],
+                    'payload' => GdaPayloadSanitizer::sanitizeForDebug($prepared['payload']),
+                ],
+                'error' => null,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'preview' => null,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    private function notificationPayloadAsArray(LaboratoryNotification $notification): ?array
+    {
+        $payload = $notification->payload;
+
+        if (is_string($payload)) {
+            $payload = json_decode($payload, true);
+        }
+
+        return is_array($payload) ? $payload : null;
     }
 
     private function resolveEventState(LaboratoryNotification $notification): ?LabOrderEventState
@@ -397,38 +713,55 @@ class LaboratoryNotificationMonitorController extends Controller
             return $this->emptyResultsPdfSummary();
         }
 
+        $purchase = $latest->laboratoryPurchase;
+        $hasPdfInStorage = $purchase && ! empty($purchase->results) && Storage::exists($purchase->results);
+        $isGdaAutomatic = $hasPdfInStorage && str_contains($purchase->results ?? '', 'results/gda-');
+        $isManual = $hasPdfInStorage && ! $isGdaAutomatic;
+        $availableAtGda = $latest->hasAvailableResults();
+
         $cachedNotification = $resultsNotifications
             ->filter(fn (LaboratoryNotification $n) => $n->hasResults())
             ->sortByDesc(fn (LaboratoryNotification $n) => $n->pdfFetchedAt() ?? $n->updated_at)
             ->first();
 
-        $servingNotification = $cachedNotification ?? $latest;
         $hasPdfInDb = $cachedNotification !== null;
-        $isStale = $latest->shouldRefreshPdfFromGda();
-        $availableAtGda = $latest->hasAvailableResults();
+        $servingNotification = $cachedNotification ?? $latest;
+        $isStale = ! $hasPdfInStorage && $latest->shouldRefreshPdfFromGda();
 
-        $pdfSource = match (true) {
-            ! $hasPdfInDb => null,
-            data_get($servingNotification->gda_message, 'results_source') === 'gda_api' => 'gda_api',
-            default => 'webhook_or_legacy',
-        };
+        $lastSyncAt = data_get($latest->gda_message, 'results_fetched_at');
+        $lastSyncError = data_get($latest->gda_message, 'results_storage_error');
+        $lastSyncErrorAt = data_get($latest->gda_message, 'results_storage_error_at');
+        $lastGdaNotAvailableAt = data_get($latest->gda_message, 'last_gda_not_available_at');
+        $lastGdaNotAvailableMessage = data_get($latest->gda_message, 'last_gda_not_available_message');
+        $consultIdResolution = $this->resolveConsultIdForNotification($latest);
+        $storagePath = $hasPdfInStorage ? $purchase->results : data_get($latest->gda_message, 'results_storage_path');
 
-        $location = match (true) {
-            ! $availableAtGda => 'none',
-            $hasPdfInDb && $isStale => 'db_base64_stale',
-            $hasPdfInDb => 'db_base64',
-            $availableAtGda => 'gda_provider',
-            default => 'none',
-        };
+        if ($hasPdfInStorage) {
+            $location = 'storage';
+            $label = $isManual
+                ? 'PDF manual almacenado en storage/S3'
+                : 'PDF automático GDA almacenado en storage/S3';
 
-        $label = match ($location) {
-            'db_base64' => $pdfSource === 'gda_api'
+            $pdfSource = $isManual ? 'manual' : (data_get($latest->gda_message, 'results_source') ?? 'gda');
+        } elseif ($hasPdfInDb && $isStale) {
+            $location = 'db_base64_stale';
+            $label = 'PDF en BD desactualizado — existe notificación más reciente en GDA';
+            $pdfSource = data_get($servingNotification->gda_message, 'results_source') === 'gda_api' ? 'gda_api' : 'webhook_or_legacy';
+        } elseif ($hasPdfInDb) {
+            $location = 'db_base64';
+            $pdfSource = data_get($servingNotification->gda_message, 'results_source') === 'gda_api' ? 'gda_api' : 'webhook_or_legacy';
+            $label = $pdfSource === 'gda_api'
                 ? 'PDF servido desde caché en BD (obtenido vía API GDA)'
-                : 'PDF almacenado en BD (webhook o carga previa)',
-            'db_base64_stale' => 'PDF en BD desactualizado — existe notificación más reciente en GDA',
-            'gda_provider' => 'PDF disponible en proveedor GDA (sin descargar a la BD)',
-            default => 'Sin PDF de resultados registrado',
-        };
+                : 'PDF almacenado en BD (webhook o carga previa)';
+        } elseif ($availableAtGda) {
+            $location = 'gda_provider';
+            $label = 'PDF disponible en proveedor GDA (sin descargar)';
+            $pdfSource = null;
+        } else {
+            $location = 'none';
+            $label = 'Sin PDF de resultados registrado';
+            $pdfSource = null;
+        }
 
         return [
             'location' => $location,
@@ -436,6 +769,10 @@ class LaboratoryNotificationMonitorController extends Controller
             'notification_id' => $servingNotification->id,
             'serving_notification_id' => $servingNotification->id,
             'latest_notification_id' => $latest->id,
+            'has_pdf_in_storage' => $hasPdfInStorage,
+            'storage_path' => $storagePath,
+            'is_manual_result' => $isManual,
+            'is_gda_automatic' => $isGdaAutomatic,
             'has_pdf_in_db' => $hasPdfInDb,
             'available_at_gda' => $availableAtGda,
             'is_stale' => $isStale,
@@ -444,9 +781,18 @@ class LaboratoryNotificationMonitorController extends Controller
             'pdf_source_label' => $this->pdfSourceLabel($pdfSource),
             'latest_results_at' => $latest->results_received_at?->toIso8601String(),
             'pdf_fetched_at' => $servingNotification->pdfFetchedAt()?->toIso8601String(),
+            'last_sync_at' => $lastSyncAt,
+            'last_sync_error' => $lastSyncError,
+            'last_sync_error_at' => $lastSyncErrorAt,
+            'last_gda_not_available_at' => $lastGdaNotAvailableAt,
+            'last_gda_not_available_message' => $lastGdaNotAvailableMessage,
+            'gda_consult_id' => $consultIdResolution['id'],
+            'gda_consult_id_source' => $consultIdResolution['source'],
+            'gda_consult_id_source_label' => $this->consultIdSourceLabel($consultIdResolution['source']),
             'results_notifications_count' => $resultsNotifications->count(),
-            'can_fetch_from_gda' => $availableAtGda && ! $hasPdfInDb,
-            'can_force_refresh_from_gda' => $availableAtGda && $hasPdfInDb,
+            'can_fetch_from_gda' => $availableAtGda && ! $hasPdfInStorage && ! $hasPdfInDb,
+            'can_force_refresh_from_gda' => $availableAtGda && ! $isManual,
+            'can_download' => $hasPdfInStorage || $hasPdfInDb || $availableAtGda,
             'can_download_from_db' => $hasPdfInDb,
         ];
     }
@@ -459,6 +805,10 @@ class LaboratoryNotificationMonitorController extends Controller
             'notification_id' => null,
             'serving_notification_id' => null,
             'latest_notification_id' => null,
+            'has_pdf_in_storage' => false,
+            'storage_path' => null,
+            'is_manual_result' => false,
+            'is_gda_automatic' => false,
             'has_pdf_in_db' => false,
             'available_at_gda' => false,
             'is_stale' => false,
@@ -467,9 +817,16 @@ class LaboratoryNotificationMonitorController extends Controller
             'pdf_source_label' => null,
             'latest_results_at' => null,
             'pdf_fetched_at' => null,
+            'last_sync_at' => null,
+            'last_sync_error' => null,
+            'last_sync_error_at' => null,
+            'gda_consult_id' => null,
+            'gda_consult_id_source' => 'none',
+            'gda_consult_id_source_label' => null,
             'results_notifications_count' => 0,
             'can_fetch_from_gda' => false,
             'can_force_refresh_from_gda' => false,
+            'can_download' => false,
             'can_download_from_db' => false,
         ];
     }
@@ -478,8 +835,44 @@ class LaboratoryNotificationMonitorController extends Controller
     {
         return match ($source) {
             'gda_api' => 'API de consulta GDA',
+            'gda', 'storage' => 'Storage / S3 (GDA automático)',
+            'manual' => 'Storage / S3 (subido manualmente)',
             'webhook_or_legacy' => 'Webhook GDA o caché legacy',
             default => null,
+        };
+    }
+
+    /**
+     * @return array{id: ?string, source: string}
+     */
+    private function resolveConsultIdForNotification(LaboratoryNotification $notification): array
+    {
+        $payload = $notification->payload;
+
+        if (is_string($payload)) {
+            $payload = json_decode($payload, true);
+        }
+
+        if (! is_array($payload)) {
+            return ['id' => null, 'source' => 'none'];
+        }
+
+        try {
+            return app(ResolveConsultableGdaId::class)($notification->gda_order_id, $payload);
+        } catch (GdaConsultIdNotResolvableException) {
+            return ['id' => null, 'source' => 'none'];
+        }
+    }
+
+    private function consultIdSourceLabel(?string $source): ?string
+    {
+        return match ($source) {
+            'gda_order_id' => 'gda_order_id',
+            'payload.id' => 'payload.id',
+            'infogda_etiqueta' => 'infogda_etiqueta',
+            'requisition.value' => 'requisition.value',
+            'none' => 'Sin ID consultable',
+            default => $source,
         };
     }
 
@@ -522,7 +915,46 @@ class LaboratoryNotificationMonitorController extends Controller
         ];
     }
 
-    private function formatNotification(LaboratoryNotification $notification, string $tz): array
+    private function buildSyncLogs($notifications, string $tz): array
+    {
+        return $notifications
+            ->filter(fn (LaboratoryNotification $n) => $n->notification_type === LaboratoryNotification::TYPE_RESULTS)
+            ->map(function (LaboratoryNotification $n) use ($tz) {
+                $gdaMsg = $n->gda_message ?? [];
+                $purchase = $n->laboratoryPurchase;
+
+                $storedInStorage = ! empty($purchase?->results) && Storage::exists($purchase->results);
+                $skippedManual = $storedInStorage && ! str_contains($purchase->results ?? '', 'results/gda-');
+                $skippedExisting = $storedInStorage && ! $skippedManual;
+
+                return [
+                    'notification_id' => $n->id,
+                    'created_at' => $this->toTimezone($n->created_at, $tz)?->toISOString(),
+                    'notification_type' => $n->notification_type,
+                    'gda_order_id' => $n->gda_order_id,
+                    'gda_consecutivo' => $n->gda_consecutivo,
+                    'gda_acuse' => $n->gda_acuse,
+                    'results_received_at' => $this->toTimezone($n->results_received_at, $tz)?->toISOString(),
+                    'results_source' => data_get($gdaMsg, 'results_source'),
+                    'results_storage_path' => data_get($gdaMsg, 'results_storage_path'),
+                    'results_fetched_at' => data_get($gdaMsg, 'results_fetched_at'),
+                    'results_storage_error' => data_get($gdaMsg, 'results_storage_error'),
+                    'results_storage_error_at' => data_get($gdaMsg, 'results_storage_error_at'),
+                    'admin_forced_refresh_at' => data_get($gdaMsg, 'admin_forced_refresh_at'),
+                    'stored_in_storage' => $storedInStorage,
+                    'purchase_results_path' => $purchase?->results,
+                    'skipped_manual_result' => $skippedManual,
+                    'skipped_existing_result' => $skippedExisting && ! $skippedManual,
+                    'email_sent_at' => $this->toTimezone($n->email_sent_at, $tz)?->toISOString(),
+                    'email_recipient' => $n->email_recipient_email,
+                    'email_error' => $n->email_error,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function formatNotification(LaboratoryNotification $notification, string $tz, bool $includeConsultPreview = false): array
     {
         $pdfLocation = 'none';
         if ($notification->notification_type === LaboratoryNotification::TYPE_RESULTS) {
@@ -533,7 +965,10 @@ class LaboratoryNotificationMonitorController extends Controller
             }
         }
 
-        return [
+        $payload = $this->notificationPayloadAsArray($notification);
+        $gdaMessage = is_array($notification->gda_message) ? $notification->gda_message : null;
+
+        $formatted = [
             'id' => $notification->id,
             'notification_type' => $notification->notification_type,
             'status' => $notification->status,
@@ -555,7 +990,19 @@ class LaboratoryNotificationMonitorController extends Controller
             'is_stale' => $notification->notification_type === LaboratoryNotification::TYPE_RESULTS
                 && $notification->hasResults()
                 && $notification->shouldRefreshPdfFromGda(),
+            'payload' => $payload ? GdaPayloadSanitizer::sanitizeForDebug($payload) : null,
+            'gda_message' => $gdaMessage ? GdaPayloadSanitizer::sanitizeForDebug($gdaMessage) : null,
         ];
+
+        if ($includeConsultPreview) {
+            $orderId = $this->preferredConsultOrderId($notification, $payload);
+            $consultPreview = $this->buildConsultPreview($orderId ?: null, $payload);
+            $formatted['consult_preview'] = $consultPreview['preview'] ?? null;
+            $formatted['consult_preview_error'] = $consultPreview['error'] ?? null;
+            $formatted['preferred_consult_order_id'] = $orderId ?: null;
+        }
+
+        return $formatted;
     }
 
     private function formatOwner(User $user): array

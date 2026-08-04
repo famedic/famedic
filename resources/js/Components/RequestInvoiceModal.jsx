@@ -18,8 +18,9 @@ import SettingsCard from "@/Components/SettingsCard";
 import { Subheading } from "@/Components/Catalyst/heading";
 import { Code, Strong, Text, TextLink } from "@/Components/Catalyst/text";
 import { Badge } from "@/Components/Catalyst/badge";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { ArrowPathIcon, ArrowUpRightIcon } from "@heroicons/react/16/solid";
+import { getDefaultTaxProfileId } from "@/lib/taxProfileSelection";
 
 export default function RequestInvoiceModal({
 	isOpen,
@@ -27,11 +28,12 @@ export default function RequestInvoiceModal({
 	close,
 	purchase,
 }) {
-	const { taxProfiles } = usePage().props;
+	const { taxProfiles = [] } = usePage().props;
+	const didInitOpenRef = useRef(false);
 
 	const { data, setData, post, reset, processing, errors } = useForm({
 		tax_profile: null,
-		cfdi_use: "", // Cambiar a string vacío para el select
+		cfdi_use: "",
 	});
 
 	const submit = (e) => {
@@ -45,11 +47,20 @@ export default function RequestInvoiceModal({
 		}
 	};
 
+	// Al abrir: preselecciona default una vez. No reescribe si taxProfiles cambia
+	// mientras el modal sigue abierto (protege la selección manual).
 	useEffect(() => {
-		if (isOpen) {
-			reset();
+		if (isOpen && !didInitOpenRef.current) {
+			didInitOpenRef.current = true;
+			reset({
+				tax_profile: getDefaultTaxProfileId(taxProfiles),
+				cfdi_use: "",
+			});
 		}
-	}, [isOpen]);
+		if (!isOpen) {
+			didInitOpenRef.current = false;
+		}
+	}, [isOpen, reset, taxProfiles]);
 
 	// Opciones de CFDI según las que proporcionaste
 	const cfdiOptions = [

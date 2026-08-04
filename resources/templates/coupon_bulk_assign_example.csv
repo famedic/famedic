@@ -1,3 +1,3 @@
-email
-beneficiario.ejemplo1@tuempresa.com
-beneficiario.ejemplo2@tuempresa.com
+email,nombre,apellido_paterno,apellido_materno
+beneficiario.ejemplo1@tuempresa.com,María,López,García
+beneficiario.ejemplo2@tuempresa.com,Juan,Pérez,

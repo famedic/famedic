@@ -14,11 +14,20 @@ class TaxProfilePolicy
 
     public function update(User $user, TaxProfile $taxProfile): bool
     {
-        return $user->customer?->id === $taxProfile->customer_id;
+        return $user->customer?->id === $taxProfile->customer_id
+            && $taxProfile->deleted_at === null
+            && ! $taxProfile->isUsed();
     }
 
     public function delete(User $user, TaxProfile $taxProfile): bool
     {
-        return $user->customer?->id === $taxProfile->customer_id;
+        return $user->customer?->id === $taxProfile->customer_id
+            && $taxProfile->deleted_at === null;
+    }
+
+    public function setDefault(User $user, TaxProfile $taxProfile): bool
+    {
+        return $user->customer?->id === $taxProfile->customer_id
+            && $taxProfile->deleted_at === null;
     }
 }

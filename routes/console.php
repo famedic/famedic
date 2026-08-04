@@ -54,3 +54,9 @@ if (config('api_v1.idempotency.prune.enabled', false)) {
         ->withoutOverlapping(120)
         ->name('akubica-prune-idempotency');
 }
+
+if (config('services.activecampaign.coupons_expiring_enabled', false)) {
+    Schedule::command('activecampaign:sync-expiring-coupons')
+        ->dailyAt('08:00')
+        ->withoutOverlapping(30);
+}

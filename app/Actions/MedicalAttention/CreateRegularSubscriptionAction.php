@@ -20,7 +20,7 @@ class CreateRegularSubscriptionAction
     ): MedicalAttentionSubscription {
         return DB::transaction(function () use ($customer, $startDate, $endDate) {
             $start = $startDate ?? now();
-            $end = $endDate ?? $start->copy()->addMonth();
+            $end = $endDate ?? $start->copy()->addYear();
             $priceCents = config('famedic.medical_attention_subscription_price_cents', 30000);
 
             $subscription = MedicalAttentionSubscription::create([

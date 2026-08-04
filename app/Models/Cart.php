@@ -64,6 +64,64 @@ class Cart extends Model
         };
     }
 
+    /**
+     * Minutos desde la última actividad (updated_at). Null si ya está comprado.
+     */
+    public function inactiveForMinutes(): ?int
+    {
+        if ($this->status === MonitoringCartStatus::Completed || ! $this->updated_at) {
+            return null;
+        }
+
+        $seconds = max(0, now()->getTimestamp() - $this->updated_at->getTimestamp());
+
+        return (int) floor($seconds / 60);
+    }
+
+    /**
+     * Etiqueta legible del tiempo sin actividad (ej. "45 min", "2 h 10 min").
+     */
+    public function inactiveForLabel(): ?string
+    {
+        $minutes = $this->inactiveForMinutes();
+
+        if ($minutes === null) {
+            return null;
+        }
+
+        if ($minutes < 60) {
+            return $minutes.' min';
+        }
+
+        $hours = intdiv($minutes, 60);
+        $remainder = $minutes % 60;
+
+        if ($hours < 24) {
+            return $remainder > 0
+                ? "{$hours} h {$remainder} min"
+                : "{$hours} h";
+        }
+
+        $days = intdiv($hours, 24);
+        $hourRemainder = $hours % 24;
+
+        return $hourRemainder > 0
+            ? "{$days} d {$hourRemainder} h"
+            : "{$days} d";
+    }
+
+    /**
+     * Momento estimado en que el carrito cruzó el umbral de abandono.
+     */
+    public function abandonedAt(): ?Carbon
+    {
+        if ($this->displayStatus() !== 'abandoned' || ! $this->updated_at) {
+            return null;
+        }
+
+        return $this->updated_at->copy()->addMinutes(self::ABANDONED_AFTER_MINUTES);
+    }
+
     public function appointmentExportStatus(): string
     {
         if ($this->type !== MonitoringCartType::Lab || ! $this->requiresAppointmentForExport()) {
@@ -214,6 +272,11 @@ class Cart extends Model
     }
 
     /**
+     * Cita de laboratorio asociada a este carrito (máximo 1).
+     *
+     * Prioriza la cita ligada al pedido del carrito. Excluye citas que ya
+     * tienen otro pedido asignado (pertenecen a otra compra/carrito).
+     *
      * @return \Illuminate\Support\Collection<int, LaboratoryAppointment>
      */
     public function laboratoryAppointmentsForDisplay(): Collection
@@ -233,16 +296,77 @@ class Cart extends Model
             ? $customer->laboratoryAppointments
             : $customer->laboratoryAppointments()->get();
 
-        return $appointments
+        $candidates = $appointments
             ->when(
                 $brandValues->isNotEmpty(),
                 fn (Collection $rows) => $rows->filter(
                     fn (LaboratoryAppointment $appointment) => $brandValues->contains($appointment->brand->value),
                 ),
             )
-            ->sortByDesc('created_at')
-            ->take(10)
             ->values();
+
+        if ($candidates->isEmpty()) {
+            return collect();
+        }
+
+        $purchase = $this->relatedLaboratoryPurchase();
+
+        if ($purchase) {
+            $linkedToPurchase = $candidates->first(
+                fn (LaboratoryAppointment $appointment) => (int) $appointment->laboratory_purchase_id === (int) $purchase->id,
+            );
+
+            if ($linkedToPurchase) {
+                return collect([$linkedToPurchase]);
+            }
+        }
+
+        // Sin pedido de este carrito: solo citas abiertas (sin pedido de otra compra).
+        $eligible = $candidates->filter(
+            fn (LaboratoryAppointment $appointment) => $appointment->laboratory_purchase_id === null
+                || ($purchase !== null && (int) $appointment->laboratory_purchase_id === (int) $purchase->id),
+        );
+
+        if ($eligible->isEmpty()) {
+            return collect();
+        }
+
+        $windowStart = $this->created_at?->copy();
+        $windowEnd = ($this->completed_at ?? $this->updated_at)?->copy()?->addDay();
+
+        if ($windowStart && $windowEnd) {
+            $inWindow = $eligible->filter(
+                fn (LaboratoryAppointment $appointment) => $appointment->updated_at
+                    && $appointment->updated_at->between($windowStart, $windowEnd),
+            );
+
+            if ($inWindow->isNotEmpty()) {
+                return collect([$inWindow->sortByDesc('updated_at')->first()]);
+            }
+        }
+
+        if ($this->status === MonitoringCartStatus::Completed) {
+            if (! $this->completed_at) {
+                return collect();
+            }
+
+            $nearest = $eligible
+                ->sortBy(fn (LaboratoryAppointment $appointment) => abs(
+                    ($appointment->updated_at?->timestamp ?? 0) - $this->completed_at->timestamp
+                ))
+                ->first();
+
+            if (
+                $nearest?->updated_at
+                && abs($nearest->updated_at->diffInHours($this->completed_at)) <= 48
+            ) {
+                return collect([$nearest]);
+            }
+
+            return collect();
+        }
+
+        return collect([$eligible->sortByDesc('updated_at')->first()]);
     }
 
     private function appointmentCartExistsSubquery(callable $appointmentConstraint): \Closure

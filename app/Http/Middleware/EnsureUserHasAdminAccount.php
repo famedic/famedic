@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\CouponAuthorizationInboxService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -16,7 +17,21 @@ class EnsureUserHasAdminAccount
             abort(404);
         }
 
+        $administrator = $request->user()->administrator;
+        $isAuthorizer = $administrator->hasRole('autorizador');
+        $pendingAuthorizationsCount = 0;
+
+        if ($isAuthorizer) {
+            $pendingAuthorizationsCount = app(CouponAuthorizationInboxService::class)
+                ->actionableCountFor($request->user());
+        }
+
         Inertia::share([
+            'couponAuthorizerNav' => [
+                'is_authorizer' => $isAuthorizer,
+                'pending_actionable_count' => $pendingAuthorizationsCount,
+                'inbox_url' => $isAuthorizer ? route('admin.coupons.authorizations.index') : null,
+            ],
             'adminNavigation' => [
                 [
                     'label' => 'Resumen',
@@ -81,6 +96,12 @@ class EnsureUserHasAdminAccount
                                 Route::currentRouteName() === 'admin.laboratory-purchases.vendor-payments.show' ||
                                 Route::currentRouteName() === 'admin.laboratory-purchases.vendor-payments.edit',
                         ] : null,
+                        app(\App\Services\LaboratoryBilling\LaboratoryBillingAccess::class)->allows($request->user()) ? [
+                            'label' => 'Facturación',
+                            'url' => route('admin.laboratory-billing.dashboard'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-billing.'),
+                            'badge' => 'NEW',
+                        ] : null,
                     ])),
                 ],
                 [
@@ -117,11 +138,29 @@ class EnsureUserHasAdminAccount
                     'current' => Route::currentRouteName() === 'admin.customers.index' ||
                         Route::currentRouteName() === 'admin.customers.show',
                 ]] : [],
-                ...$request->user()->administrator->hasPermissionTo('coupons.manage') ? [[
+                ...($request->user()->administrator->hasPermissionTo('coupons.manage') || $isAuthorizer) ? [[
                     'label' => 'Créditos a favor',
                     'icon' => 'BanknotesIcon',
                     'disabled' => (bool) config('famedic.admin_coupons_navigation_disabled', false),
                     'items' => [
+                        [
+                            'label' => 'Beneficiarios',
+                            'url' => route('admin.coupons.beneficiaries.index'),
+                            'current' => Route::currentRouteName() === 'admin.coupons.beneficiaries.index'
+                                || Route::currentRouteName() === 'admin.coupons.beneficiaries.export',
+                        ],
+                        [
+                            'label' => 'Códigos promocionales',
+                            'url' => route('admin.coupons.promo-codes.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.coupons.promo-codes.'),
+                        ],
+                        ...($isAuthorizer ? [[
+                            'label' => $pendingAuthorizationsCount > 0
+                                ? "Pendientes de autorización ({$pendingAuthorizationsCount})"
+                                : 'Pendientes de autorización',
+                            'url' => route('admin.coupons.authorizations.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.coupons.authorizations.'),
+                        ]] : []),
                         [
                             'label' => 'Créditos',
                             'url' => route('admin.coupons.index'),
@@ -239,13 +278,50 @@ class EnsureUserHasAdminAccount
                             'url' => route('admin.config-monitor.index'),
                             'current' => str_starts_with((string) Route::currentRouteName(), 'admin.config-monitor'),
                         ] : null,
-                        $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
-                            'label' => 'Murguía — asegurados',
-                            'url' => route('admin.murguia-monitor.index'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia'),
-                        ] : null,
                     ])),
                 ],
+                ...$request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [[
+                    'label' => 'Admin Membresías',
+                    'icon' => 'IdentificationIcon',
+                    'items' => [
+                        [
+                            'label' => 'Murguía — dashboard',
+                            'url' => route('admin.murguia-dashboard.index'),
+                            'current' => Route::currentRouteName() === 'admin.murguia-dashboard.index',
+                        ],
+                        [
+                            'label' => 'Murguía — reportes',
+                            'url' => route('admin.murguia-reports.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia-reports'),
+                        ],
+                        [
+                            'label' => 'Murguía — conciliación',
+                            'url' => route('admin.murguia-reconciliation.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia-reconciliation'),
+                        ],
+                        [
+                            'label' => 'Murguía — monitor',
+                            'url' => route('admin.murguia-monitor.index'),
+                            'current' => in_array(Route::currentRouteName(), [
+                                'admin.murguia-monitor.index',
+                                'admin.murguia-monitor.show',
+                                'admin.murguia.upload',
+                                'admin.murguia.logs',
+                            ], true),
+                        ],
+                    ],
+                ]] : [],
+                ...$request->user()->administrator->hasPermissionTo('monitoring-ai.manage') ? [[
+                    'label' => 'IA',
+                    'icon' => 'SparklesIcon',
+                    'items' => [
+                        [
+                            'label' => 'Asistente IA',
+                            'url' => route('admin.monitoring-ai.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.monitoring-ai'),
+                        ],
+                    ],
+                ]] : [],
             ],
             'adminUserNavigation' => [
                 [

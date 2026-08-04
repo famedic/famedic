@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -12,6 +13,12 @@ class InvoiceRequest extends Model
 {
     use HasFactory, SoftDeletes;
 
+    /**
+     * PF-1B.1: permanece abierto a nivel modelo.
+     * No hay FormRequest/HTTP que haga mass-assignment de tax_profile_id;
+     * CreateInvoiceRequestAction escribe campos explícitos del snapshot.
+     * PF-1B.3 deberá setear tax_profile_id solo vía Action (no desde request).
+     */
     protected $guarded = [];
 
     protected $appends = [
@@ -23,6 +30,14 @@ class InvoiceRequest extends Model
     public function invoiceRequestable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /**
+     * Conserva el vínculo histórico aunque el perfil esté soft-deleted.
+     */
+    public function taxProfile(): BelongsTo
+    {
+        return $this->belongsTo(TaxProfile::class)->withTrashed();
     }
 
     protected function formattedTaxRegime(): Attribute

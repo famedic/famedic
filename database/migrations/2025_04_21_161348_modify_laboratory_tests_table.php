@@ -322,7 +322,7 @@ return new class extends Migration
         $categoryExists = Schema::hasTable('laboratory_test_categories')
             && DB::table('laboratory_test_categories')->where('id', 12)->exists();
 
-        if ($categoryExists && app()->environment() !== 'testing') {
+        if ($categoryExists && app()->environment() !== 'testing' && DB::getDriverName() !== 'sqlite') {
             foreach ($this->newPackages as $pkg) {
                 foreach ($pkg['brand_codes'] as $brand => $gda_id) {
                     if (DB::table('laboratory_tests')->where('gda_id', $gda_id)->exists()) {

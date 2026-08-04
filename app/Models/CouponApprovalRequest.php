@@ -20,6 +20,7 @@ class CouponApprovalRequest extends Model
         'after_state',
         'payload',
         'rejected_at',
+        'rejection_reason',
         'executed_at',
     ];
 

@@ -24,10 +24,20 @@ import {
 	BellAlertIcon,
 	ShoppingCartIcon,
 	Cog6ToothIcon,
+	KeyIcon,
 } from "@heroicons/react/16/solid";
-import { router } from "@inertiajs/react";
+import { router, useForm } from "@inertiajs/react";
 import { useState } from "react";
 import ManageUserDialog from "@/Components/Admin/ManageUserDialog";
+import {
+	Dialog,
+	DialogActions,
+	DialogBody,
+	DialogDescription,
+	DialogTitle,
+} from "@/Components/Catalyst/dialog";
+import { Input } from "@/Components/Catalyst/input";
+import { Field, Label, ErrorMessage } from "@/Components/Catalyst/fieldset";
 
 export default function UserPage({
 	user,
@@ -35,6 +45,7 @@ export default function UserPage({
 	states = {},
 	customer,
 	canViewTaxProfilesAdmin = false,
+	canUpdatePassword = false,
 	efevooTokens,
 	efevooTransactions,
 	laboratoryNotifications,
@@ -43,11 +54,17 @@ export default function UserPage({
 	canViewCartDetails = false,
 }) {
 	const [manageOpen, setManageOpen] = useState(false);
+	const [passwordOpen, setPasswordOpen] = useState(false);
 
 	return (
 		<AdminLayout title={user.full_name || user.email || "Usuario"}>
 			<div className="space-y-6">
-				<Header user={user} onManage={() => setManageOpen(true)} />
+				<Header
+					user={user}
+					onManage={() => setManageOpen(true)}
+					canUpdatePassword={canUpdatePassword}
+					onPasswordOpen={() => setPasswordOpen(true)}
+				/>
 
 				<ManageUserDialog
 					open={manageOpen}
@@ -56,6 +73,14 @@ export default function UserPage({
 					genders={genders}
 					states={states}
 				/>
+
+				{canUpdatePassword && (
+					<UpdatePasswordDialog
+						open={passwordOpen}
+						onClose={() => setPasswordOpen(false)}
+						user={user}
+					/>
+				)}
 
 				<div className="grid gap-4 md:grid-cols-2">
 					<ProfileCard user={user} />
@@ -95,7 +120,7 @@ export default function UserPage({
 	);
 }
 
-function Header({ user, onManage }) {
+function Header({ user, onManage, canUpdatePassword, onPasswordOpen }) {
 	return (
 		<div className="flex flex-wrap items-center justify-between gap-4">
 			<div className="flex flex-wrap items-center gap-4">
@@ -128,10 +153,18 @@ function Header({ user, onManage }) {
 					</div>
 				</div>
 			</div>
-			<Button type="button" onClick={onManage}>
-				<Cog6ToothIcon />
-				Gestionar
-			</Button>
+			<div className="flex flex-wrap gap-2">
+				{canUpdatePassword && (
+					<Button type="button" outline onClick={onPasswordOpen}>
+						<KeyIcon />
+						Password
+					</Button>
+				)}
+				<Button type="button" onClick={onManage}>
+					<Cog6ToothIcon />
+					Gestionar
+				</Button>
+			</div>
 		</div>
 	);
 }
@@ -837,6 +870,86 @@ function NotificationsCard({ notifications = [], unreadCount = 0 }) {
 				</Table>
 			)}
 		</div>
+	);
+}
+
+function UpdatePasswordDialog({ open, onClose, user }) {
+	const { data, setData, post, errors, processing, reset, clearErrors } =
+		useForm({
+			password: "",
+			password_confirmation: "",
+		});
+
+	const submit = (e) => {
+		e.preventDefault();
+
+		if (!processing) {
+			post(route("admin.users.update-password", user.id), {
+				preserveScroll: true,
+				onSuccess: () => {
+					reset();
+					onClose();
+				},
+			});
+		}
+	};
+
+	const handleClose = () => {
+		reset();
+		clearErrors();
+		onClose();
+	};
+
+	return (
+		<Dialog open={open} onClose={handleClose} size="lg">
+			<form onSubmit={submit}>
+				<DialogTitle>Actualizar contraseña</DialogTitle>
+				<DialogDescription>
+					Establece una nueva contraseña para{" "}
+					<Strong>{user.full_name || user.email}</Strong>.
+				</DialogDescription>
+
+				<DialogBody className="space-y-4">
+					<Field>
+						<Label>Nueva contraseña</Label>
+						<Input
+							type="password"
+							required
+							autoComplete="new-password"
+							value={data.password}
+							onChange={(e) => setData("password", e.target.value)}
+						/>
+						{errors.password && (
+							<ErrorMessage>{errors.password}</ErrorMessage>
+						)}
+					</Field>
+					<Field>
+						<Label>Confirmar contraseña</Label>
+						<Input
+							type="password"
+							required
+							autoComplete="new-password"
+							value={data.password_confirmation}
+							onChange={(e) =>
+								setData("password_confirmation", e.target.value)
+							}
+						/>
+						{errors.password_confirmation && (
+							<ErrorMessage>{errors.password_confirmation}</ErrorMessage>
+						)}
+					</Field>
+				</DialogBody>
+
+				<DialogActions>
+					<Button type="button" plain onClick={handleClose}>
+						Cancelar
+					</Button>
+					<Button type="submit" disabled={processing}>
+						Actualizar contraseña
+					</Button>
+				</DialogActions>
+			</form>
+		</Dialog>
 	);
 }
 

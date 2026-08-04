@@ -37,6 +37,7 @@ export default function LaboratoryPayPalButton({
     addressId,
     totalCents,
     couponId = null,
+    promoValidationToken = null,
     disabled,
 }) {
     const containerRef = useRef(null);
@@ -74,6 +75,8 @@ export default function LaboratoryPayPalButton({
                                         laboratory_brand: laboratoryBrand,
                                         total: totalCents,
                                         coupon_id: couponId,
+                                        promo_validation_token:
+                                            promoValidationToken,
                                     },
                                     {
                                         headers: {
@@ -161,6 +164,7 @@ export default function LaboratoryPayPalButton({
         addressId,
         totalCents,
         couponId,
+        promoValidationToken,
         disabled,
     ]);
 

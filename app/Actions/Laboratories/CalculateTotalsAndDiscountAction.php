@@ -10,7 +10,11 @@ class CalculateTotalsAndDiscountAction
     {
         $total = 0;
         $originalTotal = 0;
-        foreach ($laboratoryCartItems as  $laboratoryCartItem) {
+        foreach ($laboratoryCartItems as $laboratoryCartItem) {
+            if ($laboratoryCartItem->laboratoryTest === null) {
+                continue;
+            }
+
             $total += $laboratoryCartItem->laboratoryTest->famedic_price_cents;
             $originalTotal += $laboratoryCartItem->laboratoryTest->public_price_cents;
         }

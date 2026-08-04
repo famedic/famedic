@@ -9,7 +9,8 @@ class CreateLaboratoryAppointmentAction
 {
     public function __invoke(Customer $customer, LaboratoryBrand $laboratoryBrand)
     {
-        $laboratoryAppointment = $customer->getPendingLaboratoryAppointment($laboratoryBrand);
+        $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand)
+            ?? $customer->getPendingLaboratoryAppointment($laboratoryBrand);
 
         return $laboratoryAppointment ?? $customer->laboratoryAppointments()->create([
             'brand' => $laboratoryBrand,

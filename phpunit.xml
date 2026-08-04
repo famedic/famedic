@@ -56,5 +56,6 @@
         <env name="API_V1_IDEMPOTENCY_PRUNE_ENABLED" value="false" force="true"/>
         <env name="API_V1_AUDIT_ENABLED" value="false" force="true"/>
         <env name="BUSINESS_AUDIT_ENABLED" value="false" force="true"/>
+        <env name="COUPON_CREATION_OTP_REQUIRED" value="true"/>
     </php>
 </phpunit>

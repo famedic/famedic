@@ -2,12 +2,21 @@
 
 namespace App\Services\ActiveCampaign;
 
+use App\Exceptions\ActiveCampaignSyncException;
+use App\Models\User;
+use App\Services\ActiveCampaign\Concerns\HandlesBeneficiaryEvents;
+use App\Services\ActiveCampaign\Concerns\HandlesCouponCreditEvents;
+use App\Services\ActiveCampaign\Concerns\HandlesPromoEvents;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 
 class ActiveCampaignService
 {
+    use HandlesBeneficiaryEvents;
+    use HandlesCouponCreditEvents;
+    use HandlesPromoEvents;
+
     protected string $baseUrl;
     protected string $apiKey;
 
@@ -1034,6 +1043,294 @@ class ActiveCampaignService
                 'error' => $e->getMessage(),
                 'event' => $eventName
             ]);
+        }
+    }
+
+    public function enabled(): bool
+    {
+        return (bool) config('services.activecampaign.enabled', true);
+    }
+
+    public function couponsEnabled(): bool
+    {
+        return $this->enabled()
+            && (bool) config('services.activecampaign.coupons_enabled', true);
+    }
+
+    public function couponTag(string $key): ?string
+    {
+        $value = data_get(config('services.activecampaign.tags'), $key);
+
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        return $value;
+    }
+
+    public function couponField(string $key): ?string
+    {
+        $value = config('services.activecampaign.fields.'.$key);
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (string) $value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function ensureContactIdForCouponPayload(array $payload): int
+    {
+        $email = $payload['email'] ?? null;
+        if (! is_string($email) || trim($email) === '') {
+            throw new ActiveCampaignSyncException('AC coupon event: email requerido en payload.');
+        }
+
+        $contactId = $this->getContactIdByEmail($email);
+        if ($contactId) {
+            return $contactId;
+        }
+
+        $userId = $payload['user_id'] ?? null;
+        if ($userId) {
+            $user = User::query()->find($userId);
+            if ($user) {
+                $syncedId = $this->syncContactForUser($user);
+                if ($syncedId) {
+                    return $syncedId;
+                }
+            }
+        }
+
+        throw new ActiveCampaignSyncException("AC coupon event: no se pudo asegurar contacto para {$email}.");
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function ensureContactIdForBeneficiaryPayload(array $payload): int
+    {
+        $email = $payload['email'] ?? null;
+        if (! is_string($email) || trim($email) === '') {
+            throw new ActiveCampaignSyncException('AC beneficiary event: email requerido en payload.');
+        }
+
+        $contactId = $this->getContactIdByEmail($email);
+        if ($contactId) {
+            return $contactId;
+        }
+
+        $syncedId = $this->syncContactForBeneficiary($payload);
+        if ($syncedId) {
+            return $syncedId;
+        }
+
+        throw new ActiveCampaignSyncException("AC beneficiary event: no se pudo asegurar contacto para {$email}.");
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function syncContactForBeneficiary(array $payload): ?int
+    {
+        $email = $payload['email'] ?? null;
+        if (! is_string($email) || trim($email) === '') {
+            return null;
+        }
+
+        return $this->syncContact([
+            'email' => $email,
+            'first_name' => (string) ($payload['first_name'] ?? ''),
+            'paternal_lastname' => (string) ($payload['paternal_lastname'] ?? ''),
+            'maternal_lastname' => (string) ($payload['maternal_lastname'] ?? ''),
+            'phone' => '',
+            'gender' => '',
+            'birth_date' => '',
+            'phone_country' => '',
+            'state' => '',
+        ]);
+    }
+
+    public function syncContactForUser(User $user): ?int
+    {
+        return $this->syncContact([
+            'email' => $user->email,
+            'first_name' => $user->name ?? '',
+            'paternal_lastname' => $user->paternal_lastname ?? '',
+            'maternal_lastname' => $user->maternal_lastname ?? '',
+            'phone' => $user->phone ?? '',
+            'gender' => $user->formatted_gender ?? ($user->gender?->value ?? ''),
+            'birth_date' => $user->birth_date?->format('Y-m-d') ?? '',
+            'phone_country' => $user->phone_country ?? '',
+            'state' => $user->state ?? '',
+        ]);
+    }
+
+    public function resolveCouponTagId(string $dottedKey): ?int
+    {
+        $tag = $this->couponTag($dottedKey);
+        if ($tag === null || $tag === '') {
+            return null;
+        }
+
+        if (ctype_digit($tag)) {
+            return (int) $tag;
+        }
+
+        return $this->getTagIdByName($tag);
+    }
+
+    public function addCouponTagByKey(int $contactId, string $dottedKey): void
+    {
+        $tagId = $this->resolveCouponTagId($dottedKey);
+        if (! $tagId) {
+            Log::warning('AC: omitiendo tag — no resuelto', [
+                'contact_id' => $contactId,
+                'tag_key' => $dottedKey,
+            ]);
+
+            return;
+        }
+
+        $this->addTagToContactOrFail($contactId, $tagId);
+    }
+
+    public function removeCouponTagByKey(int $contactId, string $dottedKey): void
+    {
+        $tagId = $this->resolveCouponTagId($dottedKey);
+        if (! $tagId) {
+            return;
+        }
+
+        $this->removeTagFromContactOrFail($contactId, $tagId);
+    }
+
+    public function addTagToContactOrFail(int $contactId, int $tagId): void
+    {
+        $response = $this->client()->post('/contactTags', [
+            'contactTag' => [
+                'contact' => $contactId,
+                'tag' => $tagId,
+            ],
+        ]);
+
+        if (! $response->successful()) {
+            throw new ActiveCampaignSyncException(
+                "AC addTag falló (contact={$contactId}, tag={$tagId}): ".$response->body()
+            );
+        }
+    }
+
+    public function removeTagFromContactOrFail(int $contactId, int $tagId): void
+    {
+        $response = $this->client()->get("/contacts/{$contactId}/contactTags");
+
+        if (! $response->successful()) {
+            throw new ActiveCampaignSyncException(
+                "AC list contactTags falló (contact={$contactId}): ".$response->body()
+            );
+        }
+
+        foreach ($response->json()['contactTags'] ?? [] as $contactTag) {
+            if ((int) ($contactTag['tag'] ?? 0) !== $tagId) {
+                continue;
+            }
+
+            $contactTagId = (int) ($contactTag['id'] ?? 0);
+            if ($contactTagId <= 0) {
+                continue;
+            }
+
+            $deleteResponse = $this->client()->delete("/contactTags/{$contactTagId}");
+            if (! $deleteResponse->successful()) {
+                throw new ActiveCampaignSyncException(
+                    "AC removeTag falló (contactTag={$contactTagId}): ".$deleteResponse->body()
+                );
+            }
+
+            return;
+        }
+    }
+
+    /**
+     * @param  array<string, string|null>  $fields
+     */
+    public function applyCouponFieldUpdates(int $contactId, array $fields): void
+    {
+        foreach ($fields as $fieldKey => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $fieldId = $this->couponField($fieldKey);
+            if ($fieldId === null || $fieldId === '') {
+                continue;
+            }
+
+            $this->updateContactFieldValueOrFail($contactId, $fieldId, (string) $value);
+        }
+    }
+
+    public function updateContactFieldValueOrFail(int $contactId, string|int $fieldId, string $value): void
+    {
+        $response = $this->client()->post('/fieldValues', [
+            'fieldValue' => [
+                'contact' => $contactId,
+                'field' => (int) $fieldId,
+                'value' => $value,
+            ],
+        ]);
+
+        if (! $response->successful()) {
+            throw new ActiveCampaignSyncException(
+                "AC fieldValue falló (contact={$contactId}, field={$fieldId}): ".$response->body()
+            );
+        }
+    }
+
+    public function formatCentsFieldValue(mixed $cents): ?string
+    {
+        if ($cents === null || $cents === '') {
+            return null;
+        }
+
+        return number_format(((int) $cents) / 100, 2, '.', '');
+    }
+
+    public function formatDateFieldValue(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse((string) $value)->format('Y-m-d');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    public function formatDateTimeFieldValue(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse((string) $value)->format('Y-m-d H:i:s');
+        } catch (\Throwable) {
+            return null;
         }
     }
 }

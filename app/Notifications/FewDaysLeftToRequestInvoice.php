@@ -45,7 +45,7 @@ class FewDaysLeftToRequestInvoice extends Notification
             ->line('Tu orden de laboratorio se realizó muy cerca del final del mes. Solo tienes **' . $daysText . ' restantes** para solicitar la factura:')
             ->line('Folio: **' . $this->laboratoryPurchase->gda_order_id . '**')
             ->line('Paciente: **' . $this->laboratoryPurchase->full_name . '**')
-            ->line('Total **' . $this->laboratoryPurchase->formatted_total . '**')
+            ->line('Total pagado **' . $this->laboratoryPurchase->formatted_net_total . '**')
             ->line('En el siguiente enlace puedes solicitar tu factura:')
             ->action('Solicitar factura', route('laboratory-purchases.show', $this->laboratoryPurchase))
             ->line('**Importante:** Si no solicitas la factura antes del final del mes, ya no podrás hacerlo para esta orden.')

@@ -65,7 +65,7 @@
     <!-- Scripts -->
     @routes
     @viteReactRefresh
-    @vite(['resources/js/app.jsx', "resources/js/Pages/{$page['component']}.jsx"])
+    @vite(['resources/js/app.jsx'])
     @inertiaHead
 
     @env('production')
@@ -137,8 +137,19 @@
             vgo('setTrackByDefault', true);
             vgo('process');
         </script>
+
         @endenv
 
+        @env('staging', 'testing')
+            @unless(request()->routeIs(
+                'laboratory.checkout',
+                'online-pharmacy.checkout',
+                'medical-attention.checkout'
+            ))
+                <!-- ActiveCampaign WhatsApp Widget (omitido en checkout: ya hay ayuda propia y tapa botones fijos) -->
+                <script src="https://diffuser-cdn.app-us1.com/whatsapp/widget.cjs.production.min.js" data-widget-id="06a47e35-87c0-72a7-8000-831831976ef4" data-account-id="69689492"></script>
+            @endunless
+        @endenv
     @unless(app()->environment('production'))
         <script>window.__FAMEDIC_ZOHO_SALESIQ__ = { enabled: true };</script>
     @endunless

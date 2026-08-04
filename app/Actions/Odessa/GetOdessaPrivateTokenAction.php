@@ -22,7 +22,7 @@ class GetOdessaPrivateTokenAction
             'aud' => 'ODESSA',
             'iat' => $now,
             'exp' => $now + (60 * 60)
-        ], base64_decode(env('FAMEDIC_PUBLIC_KEY')), 'RS512');
+        ], base64_decode((string) config('services.odessa.famedic_public_key')), 'RS512');
 
         $url = config('services.odessa.url') . 'getToken/';
 

@@ -15,34 +15,86 @@ class CreateInvoiceAction
 {
     public function __invoke(
         Model $model,
-        UploadedFile $invoice
+        ?UploadedFile $invoice = null,
+        ?UploadedFile $invoiceXml = null,
     ): Invoice {
         DB::beginTransaction();
 
+        $newPdfPath = null;
+        $newXmlPath = null;
+
         try {
-            $filePath = $invoice->store('invoices');
             $existingInvoice = $model->invoice;
 
-            if (!$existingInvoice) {
-                $newInvoice = $model->invoice()->create([
-                    'invoice' => $filePath
-                ]);
+            if ($invoice) {
+                $newPdfPath = $invoice->store('invoices');
+            }
+
+            if ($invoiceXml) {
+                $newXmlPath = $invoiceXml->store('invoices');
+            }
+
+            $previousPdfPath = null;
+            $previousXmlPath = null;
+
+            if (! $existingInvoice) {
+                $pdfPath = $newPdfPath;
+                $xmlPath = $newXmlPath;
+                $attributes = [
+                    'invoice' => $pdfPath,
+                    'invoice_xml' => $xmlPath,
+                ];
+
+                if ($this->isCompletePaths($pdfPath, $xmlPath)) {
+                    $attributes['completed_at'] = now();
+                }
+
+                $newInvoice = $model->invoice()->create($attributes);
             } else {
-                $previousPath = $existingInvoice->invoice;
-                $existingInvoice->update([
-                    'invoice' => $filePath,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-                $newInvoice = $existingInvoice;
+                $updates = [];
+
+                if ($newPdfPath) {
+                    $previousPdfPath = $existingInvoice->invoice;
+                    $updates['invoice'] = $newPdfPath;
+                }
+
+                if ($newXmlPath) {
+                    $previousXmlPath = $existingInvoice->invoice_xml;
+                    $updates['invoice_xml'] = $newXmlPath;
+                }
+
+                $resultingPdf = array_key_exists('invoice', $updates)
+                    ? $updates['invoice']
+                    : $existingInvoice->getRawOriginal('invoice');
+                $resultingXml = array_key_exists('invoice_xml', $updates)
+                    ? $updates['invoice_xml']
+                    : $existingInvoice->getRawOriginal('invoice_xml');
+
+                if (
+                    blank($existingInvoice->completed_at)
+                    && $this->isCompletePaths($resultingPdf, $resultingXml)
+                ) {
+                    $updates['completed_at'] = now();
+                }
+
+                // Conserva created_at original; updated_at lo gestiona Eloquent.
+                if ($updates !== []) {
+                    $existingInvoice->update($updates);
+                }
+
+                $newInvoice = $existingInvoice->fresh();
             }
 
             DB::commit();
 
-            if ($existingInvoice) {
-                dispatch(function () use ($previousPath) {
-                    if (Storage::exists($previousPath)) {
-                        Storage::delete($previousPath);
+            if ($previousPdfPath || $previousXmlPath) {
+                dispatch(function () use ($previousPdfPath, $previousXmlPath) {
+                    if ($previousPdfPath && Storage::exists($previousPdfPath)) {
+                        Storage::delete($previousPdfPath);
+                    }
+
+                    if ($previousXmlPath && Storage::exists($previousXmlPath)) {
+                        Storage::delete($previousXmlPath);
                     }
                 })->afterResponse();
             }
@@ -54,10 +106,21 @@ class CreateInvoiceAction
             return $newInvoice;
         } catch (\Throwable $e) {
             DB::rollBack();
-            if (!empty($filePath) && Storage::exists($filePath)) {
-                Storage::delete($filePath);
+
+            if ($newPdfPath && Storage::exists($newPdfPath)) {
+                Storage::delete($newPdfPath);
             }
+
+            if ($newXmlPath && Storage::exists($newXmlPath)) {
+                Storage::delete($newXmlPath);
+            }
+
             throw $e;
         }
+    }
+
+    private function isCompletePaths(?string $pdfPath, ?string $xmlPath): bool
+    {
+        return filled($pdfPath) && filled($xmlPath);
     }
 }

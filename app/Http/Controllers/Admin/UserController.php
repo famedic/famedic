@@ -7,6 +7,7 @@ use App\Actions\BuildUserAdminChartDataAction;
 use App\Data\StatesMexico;
 use App\Enums\Gender;
 use App\Enums\MonitoringCartType;
+use App\Enums\MonitoringCartStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\Users\UpdateUserRequest;
 use App\Models\Cart;
@@ -15,8 +16,10 @@ use App\Models\EfevooToken;
 use App\Models\EfevooTransaction;
 use App\Models\LaboratoryNotification;
 use App\Models\User;
+use App\Services\CouponBeneficiaryService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 
 class UserController extends Controller
@@ -60,7 +63,12 @@ class UserController extends Controller
             ->orderByDesc('created_at');
 
         $users = $query
-            ->withCount(['referrals'])
+            ->withCount([
+                'referrals',
+                'monitoringCarts as active_carts_count' => function ($q) {
+                    $q->where('status', '!=', MonitoringCartStatus::Completed);
+                },
+            ])
             ->paginate(25)
             ->withQueryString();
 
@@ -190,6 +198,7 @@ class UserController extends Controller
             'states' => StatesMexico::todos(),
             'customer' => $customer,
             'canViewTaxProfilesAdmin' => request()->user()->administrator->hasPermissionTo('tax-profiles.manage'),
+            'canUpdatePassword' => (bool) request()->user()->administrator?->hasRole('superadmin'),
             'efevooTokens' => $efevooTokens,
             'efevooTransactions' => $efevooTransactions,
             'laboratoryNotifications' => $labNotifications,
@@ -206,12 +215,14 @@ class UserController extends Controller
         return back()->flashMessage('Usuario actualizado correctamente.');
     }
 
-    public function verifyEmail(User $user)
+    public function verifyEmail(User $user, CouponBeneficiaryService $beneficiaryService)
     {
         request()->user()->administrator->hasPermissionTo('users.manage') || abort(403);
 
         $user->email_verified_at = now();
         $user->save();
+
+        $beneficiaryService->linkPendingBeneficiariesForUser($user->fresh());
 
         return back()->flashMessage('Correo marcado como verificado.');
     }
@@ -224,5 +235,21 @@ class UserController extends Controller
         $user->save();
 
         return back()->flashMessage('Teléfono marcado como verificado.');
+    }
+
+    public function updatePassword(Request $request, User $user)
+    {
+        $admin = $request->user()->administrator;
+
+        abort_unless($admin && $admin->hasRole('superadmin'), 403);
+
+        $request->validate([
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user->password = Hash::make($request->password);
+        $user->save();
+
+        return back()->flashMessage('Contraseña actualizada correctamente.');
     }
 }

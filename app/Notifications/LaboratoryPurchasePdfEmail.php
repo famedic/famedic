@@ -48,7 +48,7 @@ class LaboratoryPurchasePdfEmail extends Notification implements ShouldQueue
             ->line('**Detalles de la orden:**')
             ->line('Folio: **'.$displayOrderId.'**')
             ->line('Paciente: **'.$this->laboratoryPurchase->full_name.'**')
-            ->line('Total: **'.$this->laboratoryPurchase->formatted_total.'**')
+            ->line('Total pagado: **'.$this->laboratoryPurchase->formatted_net_total.'**')
             ->line('Puedes encontrar el PDF de la orden adjunto a este correo.')
             ->line('Para más información sobre Famedic, visita nuestra página web.')
             ->attachData(Storage::get($storagePath), $filename, [

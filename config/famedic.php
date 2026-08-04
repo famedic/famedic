@@ -73,6 +73,10 @@ return [
 
     'medical_attention_subscription_price_cents' => 30000,
     'free_medical_attention_subscription_days' => 30,
+    'medical_attention_trial_enabled' => filter_var(
+        env('MEDICAL_ATTENTION_TRIAL_ENABLED', false),
+        FILTER_VALIDATE_BOOLEAN
+    ),
 
     /** Licencia institucional Odessa (monitor admin / alta manual) */
     'institutional_odessa_subscription_years' => (int) env('INSTITUTIONAL_ODESSA_SUBSCRIPTION_YEARS', 1),
@@ -85,6 +89,15 @@ return [
 
     'storage_paths' => [
         'laboratory_purchase_pdfs' => env('LABORATORY_PURCHASE_PDFS_PATH', 'pdfs/laboratory-purchases'),
+    ],
+
+    /**
+     * Facturación administrativa de laboratorios.
+     * Umbral de atraso en días naturales desde invoice_requests.created_at.
+     * Las solicitudes completas (PDF+XML) nunca se consideran atrasadas.
+     */
+    'laboratory_billing' => [
+        'invoice_delay_threshold_days' => (int) env('INVOICE_DELAY_THRESHOLD_DAYS', 3),
     ],
 
     /**

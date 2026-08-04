@@ -20,17 +20,191 @@ import {
 } from "@/Components/Catalyst/table";
 import { Badge } from "@/Components/Catalyst/badge";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
+import { appendCouponEligibilityToPayload, hasPlatformWideCouponRestrictionsFromCoupon, hasPlatformWideCouponRestrictionsFromForm, isCouponEligibilityFormComplete } from "@/lib/couponEligibilityUi";
+import CouponEligibilityControls from "@/Components/Admin/Coupon/CouponEligibilityControls";
+import CouponRuleSummary from "@/Components/Admin/Coupon/CouponRuleSummary";
+import CouponSectionCard from "@/Components/Admin/Coupon/CouponSectionCard";
+import CouponMetricCard from "@/Components/Admin/Coupon/CouponMetricCard";
+import CouponBulkImportPreview from "@/Components/Admin/Coupon/CouponBulkImportPreview";
+import CouponCreationOtpModal from "@/Components/Admin/Coupon/CouponCreationOtpModal";
+import CouponOtpSecurityNotice from "@/Components/Admin/Coupon/CouponOtpSecurityNotice";
+import AuthorizationInboxLink from "@/Components/Admin/Coupon/AuthorizationInboxLink";
+import {
+	beneficiaryRowFromMatrix,
+	isConfirmableBeneficiaryStatus,
+	isMatrixRowLookupConfirmable,
+	nameFieldsFromLookupUser,
+} from "@/lib/couponBeneficiaryAssign";
+import { resolveBulkRowStatus } from "@/lib/couponBulkImportPreview";
+import { CREDIT_TYPE_OPTIONS, creditTypeLabel } from "@/lib/couponAdminUi";
+import {
+	buildShareablePreview,
+	defaultFieldsForCreditType,
+	isCreditStepComplete,
+	isRulesStepComplete,
+	visibleTabsForCreditType,
+} from "@/lib/couponAssignCreditTypes";
+import CouponAssignCreditConfig, {
+	CouponAssignPromoUsageRules,
+} from "@/Components/Admin/Coupon/CouponAssignCreditConfig";
 
 function csrfTokenFromMeta() {
 	if (typeof document === "undefined") return "";
 	return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") ?? "";
 }
 
+function isBulkPreviewDebugEnabled() {
+	if (typeof window === "undefined") return false;
+	return new URLSearchParams(window.location.search).has("debug_bulk");
+}
+
+function logBulkPreviewDebug(step, data = {}) {
+	const entry = { step, at: new Date().toISOString(), ...data };
+	console.info("[coupon-bulk-preview]", entry);
+	return entry;
+}
+
+function buildCouponAssignPayload(d, refs) {
+	const out = {
+		coupon_mode: d.coupon_mode,
+		assignment_mode: d.assignment_mode,
+		send_notification: d.send_notification,
+		send_notifications: d.send_notifications,
+		authorizer_ids: d.authorizer_ids,
+	};
+	if (d.coupon_mode === "existing") {
+		out.coupon_id = d.coupon_id;
+	}
+	if (d.coupon_mode === "new") {
+		const cents = Math.round(parseFloat(String(d.amount_mxn).replace(",", "")) * 100);
+		out.amount_cents = cents;
+		out.type = d.credit_type ?? "balance";
+		out.description = d.description?.trim() ? d.description.trim() : null;
+		out.is_active = d.is_active;
+
+		if (d.credit_type === "shared_promo") {
+			out.promo_creation = true;
+			out.promo_type = "shared";
+			out.auto_generate_code = d.auto_generate_promo_code ?? false;
+			out.code = d.auto_generate_promo_code
+				? null
+				: (d.promo_code?.trim() ? d.promo_code.trim() : null);
+			out.max_redemptions = parseInt(String(d.max_redemptions), 10);
+			out.max_uses_per_user = parseInt(String(d.max_uses_per_user), 10);
+			appendCouponEligibilityToPayload(out, d);
+			out.assignment_mode = "none";
+		} else {
+			out.code = d.code?.trim() ? d.code.trim() : null;
+			if (d.coupon_concept_id === "other") {
+				out.concept_is_other = true;
+				out.coupon_concept_id = null;
+				out.concept_other = d.concept_other?.trim() || null;
+			} else if (d.coupon_concept_id !== "" && d.coupon_concept_id != null) {
+				out.coupon_concept_id = parseInt(d.coupon_concept_id, 10);
+				out.concept_other = null;
+			} else {
+				out.coupon_concept_id = null;
+				out.concept_other = null;
+			}
+			if (d.credit_type === "balance") {
+				out.validity_mode = "open";
+				out.minimum_purchase_mode = "none";
+				out.valid_from = null;
+				out.expires_at = null;
+				out.min_purchase_cents = null;
+			} else {
+				appendCouponEligibilityToPayload(out, d);
+			}
+		}
+	}
+	if (d.assignment_mode === "individual" || d.assignment_mode === "bulk") {
+		const selectedBulkRows = refs.bulkRowsRef.current.filter(
+			(r) => r.include && isConfirmableBeneficiaryStatus(resolveBulkRowStatus(r)),
+		);
+		if (selectedBulkRows.length > 0) {
+			out.beneficiary_rows = selectedBulkRows.map((r) => ({
+				email: r.email,
+				first_name: r.first_name ?? null,
+				paternal_lastname: r.paternal_lastname ?? null,
+				maternal_lastname: r.maternal_lastname ?? null,
+				credit_type: r.credit_type ?? d.credit_type ?? "balance",
+			}));
+			out.beneficiary_source = d.assignment_mode === "bulk" ? "excel" : "manual";
+		} else {
+			const previewSource =
+				refs.beneficiaryPreviewRowsRef.current.length > 0
+					? refs.beneficiaryPreviewRowsRef.current
+					: refs.matrixRowsRef.current.map(beneficiaryRowFromMatrix);
+			const rows = previewSource
+				.filter((r) => {
+					if (r.status) return isConfirmableBeneficiaryStatus(r.status);
+					return String(r.email ?? "").trim() !== "";
+				})
+				.map((r) => ({
+					email: r.email,
+					first_name: r.first_name ?? null,
+					paternal_lastname: r.paternal_lastname ?? null,
+					maternal_lastname: r.maternal_lastname ?? null,
+					credit_type: r.credit_type ?? d.credit_type ?? "balance",
+				}));
+			if (rows.length > 0) {
+				out.beneficiary_rows = rows;
+				out.beneficiary_source = d.assignment_mode === "bulk" ? "excel" : "manual";
+			}
+		}
+	}
+	if (d.assignment_mode === "individual" && !out.beneficiary_rows) {
+		const emails = [];
+		const seen = new Set();
+		const counts = {};
+		for (const r of refs.matrixRowsRef.current) {
+			const k = r.email.trim().toLowerCase();
+			if (!k) continue;
+			counts[k] = (counts[k] || 0) + 1;
+		}
+		for (const r of refs.matrixRowsRef.current) {
+			const k = r.email.trim().toLowerCase();
+			if (!k || !isMatrixRowLookupConfirmable(r.lookup)) continue;
+			if ((counts[k] ?? 0) > 1) continue;
+			if (seen.has(k)) continue;
+			seen.add(k);
+			emails.push(r.email.trim());
+		}
+		if (emails.length > 0) out.bulk_emails = emails;
+	}
+	if (d.assignment_mode === "bulk" && !out.beneficiary_rows) {
+		const confirmed = refs.bulkRowsRef.current.filter((r) => r.include).map((r) => r.email);
+		if (confirmed.length > 0) {
+			out.bulk_emails = confirmed;
+		} else if (refs.bulkUploadFileRef.current) {
+			out.file = refs.bulkUploadFileRef.current;
+		} else if (d.file) {
+			out.file = d.file;
+		}
+	}
+	if (d.coupon_mode === "new") {
+		const beneficiaryCount = out.beneficiary_rows?.length ?? 0;
+		if (d.assignment_mode === "platform_all") {
+			out.max_beneficiaries = refs.platformUserCount ?? null;
+		} else if (d.assignment_mode === "none") {
+			out.max_beneficiaries = null;
+		} else if (beneficiaryCount > 0) {
+			out.max_beneficiaries = beneficiaryCount;
+		} else {
+			out.max_beneficiaries = null;
+		}
+	}
+	return out;
+}
+
 const TABS = [
-	{ id: "coupon", label: "Crédito" },
-	{ id: "assignment", label: "Asignación de beneficiarios" },
+	{ id: "credit", label: "Datos del beneficio" },
+	{ id: "rules", label: "Reglas de uso" },
+	{ id: "assignment", label: "Beneficiarios" },
 	{ id: "summary", label: "Resumen" },
 ];
+
+const TAB_ALIASES = { coupon: "credit" };
 
 function formatMxFromCents(cents) {
 	if (cents == null || cents === "") return "—";
@@ -86,17 +260,30 @@ function errorsForTab(errs, tabId) {
 		keys.some((k) => k === prefix || k.startsWith(`${prefix}.`));
 
 	switch (tabId) {
-		case "coupon":
+		case "credit":
 			return (
 				match("coupon_mode") ||
 				match("coupon_id") ||
 				match("amount_cents") ||
+				match("type") ||
+				match("credit_type") ||
 				match("code") ||
+				match("max_redemptions") ||
+				match("max_uses_per_user") ||
+				match("promo_code") ||
 				match("description") ||
-				match("max_beneficiaries") ||
 				match("is_active") ||
 				match("coupon_concept_id") ||
-				match("concept_other")
+				match("concept_other") ||
+				match("concept_is_other")
+			);
+		case "rules":
+			return (
+				match("validity_mode") ||
+				match("minimum_purchase_mode") ||
+				match("valid_from") ||
+				match("expires_at") ||
+				match("min_purchase_cents")
 			);
 		case "assignment":
 			return (
@@ -117,12 +304,13 @@ const ASSIGNMENT_LABELS = {
 	none: "Solo guardar",
 	individual: "Asignar ahora",
 	bulk: "Archivo masivo",
+	platform_all: "Aplicar a todos los usuarios",
 };
 
 /** Oculto temporalmente en la UI; el flujo masivo permanece en el código por si se reactiva. */
-const SHOW_BULK_ASSIGNMENT_UI = false;
+const SHOW_BULK_ASSIGNMENT_UI = true;
 
-function createMatrixRow() {
+function createMatrixRow(creditType = "balance") {
 	const id =
 		typeof crypto !== "undefined" && crypto.randomUUID
 			? crypto.randomUUID()
@@ -130,6 +318,10 @@ function createMatrixRow() {
 	return {
 		id,
 		email: "",
+		first_name: "",
+		paternal_lastname: "",
+		maternal_lastname: "",
+		credit_type: creditType,
 		lookup: {
 			status: "idle",
 			exists: null,
@@ -147,6 +339,9 @@ export default function CouponsAssign({
 	focus = "",
 	initialTab = "coupon",
 	isSuperadmin = false,
+	creationOtpRequired = true,
+	platformUserCount = 0,
+	promoCodeConfig = {},
 	concepts = [],
 }) {
 	const requireAuth = !!settings?.require_authorization;
@@ -154,7 +349,8 @@ export default function CouponsAssign({
 	const allowedTabs = new Set(TABS.map((t) => t.id));
 	const normalizedInitialTab = useMemo(() => {
 		if (focus === "bulk") return "assignment";
-		return allowedTabs.has(initialTab) ? initialTab : "coupon";
+		const tab = TAB_ALIASES[initialTab] ?? initialTab;
+		return allowedTabs.has(tab) ? tab : "credit";
 	}, [focus, initialTab]);
 
 	const firstId = assignableCoupons?.[0]?.id ?? "";
@@ -202,11 +398,24 @@ export default function CouponsAssign({
 	const [bulkRows, setBulkRows] = useState([]);
 	const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
 	const [bulkPreviewError, setBulkPreviewError] = useState("");
+	const [bulkPreviewSummary, setBulkPreviewSummary] = useState(null);
+	const [beneficiaryPreviewRows, setBeneficiaryPreviewRows] = useState([]);
+	const [beneficiaryPreviewLoading, setBeneficiaryPreviewLoading] = useState(false);
+	const [beneficiaryPreviewError, setBeneficiaryPreviewError] = useState("");
 	const [rulesSidebarExpanded, setRulesSidebarExpanded] = useState(false);
 	const bulkRowsRef = useRef([]);
+	const beneficiaryPreviewRowsRef = useRef([]);
+	const bulkUploadFileRef = useRef(null);
+	const [bulkUploadFile, setBulkUploadFile] = useState(null);
+	const [bulkPreviewDebugLog, setBulkPreviewDebugLog] = useState([]);
 	const [matrixRows, setMatrixRows] = useState(() => [createMatrixRow()]);
 	const matrixRowsRef = useRef(matrixRows);
 	const matrixLookupTimersRef = useRef({});
+	const otpVerificationTokenRef = useRef(null);
+	const [otpModalOpen, setOtpModalOpen] = useState(false);
+	const [otpAssignPayload, setOtpAssignPayload] = useState(null);
+	const platformUserCountRef = useRef(platformUserCount);
+	platformUserCountRef.current = platformUserCount;
 
 	const { data, setData, post, processing, errors, transform } = useForm({
 		coupon_mode: "new",
@@ -217,21 +426,75 @@ export default function CouponsAssign({
 					? "none"
 					: "individual",
 		coupon_id: firstId,
+		credit_type: "balance",
 		amount_mxn: defaultAmount,
 		code: "",
 		description: "",
-		max_beneficiaries: "",
-		is_active: true,
 		file: null,
 		send_notification: true,
 		send_notifications: true,
 		authorizer_ids: [],
 		coupon_concept_id: "",
 		concept_other: "",
+		validity_mode: "open",
+		valid_from: "",
+		expires_at: "",
+		minimum_purchase_mode: "none",
+		min_purchase_mxn: "",
+		is_active: true,
+		promo_code: "",
+		auto_generate_promo_code: false,
+		max_redemptions: "100",
+		max_uses_per_user: "1",
 	});
 
+	useEffect(() => {
+		if (data.credit_type === "shared_promo" && activeTab === "assignment") {
+			setActiveTab("credit");
+		}
+	}, [data.credit_type, activeTab, setActiveTab]);
+
+	const visibleTabs = useMemo(
+		() => visibleTabsForCreditType(data.credit_type ?? "balance"),
+		[data.credit_type],
+	);
+
+	const handleCreditTypeChange = useCallback(
+		(nextType) => {
+			const defaults = defaultFieldsForCreditType(nextType);
+			setData("credit_type", nextType);
+			for (const [key, value] of Object.entries(defaults)) {
+				if (value !== undefined) {
+					setData(key, value);
+				}
+			}
+			setMatrixRows((rows) =>
+				rows.map((r) => ({
+					...r,
+					credit_type: nextType === "shared_promo" ? "coupon" : nextType,
+				})),
+			);
+			if (nextType === "shared_promo") {
+				setActiveTab("credit");
+			}
+		},
+		[setData, setActiveTab],
+	);
+
 	bulkRowsRef.current = bulkRows;
+	beneficiaryPreviewRowsRef.current = beneficiaryPreviewRows;
 	matrixRowsRef.current = matrixRows;
+
+	const handleBulkRowsChange = useCallback((updater) => {
+		setBulkRows((prev) => (typeof updater === "function" ? updater(prev) : updater));
+	}, []);
+
+	const pushBulkPreviewDebug = useCallback((step, data = {}) => {
+		const entry = logBulkPreviewDebug(step, data);
+		if (isBulkPreviewDebugEnabled()) {
+			setBulkPreviewDebugLog((prev) => [...prev.slice(-19), entry]);
+		}
+	}, []);
 
 	useEffect(() => {
 		if (!SHOW_BULK_ASSIGNMENT_UI && data.assignment_mode === "bulk") {
@@ -240,67 +503,15 @@ export default function CouponsAssign({
 	}, [data.assignment_mode, setData]);
 
 	transform((d) => {
-		const out = {
-			coupon_mode: d.coupon_mode,
-			assignment_mode: d.assignment_mode,
-			send_notification: d.send_notification,
-			send_notifications: d.send_notifications,
-			authorizer_ids: d.authorizer_ids,
-		};
-		if (d.coupon_mode === "existing") {
-			out.coupon_id = d.coupon_id;
-		}
-		if (d.coupon_mode === "new") {
-			const cents = Math.round(
-				parseFloat(String(d.amount_mxn).replace(",", "")) * 100,
-			);
-			out.amount_cents = cents;
-			out.code = d.code?.trim() ? d.code.trim() : null;
-			out.description = d.description?.trim() ? d.description.trim() : null;
-			const maxB = String(d.max_beneficiaries ?? "").trim();
-			out.max_beneficiaries = maxB === "" ? null : parseInt(maxB, 10);
-			out.is_active = d.is_active;
-			if (d.coupon_concept_id === "other") {
-				out.coupon_concept_id = null;
-				out.concept_other = d.concept_other?.trim() || null;
-			} else if (d.coupon_concept_id !== "" && d.coupon_concept_id != null) {
-				out.coupon_concept_id = parseInt(d.coupon_concept_id, 10);
-				out.concept_other = null;
-			} else {
-				out.coupon_concept_id = null;
-				out.concept_other = null;
-			}
-		}
-		if (d.assignment_mode === "individual") {
-			const emails = [];
-			const seen = new Set();
-			const counts = {};
-			for (const r of matrixRowsRef.current) {
-				const k = r.email.trim().toLowerCase();
-				if (!k) continue;
-				counts[k] = (counts[k] || 0) + 1;
-			}
-			for (const r of matrixRowsRef.current) {
-				const k = r.email.trim().toLowerCase();
-				if (!k || r.lookup.status !== "found") continue;
-				if ((counts[k] ?? 0) > 1) continue;
-				if (seen.has(k)) continue;
-				seen.add(k);
-				emails.push(r.email.trim());
-			}
-			if (emails.length > 0) {
-				out.bulk_emails = emails;
-			}
-		}
-		if (d.assignment_mode === "bulk") {
-			const confirmed = bulkRowsRef.current
-				.filter((r) => r.include)
-				.map((r) => r.email);
-			if (confirmed.length > 0) {
-				out.bulk_emails = confirmed;
-			} else if (d.file) {
-				out.file = d.file;
-			}
+		const out = buildCouponAssignPayload(d, {
+			bulkRowsRef,
+			beneficiaryPreviewRowsRef,
+			matrixRowsRef,
+			bulkUploadFileRef,
+			platformUserCount: platformUserCountRef.current,
+		});
+		if (otpVerificationTokenRef.current) {
+			out.otp_verification_token = otpVerificationTokenRef.current;
 		}
 		return out;
 	});
@@ -319,9 +530,22 @@ export default function CouponsAssign({
 		}
 	}, [errors]);
 
-	const applyMatrixLookup = useCallback((rowId, nextLookup) => {
+	const applyMatrixLookup = useCallback((rowId, nextLookup, nameFields = null) => {
 		setMatrixRows((rows) =>
-			rows.map((r) => (r.id === rowId ? { ...r, lookup: nextLookup } : r)),
+			rows.map((r) => {
+				if (r.id !== rowId) {
+					return r;
+				}
+
+				const updated = { ...r, lookup: nextLookup };
+				if (nameFields) {
+					updated.first_name = nameFields.first_name ?? "";
+					updated.paternal_lastname = nameFields.paternal_lastname ?? "";
+					updated.maternal_lastname = nameFields.maternal_lastname ?? "";
+				}
+
+				return updated;
+			}),
 		);
 	}, []);
 
@@ -372,22 +596,27 @@ export default function CouponsAssign({
 					return;
 				}
 				if (payload.exists) {
-					applyMatrixLookup(rowId, {
-						status: "found",
-						exists: true,
-						user: payload.user,
-						message:
-							payload.user?.name || payload.user?.email
-								? `Registrado: ${payload.user?.name || payload.user?.email}`
-								: "Usuario registrado.",
-					});
+					const nameFields = nameFieldsFromLookupUser(payload.user);
+					applyMatrixLookup(
+						rowId,
+						{
+							status: "found",
+							exists: true,
+							user: payload.user,
+							message:
+								payload.user?.name || payload.user?.email
+									? `Registrado: ${payload.user?.name || payload.user?.email}`
+									: "Usuario registrado.",
+						},
+						nameFields,
+					);
 					return;
 				}
 				applyMatrixLookup(rowId, {
 					status: "missing",
 					exists: false,
 					user: null,
-					message: "No existe un usuario con ese correo.",
+					message: "Pendiente de registro: se guardará como beneficiario pendiente.",
 				});
 			} catch {
 				const row = matrixRowsRef.current.find((r) => r.id === rowId);
@@ -445,35 +674,139 @@ export default function CouponsAssign({
 		return m;
 	}, [matrixRows]);
 
-	const individualReadyEmails = useMemo(() => {
-		if (data.assignment_mode !== "individual") return [];
+	const confirmableBeneficiaryRows = useMemo(() => {
+		if (bulkRows.length > 0) {
+			return bulkRows
+				.filter(
+					(r) =>
+						r.include && isConfirmableBeneficiaryStatus(resolveBulkRowStatus(r)),
+				)
+				.map((r) => ({
+					email: r.email,
+					first_name: r.first_name ?? null,
+					paternal_lastname: r.paternal_lastname ?? null,
+					maternal_lastname: r.maternal_lastname ?? null,
+				}));
+		}
+		if (beneficiaryPreviewRows.length > 0) {
+			return beneficiaryPreviewRows
+				.filter((r) => isConfirmableBeneficiaryStatus(r.status))
+				.map((r) => ({
+					email: r.email,
+					first_name: r.first_name ?? null,
+					paternal_lastname: r.paternal_lastname ?? null,
+					maternal_lastname: r.maternal_lastname ?? null,
+				}));
+		}
 		const out = [];
 		const seen = new Set();
 		for (const r of matrixRows) {
 			const k = r.email.trim().toLowerCase();
-			if (!k || r.lookup.status !== "found") continue;
+			if (!k || !k.includes("@")) continue;
 			if ((emailLowerCounts[k] ?? 0) > 1) continue;
+			if (!isMatrixRowLookupConfirmable(r.lookup)) continue;
 			if (seen.has(k)) continue;
 			seen.add(k);
-			out.push(k);
+			out.push(beneficiaryRowFromMatrix(r));
 		}
 		return out;
-	}, [data.assignment_mode, matrixRows, emailLowerCounts]);
+	}, [bulkRows, beneficiaryPreviewRows, matrixRows, emailLowerCounts]);
+
+	const individualReadyEmails = useMemo(() => {
+		return confirmableBeneficiaryRows.map((r) => r.email.trim().toLowerCase());
+	}, [confirmableBeneficiaryRows]);
 
 	const beneficiaryCountPreview = useMemo(() => {
-		if (data.assignment_mode === "individual") return individualReadyEmails.length;
-		if (data.assignment_mode === "none") return 0;
-		if (data.assignment_mode === "bulk") {
-			const n = bulkRows.filter((r) => r.include).length;
-			return n > 0 ? n : 0;
+		if (data.assignment_mode === "platform_all") {
+			return platformUserCount;
 		}
+		if (data.assignment_mode === "individual" || data.assignment_mode === "bulk") {
+			return confirmableBeneficiaryRows.length;
+		}
+		if (data.assignment_mode === "none") return 0;
 		return 0;
-	}, [data.assignment_mode, bulkRows, individualReadyEmails.length]);
+	}, [data.assignment_mode, confirmableBeneficiaryRows.length, platformUserCount]);
+
+	const beneficiaryBreakdown = useMemo(() => {
+		if (data.assignment_mode === "platform_all") {
+			return {
+				registered: platformUserCount,
+				pending: 0,
+				invalid: 0,
+				duplicate: 0,
+			};
+		}
+		if (data.assignment_mode === "none") {
+			return { registered: 0, pending: 0, invalid: 0, duplicate: 0 };
+		}
+		if (bulkRows.length > 0) {
+			let registered = 0;
+			let pending = 0;
+			let invalid = 0;
+			let duplicate = 0;
+			for (const row of bulkRows) {
+				const status = resolveBulkRowStatus(row);
+				if (status === "valid_registered_user") registered += 1;
+				else if (status === "valid_pending_user") pending += 1;
+				else if (
+					status === "duplicate_in_file" ||
+					status === "already_beneficiary" ||
+					status === "already_assigned"
+				) {
+					duplicate += 1;
+				} else invalid += 1;
+			}
+			return { registered, pending, invalid, duplicate };
+		}
+		if (beneficiaryPreviewRows.length > 0) {
+			let registered = 0;
+			let pending = 0;
+			let invalid = 0;
+			let duplicate = 0;
+			for (const row of beneficiaryPreviewRows) {
+				if (row.status === "valid_registered_user") registered += 1;
+				else if (row.status === "valid_pending_user") pending += 1;
+				else if (
+					row.status === "duplicate_in_file" ||
+					row.status === "already_beneficiary" ||
+					row.status === "already_assigned"
+				) {
+					duplicate += 1;
+				} else invalid += 1;
+			}
+			return { registered, pending, invalid, duplicate };
+		}
+		let registered = 0;
+		let pending = 0;
+		let invalid = 0;
+		let duplicate = 0;
+		for (const r of matrixRows) {
+			const k = r.email.trim().toLowerCase();
+			if (!k) continue;
+			if ((emailLowerCounts[k] ?? 0) > 1) {
+				duplicate += 1;
+				continue;
+			}
+			if (r.lookup?.status === "found") registered += 1;
+			else if (r.lookup?.status === "missing") pending += 1;
+			else invalid += 1;
+		}
+		return { registered, pending, invalid, duplicate };
+	}, [
+		data.assignment_mode,
+		platformUserCount,
+		bulkRows,
+		beneficiaryPreviewRows,
+		matrixRows,
+		emailLowerCounts,
+	]);
 
 	const beneficiariesForPreApprovalDraft = useMemo(() => {
-		const parsed = parseInt(String(data.max_beneficiaries ?? "").trim(), 10);
-		return Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
-	}, [data.max_beneficiaries]);
+		if (data.assignment_mode !== "none") {
+			return Math.max(beneficiaryCountPreview, 1);
+		}
+		return 1;
+	}, [data.assignment_mode, beneficiaryCountPreview]);
 
 	const approvalsPreview = useMemo(
 		() =>
@@ -500,62 +833,285 @@ export default function CouponsAssign({
 		!(isSuperadmin && rulesForUi?.superadmin_bypass_approvals);
 
 	useEffect(() => {
-		if (data.assignment_mode !== "bulk") {
-			setBulkRows([]);
-			setBulkPreviewError("");
-			setBulkPreviewLoading(false);
+		if (data.assignment_mode === "bulk") {
+			setBeneficiaryPreviewRows([]);
+			setBeneficiaryPreviewError("");
+			return;
+		}
+		setBulkRows([]);
+		setBulkPreviewError("");
+		setBulkPreviewLoading(false);
+		setBulkPreviewSummary(null);
+		setBulkUploadFile(null);
+		bulkUploadFileRef.current = null;
+		if (data.assignment_mode === "none") {
+			setBeneficiaryPreviewRows([]);
 		}
 	}, [data.assignment_mode]);
 
-	const runBulkPreview = useCallback(async () => {
-		if (!data.file) {
-			setBulkPreviewError("Selecciona un archivo primero.");
+	const runBeneficiaryPreviewFromMatrix = useCallback(async () => {
+		const parentId =
+			data.coupon_mode === "existing" && data.coupon_id
+				? Number(data.coupon_id)
+				: null;
+		if (!parentId) {
+			setBeneficiaryPreviewError(
+				"Para generar vista previa con validación de campaña, elige un cupón existente o confirma en el resumen (se validará al enviar).",
+			);
 			return;
 		}
+		const rows = matrixRowsRef.current
+			.map(beneficiaryRowFromMatrix)
+			.filter((r) => r.email.trim() !== "");
+		if (rows.length === 0) {
+			setBeneficiaryPreviewError("Agrega al menos un correo en la lista.");
+			return;
+		}
+		setBeneficiaryPreviewLoading(true);
+		setBeneficiaryPreviewError("");
+		try {
+			const res = await fetch(
+				route("admin.coupons.beneficiaries.preview", parentId),
+				{
+					method: "POST",
+					headers: {
+						Accept: "application/json",
+						"Content-Type": "application/json",
+						"X-Requested-With": "XMLHttpRequest",
+						"X-CSRF-TOKEN": csrfTokenFromMeta(),
+					},
+					body: JSON.stringify({ rows }),
+				},
+			);
+			const json = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				setBeneficiaryPreviewError(json.message ?? "No se pudo generar la vista previa.");
+				setBeneficiaryPreviewRows([]);
+				return;
+			}
+			setBeneficiaryPreviewRows(json.rows ?? []);
+			setBulkRows(
+				(json.rows ?? []).map((r) => ({
+					email: r.email,
+					first_name: r.first_name,
+					paternal_lastname: r.paternal_lastname,
+					maternal_lastname: r.maternal_lastname,
+					status: r.status,
+					messages: r.messages,
+					editable: r.editable,
+					user_name: null,
+					include: isConfirmableBeneficiaryStatus(r.status),
+				})),
+			);
+			setBulkPreviewSummary(json.summary ?? null);
+		} catch {
+			setBeneficiaryPreviewError("Error de red al generar la vista previa.");
+		} finally {
+			setBeneficiaryPreviewLoading(false);
+		}
+	}, [data.coupon_mode, data.coupon_id]);
+
+	const runBulkPreview = useCallback(async () => {
+		const file = bulkUploadFileRef.current;
+		pushBulkPreviewDebug("run_started", {
+			hasFile: !!file,
+			fileName: file?.name ?? null,
+			fileSize: file?.size ?? null,
+			assignmentMode: data.assignment_mode,
+			couponMode: data.coupon_mode,
+			couponId: data.coupon_id ?? null,
+		});
+		if (!file) {
+			setBulkPreviewError("Selecciona un archivo primero.");
+			pushBulkPreviewDebug("aborted_no_file");
+			return;
+		}
+		const parentId =
+			data.coupon_mode === "existing" && data.coupon_id
+				? Number(data.coupon_id)
+				: null;
 		setBulkPreviewLoading(true);
 		setBulkPreviewError("");
+		setBeneficiaryPreviewError("");
 		try {
 			const fd = new FormData();
-			fd.append("file", data.file);
-			const res = await fetch(route("admin.coupons.assign.preview-bulk"), {
+			fd.append("file", file);
+			let url;
+			try {
+				url = parentId
+					? route("admin.coupons.beneficiaries.preview-file", parentId)
+					: route("admin.coupons.assign.preview-bulk");
+			} catch (routeError) {
+				pushBulkPreviewDebug("route_resolution_failed", {
+					error: routeError instanceof Error ? routeError.message : String(routeError),
+				});
+				setBulkPreviewError(
+					"No se pudo resolver la ruta del servidor para analizar el archivo.",
+				);
+				return;
+			}
+			const csrfToken = csrfTokenFromMeta();
+			pushBulkPreviewDebug("fetch_start", {
+				url,
+				parentId,
+				hasCsrfToken: csrfToken.length > 0,
+			});
+			const res = await fetch(url, {
 				method: "POST",
 				headers: {
 					Accept: "application/json",
 					"X-Requested-With": "XMLHttpRequest",
-					"X-CSRF-TOKEN": csrfTokenFromMeta(),
+					"X-CSRF-TOKEN": csrfToken,
 				},
 				body: fd,
 			});
-			const json = await res.json().catch(() => ({}));
+			const rawBody = await res.text();
+			let json = {};
+			if (rawBody) {
+				try {
+					json = JSON.parse(rawBody);
+				} catch (parseError) {
+					pushBulkPreviewDebug("invalid_json_response", {
+						status: res.status,
+						statusText: res.statusText,
+						bodyPreview: rawBody.slice(0, 500),
+						parseError:
+							parseError instanceof Error ? parseError.message : String(parseError),
+					});
+					setBulkPreviewError(
+						`Respuesta inválida del servidor (HTTP ${res.status}). Revisa la consola del navegador y storage/logs/laravel.log.`,
+					);
+					setBulkRows([]);
+					setBeneficiaryPreviewRows([]);
+					setBulkPreviewSummary(null);
+					return;
+				}
+			}
+			pushBulkPreviewDebug("fetch_finished", {
+				status: res.status,
+				ok: res.ok,
+				rowCount: Array.isArray(json.rows) ? json.rows.length : null,
+				message: json.message ?? null,
+			});
 			if (!res.ok) {
-				setBulkPreviewError(json.message ?? "No se pudo leer el archivo.");
+				setBulkPreviewError(
+					json.message ??
+						(typeof json.errors === "object"
+							? Object.values(json.errors).flat().join(" ")
+							: null) ??
+						`No se pudo leer el archivo (HTTP ${res.status}).`,
+				);
 				setBulkRows([]);
+				setBeneficiaryPreviewRows([]);
+				setBulkPreviewSummary(null);
 				return;
 			}
+			if (parentId && json.rows) {
+				setBeneficiaryPreviewRows(json.rows);
+				setBulkRows(
+					json.rows.map((r) => ({
+						email: r.email,
+						first_name: r.first_name,
+						paternal_lastname: r.paternal_lastname,
+						maternal_lastname: r.maternal_lastname,
+						status: r.status,
+						messages: r.messages,
+						editable: r.editable,
+						user_name: r.user_name ?? null,
+						include: isConfirmableBeneficiaryStatus(r.status),
+					})),
+				);
+				setBulkPreviewSummary(json.summary ?? null);
+				pushBulkPreviewDebug("preview_applied_existing_coupon", {
+					rowCount: json.rows.length,
+				});
+				return;
+			}
+			setBeneficiaryPreviewRows([]);
 			setBulkRows(
-				(json.rows ?? []).map((r) => ({
-					email: r.email,
-					exists: !!r.exists,
-					user_name: r.user_name ?? null,
-					include: !!r.exists,
-				})),
+				(json.rows ?? []).map((r) => {
+					const status =
+						r.status ??
+						(r.exists ? "valid_registered_user" : "valid_pending_user");
+
+					return {
+						email: r.email,
+						first_name: r.first_name ?? null,
+						paternal_lastname: r.paternal_lastname ?? null,
+						maternal_lastname: r.maternal_lastname ?? null,
+						status,
+						exists: !!r.exists,
+						user_name: r.user_name ?? null,
+						include: isConfirmableBeneficiaryStatus(status),
+						editable: true,
+					};
+				}),
 			);
-		} catch {
-			setBulkPreviewError("Error de red al analizar el archivo.");
+			setBulkPreviewSummary({
+				total: json.total ?? (json.rows ?? []).length,
+				valid_registered_user: json.matched ?? 0,
+				valid_pending_user: json.unmatched ?? 0,
+			});
+			pushBulkPreviewDebug("preview_applied_new_coupon", {
+				rowCount: (json.rows ?? []).length,
+			});
+		} catch (error) {
+			pushBulkPreviewDebug("fetch_exception", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+			setBulkPreviewError(
+				error instanceof Error
+					? `Error de red al analizar el archivo: ${error.message}`
+					: "Error de red al analizar el archivo.",
+			);
 			setBulkRows([]);
 		} finally {
 			setBulkPreviewLoading(false);
 		}
-	}, [data.file]);
+	}, [data.assignment_mode, data.coupon_mode, data.coupon_id, pushBulkPreviewDebug]);
 
-	const beneficiarySlotsLimit = useMemo(() => {
-		const maxB = String(data.max_beneficiaries ?? "").trim();
-		if (maxB === "") return null;
-		const n = parseInt(maxB, 10);
-		return Number.isNaN(n) || n < 1 ? null : n;
-	}, [data.max_beneficiaries]);
+	const matrixCapacity = 5000;
 
-	const matrixCapacity = beneficiarySlotsLimit ?? 5000;
+	const selectedExistingCoupon = useMemo(() => {
+		if (data.coupon_mode !== "existing" || !data.coupon_id) return null;
+		return (
+			assignableCoupons?.find((c) => String(c.id) === String(data.coupon_id)) ?? null
+		);
+	}, [data.coupon_mode, data.coupon_id, assignableCoupons]);
+
+	const platformAllEligible = useMemo(() => {
+		if (data.coupon_mode === "existing") {
+			return hasPlatformWideCouponRestrictionsFromCoupon(selectedExistingCoupon);
+		}
+		return hasPlatformWideCouponRestrictionsFromForm(data);
+	}, [data, selectedExistingCoupon]);
+
+	useEffect(() => {
+		if (data.assignment_mode === "platform_all" && !platformAllEligible) {
+			setData("assignment_mode", "none");
+		}
+	}, [data.assignment_mode, platformAllEligible, setData]);
+
+	const existingSlotsRemaining = useMemo(() => {
+		if (!selectedExistingCoupon?.max_beneficiaries) return null;
+		const used = selectedExistingCoupon.child_coupons_count ?? 0;
+		return Math.max(0, selectedExistingCoupon.max_beneficiaries - used);
+	}, [selectedExistingCoupon]);
+
+	const quotaExceeded = useMemo(() => {
+		if (data.assignment_mode === "none" || beneficiaryCountPreview === 0) {
+			return false;
+		}
+		if (data.coupon_mode === "existing" && existingSlotsRemaining != null) {
+			return beneficiaryCountPreview > existingSlotsRemaining;
+		}
+		return false;
+	}, [
+		data.assignment_mode,
+		data.coupon_mode,
+		beneficiaryCountPreview,
+		existingSlotsRemaining,
+	]);
 
 	const amountOk = useMemo(() => {
 		const v = parseFloat(String(data.amount_mxn).replace(",", ""));
@@ -563,23 +1119,32 @@ export default function CouponsAssign({
 	}, [data.amount_mxn]);
 
 	const assignmentFieldsOk = useMemo(() => {
+		if (data.assignment_mode === "platform_all") {
+			return platformAllEligible && platformUserCount > 0 && !quotaExceeded;
+		}
 		if (data.assignment_mode === "individual") {
 			const filled = matrixRows.filter((r) => r.email.trim() !== "");
 			if (filled.length === 0) return false;
 			for (const r of filled) {
 				const k = r.email.trim().toLowerCase();
 				if ((emailLowerCounts[k] ?? 0) > 1) return false;
-				if (r.lookup.status !== "found") return false;
+				if (!isMatrixRowLookupConfirmable(r.lookup)) return false;
 			}
 			return individualReadyEmails.length >= 1;
 		}
 		if (data.assignment_mode === "bulk") {
-			const selected = bulkRows.filter((r) => r.include).length;
+			const selected = bulkRows.filter(
+				(r) =>
+					r.include && isConfirmableBeneficiaryStatus(resolveBulkRowStatus(r)),
+			).length;
 			return bulkRows.length > 0 && selected > 0;
 		}
 		return true;
 	}, [
 		data.assignment_mode,
+		platformAllEligible,
+		platformUserCount,
+		quotaExceeded,
 		matrixRows,
 		emailLowerCounts,
 		individualReadyEmails.length,
@@ -591,7 +1156,9 @@ export default function CouponsAssign({
 			return true;
 		}
 		const beneficiariesForRule =
-			data.assignment_mode === "individual"
+			data.assignment_mode === "platform_all"
+				? platformUserCount
+				: data.assignment_mode === "individual"
 				? beneficiaryCountPreview
 				: data.assignment_mode === "bulk"
 					? Math.max(beneficiaryCountPreview, 1)
@@ -611,32 +1178,42 @@ export default function CouponsAssign({
 		isSuperadmin,
 		beneficiariesForPreApprovalDraft,
 		beneficiaryCountPreview,
+		platformUserCount,
 		authorizers,
 	]);
 
 	const conceptStepOk = useMemo(() => {
+		if (data.credit_type === "shared_promo") return true;
 		if (data.coupon_concept_id === "other") {
 			return String(data.concept_other ?? "").trim().length > 0;
 		}
 		return true;
-	}, [data.coupon_concept_id, data.concept_other]);
+	}, [data.credit_type, data.coupon_concept_id, data.concept_other]);
 
-	const couponStepComplete = useMemo(() => {
-		if (!amountOk) return false;
-		if (!conceptStepOk) return false;
-		if (data.assignment_mode === "none") {
-			return true;
-		}
-		const maxB = String(data.max_beneficiaries ?? "").trim();
-		if (maxB === "") return false;
-		const n = parseInt(maxB, 10);
-		return !Number.isNaN(n) && n >= 1;
-	}, [data.max_beneficiaries, data.assignment_mode, amountOk, conceptStepOk]);
+	const creditStepComplete = useMemo(
+		() => isCreditStepComplete(data, { amountOk, conceptStepOk }),
+		[data, amountOk, conceptStepOk],
+	);
+
+	const rulesStepComplete = useMemo(() => isRulesStepComplete(data), [data]);
+
+	const couponStepComplete = creditStepComplete && rulesStepComplete;
 
 	const assignmentStepComplete = useMemo(() => {
+		if (data.credit_type === "shared_promo") return true;
 		if (data.assignment_mode === "none") return true;
 		return assignmentFieldsOk;
-	}, [data.assignment_mode, assignmentFieldsOk]);
+	}, [data.credit_type, data.assignment_mode, assignmentFieldsOk]);
+
+	const shareablePreview = useMemo(
+		() =>
+			data.credit_type === "shared_promo"
+				? buildShareablePreview(data, (mxn) =>
+						(mxn ?? 0).toLocaleString("es-MX", { style: "currency", currency: "MXN" }),
+					)
+				: "",
+		[data],
+	);
 
 	const summaryUnlocked = useMemo(
 		() => couponStepComplete && assignmentStepComplete,
@@ -645,16 +1222,17 @@ export default function CouponsAssign({
 
 	const trySetTab = useCallback(
 		(id) => {
-			if (id === "assignment" && !couponStepComplete) return;
+			if (id === "rules" && !creditStepComplete) return;
+			if (id === "assignment" && !(creditStepComplete && rulesStepComplete)) return;
 			if (
 				id === "summary" &&
-				!(couponStepComplete && assignmentStepComplete)
+				!(creditStepComplete && rulesStepComplete && assignmentStepComplete)
 			) {
 				return;
 			}
 			setActiveTab(id);
 		},
-		[couponStepComplete, assignmentStepComplete, setActiveTab],
+		[creditStepComplete, rulesStepComplete, assignmentStepComplete, setActiveTab],
 	);
 
 	const canSubmit =
@@ -662,7 +1240,8 @@ export default function CouponsAssign({
 		summaryUnlocked &&
 		amountOk &&
 		assignmentFieldsOk &&
-		authorizersSelectionOk;
+		authorizersSelectionOk &&
+		!quotaExceeded;
 
 	const approvalRealtime = useMemo(() => {
 		if (data.assignment_mode === "none") {
@@ -739,11 +1318,6 @@ export default function CouponsAssign({
 				: "text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:text-zinc-400 dark:ring-zinc-600 dark:hover:bg-zinc-800",
 		].join(" ");
 
-	const summaryBulkEmails = useMemo(
-		() => bulkRows.filter((r) => r.include).map((r) => r.email),
-		[bulkRows],
-	);
-
 	const summaryApprovalsRequired = useMemo(() => {
 		if (data.assignment_mode === "none") return 0;
 		return resolveApprovalsPreview(
@@ -758,13 +1332,49 @@ export default function CouponsAssign({
 		rulesForUi,
 	]);
 
+	const submitAssign = useCallback(() => {
+		const hasSelectedBeneficiaryRows = bulkRowsRef.current.some(
+			(r) => r.include && isConfirmableBeneficiaryStatus(resolveBulkRowStatus(r)),
+		);
+		post(route("admin.coupons.assign.store"), {
+			forceFormData:
+				data.assignment_mode === "bulk" &&
+				!hasSelectedBeneficiaryRows &&
+				!!bulkUploadFileRef.current,
+		});
+	}, [data.assignment_mode, post]);
+
+	const buildOtpAssignPayload = useCallback(
+		() =>
+			buildCouponAssignPayload(data, {
+				bulkRowsRef,
+				beneficiaryPreviewRowsRef,
+				matrixRowsRef,
+				bulkUploadFileRef,
+				platformUserCount,
+			}),
+		[data, platformUserCount],
+	);
+
 	const handleFormSubmit = (e) => {
 		e.preventDefault();
 		if (activeTab !== "summary") return;
-		post(route("admin.coupons.assign.store"), {
-			forceFormData: data.assignment_mode === "bulk",
-		});
+		if (data.coupon_mode === "new" && creationOtpRequired) {
+			setOtpAssignPayload(buildOtpAssignPayload());
+			setOtpModalOpen(true);
+			return;
+		}
+		submitAssign();
 	};
+
+	const handleOtpVerified = useCallback(
+		(result) => {
+			otpVerificationTokenRef.current = result.verification_token;
+			setOtpModalOpen(false);
+			submitAssign();
+		},
+		[submitAssign],
+	);
 
 	return (
 		<AdminLayout title="Crear y asignar créditos">
@@ -776,9 +1386,12 @@ export default function CouponsAssign({
 							Define el crédito y la asignación en pasos.
 						</Text>
 					</div>
-					<Button href={route("admin.coupons.index")} outline>
-						Ir a créditos
-					</Button>
+					<div className="flex flex-wrap items-center gap-2">
+						<AuthorizationInboxLink />
+						<Button href={route("admin.coupons.index")} outline>
+							Ir a créditos
+						</Button>
+					</div>
 				</div>
 
 				<div className="space-y-6">
@@ -792,12 +1405,15 @@ export default function CouponsAssign({
 								role="tablist"
 								aria-label="Pasos del flujo"
 							>
-								{TABS.map((t) => {
+								{visibleTabs.map((t) => {
+									const lockedToRules = t.id === "rules" && !creditStepComplete;
 									const lockedToAssignment =
-										t.id === "assignment" && !couponStepComplete;
+										t.id === "assignment" &&
+										!(creditStepComplete && rulesStepComplete);
 									const lockedToSummary =
 										t.id === "summary" && !summaryUnlocked;
-									const tabLocked = lockedToAssignment || lockedToSummary;
+									const tabLocked =
+										lockedToRules || lockedToAssignment || lockedToSummary;
 									return (
 									<button
 										key={t.id}
@@ -844,114 +1460,52 @@ export default function CouponsAssign({
 									transition={{ duration: 0.18 }}
 									className="space-y-6"
 								>
-									{activeTab === "coupon" && (
-										<>
-
-											<div className="space-y-4">
-												<div className="grid grid-cols-12 gap-4">
-													<Field className="col-span-12 md:col-span-6">
-														<Label>Monto por beneficiario (MXN)</Label>
-														<Input
-															type="number"
-															step="0.01"
-															min="0.01"
-															value={data.amount_mxn}
-															onChange={(e) => setData("amount_mxn", e.target.value)}
-														/>
-														{errors.amount_cents && (
-															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																{errors.amount_cents}
-															</p>
-														)}
-													</Field>
-													<Field className="col-span-12 md:col-span-6">
-														<Label>Número de beneficiarios</Label>
-														<Input
-															type="number"
-															min="1"
-															placeholder="Sin límite"
-															value={data.max_beneficiaries}
-															onChange={(e) =>
-																setData("max_beneficiaries", e.target.value)
-															}
-														/>
-														{errors.max_beneficiaries && (
-															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																{errors.max_beneficiaries}
-															</p>
-														)}
-													</Field>
-													<Field className="col-span-12 md:col-span-6">
-														<Label>Código (opcional)</Label>
-														<Input
-															value={data.code}
-															onChange={(e) => setData("code", e.target.value)}
-														/>
-													</Field>
-													<Field className="col-span-12 md:col-span-6">
-														<Label>Concepto</Label>
-														<Select
-															value={data.coupon_concept_id ?? ""}
-															onChange={(e) => {
-																const v = e.target.value;
-																setData("coupon_concept_id", v);
-																if (v !== "other") {
-																	setData("concept_other", "");
-																}
-															}}
-														>
-															<option value="">Sin concepto</option>
-															{concepts.map((c) => (
-																<option key={c.id} value={String(c.id)}>
-																	{c.title}
-																</option>
-															))}
-															<option value="other">Otra</option>
-														</Select>
-														{errors.coupon_concept_id && (
-															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																{errors.coupon_concept_id}
-															</p>
-														)}
-														{data.coupon_concept_id === "other" && (
-															<div className="mt-2">
-																<Input
-																	value={data.concept_other ?? ""}
-																	onChange={(e) =>
-																		setData("concept_other", e.target.value)
-																	}
-																	placeholder="Especifica el concepto"
-																	maxLength={255}
-																/>
-																{errors.concept_other && (
-																	<p className="mt-1 text-sm text-red-600 dark:text-red-400">
-																		{errors.concept_other}
-																	</p>
-																)}
-															</div>
-														)}
-													</Field>
-													<Field className="col-span-12">
-														<Label>Descripción del crédito a otorgar (opcional)</Label>
-														<Textarea
-															rows={2}
-															value={data.description}
-															onChange={(e) => setData("description", e.target.value)}
-														/>
-													</Field>
-												</div>
-												{requireAuth && (
-													<p className="text-sm text-amber-800 dark:text-amber-200">
-														Con la política actual, el cupón nuevo quedará pendiente hasta que
-														el autorizador ingrese el código por correo. Las asignaciones se
-														podrán hacer cuando el cupón esté activo.
-													</p>
-												)}
-											</div>
-										</>
+									{activeTab === "credit" && (
+										<CouponAssignCreditConfig
+											data={data}
+											setData={setData}
+											errors={errors}
+											concepts={concepts}
+											requireAuth={requireAuth}
+											promoCodeConfig={promoCodeConfig}
+											onCreditTypeChange={handleCreditTypeChange}
+										/>
 									)}
 
-									{activeTab === "assignment" && (
+									{activeTab === "rules" && data.credit_type === "coupon" && (
+										<CouponEligibilityControls
+											data={data}
+											setData={setData}
+											errors={errors}
+										/>
+									)}
+
+									{activeTab === "rules" && data.credit_type === "shared_promo" && (
+										<div className="space-y-6">
+											<CouponEligibilityControls
+												data={data}
+												setData={setData}
+												errors={errors}
+											/>
+											<CouponAssignPromoUsageRules
+												data={data}
+												setData={setData}
+												errors={errors}
+											/>
+											{shareablePreview && (
+												<CouponSectionCard
+													title="Vista previa del mensaje compartible"
+													bodyClassName="space-y-2"
+												>
+													<Text className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+														{shareablePreview}
+													</Text>
+												</CouponSectionCard>
+											)}
+										</div>
+									)}
+
+									{activeTab === "assignment" && data.credit_type !== "shared_promo" && (
 										<>
 											<div>
 												<p className="mb-2 font-poppins text-base/6 font-medium text-zinc-950 sm:text-sm/6 dark:text-white">
@@ -981,7 +1535,36 @@ export default function CouponsAssign({
 															Archivo masivo
 														</button>
 													)}
+													<button
+														type="button"
+														className={[
+															pillClass(data.assignment_mode === "platform_all"),
+															!platformAllEligible
+																? "cursor-not-allowed opacity-45"
+																: "",
+														].join(" ")}
+														disabled={!platformAllEligible}
+														title={
+															platformAllEligible
+																? "Asignar a todos los usuarios con cuenta en la plataforma"
+																: "Requiere vigencia y compra mínima en Reglas de uso"
+														}
+														onClick={() => {
+															if (platformAllEligible) {
+																setData("assignment_mode", "platform_all");
+															}
+														}}
+													>
+														{ASSIGNMENT_LABELS.platform_all}
+													</button>
 												</div>
+												{!platformAllEligible && (
+													<p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+														<strong>Aplicar a todos los usuarios</strong> se habilita cuando
+														configuras <strong>vigencia</strong> y <strong>compra mínima</strong>{" "}
+														en la pestaña Reglas de uso.
+													</p>
+												)}
 												{data.assignment_mode === "none" && (
 													<p className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50/90 px-3 py-2.5 text-sm leading-relaxed text-zinc-600 dark:border-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-300">
 														<strong className="font-medium text-zinc-800 dark:text-zinc-100">
@@ -992,6 +1575,32 @@ export default function CouponsAssign({
 													</p>
 												)}
 											</div>
+
+											{data.assignment_mode === "platform_all" && (
+												<div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50/80 p-4 dark:border-sky-900 dark:bg-sky-950/30">
+													<p className="text-sm font-medium text-sky-950 dark:text-sky-100">
+														Asignación masiva a toda la plataforma
+													</p>
+													<p className="text-sm text-sky-900/90 dark:text-sky-200">
+														Se asignará este cupón a{" "}
+														<strong>{platformUserCount.toLocaleString("es-MX")}</strong>{" "}
+														usuario(s) registrados con cuenta de cliente. Las restricciones de{" "}
+														<strong>vigencia</strong> y <strong>compra mínima</strong> aplican al
+														usar el beneficio en checkout.
+													</p>
+													{quotaExceeded && (
+														<p className="text-sm text-red-700 dark:text-red-300">
+															El cupón no tiene cupo suficiente para todos los usuarios de la
+															plataforma. Ajusta el máximo de beneficiarios o elige otra modalidad.
+														</p>
+													)}
+													{platformUserCount === 0 && (
+														<p className="text-sm text-amber-800 dark:text-amber-200">
+															No hay usuarios con cuenta registrada en la plataforma.
+														</p>
+													)}
+												</div>
+											)}
 
 											{data.assignment_mode === "individual" && (
 												<div className="space-y-3">
@@ -1015,6 +1624,10 @@ export default function CouponsAssign({
 														<Table dense>
 															<TableHead>
 																<TableRow>
+																	<TableHeader>Tipo</TableHeader>
+																	<TableHeader>Nombre</TableHeader>
+																	<TableHeader>Ap. paterno</TableHeader>
+																	<TableHeader>Ap. materno</TableHeader>
 																	<TableHeader>Correo</TableHeader>
 																	<TableHeader>Usuario</TableHeader>
 																	<TableHeader>Estado</TableHeader>
@@ -1029,6 +1642,73 @@ export default function CouponsAssign({
 																	const lk = row.lookup;
 																	return (
 																		<TableRow key={row.id}>
+																			<TableCell className="min-w-[9rem] align-top">
+																				<Select
+																					value={row.credit_type ?? data.credit_type ?? "balance"}
+																					onChange={(e) => {
+																						const nextType = e.target.value;
+																						setMatrixRows((rows) =>
+																							rows.map((r) =>
+																								r.id === row.id
+																									? { ...r, credit_type: nextType }
+																									: r,
+																							),
+																						);
+																					}}
+																				>
+																					{CREDIT_TYPE_OPTIONS.map((option) => (
+																						<option
+																							key={option.value}
+																							value={option.value}
+																						>
+																							{option.label}
+																						</option>
+																					))}
+																				</Select>
+																			</TableCell>
+																			<TableCell className="align-top">
+																				<Input
+																					value={row.first_name}
+																					placeholder="Nombre"
+																					onChange={(e) =>
+																						setMatrixRows((rows) =>
+																							rows.map((r) =>
+																								r.id === row.id
+																									? { ...r, first_name: e.target.value }
+																									: r,
+																							),
+																						)
+																					}
+																				/>
+																			</TableCell>
+																			<TableCell className="align-top">
+																				<Input
+																					value={row.paternal_lastname}
+																					onChange={(e) =>
+																						setMatrixRows((rows) =>
+																							rows.map((r) =>
+																								r.id === row.id
+																									? { ...r, paternal_lastname: e.target.value }
+																									: r,
+																							),
+																						)
+																					}
+																				/>
+																			</TableCell>
+																			<TableCell className="align-top">
+																				<Input
+																					value={row.maternal_lastname}
+																					onChange={(e) =>
+																						setMatrixRows((rows) =>
+																							rows.map((r) =>
+																								r.id === row.id
+																									? { ...r, maternal_lastname: e.target.value }
+																									: r,
+																							),
+																						)
+																					}
+																				/>
+																			</TableCell>
 																			<TableCell className="max-w-[16rem] align-top">
 																				<Input
 																					type="email"
@@ -1092,12 +1772,15 @@ export default function CouponsAssign({
 																					<Badge color="emerald">
 																						Registrado
 																					</Badge>
+																				) : lk.status === "missing" ? (
+																					<Badge color="amber">
+																						Pendiente de registro
+																					</Badge>
 																				) : lk.status === "checking" ? (
 																					<Badge color="zinc">
 																						Validando…
 																					</Badge>
-																				) : lk.status === "missing" ||
-																					  lk.status === "invalid" ||
+																				) : lk.status === "invalid" ||
 																					  lk.status === "error" ||
 																					  (lk.status === "found" && isDup) ? (
 																					<Badge color="red">
@@ -1123,7 +1806,11 @@ export default function CouponsAssign({
 																						}
 																						setMatrixRows((rows) => {
 																							if (rows.length <= 1) {
-																								return [createMatrixRow()];
+																								return [
+																									createMatrixRow(
+																										data.credit_type ?? "balance",
+																									),
+																								];
 																							}
 																							return rows.filter(
 																								(r) => r.id !== row.id,
@@ -1147,28 +1834,52 @@ export default function CouponsAssign({
 																				if (matrixRows.length >= matrixCapacity) return;
 																				setMatrixRows((rows) => [
 																					...rows,
-																					createMatrixRow(),
+																					createMatrixRow(data.credit_type ?? "balance"),
 																				]);
 																			}}
 																		>
 																			Agregar fila
 																		</Button>
 																	</TableCell>
-																	<TableCell colSpan={3} className="py-3" />
+																	<TableCell colSpan={8} className="py-3" />
 																</TableRow>
 															</TableBody>
 														</Table>
 													</div>
-													<p className="text-sm text-zinc-600 dark:text-zinc-400">
-														Listos para enviar:{" "}
-														<strong>{individualReadyEmails.length}</strong> correo(s)
-														único(s) validado(s).
-													</p>
-													{errors.bulk_emails && (
+													<div className="flex flex-wrap items-center gap-3">
+														<Button
+															type="button"
+															outline
+															disabled={beneficiaryPreviewLoading}
+															onClick={() => void runBeneficiaryPreviewFromMatrix()}
+														>
+															{beneficiaryPreviewLoading
+																? "Generando preview…"
+																: "Generar preview"}
+														</Button>
+														<p className="text-sm text-zinc-600 dark:text-zinc-400">
+															Listos para confirmar:{" "}
+															<strong>{confirmableBeneficiaryRows.length}</strong>{" "}
+															beneficiario(s).
+														</p>
+													</div>
+													{beneficiaryPreviewError && (
+														<p className="text-sm text-amber-700 dark:text-amber-300">
+															{beneficiaryPreviewError}
+														</p>
+													)}
+													{beneficiaryPreviewRows.length > 0 && bulkRows.length > 0 && (
+														<CouponBulkImportPreview
+															rows={bulkRows}
+															onChangeRows={handleBulkRowsChange}
+															apiSummary={bulkPreviewSummary}
+														/>
+													)}
+													{errors.beneficiary_rows && (
 														<p className="text-sm text-red-600 dark:text-red-400">
-															{Array.isArray(errors.bulk_emails)
-																? errors.bulk_emails[0]
-																: errors.bulk_emails}
+															{Array.isArray(errors.beneficiary_rows)
+																? errors.beneficiary_rows[0]
+																: errors.beneficiary_rows}
 														</p>
 													)}
 												</div>
@@ -1177,50 +1888,99 @@ export default function CouponsAssign({
 											{SHOW_BULK_ASSIGNMENT_UI && data.assignment_mode === "bulk" && (
 												<div className="space-y-4">
 													<Field>
-														<Label>Archivo (.xlsx, .xls, .csv)</Label>
+														<Label>Sube tu archivo de Excel</Label>
 														<Text className="mb-2 text-sm text-zinc-500 dark:text-zinc-400">
-															Columna <strong>email</strong> o <strong>correo</strong>. Se
-															asignará el mismo monto del cupón maestro a cada fila con
-															cuenta registrada que incluyas abajo.
+															<strong>Formatos compatibles:</strong> Excel (.xlsx, .xls) y
+															CSV (.csv). Puedes cargar muchos registros. Primero
+															analizaremos tu archivo y te mostraremos un resumen con los
+															resultados detectados.
+														</Text>
+														<Text className="mb-2 text-sm text-zinc-500 dark:text-zinc-400">
+															Columnas: <strong>email/correo</strong> (obligatorio),{" "}
+															<strong>nombre</strong>, <strong>apellido_paterno</strong>,{" "}
+															<strong>apellido_materno</strong> (opcionales).
 														</Text>
 														<div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
 															<Button
-																href={route("admin.coupons.assign.bulk-template")}
+																type="button"
 																outline
 																className="text-sm"
+																onClick={() => {
+																	window.location.assign(
+																		route("admin.coupons.assign.bulk-template"),
+																	);
+																}}
 															>
-																Descargar plantilla CSV de ejemplo
+																Descargar plantilla de Excel/CSV
 															</Button>
 															<Text className="!text-xs !text-zinc-500 dark:!text-zinc-400">
-																CSV con encabezado <strong>email</strong> y correos de muestra;
-																puedes guardarlo como Excel (.xlsx) si prefieres.
+																Plantilla de ejemplo con encabezados listos para completar
+																en Excel o CSV.
 															</Text>
 														</div>
 														<Input
 															type="file"
 															accept=".xlsx,.xls,.csv"
 															onChange={(e) => {
-																setData("file", e.target.files?.[0] ?? null);
+																const file = e.target.files?.[0] ?? null;
+																bulkUploadFileRef.current = file;
+																setBulkUploadFile(file);
+																setData("file", file);
 																setBulkRows([]);
+																setBeneficiaryPreviewRows([]);
+																setBulkPreviewSummary(null);
 																setBulkPreviewError("");
+																pushBulkPreviewDebug("file_selected", {
+																	fileName: file?.name ?? null,
+																	fileSize: file?.size ?? null,
+																	fileType: file?.type ?? null,
+																});
 															}}
 														/>
+														{bulkUploadFile ? (
+															<p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+																Archivo seleccionado:{" "}
+																<strong>{bulkUploadFile.name}</strong>
+															</p>
+														) : (
+															<p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">
+																Aún no has seleccionado un archivo.
+															</p>
+														)}
 														<div className="mt-3 flex flex-wrap gap-2">
 															<Button
 																type="button"
 																outline
-																disabled={!data.file || bulkPreviewLoading}
-																onClick={() => runBulkPreview()}
+																disabled={!bulkUploadFile || bulkPreviewLoading}
+																onClick={() => {
+																	pushBulkPreviewDebug("button_clicked", {
+																		hasFile: !!bulkUploadFile,
+																		disabled: !bulkUploadFile || bulkPreviewLoading,
+																	});
+																	void runBulkPreview();
+																}}
 															>
 																{bulkPreviewLoading
-																	? "Analizando…"
-																	: "Analizar archivo y validar usuarios"}
+																	? "Analizando archivo…"
+																	: "Analizar archivo"}
 															</Button>
 														</div>
 														{bulkPreviewError && (
 															<p className="mt-2 text-sm text-red-600 dark:text-red-400">
 																{bulkPreviewError}
 															</p>
+														)}
+														{isBulkPreviewDebugEnabled() && bulkPreviewDebugLog.length > 0 && (
+															<div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+																<p className="text-xs font-semibold text-amber-900 dark:text-amber-100">
+																	Debug bulk preview (`?debug_bulk=1`)
+																</p>
+																<pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all text-[11px] text-amber-950 dark:text-amber-100">
+																	{bulkPreviewDebugLog
+																		.map((entry) => JSON.stringify(entry))
+																		.join("\n")}
+																</pre>
+															</div>
 														)}
 														{errors.file && (
 															<p className="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -1230,117 +1990,11 @@ export default function CouponsAssign({
 													</Field>
 
 													{bulkRows.length > 0 && (
-														<div className="rounded-lg border border-zinc-200 bg-zinc-50/90 p-4 dark:border-zinc-600 dark:bg-zinc-900/50">
-															<div className="flex flex-wrap items-start justify-between gap-3">
-																<div>
-																	<Subheading className="text-base">
-																		Vista previa de beneficiarios
-																	</Subheading>
-																	<Text className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-																		Marca quién recibirá el cupón. Por defecto solo se
-																		incluyen correos con usuario en la plataforma.
-																	</Text>
-																</div>
-																<div className="flex flex-wrap gap-2">
-																	<Button
-																		type="button"
-																		plain
-																		className="text-sm"
-																		onClick={() =>
-																			setBulkRows((rows) =>
-																				rows.map((r) => ({
-																					...r,
-																					include: r.exists ? r.include : false,
-																				})),
-																			)
-																		}
-																	>
-																		Quitar selección sin cuenta
-																	</Button>
-																	<Button
-																		type="button"
-																		plain
-																		className="text-sm text-red-700 dark:text-red-400"
-																		onClick={() =>
-																			setBulkRows((rows) =>
-																				rows.filter((r) => r.exists),
-																			)
-																		}
-																	>
-																		Eliminar filas sin usuario
-																	</Button>
-																</div>
-															</div>
-															<p className="mt-3 text-sm text-zinc-700 dark:text-zinc-300">
-																Seleccionados para asignar:{" "}
-																<strong>
-																	{bulkRows.filter((r) => r.include).length}
-																</strong>{" "}
-																de {bulkRows.length} en archivo.
-															</p>
-															<div className="mt-3 max-h-[min(24rem,50vh)] overflow-auto rounded-md border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
-																<Table dense>
-																	<TableHead>
-																		<TableRow>
-																			<TableHeader>Incluir</TableHeader>
-																			<TableHeader>Correo</TableHeader>
-																			<TableHeader>Usuario</TableHeader>
-																			<TableHeader>Estado</TableHeader>
-																			<TableHeader />
-																		</TableRow>
-																	</TableHead>
-																	<TableBody>
-																		{bulkRows.map((row, idx) => (
-																			<TableRow key={`${row.email}-${idx}`}>
-																				<TableCell>
-																					<Checkbox
-																						checked={row.include}
-																						onChange={(v) =>
-																							setBulkRows((rows) =>
-																								rows.map((r, i) =>
-																									i === idx ? { ...r, include: v } : r,
-																								),
-																							)
-																						}
-																					/>
-																				</TableCell>
-																				<TableCell className="max-w-[14rem] break-all font-mono text-sm">
-																					{row.email}
-																				</TableCell>
-																				<TableCell className="text-sm text-zinc-700 dark:text-zinc-300">
-																					{row.user_name ?? "—"}
-																				</TableCell>
-																				<TableCell>
-																					{row.exists ? (
-																						<Badge color="emerald">
-																							Registrado
-																						</Badge>
-																					) : (
-																						<Badge color="red">
-																							Sin cuenta
-																						</Badge>
-																					)}
-																				</TableCell>
-																				<TableCell className="text-right">
-																					<Button
-																						type="button"
-																						plain
-																						className="text-red-600 dark:text-red-400"
-																						onClick={() =>
-																							setBulkRows((rows) =>
-																								rows.filter((_, i) => i !== idx),
-																							)
-																						}
-																					>
-																						Quitar fila
-																					</Button>
-																				</TableCell>
-																			</TableRow>
-																		))}
-																	</TableBody>
-																</Table>
-															</div>
-														</div>
+														<CouponBulkImportPreview
+															rows={bulkRows}
+															onChangeRows={handleBulkRowsChange}
+															apiSummary={bulkPreviewSummary}
+														/>
 													)}
 												</div>
 											)}
@@ -1444,8 +2098,35 @@ export default function CouponsAssign({
 									{activeTab === "summary" && (
 										<>
 											<Text className="text-sm text-zinc-600 dark:text-zinc-400">
-												Comprueba los datos antes de continuar.
+												Comprueba los datos antes de confirmar la asignación.
 											</Text>
+											{creationOtpRequired && data.coupon_mode === "new" && (
+												<CouponOtpSecurityNotice required={creationOtpRequired} />
+											)}
+											{data.assignment_mode !== "none" && (
+												<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+													<CouponMetricCard
+														label="Registrados"
+														value={beneficiaryBreakdown.registered}
+														tone="lime"
+													/>
+													<CouponMetricCard
+														label="Pend. registro"
+														value={beneficiaryBreakdown.pending}
+														tone="amber"
+													/>
+													<CouponMetricCard
+														label="Inválidos"
+														value={beneficiaryBreakdown.invalid}
+														tone="red"
+													/>
+													<CouponMetricCard
+														label="Duplicados"
+														value={beneficiaryBreakdown.duplicate}
+														tone="zinc"
+													/>
+												</div>
+											)}
 											<dl className="space-y-3 text-sm text-zinc-800 dark:text-zinc-200">
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
@@ -1455,24 +2136,87 @@ export default function CouponsAssign({
 												</div>
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
+														Tipo de crédito
+													</dt>
+													<dd>{creditTypeLabel(data.credit_type ?? "balance")}</dd>
+												</div>
+												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Monto por beneficiario
 													</dt>
 													<dd>{formatMxFromCents(amountCentsPreview)}</dd>
 												</div>
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
-														Máximo de beneficiarios
+														Beneficiarios a asignar
 													</dt>
 													<dd>
-														{String(data.max_beneficiaries || "").trim() || "Sin límite"}
+														{data.assignment_mode === "none"
+															? "Ninguno (solo guardar cupón)"
+															: data.assignment_mode === "platform_all"
+																? `Todos los usuarios (${beneficiaryCountPreview.toLocaleString("es-MX")})`
+																: beneficiaryCountPreview}
 													</dd>
 												</div>
+												{data.assignment_mode !== "none" && (
+													<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+														<dt className="font-medium text-zinc-500 dark:text-zinc-400">
+															Cupo del cupón
+														</dt>
+														<dd>
+															{data.coupon_mode === "existing" &&
+															existingSlotsRemaining != null
+																? `${beneficiaryCountPreview} de ${existingSlotsRemaining} cupo(s) disponible(s)`
+																: `${beneficiaryCountPreview} (se definirá al confirmar)`}
+														</dd>
+													</div>
+												)}
+												{quotaExceeded && (
+													<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+														La cantidad de beneficiarios supera los cupos disponibles del
+														cupón seleccionado. Quita filas o elige otro cupón.
+													</div>
+												)}
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Código
 													</dt>
-													<dd>{data.code?.trim() || "—"}</dd>
+													<dd>
+														{data.credit_type === "shared_promo"
+															? data.promo_code?.trim() ||
+																(data.auto_generate_promo_code
+																	? "Se generará al guardar"
+																	: "—")
+															: data.code?.trim() || "—"}
+													</dd>
 												</div>
+												{data.credit_type === "shared_promo" && (
+													<>
+														<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+															<dt className="font-medium text-zinc-500 dark:text-zinc-400">
+																Usos totales
+															</dt>
+															<dd>{data.max_redemptions ?? "—"}</dd>
+														</div>
+														<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+															<dt className="font-medium text-zinc-500 dark:text-zinc-400">
+																Usos por usuario
+															</dt>
+															<dd>{data.max_uses_per_user ?? "—"}</dd>
+														</div>
+														{shareablePreview && (
+															<div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800/50">
+																<p className="font-medium text-zinc-700 dark:text-zinc-300">
+																	Mensaje compartible
+																</p>
+																<p className="mt-1 text-zinc-600 dark:text-zinc-400">
+																	{shareablePreview}
+																</p>
+															</div>
+														)}
+													</>
+												)}
+												{data.credit_type !== "shared_promo" && (
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Concepto
@@ -1489,53 +2233,13 @@ export default function CouponsAssign({
 																: "—"}
 													</dd>
 												</div>
+												)}
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Tipo de asignación
 													</dt>
 													<dd>{ASSIGNMENT_LABELS[data.assignment_mode]}</dd>
 												</div>
-												{data.assignment_mode === "individual" &&
-													individualReadyEmails.length > 0 && (
-														<div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-start">
-															<dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">
-																Beneficiarios ({individualReadyEmails.length})
-															</dt>
-															<dd className="max-w-full text-right">
-																<ul className="ml-auto max-h-40 max-w-md list-inside list-disc overflow-y-auto break-all text-left font-mono text-xs text-zinc-800 dark:text-zinc-200">
-																	{individualReadyEmails.slice(0, 40).map((em) => (
-																		<li key={em}>{em}</li>
-																	))}
-																</ul>
-																{individualReadyEmails.length > 40 && (
-																	<p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-																		Y {individualReadyEmails.length - 40} correo(s)
-																		más.
-																	</p>
-																)}
-															</dd>
-														</div>
-													)}
-												{data.assignment_mode === "bulk" &&
-													summaryBulkEmails.length > 0 && (
-														<div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-start">
-															<dt className="shrink-0 font-medium text-zinc-500 dark:text-zinc-400">
-																Beneficiarios ({summaryBulkEmails.length})
-															</dt>
-															<dd className="max-w-full text-right">
-																<ul className="ml-auto max-h-40 max-w-md list-inside list-disc overflow-y-auto break-all text-left font-mono text-xs text-zinc-800 dark:text-zinc-200">
-																	{summaryBulkEmails.slice(0, 40).map((em) => (
-																		<li key={em}>{em}</li>
-																	))}
-																</ul>
-																{summaryBulkEmails.length > 40 && (
-																	<p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-																		Y {summaryBulkEmails.length - 40} correo(s) más.
-																	</p>
-																)}
-															</dd>
-														</div>
-													)}
 												<div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 													<dt className="font-medium text-zinc-500 dark:text-zinc-400">
 														Notificaciones
@@ -1621,27 +2325,65 @@ export default function CouponsAssign({
 						</div>
 
 						<div className="mt-auto flex flex-col gap-3 border-t border-zinc-200 px-4 py-4 dark:border-zinc-700 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
-							{activeTab === "coupon" && (
+							{activeTab === "credit" && (
 								<div className="flex w-full justify-end">
 									<Button
 										type="button"
 										className="w-full sm:w-auto"
-										disabled={!couponStepComplete}
-										onClick={() => trySetTab("assignment")}
+										disabled={!creditStepComplete}
+										onClick={() =>
+											trySetTab(
+												data.credit_type === "balance" ? "assignment" : "rules",
+											)
+										}
 									>
-										Siguiente: asignación
+										{data.credit_type === "balance"
+											? "Siguiente: beneficiarios"
+											: data.credit_type === "shared_promo"
+												? "Siguiente: vigencia y uso"
+												: "Siguiente: reglas de uso"}
 									</Button>
 								</div>
 							)}
-							{activeTab === "assignment" && (
+							{activeTab === "rules" && (
 								<div className="flex w-full flex-row flex-wrap items-center justify-between gap-3">
 									<Button
 										type="button"
 										outline
 										className="shrink-0"
-										onClick={() => setActiveTab("coupon")}
+										onClick={() => setActiveTab("credit")}
 									>
-										Anterior: cupón
+										Anterior: datos del beneficio
+									</Button>
+									<Button
+										type="button"
+										className="shrink-0"
+										disabled={!rulesStepComplete}
+										onClick={() =>
+											trySetTab(
+												data.credit_type === "shared_promo" ? "summary" : "assignment",
+											)
+										}
+									>
+										{data.credit_type === "shared_promo"
+											? "Siguiente: resumen"
+											: "Siguiente: beneficiarios"}
+									</Button>
+								</div>
+							)}
+							{activeTab === "assignment" && data.credit_type !== "shared_promo" && (
+								<div className="flex w-full flex-row flex-wrap items-center justify-between gap-3">
+									<Button
+										type="button"
+										outline
+										className="shrink-0"
+										onClick={() =>
+											setActiveTab(data.credit_type === "balance" ? "credit" : "rules")
+										}
+									>
+										{data.credit_type === "balance"
+											? "Anterior: datos del beneficio"
+											: "Anterior: reglas"}
 									</Button>
 									<Button
 										type="button"
@@ -1655,13 +2397,30 @@ export default function CouponsAssign({
 							)}
 							{activeTab === "summary" && (
 								<>
+									{creationOtpRequired && data.coupon_mode === "new" && (
+										<CouponOtpSecurityNotice
+											required={creationOtpRequired}
+											compact
+											className="w-full basis-full"
+										/>
+									)}
 									<Button
 										type="button"
 										outline
 										className="w-full sm:w-auto"
-										onClick={() => setActiveTab("assignment")}
+										onClick={() =>
+											setActiveTab(
+												data.credit_type === "shared_promo"
+													? "rules"
+													: data.credit_type === "balance"
+														? "assignment"
+														: "assignment",
+											)
+										}
 									>
-										Anterior: asignación
+										{data.credit_type === "shared_promo"
+											? "Anterior: vigencia y uso"
+											: "Anterior: beneficiarios"}
 									</Button>
 									<Button
 										type="submit"
@@ -1675,15 +2434,14 @@ export default function CouponsAssign({
 												? "Guardar cupón"
 												: mustPreApproveCouponBeforeAssignment
 													? "Confirmar: solicitud con asignaciones"
-													: "Confirmar y enviar"}
+													: "Asignar créditos"}
 									</Button>
 								</>
 							)}
 							{activeTab === "summary" && !canSubmit && !processing && (
 								<p className="w-full text-sm text-amber-800 dark:text-amber-200">
-									Revisa el resumen: faltan datos o no se cumplen las reglas (por ejemplo,
-									beneficiarios no registrados o sin autorizadores en el sistema si hiciera
-									falta aprobación).
+									Revisa el resumen: faltan datos, hay cupos excedidos, correos inválidos,
+									duplicados o falta configuración de autorizadores si aplica.
 								</p>
 							)}
 						</div>
@@ -1822,6 +2580,16 @@ export default function CouponsAssign({
 					</aside>
 				</div>
 			</div>
+
+			<CouponCreationOtpModal
+				isOpen={otpModalOpen}
+				assignPayload={otpAssignPayload}
+				onSuccess={handleOtpVerified}
+				onClose={() => {
+					setOtpModalOpen(false);
+					setOtpAssignPayload(null);
+				}}
+			/>
 		</AdminLayout>
 	);
 }

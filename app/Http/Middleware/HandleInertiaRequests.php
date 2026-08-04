@@ -8,6 +8,7 @@ use App\Support\MockEfevooPaymentSupport;
 use App\Services\NotificationService;
 use App\Services\Tracking\Tracking;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Inertia\Middleware;
 use Tighten\Ziggy\Ziggy;
@@ -79,6 +80,7 @@ class HandleInertiaRequests extends Middleware
             'appEnv' => app()->environment(),
             'appEnvLabel' => AppEnvironmentLabel::current(),
             'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
+            'medicalAttentionTrialEnabled' => (bool) config('famedic.medical_attention_trial_enabled'),
             'paymentUsesMock' => MockEfevooPaymentSupport::isMockMode(),
             'labResultsOtpRequired' => (bool) config('laboratory-results.otp_required', false),
             'trackingEvents' => function () {
@@ -93,8 +95,19 @@ class HandleInertiaRequests extends Middleware
                     config('services.facebook.pixel_id') &&
                     config('services.facebook.capi_token')
                 ) {
-                    $tracking = app(Tracking::class);
-                    $tracking->propagateEvents($trackingEvents);
+                    $queueConnection = config('queue.default') === 'sync'
+                        ? 'database'
+                        : config('queue.default');
+
+                    dispatch(function () use ($trackingEvents) {
+                        try {
+                            app(Tracking::class)->propagateEvents($trackingEvents);
+                        } catch (\Throwable $e) {
+                            Log::warning('Facebook CAPI request failed', [
+                                'message' => $e->getMessage(),
+                            ]);
+                        }
+                    })->onConnection($queueConnection)->afterResponse();
 
                     return collect($trackingEvents)
                         ->filter(fn ($e) => $e->sendToBrowser)

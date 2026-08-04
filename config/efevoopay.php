@@ -45,6 +45,13 @@ return [
         '96' => 'Sistema no disponible',
     ],
     
+    // Comisión por transacción: 2.9% del monto cobrado + 16% IVA sobre la comisión.
+    // EfevooPay cotiza "2.9% + IVA"; el porcentaje efectivo sobre el monto es 2.99%.
+    'commission' => [
+        'rate_percent' => (float) env('EFEVOO_COMMISSION_RATE_PERCENT', 2.99),
+        'vat_rate_percent' => (float) env('EFEVOO_COMMISSION_VAT_RATE_PERCENT', 16),
+    ],
+
     // Configuración del simulador (desactivar en producción)
     'force_simulation' => env('EFEVOOPAY_FORCE_SIMULATION', false),
     

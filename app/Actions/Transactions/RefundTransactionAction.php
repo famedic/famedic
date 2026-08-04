@@ -5,6 +5,7 @@ namespace App\Actions\Transactions;
 use App\Models\Transaction;
 use App\Models\Customer;
 use App\Notifications\OdessaPaymentRefunded;
+use App\Services\PayPalService;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Log;
 
@@ -79,13 +80,14 @@ class RefundTransactionAction
                 'gateway_field' => $transaction->gateway,
             ]);
 
-            // Verificar si ya fue reembolsada
+            // Verificar si ya fue reembolsada (idempotente para cancelaciones)
             if ($transaction->refunded_at) {
-                Log::warning('Transacción ya reembolsada', [
+                Log::info('Transacción ya reembolsada; se omite nuevo intento', [
                     'transaction_id' => $transaction->id,
                     'refunded_at' => $transaction->refunded_at,
                 ]);
-                return false;
+
+                return true;
             }
 
             // Obtener el cliente
@@ -283,9 +285,13 @@ class RefundTransactionAction
     private function refundPayPalTransaction(Transaction $transaction, Customer $customer): bool
     {
         try {
-            $captureId = $transaction->gateway_transaction_id ?? $transaction->provider_transaction_id;
+            $captureId = $this->resolvePayPalCaptureId($transaction);
             if (!$captureId) {
-                Log::error('PayPal refund: sin capture id', ['transaction_id' => $transaction->id]);
+                Log::error('PayPal refund: sin capture id', [
+                    'transaction_id' => $transaction->id,
+                    'reference_id' => $transaction->reference_id,
+                    'provider_order_id' => $transaction->provider_order_id,
+                ]);
 
                 return false;
             }
@@ -341,6 +347,43 @@ class RefundTransactionAction
 
             return false;
         }
+    }
+
+    private function resolvePayPalCaptureId(Transaction $transaction): ?string
+    {
+        $candidates = [
+            $transaction->gateway_transaction_id,
+            $transaction->provider_transaction_id,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && $candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        /** @var PayPalService $paypal */
+        $paypal = app(PayPalService::class);
+
+        foreach (['gateway_response', 'raw_response'] as $field) {
+            $payload = $transaction->{$field};
+
+            if (is_string($payload)) {
+                $payload = json_decode($payload, true);
+            }
+
+            if (!is_array($payload)) {
+                continue;
+            }
+
+            $captureId = $paypal->extractCaptureInfo($payload)['capture_id'] ?? null;
+
+            if (is_string($captureId) && $captureId !== '') {
+                return $captureId;
+            }
+        }
+
+        return null;
     }
 
     private function getCustomerFromTransaction(Transaction $transaction): Customer

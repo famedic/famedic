@@ -11,9 +11,11 @@ import {
 } from "@/Components/Catalyst/fieldset";
 import { Subheading } from "@/Components/Catalyst/heading";
 import { Switch, SwitchField } from "@/Components/Catalyst/switch";
-import { Text, Strong } from "@/Components/Catalyst/text";
+import { Text } from "@/Components/Catalyst/text";
 import { Divider } from "@/Components/Catalyst/divider";
-import CheckoutLayout from "@/Layouts/CheckoutLayout";
+import CheckoutLayout, {
+    scrollToCheckoutSummaryTotals,
+} from "@/Layouts/CheckoutLayout";
 import { useForm, usePage } from "@inertiajs/react";
 import { GradientHeading } from "@/Components/Catalyst/heading";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
@@ -33,6 +35,16 @@ import EnvironmentBadge from "@/Components/EnvironmentBadge";
 import { ChevronLeftIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import clsx from "clsx";
+import {
+    couponCreditTypeLabel,
+    couponDiscountCents,
+    couponMeetsMinPurchase,
+    isBalanceCreditType,
+    isCouponApplicableForCheckout,
+    isCouponWithinValidity,
+} from "@/lib/couponEligibilityUi";
+import BalanceCreditCard from "@/Components/Coupons/BalanceCreditCard";
+import PromoCodeField from "@/Components/Checkout/PromoCodeField";
 
 const BASE_WIZARD_STEPS = [
     { id: "patient", number: 1, label: "Paciente" },
@@ -64,14 +76,26 @@ function resolveActiveStepId(
     laboratoryAppointment,
     savedCheckout = null,
 ) {
+    const params = new URLSearchParams(window.location.search);
+    let stepId = params.get("step");
+
+    if (stepId) {
+        if (
+            stepId === "confirmation" &&
+            requiresAppointment &&
+            !laboratoryAppointment?.confirmed_at
+        ) {
+            stepId = "appointment";
+        }
+
+        return stepId;
+    }
+
     if (requiresAppointment && laboratoryAppointment?.confirmed_at) {
         return "confirmation";
     }
 
-    const params = new URLSearchParams(window.location.search);
-    let stepId = params.get("step");
-
-    if (!stepId && savedCheckout?.checkout_step) {
+    if (savedCheckout?.checkout_step) {
         stepId = savedCheckout.checkout_step;
     }
 
@@ -138,6 +162,7 @@ function resolveInitialCheckoutData(savedCheckout = null) {
         return {
             ...fromParams,
             coupon_id: fromParams.coupon_id || null,
+            promo_validation_token: null,
         };
     }
 
@@ -158,6 +183,7 @@ function resolveInitialCheckoutData(savedCheckout = null) {
             fromParams.coupon_id ??
             savedCheckout.coupon_id ??
             null,
+        promo_validation_token: savedCheckout?.promo_validation_token ?? null,
     };
 }
 
@@ -174,8 +200,8 @@ export default function LaboratoryCheckout({
     formattedSubtotal,
     formattedDiscount,
     balanceCouponsCents = 0,
-    formattedBalanceCoupons,
     availableBalanceCoupons = [],
+    balanceCreditPresentation = null,
     addresses,
     paymentMethods,
     hasOdessaPay,
@@ -207,6 +233,30 @@ export default function LaboratoryCheckout({
         setError,
     } = useForm(initialFormData);
 
+    const checkoutSubmittedRef = useRef(false);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("step") !== "patient") {
+            return;
+        }
+
+        try {
+            sessionStorage.removeItem(checkoutStorageKey(laboratoryBrand.value));
+        } catch {
+            // ignore quota errors
+        }
+    }, [laboratoryBrand.value]);
+
+    const [appliedPromo, setAppliedPromo] = useState(() =>
+        initialFormData.promo_validation_token
+            ? {
+                  validation_token: initialFormData.promo_validation_token,
+                  message: "Código promocional guardado. Valídalo de nuevo si cambió tu carrito.",
+              }
+            : null,
+    );
+
     useEffect(() => {
         if (
             paymentUsesMock &&
@@ -223,12 +273,13 @@ export default function LaboratoryCheckout({
         laboratory_appointment: laboratoryAppointment?.id,
         total: total,
         coupon_id: data.coupon_id || null,
+        promo_validation_token: data.promo_validation_token || null,
     }));
 
     const submit = (e, isBranchPayment) => {
         e.preventDefault();
 
-        if (checkoutProcessing) return;
+        if (checkoutProcessing || checkoutSubmittedRef.current) return;
 
         // Validaciones adicionales
         if (!data.address) {
@@ -272,10 +323,13 @@ export default function LaboratoryCheckout({
                 }
             );
         } else {
+            checkoutSubmittedRef.current = true;
+
             post(route("laboratory.checkout.store", {
                 laboratory_brand: laboratoryBrand.value
             }), {
                 onError: (errors) => {
+                    checkoutSubmittedRef.current = false;
                     console.error('Errores del backend:', errors);
 
                     // Manejar errores específicos
@@ -328,40 +382,113 @@ export default function LaboratoryCheckout({
 
     const addressStepIsComplete = useMemo(() => !!data.address, [data.address]);
 
+    const checkoutCoupons =
+        balanceCreditPresentation?.coupons?.length > 0
+            ? balanceCreditPresentation.coupons
+            : availableBalanceCoupons;
+
     const selectedCoupon = useMemo(() => {
         if (!data.coupon_id) return null;
-        return availableBalanceCoupons.find((c) => c.id === data.coupon_id) ?? null;
-    }, [data.coupon_id, availableBalanceCoupons]);
+        return checkoutCoupons.find((c) => c.id === data.coupon_id) ?? null;
+    }, [data.coupon_id, checkoutCoupons]);
 
     const couponTooLarge = useMemo(() => {
         if (!selectedCoupon) return false;
+        if (!isBalanceCreditType(selectedCoupon)) return false;
         return selectedCoupon.remaining_cents > total;
     }, [selectedCoupon, total]);
 
+    const couponNotYetValid = useMemo(() => {
+        if (!selectedCoupon) return false;
+        return (
+            !isCouponWithinValidity(selectedCoupon) &&
+            selectedCoupon.validity_status === "programado"
+        );
+    }, [selectedCoupon]);
+
+    const couponBelowMinPurchase = useMemo(() => {
+        if (!selectedCoupon) return false;
+        return !couponMeetsMinPurchase(selectedCoupon, total);
+    }, [selectedCoupon, total]);
+
+    const minPurchaseShortfallCents = useMemo(() => {
+        if (!selectedCoupon?.min_purchase_cents || couponMeetsMinPurchase(selectedCoupon, total)) {
+            return 0;
+        }
+        return Math.max(0, selectedCoupon.min_purchase_cents - total);
+    }, [selectedCoupon, total]);
+
+    const couponBlocked = couponTooLarge || couponNotYetValid || couponBelowMinPurchase;
+
+    const promoDiscountCents = useMemo(() => {
+        if (!appliedPromo?.validation_token || !appliedPromo?.discount_cents) {
+            return 0;
+        }
+        return Math.min(appliedPromo.discount_cents, total);
+    }, [appliedPromo, total]);
+
+    const hasPromoApplied = Boolean(
+        appliedPromo?.validation_token && promoDiscountCents > 0,
+    );
+
+    const selectedDiscountCents = useMemo(() => {
+        if (hasPromoApplied) return promoDiscountCents;
+        if (!selectedCoupon || couponBlocked) return 0;
+        return couponDiscountCents(selectedCoupon, total);
+    }, [
+        hasPromoApplied,
+        promoDiscountCents,
+        selectedCoupon,
+        couponBlocked,
+        total,
+    ]);
+
     const amountAfterCoupon = useMemo(() => {
-        if (!selectedCoupon || couponTooLarge) return total;
-        return Math.max(0, total - selectedCoupon.remaining_cents);
-    }, [selectedCoupon, couponTooLarge, total]);
+        if (hasPromoApplied) {
+            return Math.max(0, total - promoDiscountCents);
+        }
+        if (!selectedCoupon || couponBlocked) return total;
+        return Math.max(0, total - selectedDiscountCents);
+    }, [
+        hasPromoApplied,
+        promoDiscountCents,
+        selectedCoupon,
+        couponBlocked,
+        total,
+        selectedDiscountCents,
+    ]);
 
     const summaryDetails = useMemo(() => {
         const rows = [
             { value: formattedSubtotal, label: "Subtotal" },
             { value: "-" + formattedDiscount, label: "Descuento" },
         ];
-        if (selectedCoupon && !couponTooLarge) {
+        if (selectedCoupon && !couponBlocked && !hasPromoApplied) {
             rows.push({
                 value:
                     "-" +
-                    (selectedCoupon.remaining_cents / 100).toLocaleString(
-                        "es-MX",
-                        { style: "currency", currency: "MXN" },
-                    ),
-                label: "Cupón saldo",
+                    (selectedDiscountCents / 100).toLocaleString("es-MX", {
+                        style: "currency",
+                        currency: "MXN",
+                    }),
+                label: couponCreditTypeLabel(selectedCoupon),
+            });
+        }
+        if (hasPromoApplied) {
+            rows.push({
+                value:
+                    "-" +
+                    (promoDiscountCents / 100).toLocaleString("es-MX", {
+                        style: "currency",
+                        currency: "MXN",
+                    }),
+                label:
+                    appliedPromo?.benefit_label || "Descuento promocional",
             });
         }
         rows.push({
             value:
-                !selectedCoupon || couponTooLarge
+                selectedDiscountCents === 0 && !hasPromoApplied
                     ? formattedTotal
                     : (amountAfterCoupon / 100).toLocaleString("es-MX", {
                           style: "currency",
@@ -375,16 +502,26 @@ export default function LaboratoryCheckout({
         formattedDiscount,
         formattedTotal,
         selectedCoupon,
-        couponTooLarge,
+        couponBlocked,
         amountAfterCoupon,
+        selectedDiscountCents,
+        hasPromoApplied,
+        promoDiscountCents,
+        appliedPromo,
     ]);
 
     const paymentMethodStepIsComplete = useMemo(() => {
-        if (!data.coupon_id) {
+        if (!data.coupon_id && !hasPromoApplied) {
+            return !!data.payment_method;
+        }
+        if (hasPromoApplied) {
+            if (amountAfterCoupon === 0) {
+                return data.payment_method === "coupon_balance";
+            }
             return !!data.payment_method;
         }
         if (!selectedCoupon) return false;
-        if (couponTooLarge) return false;
+        if (couponBlocked) return false;
         if (amountAfterCoupon === 0) {
             return data.payment_method === "coupon_balance";
         }
@@ -393,21 +530,38 @@ export default function LaboratoryCheckout({
         data.coupon_id,
         data.payment_method,
         selectedCoupon,
-        couponTooLarge,
+        couponBlocked,
         amountAfterCoupon,
+        hasPromoApplied,
     ]);
 
-    const applyBalanceCoupon = () => {
-        const applicable = availableBalanceCoupons.find(
-            (c) => c.remaining_cents <= total,
+    useEffect(() => {
+        if (!data.coupon_id) return;
+        const c = checkoutCoupons.find((x) => x.id === data.coupon_id);
+        if (!c || !isCouponApplicableForCheckout(c, total)) {
+            setData("coupon_id", null);
+            if (data.payment_method === "coupon_balance") {
+                setData("payment_method", null);
+            }
+        }
+    }, [data.coupon_id, data.payment_method, checkoutCoupons, total, setData]);
+
+    const applyBalanceCoupon = (couponId) => {
+        if (!couponId) return;
+        const applicable = checkoutCoupons.find(
+            (c) => c.id === couponId && isCouponApplicableForCheckout(c, total),
         );
         if (!applicable) return;
+        setAppliedPromo(null);
+        setData("promo_validation_token", null);
         setData("coupon_id", applicable.id);
-        const after = total - applicable.remaining_cents;
+        const after = total - couponDiscountCents(applicable, total);
         if (after === 0) {
             setData("payment_method", "coupon_balance");
         }
         clearErrors("payment_method");
+        clearErrors("promo_validation_token");
+        scrollToSummaryAfterApplyRef.current = true;
     };
 
     const clearBalanceCoupon = () => {
@@ -417,10 +571,28 @@ export default function LaboratoryCheckout({
         }
     };
 
-    const noCouponApplicable =
-        balanceCouponsCents > 0 &&
-        availableBalanceCoupons.length > 0 &&
-        !availableBalanceCoupons.some((c) => c.remaining_cents <= total);
+    const applyPromoCode = (promoResult) => {
+        setData("coupon_id", null);
+        if (data.payment_method === "coupon_balance") {
+            setData("payment_method", null);
+        }
+        setAppliedPromo(promoResult);
+        setData("promo_validation_token", promoResult.validation_token);
+        const after = Math.max(0, total - (promoResult.discount_cents || 0));
+        if (after === 0) {
+            setData("payment_method", "coupon_balance");
+        }
+        clearErrors("coupon_id");
+        clearErrors("promo_validation_token");
+    };
+
+    const clearPromoCode = () => {
+        setAppliedPromo(null);
+        setData("promo_validation_token", null);
+        if (data.payment_method === "coupon_balance") {
+            setData("payment_method", null);
+        }
+    };
 
     // Condiciones para habilitar/deshabilitar botones
     const onlinePaymentDisabled = checkoutProcessing ||
@@ -454,6 +626,7 @@ export default function LaboratoryCheckout({
     const stepContentRef = useRef(null);
     const skipStepScrollRef = useRef(true);
     const appointmentAutoSyncRef = useRef(false);
+    const scrollToSummaryAfterApplyRef = useRef(false);
 
     const currentStep = wizardSteps[currentStepIndex];
 
@@ -650,6 +823,7 @@ export default function LaboratoryCheckout({
                 if (data.coupon_id) {
                     payload.coupon_id = Number(data.coupon_id);
                 }
+                payload.promo_validation_token = data.promo_validation_token;
             }
 
             setSyncingDraft(true);
@@ -726,6 +900,7 @@ export default function LaboratoryCheckout({
 
         if (
             !pendingLaboratoryAppointment &&
+            !laboratoryAppointment &&
             data.contact &&
             !syncingAppointment &&
             !appointmentAutoSyncRef.current
@@ -749,6 +924,7 @@ export default function LaboratoryCheckout({
         currentStep.id,
         needsAppointment,
         pendingLaboratoryAppointment,
+        laboratoryAppointment,
         data.contact,
         syncingAppointment,
         syncAppointmentFromContact,
@@ -805,110 +981,41 @@ export default function LaboratoryCheckout({
         requestAnimationFrame(() => requestAnimationFrame(scrollToStep));
     }, [currentStepIndex]);
 
-    const couponSection = balanceCouponsCents > 0 && (
-        <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/50 p-4 dark:border-emerald-800/40 dark:bg-emerald-950/20">
-            <Text className="text-sm font-medium">Saldo a favor</Text>
-            <Text className="mt-1 text-sm">
-                Tienes <Strong>{formattedBalanceCoupons}</Strong> disponibles.
-            </Text>
-            {noCouponApplicable && (
-                <Text className="mt-2 text-xs text-amber-800 dark:text-amber-200">
-                    Tu saldo es mayor al total de la compra, no puede aplicarse
-                    en esta compra.
-                </Text>
-            )}
-            {errors.coupon_id && (
-                <ErrorMessage className="mt-2">{errors.coupon_id}</ErrorMessage>
-            )}
-            <div className="mt-3">
-                {!data.coupon_id ? (
-                    <Button
-                        type="button"
-                        color="emerald"
-                        className="w-full text-sm"
-                        disabled={noCouponApplicable}
-                        onClick={applyBalanceCoupon}
-                    >
-                        Usar saldo completo
-                    </Button>
-                ) : (
-                    <Button
-                        type="button"
-                        plain
-                        className="w-full text-sm"
-                        onClick={clearBalanceCoupon}
-                    >
-                        Quitar cupón
-                    </Button>
-                )}
-            </div>
-        </div>
-    );
+    useEffect(() => {
+        if (!scrollToSummaryAfterApplyRef.current || !data.coupon_id) {
+            return;
+        }
 
-    const footerActions = (
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            {currentStepIndex > 0 && currentStep.id !== "confirmation" ? (
-                <Button type="button" plain onClick={handlePrevStep}>
-                    <ChevronLeftIcon className="size-4" />
-                    Volver
-                </Button>
-            ) : (
-                <div />
-            )}
+        scrollToSummaryAfterApplyRef.current = false;
+        scrollToCheckoutSummaryTotals();
+    }, [data.coupon_id, summaryDetails]);
 
-            {currentStep.id !== "confirmation" ? (
-                <Button
-                    type="button"
-                    className="w-full sm:ml-auto sm:w-auto"
-                    disabled={
-                        !canProceedFromStep || syncingAppointment || syncingDraft
-                    }
-                    onClick={handleNextStep}
-                >
-                    {syncingDraft
-                        ? "Guardando…"
-                        : syncingAppointment
-                          ? "Guardando cita…"
-                          : currentStep.id === "appointment" &&
-                              !wizardLaboratoryAppointment?.confirmed_at
-                            ? "Esperando confirmación…"
-                            : "Continuar"}
-                </Button>
-            ) : (
-                <div
-                    className={clsx(
-                        "w-full sm:ml-auto sm:max-w-md",
-                        onlinePaymentDisabled &&
-                            "pointer-events-none opacity-50",
-                    )}
-                >
-                    {hasPayPal &&
-                    paypalClientId &&
-                    data.payment_method === "paypal" ? (
-                        <LaboratoryPayPalButton
-                            paypalClientId={paypalClientId}
-                            laboratoryBrand={laboratoryBrand.value}
-                            patientId={data.contact}
-                            addressId={data.address}
-                            totalCents={total}
-                            couponId={data.coupon_id}
-                            disabled={onlinePaymentDisabled}
-                        />
-                    ) : (
-                        <Button
-                            disabled={
-                                onlinePaymentDisabled || checkoutProcessing
-                            }
-                            type="submit"
-                            name="online_payment"
-                            className="w-full !py-3"
-                        >
-                            Confirmar compra{" "}
-                            {summaryDetails[summaryDetails.length - 1]?.value}
-                            {checkoutProcessing && (
-                                <ArrowPathIcon className="ml-2 size-5 animate-spin" />
-                            )}
-                        </Button>
+    const hasCheckoutCredits = checkoutCoupons.length > 0;
+
+    const couponSection = (
+        <div className="space-y-4">
+            <PromoCodeField
+                laboratoryBrand={laboratoryBrand.value}
+                disabled={Boolean(data.coupon_id) || checkoutProcessing}
+                appliedPromo={appliedPromo}
+                onApplied={applyPromoCode}
+                onCleared={clearPromoCode}
+                error={errors.promo_validation_token}
+            />
+            {hasCheckoutCredits && (
+                <div className="space-y-2">
+                    <BalanceCreditCard
+                        variant="checkout"
+                        balanceCreditPresentation={balanceCreditPresentation}
+                        balanceCouponsCents={balanceCouponsCents}
+                        availableBalanceCoupons={availableBalanceCoupons}
+                        cartTotalCents={total}
+                        selectedCouponId={data.coupon_id}
+                        onApply={applyBalanceCoupon}
+                        onClear={clearBalanceCoupon}
+                    />
+                    {errors.coupon_id && (
+                        <ErrorMessage>{errors.coupon_id}</ErrorMessage>
                     )}
                 </div>
             )}
@@ -917,7 +1024,7 @@ export default function LaboratoryCheckout({
 
     const confirmationLegalText =
         currentStep.id === "confirmation" ? (
-            <Text className="mt-4 text-sm text-zinc-600 dark:text-slate-400">
+            <Text className="text-sm text-zinc-600 dark:text-slate-400">
                 Al confirmar tu compra, aceptas los{" "}
                 <a
                     href="/terminos-y-condiciones"
@@ -938,12 +1045,81 @@ export default function LaboratoryCheckout({
             </Text>
         ) : null;
 
-    const footerWithLegal = (
-        <>
-            {footerActions}
-            {confirmationLegalText}
-        </>
-    );
+    const confirmationPaymentActions =
+        currentStep.id === "confirmation" ? (
+            <>
+                <div
+                    className={clsx(
+                        "w-full",
+                        onlinePaymentDisabled &&
+                            "pointer-events-none opacity-50",
+                    )}
+                >
+                    {hasPayPal &&
+                    paypalClientId &&
+                    data.payment_method === "paypal" ? (
+                        <LaboratoryPayPalButton
+                            paypalClientId={paypalClientId}
+                            laboratoryBrand={laboratoryBrand.value}
+                            patientId={data.contact}
+                            addressId={data.address}
+                            totalCents={total}
+                            couponId={data.coupon_id}
+                            promoValidationToken={data.promo_validation_token}
+                            disabled={onlinePaymentDisabled}
+                        />
+                    ) : (
+                        <Button
+                            disabled={
+                                onlinePaymentDisabled || checkoutProcessing
+                            }
+                            type="submit"
+                            name="online_payment"
+                            className="w-full !py-3"
+                        >
+                            Confirmar compra{" "}
+                            {summaryDetails[summaryDetails.length - 1]?.value}
+                            {checkoutProcessing && (
+                                <ArrowPathIcon className="ml-2 size-5 animate-spin" />
+                            )}
+                        </Button>
+                    )}
+                </div>
+                {confirmationLegalText}
+            </>
+        ) : null;
+
+    const wizardFooterActions =
+        currentStep.id !== "confirmation" ? (
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                {currentStepIndex > 0 ? (
+                    <Button type="button" plain onClick={handlePrevStep}>
+                        <ChevronLeftIcon className="size-4" />
+                        Volver
+                    </Button>
+                ) : (
+                    <div />
+                )}
+
+                <Button
+                    type="button"
+                    className="w-full sm:ml-auto sm:w-auto"
+                    disabled={
+                        !canProceedFromStep || syncingAppointment || syncingDraft
+                    }
+                    onClick={handleNextStep}
+                >
+                    {syncingDraft
+                        ? "Guardando…"
+                        : syncingAppointment
+                          ? "Guardando cita…"
+                          : currentStep.id === "appointment" &&
+                              !wizardLaboratoryAppointment?.confirmed_at
+                            ? "Esperando confirmación…"
+                            : "Continuar"}
+                </Button>
+            </div>
+        ) : null;
 
     const renderStepContent = () => {
         switch (currentStep.id) {
@@ -976,17 +1152,25 @@ export default function LaboratoryCheckout({
                     />
                 );
             case "payment":
-                if (amountAfterCoupon === 0 && data.coupon_id) {
+                if (amountAfterCoupon === 0 && (data.coupon_id || hasPromoApplied)) {
+                    const creditLabel = hasPromoApplied
+                        ? "código promocional"
+                        : selectedCoupon
+                          ? couponCreditTypeLabel(selectedCoupon).toLowerCase()
+                          : "crédito";
                     return (
                         <CheckoutWizardStep
                             title="Método de pago"
-                            description="Tu saldo a favor cubre el total de la compra."
+                            description={`Tu ${creditLabel} cubre el total de la compra.`}
                         >
                             <div className="flex items-center gap-3 rounded-lg bg-emerald-50 p-4 dark:bg-emerald-950/30">
                                 <CheckCircleIcon className="size-6 fill-green-600 dark:fill-famedic-lime" />
                                 <div>
                                     <Text className="font-medium">
-                                        Pago con saldo a favor
+                                        Pago con{" "}
+                                        {selectedCoupon
+                                            ? couponCreditTypeLabel(selectedCoupon).toLowerCase()
+                                            : "crédito"}
                                     </Text>
                                     <Text className="text-sm text-zinc-600 dark:text-slate-400">
                                         No necesitas seleccionar otro método de
@@ -1010,7 +1194,10 @@ export default function LaboratoryCheckout({
                         hasPayPal={hasPayPal}
                         addCardReturnUrl={addCardReturnUrl}
                         paymentUsesMock={paymentUsesMock}
-                        disabled={amountAfterCoupon === 0 && !!data.coupon_id}
+                        disabled={
+                            amountAfterCoupon === 0 &&
+                            (!!data.coupon_id || hasPromoApplied)
+                        }
                     />
                 );
             case "appointment":
@@ -1136,7 +1323,8 @@ export default function LaboratoryCheckout({
                         currentStep={currentStepIndex}
                     />
                 }
-                footerActions={footerWithLegal}
+                footerActions={wizardFooterActions}
+                summaryActions={confirmationPaymentActions}
                 couponSection={couponSection}
                 hideDefaultSubmit
                 stepContentRef={stepContentRef}

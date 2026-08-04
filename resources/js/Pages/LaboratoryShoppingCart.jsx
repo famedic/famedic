@@ -12,6 +12,7 @@ import {
 	QueueListIcon,
 } from "@heroicons/react/24/solid";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
+import BalanceCreditCard from "@/Components/Coupons/BalanceCreditCard";
 import { useEffect, useState } from "react";
 
 // ==================== FUNCIÓN DEBUG GA4 ACTUALIZADA ====================
@@ -130,9 +131,14 @@ if (typeof window !== 'undefined') {
 export default function LaboratoryShoppingCart({
 	laboratoryBrand,
 	laboratoryCarts,
+	total = 0,
 	formattedTotal,
 	formattedSubtotal,
 	formattedDiscount,
+	balanceCouponsCents = 0,
+	availableBalanceCoupons = [],
+	cartTotalCents = 0,
+	balanceCreditPresentation = null,
 }) {
 	const {
 		laboratoryCartItemToDelete,
@@ -418,6 +424,7 @@ export default function LaboratoryShoppingCart({
 			console.log(`📍 Navegando a checkout...`);
 			window.location.href = route("laboratory.checkout", {
 				laboratory_brand: laboratoryBrand.value,
+				step: "patient",
 			});
 		}, 300);
 	};
@@ -528,8 +535,22 @@ export default function LaboratoryShoppingCart({
 				}
 				checkoutUrl={route("laboratory.checkout", {
 					laboratory_brand: laboratoryBrand.value,
+					step: "patient",
 				})}
 				onCheckoutClick={handleCheckoutClick}
+				addMoreHref={route("laboratory-tests", {
+					laboratory_brand: laboratoryBrand.value,
+				})}
+				addMoreLabel="Agregar más estudios"
+				summaryExtra={
+					<BalanceCreditCard
+						variant="cart"
+						balanceCreditPresentation={balanceCreditPresentation}
+						balanceCouponsCents={balanceCouponsCents}
+						availableBalanceCoupons={availableBalanceCoupons}
+						cartTotalCents={cartTotalCents || total}
+					/>
+				}
 				// =========== NUEVAS PROPS PARA GA4 ===========
 				currency="MXN"
 				productDataList={productDataList}

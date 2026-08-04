@@ -18,7 +18,7 @@ docker compose logs -f node       Solo Vite/npm
 
 --- ENTRAR A UN CONTENEDOR (bash / shell) ---
 docker compose exec app bash      Shell en PHP-FPM (si bash no existe, usa sh)
-docker compose exec app sh        Alternativa más liviana
+docker compose exec app sh        Alternativa más livianaaa
 
 docker compose exec mysql bash    Shell dentro del servidor MySQL
 docker compose exec node sh       Shell donde corre npm/vite

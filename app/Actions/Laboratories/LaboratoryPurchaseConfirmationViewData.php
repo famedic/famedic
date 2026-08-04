@@ -38,6 +38,13 @@ final class LaboratoryPurchaseConfirmationViewData
         $famedicLogoUrl = self::assetUrl('images/logo.png', $forPdf);
         $laboratorioLogoUrl = self::assetUrl('images/gda/'.$purchase->brand->imageSrc(), $forPdf);
 
+        $grossCents = (int) $purchase->total_cents;
+        $creditCents = $purchase->appliedCouponDiscountCents();
+        $netCents = $purchase->netTotalCents();
+        $catalogDiscountCents = $purchase->catalogDiscountCents();
+        $itemsSubtotalCents = $purchase->itemsSubtotalCents();
+        $subtotalCents = $itemsSubtotalCents > 0 ? $itemsSubtotalCents : $grossCents;
+
         $data = [
             'nombre_usuario' => $notifiable->full_name ?? trim((string) $notifiable->name),
             'consecutivo' => $purchase->gda_consecutivo !== null ? (string) $purchase->gda_consecutivo : '—',
@@ -49,7 +56,19 @@ final class LaboratoryPurchaseConfirmationViewData
             'laboratorio_logo_url' => $laboratorioLogoUrl,
             'estatus_pago' => self::paymentStatusLabel($transaction?->payment_status),
             'metodo_pago' => self::paymentMethodLabel($transaction?->payment_method ?? $transaction?->gateway),
-            'total' => $purchase->formatted_total,
+            'subtotal' => formattedCentsPrice($subtotalCents),
+            'catalog_discount' => $catalogDiscountCents > 0
+                ? formattedCentsPrice($catalogDiscountCents)
+                : null,
+            'coupon_discount' => $creditCents > 0
+                ? formattedCentsPrice($creditCents)
+                : null,
+            'has_coupon_credit' => $creditCents > 0,
+            'credit_applied_message' => $creditCents > 0
+                ? 'Se aplicó un crédito a favor de '.formattedCentsPrice($creditCents).'.'
+                : null,
+            'total' => formattedCentsPrice($netCents),
+            'total_gross' => formattedCentsPrice($grossCents),
             'fecha_compra' => $purchase->formatted_created_at ?? '—',
             'studies' => $studies,
             'branches_url' => URL::route('laboratory-stores.index', ['brand' => $purchase->brand->value]),
@@ -171,6 +190,7 @@ final class LaboratoryPurchaseConfirmationViewData
             'efevoopay' => 'EfevooPay',
             'odessa' => 'Caja de ahorro',
             'stripe' => 'Tarjeta',
+            'coupon_balance' => 'Crédito a favor',
             default => $method ? ucfirst(str_replace('_', ' ', $method)) : '—',
         };
     }

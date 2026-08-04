@@ -169,8 +169,12 @@ class FinalizeLaboratoryPayPalPaymentAction
             $laboratoryAppointment,
             $cartItems,
             $gdaBrandValue,
-            isset($details['coupon_id']) ? (int) $details['coupon_id'] : null,
-            $auditHint,
+            couponId: isset($details['coupon_id']) ? (int) $details['coupon_id'] : null,
+            promoValidationToken: isset($details['promo_validation_token'])
+                ? (string) $details['promo_validation_token']
+                : null,
+            cartHash: isset($details['cart_hash']) ? (string) $details['cart_hash'] : null,
+            auditHint: $auditHint,
         );
     }
 

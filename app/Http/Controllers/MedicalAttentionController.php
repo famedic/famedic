@@ -11,14 +11,17 @@ class MedicalAttentionController extends Controller
     {
         $medicalAttentionSubscriptionIsActive = $request->user()?->customer?->medical_attention_subscription_is_active ?? false;
 
-        return Inertia::render('MedicalAttention/Index', [
-            ...($request->user() && $medicalAttentionSubscriptionIsActive ? [
-                'familyAccounts' => $request->user()->customer->familyAccounts()->with('customer.user')->get(),
-            ] : []),
-            ...($request->user() && !$medicalAttentionSubscriptionIsActive ? [
-                'paymentMethods' => $request->user()->customer->paymentMethods(),
-            ] : []),
+        $props = [
             'formattedPrice' => formattedCentsPrice(config('famedic.medical_attention_subscription_price_cents')),
+        ];
+
+        if ($request->user() && $medicalAttentionSubscriptionIsActive) {
+            $props['familyAccounts'] = $request->user()->customer->familyAccounts()->with('customer.user')->get();
+        }
+
+        return Inertia::render('MedicalAttention/Index', [
+            ...$props,
+            ...(session()->get('confetti') ? ['confetti' => true] : []),
         ]);
     }
 }

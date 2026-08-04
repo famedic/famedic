@@ -222,6 +222,8 @@ return [
         'comment' => 'comentario',
         'proof' => 'comprobante de pago',
         'paid_at' => 'fecha de pago',
+        'invoice' => 'factura PDF',
+        'invoice_xml' => 'factura XML',
     ],
 
     'values' => [

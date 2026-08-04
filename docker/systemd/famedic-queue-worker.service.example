@@ -1,0 +1,27 @@
+; Ejemplo systemd — worker de colas Laravel (alternativa a Supervisor)
+;
+; Copiar a /etc/systemd/system/famedic-queue-worker.service
+; Ajustar WorkingDirectory, User y rutas de log.
+;
+;   sudo systemctl daemon-reload
+;   sudo systemctl enable famedic-queue-worker
+;   sudo systemctl start famedic-queue-worker
+;   sudo systemctl status famedic-queue-worker
+
+[Unit]
+Description=Famedic Laravel Queue Worker
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/famedic
+ExecStart=/usr/bin/php artisan queue:work database --queue=default --sleep=3 --tries=3 --max-time=3600
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/famedic/queue-worker.log
+StandardError=append:/var/log/famedic/queue-worker-error.log
+
+[Install]
+WantedBy=multi-user.target
