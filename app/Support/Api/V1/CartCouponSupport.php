@@ -195,15 +195,27 @@ class CartCouponSupport
     {
         $message = $exception->getMessage();
 
-        if ($message === 'Este cupón ya fue utilizado.') {
+        // Accept both legacy "cupón" and post-main "crédito" exception copy.
+        if (
+            $message === 'Este cupón ya fue utilizado.'
+            || $message === 'Este crédito ya fue utilizado.'
+        ) {
             return 'COUPON_EXPIRED';
         }
 
-        if ($message === 'El cupón no está activo.' || $message === 'El cupón no está autorizado.') {
+        if (
+            $message === 'El cupón no está activo.'
+            || $message === 'El crédito no está activo.'
+            || $message === 'El cupón no está autorizado.'
+            || $message === 'El crédito no está autorizado.'
+        ) {
             return 'COUPON_NOT_APPLICABLE';
         }
 
-        if ($message === 'El cupón no tiene saldo disponible.') {
+        if (
+            $message === 'El cupón no tiene saldo disponible.'
+            || $message === 'El crédito no tiene saldo disponible.'
+        ) {
             return 'COUPON_EXPIRED';
         }
 
