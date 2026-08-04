@@ -69,6 +69,9 @@ return [
         'config_monitor' => [
             ['manage_metadata' => 'Administrar metadatos del monitor de configuración'],
         ],
+        'activecampaign' => [
+            ['manage' => 'Administrar módulo ActiveCampaign'],
+        ],
     ],
 
     'medical_attention_subscription_price_cents' => 30000,

@@ -35,6 +35,7 @@ import {
 	BanknotesIcon,
 	IdentificationIcon,
 	SparklesIcon,
+	MegaphoneIcon,
 } from "@heroicons/react/16/solid";
 import { Strong } from "@/Components/Catalyst/text";
 import ApplicationLogo from "@/Components/ApplicationLogo";
@@ -80,6 +81,7 @@ export default function SideBar() {
 		BanknotesIcon: BanknotesIcon,
 		IdentificationIcon: IdentificationIcon,
 		SparklesIcon: SparklesIcon,
+		MegaphoneIcon: MegaphoneIcon,
 	};
 
 	return (

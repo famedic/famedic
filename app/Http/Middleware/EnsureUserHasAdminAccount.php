@@ -322,6 +322,22 @@ class EnsureUserHasAdminAccount
                         ],
                     ],
                 ]] : [],
+                ...$request->user()->administrator->hasPermissionTo('activecampaign.manage') ? [[
+                    'label' => 'Marketing Intelligence',
+                    'icon' => 'MegaphoneIcon',
+                    'items' => collect(\App\Support\ActiveCampaign\MarketingIntelligenceCatalog::menu())
+                        ->map(function (array $item) {
+                            $routeName = $item['route'];
+
+                            return [
+                                'label' => $item['label'],
+                                'url' => route($routeName),
+                                'current' => Route::currentRouteName() === $routeName
+                                    || ($item['key'] === 'contacts' && Route::currentRouteName() === 'admin.activecampaign.patient-360'),
+                            ];
+                        })
+                        ->all(),
+                ]] : [],
             ],
             'adminUserNavigation' => [
                 [

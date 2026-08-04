@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\ActiveCampaignController;
 use App\Http\Controllers\Admin\AdministratorController;
 use App\Http\Controllers\Admin\CouponConceptController;
 use App\Http\Controllers\Admin\CouponBeneficiaryController;
@@ -252,6 +253,27 @@ Route::prefix('admin')->middleware([
         Route::post('coupons/{coupon}/deactivate', [CouponController::class, 'deactivate'])->name('coupons.deactivate');
         Route::delete('coupons/{coupon}/assignments/{couponUser}', [CouponController::class, 'destroyAssignment'])->name('coupons.assignments.destroy');
         Route::resource('coupons', CouponController::class);
+        Route::prefix('activecampaign')->name('activecampaign.')->group(function () {
+            Route::get('/', [ActiveCampaignController::class, 'dashboard'])->name('dashboard');
+            Route::get('/analytics', [ActiveCampaignController::class, 'analytics'])->name('analytics');
+            Route::get('/contacts', [ActiveCampaignController::class, 'contacts'])->name('contacts');
+            Route::get('/contacts/360', [ActiveCampaignController::class, 'patient360'])->name('patient-360');
+            Route::get('/customer-journey', [ActiveCampaignController::class, 'customerJourney'])->name('customer-journey');
+            Route::get('/automations', [ActiveCampaignController::class, 'automations'])->name('automations');
+            Route::get('/funnels', [ActiveCampaignController::class, 'funnels'])->name('funnels');
+            Route::get('/events', [ActiveCampaignController::class, 'events'])->name('events');
+            Route::get('/tags', [ActiveCampaignController::class, 'tags'])->name('tags');
+            Route::get('/fields', [ActiveCampaignController::class, 'fields'])->name('fields');
+            Route::get('/ecommerce', [ActiveCampaignController::class, 'ecommerce'])->name('ecommerce');
+            Route::get('/laboratories', [ActiveCampaignController::class, 'laboratories'])->name('laboratories');
+            Route::get('/memberships', [ActiveCampaignController::class, 'memberships'])->name('memberships');
+            Route::get('/alerts', [ActiveCampaignController::class, 'alerts'])->name('alerts');
+            Route::get('/logs', [ActiveCampaignController::class, 'logs'])->name('logs');
+            Route::get('/health', [ActiveCampaignController::class, 'health'])->name('health');
+            Route::get('/qa-compare', [ActiveCampaignController::class, 'qaCompare'])->name('qa-compare');
+            Route::get('/settings', [ActiveCampaignController::class, 'settings'])->name('settings');
+        });
+
         Route::get('simulators', [SimulatorController::class, 'index'])->name('simulators.index');
         Route::get('simulators/gda', [GdaNotificationSimulatorController::class, 'show'])->name('simulators.gda');
         Route::get('simulators/gda/{laboratory_purchase}/history', [GdaNotificationSimulatorController::class, 'history'])
