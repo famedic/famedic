@@ -76,6 +76,38 @@ function CheckoutTag({ active, label, color }) {
 	);
 }
 
+function appointmentCheckoutTag(appointment) {
+	if (!appointment) {
+		return {
+			active: false,
+			label: "Sin cita",
+			color: "zinc",
+		};
+	}
+
+	if (!appointment.is_confirmed) {
+		return {
+			active: true,
+			label: "Cita por confirmar",
+			color: "amber",
+		};
+	}
+
+	if (!appointment.has_linked_purchase) {
+		return {
+			active: true,
+			label: "Cita confirmada, sin pago",
+			color: "violet",
+		};
+	}
+
+	return {
+		active: true,
+		label: "Cita confirmada",
+		color: "green",
+	};
+}
+
 function CheckoutSummaryCell({ cart }) {
 	if (cart.type !== "lab") {
 		return (
@@ -96,61 +128,52 @@ function CheckoutSummaryCell({ cart }) {
 	}
 
 	return (
-		<div className="space-y-2">
+		<div className="space-y-3">
 			{entries.map((entry) => {
-				const hasAppointment = !!entry.appointment;
-				const isConfirmed =
-					hasAppointment && entry.appointment.is_confirmed;
-				const hasContactInfo =
-					!!entry.appointment?.has_phone_call_intent ||
+				const wantsPhoneCall = !!entry.appointment?.has_phone_call_intent;
+				const leftCallbackSchedule =
 					!!entry.appointment?.has_callback_info;
-
-				let appointmentLabel = "Cita";
-				let appointmentColor = "zinc";
-				let appointmentActive = false;
-
-				if (hasAppointment) {
-					appointmentActive = true;
-					if (isConfirmed) {
-						appointmentLabel = "Cita confirmada";
-						appointmentColor = "green";
-					} else {
-						appointmentLabel = "Cita pendiente";
-						appointmentColor = "amber";
-					}
-				}
+				const appointmentTag = appointmentCheckoutTag(entry.appointment);
 
 				return (
 					<div
 						key={entry.id}
-						className="flex flex-wrap items-center gap-1"
+						className="rounded-lg border border-zinc-200/80 bg-zinc-50/70 p-2 dark:border-zinc-700/70 dark:bg-zinc-900/40"
 					>
-						{entries.length > 1 && (
-							<Badge color="slate">
-								{entry.brand_label}
-							</Badge>
-						)}
-						<CheckoutTag
-							active={!!entry.patient_name}
-							label="Paciente"
-						/>
-						<CheckoutTag
-							active={!!entry.address_short}
-							label="Dirección"
-						/>
-						<CheckoutTag
-							active={!!entry.payment_method_label}
-							label="Pago"
-						/>
-						<CheckoutTag
-							active={appointmentActive}
-							label={appointmentLabel}
-							color={appointmentColor}
-						/>
-						<CheckoutTag
-							active={hasContactInfo}
-							label="Contacto"
-						/>
+						{entry.brand_label ? (
+							<div className="mb-1.5">
+								<Badge color="slate">{entry.brand_label}</Badge>
+							</div>
+						) : null}
+						<div className="flex flex-col items-start gap-1">
+							<CheckoutTag
+								active={!!entry.patient_name}
+								label="Paciente"
+							/>
+							<CheckoutTag
+								active={!!entry.address_short}
+								label="Dirección"
+							/>
+							<CheckoutTag
+								active={!!entry.payment_method_label}
+								label="Pago"
+							/>
+							<CheckoutTag
+								active={wantsPhoneCall}
+								label="Llamó"
+								color="sky"
+							/>
+							<CheckoutTag
+								active={leftCallbackSchedule}
+								label="Llamada solicitada"
+								color="violet"
+							/>
+							<CheckoutTag
+								active={appointmentTag.active}
+								label={appointmentTag.label}
+								color={appointmentTag.color}
+							/>
+						</div>
 					</div>
 				);
 			})}
@@ -221,6 +244,7 @@ export default function Carts({
 	carts,
 	filters,
 	metrics,
+	abandonedThresholdMinutes = 30,
 	canViewCartDetails = true,
 	canExport = false,
 }) {
@@ -302,7 +326,15 @@ export default function Carts({
 	return (
 		<AdminLayout title="Carritos">
 			<div className="space-y-8">
-				<Heading>Monitoreo · Carritos</Heading>
+				<div>
+					<Heading>Monitoreo · Carritos</Heading>
+					<Text className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+						Un carrito sin compra se marca como{" "}
+						<Strong>Abandonado</Strong> tras{" "}
+						<Strong>{abandonedThresholdMinutes} minutos</Strong> sin
+						actividad (última actualización).
+					</Text>
+				</div>
 
 				<form className="space-y-8" onSubmit={updateResults}>
 					<div className="flex flex-col justify-between gap-8 md:flex-row md:items-center">
@@ -312,6 +344,13 @@ export default function Carts({
 							placeholder="Buscar por usuario..."
 						/>
 						<div className="flex items-center justify-end gap-2">
+							<Button
+								href={route("admin.carts.dashboard")}
+								outline
+								className="w-full sm:w-auto"
+							>
+								Dashboard
+							</Button>
 							<Button
 								outline
 								type="button"
@@ -391,8 +430,7 @@ export default function Carts({
 								<TableHeader>Tipo</TableHeader>
 								<TableHeader>Checkout</TableHeader>
 								<TableHeader>Estatus</TableHeader>
-								<TableHeader>Última actividad</TableHeader>
-								<TableHeader></TableHeader>
+								<TableHeader>Actividad</TableHeader>
 							</TableRow>
 						</TableHead>
 						<TableBody>
@@ -401,23 +439,37 @@ export default function Carts({
 								return (
 									<TableRow key={cart.id}>
 										<TableCell>
-											{cart.user ? (
-												<div className="space-y-0.5">
-													<Text className="!text-zinc-950 dark:!text-white">
-														<Strong>
-															{cart.user.full_name ||
-																cart.user.email}
-														</Strong>
-													</Text>
-													{cart.user.email && (
-														<Text className="text-xs">
-															{cart.user.email}
+											<div className="space-y-2">
+												{cart.user ? (
+													<div className="space-y-0.5">
+														<Text className="!text-zinc-950 dark:!text-white">
+															<Strong>
+																{cart.user.full_name ||
+																	cart.user.email}
+															</Strong>
 														</Text>
-													)}
-												</div>
-											) : (
-												<Text className="text-sm">—</Text>
-											)}
+														{cart.user.email && (
+															<Text className="text-xs">
+																{cart.user.email}
+															</Text>
+														)}
+													</div>
+												) : (
+													<Text className="text-sm">—</Text>
+												)}
+												{canViewCartDetails ? (
+													<Button
+														href={route("admin.carts.show", {
+															cart: cart.id,
+														})}
+														outline
+													>
+														Ver detalle
+													</Button>
+												) : (
+													<Text className="text-xs">Sin permiso</Text>
+												)}
+											</div>
 										</TableCell>
 									<TableCell>
 										<div className="flex flex-col gap-1">
@@ -451,42 +503,33 @@ export default function Carts({
 											<CheckoutSummaryCell cart={cart} />
 										</TableCell>
 										<TableCell>
-											<div className="flex flex-wrap gap-1">
-												<Badge color={b.color}>{b.label}</Badge>
-												{cart.appointment_pending_confirmation && (
-													<Badge color="amber">
-														Cita por confirmar
-													</Badge>
-												)}
-												{cart.appointment_confirmed_pending_payment && (
-													<Badge color="violet">
-														Cita confirmada, sin pago
-													</Badge>
-												)}
-											</div>
+											<Badge color={b.color}>{b.label}</Badge>
 										</TableCell>
 										<TableCell>
-											<div className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
-												<ClockIcon className="size-4" />
-												{cart.updated_at_human}
+											<div className="space-y-0.5">
+												<div className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+													<ClockIcon className="size-4 shrink-0" />
+													<span>
+														Última: {cart.updated_at_human || "—"}
+													</span>
+												</div>
+												{cart.inactive_for_label ? (
+													<Text
+														className={clsx(
+															"text-sm font-medium tabular-nums",
+															cart.display_status === "abandoned"
+																? "text-red-600 dark:text-red-300"
+																: "text-zinc-900 dark:text-zinc-100",
+														)}
+													>
+														Sin actividad: {cart.inactive_for_label}
+													</Text>
+												) : cart.display_status === "completed" ? (
+													<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+														Compra registrada
+													</Text>
+												) : null}
 											</div>
-										</TableCell>
-										<TableCell>
-											{canViewCartDetails ? (
-												<Button
-													href={route("admin.carts.show", {
-														cart: cart.id,
-													})}
-													outline
-													size="sm"
-												>
-													Ver detalle
-												</Button>
-											) : (
-												<Text className="text-xs">
-													Sin permiso
-												</Text>
-											)}
 										</TableCell>
 									</TableRow>
 								);

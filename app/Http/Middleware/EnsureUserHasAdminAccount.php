@@ -100,6 +100,7 @@ class EnsureUserHasAdminAccount
                             'label' => 'Facturación',
                             'url' => route('admin.laboratory-billing.dashboard'),
                             'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-billing.'),
+                            'badge' => 'NEW',
                         ] : null,
                     ])),
                 ],
@@ -277,27 +278,28 @@ class EnsureUserHasAdminAccount
                             'url' => route('admin.config-monitor.index'),
                             'current' => str_starts_with((string) Route::currentRouteName(), 'admin.config-monitor'),
                         ] : null,
-                        $request->user()->administrator->hasPermissionTo('monitoring-ai.manage') ? [
-                            'label' => 'Asistente IA',
-                            'url' => route('admin.monitoring-ai.index'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.monitoring-ai'),
-                        ] : null,
-                        $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+                    ])),
+                ],
+                ...$request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [[
+                    'label' => 'Admin Membresías',
+                    'icon' => 'IdentificationIcon',
+                    'items' => [
+                        [
                             'label' => 'Murguía — dashboard',
                             'url' => route('admin.murguia-dashboard.index'),
                             'current' => Route::currentRouteName() === 'admin.murguia-dashboard.index',
-                        ] : null,
-                        $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+                        ],
+                        [
                             'label' => 'Murguía — reportes',
                             'url' => route('admin.murguia-reports.index'),
                             'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia-reports'),
-                        ] : null,
-                        $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+                        ],
+                        [
                             'label' => 'Murguía — conciliación',
                             'url' => route('admin.murguia-reconciliation.index'),
                             'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia-reconciliation'),
-                        ] : null,
-                        $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+                        ],
+                        [
                             'label' => 'Murguía — monitor',
                             'url' => route('admin.murguia-monitor.index'),
                             'current' => in_array(Route::currentRouteName(), [
@@ -306,9 +308,20 @@ class EnsureUserHasAdminAccount
                                 'admin.murguia.upload',
                                 'admin.murguia.logs',
                             ], true),
-                        ] : null,
-                    ])),
-                ],
+                        ],
+                    ],
+                ]] : [],
+                ...$request->user()->administrator->hasPermissionTo('monitoring-ai.manage') ? [[
+                    'label' => 'IA',
+                    'icon' => 'SparklesIcon',
+                    'items' => [
+                        [
+                            'label' => 'Asistente IA',
+                            'url' => route('admin.monitoring-ai.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.monitoring-ai'),
+                        ],
+                    ],
+                ]] : [],
             ],
             'adminUserNavigation' => [
                 [

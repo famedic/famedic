@@ -85,6 +85,7 @@ Route::prefix('admin')->middleware([
         Route::post('users/{user}/verify-phone', [UserController::class, 'verifyPhone'])->name('users.verify-phone');
         Route::post('users/{user}/update-password', [UserController::class, 'updatePassword'])->name('users.update-password');
         Route::resource('users', UserController::class)->only(['index', 'show']);
+        Route::get('carts/dashboard', [\App\Http\Controllers\Admin\CartsDashboardController::class, 'index'])->name('carts.dashboard');
         Route::resource('carts', CartController::class)->only(['index', 'show']);
         Route::post('carts/export', ExportCartsController::class)->name('carts.export');
         Route::resource('roles', RoleController::class)->except('show');
