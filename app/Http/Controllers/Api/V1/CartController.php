@@ -16,6 +16,8 @@ use App\Http\Resources\Api\V1\CartResource;
 use App\Http\Responses\ApiResponse;
 use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryTest;
+use App\Services\Api\V1\Audit\AuditOutcome;
+use App\Services\Api\V1\Audit\CartCheckoutAuditRecorder;
 use App\Support\Api\V1\CartCouponSupport;
 use App\Support\Api\V1\CheckoutPreparation;
 use Illuminate\Http\JsonResponse;
@@ -23,6 +25,10 @@ use Illuminate\Http\Request;
 
 class CartController extends Controller
 {
+    public function __construct(
+        private readonly CartCheckoutAuditRecorder $cartCheckoutAudit,
+    ) {}
+
     public function index(GetCartRequest $request): JsonResponse
     {
         $brand = LaboratoryBrand::from($request->validated('brand'));
@@ -47,11 +53,21 @@ class CartController extends Controller
         $laboratoryTest = LaboratoryTest::query()->find($laboratoryTestId);
 
         if (! $laboratoryTest || $laboratoryTest->brand !== $brand) {
-            return ApiResponse::error(
+            $response = ApiResponse::error(
                 'LAB_TEST_NOT_FOUND',
                 'El estudio de laboratorio no fue encontrado.',
                 404,
             );
+            $classified = $this->cartCheckoutAudit->classifyErrorResponse($response);
+            $this->cartCheckoutAudit->recordCartItemAdded(
+                request: $request,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+                laboratoryBrand: $brand->value,
+            );
+
+            return $response;
         }
 
         $alreadyInCart = $customer->laboratoryCartItems()
@@ -59,11 +75,22 @@ class CartController extends Controller
             ->exists();
 
         if ($alreadyInCart) {
-            return ApiResponse::error(
+            $response = ApiResponse::error(
                 'ITEM_ALREADY_IN_CART',
                 'El estudio ya está en el carrito.',
                 409,
             );
+            $classified = $this->cartCheckoutAudit->classifyErrorResponse($response);
+            $this->cartCheckoutAudit->recordCartItemAdded(
+                request: $request,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+                laboratoryBrand: $brand->value,
+                laboratoryTestRowId: $laboratoryTestId,
+            );
+
+            return $response;
         }
 
         $cartItem = $addItemToCartAction($customer, $laboratoryTestId);
@@ -73,6 +100,17 @@ class CartController extends Controller
             ->ofBrand($brand)
             ->with('laboratoryTest')
             ->get();
+
+        $this->cartCheckoutAudit->recordCartItemAdded(
+            request: $request,
+            outcome: AuditOutcome::SUCCEEDED,
+            httpStatus: 201,
+            resourceKey: (string) $cartItem->id,
+            laboratoryBrand: $brand->value,
+            cartItemRowId: (int) $cartItem->id,
+            laboratoryTestRowId: $laboratoryTestId,
+            itemCount: $items->count(),
+        );
 
         return ApiResponse::success([
             'item' => (new CartItemResource($cartItem))->resolve($request),
@@ -90,23 +128,43 @@ class CartController extends Controller
             ->find($cartItemId);
 
         if (! $cartItem) {
-            return ApiResponse::error(
+            $response = ApiResponse::error(
                 'CART_ITEM_NOT_FOUND',
                 'Ítem de carrito no encontrado.',
                 404,
             );
+            $classified = $this->cartCheckoutAudit->classifyErrorResponse($response);
+            $this->cartCheckoutAudit->recordCartItemRemoved(
+                request: $request,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+            );
+
+            return $response;
         }
 
         if ($request->user()->customer?->id !== $cartItem->customer_id) {
-            return ApiResponse::error(
+            $response = ApiResponse::error(
                 'FORBIDDEN',
                 'No tienes permiso para eliminar este ítem.',
                 403,
             );
+            $classified = $this->cartCheckoutAudit->classifyErrorResponse($response);
+            // Cross-user: no foreign cart_item / test IDs in resource or metadata.
+            $this->cartCheckoutAudit->recordCartItemRemoved(
+                request: $request,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+            );
+
+            return $response;
         }
 
         $brand = $cartItem->laboratoryTest->brand;
         $removedItemId = $cartItem->id;
+        $laboratoryTestRowId = (int) $cartItem->laboratory_test_id;
 
         $deleteItemFromCartAction($cartItem);
 
@@ -114,6 +172,17 @@ class CartController extends Controller
             ->ofBrand($brand)
             ->with('laboratoryTest')
             ->get();
+
+        $this->cartCheckoutAudit->recordCartItemRemoved(
+            request: $request,
+            outcome: AuditOutcome::SUCCEEDED,
+            httpStatus: 200,
+            resourceKey: (string) $removedItemId,
+            laboratoryBrand: $brand->value,
+            cartItemRowId: (int) $removedItemId,
+            laboratoryTestRowId: $laboratoryTestRowId,
+            itemCount: $items->count(),
+        );
 
         return ApiResponse::success([
             'removed_item_id' => $removedItemId,
@@ -138,7 +207,17 @@ class CartController extends Controller
         ClearAkubicaCartAction $clearAkubicaCartAction,
     ): JsonResponse {
         $brand = LaboratoryBrand::from($request->validated('brand'));
-        $deletedCount = $clearAkubicaCartAction($request->user()->customer, $brand);
+        $customer = $request->user()->customer;
+        $deletedCount = $clearAkubicaCartAction($customer, $brand);
+
+        $this->cartCheckoutAudit->recordCartCleared(
+            request: $request,
+            outcome: AuditOutcome::SUCCEEDED,
+            httpStatus: 200,
+            resourceKey: $this->cartCheckoutAudit->cartResourceKey((int) $customer->id, $brand),
+            laboratoryBrand: $brand->value,
+            itemCount: $deletedCount,
+        );
 
         return ApiResponse::success([
             'deleted' => true,

@@ -50,6 +50,20 @@ final class AuditEventDefinitions
 
     public const EVENT_INVOICES_DOWNLOADED = 'api_v1.invoices.downloaded';
 
+    // ── Cart / checkout draft (Block 4) ───────────────────────────────────
+
+    public const EVENT_CART_ITEM_ADDED = 'api_v1.cart.item_added';
+
+    public const EVENT_CART_ITEM_REMOVED = 'api_v1.cart.item_removed';
+
+    public const EVENT_CART_CLEARED = 'api_v1.cart.cleared';
+
+    public const EVENT_CART_BENEFIT_APPLIED = 'api_v1.cart.benefit_applied';
+
+    public const EVENT_CART_BENEFIT_REMOVED = 'api_v1.cart.benefit_removed';
+
+    public const EVENT_CHECKOUT_DRAFT_SYNCED = 'api_v1.checkout.draft_synced';
+
     /**
      * Shared metadata keys for OTP Auth events (all allowlisted names avoid
      * sensitive tokens: code, key, grant, otp, token, password, …).
@@ -118,6 +132,61 @@ final class AuditEventDefinitions
     ];
 
     /**
+     * Cart item mutations. Keys avoid sensitive substrings (code/token/key/…).
+     *
+     * @var list<string>
+     */
+    private const CART_ITEM_METADATA = [
+        'laboratory_brand',
+        'cart_item_row_id',
+        'laboratory_test_row_id',
+        'item_count',
+        'quantity',
+    ];
+
+    /**
+     * Cart-level clear.
+     *
+     * @var list<string>
+     */
+    private const CART_CLEARED_METADATA = [
+        'laboratory_brand',
+        'item_count',
+    ];
+
+    /**
+     * Coupon / balance benefit on cart draft. Never coupon_code / promo_code.
+     *
+     * @var list<string>
+     */
+    private const CART_BENEFIT_METADATA = [
+        'laboratory_brand',
+        'benefit_type',
+        'coupon_row_id',
+        'applied_amount_minor',
+        'removed_amount_minor',
+        'item_count',
+        'subtotal_minor',
+        'discount_minor',
+        'credit_minor',
+        'total_minor',
+        'currency',
+    ];
+
+    /**
+     * Checkout draft sync (contact/address IDs intentionally omitted).
+     *
+     * @var list<string>
+     */
+    private const CHECKOUT_DRAFT_METADATA = [
+        'laboratory_brand',
+        'draft_row_id',
+        'checkout_step',
+        'item_count',
+        'checkout_ready',
+    ];
+
+    /**
      * @var array<string, list<string>>
      */
     private const ALLOWLISTS = [
@@ -147,6 +216,12 @@ final class AuditEventDefinitions
         self::EVENT_INVOICES_SECURE_LINK_CREATED => self::DOCUMENT_SECURE_LINK_CREATED_METADATA,
         self::EVENT_INVOICES_SECURE_LINK_OPENED => self::DOCUMENT_SECURE_LINK_OPENED_METADATA,
         self::EVENT_INVOICES_DOWNLOADED => self::DOCUMENT_DOWNLOADED_METADATA,
+        self::EVENT_CART_ITEM_ADDED => self::CART_ITEM_METADATA,
+        self::EVENT_CART_ITEM_REMOVED => self::CART_ITEM_METADATA,
+        self::EVENT_CART_CLEARED => self::CART_CLEARED_METADATA,
+        self::EVENT_CART_BENEFIT_APPLIED => self::CART_BENEFIT_METADATA,
+        self::EVENT_CART_BENEFIT_REMOVED => self::CART_BENEFIT_METADATA,
+        self::EVENT_CHECKOUT_DRAFT_SYNCED => self::CHECKOUT_DRAFT_METADATA,
     ];
 
     /**
@@ -199,6 +274,21 @@ final class AuditEventDefinitions
             self::EVENT_INVOICES_SECURE_LINK_CREATED,
             self::EVENT_INVOICES_SECURE_LINK_OPENED,
             self::EVENT_INVOICES_DOWNLOADED,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function cartCheckoutEventNames(): array
+    {
+        return [
+            self::EVENT_CART_ITEM_ADDED,
+            self::EVENT_CART_ITEM_REMOVED,
+            self::EVENT_CART_CLEARED,
+            self::EVENT_CART_BENEFIT_APPLIED,
+            self::EVENT_CART_BENEFIT_REMOVED,
+            self::EVENT_CHECKOUT_DRAFT_SYNCED,
         ];
     }
 }

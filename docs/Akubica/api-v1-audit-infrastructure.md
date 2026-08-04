@@ -1,10 +1,11 @@
 # API V1 — Auditoría transversal
 
-**Estado:** infraestructura (bloque 1) + Auth/OTP (bloque 2) + secure links / downloads (bloque 3).  
+**Estado:** infraestructura (bloque 1) + Auth/OTP (bloque 2) + secure links / downloads (bloque 3) + carrito / cupón / checkout draft (bloque 4).  
 **Flag default:** `API_V1_AUDIT_ENABLED=false`  
 **Tabla:** `api_v1_audit_events` (append-only)
 
-Checkout, carrito, payment links, citas, invoice-request, perfiles, contactos/direcciones, eventos de idempotencia y fallback global 5xx **siguen pendientes**.
+Payment links, citas, invoice-request, perfiles, contactos/direcciones, eventos de idempotencia y fallback global 5xx **siguen pendientes**.  
+**API V1 no crea `LaboratoryPurchase`:** `api_v1.orders.created` y cualquier `api_v1.payment.*` **no** forman parte de este bloque.
 
 ---
 
@@ -117,6 +118,17 @@ Alias → `InitializeApiV1AuditContext`. Solo hidrata contexto; no escribe event
 - `GET orders/{id}/results/download`
 - `GET orders/{id}/invoices/{id}/download`
 
+**Bloque 4 — Carrito / cupón / checkout draft:**
+
+- `POST cart/items`
+- `DELETE cart/items/{cart_item_id}`
+- `DELETE cart`
+- `POST cart/coupon`
+- `DELETE cart/coupon`
+- `POST checkout/draft`
+
+**No** instrumentados en bloque 4: `GET cart`, `GET cart/totals`, `GET cart/coupon`, `GET checkout/prepare`, `POST checkout/payment-link`.
+
 Orden autenticado (creación):
 
 ```
@@ -137,7 +149,15 @@ Orden público open:
 force.json → api.correlation → api.token.guard → throttle → api.audit → controller
 ```
 
-**Replay idempotente:** `api.idempotency` corta antes de `api.audit` → no duplica evento semántico ni crea otro link.
+Orden carrito / draft (sin idempotencia):
+
+```
+force.json → api.correlation → api.token.guard
+  → auth:sanctum → api.customer → api.audit → controller
+```
+
+**Replay idempotente:** `api.idempotency` corta antes de `api.audit` → no duplica evento semántico ni crea otro link.  
+Las mutaciones de carrito/cupón/draft **no** usan `api.idempotency` (riesgo de doble submit preexistente; no resuelto en este bloque).
 
 **Antes de instrumentación:** 401 Sanctum / 403 sin customer / token malformado en ruta → **sin** evento de este bloque.
 
@@ -262,9 +282,120 @@ Endpoints de creación son idempotentes. Primera ejecución → 1 link + 1 event
 
 ---
 
-## 10. Fuera de alcance (siguen pendientes)
+## 10. Bloque 4 — Carrito, cupón/saldo y checkout draft
 
-- Checkout, payment links, carrito, citas, invoice-request, perfiles, contactos, direcciones.
+Emisor: `App\Services\Api\V1\Audit\CartCheckoutAuditRecorder`
+
+### Hallazgos de dominio (código real)
+
+- El “carrito” API V1 **no** es una fila `cart`: son `LaboratoryCartItem` filtrados por `customer_id` + `LaboratoryTest.brand`.
+- No hay `POST` de creación explícita de carrito → **no** existe `api_v1.cart.created`.
+- No hay `PATCH/PUT` de ítem (cantidad/sucursal/modalidad) → **no** existe `api_v1.cart.item_updated`.
+- Cupón/saldo: se persiste en `LaboratoryCheckoutDraft.coupon_id` (tipo de dominio expuesto como `balance`).
+- `GET checkout/prepare` siempre responde 200 con warnings → **no** se audita como `checkout.validated`.
+- `POST checkout/payment-link` crea `AkubicaCheckoutLink` (liga opaca) **sin** cobro y **sin** `LaboratoryPurchase` → **fuera de alcance** de este bloque (payment links / pagos).
+- Creación real de `LaboratoryPurchase`: checkout web (`OrderAction` / PayPal finalize → `FulfillLaboratoryCartOrderAction`), **fuera de API V1** → **no** se emite `api_v1.orders.created`.
+
+### Eventos
+
+| event_name | Hecho |
+|------------|-------|
+| `api_v1.cart.item_added` | Ítem persistido en carrito (o rechazo relevante de add) |
+| `api_v1.cart.item_removed` | Ítem eliminado tras ownership OK (o rechazo sin IDs ajenos) |
+| `api_v1.cart.cleared` | Ítems de la marca eliminados + draft de cupón limpiado |
+| `api_v1.cart.benefit_applied` | Cupón/saldo persistido en draft (o rechazo de aplicación) |
+| `api_v1.cart.benefit_removed` | Cupón retirado del draft tras cambio material (`removed=true`) |
+| `api_v1.checkout.draft_synced` | Draft upsert confirmado (o rechazo EMPTY_CART / ownership) |
+
+### Semántica
+
+**`item_added`:** éxito solo tras `AddItemToCartAction` persistir el row. Cantidad siempre 1 (API no soporta quantity).
+
+**`item_removed`:** éxito solo tras borrar el ítem propio. Cross-user `FORBIDDEN`: sin `resource_key` ni `cart_item_row_id` / `laboratory_test_row_id` ajenos.
+
+**`cleared`:** éxito tras borrar ítems de la marca y `clearForCustomer` del draft. `item_count` = cantidad eliminada.
+
+**`benefit_applied`:** éxito tras `persistCoupon`. Metadata monetaria copia totales confirmados (`*_minor` = centavos). **Nunca** `coupon_code`.
+
+**`benefit_removed`:** solo si hubo cupón previo (`removed=true`). No-op (`removed=false`) → **cero** eventos.
+
+**`draft_synced`:** éxito tras `updateOrCreate` del draft. No persiste `contact_id`, `address_id`, `tax_profile_id`, `notes`. `checkout_ready` refleja `is_ready_for_payment_link` sin afirmar pago.
+
+### Matriz ruta → evento terminal
+
+| Ruta | Evento terminal |
+|------|-----------------|
+| `POST /api/v1/cart/items` | `api_v1.cart.item_added` |
+| `DELETE /api/v1/cart/items/{id}` | `api_v1.cart.item_removed` |
+| `DELETE /api/v1/cart` | `api_v1.cart.cleared` |
+| `POST /api/v1/cart/coupon` | `api_v1.cart.benefit_applied` |
+| `DELETE /api/v1/cart/coupon` | `api_v1.cart.benefit_removed` (solo si material) |
+| `POST /api/v1/checkout/draft` | `api_v1.checkout.draft_synced` |
+
+### Actores / resources
+
+| Flujo | Actor | resource_type | resource_key |
+|-------|-------|---------------|--------------|
+| Mutaciones autenticadas | `customer:{customer_id}` + PAT | `laboratory_cart_item` / `laboratory_cart` / `laboratory_checkout_draft` | id interno del ítem; `{customer_id}:{brand}` para carrito; id del draft |
+| Rechazo cross-user / not-found | mismo actor customer | — | **null** (sin IDs ajenos) |
+
+### Metadata allowlist (bloque 4)
+
+Ítem: `laboratory_brand`, `cart_item_row_id`, `laboratory_test_row_id`, `item_count`, `quantity`.
+
+Clear: `laboratory_brand`, `item_count`.
+
+Beneficio: `laboratory_brand`, `benefit_type`, `coupon_row_id`, `applied_amount_minor`, `removed_amount_minor`, `item_count`, `subtotal_minor`, `discount_minor`, `credit_minor`, `total_minor`, `currency`.
+
+Draft: `laboratory_brand`, `draft_row_id`, `checkout_step`, `item_count`, `checkout_ready`.
+
+Prohibido: `coupon_code`, `promo_code`, bearer, card/cvv, payment_*, phone/email/name/address/RFC, bodies, Idempotency-Key, exception messages.
+
+### Outcomes auditados (ejemplos)
+
+| Caso | outcome | error_code típico |
+|------|---------|-------------------|
+| Add/remove/clear/apply/draft OK | succeeded | — |
+| Estudio inexistente / marca incompatible | rejected | `LAB_TEST_NOT_FOUND` |
+| Duplicado en carrito | rejected | `ITEM_ALREADY_IN_CART` |
+| Ítem ajeno | rejected | `FORBIDDEN` |
+| Ítem inexistente | rejected | `CART_ITEM_NOT_FOUND` |
+| Carrito vacío (cupón/draft) | rejected | `EMPTY_CART` |
+| Cupón ajeno / inexistente | rejected | `COUPON_NOT_FOUND` |
+| Cupón usado/sin saldo | rejected | `COUPON_EXPIRED` |
+| Cupón no aplicable | rejected | `COUPON_NOT_APPLICABLE` |
+| Contacto/dirección/perfil ajeno | rejected | `CONTACT_NOT_FOUND` / `ADDRESS_NOT_FOUND` / `TAX_PROFILE_NOT_FOUND` |
+| Error inesperado de dominio | failed | `INTERNAL_ERROR` |
+
+### Límites checkout / pedido / pago
+
+```
+API V1 (bloque 4)                 Web / gateways (fuera de bloque)
+─────────────────                 ───────────────────────────────
+cart items / coupon / draft
+        │
+POST /checkout/payment-link ──► AkubicaCheckoutLink  [NO auditado aquí]
+        │
+GET /akubica/checkout/{token} ► checkout web
+        │
+POST laboratory/.../checkout    OrderAction: charge + Fulfill → LaboratoryPurchase
+```
+
+### Limitaciones
+
+- Sin `orders.created` en API V1.
+- Sin eventos de payment-link / pagos / 3DS / webhooks.
+- Sin idempotencia en mutaciones de carrito (doble submit posible; preexistente).
+- Sin fallback global 5xx.
+- 401/403 previos a `api.audit`: sin evento.
+- `VALIDATION_ERROR` 422 (FormRequest) ocurre antes del controller → sin evento de este bloque.
+
+---
+
+## 11. Fuera de alcance (siguen pendientes)
+
+- Payment links, citas, invoice-request, perfiles, contactos, direcciones.
+- Creación de `LaboratoryPurchase` / pagos (fuera de API V1 o bloque de pagos futuro).
 - Eventos `api_v1.idempotency.*`.
 - Fallback transversal 5xx.
 - Cleanup / UI admin.
@@ -273,13 +404,15 @@ Endpoints de creación son idempotentes. Primera ejecución → 1 link + 1 event
 
 ---
 
-## 11. Clases y tests clave
+## 12. Clases y tests clave
 
 | Pieza | Clase / archivo |
 |-------|-----------------|
 | Modelo | `App\Models\Api\V1\ApiV1AuditEvent` |
 | Auth/OTP emitter | `App\Services\Api\V1\Audit\AuthOtpAuditRecorder` |
 | Document access emitter | `App\Services\Api\V1\Audit\DocumentAccessAuditRecorder` |
+| Cart/checkout emitter | `App\Services\Api\V1\Audit\CartCheckoutAuditRecorder` |
 | Tests infra | `tests/Feature/Api/V1/Audit/AkubicaAuditInfrastructureP1Test.php` |
 | Tests Auth/OTP | `tests/Feature/Api/V1/Audit/AkubicaAuditAuthOtpP2Test.php` |
 | Tests bloque 3 | `tests/Feature/Api/V1/Audit/AkubicaAuditDocumentAccessP3Test.php` |
+| Tests bloque 4 | `tests/Feature/Api/V1/Audit/AkubicaAuditCartCheckoutP4Test.php` |

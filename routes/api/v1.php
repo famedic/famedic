@@ -97,16 +97,27 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
 
         Route::get('cart/totals', [CartController::class, 'totals'])->name('cart.totals');
         Route::get('cart/coupon', [CartCouponController::class, 'show'])->name('cart.coupon.show');
-        Route::post('cart/coupon', [CartCouponController::class, 'apply'])->name('cart.coupon.apply');
-        Route::delete('cart/coupon', [CartCouponController::class, 'remove'])->name('cart.coupon.remove');
-        Route::delete('cart', [CartController::class, 'clear'])->name('cart.clear');
+        Route::post('cart/coupon', [CartCouponController::class, 'apply'])
+            ->middleware('api.audit')
+            ->name('cart.coupon.apply');
+        Route::delete('cart/coupon', [CartCouponController::class, 'remove'])
+            ->middleware('api.audit')
+            ->name('cart.coupon.remove');
+        Route::delete('cart', [CartController::class, 'clear'])
+            ->middleware('api.audit')
+            ->name('cart.clear');
         Route::get('cart', [CartController::class, 'index'])->name('cart.index');
-        Route::post('cart/items', [CartController::class, 'store'])->name('cart.items.store');
+        Route::post('cart/items', [CartController::class, 'store'])
+            ->middleware('api.audit')
+            ->name('cart.items.store');
         Route::delete('cart/items/{cart_item_id}', [CartController::class, 'destroy'])
+            ->middleware('api.audit')
             ->name('cart.items.destroy');
 
         Route::get('checkout/prepare', [CheckoutController::class, 'prepare'])->name('checkout.prepare');
-        Route::post('checkout/draft', [CheckoutController::class, 'syncDraft'])->name('checkout.draft');
+        Route::post('checkout/draft', [CheckoutController::class, 'syncDraft'])
+            ->middleware('api.audit')
+            ->name('checkout.draft');
         Route::post('checkout/payment-link', [CheckoutController::class, 'paymentLink'])
             ->middleware('api.idempotency')
             ->name('checkout.payment-link');

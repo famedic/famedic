@@ -11,12 +11,19 @@ use App\Http\Requests\Api\V1\Checkout\PrepareCheckoutRequest;
 use App\Http\Requests\Api\V1\Checkout\SyncCheckoutDraftRequest;
 use App\Http\Resources\Api\V1\CheckoutPaymentLinkResource;
 use App\Http\Responses\ApiResponse;
+use App\Models\LaboratoryCheckoutDraft;
+use App\Services\Api\V1\Audit\AuditOutcome;
+use App\Services\Api\V1\Audit\CartCheckoutAuditRecorder;
 use App\Support\Api\V1\CartCouponSupport;
 use App\Support\Api\V1\CheckoutPreparation;
 use Illuminate\Http\JsonResponse;
 
 class CheckoutController extends Controller
 {
+    public function __construct(
+        private readonly CartCheckoutAuditRecorder $cartCheckoutAudit,
+    ) {}
+
     public function prepare(
         PrepareCheckoutRequest $request,
         CheckoutPreparation $checkoutPreparation,
@@ -39,6 +46,7 @@ class CheckoutController extends Controller
         SyncAkubicaCheckoutDraftAction $syncAkubicaCheckoutDraftAction,
     ): JsonResponse {
         $brand = LaboratoryBrand::from($request->validated('brand'));
+        $customer = $request->user()->customer;
         $validated = $request->validated();
 
         $payload = [];
@@ -50,13 +58,13 @@ class CheckoutController extends Controller
         }
 
         $result = $syncAkubicaCheckoutDraftAction(
-            $request->user()->customer,
+            $customer,
             $brand,
             $payload,
         );
 
         if (isset($result['error'])) {
-            return match ($result['error']) {
+            $response = match ($result['error']) {
                 'EMPTY_CART' => ApiResponse::error(
                     'EMPTY_CART',
                     'No se puede preparar checkout con un carrito vacío.',
@@ -83,7 +91,39 @@ class CheckoutController extends Controller
                     500,
                 ),
             };
+
+            $classified = $this->cartCheckoutAudit->classifyErrorResponse($response);
+            // Ownership / empty-cart rejections: no foreign contact/address/tax IDs.
+            $this->cartCheckoutAudit->recordCheckoutDraftSynced(
+                request: $request,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+                laboratoryBrand: $brand->value,
+            );
+
+            return $response;
         }
+
+        $draftPayload = $result['draft'];
+        $draft = LaboratoryCheckoutDraft::query()
+            ->where('customer_id', $customer->id)
+            ->where('laboratory_brand', $brand)
+            ->first();
+
+        $this->cartCheckoutAudit->recordCheckoutDraftSynced(
+            request: $request,
+            outcome: AuditOutcome::SUCCEEDED,
+            httpStatus: 200,
+            resourceKey: $draft !== null ? (string) $draft->id : null,
+            laboratoryBrand: $brand->value,
+            draftRowId: $draft !== null ? (int) $draft->id : null,
+            checkoutStep: is_string($draftPayload['checkout_step'] ?? null)
+                ? $draftPayload['checkout_step']
+                : null,
+            itemCount: $customer->laboratoryCartItems()->ofBrand($brand)->count(),
+            checkoutReady: (bool) ($draftPayload['is_ready_for_payment_link'] ?? false),
+        );
 
         return ApiResponse::success($result);
     }
