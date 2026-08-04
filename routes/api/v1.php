@@ -35,27 +35,27 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
     // ── Auth pública ──────────────────────────────────────────────────────
     Route::prefix('auth')->name('auth.')->group(function () {
         Route::post('login/request-code', [LoginController::class, 'requestCode'])
-            ->middleware(['throttle:akubica-otp', 'api.idempotency'])
+            ->middleware(['throttle:akubica-otp', 'api.idempotency', 'api.audit'])
             ->name('login.request-code');
 
         Route::post('login/verify-code', [LoginController::class, 'verifyCode'])
-            ->middleware('throttle:akubica-otp')
+            ->middleware(['throttle:akubica-otp', 'api.audit'])
             ->name('login.verify-code');
 
         Route::post('login/resend-code', [LoginController::class, 'resendCode'])
-            ->middleware('throttle:akubica-otp')
+            ->middleware(['throttle:akubica-otp', 'api.audit'])
             ->name('login.resend-code');
 
         Route::post('register', [RegisterController::class, 'store'])
-            ->middleware(['throttle:akubica-otp', 'api.idempotency'])
+            ->middleware(['throttle:akubica-otp', 'api.idempotency', 'api.audit'])
             ->name('register');
 
         Route::post('register/verify-code', [RegisterController::class, 'verifyCode'])
-            ->middleware('throttle:akubica-otp')
+            ->middleware(['throttle:akubica-otp', 'api.audit'])
             ->name('register.verify-code');
 
         Route::post('register/resend-code', [RegisterController::class, 'resendCode'])
-            ->middleware('throttle:akubica-otp')
+            ->middleware(['throttle:akubica-otp', 'api.audit'])
             ->name('register.resend-code');
     });
 
@@ -132,20 +132,20 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
                 ->name('invoices.download');
 
             Route::post('{order_id}/invoices/{invoice_id}/step-up/request', [OrderInvoicesStepUpController::class, 'request'])
-                ->middleware(['throttle:akubica-otp', 'api.idempotency'])
+                ->middleware(['throttle:akubica-otp', 'api.idempotency', 'api.audit'])
                 ->name('invoices.step-up.request');
             Route::post('{order_id}/invoices/{invoice_id}/step-up/verify', [OrderInvoicesStepUpController::class, 'verify'])
-                ->middleware('throttle:akubica-otp')
+                ->middleware(['throttle:akubica-otp', 'api.audit'])
                 ->name('invoices.step-up.verify');
             Route::post('{order_id}/invoices/{invoice_id}/secure-link', [OrderInvoicesSecureLinkController::class, 'store'])
                 ->middleware(['throttle:60,1', 'api.idempotency'])
                 ->name('invoices.secure-link');
 
             Route::post('{order_id}/results/step-up/request', [OrderResultsStepUpController::class, 'request'])
-                ->middleware(['throttle:akubica-otp', 'api.idempotency'])
+                ->middleware(['throttle:akubica-otp', 'api.idempotency', 'api.audit'])
                 ->name('results.step-up.request');
             Route::post('{order_id}/results/step-up/verify', [OrderResultsStepUpController::class, 'verify'])
-                ->middleware('throttle:akubica-otp')
+                ->middleware(['throttle:akubica-otp', 'api.audit'])
                 ->name('results.step-up.verify');
             Route::post('{order_id}/results/secure-link', [OrderResultsSecureLinkController::class, 'store'])
                 ->middleware(['throttle:60,1', 'api.idempotency'])

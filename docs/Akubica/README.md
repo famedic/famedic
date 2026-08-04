@@ -18,6 +18,7 @@ Esta carpeta documenta el contrato real para integración **Akubica / LeoV**. No
 | [`openapi-changelog-v1.2.0.md`](./openapi-changelog-v1.2.0.md) | Cambios OpenAPI v1.1.0 → v1.2.0 |
 | [`openapi-changelog-v1.2.1.md`](./openapi-changelog-v1.2.1.md) | Cambios OpenAPI v1.2.0 → v1.2.1 (P1-A6) |
 | [`p1-a6-errors-correlation.md`](./p1-a6-errors-correlation.md) | Correlation ID + retryable (P1-A6) |
+| [`api-v1-audit-infrastructure.md`](./api-v1-audit-infrastructure.md) | Auditoría append-only (bloque 1 infra; flag OFF) |
 | [`p0-e1-qa-staging-production-readiness.md`](./p0-e1-qa-staging-production-readiness.md) | Readiness + rollout gradual |
 | [`p0-e2-staging-qa-evidence.md`](./p0-e2-staging-qa-evidence.md) | Matriz evidencia QA manual staging |
 | [`p0-f1-production-rollout-runbook.md`](./p0-f1-production-rollout-runbook.md) | Runbook rollout gradual a producción (flags, fases, rollback) |

@@ -10,6 +10,7 @@ use App\Exceptions\Api\V1\Auth\AuthOtpVerificationException;
 use App\Exceptions\Otp\OtpChallengeException;
 use App\Exceptions\Otp\OtpConfigurationException;
 use App\Exceptions\Otp\OtpIdentityNormalizationException;
+use App\Exceptions\Otp\RegistrationCompletedLoginRequiredException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\RegisterRequest;
 use App\Http\Requests\Api\V1\Auth\RegisterVerifyCodeRequest;
@@ -18,8 +19,11 @@ use App\Http\Requests\Api\V1\Auth\SecureRegisterResendCodeRequest;
 use App\Http\Requests\Api\V1\Auth\SecureRegisterVerifyCodeRequest;
 use App\Http\Responses\Api\V1\OtpExceptionHttpMapper;
 use App\Http\Responses\ApiResponse;
+use App\Models\OtpChallenge;
 use App\Models\OtpCode;
 use App\Models\User;
+use App\Services\Api\V1\Audit\AuditOutcome;
+use App\Services\Api\V1\Audit\AuthOtpAuditRecorder;
 use App\Services\Otp\Registration\AkubicaRegisterOtpService;
 use App\Services\Otp\Registration\AkubicaRegistrationPolicy;
 use Illuminate\Http\JsonResponse;
@@ -36,6 +40,7 @@ class RegisterController extends Controller
         private IssueAkubicaTokenAction $issueAkubicaTokenAction,
         private AkubicaRegisterOtpService $akubicaRegisterOtpService,
         private OtpExceptionHttpMapper $otpExceptionHttpMapper,
+        private AuthOtpAuditRecorder $authOtpAudit,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -66,19 +71,58 @@ class RegisterController extends Controller
         $form->setContainer(app())->setRedirector(app('redirect'));
         $form->validateResolved();
 
+        $challengePublicId = (string) $form->validated('challenge_id');
+        $material = $this->registerMaterialFromChallenge($challengePublicId);
+
         try {
             $this->akubicaRegisterOtpService->assertConfigurationReady();
             $payload = $this->akubicaRegisterOtpService->verify(
-                $form->validated('challenge_id'),
+                $challengePublicId,
                 $form->validated('code'),
                 $request->ip(),
             );
+        } catch (RegistrationCompletedLoginRequiredException $e) {
+            $response = $this->otpExceptionHttpMapper->toResponse($e);
+            $classified = $this->authOtpAudit->classifyErrorResponse($response);
+            $this->authOtpAudit->recordRegistrationCompleted(
+                request: $request,
+                normalizedMaterial: $material,
+                outcome: AuditOutcome::UNCERTAIN,
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+                challengePublicId: $challengePublicId,
+                markTerminal: true,
+            );
+
+            return $response;
         } catch (OtpConfigurationException|OtpChallengeException $e) {
-            return $this->otpExceptionHttpMapper->toResponse($e);
+            $response = $this->otpExceptionHttpMapper->toResponse($e);
+            $classified = $this->authOtpAudit->classifyErrorResponse($response);
+            $this->authOtpAudit->recordRegistrationCompleted(
+                request: $request,
+                normalizedMaterial: $material,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+                challengePublicId: $challengePublicId,
+                markTerminal: true,
+            );
+
+            return $response;
         } catch (\Throwable $e) {
             Log::error('akubica_register_verify_p0a_failed', [
                 'error' => $e->getMessage(),
             ]);
+
+            $this->authOtpAudit->recordRegistrationCompleted(
+                request: $request,
+                normalizedMaterial: $material,
+                outcome: AuditOutcome::FAILED,
+                httpStatus: 500,
+                errorCode: 'INTERNAL_ERROR',
+                challengePublicId: $challengePublicId,
+                markTerminal: true,
+            );
 
             return ApiResponse::error(
                 'INTERNAL_ERROR',
@@ -86,6 +130,19 @@ class RegisterController extends Controller
                 500,
             );
         }
+
+        $userId = is_array($payload['user'] ?? null) ? ($payload['user']['id'] ?? null) : null;
+        $user = is_numeric($userId) ? User::query()->find((int) $userId) : null;
+
+        $this->authOtpAudit->recordRegistrationCompleted(
+            request: $request,
+            normalizedMaterial: $material,
+            outcome: AuditOutcome::SUCCEEDED,
+            httpStatus: 200,
+            provisionedUser: $user,
+            challengePublicId: $challengePublicId,
+            markTerminal: true,
+        );
 
         return ApiResponse::success($payload);
     }
@@ -100,15 +157,40 @@ class RegisterController extends Controller
             );
         }
 
+        $challengePublicId = (string) $request->validated('challenge_id');
+        $material = $this->registerMaterialFromChallenge($challengePublicId);
+
         try {
             $this->akubicaRegisterOtpService->assertConfigurationReady();
             $payload = $this->akubicaRegisterOtpService->resend(
-                $request->validated('challenge_id'),
+                $challengePublicId,
                 $request->ip(),
             );
         } catch (OtpConfigurationException|OtpChallengeException $e) {
-            return $this->otpExceptionHttpMapper->toResponse($e);
+            $response = $this->otpExceptionHttpMapper->toResponse($e);
+            $classified = $this->authOtpAudit->classifyErrorResponse($response);
+            $this->authOtpAudit->recordRegistrationCodeRequested(
+                request: $request,
+                normalizedMaterial: $material,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+                challengePublicId: $challengePublicId,
+                isResend: true,
+            );
+
+            return $response;
         }
+
+        $this->authOtpAudit->recordRegistrationCodeRequested(
+            request: $request,
+            normalizedMaterial: $material,
+            outcome: AuditOutcome::SUCCEEDED,
+            httpStatus: 202,
+            challengePublicId: is_string($payload['challenge_id'] ?? null) ? $payload['challenge_id'] : $challengePublicId,
+            isDecoy: $this->isDecoyChallengePayload($payload),
+            isResend: true,
+        );
 
         return ApiResponse::success($payload, null, 202);
     }
@@ -185,14 +267,34 @@ class RegisterController extends Controller
         $form->setContainer(app())->setRedirector(app('redirect'));
         $form->validateResolved();
 
+        $material = null;
+
         try {
             $this->akubicaRegisterOtpService->assertConfigurationReady();
+            $identity = $form->registrationIdentity();
+            $material = $this->authOtpAudit->registerActorMaterial(
+                $identity->phone->comparisonKey(),
+                $identity->email->comparisonKey(),
+            );
             $payload = $this->akubicaRegisterOtpService->request(
-                $form->registrationIdentity(),
+                $identity,
                 $request->ip(),
             );
         } catch (OtpConfigurationException|OtpChallengeException $e) {
-            return $this->otpExceptionHttpMapper->toResponse($e);
+            $response = $this->otpExceptionHttpMapper->toResponse($e);
+            if (is_string($material) && $material !== '') {
+                $classified = $this->authOtpAudit->classifyErrorResponse($response);
+                $this->authOtpAudit->recordRegistrationCodeRequested(
+                    request: $request,
+                    normalizedMaterial: $material,
+                    outcome: $classified['outcome'],
+                    httpStatus: $classified['http_status'],
+                    errorCode: $classified['error_code'],
+                    isResend: false,
+                );
+            }
+
+            return $response;
         } catch (OtpIdentityNormalizationException $e) {
             return ApiResponse::error(
                 'VALIDATION_ERROR',
@@ -200,6 +302,16 @@ class RegisterController extends Controller
                 422,
             );
         }
+
+        $this->authOtpAudit->recordRegistrationCodeRequested(
+            request: $request,
+            normalizedMaterial: $material,
+            outcome: AuditOutcome::SUCCEEDED,
+            httpStatus: 202,
+            challengePublicId: is_string($payload['challenge_id'] ?? null) ? $payload['challenge_id'] : null,
+            isDecoy: $this->isDecoyChallengePayload($payload),
+            isResend: false,
+        );
 
         return ApiResponse::success($payload, null, 202);
     }
@@ -284,5 +396,39 @@ class RegisterController extends Controller
             'email' => $user->email,
             'name' => trim($user->full_name) ?: $user->name,
         ];
+    }
+
+    private function registerMaterialFromChallenge(string $challengePublicId): string
+    {
+        $challenge = OtpChallenge::query()->where('public_id', $challengePublicId)->first();
+        if ($challenge !== null) {
+            $subject = is_string($challenge->subject_key) ? $challenge->subject_key : '';
+            $metaPhone = is_array($challenge->meta) && is_string($challenge->meta['phone_comparison_key'] ?? null)
+                ? $challenge->meta['phone_comparison_key']
+                : '';
+
+            if ($subject !== '' && $metaPhone !== '') {
+                return $this->authOtpAudit->registerActorMaterial($metaPhone, $subject);
+            }
+
+            if ($subject !== '') {
+                return 'register-subject|'.$subject;
+            }
+        }
+
+        return 'register-challenge-ref|'.$challengePublicId;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function isDecoyChallengePayload(array $payload): bool
+    {
+        $publicId = $payload['challenge_id'] ?? null;
+        if (! is_string($publicId) || $publicId === '') {
+            return true;
+        }
+
+        return ! OtpChallenge::query()->where('public_id', $publicId)->exists();
     }
 }

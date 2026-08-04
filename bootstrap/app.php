@@ -42,6 +42,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.customer' => \App\Http\Middleware\EnsureApiCustomer::class,
             'api.token.guard' => \App\Http\Middleware\UseApiTokenGuard::class,
             'api.idempotency' => \App\Http\Middleware\Api\V1\EnforceIdempotencyKey::class,
+            'api.audit' => \App\Http\Middleware\Api\V1\InitializeApiV1AuditContext::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

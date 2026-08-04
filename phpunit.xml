@@ -54,5 +54,6 @@
         <env name="OTP_P0A_DELIVERY_DRIVER" value="fake" force="true"/>
         <env name="API_V1_IDEMPOTENCY_ENABLED" value="false" force="true"/>
         <env name="API_V1_IDEMPOTENCY_PRUNE_ENABLED" value="false" force="true"/>
+        <env name="API_V1_AUDIT_ENABLED" value="false" force="true"/>
     </php>
 </phpunit>

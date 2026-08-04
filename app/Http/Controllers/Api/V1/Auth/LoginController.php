@@ -15,8 +15,11 @@ use App\Http\Requests\Api\V1\Auth\LoginRequestCodeRequest;
 use App\Http\Requests\Api\V1\Auth\LoginVerifyCodeRequest;
 use App\Http\Responses\Api\V1\OtpExceptionHttpMapper;
 use App\Http\Responses\ApiResponse;
+use App\Models\OtpChallenge;
 use App\Models\OtpCode;
 use App\Models\User;
+use App\Services\Api\V1\Audit\AuditOutcome;
+use App\Services\Api\V1\Audit\AuthOtpAuditRecorder;
 use App\Services\Otp\AkubicaLoginOtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -29,6 +32,7 @@ class LoginController extends Controller
         private IssueAkubicaTokenAction $issueAkubicaTokenAction,
         private AkubicaLoginOtpService $akubicaLoginOtpService,
         private OtpExceptionHttpMapper $otpExceptionHttpMapper,
+        private AuthOtpAuditRecorder $authOtpAudit,
     ) {}
 
     public function requestCode(LoginRequestCodeRequest $request): JsonResponse
@@ -59,15 +63,42 @@ class LoginController extends Controller
             );
         }
 
+        $challengePublicId = (string) $request->validated('challenge_id');
+        $material = $this->loginMaterialFromChallenge($challengePublicId);
+
         try {
             $this->akubicaLoginOtpService->assertConfigurationReady();
             $payload = $this->akubicaLoginOtpService->resend(
-                $request->validated('challenge_id'),
+                $challengePublicId,
                 $request->ip(),
             );
         } catch (OtpConfigurationException|OtpChallengeException $e) {
-            return $this->otpExceptionHttpMapper->toResponse($e);
+            $response = $this->otpExceptionHttpMapper->toResponse($e);
+            $classified = $this->authOtpAudit->classifyErrorResponse($response);
+            $this->authOtpAudit->recordLoginCodeRequested(
+                request: $request,
+                phoneComparisonKey: $material,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+                challengePublicId: $challengePublicId,
+                isDecoy: false,
+                isResend: true,
+            );
+
+            return $response;
         }
+
+        $isDecoy = $this->isDecoyChallengePayload($payload);
+        $this->authOtpAudit->recordLoginCodeRequested(
+            request: $request,
+            phoneComparisonKey: $material,
+            outcome: AuditOutcome::SUCCEEDED,
+            httpStatus: 202,
+            challengePublicId: is_string($payload['challenge_id'] ?? null) ? $payload['challenge_id'] : $challengePublicId,
+            isDecoy: $isDecoy,
+            isResend: true,
+        );
 
         return ApiResponse::success($payload, null, 202);
     }
@@ -100,6 +131,8 @@ class LoginController extends Controller
 
     private function requestCodeP0a(LoginRequestCodeRequest $request): JsonResponse
     {
+        $phoneComparisonKey = null;
+
         try {
             $this->akubicaLoginOtpService->assertConfigurationReady();
 
@@ -107,15 +140,23 @@ class LoginController extends Controller
                 (string) $request->validated('phone'),
                 $request->validated('phone_country') ?? null,
             );
+            $phoneComparisonKey = $phone->comparisonKey();
 
             $user = $this->akubicaLoginOtpService->findEligibleUser($phone);
 
             if ($user === null) {
-                return ApiResponse::success(
-                    $this->akubicaLoginOtpService->decoyRequestResponse($phone),
-                    null,
-                    202,
+                $payload = $this->akubicaLoginOtpService->decoyRequestResponse($phone);
+                $this->authOtpAudit->recordLoginCodeRequested(
+                    request: $request,
+                    phoneComparisonKey: $phoneComparisonKey,
+                    outcome: AuditOutcome::SUCCEEDED,
+                    httpStatus: 202,
+                    challengePublicId: is_string($payload['challenge_id'] ?? null) ? $payload['challenge_id'] : null,
+                    isDecoy: true,
+                    isResend: false,
                 );
+
+                return ApiResponse::success($payload, null, 202);
             }
 
             $payload = $this->akubicaLoginOtpService->request($user, $phone, $request->ip());
@@ -126,8 +167,32 @@ class LoginController extends Controller
                 422,
             );
         } catch (OtpConfigurationException|OtpChallengeException $e) {
-            return $this->otpExceptionHttpMapper->toResponse($e);
+            $response = $this->otpExceptionHttpMapper->toResponse($e);
+            if (is_string($phoneComparisonKey) && $phoneComparisonKey !== '') {
+                $classified = $this->authOtpAudit->classifyErrorResponse($response);
+                $this->authOtpAudit->recordLoginCodeRequested(
+                    request: $request,
+                    phoneComparisonKey: $phoneComparisonKey,
+                    outcome: $classified['outcome'],
+                    httpStatus: $classified['http_status'],
+                    errorCode: $classified['error_code'],
+                    isDecoy: false,
+                    isResend: false,
+                );
+            }
+
+            return $response;
         }
+
+        $this->authOtpAudit->recordLoginCodeRequested(
+            request: $request,
+            phoneComparisonKey: $phoneComparisonKey,
+            outcome: AuditOutcome::SUCCEEDED,
+            httpStatus: 202,
+            challengePublicId: is_string($payload['challenge_id'] ?? null) ? $payload['challenge_id'] : null,
+            isDecoy: false,
+            isResend: false,
+        );
 
         return ApiResponse::success($payload, null, 202);
     }
@@ -163,16 +228,44 @@ class LoginController extends Controller
 
     private function verifyCodeP0a(LoginVerifyCodeRequest $request): JsonResponse
     {
+        $challengePublicId = (string) $request->validated('challenge_id');
+        $material = $this->loginMaterialFromChallenge($challengePublicId);
+
         try {
             $this->akubicaLoginOtpService->assertConfigurationReady();
             $payload = $this->akubicaLoginOtpService->verify(
-                $request->validated('challenge_id'),
+                $challengePublicId,
                 $request->validated('code'),
                 $request->ip(),
             );
         } catch (OtpConfigurationException|OtpChallengeException $e) {
-            return $this->otpExceptionHttpMapper->toResponse($e);
+            $response = $this->otpExceptionHttpMapper->toResponse($e);
+            $classified = $this->authOtpAudit->classifyErrorResponse($response);
+            $this->authOtpAudit->recordLoginVerified(
+                request: $request,
+                phoneComparisonKey: $material,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+                challengePublicId: $challengePublicId,
+                markTerminal: true,
+            );
+
+            return $response;
         }
+
+        $userId = is_array($payload['user'] ?? null) ? ($payload['user']['id'] ?? null) : null;
+        $user = is_numeric($userId) ? User::query()->find((int) $userId) : null;
+
+        $this->authOtpAudit->recordLoginVerified(
+            request: $request,
+            phoneComparisonKey: $material,
+            outcome: AuditOutcome::SUCCEEDED,
+            httpStatus: 200,
+            authenticatedUser: $user,
+            challengePublicId: $challengePublicId,
+            markTerminal: true,
+        );
 
         return ApiResponse::success($payload);
     }
@@ -184,5 +277,35 @@ class LoginController extends Controller
             'email' => $user->email,
             'name' => trim($user->full_name) ?: $user->name,
         ];
+    }
+
+    /**
+     * Normalized phone comparison key from challenge, or opaque HMAC material for decoys.
+     */
+    private function loginMaterialFromChallenge(string $challengePublicId): string
+    {
+        $subjectKey = OtpChallenge::query()
+            ->where('public_id', $challengePublicId)
+            ->value('subject_key');
+
+        if (is_string($subjectKey) && $subjectKey !== '') {
+            return $subjectKey;
+        }
+
+        // Decoy / unknown: material is HMAC'd — public id never persisted as actor_key.
+        return 'login-challenge-ref|'.$challengePublicId;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function isDecoyChallengePayload(array $payload): bool
+    {
+        $publicId = $payload['challenge_id'] ?? null;
+        if (! is_string($publicId) || $publicId === '') {
+            return true;
+        }
+
+        return ! OtpChallenge::query()->where('public_id', $publicId)->exists();
     }
 }
