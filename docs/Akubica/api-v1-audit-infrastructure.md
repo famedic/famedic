@@ -7,6 +7,8 @@
 Payment links, invoice-request, perfiles, contactos/direcciones, eventos de idempotencia y fallback global 5xx **siguen pendientes**.  
 **API V1 no crea `LaboratoryPurchase`:** `api_v1.orders.created` y cualquier `api_v1.payment.*` **no** forman parte de este bloque.
 
+Eventos de negocio fuera de API V1 (checkout web, admin, webhooks, sistema) **no** se escriben en `api_v1_audit_events`. Usan la infraestructura independiente documentada en [`business-audit-infrastructure.md`](./business-audit-infrastructure.md) (`business_audit_events`, `BUSINESS_AUDIT_ENABLED`).
+
 ---
 
 ## 1. Qué es y qué no es

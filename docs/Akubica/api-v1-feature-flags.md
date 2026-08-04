@@ -38,6 +38,7 @@ Fuente: `config/otp.php`, `config/akubica.php`, `.env.example`.
 | `AKUBICA_TOKEN_TTL_MINUTES` | `1440` | TTL anunciado legacy (flag 3h OFF) | — | default | default | N/A |
 | `API_V1_IDEMPOTENCY_ENABLED` | `false` | Idempotency-Key en rutas write seleccionadas | — | checklist | checklist | `false` |
 | `API_V1_AUDIT_ENABLED` | `false` | Persistencia auditoría append-only API v1 | Migración `api_v1_audit_events` | checklist | checklist | `false` |
+| `BUSINESS_AUDIT_ENABLED` | `false` | Auditoría de negocio multi-canal (independiente de API V1) | Migración `business_audit_events` | checklist | checklist | `false` |
 | `API_V1_AUDIT_MAX_METADATA_BYTES` | `2048` | Tope JSON metadata auditoría | Flag audit | `2048` | `2048` | N/A |
 | `API_V1_AUDIT_MAX_METADATA_DEPTH` | `2` | Profundidad máxima metadata | Flag audit | `2` | `2` | N/A |
 
