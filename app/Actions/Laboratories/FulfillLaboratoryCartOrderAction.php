@@ -13,6 +13,8 @@ use App\Models\Transaction;
 use App\Notifications\FewDaysLeftToRequestInvoice;
 use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
 use App\Notifications\LaboratoryPurchaseCreated;
+use App\Services\Audit\Business\LaboratoryOrderCreatedAuditHint;
+use App\Services\Audit\Business\LaboratoryOrderCreatedAuditRecorder;
 use App\Services\CouponApplicationService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use Illuminate\Database\Eloquent\Collection;
@@ -26,12 +28,15 @@ class FulfillLaboratoryCartOrderAction
         private SyncMonitoringCartService $syncMonitoringCartService,
         private CouponApplicationService $couponApplicationService,
         private SyncLaboratoryCheckoutDraftAction $syncLaboratoryCheckoutDraftAction,
+        private LaboratoryOrderCreatedAuditRecorder $laboratoryOrderCreatedAuditRecorder,
     ) {
     }
 
     /**
      * Crea el pedido de laboratorio, cotización GDA, limpia carrito y notifica.
      * Debe llamarse cuando el cobro ya fue autorizado/capturado (tarjeta, PayPal, etc.).
+     *
+     * Business audit (commerce.laboratory_order_created) runs only after DB::commit().
      */
     public function __invoke(
         Customer $customer,
@@ -43,6 +48,7 @@ class FulfillLaboratoryCartOrderAction
         Collection $laboratoryCartItems,
         string $gdaBrandValue,
         ?int $couponId = null,
+        ?LaboratoryOrderCreatedAuditHint $auditHint = null,
     ): LaboratoryPurchase {
         DB::beginTransaction();
 
@@ -109,6 +115,14 @@ class FulfillLaboratoryCartOrderAction
         } catch (\Throwable $th) {
             DB::rollBack();
             throw $th;
+        }
+
+        // Post-commit only: rollback / GDA failure never reaches here.
+        if ($auditHint !== null) {
+            $this->laboratoryOrderCreatedAuditRecorder->recordSucceeded(
+                (int) $laboratoryPurchase->id,
+                $auditHint
+            );
         }
 
         $laboratoryPurchase->customer->user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));

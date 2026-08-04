@@ -5,20 +5,21 @@ namespace App\Services\Audit\Business;
 use LogicException;
 
 /**
- * Explicit event definitions for business audit (Block 6A).
+ * Explicit event definitions for business audit.
  *
- * Productive taxonomy is empty in 6A — no real commerce/billing/payment events.
+ * Block 6A: infrastructure. Block 6B: commerce.laboratory_order_created only.
  * Tests may register temporary definitions only while `app()->environment('testing')`.
  *
- * Future examples (documentation only — not registered):
- * - commerce.laboratory_order_created
+ * Future examples (documentation only — not registered yet):
  * - billing.invoice_documents_completed
  * - customer.tax_profile_created
  */
 final class BusinessAuditEventDefinitions
 {
+    public const EVENT_COMMERCE_LABORATORY_ORDER_CREATED = 'commerce.laboratory_order_created';
+
     /**
-     * Productive allowlists — intentionally empty in Block 6A.
+     * Productive definitions.
      *
      * @var array<string, array{
      *     metadata: list<string>,
@@ -29,7 +30,30 @@ final class BusinessAuditEventDefinitions
      *     subject_types?: list<string>
      * }>
      */
-    private const DEFINITIONS = [];
+    private const DEFINITIONS = [
+        self::EVENT_COMMERCE_LABORATORY_ORDER_CREATED => [
+            'metadata' => [
+                'fulfillment_origin',
+            ],
+            'outcomes' => [
+                BusinessAuditOutcome::SUCCEEDED,
+            ],
+            'actor_types' => [
+                BusinessAuditActor::TYPE_CUSTOMER,
+                BusinessAuditActor::TYPE_INTEGRATION,
+            ],
+            'channels' => [
+                BusinessAuditChannel::WEB_CHECKOUT,
+                BusinessAuditChannel::INTEGRATION_WEBHOOK,
+            ],
+            'resource_types' => [
+                'laboratory_purchase',
+            ],
+            'subject_types' => [
+                BusinessAuditSubject::TYPE_CUSTOMER,
+            ],
+        ],
+    ];
 
     /**
      * @var array<string, array{

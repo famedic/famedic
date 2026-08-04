@@ -82,7 +82,12 @@ class CapturePayPalOrderAction
             return ['purchase' => null, 'status' => 'invalid_capture', 'message' => 'Respuesta de PayPal incompleta.'];
         }
 
-        $purchase = ($this->finalizeLaboratoryPayPalPaymentAction)($transaction, $capturePayload);
+        $purchase = ($this->finalizeLaboratoryPayPalPaymentAction)(
+            $transaction,
+            $capturePayload,
+            \App\Services\Audit\Business\LaboratoryOrderCreatedAuditHint::ORIGIN_PAYPAL_CAPTURE,
+            $customer,
+        );
 
         return [
             'purchase' => $purchase,

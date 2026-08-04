@@ -82,6 +82,7 @@ class AppServiceProvider extends ServiceProvider
             return \App\Services\Audit\Business\BusinessAuditMetadataNormalizer::fromConfig();
         });
         $this->app->singleton(\App\Services\Audit\Business\BusinessAuditEventWriter::class);
+        $this->app->singleton(\App\Services\Audit\Business\LaboratoryOrderCreatedAuditRecorder::class);
         $this->app->bind(OtpRateLimitService::class);
         $this->app->bind(OtpAbusePolicy::class);
         $this->app->singleton(AkubicaLoginOtpDecoyStore::class);

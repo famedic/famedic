@@ -531,7 +531,7 @@ Enums controlados en recorder: `appointment_state` / `previous_state` / `resulti
 ## 12. Fuera de alcance (siguen pendientes)
 
 - Payment links, invoice-request, perfiles, contactos, direcciones.
-- Creación de `LaboratoryPurchase` / pagos (fuera de API V1 o bloque de pagos futuro).
+- Creación de `LaboratoryPurchase` / pagos (fuera de API V1). La creación confirmada de pedido local se audita en la infraestructura de negocio (`commerce.laboratory_order_created`, ver [`business-audit-infrastructure.md`](./business-audit-infrastructure.md)) — **no** en `api_v1_audit_events`.
 - Eventos `api_v1.idempotency.*`.
 - Fallback transversal 5xx.
 - Cleanup / UI admin.

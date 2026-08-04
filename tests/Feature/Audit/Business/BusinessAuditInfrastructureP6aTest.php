@@ -643,13 +643,13 @@ test('creating LaboratoryPurchase via helper emits zero business audit events', 
     createAkubicaLaboratoryPurchase($user);
 
     expect(BusinessAuditEvent::query()->count())->toBe($before)
-        ->and(BusinessAuditEventDefinitions::productiveEventNames())->toBe([])
-        ->and(BusinessAuditEventDefinitions::isKnownEvent('commerce.laboratory_order_created'))->toBeFalse();
+        ->and(BusinessAuditEventDefinitions::isKnownEvent('commerce.laboratory_order_created'))->toBeTrue();
 });
 
-test('productive taxonomy does not include commerce or payment events', function () {
-    expect(BusinessAuditEventDefinitions::productiveEventNames())->toBe([])
-        ->and(BusinessAuditEventDefinitions::isKnownEvent('commerce.laboratory_order_created'))->toBeFalse()
+test('productive taxonomy includes laboratory order created and excludes payment events', function () {
+    expect(BusinessAuditEventDefinitions::productiveEventNames())
+        ->toBe([BusinessAuditEventDefinitions::EVENT_COMMERCE_LABORATORY_ORDER_CREATED])
+        ->and(BusinessAuditEventDefinitions::isKnownEvent('commerce.laboratory_order_created'))->toBeTrue()
         ->and(BusinessAuditEventDefinitions::isKnownEvent('payment.completed'))->toBeFalse();
 });
 
@@ -674,8 +674,9 @@ test('flag ON insert stores a valid probe row without PII', function () {
 });
 
 test('test definitions cannot be registered outside testing environment guard path', function () {
-    // We are in testing — registration works; productive list stays empty.
+    // We are in testing — registration works; productive list stays the 6B event only.
     registerBusinessAuditProbeDefinition();
     expect(BusinessAuditEventDefinitions::isKnownEvent(BUSINESS_AUDIT_TEST_EVENT))->toBeTrue()
-        ->and(BusinessAuditEventDefinitions::productiveEventNames())->toBe([]);
+        ->and(BusinessAuditEventDefinitions::productiveEventNames())
+        ->toBe([BusinessAuditEventDefinitions::EVENT_COMMERCE_LABORATORY_ORDER_CREATED]);
 });

@@ -13,6 +13,9 @@ use App\Models\Customer;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryPurchase;
 use App\Models\Transaction;
+use App\Services\Audit\Business\BusinessAuditActor;
+use App\Services\Audit\Business\BusinessAuditChannel;
+use App\Services\Audit\Business\LaboratoryOrderCreatedAuditHint;
 use App\Services\PayPalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -32,8 +35,15 @@ class FinalizeLaboratoryPayPalPaymentAction
      * Actualiza la transacción con datos de captura y genera el pedido de laboratorio (idempotente).
      *
      * @param  array<string, mixed>  $capturePayload  Respuesta de capture API o recurso de webhook
+     * @param  'paypal_capture'|'paypal_webhook'  $fulfillmentOrigin
+     * @param  Customer|null  $actingCustomer  Authenticated customer when capture is browser-initiated; null for webhooks
      */
-    public function __invoke(Transaction $transaction, array $capturePayload): ?LaboratoryPurchase
+    public function __invoke(
+        Transaction $transaction,
+        array $capturePayload,
+        string $fulfillmentOrigin = LaboratoryOrderCreatedAuditHint::ORIGIN_PAYPAL_CAPTURE,
+        ?Customer $actingCustomer = null,
+    ): ?LaboratoryPurchase
     {
         $info = $this->payPalService->extractCaptureInfo($capturePayload);
 
@@ -79,7 +89,7 @@ class FinalizeLaboratoryPayPalPaymentAction
         $transaction->refresh();
 
         try {
-            return $this->runFulfillment($transaction);
+            return $this->runFulfillment($transaction, $fulfillmentOrigin, $actingCustomer);
         } catch (Throwable $e) {
             Log::error('[PayPal] Fallo al generar pedido tras captura; intentando reembolso', [
                 'transaction_id' => $transaction->id,
@@ -105,8 +115,11 @@ class FinalizeLaboratoryPayPalPaymentAction
         }
     }
 
-    private function runFulfillment(Transaction $transaction): LaboratoryPurchase
-    {
+    private function runFulfillment(
+        Transaction $transaction,
+        string $fulfillmentOrigin,
+        ?Customer $actingCustomer,
+    ): LaboratoryPurchase {
         $details = is_array($transaction->details) ? $transaction->details : [];
         $customer = Customer::find($details['customer_id'] ?? null);
         if (!$customer) {
@@ -145,6 +158,8 @@ class FinalizeLaboratoryPayPalPaymentAction
 
         $gdaBrandValue = $brand->value;
 
+        $auditHint = $this->buildAuditHint($customer, $fulfillmentOrigin, $actingCustomer);
+
         return ($this->fulfillLaboratoryCartOrderAction)(
             $customer,
             $brand,
@@ -155,6 +170,43 @@ class FinalizeLaboratoryPayPalPaymentAction
             $cartItems,
             $gdaBrandValue,
             isset($details['coupon_id']) ? (int) $details['coupon_id'] : null,
+            $auditHint,
+        );
+    }
+
+    private function buildAuditHint(
+        Customer $subjectCustomer,
+        string $fulfillmentOrigin,
+        ?Customer $actingCustomer,
+    ): LaboratoryOrderCreatedAuditHint {
+        $origin = LaboratoryOrderCreatedAuditHint::isValidOrigin($fulfillmentOrigin)
+            ? $fulfillmentOrigin
+            : LaboratoryOrderCreatedAuditHint::ORIGIN_PAYPAL_CAPTURE;
+
+        if (
+            $origin === LaboratoryOrderCreatedAuditHint::ORIGIN_PAYPAL_CAPTURE
+            && $actingCustomer !== null
+            && (int) $actingCustomer->id === (int) $subjectCustomer->id
+        ) {
+            return new LaboratoryOrderCreatedAuditHint(
+                channel: BusinessAuditChannel::WEB_CHECKOUT,
+                fulfillmentOrigin: LaboratoryOrderCreatedAuditHint::ORIGIN_PAYPAL_CAPTURE,
+                actorType: BusinessAuditActor::TYPE_CUSTOMER,
+                actorCustomerId: (int) $actingCustomer->id,
+                actorUserId: $actingCustomer->user?->id !== null ? (int) $actingCustomer->user->id : null,
+                subjectCustomerId: (int) $subjectCustomer->id,
+            );
+        }
+
+        // Webhook (or capture without verified acting customer): integration actor.
+        return new LaboratoryOrderCreatedAuditHint(
+            channel: BusinessAuditChannel::INTEGRATION_WEBHOOK,
+            fulfillmentOrigin: $origin === LaboratoryOrderCreatedAuditHint::ORIGIN_PAYPAL_WEBHOOK
+                ? LaboratoryOrderCreatedAuditHint::ORIGIN_PAYPAL_WEBHOOK
+                : LaboratoryOrderCreatedAuditHint::ORIGIN_PAYPAL_CAPTURE,
+            actorType: BusinessAuditActor::TYPE_INTEGRATION,
+            integrationAlias: 'paypal',
+            subjectCustomerId: (int) $subjectCustomer->id,
         );
     }
 

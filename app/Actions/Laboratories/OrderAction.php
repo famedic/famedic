@@ -15,6 +15,9 @@ use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\Transaction;
+use App\Services\Audit\Business\BusinessAuditActor;
+use App\Services\Audit\Business\BusinessAuditChannel;
+use App\Services\Audit\Business\LaboratoryOrderCreatedAuditHint;
 use App\Services\CouponApplicationService;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Notifications\FewDaysLeftToRequestInvoice;
@@ -135,6 +138,15 @@ class OrderAction
 
             $gdaBrandValue = request()->laboratory_brand->value ?? $laboratoryBrand->value;
 
+            $auditHint = new LaboratoryOrderCreatedAuditHint(
+                channel: BusinessAuditChannel::WEB_CHECKOUT,
+                fulfillmentOrigin: LaboratoryOrderCreatedAuditHint::ORIGIN_WEB_CHECKOUT,
+                actorType: BusinessAuditActor::TYPE_CUSTOMER,
+                actorCustomerId: (int) $customer->id,
+                actorUserId: $customer->user?->id !== null ? (int) $customer->user->id : null,
+                subjectCustomerId: (int) $customer->id,
+            );
+
             $laboratoryPurchase = ($this->fulfillLaboratoryCartOrderAction)(
                 $customer,
                 $laboratoryBrand,
@@ -145,6 +157,7 @@ class OrderAction
                 $this->laboratoryCartItems,
                 $gdaBrandValue,
                 $couponId,
+                $auditHint,
             );
         } catch (\Throwable $th) {
             if (DB::transactionLevel() > 0) {

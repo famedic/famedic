@@ -53,7 +53,12 @@ class HandlePayPalWebhookAction
                 return;
             }
 
-            ($this->finalizeLaboratoryPayPalPaymentAction)($transaction, $resource);
+            ($this->finalizeLaboratoryPayPalPaymentAction)(
+                $transaction,
+                $resource,
+                \App\Services\Audit\Business\LaboratoryOrderCreatedAuditHint::ORIGIN_PAYPAL_WEBHOOK,
+                null,
+            );
 
             return;
         }
