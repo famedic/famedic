@@ -26,7 +26,10 @@ class RoleController extends Controller
         foreach ($permissionsConfig as $category => $permissions) {
             foreach ($permissions as $permission) {
                 foreach ($permission as $name => $description) {
-                    $fullPermissionName = $category.'.'.$name;
+                    // Nombres legacy que no usan el patrón category.action
+                    $fullPermissionName = $category === '_absolute'
+                        ? $name
+                        : $category.'.'.$name;
                     $permissionsKeyValue[$fullPermissionName] = $description;
                 }
             }

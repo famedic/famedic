@@ -42,10 +42,23 @@ class Permission extends SpatiePermission
                 $description = null;
 
                 foreach ($permissionsConfig as $category => $permissions) {
-                    if ($category === $permissionParts[0]) {
+                    if ($category === '_absolute') {
                         foreach ($permissions as $permission) {
                             foreach ($permission as $name => $desc) {
-                                if ($category . '.' . $name === $this->name) {
+                                if ($name === $this->name) {
+                                    $description = $desc;
+                                    break 3;
+                                }
+                            }
+                        }
+
+                        continue;
+                    }
+
+                    if ($category === ($permissionParts[0] ?? null)) {
+                        foreach ($permissions as $permission) {
+                            foreach ($permission as $name => $desc) {
+                                if ($category.'.'.$name === $this->name) {
                                     $description = $desc;
                                     break 3; // Exit all loops
                                 }

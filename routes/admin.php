@@ -260,6 +260,9 @@ Route::prefix('admin')->middleware([
             Route::get('/contacts/360', [ActiveCampaignController::class, 'patient360'])->name('patient-360');
             Route::get('/customer-journey', [ActiveCampaignController::class, 'customerJourney'])->name('customer-journey');
             Route::get('/automations', [ActiveCampaignController::class, 'automations'])->name('automations');
+            Route::get('/automations/list', [ActiveCampaignController::class, 'automationsList'])->name('automations.list');
+            Route::get('/automations/builder', [ActiveCampaignController::class, 'automationsBuilder'])->name('automations.builder');
+            Route::get('/automations/{automation}', [ActiveCampaignController::class, 'automationsShow'])->name('automations.show');
             Route::get('/funnels', [ActiveCampaignController::class, 'funnels'])->name('funnels');
             Route::get('/events', [ActiveCampaignController::class, 'events'])->name('events');
             Route::get('/tags', [ActiveCampaignController::class, 'tags'])->name('tags');
@@ -268,8 +271,10 @@ Route::prefix('admin')->middleware([
             Route::get('/laboratories', [ActiveCampaignController::class, 'laboratories'])->name('laboratories');
             Route::get('/memberships', [ActiveCampaignController::class, 'memberships'])->name('memberships');
             Route::get('/alerts', [ActiveCampaignController::class, 'alerts'])->name('alerts');
+            Route::get('/notifications', [ActiveCampaignController::class, 'notifications'])->name('notifications');
             Route::get('/logs', [ActiveCampaignController::class, 'logs'])->name('logs');
             Route::get('/health', [ActiveCampaignController::class, 'health'])->name('health');
+            Route::get('/integrations', [ActiveCampaignController::class, 'integrations'])->name('integrations');
             Route::get('/qa-compare', [ActiveCampaignController::class, 'qaCompare'])->name('qa-compare');
             Route::get('/settings', [ActiveCampaignController::class, 'settings'])->name('settings');
         });

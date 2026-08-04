@@ -66,11 +66,29 @@ return [
             ['delete' => 'Eliminar cupones'],
             ['config' => 'Configurar cupones'],
         ],
+        'coupons' => [
+            ['manage' => 'Gestionar créditos y asignaciones'],
+        ],
         'config_monitor' => [
             ['manage_metadata' => 'Administrar metadatos del monitor de configuración'],
         ],
+        'simulators' => [
+            ['manage' => 'Usar simuladores internos (OTP, etc.) sin afectar pacientes'],
+        ],
+        'monitoring-ai' => [
+            ['manage' => 'Usar el asistente IA de monitoreo'],
+        ],
         'activecampaign' => [
             ['manage' => 'Administrar módulo ActiveCampaign'],
+        ],
+        /*
+         * Permisos con nombres que no siguen category.action (legacy).
+         * La clave del arreglo es el nombre exacto del permiso en BD.
+         */
+        '_absolute' => [
+            ['view carts' => 'Ver listado de carritos (monitoreo)'],
+            ['view cart details' => 'Ver detalle de un carrito'],
+            ['view_config_monitor' => 'Ver monitor de configuración (solo lectura)'],
         ],
     ],
 

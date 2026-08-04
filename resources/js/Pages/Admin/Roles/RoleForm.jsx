@@ -36,6 +36,11 @@ export default function RoleForm() {
 		setData("permissions", updatedPermissions);
 	};
 
+	const permissionLabel = (permission) =>
+		permissionsNames?.[permission.name] ||
+		permission.formatted_name ||
+		permission.name;
+
 	const submit = (e) => {
 		e.preventDefault();
 
@@ -51,38 +56,47 @@ export default function RoleForm() {
 	};
 
 	return (
-		<form onSubmit={submit} className="grid gap-8 sm:grid-cols-2">
-			<div className="space-y-1">
-				<Subheading>Información sobre el rol</Subheading>
-				<Text>
-					Establece el nombre del rol y los permisos que tendrán los
-					usuarios que tengan asignado este rol.
-				</Text>
+		<form onSubmit={submit} className="space-y-8">
+			<div className="grid gap-8 sm:grid-cols-2">
+				<div className="space-y-1">
+					<Subheading>Información sobre el rol</Subheading>
+					<Text>
+						Establece el nombre del rol y los permisos que tendrán
+						los usuarios que tengan asignado este rol.
+					</Text>
+				</div>
+
+				<Fieldset>
+					<FieldGroup>
+						<Field>
+							<Label>Nombre</Label>
+							<Input
+								autoFocus
+								dusk="name"
+								required
+								type="text"
+								value={data.name}
+								onChange={(e) =>
+									setData("name", e.target.value)
+								}
+							/>
+							{errors.name && (
+								<ErrorMessage>{errors.name}</ErrorMessage>
+							)}
+						</Field>
+					</FieldGroup>
+				</Fieldset>
 			</div>
 
 			<Fieldset>
 				<FieldGroup>
-					<Field>
-						<Label>Nombre</Label>
-						<Input
-							autoFocus
-							dusk="name"
-							required
-							type="text"
-							value={data.name}
-							onChange={(e) => setData("name", e.target.value)}
-						/>
-						{errors.name && (
-							<ErrorMessage>{errors.name}</ErrorMessage>
-						)}
-					</Field>
 					<Field>
 						<Label>Permisos</Label>
 						<Description>
 							Los permisos que se le asignarán a los usuarios que
 							tengan este rol.
 						</Description>
-						<CheckboxGroup>
+						<CheckboxGroup className="max-w-3xl">
 							{permissions.map((permission) => (
 								<div key={permission.id}>
 									<CheckboxField>
@@ -98,14 +112,14 @@ export default function RoleForm() {
 												)
 											}
 										/>
-										<Label>
-											{permissionsNames[permission.name]}
+										<Label className="min-w-0 break-words">
+											{permissionLabel(permission)}
 										</Label>
 									</CheckboxField>
 									{permission.all_permissions &&
 										permission.all_permissions.length >
 											0 && (
-											<div className="ml-8 mt-1">
+											<div className="ml-6 mt-1 space-y-3 sm:ml-8">
 												{permission.all_permissions.map(
 													(child) => (
 														<CheckboxField
@@ -128,13 +142,10 @@ export default function RoleForm() {
 																	)
 																}
 															/>
-															<Label>
-																{
-																	permissionsNames[
-																		child
-																			.name
-																	]
-																}
+															<Label className="min-w-0 break-words">
+																{permissionLabel(
+																	child,
+																)}
 															</Label>
 														</CheckboxField>
 													),
@@ -151,7 +162,7 @@ export default function RoleForm() {
 				</FieldGroup>
 			</Fieldset>
 
-			<div className="flex justify-end sm:col-span-2">
+			<div className="flex justify-end">
 				<Button
 					dusk="save"
 					type="submit"

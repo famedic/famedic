@@ -325,17 +325,33 @@ class EnsureUserHasAdminAccount
                 ...$request->user()->administrator->hasPermissionTo('activecampaign.manage') ? [[
                     'label' => 'Marketing Intelligence',
                     'icon' => 'MegaphoneIcon',
-                    'items' => collect(\App\Support\ActiveCampaign\MarketingIntelligenceCatalog::menu())
-                        ->map(function (array $item) {
-                            $routeName = $item['route'];
+                    'layout' => 'mi-groups',
+                    'items' => collect(\App\Support\ActiveCampaign\MarketingIntelligenceCatalog::menuGroups())
+                        ->map(function (array $group) {
+                            $items = collect($group['items'] ?? [])
+                                ->map(function (array $item) {
+                                    $routeName = $item['route'];
+
+                                    return [
+                                        'label' => $item['label'],
+                                        'url' => route($routeName),
+                                        'current' => Route::currentRouteName() === $routeName
+                                            || ($item['key'] === 'contacts' && Route::currentRouteName() === 'admin.activecampaign.patient-360'),
+                                    ];
+                                })
+                                ->values()
+                                ->all();
 
                             return [
-                                'label' => $item['label'],
-                                'url' => route($routeName),
-                                'current' => Route::currentRouteName() === $routeName
-                                    || ($item['key'] === 'contacts' && Route::currentRouteName() === 'admin.activecampaign.patient-360'),
+                                'key' => $group['key'],
+                                'label' => $group['label'],
+                                'icon' => $group['icon'] ?? null,
+                                'count' => count($items),
+                                'current' => collect($items)->contains(fn (array $item) => (bool) ($item['current'] ?? false)),
+                                'items' => $items,
                             ];
                         })
+                        ->values()
                         ->all(),
                 ]] : [],
             ],
