@@ -127,9 +127,10 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
         Route::get('laboratory-appointments', [LaboratoryAppointmentController::class, 'index'])
             ->name('laboratory-appointments.index');
         Route::post('laboratory-appointments', [LaboratoryAppointmentController::class, 'store'])
-            ->middleware('api.idempotency')
+            ->middleware(['api.idempotency', 'api.audit'])
             ->name('laboratory-appointments.store');
         Route::delete('laboratory-appointments/{appointment_id}', [LaboratoryAppointmentController::class, 'destroy'])
+            ->middleware('api.audit')
             ->name('laboratory-appointments.destroy');
 
         Route::prefix('orders')->name('orders.')->group(function () {

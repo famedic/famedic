@@ -1,10 +1,10 @@
 # API V1 — Auditoría transversal
 
-**Estado:** infraestructura (bloque 1) + Auth/OTP (bloque 2) + secure links / downloads (bloque 3) + carrito / cupón / checkout draft (bloque 4).  
+**Estado:** infraestructura (bloque 1) + Auth/OTP (bloque 2) + secure links / downloads (bloque 3) + carrito / cupón / checkout draft (bloque 4) + citas / preferencia de callback (bloque 5).  
 **Flag default:** `API_V1_AUDIT_ENABLED=false`  
 **Tabla:** `api_v1_audit_events` (append-only)
 
-Payment links, citas, invoice-request, perfiles, contactos/direcciones, eventos de idempotencia y fallback global 5xx **siguen pendientes**.  
+Payment links, invoice-request, perfiles, contactos/direcciones, eventos de idempotencia y fallback global 5xx **siguen pendientes**.  
 **API V1 no crea `LaboratoryPurchase`:** `api_v1.orders.created` y cualquier `api_v1.payment.*` **no** forman parte de este bloque.
 
 ---
@@ -129,6 +129,13 @@ Alias → `InitializeApiV1AuditContext`. Solo hidrata contexto; no escribe event
 
 **No** instrumentados en bloque 4: `GET cart`, `GET cart/totals`, `GET cart/coupon`, `GET checkout/prepare`, `POST checkout/payment-link`.
 
+**Bloque 5 — Citas / preferencia de callback:**
+
+- `POST laboratory-appointments` — tras `api.idempotency`
+- `DELETE laboratory-appointments/{appointment_id}`
+
+**No** instrumentados en bloque 5: `GET laboratory-appointments/requirements`, `GET laboratory-appointments`, ni rutas web/admin de concierge/callback-availability.
+
 Orden autenticado (creación):
 
 ```
@@ -156,7 +163,21 @@ force.json → api.correlation → api.token.guard
   → auth:sanctum → api.customer → api.audit → controller
 ```
 
-**Replay idempotente:** `api.idempotency` corta antes de `api.audit` → no duplica evento semántico ni crea otro link.  
+Orden citas (POST con idempotencia opcional):
+
+```
+force.json → api.correlation → api.token.guard
+  → auth:sanctum → api.customer → api.idempotency → api.audit → controller
+```
+
+Orden citas (DELETE):
+
+```
+force.json → api.correlation → api.token.guard
+  → auth:sanctum → api.customer → api.audit → controller
+```
+
+**Replay idempotente:** `api.idempotency` corta antes de `api.audit` → no duplica evento semántico ni crea otro link/cita.  
 Las mutaciones de carrito/cupón/draft **no** usan `api.idempotency` (riesgo de doble submit preexistente; no resuelto en este bloque).
 
 **Antes de instrumentación:** 401 Sanctum / 403 sin customer / token malformado en ruta → **sin** evento de este bloque.
@@ -392,19 +413,133 @@ POST laboratory/.../checkout    OrderAction: charge + Fulfill → LaboratoryPurc
 
 ---
 
-## 11. Fuera de alcance (siguen pendientes)
+## 11. Bloque 5 — Citas / preferencia de callback
 
-- Payment links, citas, invoice-request, perfiles, contactos, direcciones.
+### Inspección del dominio real (API V1)
+
+En API V1 **solo** existen:
+
+| Method | Ruta | Mutación |
+|--------|------|----------|
+| GET | `/api/v1/laboratory-appointments/requirements` | No (consultiva) |
+| GET | `/api/v1/laboratory-appointments` | No (listado) |
+| POST | `/api/v1/laboratory-appointments` | Sí — crea pending + ventana callback 1h + avanza draft |
+| DELETE | `/api/v1/laboratory-appointments/{id}` | Sí — soft delete |
+
+**No** hay en API V1: endpoints de concierge, callback CRUD, availability/slots, PUT/PATCH de cita, confirmación de sucursal, ni hold/reserva.
+
+El POST **no** confirma una cita en sucursal: persiste `LaboratoryAppointment` con `confirmed_at = null`, copia datos del contacto al appointment, guarda `callback_availability_starts_at` / `_ends_at` (+1h), registra interaction `patient_callback_preference` (`source: akubica_api`) y hace `updateOrCreate` del `LaboratoryCheckoutDraft` (`checkout_step=confirmation`). Confirmación real (`appointment_date`, `laboratory_store_id`, `confirmed_at`) es flujo admin/concierge **fuera** de API V1.
+
+No hay jobs ni notifications en create/delete API. No hay `DB::transaction` envolvente en `CreateAkubicaLaboratoryAppointmentAction`. Zona horaria de validación: `scheduled_at` `after:now` según `config('app.timezone')` (sin forzar `America/Monterrey` en API V1).
+
+### Taxonomía implementada
+
+| event_name | Hecho afirmado |
+|------------|----------------|
+| `api_v1.appointments.requested` | Solicitud pending persistida (o rechazo relevante de store) |
+| `api_v1.appointments.cancelled` | Soft delete propio confirmado (o rechazo not-found / cross-user) |
+
+### Taxonomía omitida (justificación)
+
+| Evento candidato | Motivo |
+|------------------|--------|
+| `api_v1.concierge.callback_*` | No hay CRUD de callback en API V1; la preferencia es metadata del appointment request (`scheduling_mode=callback_window`) |
+| `api_v1.appointments.updated` | No existe PUT/PATCH en API V1 |
+| `api_v1.appointments.confirmed` | Confirmación es admin; API solo guarda solicitud pending |
+| `api_v1.appointments.availability_checked` | No hay endpoint de slots; GETs son consultivos sin efecto |
+| `callback_completed` / llamada atendida | El sistema no afirma que se realizó ni contestó una llamada |
+
+### Semántica exacta
+
+**`appointments.requested` (succeeded):** tras persistir appointment + ventana callback + interaction + draft. Afirma solicitud pending con preferencia de callback de 1h. **No** afirma: cita confirmada, sucursal asignada, llamada realizada, notificación entregada, ni atención.
+
+**`appointments.cancelled` (succeeded):** tras soft delete del row propio. **No** afirma cancelación administrativa ni reembolso.
+
+**Distinción obligatoria:** disponibilidad consultada (GET, sin evento) ≠ solicitud persistida (`requested`) ≠ dispatch (no hay) ≠ confirmación (admin) ≠ atención (fuera de alcance).
+
+### Matriz ruta → evento terminal
+
+| Ruta | Evento terminal |
+|------|-----------------|
+| `POST /api/v1/laboratory-appointments` | `api_v1.appointments.requested` |
+| `DELETE /api/v1/laboratory-appointments/{id}` | `api_v1.appointments.cancelled` |
+| `GET …/requirements` | *(omitido)* |
+| `GET …/laboratory-appointments` | *(omitido)* |
+
+### Actores / resources
+
+| Flujo | Actor | resource_type | resource_key |
+|-------|-------|---------------|--------------|
+| Mutaciones autenticadas | `customer:{customer_id}` + PAT | `laboratory_appointment` | id interno |
+| Rechazo cross-user / not-found | mismo actor customer | — | **null** (sin IDs ajenos) |
+
+### Metadata allowlist
+
+`laboratory_brand`, `appointment_row_id`, `appointment_state`, `previous_state`, `resulting_state`, `scheduling_mode`, `request_channel`, `requested_date` (solo `YYYY-MM-DD`), `requested_window` (`one_hour`), `timezone` (`UTC` \| `America/Monterrey`), `checkout_draft_advanced`.
+
+Prohibido / descartado: `notes`, phone/email/name/address, patient_*, symptoms, clinical details, hora exacta, bodies, Bearer, Idempotency-Key, payloads de terceros.
+
+Enums controlados en recorder: `appointment_state` / `previous_state` / `resulting_state` ∈ `{pending,confirmed,completed,cancelled}`; `scheduling_mode=callback_window`; `request_channel=akubica_api`; `requested_window=one_hour`. Valores inesperados de estado se omiten. `timezone` solo si es identificador IANA válido (no texto libre).
+
+### Outcomes auditados
+
+| Caso | outcome | error_code |
+|------|---------|------------|
+| POST 201 | succeeded | — |
+| DELETE 200 | succeeded | — |
+| Contacto/dirección ajeno o inexistente | rejected | `CONTACT_NOT_FOUND` / `ADDRESS_NOT_FOUND` |
+| Carrito vacío | rejected | `EMPTY_CART` |
+| Estudios sin cita requerida | rejected | `APPOINTMENT_NOT_REQUIRED` |
+| Pending/confirmed bloqueante | rejected | `APPOINTMENT_ALREADY_EXISTS` |
+| Cita ajena / inexistente | rejected | `APPOINTMENT_NOT_FOUND` |
+| Error inesperado de dominio | failed | `INTERNAL_ERROR` |
+
+### Rechazos omitidos (ruido / previos al controller)
+
+- `VALIDATION_ERROR` 422 FormRequest (p. ej. `scheduled_at` pasado) → sin evento.
+- 401 / 403 previos a `api.audit` → sin evento.
+- Conflictos de idempotencia (`IDEMPOTENCY_*`) → sin evento semántico inventado (el original sí emite uno).
+
+### Transacciones / jobs
+
+- Sin `DB::transaction` en el action de create; auditoría emite **después** de persistencia confirmada en el action (antes del return 201).
+- Sin jobs/notifications en create/delete API → no hay `job_dispatch_state` ni afirmación de entrega.
+- Writer fail-soft: si falla el INSERT de auditoría, la cita/cancelación y la respuesta HTTP no cambian.
+- Rollback de dominio: no aplica envolvente; si el action falla antes de completar, el controller no emite `succeeded`.
+
+### Idempotencia
+
+- Solo `POST laboratory-appointments` lleva `api.idempotency` (flag `API_V1_IDEMPOTENCY_ENABLED`, default false).
+- Primera ejecución: un efecto + un evento.
+- Replay: cero efectos adicionales + cero eventos adicionales.
+- Conflict: sin evento semántico inventado.
+- DELETE **no** tiene idempotencia (doble delete: segundo es `APPOINTMENT_NOT_FOUND` rejected).
+
+### Limitaciones bloque 5
+
+- Sin endpoints de update/reschedule/confirm en API V1.
+- Sin auditoría de GETs consultivos.
+- Sin afirmar llamadas, SMS, WhatsApp, ActiveCampaign, Zoho, GDA.
+- Create sin transacción única: fallo a mitad puede dejar estado parcial (preexistente; no reparado aquí).
+- Sin rate limit dedicado en citas.
+- Sin fallback transversal 5xx.
+
+---
+
+## 12. Fuera de alcance (siguen pendientes)
+
+- Payment links, invoice-request, perfiles, contactos, direcciones.
 - Creación de `LaboratoryPurchase` / pagos (fuera de API V1 o bloque de pagos futuro).
 - Eventos `api_v1.idempotency.*`.
 - Fallback transversal 5xx.
 - Cleanup / UI admin.
 - Carga/reemplazo administrativo PDF/XML.
-- Paths legacy fuera de API V1.
+- Paths legacy / web concierge fuera de API V1.
+- Confirmación administrativa de citas.
 
 ---
 
-## 12. Clases y tests clave
+## 13. Clases y tests clave
 
 | Pieza | Clase / archivo |
 |-------|-----------------|
@@ -412,7 +547,9 @@ POST laboratory/.../checkout    OrderAction: charge + Fulfill → LaboratoryPurc
 | Auth/OTP emitter | `App\Services\Api\V1\Audit\AuthOtpAuditRecorder` |
 | Document access emitter | `App\Services\Api\V1\Audit\DocumentAccessAuditRecorder` |
 | Cart/checkout emitter | `App\Services\Api\V1\Audit\CartCheckoutAuditRecorder` |
+| Appointments emitter | `App\Services\Api\V1\Audit\AppointmentConciergeAuditRecorder` |
 | Tests infra | `tests/Feature/Api/V1/Audit/AkubicaAuditInfrastructureP1Test.php` |
 | Tests Auth/OTP | `tests/Feature/Api/V1/Audit/AkubicaAuditAuthOtpP2Test.php` |
 | Tests bloque 3 | `tests/Feature/Api/V1/Audit/AkubicaAuditDocumentAccessP3Test.php` |
 | Tests bloque 4 | `tests/Feature/Api/V1/Audit/AkubicaAuditCartCheckoutP4Test.php` |
+| Tests bloque 5 | `tests/Feature/Api/V1/Audit/AkubicaAuditAppointmentConciergeP5Test.php` |

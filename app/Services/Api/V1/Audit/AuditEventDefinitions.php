@@ -64,6 +64,12 @@ final class AuditEventDefinitions
 
     public const EVENT_CHECKOUT_DRAFT_SYNCED = 'api_v1.checkout.draft_synced';
 
+    // ── Appointments / callback preference (Block 5) ──────────────────────
+
+    public const EVENT_APPOINTMENTS_REQUESTED = 'api_v1.appointments.requested';
+
+    public const EVENT_APPOINTMENTS_CANCELLED = 'api_v1.appointments.cancelled';
+
     /**
      * Shared metadata keys for OTP Auth events (all allowlisted names avoid
      * sensitive tokens: code, key, grant, otp, token, password, …).
@@ -187,6 +193,26 @@ final class AuditEventDefinitions
     ];
 
     /**
+     * Laboratory appointment request / cancel (Block 5).
+     * Never notes, phone, patient fields, exact clock time, or free-form windows.
+     *
+     * @var list<string>
+     */
+    private const APPOINTMENT_METADATA = [
+        'laboratory_brand',
+        'appointment_row_id',
+        'appointment_state',
+        'previous_state',
+        'resulting_state',
+        'scheduling_mode',
+        'request_channel',
+        'requested_date',
+        'requested_window',
+        'timezone',
+        'checkout_draft_advanced',
+    ];
+
+    /**
      * @var array<string, list<string>>
      */
     private const ALLOWLISTS = [
@@ -222,6 +248,8 @@ final class AuditEventDefinitions
         self::EVENT_CART_BENEFIT_APPLIED => self::CART_BENEFIT_METADATA,
         self::EVENT_CART_BENEFIT_REMOVED => self::CART_BENEFIT_METADATA,
         self::EVENT_CHECKOUT_DRAFT_SYNCED => self::CHECKOUT_DRAFT_METADATA,
+        self::EVENT_APPOINTMENTS_REQUESTED => self::APPOINTMENT_METADATA,
+        self::EVENT_APPOINTMENTS_CANCELLED => self::APPOINTMENT_METADATA,
     ];
 
     /**
@@ -289,6 +317,17 @@ final class AuditEventDefinitions
             self::EVENT_CART_BENEFIT_APPLIED,
             self::EVENT_CART_BENEFIT_REMOVED,
             self::EVENT_CHECKOUT_DRAFT_SYNCED,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function appointmentConciergeEventNames(): array
+    {
+        return [
+            self::EVENT_APPOINTMENTS_REQUESTED,
+            self::EVENT_APPOINTMENTS_CANCELLED,
         ];
     }
 }

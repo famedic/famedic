@@ -11,6 +11,8 @@ use App\Http\Requests\Api\V1\LaboratoryAppointments\StoreAppointmentRequest;
 use App\Http\Resources\Api\V1\LaboratoryAppointmentResource;
 use App\Http\Responses\ApiResponse;
 use App\Models\LaboratoryAppointment;
+use App\Services\Api\V1\Audit\AppointmentConciergeAuditRecorder;
+use App\Services\Api\V1\Audit\AuditOutcome;
 use App\Support\Api\V1\CheckoutPreparation;
 use App\Support\Api\V1\LaboratoryAppointmentSupport;
 use Carbon\Carbon;
@@ -19,6 +21,11 @@ use Illuminate\Http\Request;
 
 class LaboratoryAppointmentController extends Controller
 {
+    public function __construct(
+        private readonly AppointmentConciergeAuditRecorder $appointmentAudit,
+        private readonly LaboratoryAppointmentSupport $appointmentSupport,
+    ) {}
+
     public function requirements(
         GetAppointmentRequirementsRequest $request,
         LaboratoryAppointmentSupport $appointmentSupport,
@@ -73,23 +80,48 @@ class LaboratoryAppointmentController extends Controller
     ): JsonResponse {
         $brand = LaboratoryBrand::from($request->validated('brand'));
         $customer = $request->user()->customer;
+        $scheduledAt = Carbon::parse($request->validated('scheduled_at'));
 
         $contact = $checkoutPreparation->findOwnedContact($customer, (int) $request->validated('contact_id'));
         if (! $contact) {
-            return ApiResponse::error(
+            $response = ApiResponse::error(
                 'CONTACT_NOT_FOUND',
                 'El contacto no fue encontrado.',
                 404,
             );
+            $classified = $this->appointmentAudit->classifyErrorResponse($response);
+            // Cross-user / missing: brand only — never foreign contact_id.
+            $this->appointmentAudit->recordAppointmentRequested(
+                request: $request,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+                laboratoryBrand: $brand->value,
+                scheduledAt: $scheduledAt,
+            );
+
+            return $response;
         }
 
         $address = $checkoutPreparation->findOwnedAddress($customer, (int) $request->validated('address_id'));
         if (! $address) {
-            return ApiResponse::error(
+            $response = ApiResponse::error(
                 'ADDRESS_NOT_FOUND',
                 'La dirección no fue encontrada.',
                 404,
             );
+            $classified = $this->appointmentAudit->classifyErrorResponse($response);
+            // Cross-user / missing: brand only — never foreign address_id.
+            $this->appointmentAudit->recordAppointmentRequested(
+                request: $request,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+                laboratoryBrand: $brand->value,
+                scheduledAt: $scheduledAt,
+            );
+
+            return $response;
         }
 
         $result = $createAppointmentAction(
@@ -97,12 +129,12 @@ class LaboratoryAppointmentController extends Controller
             $brand,
             $contact,
             $address,
-            Carbon::parse($request->validated('scheduled_at')),
+            $scheduledAt,
             $request->validated('notes'),
         );
 
         if (isset($result['error'])) {
-            return match ($result['error']) {
+            $response = match ($result['error']) {
                 'EMPTY_CART' => ApiResponse::error(
                     'EMPTY_CART',
                     'No se puede crear cita con un carrito vacío.',
@@ -124,9 +156,32 @@ class LaboratoryAppointmentController extends Controller
                     500,
                 ),
             };
+            $classified = $this->appointmentAudit->classifyErrorResponse($response);
+            $this->appointmentAudit->recordAppointmentRequested(
+                request: $request,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+                laboratoryBrand: $brand->value,
+                scheduledAt: $scheduledAt,
+            );
+
+            return $response;
         }
 
         $appointment = $result['appointment'];
+
+        $this->appointmentAudit->recordAppointmentRequested(
+            request: $request,
+            outcome: AuditOutcome::SUCCEEDED,
+            httpStatus: 201,
+            resourceKey: (string) $appointment->id,
+            laboratoryBrand: $brand->value,
+            appointmentRowId: (int) $appointment->id,
+            appointmentState: AppointmentConciergeAuditRecorder::STATE_PENDING,
+            scheduledAt: $scheduledAt,
+            checkoutDraftAdvanced: true,
+        );
 
         return ApiResponse::success([
             'appointment' => array_merge(
@@ -149,14 +204,38 @@ class LaboratoryAppointmentController extends Controller
             ->first();
 
         if (! $appointment) {
-            return ApiResponse::error(
+            $response = ApiResponse::error(
                 'APPOINTMENT_NOT_FOUND',
                 'La cita no fue encontrada.',
                 404,
             );
+            $classified = $this->appointmentAudit->classifyErrorResponse($response);
+            // Cross-user / missing: no foreign appointment_id in resource or metadata.
+            $this->appointmentAudit->recordAppointmentCancelled(
+                request: $request,
+                outcome: $classified['outcome'],
+                httpStatus: $classified['http_status'],
+                errorCode: $classified['error_code'],
+            );
+
+            return $response;
         }
 
+        $brand = $appointment->brand->value;
+        $previousState = $this->appointmentSupport->resolveStatus($appointment);
+        $appointmentRowId = (int) $appointment->id;
+
         $appointment->delete();
+
+        $this->appointmentAudit->recordAppointmentCancelled(
+            request: $request,
+            outcome: AuditOutcome::SUCCEEDED,
+            httpStatus: 200,
+            resourceKey: (string) $appointmentRowId,
+            laboratoryBrand: $brand,
+            appointmentRowId: $appointmentRowId,
+            previousState: $previousState,
+        );
 
         return ApiResponse::success(['deleted' => true]);
     }
