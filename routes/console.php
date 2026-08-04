@@ -35,3 +35,22 @@ if (config('otp.p0a.cleanup.enabled', false)) {
         ->withoutOverlapping(120)
         ->name('akubica-prune-otp');
 }
+
+/*
+|--------------------------------------------------------------------------
+| API V1 idempotency prune — only when api_v1.idempotency.prune.enabled
+|--------------------------------------------------------------------------
+|
+| Separate from OTP pruning. Default OFF. withoutOverlapping only
+| (no onOneServer — CACHE_STORE may not be a shared lock store).
+|
+*/
+if (config('api_v1.idempotency.prune.enabled', false)) {
+    $idempotencyScheduleTime = (string) config('api_v1.idempotency.prune.schedule_time', '04:00');
+    $idempotencyBatch = (int) config('api_v1.idempotency.prune.default_batch', 1000);
+
+    Schedule::command("akubica:prune-idempotency --force --batch={$idempotencyBatch}")
+        ->dailyAt($idempotencyScheduleTime)
+        ->withoutOverlapping(120)
+        ->name('akubica-prune-idempotency');
+}

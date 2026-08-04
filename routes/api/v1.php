@@ -30,12 +30,12 @@ use Illuminate\Support\Facades\Route;
 | Auth: Laravel Sanctum Bearer Token (catálogo laboratorio público)
 */
 
-Route::middleware(['force.json', 'api.token.guard'])->name('api.v1.')->group(function () {
+Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('api.v1.')->group(function () {
 
     // ── Auth pública ──────────────────────────────────────────────────────
     Route::prefix('auth')->name('auth.')->group(function () {
         Route::post('login/request-code', [LoginController::class, 'requestCode'])
-            ->middleware('throttle:akubica-otp')
+            ->middleware(['throttle:akubica-otp', 'api.idempotency'])
             ->name('login.request-code');
 
         Route::post('login/verify-code', [LoginController::class, 'verifyCode'])
@@ -47,7 +47,7 @@ Route::middleware(['force.json', 'api.token.guard'])->name('api.v1.')->group(fun
             ->name('login.resend-code');
 
         Route::post('register', [RegisterController::class, 'store'])
-            ->middleware('throttle:akubica-otp')
+            ->middleware(['throttle:akubica-otp', 'api.idempotency'])
             ->name('register');
 
         Route::post('register/verify-code', [RegisterController::class, 'verifyCode'])
@@ -107,13 +107,16 @@ Route::middleware(['force.json', 'api.token.guard'])->name('api.v1.')->group(fun
 
         Route::get('checkout/prepare', [CheckoutController::class, 'prepare'])->name('checkout.prepare');
         Route::post('checkout/draft', [CheckoutController::class, 'syncDraft'])->name('checkout.draft');
-        Route::post('checkout/payment-link', [CheckoutController::class, 'paymentLink'])->name('checkout.payment-link');
+        Route::post('checkout/payment-link', [CheckoutController::class, 'paymentLink'])
+            ->middleware('api.idempotency')
+            ->name('checkout.payment-link');
 
         Route::get('laboratory-appointments/requirements', [LaboratoryAppointmentController::class, 'requirements'])
             ->name('laboratory-appointments.requirements');
         Route::get('laboratory-appointments', [LaboratoryAppointmentController::class, 'index'])
             ->name('laboratory-appointments.index');
         Route::post('laboratory-appointments', [LaboratoryAppointmentController::class, 'store'])
+            ->middleware('api.idempotency')
             ->name('laboratory-appointments.store');
         Route::delete('laboratory-appointments/{appointment_id}', [LaboratoryAppointmentController::class, 'destroy'])
             ->name('laboratory-appointments.destroy');
@@ -129,28 +132,29 @@ Route::middleware(['force.json', 'api.token.guard'])->name('api.v1.')->group(fun
                 ->name('invoices.download');
 
             Route::post('{order_id}/invoices/{invoice_id}/step-up/request', [OrderInvoicesStepUpController::class, 'request'])
-                ->middleware('throttle:akubica-otp')
+                ->middleware(['throttle:akubica-otp', 'api.idempotency'])
                 ->name('invoices.step-up.request');
             Route::post('{order_id}/invoices/{invoice_id}/step-up/verify', [OrderInvoicesStepUpController::class, 'verify'])
                 ->middleware('throttle:akubica-otp')
                 ->name('invoices.step-up.verify');
             Route::post('{order_id}/invoices/{invoice_id}/secure-link', [OrderInvoicesSecureLinkController::class, 'store'])
-                ->middleware('throttle:60,1')
+                ->middleware(['throttle:60,1', 'api.idempotency'])
                 ->name('invoices.secure-link');
 
             Route::post('{order_id}/results/step-up/request', [OrderResultsStepUpController::class, 'request'])
-                ->middleware('throttle:akubica-otp')
+                ->middleware(['throttle:akubica-otp', 'api.idempotency'])
                 ->name('results.step-up.request');
             Route::post('{order_id}/results/step-up/verify', [OrderResultsStepUpController::class, 'verify'])
                 ->middleware('throttle:akubica-otp')
                 ->name('results.step-up.verify');
             Route::post('{order_id}/results/secure-link', [OrderResultsSecureLinkController::class, 'store'])
-                ->middleware('throttle:60,1')
+                ->middleware(['throttle:60,1', 'api.idempotency'])
                 ->name('results.secure-link');
 
             Route::get('{order_id}/invoice-request/status', [OrderInvoiceRequestController::class, 'status'])
                 ->name('invoice-request.status');
             Route::post('{order_id}/invoice-request', [OrderInvoiceRequestController::class, 'store'])
+                ->middleware('api.idempotency')
                 ->name('invoice-request.store');
 
             Route::get('{order_id}/products', [OrderController::class, 'products'])->name('products');

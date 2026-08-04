@@ -479,7 +479,19 @@ test('p0a4 does not persist otp plaintext or full destination in abuse events or
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('555555'));
 
     $handler = new TestHandler;
-    $logger = new Logger('testing');
+    $logger = new class('testing') extends Logger
+    {
+        /** @param  array<string, mixed>  $context */
+        public function shareContext(array $context): void
+        {
+        }
+
+        /** @return array<string, mixed> */
+        public function sharedContext(): array
+        {
+            return [];
+        }
+    };
     $logger->pushHandler($handler);
     Log::swap($logger);
 

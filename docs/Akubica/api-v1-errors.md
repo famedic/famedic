@@ -15,12 +15,20 @@ Envelope real (`App\Http\Responses\ApiResponse`):
     "code": "ERROR_CODE",
     "message": "Descripción",
     "fields": {},
-    "details": {}
+    "details": {},
+    "retryable": false,
+    "correlation_id": "opaque-id"
   }
 }
 ```
 
-`fields` / `details` son opcionales.
+`fields` / `details` son opcionales (se omiten si null).
+`retryable` y `correlation_id` son **aditivos P1-A6** y están siempre en errores.
+
+Header de respuesta (éxito y error, también PDF): `X-Correlation-ID`.
+Éxito: correlation solo en header (no en `data`).
+
+Clasificación `retryable`: `App\Support\Api\V1\ApiErrorRetryability` — ver [`p1-a6-errors-correlation.md`](./p1-a6-errors-correlation.md).
 
 ## Componentes OpenAPI (alias)
 
@@ -96,7 +104,19 @@ Envelope real (`App\Http\Responses\ApiResponse`):
 
 ### Carrito / checkout / citas / facturación (existentes)
 
-Incluyen entre otros: `LAB_TEST_NOT_FOUND`, `CART_ITEM_NOT_FOUND`, `ITEM_ALREADY_IN_CART`, `COUPON_NOT_FOUND`, `EMPTY_CART`, `COUPON_EXPIRED`, `COUPON_NOT_APPLICABLE`, `CHECKOUT_NOT_READY`, `APPOINTMENT_REQUIRED`, `APPOINTMENT_NOT_FOUND`, `APPOINTMENT_ALREADY_EXISTS`, `APPOINTMENT_NOT_REQUIRED`, `INVOICE_ALREADY_EXISTS`, `INVOICE_REQUEST_ALREADY_EXISTS`, `ORDER_NOT_INVOICEABLE`, `TAX_PROFILE_NOT_FOUND`, `ADDRESS_NOT_FOUND`, `CONTACT_NOT_FOUND`.
+Incluyen entre otros: `LAB_TEST_NOT_FOUND`, `CART_ITEM_NOT_FOUND`, `ITEM_ALREADY_IN_CART`, `COUPON_NOT_FOUND`, `EMPTY_CART`, `COUPON_EXPIRED`, `COUPON_NOT_APPLICABLE`, `CHECKOUT_NOT_READY`, `APPOINTMENT_REQUIRED`, `APPOINTMENT_NOT_FOUND`, `APPOINTMENT_ALREADY_EXISTS`, `APPOINTMENT_NOT_REQUIRED`, `INVOICE_ALREADY_EXISTS`, `INVOICE_REQUEST_ALREADY_EXISTS`, `ORDER_NOT_INVOICEABLE`, `TAX_PROFILE_NOT_FOUND`, `ADDRESS_NOT_FOUND`, `CONTACT_NOT_FOUND`, `RFC_ALREADY_EXISTS`.
+
+### Idempotencia HTTP (fase 1)
+
+| Código | HTTP | `retryable` | Origen |
+|--------|------|-------------|--------|
+| `IDEMPOTENCY_KEY_CONFLICT` | 409 | false | Misma `Idempotency-Key`, payload distinto |
+| `IDEMPOTENCY_REQUEST_IN_PROGRESS` | 409 | true | Lease `processing` vigente (`Retry-After`) |
+| `IDEMPOTENCY_OPERATION_UNCERTAIN` | 409 | false | Lease vencido / 5xx / body demasiado grande sin respuesta persistida |
+
+Header opcional de request: `Idempotency-Key` (8–128, `[A-Za-z0-9._-]`), solo con `API_V1_IDEMPOTENCY_ENABLED=true`.
+Replay completado: header `Idempotency-Replayed: true` + `X-Correlation-ID` original.
+No garantiza exactly-once ante efectos externos inciertos.
 
 No inventar códigos adicionales en clientes.
 

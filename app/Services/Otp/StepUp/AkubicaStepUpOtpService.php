@@ -445,7 +445,7 @@ class AkubicaStepUpOtpService
             $challenge,
             $plainCode,
             $phoneE164,
-            (string) Str::uuid(),
+            \App\Support\Api\V1\AkubicaCorrelationId::currentOrGenerate(),
         );
 
         if ($outcome === OtpDeliveryOutcome::Succeeded

@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Famedic API — Integración Akubica
-  version: 1.2.0
+  version: 1.2.1
   description: |
     API REST `/api/v1` para el asistente virtual **Akubica / LeoV**.
 
@@ -23,8 +23,28 @@ info:
 
     ## Envelope
 
-    Éxito: `{ "success": true, "data": {} }`
-    Error: `{ "success": false, "error": { "code", "message", "fields?", "details?" } }`
+    Éxito: `{ "success": true, "data": {} }` — correlation solo en header `X-Correlation-ID`.
+    Error: `{ "success": false, "error": { "code", "message", "fields?", "details?", "retryable", "correlation_id" } }`
+
+    ## Correlation ID (P1-A6)
+
+    Header opcional de request `X-Correlation-ID` (8–128, `[A-Za-z0-9._-]`).
+    Si falta o es inválido, el servidor genera un UUID opaco.
+    Respuesta: siempre `X-Correlation-ID`; en errores también `error.correlation_id` (mismo valor).
+
+    ## Idempotency-Key (fase 1)
+
+    Header opcional `Idempotency-Key` (8–128, `[A-Za-z0-9._-]`) en escrituras seleccionadas:
+    `POST /auth/login/request-code`, `POST /auth/register`, `POST /checkout/payment-link`,
+    `POST /laboratory-appointments`, `POST …/invoice-request`, `POST …/step-up/request`,
+    `POST …/secure-link`.
+
+    - Flag `API_V1_IDEMPOTENCY_ENABLED` (default OFF). Sin header o flag OFF → comportamiento previo.
+    - Replay con mismo payload → mismo body/status + `Idempotency-Replayed: true` + `X-Correlation-ID` original.
+    - Misma key, payload distinto → `409 IDEMPOTENCY_KEY_CONFLICT` (`retryable: false`).
+    - Concurrente en `processing` → `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` (`retryable: true`, `Retry-After`).
+    - Lease vencido sin respuesta persistida → `409 IDEMPOTENCY_OPERATION_UNCERTAIN` (`retryable: false` para esa key).
+    - **No** garantiza exactly-once si un efecto externo completó y el proceso murió antes de persistir la respuesta.
 
     ## Ownership
 
@@ -33,7 +53,7 @@ info:
 
     ## Fuera de OpenAPI
 
-    Mantenimiento `akubica:prune-otp` no es HTTP; ver runbook P0-C2.
+    Mantenimiento `akubica:prune-otp` / `akubica:prune-idempotency` no es HTTP; ver runbooks.
 
     Documentación: `docs/Akubica/README.md`.
   contact:
@@ -79,6 +99,9 @@ paths:
         **P0-A ON:** body `{ "phone": "+52..." }` → `202` + `OtpChallenge` (SMS).
         Teléfono inexistente → misma forma `202` (señuelo; sin SMS).
         **Legacy OFF:** body `{ "email" }` → `200` genérico (anti-enumeración).
+        Soporta `Idempotency-Key` opcional (fase 1) cuando el flag está ON.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -116,6 +139,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
         '503':
           $ref: '#/components/responses/DeliveryOrConfigFailed'
 
@@ -197,6 +222,8 @@ paths:
         **P0-A ON:** `email`, `phone`, `full_name` → `202` + challenge SMS (o señuelo si teléfono duplicado).
         **Legacy:** puede responder 409 email/phone ya registrados.
         Usuario se crea solo tras verify exitoso.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -222,7 +249,7 @@ paths:
                       data:
                         $ref: '#/components/schemas/OtpChallenge'
         '409':
-          description: Legacy — email/teléfono ya registrados
+          description: Legacy — email/teléfono ya registrados / IDEMPOTENCY_*
           content:
             application/json:
               schema:
@@ -762,6 +789,8 @@ paths:
       summary: Generar payment link
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -778,7 +807,10 @@ paths:
                   maximum: 1440
       responses:
         '200':
-          description: Link de pago
+          description: Link de pago (replayable con Idempotency-Key)
+          headers:
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
           content:
             application/json:
               schema:
@@ -786,7 +818,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '409':
-          description: EMPTY_CART / CHECKOUT_NOT_READY / APPOINTMENT_REQUIRED
+          description: EMPTY_CART / CHECKOUT_NOT_READY / APPOINTMENT_REQUIRED / IDEMPOTENCY_*
           content:
             application/json:
               schema:
@@ -833,6 +865,8 @@ paths:
       summary: Crear cita
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -862,7 +896,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '409':
-          description: EMPTY_CART / APPOINTMENT_NOT_REQUIRED / APPOINTMENT_ALREADY_EXISTS
+          description: EMPTY_CART / APPOINTMENT_NOT_REQUIRED / APPOINTMENT_ALREADY_EXISTS / IDEMPOTENCY_*
           content:
             application/json:
               schema:
@@ -1092,6 +1126,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: false
         content:
@@ -1115,6 +1150,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           $ref: '#/components/responses/OrderNotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '503':
@@ -1168,6 +1205,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1191,7 +1229,7 @@ paths:
         '404':
           $ref: '#/components/responses/OrderNotFound'
         '409':
-          description: RESULT_NOT_READY
+          description: RESULT_NOT_READY / IDEMPOTENCY_*
           content:
             application/json:
               schema:
@@ -1285,6 +1323,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/OrderId'
         - $ref: '#/components/parameters/InvoiceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: false
         content:
@@ -1312,6 +1351,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
@@ -1366,6 +1407,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/OrderId'
         - $ref: '#/components/parameters/InvoiceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1393,7 +1435,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '409':
-          description: INVOICE_NOT_READY
+          description: INVOICE_NOT_READY / IDEMPOTENCY_*
           content:
             application/json:
               schema:
@@ -1437,6 +1479,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1466,7 +1509,7 @@ paths:
         '404':
           $ref: '#/components/responses/OrderNotFound'
         '409':
-          description: INVOICE_ALREADY_EXISTS / INVOICE_REQUEST_ALREADY_EXISTS / ORDER_NOT_INVOICEABLE
+          description: INVOICE_ALREADY_EXISTS / INVOICE_REQUEST_ALREADY_EXISTS / ORDER_NOT_INVOICEABLE / IDEMPOTENCY_*
           content:
             application/json:
               schema:
@@ -1787,7 +1830,47 @@ components:
         Public id del grant step-up. Solo para descargas Bearer cuando enforcement ON.
         No usar como API key global. No enviar en query string.
 
+  headers:
+    X-Correlation-ID:
+      description: Opaque correlation id for this request (echo or server-generated)
+      schema:
+        type: string
+        example: 550e8400-e29b-41d4-a716-446655440000
+    IdempotencyReplayed:
+      description: Present with value `true` when the response is a replay of a completed idempotent operation
+      schema:
+        type: string
+        enum: ['true']
+
   parameters:
+    XCorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: false
+      description: |
+        Opaque correlation id (8–128 chars, `[A-Za-z0-9._-]`).
+        If omitted or invalid, the server generates a UUID and returns it.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+        pattern: '^[A-Za-z0-9._-]+$'
+        example: 550e8400-e29b-41d4-a716-446655440000
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Optional client idempotency key (8–128, `[A-Za-z0-9._-]`).
+        Only honored when `API_V1_IDEMPOTENCY_ENABLED=true` on phase-1 write routes.
+        Replay returns the original response with `Idempotency-Replayed: true`.
+        Does not guarantee exactly-once under uncertain external side effects.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+        pattern: '^[A-Za-z0-9._-]+$'
+        example: leo-pay-link-2026-08-03-001
     OrderId:
       name: order_id
       in: path
@@ -1871,6 +1954,21 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
+    IdempotencyConflict:
+      description: |
+        Idempotency key semantics:
+        `IDEMPOTENCY_KEY_CONFLICT` (retryable false),
+        `IDEMPOTENCY_REQUEST_IN_PROGRESS` (retryable true + Retry-After),
+        `IDEMPOTENCY_OPERATION_UNCERTAIN` (retryable false for same key).
+      headers:
+        Retry-After:
+          description: Present for IDEMPOTENCY_REQUEST_IN_PROGRESS
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
     FeatureDisabled:
       description: FEATURE_DISABLED / OTP_CONFIGURATION_INVALID
       content:
@@ -1921,7 +2019,7 @@ components:
           const: false
         error:
           type: object
-          required: [code, message]
+          required: [code, message, retryable, correlation_id]
           properties:
             code:
               type: string
@@ -1933,6 +2031,15 @@ components:
             details:
               type: object
               additionalProperties: true
+            retryable:
+              type: boolean
+              description: |
+                true solo para fallos transitorios / rate-limit (p. ej. OTP_COOLDOWN,
+                DELIVERY_FAILED). Validación, ownership, step-up y FEATURE_DISABLED → false.
+            correlation_id:
+              type: string
+              description: Mismo valor que el header X-Correlation-ID
+              example: 550e8400-e29b-41d4-a716-446655440000
 
     SuccessResponse:
       $ref: '#/components/schemas/ApiSuccessResponse'

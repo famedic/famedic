@@ -57,7 +57,21 @@ function p0a57bRequestRegister(string $email, string $phone, string $code = '123
 function p0a57bSwapTestLog(): TestHandler
 {
     $handler = new TestHandler;
-    $logger = new Logger('testing');
+    // Extend Monolog with LogManager-compatible shareContext so P1-A6
+    // AssignAkubicaCorrelationId does not 500 when tests swap the logger.
+    $logger = new class('testing') extends Logger
+    {
+        /** @param  array<string, mixed>  $context */
+        public function shareContext(array $context): void
+        {
+        }
+
+        /** @return array<string, mixed> */
+        public function sharedContext(): array
+        {
+            return [];
+        }
+    };
     $logger->pushHandler($handler);
     Log::swap($logger);
 

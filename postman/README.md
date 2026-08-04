@@ -41,6 +41,14 @@ Usar **Famedic Akubica - Staging** para QA.
 11. **19** Facturas step-up + secure links + enforcement
 12. **17** Features desactivadas (503)
 
+## Correlation ID (P1-A6)
+
+- Toda respuesta `/api/v1` incluye header `X-Correlation-ID`.
+- En errores JSON: `error.correlation_id` + `error.retryable` (aditivos).
+- La colección guarda el último valor en variable `correlation_id` (script de colección).
+- Opcional: enviar `X-Correlation-ID: {{correlation_id}}` en un request para trazar un flujo.
+- No registrar OTP, tokens, grants ni PII junto al correlation id.
+
 ## Cómo capturar OTP manual
 
 1. Ejecutar request de `request` / `request-code` (01.1, 02.1, 18.1, 19.1).

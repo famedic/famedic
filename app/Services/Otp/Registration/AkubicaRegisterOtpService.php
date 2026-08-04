@@ -745,7 +745,7 @@ final class AkubicaRegisterOtpService
             $result->challenge,
             $result->plainCode(),
             $identity,
-            (string) Str::uuid(),
+            \App\Support\Api\V1\AkubicaCorrelationId::currentOrGenerate(),
         );
 
         if ($outcome === OtpDeliveryOutcome::Succeeded

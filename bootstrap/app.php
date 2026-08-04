@@ -38,8 +38,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'bypass.password.confirm' => \App\Http\Middleware\BypassPasswordConfirm::class,
             'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
             'force.json' => \App\Http\Middleware\ForceJsonResponse::class,
+            'api.correlation' => \App\Http\Middleware\AssignAkubicaCorrelationId::class,
             'api.customer' => \App\Http\Middleware\EnsureApiCustomer::class,
             'api.token.guard' => \App\Http\Middleware\UseApiTokenGuard::class,
+            'api.idempotency' => \App\Http\Middleware\Api\V1\EnforceIdempotencyKey::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

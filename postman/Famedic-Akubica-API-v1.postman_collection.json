@@ -12,6 +12,11 @@
       "type": "string"
     },
     {
+      "key": "correlation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "access_token",
       "value": "",
       "type": "string"
@@ -215,6 +220,32 @@
       "key": "allow_production_writes",
       "value": "false",
       "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// P1-A6 — capture correlation id (no secrets)",
+          "const cid = pm.response.headers.get('X-Correlation-ID');",
+          "if (cid) {",
+          "  pm.collectionVariables.set('correlation_id', cid);",
+          "}",
+          "const json = pm.response.headers.get('Content-Type') || '';",
+          "if (json.includes('application/json')) {",
+          "  try {",
+          "    const body = pm.response.json();",
+          "    if (body && body.success === false && body.error && body.error.correlation_id && cid) {",
+          "      pm.test('error.correlation_id matches X-Correlation-ID', function () {",
+          "        pm.expect(body.error.correlation_id).to.eql(cid);",
+          "      });",
+          "    }",
+          "  } catch (e) {}",
+          "}"
+        ]
+      }
     }
   ],
   "item": [

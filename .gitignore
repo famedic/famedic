@@ -41,7 +41,9 @@ docs/ACTIVECAMPAIGN_TAGS.md
 !/docs/Akubica/akubica-openapi.yaml
 !/docs/Akubica/api-v1-*.md
 !/docs/Akubica/p0-*.md
+!/docs/Akubica/p1-*.md
 !/docs/Akubica/openapi-changelog-v1.2.0.md
+!/docs/Akubica/openapi-changelog-v1.2.1.md
 # Binarios, evidencias, .docx, RAR e históricos no listados arriba siguen ignorados
 desktop.ini
 /backups/*

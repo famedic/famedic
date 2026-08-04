@@ -2,7 +2,7 @@
 
 **Rama de referencia:** `feature/apis-akubica`  
 **Contrato HTTP:** `/api/v1`  
-**OpenAPI:** [`akubica-openapi.yaml`](./akubica-openapi.yaml) (v1.2.0)  
+**OpenAPI:** [`akubica-openapi.yaml`](./akubica-openapi.yaml) (v1.2.1)
 **Postman (canónico en git):** `/postman/` — ver [`postman/README.md`](../../postman/README.md)
 
 Esta carpeta documenta el contrato real para integración **Akubica / LeoV**. No modifica comportamiento de negocio.
@@ -16,6 +16,8 @@ Esta carpeta documenta el contrato real para integración **Akubica / LeoV**. No
 | [`api-v1-feature-flags.md`](./api-v1-feature-flags.md) | Flags P0-A/B/C, defaults, staging/prod, rollback |
 | [`api-v1-errors.md`](./api-v1-errors.md) | Códigos HTTP y de dominio reales |
 | [`openapi-changelog-v1.2.0.md`](./openapi-changelog-v1.2.0.md) | Cambios OpenAPI v1.1.0 → v1.2.0 |
+| [`openapi-changelog-v1.2.1.md`](./openapi-changelog-v1.2.1.md) | Cambios OpenAPI v1.2.0 → v1.2.1 (P1-A6) |
+| [`p1-a6-errors-correlation.md`](./p1-a6-errors-correlation.md) | Correlation ID + retryable (P1-A6) |
 | [`p0-e1-qa-staging-production-readiness.md`](./p0-e1-qa-staging-production-readiness.md) | Readiness + rollout gradual |
 | [`p0-e2-staging-qa-evidence.md`](./p0-e2-staging-qa-evidence.md) | Matriz evidencia QA manual staging |
 | [`p0-f1-production-rollout-runbook.md`](./p0-f1-production-rollout-runbook.md) | Runbook rollout gradual a producción (flags, fases, rollback) |
