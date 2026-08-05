@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "famedic-akubica-api-v1-s15",
     "name": "Famedic Akubica API v1",
-    "description": "# Famedic Akubica API v1\n\nColección Postman para la API pública Akubica de Famedic (`/api/v1`).\n\n## Propósito\n\nValidar de punta a punta el flujo QA de registro OTP por SMS (P0-A), login legacy, catálogo, carrito, checkout, pedidos, resultados y facturas contra environments Local / Staging / Production.\n\n## Base URL\n\n`base_url` **incluye** el prefijo `/api/v1` (ej. `https://staging.famedic.com.mx/api/v1`). No concatenar `/api/v1` otra vez en las rutas.\n\nDefinir `base_url` en el **environment** (en la colección queda vacío).\n\n## Orden de módulos\n\n1. Registro nuevo usuario (OTP SMS P0-A)\n2. Login usuario existente (OTP SMS P0-A cuando LOGIN+SMS flags ON; legacy email si OFF)\n3. Perfil usuario\n4. Catálogo laboratorio (público)\n5. Carrito\n6. Cupones\n7. Contactos / pacientes\n8. Direcciones\n9. Checkout prepare y draft\n10. Citas laboratorio\n11. Payment link\n12. Pedidos\n13. Resultados\n14. Facturas\n15. Solicitud factura\n16. Descargas Bearer-native (PDF)\n17. Features desactivadas (pueden responder 503)\n\n## Autenticación\n\n- **Público (noauth):** `catalog/*`, `auth/register*`, `auth/login/request-code`, `auth/login/verify-code`, `auth/login/resend-code`\n- **Bearer `{{access_token}}`:** resto de endpoints, incluido `DELETE auth/token`\n\nTras verify OTP exitoso, guardar `data.token` en `access_token`.\n\n## Registro OTP P0-A (SMS)\n\nFlujo carpeta **01** (orden estricto 01.1 → 01.6):\n\n1. Solicitar OTP por SMS (`POST /auth/register`) → 202 + `challenge_id`\n2. Verificar OTP incorrecto → 422 `INVALID_CODE`\n3. Verificar OTP correcto (`{{correct_otp}}` manual desde SMS) → 200 + token + user (crea User+Customer; **no** hay endpoint complete separado)\n4. Reutilizar challenge consumido → 422\n5. Registro con teléfono duplicado → 202 señuelo (`duplicate_challenge_id`) sin segundo SMS\n6. Verificar challenge señuelo → 422 `INVALID_CODE`\n\nCompletar a mano en el environment: `test_email`, `test_phone`, `duplicate_test_email`, `correct_otp`.\n\n## Warning Production\n\n**No ejecutar requests de escritura en Production sin autorización explícita.** Preferir Staging.\n\n## Stop conditions\n\nDetener la corrida / fallar el test si:\n\n- Status **500** (nunca aceptar en silencio)\n- Error `DELIVERY_FAILED` en registro SMS (Vonage / delivery)\n- **OTP leak** en body de respuesta (dígitos OTP como `\"code\"` en JSON)\n\n## Seguridad / PII\n\nNo guardar PII real en la colección. Environments trackeados llevan email/phone/OTP/token **vacíos**. No commitear secrets.\n\n## Referencia\n\n## Login OTP P0-A (SMS)\n\nFlujo carpeta **02** (requiere LOGIN + ANTI_ABUSE + SMS_DELIVERY):\n\n1. Solicitar OTP login por SMS (`POST /auth/login/request-code` con `phone`) → 202\n2. Verificar OTP incorrecto → 422\n3. Verificar OTP correcto (`login_correct_otp` manual) → 200 + token\n4. Reutilizar challenge consumido → 422\n5. Reenviar OTP (tras cooldown) → 202\n6. Teléfono inexistente → 202 señuelo\n7. Verificar señuelo → 422\n\nSi login P0-A está **off**: body legacy `{email}`; `resend-code` → 503 FEATURE_DISABLED.\n\nCommit base: `26a1dd8` (`feature/apis-akubica`). Actualizado: 2026-07-29.\n\n## P0-C1 — Expiración Sanctum (Akubica)\n\nCon `OTP_P0A_SANCTUM_3H_ENABLED` ON, el verify de login/registro expone `expires_in` ≈ **10800** (180 min) y `expires_at`. Guardar en vars `akubica_token_expires_in` / `akubica_token_expires_at`. **No hay refresh token**: al expirar, repetir login OTP. Con el flag OFF, el TTL anunciado sigue el legacy (~1440 min / Sanctum Guard).\n",
+    "description": "Colección API V1 Akubica/Leo — alineada a OpenAPI v1.2.1 (61 operaciones).\n\nAmbiente recomendado: **Famedic Akubica QA**.\nIncluye correlation, idempotencia (9 rutas), step-up, secure links, Bearer PDF,\ncupones COUPON_*, ownership y casos negativos.\nXML / Business Audit / web_checkout: fuera del contrato público.\nNo versionar tokens, OTP, teléfonos reales ni URLs firmadas.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -220,29 +220,116 @@
       "key": "allow_production_writes",
       "value": "false",
       "type": "string"
+    },
+    {
+      "key": "idempotency_key",
+      "value": ""
+    },
+    {
+      "key": "idempotency_original_key",
+      "value": ""
+    },
+    {
+      "key": "foreign_order_id",
+      "value": ""
+    },
+    {
+      "key": "foreign_tax_profile_id",
+      "value": ""
+    },
+    {
+      "key": "foreign_appointment_id",
+      "value": ""
+    },
+    {
+      "key": "foreign_invoice_id",
+      "value": ""
+    },
+    {
+      "key": "coupon_code_expired",
+      "value": ""
+    },
+    {
+      "key": "coupon_code_not_applicable",
+      "value": ""
+    },
+    {
+      "key": "coupon_code_unknown",
+      "value": ""
+    },
+    {
+      "key": "medication_id",
+      "value": ""
+    },
+    {
+      "key": "secure_download_token",
+      "value": ""
     }
   ],
   "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Production write guard + ensure idempotency key exists when needed",
+          "const envName = (pm.environment.name || '').toLowerCase();",
+          "const allowWrites = String(pm.variables.get('allow_production_writes') || '').toLowerCase() === 'true';",
+          "const method = (pm.request.method || '').toUpperCase();",
+          "const path = (pm.request.url && pm.request.url.getPath) ? pm.request.url.getPath() : String(pm.request.url || '');",
+          "const isMutation = ['POST','PUT','PATCH','DELETE'].includes(method);",
+          "const isSensitiveGet = method === 'GET' && (path.includes('/secure-downloads/') || path.includes('/download'));",
+          "if (envName.includes('production') && (isMutation || isSensitiveGet) && !allowWrites) {",
+          "  throw new Error('Blocked: Production environment requires allow_production_writes=true for mutations/sensitive GETs.');",
+          "}",
+          "",
+          "// Do not overwrite correlation_id here (needed for idempotent replay).",
+          "// Generate idempotency_key only if empty.",
+          "if (!pm.collectionVariables.get('idempotency_key')) {",
+          "  const key = 'leo-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);",
+          "  pm.collectionVariables.set('idempotency_key', key);",
+          "}"
+        ]
+      }
+    },
     {
       "listen": "test",
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// P1-A6 — capture correlation id (no secrets)",
+          "// Capture X-Correlation-ID (case-insensitive via Postman helper)",
           "const cid = pm.response.headers.get('X-Correlation-ID');",
           "if (cid) {",
           "  pm.collectionVariables.set('correlation_id', cid);",
+          "  pm.test('response has X-Correlation-ID', function () {",
+          "    pm.expect(cid).to.be.a(\"string\").and.to.have.lengthOf.at.least(8);",
+          "  });",
           "}",
-          "const json = pm.response.headers.get('Content-Type') || '';",
-          "if (json.includes('application/json')) {",
-          "  try {",
-          "    const body = pm.response.json();",
-          "    if (body && body.success === false && body.error && body.error.correlation_id && cid) {",
-          "      pm.test('error.correlation_id matches X-Correlation-ID', function () {",
-          "        pm.expect(body.error.correlation_id).to.eql(cid);",
-          "      });",
-          "    }",
-          "  } catch (e) {}",
+          "",
+          "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+          "const isBinary = ct.includes(\"application/pdf\") || ct.includes(\"octet-stream\") || ct.includes(\"image/\");",
+          "if (isBinary) {",
+          "  pm.test('binary body not empty', function () {",
+          "    pm.expect(pm.response.stream && pm.response.stream.byteLength || pm.response.text().length).to.be.above(0);",
+          "  });",
+          "  return;",
+          "}",
+          "",
+          "let body = null;",
+          "try { body = pm.response.json(); } catch (e) { body = null; }",
+          "pm.test('HTTP not 500 for JSON', function () {",
+          "  pm.expect(pm.response.code).to.not.eql(500);",
+          "});",
+          "if (body && body.success === false && body.error) {",
+          "  pm.test('error envelope has retryable + correlation_id', function () {",
+          "    pm.expect(body.error).to.have.property('retryable');",
+          "    pm.expect(body.error).to.have.property('correlation_id');",
+          "  });",
+          "  if (cid && body.error.correlation_id) {",
+          "    pm.test('error.correlation_id matches header', function () {",
+          "      pm.expect(body.error.correlation_id).to.eql(cid);",
+          "    });",
+          "  }",
           "}"
         ]
       }
@@ -266,6 +353,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
                 "type": "text"
               }
             ],
@@ -340,6 +437,11 @@
                 "key": "Content-Type",
                 "value": "application/json",
                 "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/auth/register/verify-code",
@@ -392,6 +494,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
                 "type": "text"
               }
             ],
@@ -451,6 +558,11 @@
                 "key": "Content-Type",
                 "value": "application/json",
                 "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/auth/register/verify-code",
@@ -502,6 +614,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
                 "type": "text"
               }
             ],
@@ -556,6 +678,11 @@
                 "key": "Content-Type",
                 "value": "application/json",
                 "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/auth/register/verify-code",
@@ -592,6 +719,60 @@
               }
             }
           ]
+        },
+        {
+          "name": "01.7 - Reenviar OTP registro (P0-A)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/register/resend-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{otp_challenge_public_id}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Requiere OTP_P0A_AKUBICA_REGISTER_ENABLED=true. Usa challenge activo de 01.1."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [202, 422, 429, 503]', function () {",
+                  "  pm.expect([202, 422, 429, 503]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -612,6 +793,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
                 "type": "text"
               }
             ],
@@ -674,6 +865,11 @@
                 "key": "Content-Type",
                 "value": "application/json",
                 "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/auth/login/verify-code",
@@ -722,6 +918,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
                 "type": "text"
               }
             ],
@@ -776,6 +977,11 @@
                 "key": "Content-Type",
                 "value": "application/json",
                 "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/auth/login/verify-code",
@@ -821,6 +1027,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
                 "type": "text"
               }
             ],
@@ -869,6 +1080,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
                 "type": "text"
               }
             ],
@@ -919,6 +1140,11 @@
                 "key": "Content-Type",
                 "value": "application/json",
                 "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/auth/login/verify-code",
@@ -964,6 +1190,11 @@
               {
                 "key": "Accept",
                 "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
                 "type": "text"
               }
             ],
@@ -1011,6 +1242,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/user/family"
@@ -1029,6 +1265,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/user/contacts"
@@ -1047,6 +1288,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/user/addresses"
@@ -1065,6 +1311,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/user/tax-profiles"
@@ -1083,6 +1334,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/user/payment-methods"
@@ -1102,6 +1358,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/catalog/laboratory-brands",
@@ -1133,6 +1394,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1179,6 +1445,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1227,6 +1498,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1258,6 +1534,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/catalog/laboratory-tests/{{laboratory_test_id}}",
@@ -1265,6 +1546,43 @@
               "type": "noauth"
             }
           }
+        },
+        {
+          "name": "GET Medication detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/catalog/medications/{{medication_id}}",
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Requiere flag de catálogo medicamentos ON. Si OFF → 503 FEATURE_DISABLED (ver carpeta 17)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status allowlist', function () {",
+                  "  pm.expect([200, 404, 422, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ],
       "description": "## Catálogo laboratorio (público)\n\nEndpoints de catálogo **sin** Authorization.\n\n**Prereq:** ninguno (auth noauth).\n**Vars in:** `brand` (default `olab`), `laboratory_test_id`, `category_id`.\n**Vars out:** `laboratory_test_id` / `category_id` para carrito."
@@ -1301,6 +1619,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1328,6 +1651,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1360,6 +1688,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1393,6 +1726,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/cart/items/{{cart_item_id}}"
@@ -1411,6 +1749,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1449,6 +1792,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1486,6 +1834,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1513,6 +1866,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1567,6 +1925,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1594,10 +1957,111 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/user/contacts"
           }
+        },
+        {
+          "name": "PUT Update contact",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/user/contacts/{{contact_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Juan\",\n  \"paternal_lastname\": \"Pérez\",\n  \"maternal_lastname\": \"López\",\n  \"phone\": \"{{test_phone}}\",\n  \"phone_country\": \"MX\",\n  \"birth_date\": \"1990-05-20\",\n  \"gender\": \"male\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [200, 404, 422, 401]', function () {",
+                  "  pm.expect([200, 404, 422, 401]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE Contact",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/user/contacts/{{contact_id}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [200, 204, 404, 401]', function () {",
+                  "  pm.expect([200, 204, 404, 401]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
         }
       ],
       "description": "## Contactos / pacientes\n\nCrear y listar contactos del usuario.\n\n**Prereq:** `access_token`.\n**Vars out:** `contact_id`."
@@ -1633,6 +2097,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1660,10 +2129,111 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/user/addresses"
           }
+        },
+        {
+          "name": "PUT Update address",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/user/addresses/{{address_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"street\": \"Av. Constitución\",\n  \"number\": \"100\",\n  \"neighborhood\": \"Centro\",\n  \"state\": \"Nuevo León\",\n  \"city\": \"Monterrey\",\n  \"zipcode\": \"64000\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [200, 404, 422, 401]', function () {",
+                  "  pm.expect([200, 404, 422, 401]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE Address",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/user/addresses/{{address_id}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [200, 204, 404, 401]', function () {",
+                  "  pm.expect([200, 204, 404, 401]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
         }
       ],
       "description": "## Direcciones\n\nCrear y listar direcciones.\n\n**Prereq:** `access_token`.\n**Vars out:** `address_id`."
@@ -1684,6 +2254,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1721,6 +2296,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1754,6 +2334,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1787,6 +2372,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1823,6 +2413,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1836,6 +2436,47 @@
             },
             "url": "{{base_url}}/laboratory-appointments"
           }
+        },
+        {
+          "name": "DELETE Appointment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/laboratory-appointments/{{appointment_id}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [200, 204, 404, 401]', function () {",
+                  "  pm.expect([200, 204, 404, 401]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
         }
       ],
       "description": "## Citas laboratorio\n\nRequirements, listado y creación de citas.\n\n**Prereq:** checkout draft / datos de paciente; `brand`.\n**Vars out:** `appointment_id`."
@@ -1860,6 +2501,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1908,6 +2559,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1940,6 +2596,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/{{order_id}}/status"
@@ -1958,10 +2619,54 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/{{order_id}}/products"
           }
+        },
+        {
+          "name": "PUT Cancel order",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/cancel",
+            "description": "Cancelación de pedido propio. Puede responder 503 si el feature está desactivado (carpeta 17)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status allowlist', function () {",
+                  "  pm.expect([200, 404, 422, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ],
       "description": "## Pedidos\n\nListar pedidos, status y products.\n\n**Prereq:** `access_token`.\n**Vars in/out:** `order_id`."
@@ -1982,6 +2687,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/results"
@@ -2000,6 +2710,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/{{order_id}}/results"
@@ -2024,6 +2739,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/invoices"
@@ -2057,6 +2777,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/{{order_id}}/invoices"
@@ -2097,6 +2822,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -2112,6 +2842,61 @@
           }
         },
         {
+          "name": "PUT Tax profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/user/tax-profiles/{{tax_profile_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rfc\": \"XAXX010101000\",\n  \"business_name\": \"Empresa Demo SA de CV\",\n  \"tax_regime\": \"601\",\n  \"postal_code\": \"64000\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [200, 404, 422, 401]', function () {",
+                  "  pm.expect([200, 404, 422, 401]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "GET Invoice request status",
           "request": {
             "method": "GET",
@@ -2124,6 +2909,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/{{order_id}}/invoice-request/status"
@@ -2146,6 +2936,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -2159,6 +2959,48 @@
             },
             "url": "{{base_url}}/orders/{{order_id}}/invoice-request"
           }
+        },
+        {
+          "name": "DELETE Tax profile",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/user/tax-profiles/{{tax_profile_id}}",
+            "description": "Soft-delete según contrato. Puede reasignar default."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [200, 204, 404, 409, 401]', function () {",
+                  "  pm.expect([200, 204, 404, 409, 401]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
         }
       ],
       "description": "## Solicitud factura\n\nTax profile + invoice-request status/create.\n\n**Prereq:** `access_token`, `order_id`.\n**Vars out:** `tax_profile_id`."
@@ -2179,6 +3021,11 @@
               {
                 "key": "Accept",
                 "value": "application/pdf"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/{{order_id}}/results/download"
@@ -2218,6 +3065,11 @@
               {
                 "key": "Accept",
                 "value": "application/pdf"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/{{order_id}}/invoices/{{invoice_id}}/download"
@@ -2284,6 +3136,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -2335,6 +3197,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -2389,6 +3256,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -2429,6 +3306,11 @@
               {
                 "key": "Accept",
                 "value": "application/pdf"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{results_secure_download_url}}",
@@ -2465,6 +3347,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{results_secure_download_url}}",
@@ -2496,6 +3383,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{results_secure_download_url}}",
@@ -2547,6 +3439,11 @@
               {
                 "key": "Accept",
                 "value": "application/pdf"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/{{order_id}}/results/download",
@@ -2599,6 +3496,11 @@
               {
                 "key": "X-Step-Up-Grant",
                 "value": "{{results_step_up_grant_id}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
                 "type": "text"
               }
             ],
@@ -2653,11 +3555,59 @@
                 "key": "X-Step-Up-Grant",
                 "value": "{{invoice_step_up_grant_id}}",
                 "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/{{order_id}}/results/download",
             "description": "P0-B4: grant **cross-purpose** — usa `invoice_step_up_grant_id` (purpose facturas) contra descarga de **resultados**.\n\nCon enforcement ON: **403** `STEP_UP_GRANT_INVALID` (purpose/resource binding).\nCon enforcement OFF: el header se ignora → **200** si ownership OK.\n\nNota: no usar grant de otro usuario/PAT/recurso; mismo patrón de fallo."
           }
+        },
+        {
+          "name": "18.4b - Abrir secure link por path (token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/secure-downloads/{{secure_download_token}}",
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Misma operación secureDownloadShow. Preferir URL completa de 18.3 en UAT; esta variante usa token aislado."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+                  "pm.test('PDF or documented error', function () {",
+                  "  if (ct.includes('application/pdf')) {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    pm.expect(pm.response.stream.byteLength || pm.response.text().length).to.be.above(0);",
+                  "  } else {",
+                  "    pm.expect([401, 403, 404, 410, 422, 503]).to.include(pm.response.code);",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -2698,6 +3648,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -2749,6 +3709,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -2803,6 +3768,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -2843,6 +3818,11 @@
               {
                 "key": "Accept",
                 "value": "application/pdf"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{invoice_secure_download_url}}",
@@ -2879,6 +3859,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{invoice_secure_download_url}}",
@@ -2910,6 +3895,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{invoice_secure_download_url}}",
@@ -2961,6 +3951,11 @@
               {
                 "key": "Accept",
                 "value": "application/pdf"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/{{invoice_order_id}}/invoices/{{invoice_id}}/download",
@@ -3013,6 +4008,11 @@
               {
                 "key": "X-Step-Up-Grant",
                 "value": "{{invoice_step_up_grant_id}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
                 "type": "text"
               }
             ],
@@ -3067,6 +4067,11 @@
                 "key": "X-Step-Up-Grant",
                 "value": "{{results_step_up_grant_id}}",
                 "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/orders/{{invoice_order_id}}/invoices/{{invoice_id}}/download",
@@ -3097,6 +4102,11 @@
               {
                 "key": "Accept",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "url": "{{base_url}}/catalog/medications/1",
@@ -3133,6 +4143,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -3149,74 +4164,871 @@
         }
       ],
       "description": "## Features desactivadas\n\nEndpoints que pueden responder **503** (medications, cancel order).\n\nÚtil para documentar features off en el environment actual."
+    },
+    {
+      "name": "99 - Legacy",
+      "description": "Flujos legacy (flags OTP P0-A OFF). No confundir con login SMS principal.",
+      "item": [
+        {
+          "name": "99.1 - Login request-code por email (legacy)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/request-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{test_email}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Solo cuando OTP_P0A_AKUBICA_LOGIN_ENABLED=false. Body email (no phone)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [200, 422, 429]', function () {",
+                  "  pm.expect([200, 422, 429]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "99.2 - Login verify-code por email (legacy)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/verify-code",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{test_email}}\",\n  \"code\": \"{{login_correct_otp}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Legacy verify. Pegar OTP manualmente; no versionar."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [200, 401, 422, 429]', function () {",
+                  "  pm.expect([200, 401, 422, 429]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "20 - Idempotency / Replay",
+      "description": "Solo rutas con middleware api.idempotency. Requiere API_V1_IDEMPOTENCY_ENABLED=true. No ejecutar mutaciones reales en staging sin control UAT. Flujo: 20.0 regenerar key → 20.1 primera llamada → 20.2 replay (misma key/payload).",
+      "item": [
+        {
+          "name": "20.0 - Regenerar Idempotency-Key",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/catalog/laboratory-brands",
+            "description": "Request inocua; el prerequest regenera idempotency_key.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const key = 'leo-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);",
+                  "pm.collectionVariables.set('idempotency_key', key);",
+                  "pm.collectionVariables.set('idempotency_original_key', key);",
+                  "console.log('idempotency_key regenerated (value not logged)');"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "20.1 - Payment link (primera llamada idempotente)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/checkout/payment-link",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"expires_in_minutes\": {{expires_in_minutes}}\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Primera ejecución. Guarda status mentalmente; luego 20.2 con misma key."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const original = pm.collectionVariables.get('idempotency_original_key') || pm.collectionVariables.get('idempotency_key');",
+                  "if (original) { pm.collectionVariables.set('idempotency_key', original); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [200, 201, 409, 422, 401, 503]', function () {",
+                  "  pm.expect([200, 201, 409, 422, 401, 503]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }",
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  pm.collectionVariables.set('idempotency_original_key', pm.collectionVariables.get('idempotency_key'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "20.2 - Payment link REPLAY (misma key)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/checkout/payment-link",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"expires_in_minutes\": {{expires_in_minutes}}\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Replay: espera Idempotency-Replayed: true y mismo status/body. Conserva correlation original del servidor."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const original = pm.collectionVariables.get('idempotency_original_key') || pm.collectionVariables.get('idempotency_key');",
+                  "if (original) { pm.collectionVariables.set('idempotency_key', original); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Idempotency-Replayed is true', function () {",
+                  "  const h = pm.response.headers.get('Idempotency-Replayed');",
+                  "  pm.expect(h).to.eql('true');",
+                  "});",
+                  "pm.test('status is success class', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 202]);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }",
+                  "pm.test('status in [200, 201, 409]', function () {",
+                  "  pm.expect([200, 201, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "20.3 - Documentado: IDEMPOTENCY_OPERATION_UNCERTAIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/checkout/payment-link",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"expires_in_minutes\": {{expires_in_minutes}}\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Caso documental. Si el servidor responde 409 IDEMPOTENCY_OPERATION_UNCERTAIN, error.retryable debe ser false. Usar nueva key para reintentar."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 409) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.error && j.error.code === 'IDEMPOTENCY_OPERATION_UNCERTAIN') {",
+                  "    pm.test('UNCERTAIN retryable=false', function () {",
+                  "      pm.expect(j.error.retryable).to.eql(false);",
+                  "    });",
+                  "  }",
+                  "}",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "90 - Casos negativos",
+      "description": "Ownership, auth, cupones y grants. Variables foreign_* vacías por defecto. Requieren datos preparados por Famedic. No versionar IDs reales.",
+      "item": [
+        {
+          "name": "90.1 - Pedido ajeno (soft-deny 404)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{foreign_order_id}}/status",
+            "description": "Precondición: foreign_order_id de otro customer. Expect ORDER_NOT_FOUND."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [404, 401, 422]', function () {",
+                  "  pm.expect([404, 401, 422]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('error.code in allowlist', function () {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j).to.have.property('success', false);",
+                  "  pm.expect([\"ORDER_NOT_FOUND\", \"VALIDATION_ERROR\", \"UNAUTHENTICATED\"]).to.include(j.error && j.error.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "90.2 - Tax profile ajeno (404)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/user/tax-profiles/{{foreign_tax_profile_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rfc\": \"XAXX010101000\",\n  \"business_name\": \"X\",\n  \"tax_regime\": \"601\",\n  \"postal_code\": \"64000\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Precondición: foreign_tax_profile_id ajeno."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [404, 401, 422]', function () {",
+                  "  pm.expect([404, 401, 422]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "90.3 - Cita ajena DELETE (404)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/laboratory-appointments/{{foreign_appointment_id}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [404, 401, 422]', function () {",
+                  "  pm.expect([404, 401, 422]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "90.4 - Cupón inexistente COUPON_NOT_FOUND",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/cart/coupon",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"code\": \"{{coupon_code_unknown}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Usar código inventado no asignado. Contrato público COUPON_* (no CREDIT_*)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [404, 409, 422, 401]', function () {",
+                  "  pm.expect([404, 409, 422, 401]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('error.code in allowlist', function () {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j).to.have.property('success', false);",
+                  "  pm.expect([\"COUPON_NOT_FOUND\", \"VALIDATION_ERROR\", \"EMPTY_CART\", \"UNAUTHENTICATED\"]).to.include(j.error && j.error.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "90.5 - Cupón vencido/usado COUPON_EXPIRED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/cart/coupon",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"code\": \"{{coupon_code_expired}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Requiere cupón de prueba vencido/usado preparado por Famedic."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [409, 404, 422, 401]', function () {",
+                  "  pm.expect([409, 404, 422, 401]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('error.code in allowlist', function () {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j).to.have.property('success', false);",
+                  "  pm.expect([\"COUPON_EXPIRED\", \"COUPON_NOT_FOUND\", \"VALIDATION_ERROR\", \"EMPTY_CART\", \"UNAUTHENTICATED\"]).to.include(j.error && j.error.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "90.6 - Cupón no aplicable COUPON_NOT_APPLICABLE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/cart/coupon",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"code\": \"{{coupon_code_not_applicable}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Requiere cupón válido pero no aplicable al carrito actual."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [409, 404, 422, 401]', function () {",
+                  "  pm.expect([409, 404, 422, 401]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('error.code in allowlist', function () {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j).to.have.property('success', false);",
+                  "  pm.expect([\"COUPON_NOT_APPLICABLE\", \"COUPON_EXPIRED\", \"COUPON_NOT_FOUND\", \"VALIDATION_ERROR\", \"EMPTY_CART\", \"UNAUTHENTICATED\"]).to.include(j.error && j.error.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "90.7 - Bearer download sin token (401)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/results/download",
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Sin Authorization."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [401]', function () {",
+                  "  pm.expect([401]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "90.8 - Step-up results grant inválido en secure-link (Requiere flag)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{order_id}}/results/secure-link",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_id\": \"00000000-0000-4000-8000-000000000000\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Requiere OTP_P0A_SECURE_LINKS_RESULTS_ENABLED=true. Expect STEP_UP_GRANT_INVALID u error de grant."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [403, 404, 422, 503, 401]', function () {",
+                  "  pm.expect([403, 404, 422, 503, 401]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "90.9 - Secure link token inválido",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlation_id}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/secure-downloads/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Token hex64 inválido/inexistente."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status in [404, 410, 422]', function () {",
+                  "  pm.expect([404, 410, 422]).to.include(pm.response.code);",
+                  "});",
+                  "// Capture correlation (collection-level also runs)",
+                  "const _cid = pm.response.headers.get('X-Correlation-ID');",
+                  "if (_cid) { pm.collectionVariables.set(\"correlation_id\", _cid); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "auth": {
     "type": "noauth"
   },
-  "event": [
-    {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          "// P0-D1 — Production write guard (technical, not just a warning)",
-          "const envName = (pm.environment.name || '').toLowerCase();",
-          "const isProduction = envName.includes('production') || envName.includes('prod');",
-          "if (!isProduction) { return; }",
-          "",
-          "const allow = String(pm.environment.get('allow_production_writes') || 'false').toLowerCase();",
-          "const writesAllowed = allow === 'true' || allow === '1' || allow === 'yes';",
-          "",
-          "const method = String(pm.request.method || 'GET').toUpperCase();",
-          "const url = (typeof pm.request.url === 'object' && pm.request.url.toString)",
-          "  ? pm.request.url.toString()",
-          "  : String(pm.request.url || '');",
-          "const path = url.replace(/^https?:\\/\\/[^/]+/i, '').split('?')[0].toLowerCase();",
-          "",
-          "const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);",
-          "const sensitiveGet = path.includes('/secure-downloads/')",
-          "  || path.endsWith('/download')",
-          "  || path.includes('/download');",
-          "",
-          "if ((isMutation || sensitiveGet) && !writesAllowed) {",
-          "  throw new Error(",
-          "    'PRODUCTION GUARD: bloqueado. Environment Production + allow_production_writes!=true. '",
-          "    + 'Solo GET no sensibles permitidos. Set allow_production_writes=true solo con autorización explícita.'",
-          "  );",
-          "}"
-        ]
-      }
-    },
-    {
-      "listen": "test",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          "// Collection-level: fail hard on HTTP 500 for JSON responses; skip binary/PDF",
-          "const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
-          "const isBinary = ct.includes('pdf') || ct.includes('octet-stream');",
-          "if (isBinary) { return; }",
-          "",
-          "let bodyText = '';",
-          "try { bodyText = pm.response.text() || ''; } catch (e) { bodyText = ''; }",
-          "const looksJson = ct.includes('application/json') || (bodyText.trim().startsWith('{') || bodyText.trim().startsWith('['));",
-          "if (!looksJson) { return; }",
-          "",
-          "let json = null;",
-          "try { json = pm.response.json(); } catch (e) {",
-          "  // Non-parseable despite JSON-ish hints: still fail on 500",
-          "  pm.test('No HTTP 500', function () { pm.expect(pm.response.code).to.not.eql(500); });",
-          "  return;",
-          "}",
-          "",
-          "pm.test('No HTTP 500', function () {",
-          "  pm.expect(pm.response.code).to.not.eql(500);",
-          "});"
-        ]
-      }
-    }
-  ],
   "header": [
     {
       "key": "Accept",
