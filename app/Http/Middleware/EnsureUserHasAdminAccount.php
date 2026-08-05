@@ -206,28 +206,31 @@ class EnsureUserHasAdminAccount
         ));
 
         $currentRoute = (string) Route::currentRouteName();
-        $hubActive = str_starts_with($currentRoute, 'admin.intelligence.')
+        $workspaceActive = str_starts_with($currentRoute, 'admin.workspace.')
+            || str_starts_with($currentRoute, 'admin.intelligence.')
             || str_starts_with($currentRoute, 'admin.customer-intelligence.')
             || $currentRoute === 'admin.customers.dormant'
             || str_starts_with($currentRoute, 'admin.activecampaign.')
             || str_starts_with($currentRoute, 'admin.clinical-interpreter.')
             || str_starts_with($currentRoute, 'admin.monitoring-ai.');
 
-        $canOpenHub = $this->adminHasPermission($administrator, 'customers.manage')
+        $canOpenWorkspace = $this->adminHasPermission($administrator, 'customers.manage')
             || $this->adminHasPermission($administrator, 'activecampaign.manage')
             || $this->adminHasPermission($administrator, 'clinical-interpreter.manage')
             || $this->adminHasPermission($administrator, 'monitoring-ai.manage')
-            || $this->adminHasPermission($administrator, 'administrators.manage');
+            || $this->adminHasPermission($administrator, 'administrators.manage')
+            || $this->adminHasPermission($administrator, 'logs-general.manage')
+            || $this->adminHasPermission($administrator, 'view_config_monitor');
 
         $intelligenceItems = array_values(array_filter([
-            $canOpenHub ? [
-                'label' => 'Intelligence Hub',
+            $canOpenWorkspace ? [
+                'label' => 'Workspace',
                 'icon' => 'CpuChipIcon',
                 'emoji' => '🧠',
                 'badge' => 'BETA',
                 'badge_variant' => 'beta',
-                'url' => route('admin.intelligence.index'),
-                'current' => $hubActive,
+                'url' => route('admin.workspace.index'),
+                'current' => $workspaceActive,
             ] : null,
         ]));
 
@@ -372,7 +375,7 @@ class EnsureUserHasAdminAccount
             ] : null,
             $intelligenceItems !== [] ? [
                 'type' => 'section',
-                'label' => 'INTELLIGENCE',
+                'label' => 'WORKSPACE',
                 'items' => $intelligenceItems,
             ] : null,
             $adminItems !== [] ? [

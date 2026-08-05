@@ -77,13 +77,32 @@ Route::prefix('admin')->middleware([
 ])->group(function () {
     Route::name('admin.')->group(function () {
         Route::get('admin', AdminController::class)->name('admin');
-        Route::prefix('intelligence')->name('intelligence.')->group(function () {
-            Route::get('/', \App\Http\Controllers\Admin\Intelligence\IntelligenceHubController::class)
+
+        Route::prefix('workspace')->name('workspace.')->group(function () {
+            Route::get('/', \App\Http\Controllers\Admin\Workspace\WorkspaceHomeController::class)
                 ->name('index');
-            Route::get('{suite}', \App\Http\Controllers\Admin\Intelligence\IntelligenceSuiteController::class)
-                ->where('suite', 'customer|marketing|executive|business|ai-operations|operations|governance')
-                ->name('suite');
+            Route::get('{workspace}', \App\Http\Controllers\Admin\Workspace\WorkspaceShowController::class)
+                ->where('workspace', 'clinical-ai|customers|marketing|executive|ai|platform')
+                ->name('show');
         });
+
+        // Compatibilidad: Intelligence Hub → Workspace
+        Route::redirect('intelligence', '/admin/workspace')->name('intelligence.index');
+        Route::get('intelligence/{suite}', function (string $suite) {
+            $map = [
+                'customer' => 'customers',
+                'marketing' => 'marketing',
+                'executive' => 'executive',
+                'business' => 'executive',
+                'ai-operations' => 'ai',
+                'operations' => 'platform',
+                'governance' => 'platform',
+            ];
+
+            return redirect()->route('admin.workspace.show', $map[$suite] ?? 'customers');
+        })->where('suite', 'customer|marketing|executive|business|ai-operations|operations|governance')
+            ->name('intelligence.suite');
+
         Route::resource('administrators', AdministratorController::class)->except(['show']);
         Route::post('administrators/export', ExportAdministratorsController::class)->name('administrators.export');
         Route::get('customers/referrals', [CustomerReferralController::class, 'index'])->name('customers.referrals');
