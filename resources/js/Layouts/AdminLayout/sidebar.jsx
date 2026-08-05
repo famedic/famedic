@@ -16,7 +16,6 @@ import {
 	SidebarLabel,
 	SidebarSection,
 } from "@/Components/Catalyst/sidebar";
-import { Badge } from "@/Components/Catalyst/badge";
 import {
 	ArrowRightStartOnRectangleIcon,
 	ChevronUpIcon,
@@ -38,13 +37,17 @@ import {
 	IdentificationIcon,
 	SparklesIcon,
 	MegaphoneIcon,
+	CpuChipIcon,
 } from "@heroicons/react/16/solid";
 import { Strong } from "@/Components/Catalyst/text";
 import ApplicationLogo from "@/Components/ApplicationLogo";
 import MarketingIntelligenceNav from "@/Components/Admin/ActiveCampaign/MarketingIntelligenceNav";
+import SidebarBadge from "@/Components/Admin/Sidebar/SidebarBadge";
 import {
-	useAdminSidebarUi,
-} from "@/Layouts/AdminLayout/SidebarUiContext";
+	SidebarNavSection,
+	SidebarNavDivider,
+} from "@/Components/Admin/Sidebar/SidebarNavSection";
+import { useAdminSidebarUi } from "@/Layouts/AdminLayout/SidebarUiContext";
 
 import { usePage } from "@inertiajs/react";
 import {
@@ -56,18 +59,27 @@ import { useEffect, useState } from "react";
 
 const MI_PARENT_STORAGE_KEY = "mi-nav-parent-open-v1";
 
-function NavItemBadge({ badge }) {
+function NavItemBadge({ badge, variant }) {
 	if (!badge) {
 		return null;
 	}
 
+	const resolvedVariant =
+		variant ||
+		(String(badge).toUpperCase() === "BETA"
+			? "beta"
+			: String(badge).toUpperCase() === "NEW"
+				? "new"
+				: String(badge).toUpperCase().includes("SOON")
+					? "comingSoon"
+					: String(badge).toUpperCase() === "AI"
+						? "ai"
+						: "new");
+
 	return (
-		<Badge
-			color="famedic-lime"
-			className="ml-auto shrink-0 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-		>
+		<SidebarBadge variant={resolvedVariant} className="ml-auto">
 			{badge}
-		</Badge>
+		</SidebarBadge>
 	);
 }
 
@@ -83,7 +95,7 @@ function groupHasActiveChild(items = []) {
 	});
 }
 
-function CollapsedFlyout({ label, icon: IconComponent, items, current }) {
+function CollapsedFlyout({ label, icon: IconComponent, emoji, items, current, badge, badgeVariant }) {
 	const [open, setOpen] = useState(false);
 
 	return (
@@ -101,7 +113,13 @@ function CollapsedFlyout({ label, icon: IconComponent, items, current }) {
 				className="justify-center"
 				onClick={() => setOpen((value) => !value)}
 			>
-				{IconComponent ? <IconComponent data-slot="icon" /> : null}
+				{emoji ? (
+					<span className="text-sm leading-none" aria-hidden="true">
+						{emoji}
+					</span>
+				) : IconComponent ? (
+					<IconComponent data-slot="icon" />
+				) : null}
 			</SidebarItem>
 			{open ? (
 				<div
@@ -109,9 +127,12 @@ function CollapsedFlyout({ label, icon: IconComponent, items, current }) {
 					aria-label={label}
 					className="absolute left-full top-0 z-50 ml-2 max-h-[70vh] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
 				>
-					<p className="mb-2 px-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-						{label}
-					</p>
+					<div className="mb-2 flex items-center gap-2 px-2 pt-1">
+						<p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+							{label}
+						</p>
+						<NavItemBadge badge={badge} variant={badgeVariant} />
+					</div>
 					<div className="min-w-[14rem] space-y-0.5">
 						{items.map((item) => {
 							if (item.items) {
@@ -128,6 +149,10 @@ function CollapsedFlyout({ label, icon: IconComponent, items, current }) {
 												current={child.current}
 											>
 												<SidebarLabel>{child.label}</SidebarLabel>
+												<NavItemBadge
+													badge={child.badge}
+													variant={child.badge_variant}
+												/>
 											</SidebarItem>
 										))}
 									</div>
@@ -142,7 +167,10 @@ function CollapsedFlyout({ label, icon: IconComponent, items, current }) {
 									current={item.current}
 								>
 									<SidebarLabel>{item.label}</SidebarLabel>
-									<NavItemBadge badge={item.badge} />
+									<NavItemBadge
+										badge={item.badge}
+										variant={item.badge_variant}
+									/>
 								</SidebarItem>
 							);
 						})}
@@ -151,6 +179,119 @@ function CollapsedFlyout({ label, icon: IconComponent, items, current }) {
 			) : null}
 		</div>
 	);
+}
+
+function NavLeaf({ navItem, rail, iconMap }) {
+	const { label, url, current, icon, emoji, badge, badge_variant: badgeVariant } =
+		navItem;
+	const IconComponent = iconMap[icon];
+
+	return (
+		<SidebarItem
+			href={url}
+			key={label}
+			current={current}
+			forceHoverStyle={current}
+			title={label}
+			className={rail ? "justify-center" : undefined}
+		>
+			{emoji ? (
+				<span className="text-sm leading-none" data-slot="icon" aria-hidden="true">
+					{emoji}
+				</span>
+			) : (
+				IconComponent && <IconComponent />
+			)}
+			{!rail ? (
+				<>
+					<SidebarLabel>{label}</SidebarLabel>
+					<NavItemBadge badge={badge} variant={badgeVariant} />
+				</>
+			) : null}
+		</SidebarItem>
+	);
+}
+
+function NavGroup({ navItem, rail, iconMap }) {
+	const IconComponent = iconMap[navItem.icon];
+	const hasActiveChild =
+		Boolean(navItem.current) || groupHasActiveChild(navItem.items || []);
+	const isMiGroups = navItem.layout === "mi-groups";
+
+	if (navItem.disabled) {
+		return (
+			<SidebarItem
+				key={navItem.label}
+				disabled
+				title="Temporalmente deshabilitado"
+				className={rail ? "justify-center" : undefined}
+			>
+				{navItem.emoji ? (
+					<span className="text-sm leading-none" aria-hidden="true">
+						{navItem.emoji}
+					</span>
+				) : (
+					IconComponent && <IconComponent />
+				)}
+				{!rail ? <SidebarLabel>{navItem.label}</SidebarLabel> : null}
+			</SidebarItem>
+		);
+	}
+
+	if (rail) {
+		if (isMiGroups) {
+			return (
+				<div key={navItem.label} className="space-y-1">
+					<div
+						className="mx-auto my-1 h-px w-6 bg-zinc-200 dark:bg-zinc-800"
+						aria-hidden="true"
+					/>
+					<MarketingIntelligenceNav groups={navItem.items} />
+				</div>
+			);
+		}
+
+		return (
+			<CollapsedFlyout
+				key={navItem.label}
+				label={navItem.label}
+				icon={IconComponent}
+				emoji={navItem.emoji}
+				items={navItem.items}
+				current={hasActiveChild}
+				badge={navItem.badge}
+				badgeVariant={navItem.badge_variant}
+			/>
+		);
+	}
+
+	return (
+		<MiAwareDisclosure
+			key={navItem.label}
+			navItem={navItem}
+			IconComponent={IconComponent}
+			hasActiveChild={hasActiveChild}
+			isMiGroups={isMiGroups}
+		/>
+	);
+}
+
+function flattenNavigation(adminNavigation = []) {
+	if (
+		Array.isArray(adminNavigation) &&
+		adminNavigation.some((entry) => entry?.type === "section")
+	) {
+		return adminNavigation;
+	}
+
+	// Compatibilidad con navegación plana legacy.
+	return [
+		{
+			type: "section",
+			label: null,
+			items: adminNavigation || [],
+		},
+	];
 }
 
 export default function SideBar() {
@@ -174,7 +315,10 @@ export default function SideBar() {
 		IdentificationIcon: IdentificationIcon,
 		SparklesIcon: SparklesIcon,
 		MegaphoneIcon: MegaphoneIcon,
+		CpuChipIcon: CpuChipIcon,
 	};
+
+	const sections = flattenNavigation(adminNavigation);
 
 	return (
 		<Sidebar>
@@ -206,88 +350,43 @@ export default function SideBar() {
 				</SidebarSection>
 			</SidebarHeader>
 			<SidebarBody>
-				<SidebarSection>
-					{adminNavigation.map((navItem) => {
-						if (navItem.disabled) {
-							const IconComponent = iconMap[navItem.icon];
+				<div className="space-y-1">
+					{sections.map((section, sectionIndex) => {
+						const sectionKey = section.label || `section-${sectionIndex}`;
+						const items = section.items || [];
 
-							return (
-								<SidebarItem
-									key={navItem.label}
-									disabled
-									title="Temporalmente deshabilitado"
-									className={rail ? "justify-center" : undefined}
-								>
-									{IconComponent && <IconComponent />}
-									{!rail ? (
-										<SidebarLabel>{navItem.label}</SidebarLabel>
-									) : null}
-								</SidebarItem>
-							);
-						}
-
-						if (navItem.items) {
-							const IconComponent = iconMap[navItem.icon];
-							const hasActiveChild = groupHasActiveChild(navItem.items);
-							const isMiGroups = navItem.layout === "mi-groups";
-
-							if (rail) {
-								if (isMiGroups) {
-									return (
-										<div key={navItem.label} className="space-y-1">
-											<div
-												className="mx-auto my-1 h-px w-6 bg-zinc-200 dark:bg-zinc-800"
-												aria-hidden="true"
-											/>
-											<MarketingIntelligenceNav groups={navItem.items} />
-										</div>
-									);
-								}
-
-								return (
-									<CollapsedFlyout
-										key={navItem.label}
-										label={navItem.label}
-										icon={IconComponent}
-										items={navItem.items}
-										current={hasActiveChild}
-									/>
-								);
-							}
-
-							return (
-								<MiAwareDisclosure
-									key={navItem.label}
-									navItem={navItem}
-									IconComponent={IconComponent}
-									hasActiveChild={hasActiveChild}
-									isMiGroups={isMiGroups}
-								/>
-							);
-						}
-
-						const { label, url, current, icon, badge } = navItem;
-						const IconComponent = iconMap[icon];
 						return (
-							<SidebarItem
-								href={url}
-								key={label}
-								current={current}
-								forceHoverStyle={current}
-								title={label}
-								className={rail ? "justify-center" : undefined}
-							>
-								{IconComponent && <IconComponent />}
-								{!rail ? (
-									<>
-										<SidebarLabel>{label}</SidebarLabel>
-										<NavItemBadge badge={badge} />
-									</>
+							<div key={sectionKey}>
+								{sectionIndex > 0 ? (
+									<SidebarNavDivider rail={rail} />
 								) : null}
-							</SidebarItem>
+								<SidebarNavSection label={section.label} rail={rail}>
+									{items.map((navItem) => {
+										if (navItem.items) {
+											return (
+												<NavGroup
+													key={navItem.label}
+													navItem={navItem}
+													rail={rail}
+													iconMap={iconMap}
+												/>
+											);
+										}
+
+										return (
+											<NavLeaf
+												key={navItem.label}
+												navItem={navItem}
+												rail={rail}
+												iconMap={iconMap}
+											/>
+										);
+									})}
+								</SidebarNavSection>
+							</div>
 						);
 					})}
-				</SidebarSection>
+				</div>
 			</SidebarBody>
 			<SidebarFooter className="max-lg:hidden">
 				<Dropdown>
@@ -318,17 +417,15 @@ export default function SideBar() {
 						{!rail ? <ChevronUpIcon /> : null}
 					</DropdownButton>
 					<DropdownMenu className="min-w-64" anchor="top start">
-						{adminUserNavigation.map(
-							({ label, url, current, icon }) => {
-								const IconComponent = iconMap[icon];
-								return (
-									<DropdownItem href={url} key={label}>
-										{IconComponent && <IconComponent />}
-										{label}
-									</DropdownItem>
-								);
-							},
-						)}
+						{adminUserNavigation.map(({ label, url, current, icon }) => {
+							const IconComponent = iconMap[icon];
+							return (
+								<DropdownItem href={url} key={label}>
+									{IconComponent && <IconComponent />}
+									{label}
+								</DropdownItem>
+							);
+						})}
 						<DropdownDivider />
 						<DropdownItem
 							dusk="logout"
@@ -353,6 +450,7 @@ function MiAwareDisclosure({
 	isMiGroups,
 }) {
 	const [open, setOpen] = useState(hasActiveChild);
+	const parentUrl = navItem.url || null;
 
 	useEffect(() => {
 		if (!isMiGroups) {
@@ -389,32 +487,109 @@ function MiAwareDisclosure({
 	};
 
 	if (!isMiGroups) {
+		// Parent con URL propia (p.ej. Customer Intelligence → hub).
+		if (parentUrl) {
+			return (
+				<div>
+					<div className="flex items-stretch gap-0.5">
+						<SidebarItem
+							href={parentUrl}
+							current={hasActiveChild}
+							forceHoverStyle={hasActiveChild}
+							className="min-w-0 flex-1"
+							title={navItem.label}
+						>
+							{navItem.emoji ? (
+								<span
+									className="text-sm leading-none"
+									data-slot="icon"
+									aria-hidden="true"
+								>
+									{navItem.emoji}
+								</span>
+							) : (
+								IconComponent && <IconComponent />
+							)}
+							<SidebarLabel>{navItem.label}</SidebarLabel>
+							<NavItemBadge
+								badge={navItem.badge}
+								variant={navItem.badge_variant}
+							/>
+						</SidebarItem>
+						<button
+							type="button"
+							aria-label={open ? "Cerrar submenú" : "Abrir submenú"}
+							aria-expanded={open}
+							onClick={() => setOpen((value) => !value)}
+							className="flex shrink-0 items-center justify-center rounded-lg px-1.5 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+						>
+							<ChevronDownIcon
+								className={`size-4 transform transition-transform ${open ? "-rotate-180" : ""}`}
+							/>
+						</button>
+					</div>
+					{open ? (
+						<div className="relative ml-4 space-y-0.5 pl-4">
+							<div className="absolute left-0 top-0 h-[calc(100%-1rem)] border-l border-zinc-200 dark:border-zinc-900" />
+							{navItem.items.map(
+								({ label, url, current, badge, badge_variant: badgeVariant }) => (
+									<SidebarItem
+										key={label}
+										href={url}
+										forceHoverStyle={current}
+										current={current}
+									>
+										<SidebarLabel>{label}</SidebarLabel>
+										<NavItemBadge badge={badge} variant={badgeVariant} />
+									</SidebarItem>
+								),
+							)}
+						</div>
+					) : null}
+				</div>
+			);
+		}
+
 		return (
 			<Disclosure defaultOpen={hasActiveChild}>
 				{({ open: panelOpen }) => (
 					<>
-						<DisclosureButton
-							as={SidebarItem}
-							current={hasActiveChild}
-						>
-							{IconComponent && <IconComponent />}
+						<DisclosureButton as={SidebarItem} current={hasActiveChild}>
+							{navItem.emoji ? (
+								<span
+									className="text-sm leading-none"
+									data-slot="icon"
+									aria-hidden="true"
+								>
+									{navItem.emoji}
+								</span>
+							) : (
+								IconComponent && <IconComponent />
+							)}
 							<SidebarLabel>{navItem.label}</SidebarLabel>
+							<NavItemBadge
+								badge={navItem.badge}
+								variant={navItem.badge_variant}
+							/>
 							<ChevronDownIcon
 								className={`${panelOpen ? "-rotate-180" : ""} transform transition-transform`}
 							/>
 						</DisclosureButton>
 						<DisclosurePanel className="relative ml-4 space-y-0.5 pl-4">
-							<div className="absolute left-0 top-0 h-[calc(100%-1rem)] border-l border-zinc-200 dark:border-zinc-900"></div>
-							{navItem.items.map(({ label, url, current, badge }) => (
-								<SidebarItem
-									key={label}
-									href={url}
-									forceHoverStyle={current}
-								>
-									<SidebarLabel>{label}</SidebarLabel>
-									<NavItemBadge badge={badge} />
-								</SidebarItem>
-							))}
+							<div className="absolute left-0 top-0 h-[calc(100%-1rem)] border-l border-zinc-200 dark:border-zinc-900" />
+							{navItem.items.map(
+								({ label, url, current, badge, badge_variant: badgeVariant }) => (
+									<SidebarItem
+										key={label}
+										href={url}
+										forceHoverStyle={current}
+										current={current}
+									>
+										<SidebarLabel>{label}</SidebarLabel>
+										<NavItemBadge badge={badge} variant={badgeVariant} />
+									</SidebarItem>
+								),
+							)}
 						</DisclosurePanel>
 					</>
 				)}
@@ -433,6 +608,7 @@ function MiAwareDisclosure({
 			>
 				{IconComponent && <IconComponent />}
 				<SidebarLabel>{navItem.label}</SidebarLabel>
+				<NavItemBadge badge={navItem.badge} variant={navItem.badge_variant} />
 				<ChevronDownIcon
 					data-slot="icon"
 					className={`${open ? "-rotate-180" : ""} transform transition-transform`}

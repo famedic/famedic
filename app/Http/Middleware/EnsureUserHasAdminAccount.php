@@ -27,53 +27,358 @@ class EnsureUserHasAdminAccount
                 ->actionableCountFor($request->user());
         }
 
-        $canClinicalInterpreter = $this->adminHasPermission(
-            $administrator,
-            'clinical-interpreter.manage'
-        );
+        $operationItems = array_values(array_filter([
+            $request->user()->administrator->hasPermissionTo('administrators.manage') ? [
+                'label' => 'Personal y permisos',
+                'icon' => 'UsersIcon',
+                'items' => [
+                    [
+                        'label' => 'Administradores',
+                        'url' => route('admin.administrators.index'),
+                        'current' => Route::currentRouteName() === 'admin.administrators.index' ||
+                            Route::currentRouteName() === 'admin.administrators.create' ||
+                            Route::currentRouteName() === 'admin.administrators.edit',
+                    ],
+                    [
+                        'label' => 'Roles y permisos',
+                        'url' => route('admin.roles.index'),
+                        'current' => Route::currentRouteName() === 'admin.roles.index' ||
+                            Route::currentRouteName() === 'admin.roles.create' ||
+                            Route::currentRouteName() === 'admin.roles.edit',
+                    ],
+                ],
+            ] : null,
+            [
+                'label' => 'Laboratorios',
+                'icon' => 'BeakerIcon',
+                'items' => array_values(array_filter([
+                    $request->user()->administrator->hasPermissionTo('laboratory-purchases.manage') ? [
+                        'label' => 'Pedidos',
+                        'url' => route('admin.laboratory-purchases.index'),
+                        'current' => Route::currentRouteName() === 'admin.laboratory-purchases.index' ||
+                            Route::currentRouteName() === 'admin.laboratory-purchases.chart' ||
+                            Route::currentRouteName() === 'admin.laboratory-purchases.show',
+                    ] : null,
+                    $request->user()->administrator->hasPermissionTo('laboratory-tests.manage') ? [
+                        'label' => 'Catálogo de estudios',
+                        'url' => route('admin.laboratory-tests.index'),
+                        'current' => Route::currentRouteName() === 'admin.laboratory-tests.index' ||
+                            Route::currentRouteName() === 'admin.laboratory-tests.create' ||
+                            Route::currentRouteName() === 'admin.laboratory-tests.edit',
+                    ] : null,
+                    $request->user()->administrator->laboratoryConcierge ? [
+                        'label' => 'Citas',
+                        'url' => route('admin.laboratory-appointments.index'),
+                        'current' => Route::currentRouteName() === 'admin.laboratory-appointments.index' ||
+                            Route::currentRouteName() === 'admin.laboratory-appointments.show',
+                    ] : null,
+                    $request->user()->administrator->laboratoryConcierge ? [
+                        'label' => 'Métricas de citas',
+                        'url' => route('admin.laboratory-appointments.metrics'),
+                        'current' => Route::currentRouteName() === 'admin.laboratory-appointments.metrics',
+                    ] : null,
+                    $request->user()->administrator->hasPermissionTo('laboratory-purchases.manage.vendor-payments') ? [
+                        'label' => 'Pagos a GDA',
+                        'url' => route('admin.laboratory-purchases.vendor-payments.index'),
+                        'current' => Route::currentRouteName() === 'admin.laboratory-purchases.vendor-payments.index' ||
+                            Route::currentRouteName() === 'admin.laboratory-purchases.vendor-payments.create' ||
+                            Route::currentRouteName() === 'admin.laboratory-purchases.vendor-payments.show' ||
+                            Route::currentRouteName() === 'admin.laboratory-purchases.vendor-payments.edit',
+                    ] : null,
+                    app(\App\Services\LaboratoryBilling\LaboratoryBillingAccess::class)->allows($request->user()) ? [
+                        'label' => 'Facturación',
+                        'url' => route('admin.laboratory-billing.dashboard'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-billing.'),
+                        'badge' => 'NEW',
+                        'badge_variant' => 'new',
+                    ] : null,
+                ])),
+            ],
+            [
+                'label' => 'Farmacia',
+                'icon' => 'BuildingStorefrontIcon',
+                'items' => array_values(array_filter([
+                    $request->user()->administrator->hasPermissionTo('online-pharmacy-purchases.manage') ? [
+                        'label' => 'Pedidos',
+                        'url' => route('admin.online-pharmacy-purchases.index'),
+                        'current' => Route::currentRouteName() === 'admin.online-pharmacy-purchases.index' ||
+                            Route::currentRouteName() === 'admin.online-pharmacy-purchases.show',
+                    ] : null,
+                    $request->user()->administrator->hasPermissionTo('online-pharmacy-purchases.manage.vendor-payments') ? [
+                        'label' => 'Pagos a Vitau',
+                        'url' => route('admin.online-pharmacy-purchases.vendor-payments.index'),
+                        'current' => Route::currentRouteName() === 'admin.online-pharmacy-purchases.vendor-payments.index' ||
+                            Route::currentRouteName() === 'admin.online-pharmacy-purchases.vendor-payments.create' ||
+                            Route::currentRouteName() === 'admin.online-pharmacy-purchases.vendor-payments.show' ||
+                            Route::currentRouteName() === 'admin.online-pharmacy-purchases.vendor-payments.edit',
+                    ] : null,
+                ])),
+            ],
+            $request->user()->administrator->hasPermissionTo('medical-attention-subscriptions.manage') ? [
+                'label' => 'Membresías',
+                'url' => route('admin.medical-attention-subscriptions.index'),
+                'icon' => 'HeartIcon',
+                'current' => Route::currentRouteName() === 'admin.medical-attention-subscriptions.index' ||
+                    Route::currentRouteName() === 'admin.medical-attention-subscriptions.show',
+            ] : null,
+            $request->user()->administrator->hasPermissionTo('customers.manage') ? [
+                'label' => 'Clientes',
+                'icon' => 'UserGroupIcon',
+                'items' => [
+                    [
+                        'label' => 'Todos los clientes',
+                        'url' => route('admin.customers.index'),
+                        'current' => in_array(Route::currentRouteName(), [
+                            'admin.customers.index',
+                            'admin.customers.show',
+                        ], true),
+                    ],
+                    [
+                        'label' => 'Referenciados',
+                        'url' => route('admin.customers.referrals'),
+                        'current' => Route::currentRouteName() === 'admin.customers.referrals',
+                    ],
+                ],
+            ] : null,
+            ($request->user()->administrator->hasPermissionTo('coupons.manage') || $isAuthorizer) ? [
+                'label' => 'Créditos',
+                'icon' => 'BanknotesIcon',
+                'disabled' => (bool) config('famedic.admin_coupons_navigation_disabled', false),
+                'items' => [
+                    [
+                        'label' => 'Beneficiarios',
+                        'url' => route('admin.coupons.beneficiaries.index'),
+                        'current' => Route::currentRouteName() === 'admin.coupons.beneficiaries.index'
+                            || Route::currentRouteName() === 'admin.coupons.beneficiaries.export',
+                    ],
+                    [
+                        'label' => 'Códigos promocionales',
+                        'url' => route('admin.coupons.promo-codes.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.coupons.promo-codes.'),
+                    ],
+                    ...($isAuthorizer ? [[
+                        'label' => $pendingAuthorizationsCount > 0
+                            ? "Pendientes de autorización ({$pendingAuthorizationsCount})"
+                            : 'Pendientes de autorización',
+                        'url' => route('admin.coupons.authorizations.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.coupons.authorizations.'),
+                    ]] : []),
+                    [
+                        'label' => 'Créditos',
+                        'url' => route('admin.coupons.index'),
+                        'current' => Route::currentRouteName() === 'admin.coupons.index'
+                            || Route::currentRouteName() === 'admin.coupons.create'
+                            || Route::currentRouteName() === 'admin.coupons.edit'
+                            || Route::currentRouteName() === 'admin.coupons.show'
+                            || Route::currentRouteName() === 'admin.coupons.assign'
+                            || Route::currentRouteName() === 'admin.coupons.import',
+                    ],
+                    [
+                        'label' => 'Crear crédito',
+                        'url' => route('admin.coupons.create'),
+                        'current' => Route::currentRouteName() === 'admin.coupons.create',
+                    ],
+                    [
+                        'label' => 'Configuración',
+                        'url' => route('admin.coupons.settings'),
+                        'current' => Route::currentRouteName() === 'admin.coupons.settings'
+                            && $request->query('tab') !== 'concepts',
+                    ],
+                    [
+                        'label' => 'Conceptos',
+                        'url' => route('admin.coupons.settings', ['tab' => 'concepts']),
+                        'current' => Route::currentRouteName() === 'admin.coupons.settings'
+                            && $request->query('tab') === 'concepts',
+                    ],
+                    [
+                        'label' => 'Historial',
+                        'url' => route('admin.coupons.logs'),
+                        'current' => Route::currentRouteName() === 'admin.coupons.logs',
+                    ],
+                ],
+            ] : null,
+        ]));
 
-        $iaItems = array_values(array_filter([
-            $this->adminHasPermission($administrator, 'monitoring-ai.manage') ? [
-                'label' => '💬 Asistente IA',
-                'url' => route('admin.monitoring-ai.index'),
-                'current' => str_starts_with((string) Route::currentRouteName(), 'admin.monitoring-ai'),
+        // Quitar grupos vacíos (sin items y sin url).
+        $operationItems = array_values(array_filter(
+            $operationItems,
+            fn (array $item) => ! empty($item['url']) || ! empty($item['items'])
+        ));
+
+        $currentRoute = (string) Route::currentRouteName();
+        $hubActive = str_starts_with($currentRoute, 'admin.intelligence.')
+            || str_starts_with($currentRoute, 'admin.customer-intelligence.')
+            || $currentRoute === 'admin.customers.dormant'
+            || str_starts_with($currentRoute, 'admin.activecampaign.')
+            || str_starts_with($currentRoute, 'admin.clinical-interpreter.')
+            || str_starts_with($currentRoute, 'admin.monitoring-ai.');
+
+        $canOpenHub = $this->adminHasPermission($administrator, 'customers.manage')
+            || $this->adminHasPermission($administrator, 'activecampaign.manage')
+            || $this->adminHasPermission($administrator, 'clinical-interpreter.manage')
+            || $this->adminHasPermission($administrator, 'monitoring-ai.manage')
+            || $this->adminHasPermission($administrator, 'administrators.manage');
+
+        $intelligenceItems = array_values(array_filter([
+            $canOpenHub ? [
+                'label' => 'Intelligence Hub',
+                'icon' => 'CpuChipIcon',
+                'emoji' => '🧠',
+                'badge' => 'BETA',
+                'badge_variant' => 'beta',
+                'url' => route('admin.intelligence.index'),
+                'current' => $hubActive,
             ] : null,
-            $canClinicalInterpreter ? [
-                'label' => '🩺 AI Clinical Interpreter',
-                'url' => route('admin.clinical-interpreter.index'),
-                'current' => in_array(Route::currentRouteName(), [
-                    'admin.clinical-interpreter.index',
-                    'admin.clinical-interpreter.matching',
-                    'admin.clinical-interpreter.assistant',
-                ], true),
-                'badge' => 'NEW',
+        ]));
+
+        $adminItems = array_values(array_filter([
+            $request->user()->administrator->hasPermissionTo('documentation.manage') ? [
+                'label' => 'Documentación legal',
+                'url' => route('admin.documentation'),
+                'icon' => 'BookOpenIcon',
+                'current' => Route::currentRouteName() === 'admin.documentation',
             ] : null,
-            $canClinicalInterpreter ? [
-                'label' => '📋 Clinical Orders',
-                'url' => route('admin.clinical-interpreter.orders.index'),
-                'current' => str_starts_with((string) Route::currentRouteName(), 'admin.clinical-interpreter.clinical-orders')
-                    || Route::currentRouteName() === 'admin.clinical-interpreter.orders.index',
+            $request->user()->administrator->hasPermissionTo('simulators.manage') ? [
+                'label' => 'Simuladores',
+                'icon' => 'BeakerIcon',
+                'items' => [
+                    [
+                        'label' => 'Inicio',
+                        'url' => route('admin.simulators.index'),
+                        'current' => Route::currentRouteName() === 'admin.simulators.index',
+                    ],
+                    [
+                        'label' => 'Simulador OTP',
+                        'url' => route('admin.simulators.otp'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.otp'),
+                    ],
+                    [
+                        'label' => 'Simulador de correos',
+                        'url' => route('admin.simulators.emails'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.emails'),
+                    ],
+                    [
+                        'label' => 'Simulador GDA',
+                        'url' => route('admin.simulators.gda'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.gda'),
+                    ],
+                ],
             ] : null,
-            $canClinicalInterpreter ? [
-                'label' => '📚 Historial',
-                'url' => route('admin.clinical-interpreter.history'),
-                'current' => Route::currentRouteName() === 'admin.clinical-interpreter.history',
+            [
+                'label' => 'Monitoreo',
+                'icon' => 'ClipboardDocumentListIcon',
+                'items' => array_values(array_filter([
+                    $request->user()->administrator->hasPermissionTo('logs-general.manage') ? [
+                        'label' => 'Logs generales',
+                        'url' => route('admin.logs-general.manage'),
+                        'current' => Route::currentRouteName() === 'admin.logs-general.manage',
+                    ] : null,
+                    $request->user()->administrator->hasPermissionTo('users.manage') ? [
+                        'label' => 'Usuarios',
+                        'url' => route('admin.users.index'),
+                        'current' => Route::currentRouteName() === 'admin.users.index'
+                            || Route::currentRouteName() === 'admin.users.show',
+                    ] : null,
+                    $request->user()->administrator->hasPermissionTo('view carts') ? [
+                        'label' => 'Carritos',
+                        'url' => route('admin.carts.index'),
+                        'current' => Route::currentRouteName() === 'admin.carts.index'
+                            || Route::currentRouteName() === 'admin.carts.show',
+                    ] : null,
+                    $request->user()->administrator->hasPermissionTo('efevoo-tokens.manage') ? [
+                        'label' => 'Tokens Efevoo',
+                        'url' => route('admin.efevoo-tokens.index'),
+                        'current' => Route::currentRouteName() === 'admin.efevoo-tokens.index'
+                            || Route::currentRouteName() === 'admin.efevoo-tokens.show',
+                    ] : null,
+                    $request->user()->administrator->hasPermissionTo('tax-profiles.manage') ? [
+                        'label' => 'Perfiles fiscales',
+                        'url' => route('admin.tax-profiles.index'),
+                        'current' => Route::currentRouteName() === 'admin.tax-profiles.index'
+                            || Route::currentRouteName() === 'admin.tax-profiles.show',
+                    ] : null,
+                    $request->user()->administrator->hasPermissionTo('payment-attempts.manage') ? [
+                        'label' => 'Intentos de pago',
+                        'url' => route('admin.payment-attempts.index'),
+                        'current' => Route::currentRouteName() === 'admin.payment-attempts.index'
+                            || Route::currentRouteName() === 'admin.payment-attempts.show',
+                    ] : null,
+                    $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') ? [
+                        'label' => 'Monitor notificaciones lab',
+                        'url' => route('admin.laboratory-notifications-monitor.index'),
+                        'current' => Route::currentRouteName() === 'admin.laboratory-notifications-monitor.index'
+                            || Route::currentRouteName() === 'admin.laboratory-notifications-monitor.show',
+                    ] : null,
+                    $request->user()->administrator->hasPermissionTo('view_config_monitor') ? [
+                        'label' => 'Config Monitor',
+                        'url' => route('admin.config-monitor.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.config-monitor'),
+                    ] : null,
+                ])),
+            ],
+            $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+                'label' => 'Admin Membresías',
+                'icon' => 'IdentificationIcon',
+                'items' => [
+                    [
+                        'label' => 'Murguía — dashboard',
+                        'url' => route('admin.murguia-dashboard.index'),
+                        'current' => Route::currentRouteName() === 'admin.murguia-dashboard.index',
+                    ],
+                    [
+                        'label' => 'Murguía — reportes',
+                        'url' => route('admin.murguia-reports.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia-reports'),
+                    ],
+                    [
+                        'label' => 'Murguía — conciliación',
+                        'url' => route('admin.murguia-reconciliation.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia-reconciliation'),
+                    ],
+                    [
+                        'label' => 'Murguía — monitor',
+                        'url' => route('admin.murguia-monitor.index'),
+                        'current' => in_array(Route::currentRouteName(), [
+                            'admin.murguia-monitor.index',
+                            'admin.murguia-monitor.show',
+                            'admin.murguia.upload',
+                            'admin.murguia.logs',
+                        ], true),
+                    ],
+                ],
             ] : null,
-            $canClinicalInterpreter ? [
-                'label' => '🧠 AI Learning',
-                'url' => route('admin.clinical-interpreter.learning'),
-                'current' => Route::currentRouteName() === 'admin.clinical-interpreter.learning',
+        ]));
+
+        $adminItems = array_values(array_filter(
+            $adminItems,
+            fn (array $item) => ! empty($item['url']) || ! empty($item['items'])
+        ));
+
+        $sections = array_values(array_filter([
+            [
+                'type' => 'section',
+                'label' => null,
+                'items' => [[
+                    'label' => 'Resumen',
+                    'url' => route('admin.admin'),
+                    'icon' => 'PresentationChartLineIcon',
+                    'current' => Route::currentRouteName() === 'admin.admin',
+                ]],
+            ],
+            $operationItems !== [] ? [
+                'type' => 'section',
+                'label' => 'OPERACIÓN',
+                'items' => $operationItems,
             ] : null,
-            $canClinicalInterpreter ? [
-                'label' => '📊 AI Operations Center',
-                'url' => route('admin.clinical-interpreter.operations'),
-                'current' => Route::currentRouteName() === 'admin.clinical-interpreter.operations',
-                'badge' => 'NEW',
+            $intelligenceItems !== [] ? [
+                'type' => 'section',
+                'label' => 'INTELLIGENCE',
+                'items' => $intelligenceItems,
             ] : null,
-            $canClinicalInterpreter ? [
-                'label' => '⚙ Configuración IA',
-                'url' => route('admin.clinical-interpreter.config'),
-                'current' => Route::currentRouteName() === 'admin.clinical-interpreter.config',
+            $adminItems !== [] ? [
+                'type' => 'section',
+                'label' => 'ADMINISTRACIÓN',
+                'items' => $adminItems,
             ] : null,
         ]));
 
@@ -83,323 +388,7 @@ class EnsureUserHasAdminAccount
                 'pending_actionable_count' => $pendingAuthorizationsCount,
                 'inbox_url' => $isAuthorizer ? route('admin.coupons.authorizations.index') : null,
             ],
-            'adminNavigation' => [
-                [
-                    'label' => 'Resumen',
-                    'url' => route('admin.admin'),
-                    'icon' => 'PresentationChartLineIcon',
-                    'current' => Route::currentRouteName() === 'admin.admin',
-                ],
-                ...$request->user()->administrator->hasPermissionTo('administrators.manage') ? [[
-                    'label' => 'Personal y permisos',
-                    'icon' => 'UsersIcon',
-                    'items' => [
-                        [
-                            'label' => 'Administradores',
-                            'url' => route('admin.administrators.index'),
-                            'current' => Route::currentRouteName() === 'admin.administrators.index' ||
-                                Route::currentRouteName() === 'admin.administrators.create' ||
-                                Route::currentRouteName() === 'admin.administrators.edit',
-                        ],
-                        [
-                            'label' => 'Roles y permisos',
-                            'url' => route('admin.roles.index'),
-                            'current' => Route::currentRouteName() === 'admin.roles.index' ||
-                                Route::currentRouteName() === 'admin.roles.create' ||
-                                Route::currentRouteName() === 'admin.roles.edit',
-                        ],
-                    ],
-                ]] : [],
-                [
-                    'label' => 'Laboratorios',
-                    'icon' => 'BeakerIcon',
-                    'items' => array_values(array_filter([
-                        $request->user()->administrator->hasPermissionTo('laboratory-purchases.manage') ? [
-                            'label' => 'Pedidos',
-                            'url' => route('admin.laboratory-purchases.index'),
-                            'current' => Route::currentRouteName() === 'admin.laboratory-purchases.index' ||
-                                Route::currentRouteName() === 'admin.laboratory-purchases.chart' ||
-                                Route::currentRouteName() === 'admin.laboratory-purchases.show',
-                        ] : null,
-                        $request->user()->administrator->hasPermissionTo('laboratory-tests.manage') ? [
-                            'label' => 'Catálogo de estudios',
-                            'url' => route('admin.laboratory-tests.index'),
-                            'current' => Route::currentRouteName() === 'admin.laboratory-tests.index' ||
-                                Route::currentRouteName() === 'admin.laboratory-tests.create' ||
-                                Route::currentRouteName() === 'admin.laboratory-tests.edit',
-                        ] : null,
-                        $request->user()->administrator->laboratoryConcierge ? [
-                            'label' => 'Citas',
-                            'url' => route('admin.laboratory-appointments.index'),
-                            'current' => Route::currentRouteName() === 'admin.laboratory-appointments.index' ||
-                                Route::currentRouteName() === 'admin.laboratory-appointments.show',
-                        ] : null,
-                        $request->user()->administrator->laboratoryConcierge ? [
-                            'label' => 'Métricas de citas',
-                            'url' => route('admin.laboratory-appointments.metrics'),
-                            'current' => Route::currentRouteName() === 'admin.laboratory-appointments.metrics',
-                        ] : null,
-                        $request->user()->administrator->hasPermissionTo('laboratory-purchases.manage.vendor-payments') ? [
-                            'label' => 'Pagos a GDA',
-                            'url' => route('admin.laboratory-purchases.vendor-payments.index'),
-                            'current' => Route::currentRouteName() === 'admin.laboratory-purchases.vendor-payments.index' ||
-                                Route::currentRouteName() === 'admin.laboratory-purchases.vendor-payments.create' ||
-                                Route::currentRouteName() === 'admin.laboratory-purchases.vendor-payments.show' ||
-                                Route::currentRouteName() === 'admin.laboratory-purchases.vendor-payments.edit',
-                        ] : null,
-                        app(\App\Services\LaboratoryBilling\LaboratoryBillingAccess::class)->allows($request->user()) ? [
-                            'label' => 'Facturación',
-                            'url' => route('admin.laboratory-billing.dashboard'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-billing.'),
-                            'badge' => 'NEW',
-                        ] : null,
-                    ])),
-                ],
-                [
-                    'label' => 'Farmacia',
-                    'icon' => 'BuildingStorefrontIcon',
-                    'items' => array_values(array_filter([
-                        $request->user()->administrator->hasPermissionTo('online-pharmacy-purchases.manage') ? [
-                            'label' => 'Pedidos',
-                            'url' => route('admin.online-pharmacy-purchases.index'),
-                            'current' => Route::currentRouteName() === 'admin.online-pharmacy-purchases.index' ||
-                                Route::currentRouteName() === 'admin.online-pharmacy-purchases.show',
-                        ] : null,
-                        $request->user()->administrator->hasPermissionTo('online-pharmacy-purchases.manage.vendor-payments') ? [
-                            'label' => 'Pagos a Vitau',
-                            'url' => route('admin.online-pharmacy-purchases.vendor-payments.index'),
-                            'current' => Route::currentRouteName() === 'admin.online-pharmacy-purchases.vendor-payments.index' ||
-                                Route::currentRouteName() === 'admin.online-pharmacy-purchases.vendor-payments.create' ||
-                                Route::currentRouteName() === 'admin.online-pharmacy-purchases.vendor-payments.show' ||
-                                Route::currentRouteName() === 'admin.online-pharmacy-purchases.vendor-payments.edit',
-                        ] : null,
-                    ])),
-                ],
-                ...$request->user()->administrator->hasPermissionTo('medical-attention-subscriptions.manage') ? [[
-                    'label' => 'Membresías médicas',
-                    'url' => route('admin.medical-attention-subscriptions.index'),
-                    'icon' => 'HeartIcon',
-                    'current' => Route::currentRouteName() === 'admin.medical-attention-subscriptions.index' ||
-                        Route::currentRouteName() === 'admin.medical-attention-subscriptions.show',
-                ]] : [],
-                ...$request->user()->administrator->hasPermissionTo('customers.manage') ? [[
-                    'label' => 'Clientes',
-                    'url' => route('admin.customers.index'),
-                    'icon' => 'UserGroupIcon',
-                    'current' => Route::currentRouteName() === 'admin.customers.index' ||
-                        Route::currentRouteName() === 'admin.customers.show',
-                ]] : [],
-                ...($request->user()->administrator->hasPermissionTo('coupons.manage') || $isAuthorizer) ? [[
-                    'label' => 'Créditos a favor',
-                    'icon' => 'BanknotesIcon',
-                    'disabled' => (bool) config('famedic.admin_coupons_navigation_disabled', false),
-                    'items' => [
-                        [
-                            'label' => 'Beneficiarios',
-                            'url' => route('admin.coupons.beneficiaries.index'),
-                            'current' => Route::currentRouteName() === 'admin.coupons.beneficiaries.index'
-                                || Route::currentRouteName() === 'admin.coupons.beneficiaries.export',
-                        ],
-                        [
-                            'label' => 'Códigos promocionales',
-                            'url' => route('admin.coupons.promo-codes.index'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.coupons.promo-codes.'),
-                        ],
-                        ...($isAuthorizer ? [[
-                            'label' => $pendingAuthorizationsCount > 0
-                                ? "Pendientes de autorización ({$pendingAuthorizationsCount})"
-                                : 'Pendientes de autorización',
-                            'url' => route('admin.coupons.authorizations.index'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.coupons.authorizations.'),
-                        ]] : []),
-                        [
-                            'label' => 'Créditos',
-                            'url' => route('admin.coupons.index'),
-                            'current' => Route::currentRouteName() === 'admin.coupons.index'
-                                || Route::currentRouteName() === 'admin.coupons.create'
-                                || Route::currentRouteName() === 'admin.coupons.edit'
-                                || Route::currentRouteName() === 'admin.coupons.show'
-                                || Route::currentRouteName() === 'admin.coupons.assign'
-                                || Route::currentRouteName() === 'admin.coupons.import',
-                        ],
-                        [
-                            'label' => 'Crear crédito',
-                            'url' => route('admin.coupons.create'),
-                            'current' => Route::currentRouteName() === 'admin.coupons.create',
-                        ],
-                        [
-                            'label' => 'Configuración',
-                            'url' => route('admin.coupons.settings'),
-                            'current' => Route::currentRouteName() === 'admin.coupons.settings'
-                                && $request->query('tab') !== 'concepts',
-                        ],
-                        [
-                            'label' => 'Conceptos',
-                            'url' => route('admin.coupons.settings', ['tab' => 'concepts']),
-                            'current' => Route::currentRouteName() === 'admin.coupons.settings'
-                                && $request->query('tab') === 'concepts',
-                        ],
-                        [
-                            'label' => 'Historial',
-                            'url' => route('admin.coupons.logs'),
-                            'current' => Route::currentRouteName() === 'admin.coupons.logs',
-                        ],
-                    ],
-                ]] : [],
-                ...$request->user()->administrator->hasPermissionTo('documentation.manage') ? [[
-                    'label' => 'Documentación legal',
-                    'url' => route('admin.documentation'),
-                    'icon' => 'BookOpenIcon',
-                    'current' => Route::currentRouteName() === 'admin.documentation',
-                ]] : [],
-                ...$request->user()->administrator->hasPermissionTo('simulators.manage') ? [[
-                    'label' => 'Simuladores',
-                    'icon' => 'BeakerIcon',
-                    'items' => [
-                        [
-                            'label' => 'Inicio',
-                            'url' => route('admin.simulators.index'),
-                            'current' => Route::currentRouteName() === 'admin.simulators.index',
-                        ],
-                        [
-                            'label' => 'Simulador OTP',
-                            'url' => route('admin.simulators.otp'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.otp'),
-                        ],
-                        [
-                            'label' => 'Simulador de correos',
-                            'url' => route('admin.simulators.emails'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.emails'),
-                        ],
-                        [
-                            'label' => 'Simulador GDA',
-                            'url' => route('admin.simulators.gda'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.gda'),
-                        ],
-                    ],
-                ]] : [],
-                // Monitoreo y herramientas internas solo para administradores
-                [
-                    'label' => 'Monitoreo',
-                    'icon' => 'ClipboardDocumentListIcon',
-                    'items' => array_values(array_filter([
-                        $request->user()->administrator->hasPermissionTo('logs-general.manage') ? [
-                            'label' => 'Logs generales',
-                            'url' => route('admin.logs-general.manage'),
-                            'current' => Route::currentRouteName() === 'admin.logs-general.manage',
-                        ] : null,
-                        $request->user()->administrator->hasPermissionTo('users.manage') ? [
-                            'label' => 'Usuarios',
-                            'url' => route('admin.users.index'),
-                            'current' => Route::currentRouteName() === 'admin.users.index'
-                                || Route::currentRouteName() === 'admin.users.show',
-                        ] : null,
-                        $request->user()->administrator->hasPermissionTo('view carts') ? [
-                            'label' => 'Carritos',
-                            'url' => route('admin.carts.index'),
-                            'current' => Route::currentRouteName() === 'admin.carts.index'
-                                || Route::currentRouteName() === 'admin.carts.show',
-                        ] : null,
-                        $request->user()->administrator->hasPermissionTo('efevoo-tokens.manage') ? [
-                            'label' => 'Tokens Efevoo',
-                            'url' => route('admin.efevoo-tokens.index'),
-                            'current' => Route::currentRouteName() === 'admin.efevoo-tokens.index'
-                                || Route::currentRouteName() === 'admin.efevoo-tokens.show',
-                        ] : null,
-                        $request->user()->administrator->hasPermissionTo('tax-profiles.manage') ? [
-                            'label' => 'Perfiles fiscales',
-                            'url' => route('admin.tax-profiles.index'),
-                            'current' => Route::currentRouteName() === 'admin.tax-profiles.index'
-                                || Route::currentRouteName() === 'admin.tax-profiles.show',
-                        ] : null,
-                        $request->user()->administrator->hasPermissionTo('payment-attempts.manage') ? [
-                            'label' => 'Intentos de pago',
-                            'url' => route('admin.payment-attempts.index'),
-                            'current' => Route::currentRouteName() === 'admin.payment-attempts.index'
-                                || Route::currentRouteName() === 'admin.payment-attempts.show',
-                        ] : null,
-                        $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') ? [
-                            'label' => 'Monitor notificaciones lab',
-                            'url' => route('admin.laboratory-notifications-monitor.index'),
-                            'current' => Route::currentRouteName() === 'admin.laboratory-notifications-monitor.index'
-                                || Route::currentRouteName() === 'admin.laboratory-notifications-monitor.show',
-                        ] : null,
-                        $request->user()->administrator->hasPermissionTo('view_config_monitor') ? [
-                            'label' => 'Config Monitor',
-                            'url' => route('admin.config-monitor.index'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.config-monitor'),
-                        ] : null,
-                    ])),
-                ],
-                ...$request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [[
-                    'label' => 'Admin Membresías',
-                    'icon' => 'IdentificationIcon',
-                    'items' => [
-                        [
-                            'label' => 'Murguía — dashboard',
-                            'url' => route('admin.murguia-dashboard.index'),
-                            'current' => Route::currentRouteName() === 'admin.murguia-dashboard.index',
-                        ],
-                        [
-                            'label' => 'Murguía — reportes',
-                            'url' => route('admin.murguia-reports.index'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia-reports'),
-                        ],
-                        [
-                            'label' => 'Murguía — conciliación',
-                            'url' => route('admin.murguia-reconciliation.index'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.murguia-reconciliation'),
-                        ],
-                        [
-                            'label' => 'Murguía — monitor',
-                            'url' => route('admin.murguia-monitor.index'),
-                            'current' => in_array(Route::currentRouteName(), [
-                                'admin.murguia-monitor.index',
-                                'admin.murguia-monitor.show',
-                                'admin.murguia.upload',
-                                'admin.murguia.logs',
-                            ], true),
-                        ],
-                    ],
-                ]] : [],
-                ...($iaItems !== [] ? [[
-                    'label' => 'IA',
-                    'icon' => 'SparklesIcon',
-                    'items' => $iaItems,
-                ]] : []),
-                ...$request->user()->administrator->hasPermissionTo('activecampaign.manage') ? [[
-                    'label' => 'Marketing Intelligence',
-                    'icon' => 'MegaphoneIcon',
-                    'layout' => 'mi-groups',
-                    'items' => collect(\App\Support\ActiveCampaign\MarketingIntelligenceCatalog::menuGroups())
-                        ->map(function (array $group) {
-                            $items = collect($group['items'] ?? [])
-                                ->map(function (array $item) {
-                                    $routeName = $item['route'];
-
-                                    return [
-                                        'label' => $item['label'],
-                                        'url' => route($routeName),
-                                        'current' => Route::currentRouteName() === $routeName
-                                            || ($item['key'] === 'contacts' && Route::currentRouteName() === 'admin.activecampaign.patient-360'),
-                                    ];
-                                })
-                                ->values()
-                                ->all();
-
-                            return [
-                                'key' => $group['key'],
-                                'label' => $group['label'],
-                                'icon' => $group['icon'] ?? null,
-                                'count' => count($items),
-                                'current' => collect($items)->contains(fn (array $item) => (bool) ($item['current'] ?? false)),
-                                'items' => $items,
-                            ];
-                        })
-                        ->values()
-                        ->all(),
-                ]] : [],
-            ],
+            'adminNavigation' => $sections,
             'adminUserNavigation' => [
                 [
                     'label' => 'Regresar a Famedic',

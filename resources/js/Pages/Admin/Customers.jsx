@@ -185,6 +185,14 @@ export default function Customers({ customers, chart, filters, canExport }) {
 					/>
 					<div className="flex items-center justify-end gap-2">
 						<Button
+							href={route("admin.customers.dormant")}
+							outline
+							className="w-full"
+						>
+							Clientes Dormidos
+							<PresentationChartLineIcon className="size-4" />
+						</Button>
+						<Button
 							href={route("admin.customers.referrals")}
 							outline
 							className="w-full"

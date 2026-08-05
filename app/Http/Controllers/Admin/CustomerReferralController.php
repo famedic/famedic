@@ -4,109 +4,115 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\Customers\IndexCustomerReferralRequest;
-use App\Models\FamilyAccount;
-use App\Models\OdessaAfiliateAccount;
 use App\Models\User;
-use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
+use App\Services\CustomerIntelligence\ReferralIntelligenceAnalyticsService;
+use App\Services\CustomerIntelligence\ReferralIntelligenceRepository;
+use App\Support\CustomerIntelligence\ReferralIntelligenceFilter;
+use Illuminate\Http\Response as HttpResponse;
 use Inertia\Inertia;
+use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CustomerReferralController extends Controller
 {
-    public function index(IndexCustomerReferralRequest $request)
+    public function __construct(
+        private ReferralIntelligenceAnalyticsService $analytics,
+        private ReferralIntelligenceRepository $repository,
+    ) {
+    }
+
+    public function index(IndexCustomerReferralRequest $request): Response|StreamedResponse|HttpResponse
     {
-        $filters = collect($request->safe()->only('search', 'start_date', 'end_date'))->filter()->all();
+        $filter = ReferralIntelligenceFilter::fromRequest($request);
 
-        $referralDateFilter = function ($query) use ($filters) {
-            $this->applyReferralDateFilters($query, $filters);
-        };
+        if ($request->filled('export')) {
+            return $this->export($filter);
+        }
 
-        $invitersQuery = User::query()
-            ->whereHas('referrals', $referralDateFilter)
-            ->when($filters['search'] ?? null, function (Builder $query, string $search) {
-                $query->where(function (Builder $q) use ($search) {
-                    $q->where('name', 'like', '%'.$search.'%')
-                        ->orWhere('paternal_lastname', 'like', '%'.$search.'%')
-                        ->orWhere('maternal_lastname', 'like', '%'.$search.'%')
-                        ->orWhere('email', 'like', '%'.$search.'%')
-                        ->orWhere('phone', 'like', '%'.$search.'%');
-                });
-            })
-            ->withCount(['referrals' => $referralDateFilter])
-            ->with([
-                'customer.user',
-                'customer.customerable',
-                'referrals' => function ($query) use ($referralDateFilter) {
-                    $referralDateFilter($query);
-                    $query->with(['customer.user', 'customer.customerable'])->latest();
-                },
-            ])
-            ->orderByDesc('referrals_count')
-            ->orderByDesc('id');
+        $only = collect(explode(',', (string) $request->header('X-Inertia-Partial-Data')))
+            ->map(fn (string $value) => trim($value))
+            ->filter()
+            ->values();
 
-        $totalReferralsQuery = User::query()->whereNotNull('referred_by');
-        $referralDateFilter($totalReferralsQuery);
-        $totalReferrals = $totalReferralsQuery->count();
+        $drawerOnly = $only->count() === 1 && $only->first() === 'drawer';
 
-        $inviters = $invitersQuery
-            ->paginate(15)
-            ->withQueryString();
-
-        $inviters->getCollection()->each(function (User $inviter) {
-            if ($inviter->customer) {
-                $this->loadCustomerableRelations($inviter->customer);
+        $drawer = null;
+        if ($filter->drawerUserId) {
+            $user = User::query()->find($filter->drawerUserId);
+            if ($user) {
+                $drawer = $this->repository->inviterDrawer($user, $filter);
             }
-
-            $inviter->referrals->each(function (User $referral) {
-                if ($referral->customer) {
-                    $this->loadCustomerableRelations($referral->customer);
-                }
-            });
-        });
-
-        if (! empty($filters['start_date'])) {
-            $filters['formatted_start_date'] = Carbon::parse($filters['start_date'], 'America/Monterrey')->isoFormat('MMM D, Y');
         }
 
-        if (! empty($filters['end_date'])) {
-            $filters['formatted_end_date'] = Carbon::parse($filters['end_date'], 'America/Monterrey')->isoFormat('MMM D, Y');
+        if ($drawerOnly) {
+            return Inertia::render('Admin/CustomerReferrals', [
+                'drawer' => $drawer,
+            ]);
         }
+
+        $payload = $this->analytics->build($filter);
+        $inviters = $this->repository->paginateInviters($filter);
 
         return Inertia::render('Admin/CustomerReferrals', [
+            'filters' => $filter->toArray(),
+            'filterOptions' => $this->repository->filterOptions(),
+            'kpis' => $payload['kpis'],
+            'evolution' => $payload['evolution'],
+            'topInviters' => $payload['top_inviters'],
+            'statusBreakdown' => $payload['status_breakdown'],
+            'leaderboards' => $payload['leaderboards'],
+            'marketingInsights' => $payload['marketing_insights'],
+            'aiInsights' => $payload['ai_insights'],
+            'automations' => $payload['automations'],
+            'performance' => $payload['performance'],
+            'compare' => $payload['compare'],
+            'meta' => $payload['meta'],
             'inviters' => $inviters,
-            'filters' => $filters,
-            'summary' => [
-                'inviters_count' => $inviters->total(),
-                'referrals_count' => $totalReferrals,
-            ],
+            'drawer' => $drawer,
+            'customersIndexUrl' => route('admin.customers.index'),
+            'hubUrl' => route('admin.customer-intelligence.index'),
+            'canExport' => true,
         ]);
     }
 
-    private function applyReferralDateFilters($query, array $filters): void
+    private function export(ReferralIntelligenceFilter $filter): StreamedResponse
     {
-        if (! empty($filters['start_date'])) {
-            $query->where(
-                'created_at',
-                '>=',
-                Carbon::parse($filters['start_date'], 'America/Monterrey')->startOfDay()
-            );
-        }
+        $rows = $this->repository->topInviters($filter, 500);
+        $filename = 'referral-intelligence-'.now('America/Monterrey')->format('Ymd-His').'.csv';
 
-        if (! empty($filters['end_date'])) {
-            $query->where(
-                'created_at',
-                '<=',
-                Carbon::parse($filters['end_date'], 'America/Monterrey')->endOfDay()
-            );
-        }
-    }
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, [
+                'Invitador',
+                'Email',
+                'Empresa',
+                'Referidos',
+                'Compradores',
+                'Conversion %',
+                'Ingresos MXN',
+                'Creditos MXN',
+                'Nivel',
+                'Ultima invitacion',
+            ]);
 
-    private function loadCustomerableRelations($customer): void
-    {
-        if ($customer->customerable_type === OdessaAfiliateAccount::class) {
-            $customer->customerable?->load('odessaAfiliatedCompany');
-        } elseif ($customer->customerable_type === FamilyAccount::class) {
-            $customer->customerable?->load('parentCustomer.user');
-        }
+            foreach ($rows as $row) {
+                fputcsv($out, [
+                    $row['name'] ?? '',
+                    $row['email'] ?? '',
+                    $row['company'] ?? '',
+                    $row['referrals'] ?? 0,
+                    $row['buyers'] ?? 0,
+                    $row['conversion'] ?? 0,
+                    round(($row['revenue_cents'] ?? 0) / 100, 2),
+                    round(($row['credits_cents'] ?? 0) / 100, 2),
+                    $row['level']['label'] ?? '',
+                    $row['last_referral_at'] ?? '',
+                ]);
+            }
+
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
 }

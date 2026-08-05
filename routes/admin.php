@@ -77,9 +77,34 @@ Route::prefix('admin')->middleware([
 ])->group(function () {
     Route::name('admin.')->group(function () {
         Route::get('admin', AdminController::class)->name('admin');
+        Route::prefix('intelligence')->name('intelligence.')->group(function () {
+            Route::get('/', \App\Http\Controllers\Admin\Intelligence\IntelligenceHubController::class)
+                ->name('index');
+            Route::get('{suite}', \App\Http\Controllers\Admin\Intelligence\IntelligenceSuiteController::class)
+                ->where('suite', 'customer|marketing|executive|business|ai-operations|operations|governance')
+                ->name('suite');
+        });
         Route::resource('administrators', AdministratorController::class)->except(['show']);
         Route::post('administrators/export', ExportAdministratorsController::class)->name('administrators.export');
         Route::get('customers/referrals', [CustomerReferralController::class, 'index'])->name('customers.referrals');
+        Route::get('customers/dormant', [\App\Http\Controllers\Admin\CustomerIntelligence\DormantCustomersController::class, 'index'])
+            ->name('customers.dormant');
+        Route::prefix('customer-intelligence')->name('customer-intelligence.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\CustomerIntelligence\CustomerIntelligenceHubController::class, '__invoke'])
+                ->name('index');
+            Route::get('customer-journey', [\App\Http\Controllers\Admin\CustomerIntelligence\CustomerJourneyController::class, 'index'])
+                ->name('customer-journey');
+            Route::get('customer-journey/data', [\App\Http\Controllers\Admin\CustomerIntelligence\CustomerJourneyController::class, 'data'])
+                ->name('customer-journey.data');
+            Route::get('cohorts', [\App\Http\Controllers\Admin\CustomerIntelligence\CohortsController::class, 'index'])
+                ->name('cohorts');
+            Route::get('cohorts/data', [\App\Http\Controllers\Admin\CustomerIntelligence\CohortsController::class, 'data'])
+                ->name('cohorts.data');
+            Route::get('customer-health', [\App\Http\Controllers\Admin\CustomerIntelligence\CustomerHealthController::class, 'index'])
+                ->name('customer-health');
+            Route::get('customer-health/data', [\App\Http\Controllers\Admin\CustomerIntelligence\CustomerHealthController::class, 'data'])
+                ->name('customer-health.data');
+        });
         Route::resource('customers', CustomerController::class)->only(['index', 'show', 'destroy']);
         Route::post('customers/export', ExportCustomersController::class)->name('customers.export');
         Route::patch('users/{user}', [UserController::class, 'update'])->name('users.update');
