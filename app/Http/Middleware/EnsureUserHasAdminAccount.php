@@ -7,6 +7,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use Spatie\Permission\Exceptions\PermissionDoesNotExist;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureUserHasAdminAccount
@@ -25,6 +26,56 @@ class EnsureUserHasAdminAccount
             $pendingAuthorizationsCount = app(CouponAuthorizationInboxService::class)
                 ->actionableCountFor($request->user());
         }
+
+        $canClinicalInterpreter = $this->adminHasPermission(
+            $administrator,
+            'clinical-interpreter.manage'
+        );
+
+        $iaItems = array_values(array_filter([
+            $this->adminHasPermission($administrator, 'monitoring-ai.manage') ? [
+                'label' => '💬 Asistente IA',
+                'url' => route('admin.monitoring-ai.index'),
+                'current' => str_starts_with((string) Route::currentRouteName(), 'admin.monitoring-ai'),
+            ] : null,
+            $canClinicalInterpreter ? [
+                'label' => '🩺 AI Clinical Interpreter',
+                'url' => route('admin.clinical-interpreter.index'),
+                'current' => in_array(Route::currentRouteName(), [
+                    'admin.clinical-interpreter.index',
+                    'admin.clinical-interpreter.matching',
+                    'admin.clinical-interpreter.assistant',
+                ], true),
+                'badge' => 'NEW',
+            ] : null,
+            $canClinicalInterpreter ? [
+                'label' => '📋 Clinical Orders',
+                'url' => route('admin.clinical-interpreter.orders.index'),
+                'current' => str_starts_with((string) Route::currentRouteName(), 'admin.clinical-interpreter.clinical-orders')
+                    || Route::currentRouteName() === 'admin.clinical-interpreter.orders.index',
+            ] : null,
+            $canClinicalInterpreter ? [
+                'label' => '📚 Historial',
+                'url' => route('admin.clinical-interpreter.history'),
+                'current' => Route::currentRouteName() === 'admin.clinical-interpreter.history',
+            ] : null,
+            $canClinicalInterpreter ? [
+                'label' => '🧠 AI Learning',
+                'url' => route('admin.clinical-interpreter.learning'),
+                'current' => Route::currentRouteName() === 'admin.clinical-interpreter.learning',
+            ] : null,
+            $canClinicalInterpreter ? [
+                'label' => '📊 AI Operations Center',
+                'url' => route('admin.clinical-interpreter.operations'),
+                'current' => Route::currentRouteName() === 'admin.clinical-interpreter.operations',
+                'badge' => 'NEW',
+            ] : null,
+            $canClinicalInterpreter ? [
+                'label' => '⚙ Configuración IA',
+                'url' => route('admin.clinical-interpreter.config'),
+                'current' => Route::currentRouteName() === 'admin.clinical-interpreter.config',
+            ] : null,
+        ]));
 
         Inertia::share([
             'couponAuthorizerNav' => [
@@ -311,17 +362,11 @@ class EnsureUserHasAdminAccount
                         ],
                     ],
                 ]] : [],
-                ...$request->user()->administrator->hasPermissionTo('monitoring-ai.manage') ? [[
+                ...($iaItems !== [] ? [[
                     'label' => 'IA',
                     'icon' => 'SparklesIcon',
-                    'items' => [
-                        [
-                            'label' => 'Asistente IA',
-                            'url' => route('admin.monitoring-ai.index'),
-                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.monitoring-ai'),
-                        ],
-                    ],
-                ]] : [],
+                    'items' => $iaItems,
+                ]] : []),
                 ...$request->user()->administrator->hasPermissionTo('activecampaign.manage') ? [[
                     'label' => 'Marketing Intelligence',
                     'icon' => 'MegaphoneIcon',
@@ -366,5 +411,14 @@ class EnsureUserHasAdminAccount
         ]);
 
         return $next($request);
+    }
+
+    private function adminHasPermission(mixed $administrator, string $permission): bool
+    {
+        try {
+            return $administrator->hasPermissionTo($permission);
+        } catch (PermissionDoesNotExist) {
+            return false;
+        }
     }
 }

@@ -11,6 +11,10 @@ use App\Models\LaboratoryCheckoutDraft;
 
 class PrepareLaboratoryCheckoutPaymentLinkAction
 {
+    public function __construct(
+        private PrepareCustomerLaboratoryCheckoutLinkAction $prepareCustomerCheckoutLink,
+    ) {}
+
     public function __invoke(LaboratoryAppointment $appointment): string
     {
         $appointment->loadMissing(['customer.contacts', 'laboratoryStore']);
@@ -25,32 +29,12 @@ class PrepareLaboratoryCheckoutPaymentLinkAction
 
         $contactId = $this->resolveContactId($customer, $appointment, $existingDraft);
 
-        $draft = LaboratoryCheckoutDraft::query()->updateOrCreate(
-            [
-                'customer_id' => $customer->id,
-                'laboratory_brand' => $brand,
-            ],
-            [
-                'contact_id' => $contactId,
-                'address_id' => $existingDraft?->address_id,
-                'payment_method' => $existingDraft?->payment_method,
-                'coupon_id' => $existingDraft?->coupon_id,
-                'checkout_step' => 'confirmation',
-            ],
+        return ($this->prepareCustomerCheckoutLink)(
+            customer: $customer,
+            brand: $brand,
+            contactId: $contactId,
+            checkoutStep: 'confirmation',
         );
-
-        $query = array_filter([
-            'step' => 'confirmation',
-            'contact' => $contactId,
-            'address' => $draft->address_id,
-            'payment_method' => $draft->payment_method,
-            'coupon_id' => $draft->coupon_id,
-        ], fn ($value) => $value !== null && $value !== '');
-
-        return route('laboratory.checkout', [
-            'laboratory_brand' => $brand,
-            ...$query,
-        ]);
     }
 
     private function resolveContactId(

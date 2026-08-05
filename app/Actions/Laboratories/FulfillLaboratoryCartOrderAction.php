@@ -7,6 +7,7 @@ use App\Models\Address;
 use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\LaboratoryAppointment;
+use App\Models\LaboratoryCheckoutDraft;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryPurchaseItem;
 use App\Models\Transaction;
@@ -49,6 +50,8 @@ class FulfillLaboratoryCartOrderAction
         ?string $cartHash = null,
     ): LaboratoryPurchase {
         DB::beginTransaction();
+
+        $clinicalOrderUuid = null;
 
         try {
             $laboratoryPurchase = $this->createLaboratoryPurchase(
@@ -119,6 +122,12 @@ class FulfillLaboratoryCartOrderAction
             }
 
             $this->syncMonitoringCartService->markLaboratoryCartCompleted($customer);
+
+            $clinicalOrderUuid = LaboratoryCheckoutDraft::query()
+                ->where('customer_id', $customer->id)
+                ->where('laboratory_brand', $laboratoryBrand)
+                ->value('clinical_order_uuid');
+
             $this->syncLaboratoryCheckoutDraftAction->clearForCustomer($customer, $laboratoryBrand);
             $this->clearCart($customer);
 
@@ -126,6 +135,25 @@ class FulfillLaboratoryCartOrderAction
         } catch (\Throwable $th) {
             DB::rollBack();
             throw $th;
+        }
+
+        if (is_string($clinicalOrderUuid) && $clinicalOrderUuid !== '') {
+            try {
+                $clinicalOrders = app(\App\Services\ClinicalOrder\ClinicalOrderService::class);
+                $clinicalOrder = $clinicalOrders->findByUuid($clinicalOrderUuid);
+                if ($clinicalOrder) {
+                    $clinicalOrders->completeFromLaboratoryPurchase(
+                        $clinicalOrder,
+                        (int) $laboratoryPurchase->id,
+                    );
+                }
+            } catch (\Throwable $e) {
+                logger()->warning('clinical_interpreter.purchase_link_failed', [
+                    'clinical_order_uuid' => $clinicalOrderUuid,
+                    'purchase_id' => $laboratoryPurchase->id,
+                    'message' => $e->getMessage(),
+                ]);
+            }
         }
 
         $laboratoryPurchase->customer->user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));

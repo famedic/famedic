@@ -42,6 +42,7 @@ use App\Http\Controllers\Admin\MurguiaMonitorController;
 use App\Http\Controllers\Admin\MurguiaReconciliationController;
 use App\Http\Controllers\Admin\MurguiaReportController;
 use App\Http\Controllers\Admin\MonitoringAiController;
+use App\Http\Controllers\Admin\ClinicalInterpreterController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\DevAssistanceRequestController as OnlinePharmacyDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\InvoiceController as OnlinePharmacyPurchasesInvoiceController;
@@ -181,6 +182,33 @@ Route::prefix('admin')->middleware([
         // Asistente IA de monitoreo
         Route::get('monitoring-ai', [MonitoringAiController::class, 'index'])->name('monitoring-ai.index');
         Route::post('monitoring-ai/ask', [MonitoringAiController::class, 'ask'])->name('monitoring-ai.ask');
+
+        // AI Clinical Interpreter · producto navegable
+        Route::prefix('clinical-interpreter')->name('clinical-interpreter.')->group(function () {
+            Route::get('/', [ClinicalInterpreterController::class, 'index'])->name('index');
+            Route::get('/history', [ClinicalInterpreterController::class, 'history'])->name('history');
+            Route::get('/orders', [ClinicalInterpreterController::class, 'ordersIndex'])->name('orders.index');
+            Route::get('/learning', [ClinicalInterpreterController::class, 'learning'])->name('learning');
+            Route::get('/config', [ClinicalInterpreterController::class, 'config'])->name('config');
+            Route::get('/operations', [ClinicalInterpreterController::class, 'operations'])->name('operations');
+
+            Route::get('/assistant', [ClinicalInterpreterController::class, 'assistant'])->name('assistant');
+            Route::get('/matching', [ClinicalInterpreterController::class, 'matching'])->name('matching');
+            Route::post('/interpret', [ClinicalInterpreterController::class, 'interpret'])
+                ->middleware('throttle:clinical-interpreter-interpret')
+                ->name('interpret');
+            Route::get('/catalog-search', [ClinicalInterpreterController::class, 'searchCatalog'])->name('catalog-search');
+            Route::post('/learning-suggestions', [ClinicalInterpreterController::class, 'recordLearning'])->name('learning-suggestions.store');
+            Route::post('/commercial/proposal', [ClinicalInterpreterController::class, 'commercialProposal'])->name('commercial.proposal');
+            Route::post('/commercial/draft', [ClinicalInterpreterController::class, 'commercialDraft'])->name('commercial.draft');
+            Route::post('/commercial/quote', [ClinicalInterpreterController::class, 'commercialQuote'])->name('commercial.quote');
+            Route::post('/commercial/cart', [ClinicalInterpreterController::class, 'commercialCart'])->name('commercial.cart');
+            Route::get('/customers/search', [ClinicalInterpreterController::class, 'searchCustomers'])->name('customers.search');
+            Route::post('/clinical-orders', [ClinicalInterpreterController::class, 'storeClinicalOrder'])->name('clinical-orders.store');
+            Route::get('/clinical-orders/{clinicalOrder}', [ClinicalInterpreterController::class, 'showClinicalOrder'])->name('clinical-orders.show');
+            Route::post('/clinical-orders/{clinicalOrder}/quote', [ClinicalInterpreterController::class, 'clinicalOrderQuote'])->name('clinical-orders.quote');
+            Route::post('/clinical-orders/{clinicalOrder}/cart', [ClinicalInterpreterController::class, 'clinicalOrderCart'])->name('clinical-orders.cart');
+        });
 
         // Tokens de Efevoo
         Route::resource('efevoo-tokens', EfevooTokenController::class)->only(['index', 'show']);

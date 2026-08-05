@@ -9,6 +9,16 @@ use App\Listeners\ApplyMailSafetyPolicy;
 use App\Listeners\LinkPendingCouponBeneficiaries;
 use App\Services\ConstanciaFiscalService;
 use App\Services\Tracking\Tracking;
+use App\Services\ClinicalMatching\Catalog\CatalogAdapterInterface;
+use App\Services\ClinicalMatching\Catalog\CompositeCatalogAdapter;
+use App\Services\ClinicalMatching\Catalog\LaboratoryCatalogAdapter;
+use App\Services\ClinicalMatching\Catalog\NullMedicationCatalogAdapter;
+use App\Services\DocumentInterpretation\DocumentInterpreterInterface;
+use App\Services\DocumentInterpretation\OpenAIVisionInterpreter;
+use App\Services\DocumentInterpretation\Prompts\FilePromptRepository;
+use App\Services\DocumentInterpretation\Prompts\PromptRepositoryInterface;
+use App\Services\ClinicalLearning\LearningSuggestionRecorder;
+use App\Services\ClinicalLearning\LearningSuggestionRecorderInterface;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -55,6 +65,17 @@ class AppServiceProvider extends ServiceProvider
             return new ConstanciaFiscalService();
         });
 
+        $this->app->singleton(CatalogAdapterInterface::class, function ($app) {
+            return new CompositeCatalogAdapter([
+                $app->make(LaboratoryCatalogAdapter::class),
+                $app->make(NullMedicationCatalogAdapter::class),
+            ]);
+        });
+
+        $this->app->singleton(PromptRepositoryInterface::class, FilePromptRepository::class);
+        $this->app->bind(DocumentInterpreterInterface::class, OpenAIVisionInterpreter::class);
+        $this->app->bind(LearningSuggestionRecorderInterface::class, LearningSuggestionRecorder::class);
+
         $this->app->register(\App\Providers\EfevooPayServiceProvider::class);
         $this->app->register(\App\Providers\ActiveCampaignServiceProvider::class);
 
@@ -85,6 +106,10 @@ class AppServiceProvider extends ServiceProvider
     {
         RateLimiter::for('tax-profile-extract', function (Request $request) {
             return Limit::perMinute(5)->by((string) ($request->user()?->id ?: $request->ip()));
+        });
+
+        RateLimiter::for('clinical-interpreter-interpret', function (Request $request) {
+            return Limit::perMinute(8)->by((string) ($request->user()?->id ?: $request->ip()));
         });
 
         Event::listen(Verified::class, LinkPendingCouponBeneficiaries::class);
