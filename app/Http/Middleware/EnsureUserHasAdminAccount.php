@@ -211,6 +211,7 @@ class EnsureUserHasAdminAccount
             || str_starts_with($currentRoute, 'admin.customer-intelligence.')
             || $currentRoute === 'admin.customers.dormant'
             || str_starts_with($currentRoute, 'admin.activecampaign.')
+            || str_starts_with($currentRoute, 'admin.integrations.')
             || str_starts_with($currentRoute, 'admin.clinical-interpreter.')
             || str_starts_with($currentRoute, 'admin.monitoring-ai.');
 
@@ -357,6 +358,15 @@ class EnsureUserHasAdminAccount
             fn (array $item) => ! empty($item['url']) || ! empty($item['items'])
         ));
 
+        $integrationsItems = array_values(array_filter([
+            $this->adminHasPermission($administrator, 'activecampaign.manage') ? [
+                'label' => 'ActiveCampaign',
+                'url' => route('admin.integrations.activecampaign'),
+                'icon' => 'SignalIcon',
+                'current' => str_starts_with($currentRoute, 'admin.integrations.activecampaign'),
+            ] : null,
+        ]));
+
         $sections = array_values(array_filter([
             [
                 'type' => 'section',
@@ -377,6 +387,11 @@ class EnsureUserHasAdminAccount
                 'type' => 'section',
                 'label' => 'WORKSPACE',
                 'items' => $intelligenceItems,
+            ] : null,
+            $integrationsItems !== [] ? [
+                'type' => 'section',
+                'label' => 'INTEGRACIONES',
+                'items' => $integrationsItems,
             ] : null,
             $adminItems !== [] ? [
                 'type' => 'section',

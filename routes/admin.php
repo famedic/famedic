@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActiveCampaignController;
+use App\Http\Controllers\Admin\ActiveCampaignOperationsController;
 use App\Http\Controllers\Admin\AdministratorController;
 use App\Http\Controllers\Admin\CouponConceptController;
 use App\Http\Controllers\Admin\CouponBeneficiaryController;
@@ -81,8 +82,14 @@ Route::prefix('admin')->middleware([
         Route::prefix('workspace')->name('workspace.')->group(function () {
             Route::get('/', \App\Http\Controllers\Admin\Workspace\WorkspaceHomeController::class)
                 ->name('index');
+            // Producto independiente ActiveCampaign Hub
+            Route::get('activecampaign', \App\Http\Controllers\Admin\Workspace\ActiveCampaignHubController::class)
+                ->name('activecampaign');
+            // Compatibilidad: ruta anterior bajo Customer Engagement
+            Route::redirect('customer-engagement/activecampaign', '/admin/workspace/activecampaign')
+                ->name('customer-engagement.activecampaign');
             Route::get('{workspace}', \App\Http\Controllers\Admin\Workspace\WorkspaceShowController::class)
-                ->where('workspace', 'clinical-ai|customers|marketing|executive|ai|platform')
+                ->where('workspace', 'clinical-ai|customers|marketing|customer-engagement|executive|ai|platform')
                 ->name('show');
         });
 
@@ -91,7 +98,7 @@ Route::prefix('admin')->middleware([
         Route::get('intelligence/{suite}', function (string $suite) {
             $map = [
                 'customer' => 'customers',
-                'marketing' => 'marketing',
+                'marketing' => 'customer-engagement',
                 'executive' => 'executive',
                 'business' => 'executive',
                 'ai-operations' => 'ai',
@@ -349,6 +356,17 @@ Route::prefix('admin')->middleware([
             Route::get('/integrations', [ActiveCampaignController::class, 'integrations'])->name('integrations');
             Route::get('/qa-compare', [ActiveCampaignController::class, 'qaCompare'])->name('qa-compare');
             Route::get('/settings', [ActiveCampaignController::class, 'settings'])->name('settings');
+        });
+
+        Route::prefix('integrations')->name('integrations.')->group(function () {
+            Route::get('activecampaign', [ActiveCampaignOperationsController::class, 'index'])
+                ->name('activecampaign');
+            Route::post('activecampaign/test-api', [ActiveCampaignOperationsController::class, 'testApi'])
+                ->name('activecampaign.test-api');
+            Route::post('activecampaign/diagnostic', [ActiveCampaignOperationsController::class, 'diagnostic'])
+                ->name('activecampaign.diagnostic');
+            Route::get('activecampaign/export', [ActiveCampaignOperationsController::class, 'export'])
+                ->name('activecampaign.export');
         });
 
         Route::get('simulators', [SimulatorController::class, 'index'])->name('simulators.index');

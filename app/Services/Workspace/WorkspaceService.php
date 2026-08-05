@@ -54,8 +54,22 @@ class WorkspaceService
                 ];
             }
 
-            if ($tools === []) {
+            if ($tools === [] && ($workspace['home_mode'] ?? null) !== 'gateway') {
                 continue;
+            }
+
+            // Gateway: no listar tools en home; solo tarjeta + highlights.
+            $homeMode = $workspace['home_mode'] ?? 'tools';
+            $displayTools = $homeMode === 'gateway' ? [] : $tools;
+
+            $landingRoute = $workspace['landing_route'] ?? null;
+            $href = route('admin.workspace.show', $workspace['slug']);
+            if ($landingRoute && Route::has($landingRoute)) {
+                try {
+                    $href = route($landingRoute);
+                } catch (\Throwable) {
+                    // keep show route
+                }
             }
 
             $payload = [
@@ -66,9 +80,12 @@ class WorkspaceService
                 'description' => $workspace['description'],
                 'accent' => $workspace['accent'],
                 'featured' => (bool) ($workspace['featured'] ?? false),
+                'home_mode' => $homeMode,
+                'badge' => $workspace['badge'] ?? null,
+                'highlights' => $workspace['highlights'] ?? [],
                 'cta' => $workspace['cta'] ?? 'Abrir',
-                'href' => route('admin.workspace.show', $workspace['slug']),
-                'tools' => $tools,
+                'href' => $href,
+                'tools' => $displayTools,
             ];
 
             $workspaces[] = $payload;
@@ -81,8 +98,22 @@ class WorkspaceService
                 'description' => $workspace['description'],
                 'href' => $payload['href'],
                 'status' => 'active',
-                'keywords' => $workspace['name'].' '.$workspace['description'],
+                'keywords' => $workspace['name'].' '.$workspace['description'].' '.implode(' ', $workspace['highlights'] ?? []),
             ];
+
+            // Indexar highlights / áreas CE para búsqueda.
+            foreach ($workspace['highlights'] ?? [] as $highlight) {
+                $searchIndex[] = [
+                    'type' => 'tool',
+                    'workspace' => $workspace['name'],
+                    'workspace_slug' => $workspace['slug'],
+                    'title' => $highlight,
+                    'description' => $workspace['description'],
+                    'href' => $payload['href'],
+                    'status' => 'active',
+                    'keywords' => $highlight.' '.$workspace['name'].' crm campanas activecampaign',
+                ];
+            }
         }
 
         // Orden: featured primero, luego el resto del catálogo.
@@ -193,7 +224,8 @@ class WorkspaceService
 
         if ($routeName && Route::has($routeName)) {
             try {
-                $href = route($routeName);
+                $params = $tool['route_params'] ?? [];
+                $href = $params === [] ? route($routeName) : route($routeName, $params);
                 $status = $tool['status'] ?? 'active';
             } catch (\Throwable) {
                 $href = null;

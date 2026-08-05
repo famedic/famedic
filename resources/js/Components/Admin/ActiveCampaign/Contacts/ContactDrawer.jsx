@@ -9,6 +9,10 @@ import ContactSummary from "./ContactSummary";
 import ContactTimeline from "./ContactTimeline";
 import ContactEvents from "./ContactEvents";
 import ContactTags from "./ContactTags";
+import ContactLeadScore from "./ContactLeadScore";
+import ContactLists from "./ContactLists";
+import ContactCustomFields from "./ContactCustomFields";
+import ContactEngagement from "./ContactEngagement";
 import ContactPurchases from "./ContactPurchases";
 import ContactLaboratories from "./ContactLaboratories";
 import ContactMemberships from "./ContactMemberships";
@@ -18,9 +22,53 @@ import ContactBeneficiaries from "./ContactBeneficiaries";
 import ContactAutomations from "./ContactAutomations";
 import ContactInsights from "./ContactInsights";
 
+function MirrorStatusBanner({ mirror, loading }) {
+	if (loading && !mirror) {
+		return (
+			<div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-400">
+				<span className="size-1.5 animate-pulse rounded-full bg-zinc-300" />
+				Consultando ActiveCampaign…
+			</div>
+		);
+	}
+
+	if (!mirror) {
+		return null;
+	}
+
+	if (mirror.status === "ok") {
+		return (
+			<div className="mt-2 space-y-0.5">
+				<div className="flex items-center gap-2 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+					<span className="size-1.5 rounded-full bg-emerald-500" />
+					ActiveCampaign sincronizado
+				</div>
+				{mirror.synced_at_human ? (
+					<Text className="text-[11px] text-zinc-400">
+						Última lectura: {mirror.synced_at_human}
+						{mirror.from_cache ? " (caché)" : ""}
+					</Text>
+				) : null}
+			</div>
+		);
+	}
+
+	return (
+		<div className="mt-2 space-y-0.5">
+			<div className="flex items-center gap-2 text-[11px] font-medium text-rose-700 dark:text-rose-400">
+				<span className="size-1.5 rounded-full bg-rose-500" />
+				Error consultando ActiveCampaign
+			</div>
+			{mirror.message ? (
+				<Text className="text-[11px] text-zinc-400">{mirror.message}</Text>
+			) : null}
+		</div>
+	);
+}
+
 /**
  * Vista 360 en panel lateral (HubSpot-style).
- * Summary primero; Timeline + secciones en un único partial (drawerExtras).
+ * Summary primero; Timeline + secciones + Mirror AC en un único partial (drawerExtras).
  */
 export default function ContactDrawer({
 	open,
@@ -48,6 +96,8 @@ export default function ContactDrawer({
 	const extrasReady =
 		extras?.contact_id && contact?.id && extras.contact_id === contact.id;
 	const timelineLoading = Boolean(summaryReady && !extrasReady);
+	const mirror = extrasReady ? extras?.mirror || null : null;
+	const mirrorLoading = Boolean(summaryReady && (extrasLoading || !extrasReady));
 
 	const resetExtras = useCallback(() => {
 		setExtras(null);
@@ -178,6 +228,10 @@ export default function ContactDrawer({
 														: "Cargando timeline y secciones…"
 													: "Cargando resumen…"}
 											</Text>
+											<MirrorStatusBanner
+												mirror={mirror}
+												loading={mirrorLoading}
+											/>
 										</div>
 										<Button
 											plain
@@ -221,8 +275,36 @@ export default function ContactDrawer({
 										timeline={extrasReady ? extras.timeline : null}
 										loading={timelineLoading || extrasLoading}
 									/>
-									<ContactEvents />
-									<ContactTags />
+									<ContactLeadScore
+										ready={extrasReady}
+										loading={extrasLoading && !extrasReady}
+										mirror={mirror}
+									/>
+									<ContactEngagement
+										ready={extrasReady}
+										loading={extrasLoading && !extrasReady}
+										mirror={mirror}
+									/>
+									<ContactEvents
+										ready={extrasReady}
+										loading={extrasLoading && !extrasReady}
+										mirror={mirror}
+									/>
+									<ContactTags
+										ready={extrasReady}
+										loading={extrasLoading && !extrasReady}
+										mirror={mirror}
+									/>
+									<ContactLists
+										ready={extrasReady}
+										loading={extrasLoading && !extrasReady}
+										mirror={mirror}
+									/>
+									<ContactCustomFields
+										ready={extrasReady}
+										loading={extrasLoading && !extrasReady}
+										mirror={mirror}
+									/>
 									<ContactPurchases
 										ready={extrasReady}
 										loading={extrasLoading && !extrasReady}
@@ -259,7 +341,11 @@ export default function ContactDrawer({
 										payload={sectionPayload("beneficiaries")}
 										onRequest={null}
 									/>
-									<ContactAutomations />
+									<ContactAutomations
+										ready={extrasReady}
+										loading={extrasLoading && !extrasReady}
+										mirror={mirror}
+									/>
 									<ContactInsights />
 								</div>
 							</div>

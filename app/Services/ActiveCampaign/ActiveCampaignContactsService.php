@@ -8,6 +8,7 @@ use App\Models\OnlinePharmacyPurchase;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Listado ligero de Contactos para Marketing Intelligence.
@@ -155,7 +156,7 @@ class ActiveCampaignContactsService
     }
 
     /**
-     * Bundle único: Timeline + secciones lazy (un solo partial reload).
+     * Bundle único: Timeline + secciones lazy + espejo ActiveCampaign (un solo partial reload).
      *
      * @return array<string, mixed>|null
      */
@@ -163,6 +164,7 @@ class ActiveCampaignContactsService
         int $contactId,
         ActiveCampaignContactTimelineService $timeline,
         ActiveCampaignContactDrawerSectionsService $sections,
+        ActiveCampaignMirrorService $mirror,
     ): ?array {
         $contact = Contact::query()
             ->with(['customer.user:id,email'])
@@ -181,7 +183,303 @@ class ActiveCampaignContactsService
             'contact_id' => $contact->id,
             'timeline' => $timeline->buildForContact($contact),
             'sections' => $sectionPayloads,
+            'mirror' => $this->buildMirrorPayload($contact, $mirror),
         ];
+    }
+
+    /**
+     * Espejo AC para el Drawer 360 (Tags, Eventos, Automations + Fase 2).
+     * Nunca lanza: un fallo de API no debe romper el CRM Famedic.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildMirrorPayload(Contact $contact, ActiveCampaignMirrorService $mirror): array
+    {
+        $empty = [
+            'status' => 'missing',
+            'message' => null,
+            'synced_at' => null,
+            'synced_at_human' => null,
+            'from_cache' => false,
+            'ac_contact_id' => null,
+            'tags' => [],
+            'activities' => [],
+            'automations' => [],
+            'lists' => [],
+            'fields' => [],
+            'lead_score' => null,
+            'engagement' => null,
+            'owner' => null,
+        ];
+
+        $customer = $contact->customer;
+        if (! $customer) {
+            return [
+                ...$empty,
+                'status' => 'missing',
+                'message' => 'Este contacto no tiene customer asociado en Famedic.',
+            ];
+        }
+
+        try {
+            $snapshot = $mirror->snapshot($customer);
+        } catch (\Throwable $e) {
+            Log::warning('AC Mirror Drawer: fallo al obtener snapshot', [
+                'contact_id' => $contact->id,
+                'customer_id' => $customer->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                ...$empty,
+                'status' => 'error',
+                'message' => 'No fue posible obtener la información de ActiveCampaign.',
+            ];
+        }
+
+        if ($snapshot === null) {
+            return [
+                ...$empty,
+                'status' => 'missing',
+                'message' => 'No fue posible obtener la información de ActiveCampaign.',
+            ];
+        }
+
+        $tags = array_map(
+            static fn ($tag) => $tag->toArray(),
+            $snapshot->tags
+        );
+        usort($tags, static fn (array $a, array $b) => strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? '')));
+
+        $activities = array_map(
+            fn ($activity) => $this->mapActivityForDrawer($activity->toArray()),
+            $snapshot->activities
+        );
+
+        $automations = array_map(
+            fn ($automation) => $this->mapAutomationForDrawer($automation->toArray()),
+            $snapshot->automations
+        );
+
+        $lists = array_map(
+            fn ($list) => $this->mapListForDrawer($list->toArray()),
+            $snapshot->lists
+        );
+
+        $fieldsSource = $snapshot->relevantFields !== []
+            ? $snapshot->relevantFields
+            : [];
+        $fields = array_map(
+            static fn ($field) => $field->toArray(),
+            $fieldsSource
+        );
+
+        $lead = $snapshot->leadScoreSummary();
+        $engagement = ($snapshot->engagement ?? \App\DataTransferObjects\ActiveCampaign\ContactEngagementData::unavailable())->toArray();
+
+        return [
+            'status' => 'ok',
+            'message' => null,
+            'synced_at' => $snapshot->mirroredAt->toIso8601String(),
+            'synced_at_human' => $snapshot->mirroredAt->locale('es')->diffForHumans(),
+            'from_cache' => $snapshot->fromCache,
+            'ac_contact_id' => $snapshot->acContactId,
+            'tags' => array_values($tags),
+            'activities' => array_values($activities),
+            'automations' => array_values($automations),
+            'lists' => array_values($lists),
+            'fields' => array_values($fields),
+            'lead_score' => [
+                'total' => $lead->total,
+                'primary' => $lead->primary?->toArray(),
+                'updated_at' => $this->formatMirrorTimestamp($lead->updatedAt),
+                'classification' => $lead->classification,
+                'scores' => array_map(
+                    static fn ($s) => $s->toArray(),
+                    $lead->scores
+                ),
+            ],
+            'engagement' => [
+                'emails_sent' => $this->formatEngagementValue($engagement['emails_sent'] ?? null),
+                'last_open' => $this->formatEngagementTimestamp($engagement['last_open'] ?? null),
+                'last_click' => $this->formatEngagementTimestamp($engagement['last_click'] ?? null),
+                'open_rate' => $this->formatEngagementRate($engagement['open_rate'] ?? null),
+                'click_rate' => $this->formatEngagementRate($engagement['click_rate'] ?? null),
+                'last_campaign' => $this->formatEngagementValue($engagement['last_campaign'] ?? null),
+            ],
+            'owner' => $snapshot->owner?->toArray(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $list
+     * @return array<string, mixed>
+     */
+    private function mapListForDrawer(array $list): array
+    {
+        return [
+            'id' => $list['contact_list_id'] ?? $list['list_id'] ?? null,
+            'name' => filled($list['name'] ?? null)
+                ? (string) $list['name']
+                : ('Lista #'.($list['list_id'] ?? '—')),
+            'status' => $list['status'] ?? '—',
+            'joined_at' => $this->formatMirrorTimestamp(
+                is_string($list['sdate'] ?? null) ? $list['sdate'] : null
+            ),
+        ];
+    }
+
+    private function formatEngagementValue(mixed $value): string
+    {
+        if ($value === null || $value === '' || $value === 'No disponible') {
+            return 'No disponible';
+        }
+
+        return is_scalar($value) ? (string) $value : 'No disponible';
+    }
+
+    private function formatEngagementTimestamp(mixed $value): string
+    {
+        if ($value === null || $value === '' || $value === 'No disponible') {
+            return 'No disponible';
+        }
+
+        if (! is_string($value)) {
+            return 'No disponible';
+        }
+
+        return $this->formatMirrorTimestamp($value);
+    }
+
+    private function formatEngagementRate(mixed $value): string
+    {
+        if ($value === null || $value === '' || $value === 'No disponible') {
+            return 'No disponible';
+        }
+
+        if (is_numeric($value)) {
+            return ((int) $value).'%';
+        }
+
+        return (string) $value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $activity
+     * @return array<string, mixed>
+     */
+    private function mapActivityForDrawer(array $activity): array
+    {
+        $type = (string) ($activity['reference_model_name'] ?? $activity['type'] ?? 'actividad');
+        $action = trim((string) ($activity['reference_action'] ?? ''));
+        $tstamp = $activity['tstamp'] ?? null;
+
+        $label = $this->activityTypeLabel($type, $action);
+        $description = $this->activityDescription($type, $action, $activity);
+
+        return [
+            'id' => $activity['id'] ?? null,
+            'icon' => $this->activityIconKey($type, $action),
+            'type' => $label,
+            'description' => $description,
+            'tstamp' => $tstamp,
+            'date' => $this->formatMirrorTimestamp(is_string($tstamp) ? $tstamp : null),
+            'reference_type' => $activity['reference_type'] ?? null,
+            'reference_action' => $action !== '' ? $action : null,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $automation
+     * @return array<string, mixed>
+     */
+    private function mapAutomationForDrawer(array $automation): array
+    {
+        return [
+            'id' => $automation['contact_automation_id'] ?? $automation['automation_id'] ?? null,
+            'name' => filled($automation['name'] ?? null)
+                ? (string) $automation['name']
+                : ('Automatización #'.($automation['automation_id'] ?? '—')),
+            'status' => $this->automationStatusLabel($automation['status'] ?? null),
+            'status_raw' => $automation['status'] ?? null,
+            'entered_at' => $this->formatMirrorTimestamp(
+                is_string($automation['add_date'] ?? null) ? $automation['add_date'] : null
+            ),
+            'updated_at' => $this->formatMirrorTimestamp(
+                is_string($automation['last_date'] ?? null) ? $automation['last_date'] : null
+            ),
+            'complete_value' => $automation['complete_value'] ?? null,
+        ];
+    }
+
+    private function activityTypeLabel(string $type, string $action): string
+    {
+        $normalized = mb_strtolower($type);
+
+        return match (true) {
+            str_contains($normalized, 'email') && $action === 'open' => 'Email abierto',
+            str_contains($normalized, 'email') && $action === 'click' => 'Click en email',
+            str_contains($normalized, 'email') => 'Email',
+            str_contains($normalized, 'tag') => 'Tag',
+            str_contains($normalized, 'list') => 'Lista',
+            str_contains($normalized, 'automat') => 'Automatización',
+            str_contains($normalized, 'note') => 'Nota',
+            str_contains($normalized, 'deal') => 'Deal',
+            default => $type !== '' ? $type : 'Actividad',
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $activity
+     */
+    private function activityDescription(string $type, string $action, array $activity): string
+    {
+        $label = $this->activityTypeLabel($type, $action);
+        $refId = $activity['reference_id'] ?? null;
+
+        if ($action !== '' && ! in_array($action, ['open', 'click'], true)) {
+            return trim($label.' · '.$action.($refId ? " (#{$refId})" : ''));
+        }
+
+        return $refId ? "{$label} · ref #{$refId}" : $label;
+    }
+
+    private function activityIconKey(string $type, string $action): string
+    {
+        $normalized = mb_strtolower($type);
+
+        return match (true) {
+            str_contains($normalized, 'email') && $action === 'open' => 'mail-open',
+            str_contains($normalized, 'email') && $action === 'click' => 'cursor-click',
+            str_contains($normalized, 'email') => 'mail',
+            str_contains($normalized, 'tag') => 'tag',
+            str_contains($normalized, 'list') => 'list',
+            str_contains($normalized, 'automat') => 'bolt',
+            default => 'activity',
+        };
+    }
+
+    private function automationStatusLabel(mixed $status): string
+    {
+        return match ((string) $status) {
+            '0' => 'Inactiva',
+            '1' => 'Activa',
+            '2' => 'Completada',
+            default => filled($status) ? (string) $status : 'Desconocido',
+        };
+    }
+
+    private function formatMirrorTimestamp(?string $value): string
+    {
+        if ($value === null || trim($value) === '') {
+            return self::UNAVAILABLE;
+        }
+
+        try {
+            return $this->formatDateTime(Carbon::parse($value));
+        } catch (\Throwable) {
+            return $value;
+        }
     }
 
     /**

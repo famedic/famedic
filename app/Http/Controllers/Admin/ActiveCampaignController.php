@@ -21,6 +21,7 @@ use App\Services\ActiveCampaign\ActiveCampaignIntegrationsHubService;
 use App\Services\ActiveCampaign\ActiveCampaignLaboratoryIntelligenceService;
 use App\Services\ActiveCampaign\ActiveCampaignLogsCenterService;
 use App\Services\ActiveCampaign\ActiveCampaignMembershipIntelligenceService;
+use App\Services\ActiveCampaign\ActiveCampaignMirrorService;
 use App\Services\ActiveCampaign\ActiveCampaignNotificationCenterService;
 use App\Services\ActiveCampaign\ActiveCampaignQaCompareService;
 use App\Services\ActiveCampaign\ActiveCampaignTagsManagerService;
@@ -79,6 +80,7 @@ class ActiveCampaignController extends Controller
         ActiveCampaignContactsService $contacts,
         ActiveCampaignContactDrawerSectionsService $drawerSections,
         ActiveCampaignContactTimelineService $timeline,
+        ActiveCampaignMirrorService $mirror,
     ): Response {
         $request->user()->administrator->hasPermissionTo('activecampaign.manage') || abort(403);
 
@@ -92,6 +94,7 @@ class ActiveCampaignController extends Controller
                     $drawerContactId,
                     $timeline,
                     $drawerSections,
+                    $mirror,
                 ),
             ]);
         }

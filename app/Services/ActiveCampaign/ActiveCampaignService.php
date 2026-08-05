@@ -497,6 +497,299 @@ class ActiveCampaignService
     }
 
     /**
+     * GET /contacts/{id} — ficha completa del contacto.
+     *
+     * @return array<string, mixed>|null Contacto AC o null si no existe / error.
+     */
+    public function getContact(int $contactId): ?array
+    {
+        try {
+            $response = $this->client()->get("/contacts/{$contactId}");
+
+            if (! $response->successful()) {
+                Log::warning('AC: getContact falló', [
+                    'contact_id' => $contactId,
+                    'status' => $response->status(),
+                ]);
+
+                return null;
+            }
+
+            return $response->json()['contact'] ?? null;
+        } catch (\Throwable $e) {
+            Log::error('AC: Excepción getContact', [
+                'contact_id' => $contactId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * GET /contacts/{id}/contactData — geo / ubicación / tracking metadata.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getContactData(int $contactId): ?array
+    {
+        try {
+            $response = $this->client()->get("/contacts/{$contactId}/contactData");
+
+            if (! $response->successful()) {
+                Log::warning('AC: getContactData falló', [
+                    'contact_id' => $contactId,
+                    'status' => $response->status(),
+                ]);
+
+                return null;
+            }
+
+            $json = $response->json();
+
+            return $json['contactDatum'] ?? $json['contactData'] ?? null;
+        } catch (\Throwable $e) {
+            Log::error('AC: Excepción getContactData', [
+                'contact_id' => $contactId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * GET /contacts/{id}/contactTags
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getContactTags(int $contactId): array
+    {
+        return $this->getContactCollection($contactId, 'contactTags', 'contactTags');
+    }
+
+    /**
+     * GET /contacts/{id}/contactLists
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getContactLists(int $contactId): array
+    {
+        return $this->getContactCollection($contactId, 'contactLists', 'contactLists');
+    }
+
+    /**
+     * GET /contacts/{id}/fieldValues
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getContactFieldValues(int $contactId): array
+    {
+        return $this->getContactCollection($contactId, 'fieldValues', 'fieldValues');
+    }
+
+    /**
+     * GET /contacts/{id}/contactAutomations
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getContactAutomations(int $contactId): array
+    {
+        return $this->getContactCollection($contactId, 'contactAutomations', 'contactAutomations');
+    }
+
+    /**
+     * GET /contacts/{id}/scoreValues
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getContactScoreValues(int $contactId): array
+    {
+        return $this->getContactCollection($contactId, 'scoreValues', 'scoreValues');
+    }
+
+    /**
+     * GET /activities?contact={id}
+     *
+     * Nota AC: las activities se generan al recuperar el contacto vía getContact().
+     * El Mirror debe llamar getContact() antes de este método.
+     *
+     * @return array{activities: list<array<string, mixed>>, raw: array<string, mixed>}
+     */
+    public function getContactActivities(int $contactId): array
+    {
+        try {
+            $response = $this->client()->get('/activities', [
+                'contact' => $contactId,
+                'orders[tstamp]' => 'DESC',
+            ]);
+
+            if (! $response->successful()) {
+                Log::warning('AC: getContactActivities falló', [
+                    'contact_id' => $contactId,
+                    'status' => $response->status(),
+                ]);
+
+                return ['activities' => [], 'raw' => []];
+            }
+
+            $json = $response->json() ?? [];
+
+            return [
+                'activities' => is_array($json['activities'] ?? null) ? $json['activities'] : [],
+                'raw' => $json,
+            ];
+        } catch (\Throwable $e) {
+            Log::error('AC: Excepción getContactActivities', [
+                'contact_id' => $contactId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['activities' => [], 'raw' => []];
+        }
+    }
+
+    /**
+     * Catálogo paginado de listas de la cuenta.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getLists(): array
+    {
+        return $this->getPaginatedCollection('/lists', 'lists');
+    }
+
+    /**
+     * Catálogo paginado de automatizaciones de la cuenta.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getAutomations(): array
+    {
+        return $this->getPaginatedCollection('/automations', 'automations');
+    }
+
+    /**
+     * Catálogo de lead scores de la cuenta.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getScores(): array
+    {
+        return $this->getPaginatedCollection('/scores', 'scores');
+    }
+
+    /**
+     * GET /users/{id} — usuario AC (owner / account manager).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getUser(int $userId): ?array
+    {
+        if ($userId <= 0) {
+            return null;
+        }
+
+        try {
+            $response = $this->client()->get("/users/{$userId}");
+
+            if (! $response->successful()) {
+                Log::debug('AC: getUser falló', [
+                    'user_id' => $userId,
+                    'status' => $response->status(),
+                ]);
+
+                return null;
+            }
+
+            return $response->json()['user'] ?? null;
+        } catch (\Throwable $e) {
+            Log::warning('AC: Excepción getUser', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    protected function getContactCollection(int $contactId, string $pathSegment, string $jsonKey): array
+    {
+        try {
+            $response = $this->client()->get("/contacts/{$contactId}/{$pathSegment}");
+
+            if (! $response->successful()) {
+                Log::warning("AC: getContactCollection {$pathSegment} falló", [
+                    'contact_id' => $contactId,
+                    'status' => $response->status(),
+                ]);
+
+                return [];
+            }
+
+            $items = $response->json()[$jsonKey] ?? [];
+
+            return is_array($items) ? array_values($items) : [];
+        } catch (\Throwable $e) {
+            Log::error("AC: Excepción getContactCollection {$pathSegment}", [
+                'contact_id' => $contactId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    protected function getPaginatedCollection(string $path, string $jsonKey): array
+    {
+        try {
+            $all = [];
+            $offset = 0;
+            $limit = 100;
+
+            do {
+                $response = $this->client()->get($path, [
+                    'limit' => $limit,
+                    'offset' => $offset,
+                ]);
+
+                if (! $response->successful()) {
+                    Log::error("AC: Error obteniendo {$jsonKey}", [
+                        'path' => $path,
+                        'offset' => $offset,
+                        'status' => $response->status(),
+                    ]);
+
+                    return $all;
+                }
+
+                $data = $response->json();
+                $page = $data[$jsonKey] ?? [];
+                if (is_array($page)) {
+                    $all = array_merge($all, $page);
+                }
+
+                $offset += $limit;
+                $total = (int) ($data['meta']['total'] ?? 0);
+            } while ($offset < $total);
+
+            return $all;
+        } catch (\Throwable $e) {
+            Log::error("AC: Excepción getPaginatedCollection {$jsonKey}", [
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
+    }
+
+    /**
      * Agregar un tag a un contacto
      */
     public function addTagToContact(int $contactId, int $tagId): void
@@ -1226,15 +1519,7 @@ class ActiveCampaignService
 
     public function removeTagFromContactOrFail(int $contactId, int $tagId): void
     {
-        $response = $this->client()->get("/contacts/{$contactId}/contactTags");
-
-        if (! $response->successful()) {
-            throw new ActiveCampaignSyncException(
-                "AC list contactTags falló (contact={$contactId}): ".$response->body()
-            );
-        }
-
-        foreach ($response->json()['contactTags'] ?? [] as $contactTag) {
+        foreach ($this->getContactTags($contactId) as $contactTag) {
             if ((int) ($contactTag['tag'] ?? 0) !== $tagId) {
                 continue;
             }

@@ -28,6 +28,7 @@
     "@mdxeditor/editor": "^3.37.0",
     "caniuse-lite": "^1.0.30001724",
     "canvas-confetti": "^1.9.3",
+    "chart.js": "^4.4.9",
     "clsx": "^2.1.1",
     "framer-motion": "^11.18.2",
     "install": "^0.13.0",
