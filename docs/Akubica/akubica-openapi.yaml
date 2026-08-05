@@ -51,9 +51,23 @@ info:
     Recursos ajenos → **404 soft-deny** (`ORDER_NOT_FOUND`, `INVOICE_NOT_FOUND`, …).
     Ítem de carrito ajeno → **403**.
 
+    ## Cupones (contrato público)
+
+    El contrato HTTP usa códigos **`COUPON_*`** (`COUPON_NOT_FOUND`, `COUPON_EXPIRED`,
+    `COUPON_NOT_APPLICABLE`). La implementación interna puede referirse a “crédito” o
+    saldo a favor; eso **no** cambia el vocabulario público ni las respuestas HTTP.
+
+    ## Alcance de esta especificación
+
+    - **61 operaciones** documentadas (núcleo, auxiliares y seguridad avanzada).
+    - Incluye **secure links** y **descargas Bearer** (PDF) de resultados/facturas.
+    - **No** incluye descarga XML en API V1 (no existe ruta `/api/v1` para XML).
+    - Business Audit y el canal interno `web_checkout` **no** son endpoints públicos.
+
     ## Fuera de OpenAPI
 
     Mantenimiento `akubica:prune-otp` / `akubica:prune-idempotency` no es HTTP; ver runbooks.
+    Auditoría de negocio (`business_audit_events`) es interna y no forma parte del contrato Leo.
 
     Documentación: `docs/Akubica/README.md`.
   contact:
@@ -101,6 +115,7 @@ paths:
         **Legacy OFF:** body `{ "email" }` → `200` genérico (anti-enumeración).
         Soporta `Idempotency-Key` opcional (fase 1) cuando el flag está ON.
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -120,12 +135,22 @@ paths:
       responses:
         '200':
           description: Legacy — solicitud procesada
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '202':
           description: P0-A — challenge creado (o señuelo)
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
           content:
             application/json:
               schema:
@@ -144,6 +169,9 @@ paths:
         '503':
           $ref: '#/components/responses/DeliveryOrConfigFailed'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /auth/login/verify-code:
     post:
       tags: [Auth]
@@ -153,6 +181,8 @@ paths:
         **P0-A:** `{ "challenge_id", "code" }` → token + user.
         **Legacy:** `{ "email", "code" }`.
         `expires_in` refleja TTL efectivo (≈10800 s con Sanctum 3h ON).
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       requestBody:
         required: true
         content:
@@ -164,6 +194,9 @@ paths:
       responses:
         '200':
           description: Token emitido
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -180,6 +213,9 @@ paths:
         '503':
           $ref: '#/components/responses/DeliveryOrConfigFailed'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /auth/login/resend-code:
     post:
       tags: [Auth]
@@ -188,6 +224,8 @@ paths:
       description: |
         Solo con login P0-A ON. Body `{ "challenge_id" }`.
         Con flags OFF → `503 FEATURE_DISABLED`.
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       requestBody:
         required: true
         content:
@@ -197,6 +235,9 @@ paths:
       responses:
         '202':
           description: Challenge actualizado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -213,6 +254,9 @@ paths:
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /auth/register:
     post:
       tags: [Auth]
@@ -223,6 +267,7 @@ paths:
         **Legacy:** puede responder 409 email/phone ya registrados.
         Usuario se crea solo tras verify exitoso.
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -233,12 +278,22 @@ paths:
       responses:
         '200':
           description: Legacy — OTP iniciado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '202':
           description: P0-A — challenge
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
           content:
             application/json:
               schema:
@@ -250,6 +305,9 @@ paths:
                         $ref: '#/components/schemas/OtpChallenge'
         '409':
           description: Legacy — email/teléfono ya registrados / IDEMPOTENCY_*
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -261,11 +319,16 @@ paths:
         '503':
           $ref: '#/components/responses/DeliveryOrConfigFailed'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /auth/register/verify-code:
     post:
       tags: [Auth]
       operationId: authRegisterVerifyCode
       summary: Verificar OTP de registro y emitir token
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       requestBody:
         required: true
         content:
@@ -277,6 +340,9 @@ paths:
       responses:
         '200':
           description: Registro completado + token
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -288,6 +354,9 @@ paths:
                         $ref: '#/components/schemas/TokenResponse'
         '409':
           description: LOGIN_REQUIRED u otros conflictos
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -299,11 +368,16 @@ paths:
         '503':
           $ref: '#/components/responses/DeliveryOrConfigFailed'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /auth/register/resend-code:
     post:
       tags: [Auth]
       operationId: authRegisterResendCode
       summary: Reenviar OTP de registro (P0-A)
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       requestBody:
         required: true
         content:
@@ -313,6 +387,9 @@ paths:
       responses:
         '202':
           description: Challenge actualizado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -329,6 +406,9 @@ paths:
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /auth/token:
     delete:
       tags: [Auth]
@@ -336,9 +416,14 @@ paths:
       summary: Revocar token Bearer actual (logout)
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '200':
           description: Token revocado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -346,6 +431,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /secure-downloads/{token}:
     get:
       tags: [SecureDownloads]
@@ -355,10 +443,14 @@ paths:
         **Sin Bearer.** Token de 64 hex. Secreto temporal.
         Errores: `SECURE_LINK_*`, `RESULT_NOT_READY`, `INVOICE_NOT_READY`, `FEATURE_DISABLED`.
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/SecureDownloadToken'
       responses:
         '200':
           description: PDF binario
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/pdf:
               schema:
@@ -366,18 +458,27 @@ paths:
                 format: binary
         '404':
           description: SECURE_LINK_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '409':
           description: RESULT_NOT_READY / INVOICE_NOT_READY
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '410':
           description: SECURE_LINK_EXPIRED / CONSUMED / REVOKED
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -385,12 +486,16 @@ paths:
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /catalog/laboratory-brands:
     get:
       tags: [Catalog]
       operationId: catalogLaboratoryBrands
       summary: Listar marcas de laboratorio
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - name: state
           in: query
           schema:
@@ -398,6 +503,9 @@ paths:
       responses:
         '200':
           description: Marcas
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -409,6 +517,7 @@ paths:
       operationId: catalogLaboratoryTests
       summary: Listar estudios
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - name: brand
           in: query
           schema:
@@ -433,6 +542,9 @@ paths:
       responses:
         '200':
           description: Lista paginada
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -444,6 +556,7 @@ paths:
       operationId: catalogLaboratoryTestCategories
       summary: Listar categorías
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - name: brand
           in: query
           schema:
@@ -451,6 +564,9 @@ paths:
       responses:
         '200':
           description: Categorías
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -462,6 +578,7 @@ paths:
       operationId: catalogLaboratoryStores
       summary: Listar sucursales
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - name: brand
           in: query
           schema:
@@ -473,6 +590,9 @@ paths:
       responses:
         '200':
           description: Sucursales
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -484,10 +604,14 @@ paths:
       operationId: catalogShowLaboratoryTest
       summary: Detalle de estudio
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/LaboratoryTestId'
       responses:
         '200':
           description: Estudio
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -499,6 +623,9 @@ paths:
                         $ref: '#/components/schemas/LaboratoryTest'
         '404':
           description: LAB_TEST_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -511,10 +638,14 @@ paths:
       summary: Medicamento (deshabilitado)
       description: Responde `503 CATALOG_UNAVAILABLE` en el estado actual.
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/MedicationId'
       responses:
         '503':
           description: CATALOG_UNAVAILABLE
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -528,10 +659,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/BrandRequired'
       responses:
         '200':
           description: Carrito
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -545,10 +680,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/BrandRequired'
       responses:
         '200':
           description: Carrito vaciado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -556,6 +695,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /cart/totals:
     get:
       tags: [Cart]
@@ -564,10 +706,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/BrandRequired'
       responses:
         '200':
           description: Totales
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -575,6 +721,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /cart/items:
     post:
       tags: [Cart]
@@ -582,6 +731,8 @@ paths:
       summary: Agregar ítem
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       requestBody:
         required: true
         content:
@@ -597,6 +748,9 @@ paths:
       responses:
         '201':
           description: Ítem agregado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -605,12 +759,18 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: LAB_TEST_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '409':
           description: ITEM_ALREADY_IN_CART
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -624,10 +784,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/CartItemId'
       responses:
         '200':
           description: Eliminado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -638,6 +802,9 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           description: CART_ITEM_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -651,10 +818,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/BrandRequired'
       responses:
         '200':
           description: Cupón
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -665,8 +836,15 @@ paths:
       tags: [Cart]
       operationId: cartCouponApply
       summary: Aplicar cupón
+      description: |
+        Aplica un cupón/beneficio al carrito.
+        Errores públicos: `COUPON_NOT_FOUND`, `COUPON_EXPIRED`,
+        `COUPON_NOT_APPLICABLE`, `EMPTY_CART`.
+        La denominación interna “crédito” no forma parte del contrato HTTP.
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       requestBody:
         required: true
         content:
@@ -682,6 +860,9 @@ paths:
       responses:
         '200':
           description: Aplicado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -690,12 +871,18 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: COUPON_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '409':
           description: EMPTY_CART / COUPON_EXPIRED / COUPON_NOT_APPLICABLE
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -707,10 +894,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/BrandRequired'
       responses:
         '200':
           description: Removido
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -718,6 +909,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /checkout/prepare:
     get:
       tags: [Checkout]
@@ -726,10 +920,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/BrandRequired'
       responses:
         '200':
           description: Payload prepare
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -737,6 +935,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /checkout/draft:
     post:
       tags: [Checkout]
@@ -744,6 +945,8 @@ paths:
       summary: Sincronizar draft de checkout
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       requestBody:
         required: true
         content:
@@ -769,6 +972,9 @@ paths:
       responses:
         '200':
           description: Draft
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -777,6 +983,9 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '409':
           description: EMPTY_CART
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -790,6 +999,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -809,6 +1019,8 @@ paths:
         '200':
           description: Link de pago (replayable con Idempotency-Key)
           headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
             Idempotency-Replayed:
               $ref: '#/components/headers/IdempotencyReplayed'
           content:
@@ -819,6 +1031,9 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '409':
           description: EMPTY_CART / CHECKOUT_NOT_READY / APPOINTMENT_REQUIRED / IDEMPOTENCY_*
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -832,10 +1047,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/BrandRequired'
       responses:
         '200':
           description: Requisitos
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -843,6 +1062,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /laboratory-appointments:
     get:
       tags: [Appointments]
@@ -850,9 +1072,14 @@ paths:
       summary: Listar citas
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '200':
           description: Citas paginadas
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -866,6 +1093,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -889,6 +1117,11 @@ paths:
       responses:
         '201':
           description: Cita creada
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
           content:
             application/json:
               schema:
@@ -897,6 +1130,9 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '409':
           description: EMPTY_CART / APPOINTMENT_NOT_REQUIRED / APPOINTMENT_ALREADY_EXISTS / IDEMPOTENCY_*
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -910,6 +1146,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - name: appointment_id
           in: path
           required: true
@@ -918,6 +1155,9 @@ paths:
       responses:
         '200':
           description: Eliminada
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -926,6 +1166,9 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: APPOINTMENT_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -938,9 +1181,14 @@ paths:
       summary: Listar pedidos
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '200':
           description: Pedidos + Pagination
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -960,6 +1208,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/results:
     get:
       tags: [Orders]
@@ -967,9 +1218,14 @@ paths:
       summary: Listar resultados agregados
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '200':
           description: Resultados
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -977,6 +1233,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/invoices:
     get:
       tags: [Orders]
@@ -984,9 +1243,14 @@ paths:
       summary: Listar facturas agregadas
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '200':
           description: Facturas
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -994,6 +1258,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/products:
     get:
       tags: [Orders]
@@ -1002,10 +1269,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
       responses:
         '200':
           description: Productos
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1015,6 +1286,9 @@ paths:
         '404':
           $ref: '#/components/responses/OrderNotFound'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/status:
     get:
       tags: [Orders]
@@ -1023,10 +1297,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
       responses:
         '200':
           description: Estado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1036,6 +1314,9 @@ paths:
         '404':
           $ref: '#/components/responses/OrderNotFound'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/cancel:
     put:
       tags: [Orders]
@@ -1045,6 +1326,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
       responses:
         '503':
@@ -1052,6 +1334,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/results:
     get:
       tags: [Orders]
@@ -1063,10 +1348,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
       responses:
         '200':
           description: Result metadata
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1081,6 +1370,9 @@ paths:
         '404':
           $ref: '#/components/responses/OrderNotFound'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/results/download:
     get:
       tags: [Orders]
@@ -1093,11 +1385,15 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
         - $ref: '#/components/parameters/StepUpGrantHeader'
       responses:
         '200':
           description: PDF
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/pdf:
               schema:
@@ -1111,6 +1407,9 @@ paths:
           $ref: '#/components/responses/OrderNotFound'
         '409':
           description: RESULT_NOT_READY
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1125,6 +1424,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1137,6 +1437,11 @@ paths:
       responses:
         '202':
           description: Challenge
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
           content:
             application/json:
               schema:
@@ -1157,6 +1462,9 @@ paths:
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/results/step-up/verify:
     post:
       tags: [Orders]
@@ -1165,6 +1473,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
       requestBody:
         required: true
@@ -1175,6 +1484,9 @@ paths:
       responses:
         '200':
           description: Grant
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1193,6 +1505,9 @@ paths:
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/results/secure-link:
     post:
       tags: [Orders]
@@ -1204,6 +1519,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1215,6 +1531,11 @@ paths:
       responses:
         '201':
           description: Liga emitida
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
           content:
             application/json:
               schema:
@@ -1230,12 +1551,18 @@ paths:
           $ref: '#/components/responses/OrderNotFound'
         '409':
           description: RESULT_NOT_READY / IDEMPOTENCY_*
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '422':
           description: STEP_UP_GRANT_INVALID
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1243,6 +1570,9 @@ paths:
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/invoices:
     get:
       tags: [Orders]
@@ -1251,10 +1581,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
       responses:
         '200':
           description: Invoices
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1274,6 +1608,9 @@ paths:
         '404':
           $ref: '#/components/responses/OrderNotFound'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/invoices/{invoice_id}/download:
     get:
       tags: [Orders]
@@ -1285,12 +1622,16 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
         - $ref: '#/components/parameters/InvoiceId'
         - $ref: '#/components/parameters/StepUpGrantHeader'
       responses:
         '200':
           description: PDF
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/pdf:
               schema:
@@ -1302,12 +1643,18 @@ paths:
           $ref: '#/components/responses/StepUpForbidden'
         '404':
           description: ORDER_NOT_FOUND / INVOICE_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '409':
           description: INVOICE_NOT_READY
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1321,6 +1668,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
         - $ref: '#/components/parameters/InvoiceId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1334,6 +1682,11 @@ paths:
       responses:
         '202':
           description: Challenge
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
           content:
             application/json:
               schema:
@@ -1347,6 +1700,9 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: ORDER_NOT_FOUND / INVOICE_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1356,6 +1712,9 @@ paths:
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/invoices/{invoice_id}/step-up/verify:
     post:
       tags: [Orders]
@@ -1364,6 +1723,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
         - $ref: '#/components/parameters/InvoiceId'
       requestBody:
@@ -1375,6 +1735,9 @@ paths:
       responses:
         '200':
           description: Grant
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1388,6 +1751,9 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: ORDER_NOT_FOUND / INVOICE_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1397,6 +1763,9 @@ paths:
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/invoices/{invoice_id}/secure-link:
     post:
       tags: [Orders]
@@ -1405,6 +1774,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
         - $ref: '#/components/parameters/InvoiceId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1417,6 +1787,11 @@ paths:
       responses:
         '201':
           description: Liga emitida
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
           content:
             application/json:
               schema:
@@ -1430,18 +1805,27 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: ORDER_NOT_FOUND / INVOICE_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '409':
           description: INVOICE_NOT_READY / IDEMPOTENCY_*
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '422':
           description: STEP_UP_GRANT_INVALID
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1449,6 +1833,9 @@ paths:
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/invoice-request/status:
     get:
       tags: [Orders]
@@ -1457,10 +1844,14 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
       responses:
         '200':
           description: Status
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1470,6 +1861,9 @@ paths:
         '404':
           $ref: '#/components/responses/OrderNotFound'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /orders/{order_id}/invoice-request:
     post:
       tags: [Orders]
@@ -1478,6 +1872,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1500,6 +1895,11 @@ paths:
       responses:
         '201':
           description: Solicitud creada
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
           content:
             application/json:
               schema:
@@ -1510,6 +1910,9 @@ paths:
           $ref: '#/components/responses/OrderNotFound'
         '409':
           description: INVOICE_ALREADY_EXISTS / INVOICE_REQUEST_ALREADY_EXISTS / ORDER_NOT_INVOICEABLE / IDEMPOTENCY_*
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1522,9 +1925,14 @@ paths:
       summary: Cuentas familiares
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '200':
           description: Family
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1532,6 +1940,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /user/payment-methods:
     get:
       tags: [User]
@@ -1539,9 +1950,14 @@ paths:
       summary: Métodos de pago (sin datos sensibles)
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '200':
           description: Payment methods
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1549,6 +1965,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /user/tax-profiles:
     get:
       tags: [User]
@@ -1556,9 +1975,14 @@ paths:
       summary: Listar perfiles fiscales
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '200':
           description: Tax profiles
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1571,9 +1995,14 @@ paths:
       summary: Crear perfil fiscal
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '201':
           description: Creado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1581,6 +2010,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /user/tax-profiles/{tax_profile_id}:
     put:
       tags: [User]
@@ -1589,6 +2021,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - name: tax_profile_id
           in: path
           required: true
@@ -1597,6 +2030,9 @@ paths:
       responses:
         '200':
           description: Actualizado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1605,6 +2041,9 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: TAX_PROFILE_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1616,6 +2055,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - name: tax_profile_id
           in: path
           required: true
@@ -1624,6 +2064,9 @@ paths:
       responses:
         '200':
           description: Eliminado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1632,6 +2075,9 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: TAX_PROFILE_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1644,9 +2090,14 @@ paths:
       summary: Listar direcciones
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '200':
           description: Addresses
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1659,9 +2110,14 @@ paths:
       summary: Crear dirección
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '201':
           description: Creada
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1669,6 +2125,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /user/addresses/{address_id}:
     put:
       tags: [User]
@@ -1677,6 +2136,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - name: address_id
           in: path
           required: true
@@ -1685,6 +2145,9 @@ paths:
       responses:
         '200':
           description: Actualizada
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1693,6 +2156,9 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: ADDRESS_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1704,6 +2170,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - name: address_id
           in: path
           required: true
@@ -1712,6 +2179,9 @@ paths:
       responses:
         '200':
           description: Eliminada
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1720,6 +2190,9 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: ADDRESS_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1732,9 +2205,14 @@ paths:
       summary: Listar contactos
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '200':
           description: Contacts
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1747,9 +2225,14 @@ paths:
       summary: Crear contacto
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
       responses:
         '201':
           description: Creado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1757,6 +2240,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
 
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
   /user/contacts/{contact_id}:
     put:
       tags: [User]
@@ -1765,6 +2251,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - name: contact_id
           in: path
           required: true
@@ -1773,6 +2260,9 @@ paths:
       responses:
         '200':
           description: Actualizado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1781,6 +2271,9 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: CONTACT_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1792,6 +2285,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
         - name: contact_id
           in: path
           required: true
@@ -1800,6 +2294,9 @@ paths:
       responses:
         '200':
           description: Eliminado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1808,6 +2305,9 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: CONTACT_NOT_FOUND
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
@@ -1862,8 +2362,12 @@ components:
       required: false
       description: |
         Optional client idempotency key (8–128, `[A-Za-z0-9._-]`).
-        Only honored when `API_V1_IDEMPOTENCY_ENABLED=true` on phase-1 write routes.
-        Replay returns the original response with `Idempotency-Replayed: true`.
+        Only honored when `API_V1_IDEMPOTENCY_ENABLED=true` on phase-1 write routes
+        that register middleware `api.idempotency`.
+        Successful replay returns the original body/status with
+        `Idempotency-Replayed: true` and the **original** `X-Correlation-ID`.
+        `409 IDEMPOTENCY_OPERATION_UNCERTAIN` → `retryable: false` for that key
+        (use a new key if a fresh attempt is required).
         Does not guarantee exactly-once under uncertain external side effects.
       schema:
         type: string
@@ -1932,24 +2436,36 @@ components:
   responses:
     Unauthenticated:
       description: UNAUTHENTICATED
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/X-Correlation-ID'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     Forbidden:
       description: FORBIDDEN
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/X-Correlation-ID'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     ValidationError:
       description: VALIDATION_ERROR
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/X-Correlation-ID'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     TooManyRequests:
       description: TOO_MANY_REQUESTS / OTP cooldown
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/X-Correlation-ID'
       content:
         application/json:
           schema:
@@ -1961,6 +2477,8 @@ components:
         `IDEMPOTENCY_REQUEST_IN_PROGRESS` (retryable true + Retry-After),
         `IDEMPOTENCY_OPERATION_UNCERTAIN` (retryable false for same key).
       headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/X-Correlation-ID'
         Retry-After:
           description: Present for IDEMPOTENCY_REQUEST_IN_PROGRESS
           schema:
@@ -1971,30 +2489,45 @@ components:
             $ref: '#/components/schemas/ApiErrorResponse'
     FeatureDisabled:
       description: FEATURE_DISABLED / OTP_CONFIGURATION_INVALID
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/X-Correlation-ID'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     DeliveryOrConfigFailed:
       description: DELIVERY_FAILED / OTP_CONFIGURATION_INVALID
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/X-Correlation-ID'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     OtpVerifyError:
       description: INVALID_CODE / NO_ACTIVE_CODE / CODE_EXPIRED / CODE_ALREADY_USED / …
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/X-Correlation-ID'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     OrderNotFound:
       description: ORDER_NOT_FOUND (soft-deny)
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/X-Correlation-ID'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     StepUpForbidden:
       description: STEP_UP_REQUIRED / STEP_UP_GRANT_INVALID / STEP_UP_EXPIRED / STEP_UP_REVOKED
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/X-Correlation-ID'
       content:
         application/json:
           schema:

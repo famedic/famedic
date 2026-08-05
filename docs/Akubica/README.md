@@ -35,7 +35,7 @@ Esta carpeta documenta el contrato real para integración **Akubica / LeoV**. No
 
 1. `routes/api/v1.php`
 2. Tests `tests/Feature/Api/V1/*`
-3. OpenAPI v1.2.0
+3. OpenAPI v1.2.1
 4. Colección Postman `/postman/Famedic-Akubica-API-v1.postman_collection.json`
 
 ## Autenticación (resumen)

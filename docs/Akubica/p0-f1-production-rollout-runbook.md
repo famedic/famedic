@@ -1,8 +1,8 @@
 # P0-F1 — Runbook de rollout gradual a producción (Famedic–Akubica)
 
-**Tipo:** runbook operativo (documentación). **No modifica código ni toca producción por sí solo.**  
-**Rama de referencia:** `feature/apis-akubica`  
-**Contrato:** `/api/v1` · OpenAPI v1.2.0 (61 operaciones) · Postman `/postman/`  
+**Tipo:** runbook operativo (documentación). **No modifica código ni toca producción por sí solo.**
+**Rama de referencia:** `feature/apis-akubica`
+**Contrato:** `/api/v1` · OpenAPI v1.2.1 (61 operaciones) · Postman `/postman/`
 **Prerrequisitos de entrada (confirmados en P0-E1 / P0-E2):**
 
 - QA staging aprobado con observaciones.
@@ -62,7 +62,7 @@ Completar **antes** de cualquier cambio en el servidor de producción. Marcar �
 | P03 | Working tree limpio en el artefacto a desplegar | Sin cambios locales no versionados en el paquete de release |
 | P04 | `git diff --check` limpio | Sin whitespace errors en el commit de release |
 | P05 | Suite Api/V1 verde | 546/546 (idealmente ×2) en el commit de release |
-| P06 | OpenAPI / Postman alineados | v1.2.0 · 61 ops · guard Production presente |
+| P06 | OpenAPI / Postman alineados | v1.2.1 · 61 ops · guard Production presente |
 
 ### 1.2 Backup y datos
 
@@ -282,8 +282,8 @@ OTP_P0A_AKUBICA_LOGIN_ENABLED=false
 OTP_P0A_SMS_DELIVERY_ENABLED=false
 ```
 
-Opcional: `OTP_P0A_ANTI_ABUSE_ENABLED=false` si ningún otro flujo P0-A quedó ON.  
-Luego: `optimize:clear` → `config:cache` → `queue:restart`.  
+Opcional: `OTP_P0A_ANTI_ABUSE_ENABLED=false` si ningún otro flujo P0-A quedó ON.
+Luego: `optimize:clear` → `config:cache` → `queue:restart`.
 Auth vuelve a legacy email.
 
 ---
@@ -297,7 +297,7 @@ OTP_P0A_STEP_UP_RESULTS_ENABLED=true
 OTP_P0A_SECURE_LINKS_RESULTS_ENABLED=true
 ```
 
-Confirmar policy secure links (TTL / max opens) acordada.  
+Confirmar policy secure links (TTL / max opens) acordada.
 Mantener **enforcement Bearer OFF** (`STEP_UP_BEARER_RESULTS/INVOICES/DOWNLOADS=false`).
 
 ### 6.2 Validar
@@ -669,5 +669,5 @@ Completar una fila por fase. **Prohibido:** PII, secretos, OTP, tokens, grants, 
 
 ---
 
-**Documento P0-F1:** runbook listo para ejecución operativa.  
+**Documento P0-F1:** runbook listo para ejecución operativa.
 **No implica** autorización automática de deploy ni de Fase 8.

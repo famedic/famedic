@@ -1,6 +1,6 @@
-# OpenAPI changelog — v1.2.1 (P1-A6)
+# OpenAPI changelog — v1.2.1 (P1-A6 + cableado documental)
 
-Fecha: 2026-08-03
+Fecha: 2026-08-03 · actualización documental: 2026-08-04
 
 ## Cambios aditivos (compatibles)
 
@@ -11,7 +11,18 @@ Fecha: 2026-08-03
 - Componentes: `parameters.XCorrelationId`, `headers.X-Correlation-ID`.
 - Documentación: `docs/Akubica/p1-a6-errors-correlation.md`.
 
+## Cableado documental (sin bump de versión)
+
+- `$ref` de `XCorrelationId` en las **61** operaciones.
+- `$ref` de header `X-Correlation-ID` en respuestas inline y en responses compartidas.
+- `Idempotency-Key` + `Idempotency-Replayed` alineados a las **9** rutas con `api.idempotency`
+  (no solo `payment-link`).
+- Aclaración de alcance: 61 ops; secure links y Bearer PDF incluidos; XML fuera de API V1;
+  Business Audit / `web_checkout` no son endpoints públicos.
+- Vocabulario público de beneficios: códigos `COUPON_*` (crédito = denominación interna).
+
 ## No breaking
 
 - Códigos de dominio y HTTP status intactos.
 - `fields` / `details` siguen opcionales.
+- Versión OpenAPI permanece **1.2.1**.

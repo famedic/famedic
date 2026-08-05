@@ -42,7 +42,7 @@ Completar en ejecución:
 |--------|--------|-----------|
 | P0-C2 pruning | `d2faa84` | `feat(api): add OTP pruning maintenance` + `p0-c2-*.md` |
 | P0-D1 docs/OpenAPI/Postman | `626ed7b` | `docs(api): align Akubica OpenAPI and Postman contracts` |
-| OpenAPI | v1.2.0 | `docs/Akubica/akubica-openapi.yaml` |
+| OpenAPI | v1.2.1 | `docs/Akubica/akubica-openapi.yaml` |
 | Postman guard | en colección + Production env | `allow_production_writes` + PRODUCTION GUARD |
 
 ---
@@ -230,7 +230,7 @@ Verificar: conteos, omitidos, sin PII en stdout, sin errores FK. Si `CLEANUP_ENA
 
 ## 11–12. Postman / OpenAPI
 
-Ver salida del validador `tools/p0d1_validate_docs.py` y comparación Laravel↔OpenAPI (61 ops, v1.2.0).
+Ver salida del validador `tools/p0d1_validate_docs.py` y comparación Laravel↔OpenAPI (61 ops, v1.2.1).
 
 ---
 

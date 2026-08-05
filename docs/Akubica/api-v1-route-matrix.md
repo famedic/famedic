@@ -1,12 +1,12 @@
 # Matriz rutas Laravel × OpenAPI × Postman × Tests
 
-**Fecha:** 2026-07-31 · **Fuente canónica:** `routes/api/v1.php`  
-**OpenAPI:** v1.2.0 · **Postman:** `/postman/Famedic-Akubica-API-v1.postman_collection.json`  
+**Fecha:** 2026-08-04 · **Fuente canónica:** `routes/api/v1.php`
+**OpenAPI:** v1.2.1 · **Postman:** `/postman/Famedic-Akubica-API-v1.postman_collection.json`
 **Prefijo:** `/api/v1`
 
 Leyenda **Estado**:
 - `OK` — documentada y correcta
-- `ACT` — documentada pero desactualizada (corregida en v1.2.0)
+- `ACT` — documentada pero desactualizada (corregida en v1.2.x)
 - `NEW` — no documentada antes; agregada en v1.2.0 / Postman
 - `POST` — en Postman; OpenAPI parcial o reciente
 - `OUT` — documentada en OpenAPI histórico sin ruta real (ninguna detectada en v1.2)
@@ -100,5 +100,12 @@ Leyenda **Estado**:
 |---------|------:|
 | Rutas Laravel `/api/v1` | 61 |
 | Operaciones OpenAPI v1.1.0 (previas) | 22 |
-| Operaciones OpenAPI v1.2.0 (objetivo) | 61 |
+| Operaciones OpenAPI v1.2.1 (actual) | 61 |
 | Carpetas Postman step-up/secure/enforcement | 18, 19 |
+
+## Correlation e idempotencia (v1.2.1)
+
+- **Todas** las operaciones documentan request opcional `X-Correlation-ID` y response header `X-Correlation-ID`.
+- `Idempotency-Key` + response `Idempotency-Replayed` solo en rutas con middleware `api.idempotency` (9 escrituras fase 1).
+- Descarga **XML** no existe en `/api/v1` (fuera de alcance Leo).
+- Códigos públicos de beneficio: `COUPON_*` (la denominación interna “crédito” no forma parte del contrato HTTP).
