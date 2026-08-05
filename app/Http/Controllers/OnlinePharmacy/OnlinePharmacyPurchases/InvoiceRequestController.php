@@ -6,6 +6,8 @@ use App\Actions\CreateInvoiceRequestAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OnlinePharmacy\OnlinePharmacyPurchases\StoreInvoiceRequestRequest;
 use App\Models\OnlinePharmacyPurchase;
+use App\Services\Audit\Business\BillingInvoiceRequestedAuditHint;
+use App\Services\Audit\Business\BusinessAuditChannel;
 use Illuminate\Support\Facades\Log;
 
 class InvoiceRequestController extends Controller
@@ -29,7 +31,20 @@ class InvoiceRequestController extends Controller
         }
 
         // Snapshot con el cfdi_use elegido. No se actualiza el perfil (sin efecto secundario nuevo).
-        $action($onlinePharmacyPurchase, $taxProfile, $request->validated('cfdi_use'));
+        $action(
+            $onlinePharmacyPurchase,
+            $taxProfile,
+            $request->validated('cfdi_use'),
+            new BillingInvoiceRequestedAuditHint(
+                channel: BusinessAuditChannel::WEB_CHECKOUT,
+                requestOrigin: BillingInvoiceRequestedAuditHint::ORIGIN_PHARMACY_WEB,
+                purchaseType: BillingInvoiceRequestedAuditHint::PURCHASE_TYPE_PHARMACY,
+                purchaseId: (int) $onlinePharmacyPurchase->id,
+                actorCustomerId: (int) $request->user()->customer->id,
+                actorUserId: (int) $request->user()->id,
+                subjectCustomerId: (int) $request->user()->customer->id,
+            ),
+        );
 
         return redirect()->route('online-pharmacy-purchases.show', [
             'online_pharmacy_purchase' => $onlinePharmacyPurchase,

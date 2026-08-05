@@ -6,6 +6,8 @@ use App\Models\Invoice;
 use App\Models\LaboratoryPurchase;
 use App\Models\OnlinePharmacyPurchase;
 use App\Notifications\PurchaseInvoiceUploaded;
+use App\Services\Audit\Business\BillingInvoiceDocumentsAuditHint;
+use App\Services\Audit\Business\BillingInvoiceDocumentsAuditRecorder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -13,10 +15,15 @@ use Illuminate\Support\Facades\Storage;
 
 class CreateInvoiceAction
 {
+    public function __construct(
+        private readonly BillingInvoiceDocumentsAuditRecorder $billingInvoiceDocumentsAuditRecorder,
+    ) {}
+
     public function __invoke(
         Model $model,
         ?UploadedFile $invoice = null,
         ?UploadedFile $invoiceXml = null,
+        ?BillingInvoiceDocumentsAuditHint $auditHint = null,
     ): Invoice {
         DB::beginTransaction();
 
@@ -36,6 +43,10 @@ class CreateInvoiceAction
 
             $previousPdfPath = null;
             $previousXmlPath = null;
+            $wasAlreadyComplete = $existingInvoice !== null && filled($existingInvoice->completed_at);
+            $becameComplete = false;
+            $pdfReplaced = false;
+            $xmlReplaced = false;
 
             if (! $existingInvoice) {
                 $pdfPath = $newPdfPath;
@@ -47,6 +58,7 @@ class CreateInvoiceAction
 
                 if ($this->isCompletePaths($pdfPath, $xmlPath)) {
                     $attributes['completed_at'] = now();
+                    $becameComplete = true;
                 }
 
                 $newInvoice = $model->invoice()->create($attributes);
@@ -56,11 +68,13 @@ class CreateInvoiceAction
                 if ($newPdfPath) {
                     $previousPdfPath = $existingInvoice->invoice;
                     $updates['invoice'] = $newPdfPath;
+                    $pdfReplaced = true;
                 }
 
                 if ($newXmlPath) {
                     $previousXmlPath = $existingInvoice->invoice_xml;
                     $updates['invoice_xml'] = $newXmlPath;
+                    $xmlReplaced = true;
                 }
 
                 $resultingPdf = array_key_exists('invoice', $updates)
@@ -75,6 +89,7 @@ class CreateInvoiceAction
                     && $this->isCompletePaths($resultingPdf, $resultingXml)
                 ) {
                     $updates['completed_at'] = now();
+                    $becameComplete = true;
                 }
 
                 // Conserva created_at original; updated_at lo gestiona Eloquent.
@@ -86,6 +101,23 @@ class CreateInvoiceAction
             }
 
             DB::commit();
+
+            // Post-commit only: rollback never reaches here.
+            if ($auditHint !== null) {
+                if ($becameComplete) {
+                    $this->billingInvoiceDocumentsAuditRecorder->recordCompleted(
+                        (int) $newInvoice->id,
+                        $auditHint,
+                    );
+                } elseif ($wasAlreadyComplete && ($pdfReplaced || $xmlReplaced)) {
+                    $this->billingInvoiceDocumentsAuditRecorder->recordDocumentsReplaced(
+                        (int) $newInvoice->id,
+                        $auditHint,
+                        $pdfReplaced,
+                        $xmlReplaced,
+                    );
+                }
+            }
 
             if ($previousPdfPath || $previousXmlPath) {
                 dispatch(function () use ($previousPdfPath, $previousXmlPath) {

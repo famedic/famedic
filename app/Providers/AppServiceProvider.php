@@ -88,6 +88,8 @@ class AppServiceProvider extends ServiceProvider
         });
         $this->app->singleton(\App\Services\Audit\Business\BusinessAuditEventWriter::class);
         $this->app->singleton(\App\Services\Audit\Business\LaboratoryOrderCreatedAuditRecorder::class);
+        $this->app->singleton(\App\Services\Audit\Business\BillingInvoiceRequestedAuditRecorder::class);
+        $this->app->singleton(\App\Services\Audit\Business\BillingInvoiceDocumentsAuditRecorder::class);
         $this->app->bind(OtpRateLimitService::class);
         $this->app->bind(OtpAbusePolicy::class);
         $this->app->singleton(AkubicaLoginOtpDecoyStore::class);

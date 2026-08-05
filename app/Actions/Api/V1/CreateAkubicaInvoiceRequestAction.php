@@ -5,6 +5,8 @@ namespace App\Actions\Api\V1;
 use App\Models\InvoiceRequest;
 use App\Models\LaboratoryPurchase;
 use App\Models\TaxProfile;
+use App\Services\Audit\Business\BillingInvoiceRequestedAuditHint;
+use App\Services\Audit\Business\BillingInvoiceRequestedAuditRecorder;
 use App\Support\Api\V1\LaboratoryInvoiceSupport;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -13,6 +15,7 @@ class CreateAkubicaInvoiceRequestAction
 {
     public function __construct(
         private readonly LaboratoryInvoiceSupport $invoiceSupport,
+        private readonly BillingInvoiceRequestedAuditRecorder $billingInvoiceRequestedAuditRecorder,
     ) {}
 
     /**
@@ -22,6 +25,7 @@ class CreateAkubicaInvoiceRequestAction
         LaboratoryPurchase $order,
         TaxProfile $taxProfile,
         ?string $cfdiUse = null,
+        ?BillingInvoiceRequestedAuditHint $auditHint = null,
     ): array {
         $order->loadMissing(['invoice', 'invoiceRequest']);
 
@@ -46,7 +50,7 @@ class CreateAkubicaInvoiceRequestAction
             $taxProfile->refresh();
         }
 
-        $invoiceRequest = $this->persistInvoiceRequest($order, $taxProfile);
+        $invoiceRequest = $this->persistInvoiceRequest($order, $taxProfile, $auditHint);
 
         return [
             'invoice_request' => $invoiceRequest,
@@ -57,6 +61,7 @@ class CreateAkubicaInvoiceRequestAction
     private function persistInvoiceRequest(
         LaboratoryPurchase $order,
         TaxProfile $taxProfile,
+        ?BillingInvoiceRequestedAuditHint $auditHint,
     ): InvoiceRequest {
         DB::beginTransaction();
 
@@ -81,6 +86,14 @@ class CreateAkubicaInvoiceRequestAction
             ]);
 
             DB::commit();
+
+            // Post-commit only: rollback never reaches here.
+            if ($auditHint !== null) {
+                $this->billingInvoiceRequestedAuditRecorder->recordSucceeded(
+                    (int) $invoiceRequest->id,
+                    $auditHint,
+                );
+            }
 
             return $invoiceRequest;
         } catch (\Throwable $e) {

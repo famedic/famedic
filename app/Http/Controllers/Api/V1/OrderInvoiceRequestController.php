@@ -7,6 +7,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Orders\CreateInvoiceRequestRequest;
 use App\Http\Resources\Api\V1\InvoiceRequestResource;
 use App\Http\Responses\ApiResponse;
+use App\Services\Audit\Business\BillingInvoiceRequestedAuditHint;
+use App\Services\Audit\Business\BusinessAuditChannel;
+use App\Support\Api\V1\AkubicaCorrelationId;
 use App\Support\Api\V1\LaboratoryInvoiceSupport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,6 +51,16 @@ class OrderInvoiceRequestController extends Controller
             $order,
             $taxProfile,
             $request->validated('cfdi_use'),
+            new BillingInvoiceRequestedAuditHint(
+                channel: BusinessAuditChannel::API_V1,
+                requestOrigin: BillingInvoiceRequestedAuditHint::ORIGIN_API_V1,
+                purchaseType: BillingInvoiceRequestedAuditHint::PURCHASE_TYPE_LABORATORY,
+                purchaseId: (int) $order->id,
+                actorCustomerId: (int) $customer->id,
+                actorUserId: (int) $request->user()->id,
+                subjectCustomerId: (int) $customer->id,
+                correlationId: AkubicaCorrelationId::fromRequest($request),
+            ),
         );
 
         if (isset($result['error'])) {

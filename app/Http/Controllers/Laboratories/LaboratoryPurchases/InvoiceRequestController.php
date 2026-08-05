@@ -11,6 +11,8 @@ use App\Models\Permission;
 use App\Models\TaxProfile;
 use App\Models\User;
 use App\Notifications\LaboratoryPurchaseInvoiceRequested;
+use App\Services\Audit\Business\BillingInvoiceRequestedAuditHint;
+use App\Services\Audit\Business\BusinessAuditChannel;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Log;
 
@@ -62,7 +64,20 @@ class InvoiceRequestController extends Controller
             'tax_profile_id' => $taxProfile->id,
             'operation' => 'laboratory_invoice_request',
         ]);
-        $action($laboratoryPurchase, $taxProfile, $cfdiUse);
+        $action(
+            $laboratoryPurchase,
+            $taxProfile,
+            $cfdiUse,
+            new BillingInvoiceRequestedAuditHint(
+                channel: BusinessAuditChannel::WEB_CHECKOUT,
+                requestOrigin: BillingInvoiceRequestedAuditHint::ORIGIN_LABORATORY_WEB,
+                purchaseType: BillingInvoiceRequestedAuditHint::PURCHASE_TYPE_LABORATORY,
+                purchaseId: (int) $laboratoryPurchase->id,
+                actorCustomerId: (int) auth()->user()->customer->id,
+                actorUserId: (int) auth()->id(),
+                subjectCustomerId: (int) auth()->user()->customer->id,
+            ),
+        );
 
         // 3. NOTIFICACIONES A EQUIPO DE FACTURACIÓN (LaboratoryPurchaseInvoiceRequested → correo)
         // ---------------------------------------------------------------------------

@@ -5,6 +5,8 @@ namespace App\Actions;
 use App\Exceptions\TaxProfiles\ConstanciaExtractionException;
 use App\Models\InvoiceRequest;
 use App\Models\TaxProfile;
+use App\Services\Audit\Business\BillingInvoiceRequestedAuditHint;
+use App\Services\Audit\Business\BillingInvoiceRequestedAuditRecorder;
 use App\Services\TaxProfiles\IndividualTaxpayerValidator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -15,18 +17,21 @@ class CreateInvoiceRequestAction
 {
     public function __construct(
         private readonly IndividualTaxpayerValidator $taxpayerValidator,
+        private readonly BillingInvoiceRequestedAuditRecorder $billingInvoiceRequestedAuditRecorder,
     ) {}
 
     public function __invoke(
         Model $model,
         TaxProfile $taxProfile,
         ?string $cfdiUse = null,
+        ?BillingInvoiceRequestedAuditHint $auditHint = null,
     ): InvoiceRequest {
         $fiscalCertificatePath = null;
         $oldCertificate = null;
+        $wasCreated = false;
 
         try {
-            $invoiceRequest = DB::transaction(function () use ($model, $taxProfile, $cfdiUse, &$fiscalCertificatePath, &$oldCertificate) {
+            $invoiceRequest = DB::transaction(function () use ($model, $taxProfile, $cfdiUse, &$fiscalCertificatePath, &$oldCertificate, &$wasCreated) {
                 // Perfil activo reconsultado; no soft-deleted.
                 $profile = TaxProfile::query()
                     ->whereKey($taxProfile->id)
@@ -82,8 +87,18 @@ class CreateInvoiceRequestAction
                     return $existingInvoiceRequest->fresh();
                 }
 
+                $wasCreated = true;
+
                 return $model->invoiceRequest()->create($invoiceRequestData);
             });
+
+            // Post-commit only: first-time create (updates do not emit).
+            if ($wasCreated && $auditHint !== null) {
+                $this->billingInvoiceRequestedAuditRecorder->recordSucceeded(
+                    (int) $invoiceRequest->id,
+                    $auditHint,
+                );
+            }
 
             if ($oldCertificate && $oldCertificate !== $fiscalCertificatePath && Storage::exists($oldCertificate)) {
                 Storage::delete($oldCertificate);

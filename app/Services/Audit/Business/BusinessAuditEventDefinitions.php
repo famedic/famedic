@@ -7,16 +7,23 @@ use LogicException;
 /**
  * Explicit event definitions for business audit.
  *
- * Block 6A: infrastructure. Block 6B: commerce.laboratory_order_created only.
+ * Block 6A: infrastructure.
+ * Block 6B: commerce.laboratory_order_created.
+ * Block 7B: billing.invoice_requested|completed|documents_replaced.
  * Tests may register temporary definitions only while `app()->environment('testing')`.
  *
  * Future examples (documentation only — not registered yet):
- * - billing.invoice_documents_completed
  * - customer.tax_profile_created
  */
 final class BusinessAuditEventDefinitions
 {
     public const EVENT_COMMERCE_LABORATORY_ORDER_CREATED = 'commerce.laboratory_order_created';
+
+    public const EVENT_BILLING_INVOICE_REQUESTED = 'billing.invoice_requested';
+
+    public const EVENT_BILLING_INVOICE_COMPLETED = 'billing.invoice_completed';
+
+    public const EVENT_BILLING_INVOICE_DOCUMENTS_REPLACED = 'billing.invoice_documents_replaced';
 
     /**
      * Productive definitions.
@@ -53,8 +60,74 @@ final class BusinessAuditEventDefinitions
                 BusinessAuditSubject::TYPE_CUSTOMER,
             ],
         ],
+        self::EVENT_BILLING_INVOICE_REQUESTED => [
+            'metadata' => [
+                'request_origin',
+                'purchase_type',
+                'purchase_id',
+            ],
+            'outcomes' => [
+                BusinessAuditOutcome::SUCCEEDED,
+            ],
+            'actor_types' => [
+                BusinessAuditActor::TYPE_CUSTOMER,
+            ],
+            'channels' => [
+                BusinessAuditChannel::WEB_CHECKOUT,
+                BusinessAuditChannel::API_V1,
+            ],
+            'resource_types' => [
+                'invoice_request',
+            ],
+            'subject_types' => [
+                BusinessAuditSubject::TYPE_CUSTOMER,
+            ],
+        ],
+        self::EVENT_BILLING_INVOICE_COMPLETED => [
+            'metadata' => [
+                'purchase_type',
+                'purchase_id',
+            ],
+            'outcomes' => [
+                BusinessAuditOutcome::SUCCEEDED,
+            ],
+            'actor_types' => [
+                BusinessAuditActor::TYPE_ADMIN,
+            ],
+            'channels' => [
+                BusinessAuditChannel::ADMIN_WEB,
+            ],
+            'resource_types' => [
+                'invoice',
+            ],
+            'subject_types' => [
+                BusinessAuditSubject::TYPE_CUSTOMER,
+            ],
+        ],
+        self::EVENT_BILLING_INVOICE_DOCUMENTS_REPLACED => [
+            'metadata' => [
+                'purchase_type',
+                'purchase_id',
+                'pdf_replaced',
+                'xml_replaced',
+            ],
+            'outcomes' => [
+                BusinessAuditOutcome::SUCCEEDED,
+            ],
+            'actor_types' => [
+                BusinessAuditActor::TYPE_ADMIN,
+            ],
+            'channels' => [
+                BusinessAuditChannel::ADMIN_WEB,
+            ],
+            'resource_types' => [
+                'invoice',
+            ],
+            'subject_types' => [
+                BusinessAuditSubject::TYPE_CUSTOMER,
+            ],
+        ],
     ];
-
     /**
      * @var array<string, array{
      *     metadata: list<string>,

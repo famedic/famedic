@@ -646,10 +646,16 @@ test('creating LaboratoryPurchase via helper emits zero business audit events', 
         ->and(BusinessAuditEventDefinitions::isKnownEvent('commerce.laboratory_order_created'))->toBeTrue();
 });
 
-test('productive taxonomy includes laboratory order created and excludes payment events', function () {
+test('productive taxonomy includes laboratory order and billing events and excludes payment events', function () {
     expect(BusinessAuditEventDefinitions::productiveEventNames())
-        ->toBe([BusinessAuditEventDefinitions::EVENT_COMMERCE_LABORATORY_ORDER_CREATED])
+        ->toBe([
+            BusinessAuditEventDefinitions::EVENT_COMMERCE_LABORATORY_ORDER_CREATED,
+            BusinessAuditEventDefinitions::EVENT_BILLING_INVOICE_REQUESTED,
+            BusinessAuditEventDefinitions::EVENT_BILLING_INVOICE_COMPLETED,
+            BusinessAuditEventDefinitions::EVENT_BILLING_INVOICE_DOCUMENTS_REPLACED,
+        ])
         ->and(BusinessAuditEventDefinitions::isKnownEvent('commerce.laboratory_order_created'))->toBeTrue()
+        ->and(BusinessAuditEventDefinitions::isKnownEvent('billing.invoice_requested'))->toBeTrue()
         ->and(BusinessAuditEventDefinitions::isKnownEvent('payment.completed'))->toBeFalse();
 });
 
@@ -674,9 +680,15 @@ test('flag ON insert stores a valid probe row without PII', function () {
 });
 
 test('test definitions cannot be registered outside testing environment guard path', function () {
-    // We are in testing — registration works; productive list stays the 6B event only.
+    // We are in testing — registration works; productive list excludes temporary test events.
     registerBusinessAuditProbeDefinition();
     expect(BusinessAuditEventDefinitions::isKnownEvent(BUSINESS_AUDIT_TEST_EVENT))->toBeTrue()
         ->and(BusinessAuditEventDefinitions::productiveEventNames())
-        ->toBe([BusinessAuditEventDefinitions::EVENT_COMMERCE_LABORATORY_ORDER_CREATED]);
+        ->toBe([
+            BusinessAuditEventDefinitions::EVENT_COMMERCE_LABORATORY_ORDER_CREATED,
+            BusinessAuditEventDefinitions::EVENT_BILLING_INVOICE_REQUESTED,
+            BusinessAuditEventDefinitions::EVENT_BILLING_INVOICE_COMPLETED,
+            BusinessAuditEventDefinitions::EVENT_BILLING_INVOICE_DOCUMENTS_REPLACED,
+        ])
+        ->and(in_array(BUSINESS_AUDIT_TEST_EVENT, BusinessAuditEventDefinitions::productiveEventNames(), true))->toBeFalse();
 });
