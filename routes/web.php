@@ -1,33 +1,37 @@
 <?php
 
 use App\Http\Controllers\DocumentationAcceptController;
+use App\Http\Controllers\DocumentsServiceController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InvoiceController;
-use App\Http\Controllers\InvoiceXmlController;
 use App\Http\Controllers\InvoiceRequests\FiscalCertificateController;
+use App\Http\Controllers\InvoiceXmlController;
 use App\Http\Controllers\LaboratoryPurchasePdfController;
+use App\Http\Controllers\Marketing\MarketingCampaignLinkController;
 use App\Http\Controllers\PrivacyPolicyController;
 use App\Http\Controllers\ResultsController;
 use App\Http\Controllers\TermsOfServiceController;
-use App\Http\Controllers\DocumentsServiceController;
 use App\Http\Controllers\VendorPaymentController;
 use App\Http\Controllers\WelcomeController;
-use App\Http\Controllers\PaymentMethodController;
-use App\Services\EfevooPayService;
 use App\Http\Middleware\EnsureLabResultsOtpVerified;
-//use App\Http\Controllers\WebHook\GDAWebHookController;
+// use App\Http\Controllers\WebHook\GDAWebHookController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', WelcomeController::class)->name('welcome');
-#Route::get('/terms-of-service', TermsOfServiceController::class)->name('terms-of-service');
-#Route::get('/privacy-policy', PrivacyPolicyController::class)->name('privacy-policy');
+
+Route::get('/c/{slug}', MarketingCampaignLinkController::class)
+    ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
+    ->name('campaign-links.show');
+
+// Route::get('/terms-of-service', TermsOfServiceController::class)->name('terms-of-service');
+// Route::get('/privacy-policy', PrivacyPolicyController::class)->name('privacy-policy');
 Route::get('/documentation-accept', [DocumentationAcceptController::class, 'index'])->name('documentation.accept');
 Route::post('/documentation-accept', [DocumentationAcceptController::class, 'store'])->name('documentation.accept.store');
 
 // Rutas de documentos de servicio (TOS, Privacy Policy, ARCO)
 Route::get('/terms-of-service', [DocumentsServiceController::class, 'termsOfService'])->name('terms-of-service');
 Route::get('/privacy-policy', [DocumentsServiceController::class, 'privacyPolicy'])->name('privacy-policy');
-//Route::get('/rights-arco', [DocumentsServiceController::class, 'rightsARCO'])->name('rights-arco');
+// Route::get('/rights-arco', [DocumentsServiceController::class, 'rightsARCO'])->name('rights-arco');
 
 // Derechos ARCO
 Route::get('/derechos-arco', [DocumentsServiceController::class, 'rightsARCO'])->name('rights-arco');
@@ -73,11 +77,11 @@ if (app()->environment('local')) {
     )->name('debug.laboratory-purchase-pdf');
 }
 
-require __DIR__ . '/odessa.php';
-require __DIR__ . '/admin.php';
-require __DIR__ . '/settings.php';
-require __DIR__ . '/laboratories.php';
-require __DIR__ . '/online-pharmacy.php';
-require __DIR__ . '/medical-attention.php';
-require __DIR__ . '/auth.php';
-require __DIR__ . '/webhooks.php';
+require __DIR__.'/odessa.php';
+require __DIR__.'/admin.php';
+require __DIR__.'/settings.php';
+require __DIR__.'/laboratories.php';
+require __DIR__.'/online-pharmacy.php';
+require __DIR__.'/medical-attention.php';
+require __DIR__.'/auth.php';
+require __DIR__.'/webhooks.php';
