@@ -154,14 +154,24 @@ final class WorkspaceCatalog
                 'accent' => 'orange',
                 'featured' => false,
                 'cta' => 'Abrir Marketing',
-                'permissions' => ['customers.manage'],
+                'permissions' => ['customers.manage', 'marketing-campaigns.manage'],
+                'permission_mode' => 'any',
                 'tools' => [
+                    [
+                        'id' => 'marketing-campaigns',
+                        'title' => 'Campañas y enlaces',
+                        'description' => 'Campañas, enlaces UTM y colecciones monomarca.',
+                        'route' => 'admin.marketing-campaigns.index',
+                        'status' => 'active',
+                        'permissions' => ['marketing-campaigns.manage'],
+                    ],
                     [
                         'id' => 'referral',
                         'title' => 'Referral Intelligence',
                         'description' => 'Desempeño del programa de referidos.',
                         'route' => 'admin.customers.referrals',
                         'status' => 'active',
+                        'permissions' => ['customers.manage'],
                     ],
                     [
                         'id' => 'acquisition',
@@ -169,6 +179,7 @@ final class WorkspaceCatalog
                         'description' => 'Customer Journey de nuevos registros.',
                         'route' => 'admin.customer-intelligence.customer-journey',
                         'status' => 'active',
+                        'permissions' => ['customers.manage'],
                     ],
                     [
                         'id' => 'segmentation',
@@ -176,6 +187,7 @@ final class WorkspaceCatalog
                         'description' => 'Cohorts y retención.',
                         'route' => 'admin.customer-intelligence.cohorts',
                         'status' => 'active',
+                        'permissions' => ['customers.manage'],
                     ],
                     [
                         'id' => 'customer-engagement',

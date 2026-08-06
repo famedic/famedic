@@ -31,6 +31,9 @@ class UpdateMarketingCampaignLinkAction
         array $data,
         Administrator $administrator,
     ): MarketingCampaignLink {
+        $link->loadMissing('campaign');
+        $link->campaign?->assertWritable();
+
         $targetType = $data['target_type'] instanceof MarketingCampaignTargetType
             ? $data['target_type']
             : MarketingCampaignTargetType::from($data['target_type']);

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\MarketingCampaignStatus;
+use App\Exceptions\Marketing\ArchivedMarketingCampaignException;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -22,6 +23,21 @@ class MarketingCampaign extends Model
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
         ];
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->status === MarketingCampaignStatus::Archived;
+    }
+
+    /**
+     * @throws ArchivedMarketingCampaignException
+     */
+    public function assertWritable(): void
+    {
+        if ($this->isArchived()) {
+            throw new ArchivedMarketingCampaignException;
+        }
     }
 
     public function links(): HasMany

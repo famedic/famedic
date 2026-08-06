@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin\MarketingCampaigns;
 
 use App\Enums\LaboratoryBrand;
 use App\Models\LaboratoryTest;
+use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignCollection;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -13,7 +14,13 @@ class StoreMarketingCampaignCollectionRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('create', MarketingCampaignCollection::class) ?? false;
+        if (! ($this->user()?->can('create', MarketingCampaignCollection::class) ?? false)) {
+            return false;
+        }
+
+        $campaign = $this->route('marketing_campaign');
+
+        return ! ($campaign instanceof MarketingCampaign && $campaign->isArchived());
     }
 
     public function rules(): array
@@ -27,13 +34,16 @@ class StoreMarketingCampaignCollectionRequest extends FormRequest
             'is_active' => ['boolean'],
             // Lista vacía permitida (borrador/configuración). Duplicados se rechazan.
             'laboratory_test_ids' => ['present', 'array'],
-            'laboratory_test_ids.*' => ['required', 'integer', 'distinct', 'exists:laboratory_tests,id'],
+            'laboratory_test_ids.*' => ['required', 'integer', 'exists:laboratory_tests,id'],
         ];
     }
 
     protected function prepareForValidation(): void
     {
+        $campaign = $this->route('marketing_campaign');
+
         $this->merge([
+            'marketing_campaign_id' => $campaign?->id ?? $this->input('marketing_campaign_id'),
             'is_active' => $this->boolean('is_active', true),
             'laboratory_test_ids' => $this->input('laboratory_test_ids', []),
         ]);

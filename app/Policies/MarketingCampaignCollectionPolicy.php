@@ -24,7 +24,13 @@ class MarketingCampaignCollectionPolicy
 
     public function update(User $user, MarketingCampaignCollection $collection): bool
     {
-        return $this->create($user);
+        if (! $this->create($user)) {
+            return false;
+        }
+
+        $campaign = $collection->campaign;
+
+        return $campaign !== null && ! $campaign->isArchived();
     }
 
     public function delete(User $user, MarketingCampaignCollection $collection): bool

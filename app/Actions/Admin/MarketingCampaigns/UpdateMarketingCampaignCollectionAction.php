@@ -21,6 +21,9 @@ class UpdateMarketingCampaignCollectionAction
         MarketingCampaignCollection $collection,
         array $data,
     ): MarketingCampaignCollection {
+        $collection->loadMissing('campaign');
+        $collection->campaign?->assertWritable();
+
         return DB::transaction(function () use ($collection, $data) {
             $collection->update(Arr::except($data, ['laboratory_test_ids']));
 

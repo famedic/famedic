@@ -121,6 +121,12 @@ class EnsureUserHasAdminAccount
                 'current' => Route::currentRouteName() === 'admin.medical-attention-subscriptions.index' ||
                     Route::currentRouteName() === 'admin.medical-attention-subscriptions.show',
             ] : null,
+            $this->adminHasPermission($administrator, 'marketing-campaigns.manage') ? [
+                'label' => 'Campañas y enlaces',
+                'url' => route('admin.marketing-campaigns.index'),
+                'icon' => 'MegaphoneIcon',
+                'current' => str_starts_with((string) Route::currentRouteName(), 'admin.marketing-campaigns.'),
+            ] : null,
             $request->user()->administrator->hasPermissionTo('customers.manage') ? [
                 'label' => 'Clientes',
                 'icon' => 'UserGroupIcon',
@@ -214,9 +220,11 @@ class EnsureUserHasAdminAccount
             || str_starts_with($currentRoute, 'admin.integrations.')
             || str_starts_with($currentRoute, 'admin.automation')
             || str_starts_with($currentRoute, 'admin.clinical-interpreter.')
-            || str_starts_with($currentRoute, 'admin.monitoring-ai.');
+            || str_starts_with($currentRoute, 'admin.monitoring-ai.')
+            || str_starts_with($currentRoute, 'admin.marketing-campaigns.');
 
         $canOpenWorkspace = $this->adminHasPermission($administrator, 'customers.manage')
+            || $this->adminHasPermission($administrator, 'marketing-campaigns.manage')
             || $this->adminHasPermission($administrator, 'activecampaign.manage')
             || $this->adminHasPermission($administrator, 'automation.manage')
             || $this->adminHasPermission($administrator, 'clinical-interpreter.manage')

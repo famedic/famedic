@@ -243,7 +243,8 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
                 ->where('thresholdDays', 3)
                 ->has('adminNavigation'));
 
-        $navigation = collect($response->original->getData()['page']['props']['adminNavigation'] ?? []);
+        $navigation = collect($response->original->getData()['page']['props']['adminNavigation'] ?? [])
+            ->flatMap(fn ($section) => $section['items'] ?? []);
         $labs = $navigation->firstWhere('label', 'Laboratorios');
         $this->assertNotNull($labs);
         $this->assertTrue(collect($labs['items'] ?? [])->pluck('label')->contains('Facturación'));

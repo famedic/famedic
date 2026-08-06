@@ -24,7 +24,13 @@ class MarketingCampaignLinkPolicy
 
     public function update(User $user, MarketingCampaignLink $link): bool
     {
-        return $this->create($user);
+        if (! $this->create($user)) {
+            return false;
+        }
+
+        $campaign = $link->campaign;
+
+        return $campaign !== null && ! $campaign->isArchived();
     }
 
     public function delete(User $user, MarketingCampaignLink $link): bool

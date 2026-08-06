@@ -38,6 +38,13 @@ class UpdateMarketingCampaignLinkRequest extends FormRequest
 
     public function prepareForValidation(): void
     {
+        $campaign = $this->route('marketing_campaign');
+        $link = $this->link();
+
+        if ($campaign && $link && (int) $link->marketing_campaign_id !== (int) $campaign->id) {
+            abort(404);
+        }
+
         if ($this->has('slug')) {
             $this->merge([
                 'slug' => app(MarketingCampaignLinkSlugService::class)->normalize((string) $this->input('slug')),
@@ -76,6 +83,8 @@ class UpdateMarketingCampaignLinkRequest extends FormRequest
 
     private function link(): mixed
     {
-        return $this->route('marketing_campaign_link') ?? $this->route('link');
+        return $this->route('marketing_campaign_link')
+            ?? $this->route('link')
+            ?? $this->route('marketingCampaignLink');
     }
 }

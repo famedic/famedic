@@ -4,6 +4,7 @@ namespace App\Actions\Admin\MarketingCampaigns;
 
 use App\Enums\MarketingCampaignTargetType;
 use App\Models\Administrator;
+use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignLink;
 use App\Services\Marketing\MarketingCampaignLinkSlugService;
 use App\Services\Marketing\MarketingCampaignTargetPayloadValidator;
@@ -34,6 +35,9 @@ class CreateMarketingCampaignLinkAction
             : MarketingCampaignTargetType::from($data['target_type']);
 
         return DB::transaction(function () use ($data, $administrator, $targetType) {
+            $campaign = MarketingCampaign::query()->findOrFail((int) $data['marketing_campaign_id']);
+            $campaign->assertWritable();
+
             $data['slug'] = $this->slugService->assertAvailable($data['slug']);
             $data['target_payload'] = $this->targetPayloadValidator->validate(
                 $targetType,

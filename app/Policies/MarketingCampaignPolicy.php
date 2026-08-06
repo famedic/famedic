@@ -24,6 +24,18 @@ class MarketingCampaignPolicy
 
     public function update(User $user, MarketingCampaign $campaign): bool
     {
+        if ($campaign->isArchived()) {
+            return false;
+        }
+
+        return $this->create($user);
+    }
+
+    /**
+     * Archivar (idempotente): requiere edit aunque ya esté archived.
+     */
+    public function archive(User $user, MarketingCampaign $campaign): bool
+    {
         return $this->create($user);
     }
 

@@ -18,7 +18,10 @@ function marketingCampaignIsolatedTableNames(): array
         'roles',
         'laboratory_tests',
         'laboratory_test_categories',
+        'notifications',
+        'laboratory_concierges',
         'administrators',
+        'customers',
         'users',
     ];
 }
@@ -51,9 +54,39 @@ function bootstrapIsolatedMarketingCampaignSchema(): void
         $table->timestamps();
     });
 
+    Schema::create('notifications', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+        $table->string('type')->nullable();
+        $table->string('title')->nullable();
+        $table->text('message')->nullable();
+        $table->boolean('is_read')->default(false);
+        $table->timestamp('created_at')->nullable();
+    });
+
     Schema::create('administrators', function (Blueprint $table) {
         $table->id();
         $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+        $table->timestamps();
+        $table->softDeletes();
+    });
+
+    Schema::create('laboratory_concierges', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('administrator_id')->constrained()->cascadeOnDelete();
+        $table->timestamps();
+        $table->softDeletes();
+    });
+
+    // Stub for HandleInertiaRequests share props (user->customer) on admin Inertia responses.
+    Schema::create('customers', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+        $table->string('customerable_type')->nullable();
+        $table->unsignedBigInteger('customerable_id')->nullable();
+        $table->timestamp('medical_attention_subscription_expires_at')->nullable();
+        $table->string('medical_attention_identifier')->nullable();
+        $table->boolean('has_odessa_afiliate_account')->default(false);
         $table->timestamps();
         $table->softDeletes();
     });
@@ -70,6 +103,7 @@ function bootstrapIsolatedMarketingCampaignSchema(): void
         $table->string('brand', 80);
         $table->string('gda_id')->unique();
         $table->string('name');
+        $table->string('other_name')->nullable();
         $table->text('indications')->nullable();
         $table->boolean('requires_appointment')->default(false);
         $table->unsignedInteger('public_price_cents');

@@ -25,12 +25,19 @@ class UpdateMarketingCampaignCollectionRequest extends FormRequest
             'is_active' => ['boolean'],
             // Lista vacía válida: limpia items. Duplicados se rechazan.
             'laboratory_test_ids' => ['present', 'array'],
-            'laboratory_test_ids.*' => ['required', 'integer', 'distinct', 'exists:laboratory_tests,id'],
+            'laboratory_test_ids.*' => ['required', 'integer', 'exists:laboratory_tests,id'],
         ];
     }
 
     protected function prepareForValidation(): void
     {
+        $campaign = $this->route('marketing_campaign');
+        $collection = $this->collection();
+
+        if ($campaign && $collection && (int) $collection->marketing_campaign_id !== (int) $campaign->id) {
+            abort(404);
+        }
+
         $this->merge([
             'is_active' => $this->boolean('is_active', true),
             'laboratory_test_ids' => $this->input('laboratory_test_ids', []),
@@ -76,6 +83,8 @@ class UpdateMarketingCampaignCollectionRequest extends FormRequest
 
     private function collection(): mixed
     {
-        return $this->route('marketing_campaign_collection') ?? $this->route('collection');
+        return $this->route('marketing_campaign_collection')
+            ?? $this->route('collection')
+            ?? $this->route('marketingCampaignCollection');
     }
 }

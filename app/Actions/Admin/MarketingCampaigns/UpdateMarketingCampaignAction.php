@@ -15,6 +15,8 @@ class UpdateMarketingCampaignAction
         array $data,
         Administrator $administrator,
     ): MarketingCampaign {
+        $campaign->assertWritable();
+
         $campaign->update(array_merge($data, [
             'updated_by' => $administrator->id,
         ]));

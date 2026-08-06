@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin\MarketingCampaigns;
 
 use App\Enums\MarketingCampaignLinkStatus;
 use App\Enums\MarketingCampaignTargetType;
+use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignLink;
 use App\Services\Marketing\MarketingCampaignLinkSlugService;
 use App\Services\Marketing\MarketingCampaignTargetPayloadValidator;
@@ -16,7 +17,13 @@ class StoreMarketingCampaignLinkRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('create', MarketingCampaignLink::class) ?? false;
+        if (! ($this->user()?->can('create', MarketingCampaignLink::class) ?? false)) {
+            return false;
+        }
+
+        $campaign = $this->route('marketing_campaign');
+
+        return ! ($campaign instanceof MarketingCampaign && $campaign->isArchived());
     }
 
     public function rules(): array
@@ -40,10 +47,19 @@ class StoreMarketingCampaignLinkRequest extends FormRequest
 
     public function prepareForValidation(): void
     {
+        $campaign = $this->route('marketing_campaign');
+        $merge = [];
+
+        if ($campaign) {
+            $merge['marketing_campaign_id'] = $campaign->id;
+        }
+
         if ($this->has('slug')) {
-            $this->merge([
-                'slug' => app(MarketingCampaignLinkSlugService::class)->normalize((string) $this->input('slug')),
-            ]);
+            $merge['slug'] = app(MarketingCampaignLinkSlugService::class)->normalize((string) $this->input('slug'));
+        }
+
+        if ($merge !== []) {
+            $this->merge($merge);
         }
     }
 

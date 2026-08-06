@@ -2,6 +2,7 @@
 
 namespace App\Actions\Admin\MarketingCampaigns;
 
+use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignCollection;
 use App\Services\Marketing\MarketingCampaignCollectionService;
 use Illuminate\Support\Arr;
@@ -20,6 +21,9 @@ class CreateMarketingCampaignCollectionAction
     public function __invoke(array $data): MarketingCampaignCollection
     {
         return DB::transaction(function () use ($data) {
+            $campaign = MarketingCampaign::query()->findOrFail((int) $data['marketing_campaign_id']);
+            $campaign->assertWritable();
+
             $collection = MarketingCampaignCollection::query()->create(
                 Arr::except($data, ['laboratory_test_ids'])
             );
