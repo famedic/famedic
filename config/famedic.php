@@ -81,6 +81,9 @@ return [
         'activecampaign' => [
             ['manage' => 'Administrar módulo ActiveCampaign'],
         ],
+        'automation' => [
+            ['manage' => 'Monitorear Automation Operations Center'],
+        ],
         /*
          * Permisos con nombres que no siguen category.action (legacy).
          * La clave del arreglo es el nombre exacto del permiso en BD.

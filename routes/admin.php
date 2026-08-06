@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\ActiveCampaignController;
 use App\Http\Controllers\Admin\ActiveCampaignOperationsController;
 use App\Http\Controllers\Admin\AdministratorController;
+use App\Http\Controllers\Admin\AutomationOperationsController;
 use App\Http\Controllers\Admin\CouponConceptController;
 use App\Http\Controllers\Admin\CouponBeneficiaryController;
 use App\Http\Controllers\Admin\CouponAuthorizationController;
@@ -368,6 +369,14 @@ Route::prefix('admin')->middleware([
             Route::get('activecampaign/export', [ActiveCampaignOperationsController::class, 'export'])
                 ->name('activecampaign.export');
         });
+
+        // Automation Operations Center — monitor / audit / diagnose only
+        Route::get('automation', [AutomationOperationsController::class, 'index'])
+            ->name('automation');
+        Route::post('automation/diagnostic', [AutomationOperationsController::class, 'diagnostic'])
+            ->name('automation.diagnostic');
+        Route::post('automation/queue/action', [AutomationOperationsController::class, 'queueAction'])
+            ->name('automation.queue.action');
 
         Route::get('simulators', [SimulatorController::class, 'index'])->name('simulators.index');
         Route::get('simulators/gda', [GdaNotificationSimulatorController::class, 'show'])->name('simulators.gda');

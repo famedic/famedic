@@ -212,11 +212,13 @@ class EnsureUserHasAdminAccount
             || $currentRoute === 'admin.customers.dormant'
             || str_starts_with($currentRoute, 'admin.activecampaign.')
             || str_starts_with($currentRoute, 'admin.integrations.')
+            || str_starts_with($currentRoute, 'admin.automation')
             || str_starts_with($currentRoute, 'admin.clinical-interpreter.')
             || str_starts_with($currentRoute, 'admin.monitoring-ai.');
 
         $canOpenWorkspace = $this->adminHasPermission($administrator, 'customers.manage')
             || $this->adminHasPermission($administrator, 'activecampaign.manage')
+            || $this->adminHasPermission($administrator, 'automation.manage')
             || $this->adminHasPermission($administrator, 'clinical-interpreter.manage')
             || $this->adminHasPermission($administrator, 'monitoring-ai.manage')
             || $this->adminHasPermission($administrator, 'administrators.manage')
@@ -364,6 +366,12 @@ class EnsureUserHasAdminAccount
                 'url' => route('admin.integrations.activecampaign'),
                 'icon' => 'SignalIcon',
                 'current' => str_starts_with($currentRoute, 'admin.integrations.activecampaign'),
+            ] : null,
+            $this->adminHasPermission($administrator, 'automation.manage') ? [
+                'label' => 'Automation Platform',
+                'url' => route('admin.automation'),
+                'icon' => 'BoltIcon',
+                'current' => str_starts_with($currentRoute, 'admin.automation'),
             ] : null,
         ]));
 

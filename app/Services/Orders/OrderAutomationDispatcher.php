@@ -4,21 +4,22 @@ namespace App\Services\Orders;
 
 use App\DTOs\Orders\OrderAutomationContext;
 use App\DTOs\Orders\OrderAutomationDispatchResult;
-use App\DTOs\Orders\OrderAutomationResult;
+use App\Jobs\Automation\AutomationExecutionJob;
+use App\Models\AutomationRun;
 use Illuminate\Support\Facades\Log;
-use Throwable;
+use Illuminate\Support\Str;
 
 /**
  * Official fan-out layer for completed-order automations.
  *
- * Fulfill / callers notify order completion → OrderAutomationService → this dispatcher.
- * Drivers are registered in config/order_automation.php — add Email/WhatsApp/etc.
- * without changing this class.
+ * Phase 4: enqueues one AutomationExecutionJob per registered driver.
+ * Drivers are NOT executed inline — workers run them asynchronously.
+ * Business logic remains inside drivers; this class only schedules work.
  */
 class OrderAutomationDispatcher
 {
-    /** @var list<object> */
-    private array $drivers;
+    /** @var list<class-string> */
+    private array $driverClasses;
 
     /**
      * @param  list<object|string>|null  $drivers  Driver instances or class names (defaults to config)
@@ -27,9 +28,9 @@ class OrderAutomationDispatcher
     {
         $resolved = $drivers ?? config('order_automation.drivers', []);
 
-        $this->drivers = array_values(array_map(
-            function (object|string $driver): object {
-                return is_string($driver) ? app($driver) : $driver;
+        $this->driverClasses = array_values(array_map(
+            function (object|string $driver): string {
+                return is_string($driver) ? $driver : $driver::class;
             },
             $resolved
         ));
@@ -38,89 +39,79 @@ class OrderAutomationDispatcher
     public function dispatch(OrderAutomationContext $context): OrderAutomationDispatchResult
     {
         $started = hrtime(true);
+        $handler = $this->handlerForChannel($context->channel);
+        $payload = $context->toArray();
 
-        Log::info('[Order Automation Dispatcher] dispatch started', [
+        Log::info('[Order Automation Dispatcher] enqueue started', [
             'channel' => $context->channel,
-            'drivers_registered' => count($this->drivers),
-            'driver_names' => array_map(fn (object $d) => class_basename($d), $this->drivers),
-            'context' => $context->toArray(),
+            'handler' => $handler,
+            'drivers_registered' => count($this->driverClasses),
+            'driver_names' => array_map(fn (string $c) => class_basename($c), $this->driverClasses),
+            'context' => $payload,
         ]);
 
         $driverEntries = [];
-        $operations = [];
         $errors = [];
-        $successful = 0;
+        $queued = 0;
         $failed = 0;
 
-        foreach ($this->drivers as $driver) {
-            $driverName = class_basename($driver);
-
-            Log::info('[Driver Execution] starting', [
-                'driver' => $driverName,
-                'channel' => $context->channel,
-            ]);
+        foreach ($this->driverClasses as $driverClass) {
+            $driverName = class_basename($driverClass);
+            $uuid = (string) Str::uuid();
 
             try {
-                $result = $this->executeDriver($driver, $context);
-                $resultArray = $result->toArray();
-                $driverSuccess = $this->isDriverSuccess($result);
+                $run = AutomationRun::query()->create([
+                    'automation_uuid' => $uuid,
+                    'driver' => $driverName,
+                    'driver_class' => $driverClass,
+                    'handler' => $handler,
+                    'entity_type' => $payload['order_type'] ?? null,
+                    'entity_id' => $payload['order_id'] ?? null,
+                    'channel' => $context->channel,
+                    'attempt' => 1,
+                    'status' => AutomationRun::STATUS_PENDING,
+                    'payload' => $payload,
+                ]);
+
+                AutomationExecutionJob::dispatchForUuid($run->automation_uuid);
+                $queued++;
 
                 $driverEntries[] = [
                     'driver' => $driverName,
-                    'success' => $driverSuccess,
-                    'status' => $result->status,
-                    'message' => $result->message,
-                    'result' => $resultArray,
+                    'success' => true,
+                    'status' => 'queued',
+                    'message' => 'Enqueued AutomationExecutionJob',
+                    'automation_uuid' => $uuid,
+                    'result' => [
+                        'automation_uuid' => $uuid,
+                        'status' => AutomationRun::STATUS_PENDING,
+                    ],
                 ];
 
-                foreach ($result->activecampaign['operations'] ?? [] as $operation) {
-                    if (is_array($operation)) {
-                        $operations[] = array_merge(['driver' => $driverName], $operation);
-                    }
-                }
-
-                if ($driverSuccess) {
-                    $successful++;
-                    Log::info('[Driver Success]', [
-                        'driver' => $driverName,
-                        'channel' => $context->channel,
-                        'status' => $result->status,
-                        'activecampaign' => $result->activecampaign,
-                    ]);
-                } else {
-                    $failed++;
-                    $errorEntry = [
-                        'driver' => $driverName,
-                        'status' => $result->status,
-                        'message' => $result->message,
-                        'error' => $result->activecampaign['error'] ?? $result->message,
-                        'retryable' => $result->activecampaign['retryable'] ?? null,
-                    ];
-                    $errors[] = $errorEntry;
-
-                    Log::warning('[Driver Failed]', $errorEntry);
-                }
-            } catch (Throwable $e) {
-                $failed++;
-                $errorEntry = [
+                Log::info('[Order Automation Dispatcher] job queued', [
+                    'automation_uuid' => $uuid,
                     'driver' => $driverName,
-                    'status' => 'exception',
+                    'channel' => $context->channel,
+                ]);
+            } catch (\Throwable $e) {
+                $failed++;
+                $errors[] = [
+                    'driver' => $driverName,
+                    'status' => 'enqueue_failed',
                     'message' => $e->getMessage(),
                     'error' => $e->getMessage(),
                     'retryable' => true,
                 ];
-                $errors[] = $errorEntry;
                 $driverEntries[] = [
                     'driver' => $driverName,
                     'success' => false,
-                    'status' => 'exception',
+                    'status' => 'enqueue_failed',
                     'message' => $e->getMessage(),
                     'result' => null,
                 ];
 
-                Log::error('[Driver Failed] exception', [
+                Log::error('[Order Automation Dispatcher] enqueue failed', [
                     'driver' => $driverName,
-                    'channel' => $context->channel,
                     'error' => $e->getMessage(),
                 ]);
             }
@@ -130,54 +121,37 @@ class OrderAutomationDispatcher
 
         $dispatchResult = new OrderAutomationDispatchResult(
             drivers: $driverEntries,
-            successful: $successful,
+            successful: $queued,
             failed: $failed,
             durationMs: $durationMs,
-            operations: $operations,
+            operations: [],
             errors: $errors,
             channel: $context->channel,
-            context: $context->toArray(),
+            context: $payload,
             handled: true,
-            status: $failed === 0 && $successful > 0
-                ? 'completed'
-                : ($successful === 0 && $failed === 0 ? 'noop' : 'completed_with_errors'),
+            status: $failed === 0 && $queued > 0
+                ? 'queued'
+                : ($queued === 0 && $failed === 0 ? 'noop' : 'queued_with_errors'),
             message: sprintf(
-                'Dispatched %d driver(s): %d successful, %d failed.',
-                count($this->drivers),
-                $successful,
+                'Queued %d driver job(s): %d enqueued, %d failed to enqueue.',
+                count($this->driverClasses),
+                $queued,
                 $failed
             ),
         );
 
-        Log::info('[Order Automation Dispatcher] dispatch completed', $dispatchResult->toArray());
+        Log::info('[Order Automation Dispatcher] enqueue completed', $dispatchResult->toArray());
 
         return $dispatchResult;
     }
 
-    private function executeDriver(object $driver, OrderAutomationContext $context): OrderAutomationResult
+    private function handlerForChannel(string $channel): string
     {
-        return match ($context->channel) {
-            OrderAutomationContext::CHANNEL_LABORATORY => $driver->handleLaboratoryOrder($context),
-            OrderAutomationContext::CHANNEL_PHARMACY => $driver->handlePharmacyOrder($context),
-            OrderAutomationContext::CHANNEL_MEMBERSHIP => $driver->handleMembershipOrder($context),
-            default => new OrderAutomationResult(
-                handler: 'dispatch',
-                status: 'failed',
-                handled: false,
-                message: "Unsupported order channel: {$context->channel}",
-                context: $context->toArray(),
-                automationsExecuted: false,
-                activecampaign: OrderAutomationResult::emptyActiveCampaignPayload('unsupported_channel'),
-            ),
+        return match ($channel) {
+            OrderAutomationContext::CHANNEL_LABORATORY => 'handleLaboratoryOrder',
+            OrderAutomationContext::CHANNEL_PHARMACY => 'handlePharmacyOrder',
+            OrderAutomationContext::CHANNEL_MEMBERSHIP => 'handleMembershipOrder',
+            default => 'handleLaboratoryOrder',
         };
-    }
-
-    private function isDriverSuccess(OrderAutomationResult $result): bool
-    {
-        if (array_key_exists('success', $result->activecampaign) && $result->activecampaign['success'] !== null) {
-            return (bool) $result->activecampaign['success'];
-        }
-
-        return in_array($result->status, ['synced', 'prepared', 'completed'], true);
     }
 }

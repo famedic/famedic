@@ -39,6 +39,7 @@ import {
 	MegaphoneIcon,
 	CpuChipIcon,
 	SignalIcon,
+	BoltIcon,
 } from "@heroicons/react/16/solid";
 import { Strong } from "@/Components/Catalyst/text";
 import ApplicationLogo from "@/Components/ApplicationLogo";
@@ -318,6 +319,7 @@ export default function SideBar() {
 		MegaphoneIcon: MegaphoneIcon,
 		CpuChipIcon: CpuChipIcon,
 		SignalIcon: SignalIcon,
+		BoltIcon: BoltIcon,
 	};
 
 	const sections = flattenNavigation(adminNavigation);
