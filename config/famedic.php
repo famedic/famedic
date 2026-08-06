@@ -81,6 +81,10 @@ return [
         'activecampaign' => [
             ['manage' => 'Administrar módulo ActiveCampaign'],
         ],
+        'marketing-campaigns' => [
+            ['manage' => 'Administrar campañas y enlaces'],
+            ['manage.edit' => 'Crear y editar campañas y enlaces'],
+        ],
         'automation' => [
             ['manage' => 'Monitorear Automation Operations Center'],
         ],
