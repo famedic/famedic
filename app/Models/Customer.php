@@ -31,6 +31,8 @@ class Customer extends Model
     {
         return [
             'medical_attention_subscription_expires_at' => 'datetime',
+            'ac_last_sync_at' => 'datetime',
+            'ac_contact_id' => 'integer',
         ];
     }
 

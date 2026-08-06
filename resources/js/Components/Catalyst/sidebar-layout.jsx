@@ -1,11 +1,13 @@
 import * as Headless from "@headlessui/react";
 import { useState } from "react";
 import { NavbarItem } from "./navbar";
+import { useAdminSidebarUi } from "@/Layouts/AdminLayout/SidebarUiContext";
+import clsx from "clsx";
 
 function OpenMenuIcon() {
 	return (
 		<svg data-slot="icon" viewBox="0 0 20 20" aria-hidden="true">
-			<path d="M2 6.75C2 6.33579 2.33579 6 2.75 6H17.25C17.6642 6 18 6.33579 18 6.75C18 7.16421 17.6642 7.5 17.25 7.5H2.75C2.33579 7.5 2 7.16421 2 6.75ZM2 13.25C2 12.8358 2.33579 12.5 2.75 12.5H17.25C17.6642 12.5 18 12.8358 18 13.25C18 13.6642 17.6642 14 17.25 14H2.75C2.33579 14 2 13.6642 2 13.25Z" />
+			<path d="M2 6.75C2 6.33579 2.33579 6 2.75 6H17.25C17.6642 6 18 6.33579 18 6.75C18 7.16421 17.6642 7.5 17.25 7.5H2.75C2.33579 7.5 2 6.75ZM2 13.25C2 12.8358 2.33579 12.5 2.75 12.5H17.25C17.6642 12.5 18 12.8358 18 13.25C18 13.6642 17.6642 14 17.25 14H2.75C2.33579 14 2 12.8358 2 13.25Z" />
 		</svg>
 	);
 }
@@ -47,15 +49,21 @@ function MobileSidebar({ open, close, children }) {
 
 export function SidebarLayout({ navbar, sidebar, children }) {
 	let [showSidebar, setShowSidebar] = useState(false);
+	const { collapsed } = useAdminSidebarUi();
 
 	return (
 		<div className="relative isolate flex min-h-svh w-full bg-white max-lg:flex-col lg:bg-zinc-100 dark:bg-slate-950 dark:lg:bg-gray-950">
 			{/* Sidebar on desktop */}
-			<div className="fixed inset-y-0 left-0 w-64 max-lg:hidden">
+			<div
+				className={clsx(
+					"fixed inset-y-0 left-0 max-lg:hidden transition-[width] duration-200 ease-out",
+					collapsed ? "w-16" : "w-64",
+				)}
+			>
 				{sidebar}
 			</div>
 
-			{/* Sidebar on mobile */}
+			{/* Sidebar on mobile — always expanded labels */}
 			<MobileSidebar
 				open={showSidebar}
 				close={() => setShowSidebar(false)}
@@ -77,7 +85,12 @@ export function SidebarLayout({ navbar, sidebar, children }) {
 			</header>
 
 			{/* Content */}
-			<main className="flex flex-1 flex-col pb-2 lg:min-w-0 lg:pl-64 lg:pr-2 lg:pt-2">
+			<main
+				className={clsx(
+					"flex flex-1 flex-col pb-2 lg:min-w-0 lg:pr-2 lg:pt-2 transition-[padding] duration-200 ease-out",
+					collapsed ? "lg:pl-16" : "lg:pl-64",
+				)}
+			>
 				<div className="grow p-6 lg:rounded-lg lg:bg-white lg:p-10 lg:shadow-sm lg:ring-1 lg:ring-zinc-950/5 dark:lg:bg-slate-950 dark:lg:ring-slate-800">
 					<div className="mx-auto max-w-6xl">{children}</div>
 				</div>

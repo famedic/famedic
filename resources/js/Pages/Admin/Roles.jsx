@@ -1,7 +1,7 @@
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Button } from "@/Components/Catalyst/button";
 import { Heading } from "@/Components/Catalyst/heading";
-import { CheckIcon, PlusIcon, XMarkIcon } from "@heroicons/react/16/solid";
+import { PlusIcon } from "@heroicons/react/16/solid";
 import { Badge } from "@/Components/Catalyst/badge";
 import {
 	Pagination,
@@ -18,6 +18,57 @@ import {
 } from "@/Components/Catalyst/table";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { usePage } from "@inertiajs/react";
+
+const PREVIEW_LIMIT = 4;
+
+function isRootPermissionKey(key) {
+	if (!key.includes(".")) {
+		return true;
+	}
+
+	return key.split(".").length === 2;
+}
+
+function RolePermissionsSummary({ role, permissionsNames }) {
+	const rootKeys = Object.keys(permissionsNames).filter(isRootPermissionKey);
+	const grantedRoots = rootKeys.filter((key) =>
+		role.permissions.some((permission) => permission.name === key),
+	);
+	const grantedCount = role.permissions.length;
+	const totalCount = Object.keys(permissionsNames).length;
+	const preview = grantedRoots.slice(0, PREVIEW_LIMIT);
+	const remaining = grantedRoots.length - preview.length;
+
+	return (
+		<div className="space-y-2">
+			<div className="flex flex-wrap items-center gap-2">
+				<Badge color="slate">
+					{grantedCount} de {totalCount} permisos
+				</Badge>
+				{grantedRoots.length > 0 && remaining > 0 && (
+					<Text className="text-xs text-zinc-500">
+						{grantedRoots.length} módulos activos
+					</Text>
+				)}
+			</div>
+
+			{preview.length > 0 ? (
+				<div className="flex flex-wrap gap-1.5">
+					{preview.map((key) => (
+						<Badge key={key} color="zinc" className="max-w-56 truncate">
+							{permissionsNames[key]}
+						</Badge>
+					))}
+					{remaining > 0 && (
+						<Badge color="slate">+{remaining} más</Badge>
+					)}
+				</div>
+			) : (
+				<Text className="text-sm text-zinc-500">Sin permisos asignados</Text>
+			)}
+		</div>
+	);
+}
 
 export default function Roles() {
 	return (
@@ -43,7 +94,7 @@ function RolesList() {
 			<Table className="mt-8 [--gutter:theme(spacing.6)]">
 				<TableHead>
 					<TableRow>
-						<TableHeader>Nombre</TableHeader>
+						<TableHeader className="w-48 sm:w-64">Nombre</TableHeader>
 						<TableHeader>Permisos</TableHeader>
 					</TableRow>
 				</TableHead>
@@ -55,105 +106,16 @@ function RolesList() {
 							title={`Rol #${role.id}`}
 							dusk={`editRole-${role.id}`}
 						>
-							<TableCell>
+							<TableCell className="align-top">
 								<Text>
 									<Strong>{role.name}</Strong>
 								</Text>
 							</TableCell>
 							<TableCell>
-								<ul className="space-y-1">
-									{Object.keys(permissionsNames)
-										.filter(
-											(key) =>
-												key.split(".").length === 2,
-										)
-										.map((parentKey) => {
-											const hasParentPermission =
-												role.permissions.some(
-													(p) => p.name === parentKey,
-												);
-											return (
-												<li key={parentKey}>
-													<div className="flex items-center space-x-2">
-														<Badge color="slate">
-															{hasParentPermission ? (
-																<CheckIcon className="h-4 w-4 text-famedic-light" />
-															) : (
-																<XMarkIcon className="h-4 w-4 text-red-500" />
-															)}
-															{
-																permissionsNames[
-																	parentKey
-																]
-															}
-														</Badge>
-													</div>
-													{Object.keys(
-														permissionsNames,
-													).filter(
-														(key) =>
-															key.startsWith(
-																parentKey + ".",
-															) &&
-															key.split(".")
-																.length > 2,
-													).length > 0 && (
-														<ul className="ml-4 mt-1 space-y-1">
-															{Object.keys(
-																permissionsNames,
-															)
-																.filter(
-																	(key) =>
-																		key.startsWith(
-																			parentKey +
-																				".",
-																		) &&
-																		key.split(
-																			".",
-																		)
-																			.length >
-																			2,
-																)
-																.map(
-																	(
-																		childKey,
-																	) => {
-																		const hasChildPermission =
-																			role.permissions.some(
-																				(
-																					p,
-																				) =>
-																					p.name ===
-																					childKey,
-																			);
-																		return (
-																			<li
-																				key={
-																					childKey
-																				}
-																			>
-																				<Badge color="slate">
-																					{hasChildPermission ? (
-																						<CheckIcon className="h-4 w-4 text-famedic-light" />
-																					) : (
-																						<XMarkIcon className="h-4 w-4 text-red-500" />
-																					)}
-																					{
-																						permissionsNames[
-																							childKey
-																						]
-																					}
-																				</Badge>
-																			</li>
-																		);
-																	},
-																)}
-														</ul>
-													)}
-												</li>
-											);
-										})}
-								</ul>
+								<RolePermissionsSummary
+									role={role}
+									permissionsNames={permissionsNames}
+								/>
 							</TableCell>
 						</TableRow>
 					))}

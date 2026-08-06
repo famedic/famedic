@@ -16,6 +16,10 @@ import {
 	CurrencyDollarIcon,
 	ChartBarIcon,
 	ReceiptPercentIcon,
+	BeakerIcon,
+	BuildingStorefrontIcon,
+	HeartIcon,
+	TagIcon,
 } from "@heroicons/react/16/solid";
 import { Text } from "@/Components/Catalyst/text";
 import { DASHBOARD_COLORS, TONE_CLASSES } from "./chartTheme.jsx";
@@ -29,6 +33,32 @@ const ICONS = {
 	recovered_value: CurrencyDollarIcon,
 	conversion: ChartBarIcon,
 	avg_ticket: ReceiptPercentIcon,
+	lab: BeakerIcon,
+	pharmacy: BuildingStorefrontIcon,
+	membership: HeartIcon,
+	credit: BanknotesIcon,
+	promo: TagIcon,
+	tag: TagIcon,
+	registered: ShoppingCartIcon,
+	active: CheckCircleIcon,
+	email_verified: TagIcon,
+	logged_in: CheckCircleIcon,
+	with_cart: ShoppingCartIcon,
+	purchased: CheckCircleIcon,
+	abandonment: XCircleIcon,
+	time_to_purchase: ChartBarIcon,
+	retention_30: CheckCircleIcon,
+	retention_60: ChartBarIcon,
+	retention_90: TagIcon,
+	avg_ltv: CurrencyDollarIcon,
+	avg_health: ChartBarIcon,
+	excellent: CheckCircleIcon,
+	good: CheckCircleIcon,
+	at_risk: XCircleIcon,
+	lost: XCircleIcon,
+	city_health: TagIcon,
+	source_health: ChartBarIcon,
+	channel_health: BeakerIcon,
 };
 
 function DeltaBadge({ kpi }) {
@@ -90,9 +120,9 @@ function Sparkline({ data, color }) {
 	);
 }
 
-export default function KpiCards({ kpis = [] }) {
+export default function KpiCards({ kpis = [], columnsClassName = "grid gap-4 sm:grid-cols-2 xl:grid-cols-4" }) {
 	return (
-		<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+		<div className={columnsClassName}>
 			{kpis.map((kpi) => {
 				const Icon = ICONS[kpi.id] || ShoppingCartIcon;
 				const tone = TONE_CLASSES[kpi.tone] || TONE_CLASSES.blue;
@@ -125,9 +155,11 @@ export default function KpiCards({ kpis = [] }) {
 								{kpi.hint}
 							</Text>
 						) : null}
-						<div className="mt-3">
-							<Sparkline data={kpi.sparkline} color={color} />
-						</div>
+						{kpi.sparkline?.length ? (
+							<div className="mt-3">
+								<Sparkline data={kpi.sparkline} color={color} />
+							</div>
+						) : null}
 						<p className="mt-1 text-[11px] text-zinc-400">
 							Periodo anterior: {kpi.previous_formatted}
 						</p>

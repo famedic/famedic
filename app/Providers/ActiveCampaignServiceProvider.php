@@ -2,6 +2,9 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use App\Services\ActiveCampaign\ActiveCampaignCacheService;
+use App\Services\ActiveCampaign\ActiveCampaignMirrorService;
+use App\Services\ActiveCampaign\ActiveCampaignReadService;
 use App\Services\ActiveCampaign\ActiveCampaignService;
 
 // Observers
@@ -32,6 +35,10 @@ class ActiveCampaignServiceProvider extends ServiceProvider
         $this->app->singleton(ActiveCampaignService::class, function ($app) {
             return new ActiveCampaignService();
         });
+
+        $this->app->singleton(ActiveCampaignCacheService::class);
+        $this->app->singleton(ActiveCampaignReadService::class);
+        $this->app->singleton(ActiveCampaignMirrorService::class);
     }
 
     public function boot(): void

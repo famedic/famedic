@@ -28,6 +28,10 @@ export const TONE_CLASSES = {
 		icon: "bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-300",
 		bar: "bg-violet-500",
 	},
+	slate: {
+		icon: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+		bar: "bg-slate-500",
+	},
 };
 
 export function ChartCard({ title, description, children, className = "" }) {

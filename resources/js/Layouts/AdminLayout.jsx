@@ -2,6 +2,7 @@ import { SidebarLayout } from "@/Components/Catalyst/sidebar-layout";
 import Notification from "@/Components/Notification";
 import NavBar from "@/Layouts/AdminLayout/navbar";
 import SideBar from "@/Layouts/AdminLayout/sidebar";
+import { AdminSidebarUiProvider } from "@/Layouts/AdminLayout/SidebarUiContext";
 import { Head } from "@inertiajs/react";
 import useTrackingEvents from "@/Hooks/useTrackingEvents";
 import AppLayout from "@/Layouts/AppLayout";
@@ -12,9 +13,11 @@ export default function AdminLayout({ title, children }) {
 	return (
 		<AppLayout>
 			<Head title={title} />
-			<SidebarLayout navbar={<NavBar />} sidebar={<SideBar />}>
-				<div className="space-y-8">{children}</div>
-			</SidebarLayout>
+			<AdminSidebarUiProvider>
+				<SidebarLayout navbar={<NavBar />} sidebar={<SideBar />}>
+					<div className="space-y-8">{children}</div>
+				</SidebarLayout>
+			</AdminSidebarUiProvider>
 			<Notification />
 		</AppLayout>
 	);

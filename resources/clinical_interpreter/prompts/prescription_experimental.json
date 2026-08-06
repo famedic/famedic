@@ -1,0 +1,12 @@
+{
+    "key": "prescription_interpreter",
+    "version": "1.1.0-experimental",
+    "status": "experimental",
+    "label": "Interpretación de recetas (experimental)",
+    "model": "gpt-4o",
+    "temperature": 0.2,
+    "top_p": 0.95,
+    "max_tokens": 3000,
+    "system_prompt": "Eres el intérprete documental clínico de Famedic (versión experimental). Extrae de la imagen de la receta un JSON estricto.\n\nProhibido: inventar datos, sugerir productos Famedic, consultar catálogos, devolver Markdown/HTML/texto libre.\nSolo JSON con las claves: patient, doctor, date, diagnosis, laboratory_tests, medications, instructions, observations, warnings, confidence.\nUsa null o [] cuando falte información.",
+    "user_prompt": "Analiza la imagen de la receta y responde solo con el JSON del contrato clínico Famedic."
+}

@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Admin\ActiveCampaignController;
+use App\Http\Controllers\Admin\ActiveCampaignOperationsController;
 use App\Http\Controllers\Admin\AdministratorController;
+use App\Http\Controllers\Admin\AutomationOperationsController;
 use App\Http\Controllers\Admin\CouponConceptController;
 use App\Http\Controllers\Admin\CouponBeneficiaryController;
 use App\Http\Controllers\Admin\CouponAuthorizationController;
@@ -41,6 +44,7 @@ use App\Http\Controllers\Admin\MurguiaMonitorController;
 use App\Http\Controllers\Admin\MurguiaReconciliationController;
 use App\Http\Controllers\Admin\MurguiaReportController;
 use App\Http\Controllers\Admin\MonitoringAiController;
+use App\Http\Controllers\Admin\ClinicalInterpreterController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\DevAssistanceRequestController as OnlinePharmacyDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\InvoiceController as OnlinePharmacyPurchasesInvoiceController;
@@ -75,9 +79,59 @@ Route::prefix('admin')->middleware([
 ])->group(function () {
     Route::name('admin.')->group(function () {
         Route::get('admin', AdminController::class)->name('admin');
+
+        Route::prefix('workspace')->name('workspace.')->group(function () {
+            Route::get('/', \App\Http\Controllers\Admin\Workspace\WorkspaceHomeController::class)
+                ->name('index');
+            // Producto independiente ActiveCampaign Hub
+            Route::get('activecampaign', \App\Http\Controllers\Admin\Workspace\ActiveCampaignHubController::class)
+                ->name('activecampaign');
+            // Compatibilidad: ruta anterior bajo Customer Engagement
+            Route::redirect('customer-engagement/activecampaign', '/admin/workspace/activecampaign')
+                ->name('customer-engagement.activecampaign');
+            Route::get('{workspace}', \App\Http\Controllers\Admin\Workspace\WorkspaceShowController::class)
+                ->where('workspace', 'clinical-ai|customers|marketing|customer-engagement|executive|ai|platform')
+                ->name('show');
+        });
+
+        // Compatibilidad: Intelligence Hub → Workspace
+        Route::redirect('intelligence', '/admin/workspace')->name('intelligence.index');
+        Route::get('intelligence/{suite}', function (string $suite) {
+            $map = [
+                'customer' => 'customers',
+                'marketing' => 'customer-engagement',
+                'executive' => 'executive',
+                'business' => 'executive',
+                'ai-operations' => 'ai',
+                'operations' => 'platform',
+                'governance' => 'platform',
+            ];
+
+            return redirect()->route('admin.workspace.show', $map[$suite] ?? 'customers');
+        })->where('suite', 'customer|marketing|executive|business|ai-operations|operations|governance')
+            ->name('intelligence.suite');
+
         Route::resource('administrators', AdministratorController::class)->except(['show']);
         Route::post('administrators/export', ExportAdministratorsController::class)->name('administrators.export');
         Route::get('customers/referrals', [CustomerReferralController::class, 'index'])->name('customers.referrals');
+        Route::get('customers/dormant', [\App\Http\Controllers\Admin\CustomerIntelligence\DormantCustomersController::class, 'index'])
+            ->name('customers.dormant');
+        Route::prefix('customer-intelligence')->name('customer-intelligence.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\CustomerIntelligence\CustomerIntelligenceHubController::class, '__invoke'])
+                ->name('index');
+            Route::get('customer-journey', [\App\Http\Controllers\Admin\CustomerIntelligence\CustomerJourneyController::class, 'index'])
+                ->name('customer-journey');
+            Route::get('customer-journey/data', [\App\Http\Controllers\Admin\CustomerIntelligence\CustomerJourneyController::class, 'data'])
+                ->name('customer-journey.data');
+            Route::get('cohorts', [\App\Http\Controllers\Admin\CustomerIntelligence\CohortsController::class, 'index'])
+                ->name('cohorts');
+            Route::get('cohorts/data', [\App\Http\Controllers\Admin\CustomerIntelligence\CohortsController::class, 'data'])
+                ->name('cohorts.data');
+            Route::get('customer-health', [\App\Http\Controllers\Admin\CustomerIntelligence\CustomerHealthController::class, 'index'])
+                ->name('customer-health');
+            Route::get('customer-health/data', [\App\Http\Controllers\Admin\CustomerIntelligence\CustomerHealthController::class, 'data'])
+                ->name('customer-health.data');
+        });
         Route::resource('customers', CustomerController::class)->only(['index', 'show', 'destroy']);
         Route::post('customers/export', ExportCustomersController::class)->name('customers.export');
         Route::patch('users/{user}', [UserController::class, 'update'])->name('users.update');
@@ -181,6 +235,33 @@ Route::prefix('admin')->middleware([
         Route::get('monitoring-ai', [MonitoringAiController::class, 'index'])->name('monitoring-ai.index');
         Route::post('monitoring-ai/ask', [MonitoringAiController::class, 'ask'])->name('monitoring-ai.ask');
 
+        // AI Clinical Interpreter · producto navegable
+        Route::prefix('clinical-interpreter')->name('clinical-interpreter.')->group(function () {
+            Route::get('/', [ClinicalInterpreterController::class, 'index'])->name('index');
+            Route::get('/history', [ClinicalInterpreterController::class, 'history'])->name('history');
+            Route::get('/orders', [ClinicalInterpreterController::class, 'ordersIndex'])->name('orders.index');
+            Route::get('/learning', [ClinicalInterpreterController::class, 'learning'])->name('learning');
+            Route::get('/config', [ClinicalInterpreterController::class, 'config'])->name('config');
+            Route::get('/operations', [ClinicalInterpreterController::class, 'operations'])->name('operations');
+
+            Route::get('/assistant', [ClinicalInterpreterController::class, 'assistant'])->name('assistant');
+            Route::get('/matching', [ClinicalInterpreterController::class, 'matching'])->name('matching');
+            Route::post('/interpret', [ClinicalInterpreterController::class, 'interpret'])
+                ->middleware('throttle:clinical-interpreter-interpret')
+                ->name('interpret');
+            Route::get('/catalog-search', [ClinicalInterpreterController::class, 'searchCatalog'])->name('catalog-search');
+            Route::post('/learning-suggestions', [ClinicalInterpreterController::class, 'recordLearning'])->name('learning-suggestions.store');
+            Route::post('/commercial/proposal', [ClinicalInterpreterController::class, 'commercialProposal'])->name('commercial.proposal');
+            Route::post('/commercial/draft', [ClinicalInterpreterController::class, 'commercialDraft'])->name('commercial.draft');
+            Route::post('/commercial/quote', [ClinicalInterpreterController::class, 'commercialQuote'])->name('commercial.quote');
+            Route::post('/commercial/cart', [ClinicalInterpreterController::class, 'commercialCart'])->name('commercial.cart');
+            Route::get('/customers/search', [ClinicalInterpreterController::class, 'searchCustomers'])->name('customers.search');
+            Route::post('/clinical-orders', [ClinicalInterpreterController::class, 'storeClinicalOrder'])->name('clinical-orders.store');
+            Route::get('/clinical-orders/{clinicalOrder}', [ClinicalInterpreterController::class, 'showClinicalOrder'])->name('clinical-orders.show');
+            Route::post('/clinical-orders/{clinicalOrder}/quote', [ClinicalInterpreterController::class, 'clinicalOrderQuote'])->name('clinical-orders.quote');
+            Route::post('/clinical-orders/{clinicalOrder}/cart', [ClinicalInterpreterController::class, 'clinicalOrderCart'])->name('clinical-orders.cart');
+        });
+
         // Tokens de Efevoo
         Route::resource('efevoo-tokens', EfevooTokenController::class)->only(['index', 'show']);
 
@@ -252,6 +333,51 @@ Route::prefix('admin')->middleware([
         Route::post('coupons/{coupon}/deactivate', [CouponController::class, 'deactivate'])->name('coupons.deactivate');
         Route::delete('coupons/{coupon}/assignments/{couponUser}', [CouponController::class, 'destroyAssignment'])->name('coupons.assignments.destroy');
         Route::resource('coupons', CouponController::class);
+        Route::prefix('activecampaign')->name('activecampaign.')->group(function () {
+            Route::get('/', [ActiveCampaignController::class, 'dashboard'])->name('dashboard');
+            Route::get('/analytics', [ActiveCampaignController::class, 'analytics'])->name('analytics');
+            Route::get('/contacts', [ActiveCampaignController::class, 'contacts'])->name('contacts');
+            Route::get('/contacts/360', [ActiveCampaignController::class, 'patient360'])->name('patient-360');
+            Route::get('/customer-journey', [ActiveCampaignController::class, 'customerJourney'])->name('customer-journey');
+            Route::get('/automations', [ActiveCampaignController::class, 'automations'])->name('automations');
+            Route::get('/automations/list', [ActiveCampaignController::class, 'automationsList'])->name('automations.list');
+            Route::get('/automations/builder', [ActiveCampaignController::class, 'automationsBuilder'])->name('automations.builder');
+            Route::get('/automations/{automation}', [ActiveCampaignController::class, 'automationsShow'])->name('automations.show');
+            Route::get('/funnels', [ActiveCampaignController::class, 'funnels'])->name('funnels');
+            Route::get('/events', [ActiveCampaignController::class, 'events'])->name('events');
+            Route::get('/tags', [ActiveCampaignController::class, 'tags'])->name('tags');
+            Route::get('/fields', [ActiveCampaignController::class, 'fields'])->name('fields');
+            Route::get('/ecommerce', [ActiveCampaignController::class, 'ecommerce'])->name('ecommerce');
+            Route::get('/laboratories', [ActiveCampaignController::class, 'laboratories'])->name('laboratories');
+            Route::get('/memberships', [ActiveCampaignController::class, 'memberships'])->name('memberships');
+            Route::get('/alerts', [ActiveCampaignController::class, 'alerts'])->name('alerts');
+            Route::get('/notifications', [ActiveCampaignController::class, 'notifications'])->name('notifications');
+            Route::get('/logs', [ActiveCampaignController::class, 'logs'])->name('logs');
+            Route::get('/health', [ActiveCampaignController::class, 'health'])->name('health');
+            Route::get('/integrations', [ActiveCampaignController::class, 'integrations'])->name('integrations');
+            Route::get('/qa-compare', [ActiveCampaignController::class, 'qaCompare'])->name('qa-compare');
+            Route::get('/settings', [ActiveCampaignController::class, 'settings'])->name('settings');
+        });
+
+        Route::prefix('integrations')->name('integrations.')->group(function () {
+            Route::get('activecampaign', [ActiveCampaignOperationsController::class, 'index'])
+                ->name('activecampaign');
+            Route::post('activecampaign/test-api', [ActiveCampaignOperationsController::class, 'testApi'])
+                ->name('activecampaign.test-api');
+            Route::post('activecampaign/diagnostic', [ActiveCampaignOperationsController::class, 'diagnostic'])
+                ->name('activecampaign.diagnostic');
+            Route::get('activecampaign/export', [ActiveCampaignOperationsController::class, 'export'])
+                ->name('activecampaign.export');
+        });
+
+        // Automation Operations Center — monitor / audit / diagnose only
+        Route::get('automation', [AutomationOperationsController::class, 'index'])
+            ->name('automation');
+        Route::post('automation/diagnostic', [AutomationOperationsController::class, 'diagnostic'])
+            ->name('automation.diagnostic');
+        Route::post('automation/queue/action', [AutomationOperationsController::class, 'queueAction'])
+            ->name('automation.queue.action');
+
         Route::get('simulators', [SimulatorController::class, 'index'])->name('simulators.index');
         Route::get('simulators/gda', [GdaNotificationSimulatorController::class, 'show'])->name('simulators.gda');
         Route::get('simulators/gda/{laboratory_purchase}/history', [GdaNotificationSimulatorController::class, 'history'])
