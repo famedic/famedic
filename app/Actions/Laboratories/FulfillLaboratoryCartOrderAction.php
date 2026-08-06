@@ -15,11 +15,14 @@ use App\Notifications\FewDaysLeftToRequestInvoice;
 use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Services\CouponApplicationService;
+use App\Services\Orders\OrderAutomationService;
 use App\Services\PromoCodeService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Propaganistas\LaravelPhone\PhoneNumber;
+use Throwable;
 
 class FulfillLaboratoryCartOrderAction
 {
@@ -29,6 +32,7 @@ class FulfillLaboratoryCartOrderAction
         private CouponApplicationService $couponApplicationService,
         private PromoCodeService $promoCodeService,
         private SyncLaboratoryCheckoutDraftAction $syncLaboratoryCheckoutDraftAction,
+        private OrderAutomationService $orderAutomationService,
     ) {
     }
 
@@ -137,6 +141,9 @@ class FulfillLaboratoryCartOrderAction
             throw $th;
         }
 
+        // Post-commit only: purchase + transaction are durable. Never rollback checkout on automation failure.
+        $this->dispatchLaboratoryOrderAutomation($laboratoryPurchase);
+
         if (is_string($clinicalOrderUuid) && $clinicalOrderUuid !== '') {
             try {
                 $clinicalOrders = app(\App\Services\ClinicalOrder\ClinicalOrderService::class);
@@ -175,6 +182,90 @@ class FulfillLaboratoryCartOrderAction
         $this->checkAndSendInvoiceDeadlineNotification($laboratoryPurchase);
 
         return $laboratoryPurchase;
+    }
+
+    /**
+     * Fire order automations once after a successful DB commit.
+     * Isolates AC/Email/etc. from the purchase transaction.
+     */
+    private function dispatchLaboratoryOrderAutomation(LaboratoryPurchase $laboratoryPurchase): void
+    {
+        $automationStartedAt = now();
+        $startedHrtime = hrtime(true);
+
+        try {
+            $laboratoryPurchase->refresh();
+            $laboratoryPurchase->loadMissing(['customer.user', 'transactions', 'laboratoryPurchaseItems']);
+
+            $hasTransaction = $laboratoryPurchase->transactions->isNotEmpty();
+            if (! $hasTransaction) {
+                Log::warning('[Order Automation Failed] Laboratory purchase has no attached transaction', [
+                    'purchase_id' => $laboratoryPurchase->id,
+                    'automation_started_at' => $automationStartedAt->toIso8601String(),
+                    'automation_success' => false,
+                ]);
+
+                return;
+            }
+
+            Log::info('[Order Automation Started]', [
+                'channel' => 'laboratory',
+                'purchase_id' => $laboratoryPurchase->id,
+                'transaction_id' => $laboratoryPurchase->transactions->sortByDesc('id')->first()?->id,
+                'customer_id' => $laboratoryPurchase->customer_id,
+                'automation_started_at' => $automationStartedAt->toIso8601String(),
+            ]);
+
+            $context = $this->orderAutomationService->contextForLaboratory($laboratoryPurchase);
+            $dispatchResult = $this->orderAutomationService->handleLaboratoryOrder($context);
+
+            $automationFinishedAt = now();
+            $durationMs = (int) round((hrtime(true) - $startedHrtime) / 1_000_000);
+
+            Log::info('[Order Automation Completed]', [
+                'channel' => 'laboratory',
+                'purchase_id' => $laboratoryPurchase->id,
+                'automation_started_at' => $automationStartedAt->toIso8601String(),
+                'automation_finished_at' => $automationFinishedAt->toIso8601String(),
+                'automation_duration_ms' => $durationMs,
+                'automation_success' => $dispatchResult->ok(),
+                'automation_driver_count' => count($dispatchResult->drivers),
+                'automation_failed_count' => $dispatchResult->failed,
+                'dispatch' => $dispatchResult->toArray(),
+            ]);
+
+            if (! $dispatchResult->ok()) {
+                Log::warning('[Order Automation Failed]', [
+                    'channel' => 'laboratory',
+                    'purchase_id' => $laboratoryPurchase->id,
+                    'automation_started_at' => $automationStartedAt->toIso8601String(),
+                    'automation_finished_at' => $automationFinishedAt->toIso8601String(),
+                    'automation_duration_ms' => $durationMs,
+                    'automation_success' => false,
+                    'automation_driver_count' => count($dispatchResult->drivers),
+                    'automation_failed_count' => $dispatchResult->failed,
+                    'errors' => $dispatchResult->errors,
+                    'dispatch' => $dispatchResult->toArray(),
+                ]);
+            }
+        } catch (Throwable $e) {
+            $automationFinishedAt = now();
+            $durationMs = (int) round((hrtime(true) - $startedHrtime) / 1_000_000);
+
+            Log::error('[Order Automation Failed]', [
+                'channel' => 'laboratory',
+                'purchase_id' => $laboratoryPurchase->id,
+                'customer_id' => $laboratoryPurchase->customer_id,
+                'automation_started_at' => $automationStartedAt->toIso8601String(),
+                'automation_finished_at' => $automationFinishedAt->toIso8601String(),
+                'automation_duration_ms' => $durationMs,
+                'automation_success' => false,
+                'automation_driver_count' => null,
+                'automation_failed_count' => null,
+                'error' => $e->getMessage(),
+                'exception' => $e::class,
+            ]);
+        }
     }
 
     private function clearCart(Customer $customer): void

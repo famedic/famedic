@@ -2,6 +2,7 @@
 
 namespace App\Services\ActiveCampaign;
 
+use App\DTOs\ActiveCampaign\ActiveCampaignOperationResult;
 use App\Exceptions\ActiveCampaignSyncException;
 use App\Models\User;
 use App\Services\ActiveCampaign\Concerns\HandlesBeneficiaryEvents;
@@ -790,76 +791,175 @@ class ActiveCampaignService
     }
 
     /**
-     * Agregar un tag a un contacto
+     * Agregar un tag a un contacto.
+     * Returns a structured result so callers never assume success from a missing exception.
      */
-    public function addTagToContact(int $contactId, int $tagId): void
+    public function addTagToContact(int $contactId, int $tagId): ActiveCampaignOperationResult
     {
-        try {
+        $started = hrtime(true);
 
-            $this->client()->post('/contactTags', [
+        try {
+            $response = $this->client()->post('/contactTags', [
                 'contactTag' => [
                     'contact' => $contactId,
                     'tag' => $tagId,
                 ],
             ]);
 
+            $httpStatus = $response->status();
+            $body = $response->json() ?? $response->body();
+
+            if (! $response->successful()) {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'add_tag',
+                    'resource' => 'contactTag',
+                    'contact_id' => $contactId,
+                    'tag_id' => $tagId,
+                    'http_status' => $httpStatus,
+                    'response' => $body,
+                    'error' => 'add_tag_http_error',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => ActiveCampaignOperationResult::isRetryableHttpStatus($httpStatus),
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
+            }
+
+            $result = ActiveCampaignOperationResult::success([
+                'operation' => 'add_tag',
+                'resource' => 'contactTag',
+                'contact_id' => $contactId,
+                'tag_id' => $tagId,
+                'http_status' => $httpStatus,
+                'response' => $body,
+                'duration_ms' => $this->elapsedMs($started),
+            ]);
+            $this->logOperationResult($result);
+
             Log::info('AC: Tag agregado', [
                 'contact_id' => $contactId,
-                'tag_id' => $tagId
+                'tag_id' => $tagId,
             ]);
+
+            return $result;
         } catch (\Throwable $e) {
+            $result = ActiveCampaignOperationResult::failure([
+                'operation' => 'add_tag',
+                'resource' => 'contactTag',
+                'contact_id' => $contactId,
+                'tag_id' => $tagId,
+                'http_status' => null,
+                'response' => null,
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
+            $this->logOperationResult($result);
 
             Log::error('AC: Error addTagToContact', [
                 'error' => $e->getMessage(),
             ]);
+
+            return $result;
         }
     }
 
     /**
-     * Crear una orden
+     * Crear una orden e-commerce en ActiveCampaign.
      */
-    public function createOrder(array $data): void
+    public function createOrder(array $data): ActiveCampaignOperationResult
     {
-        try {
+        $started = hrtime(true);
 
+        try {
             $response = $this->client()->post('/ecomOrders', [
-                'order' => $data
+                'order' => $data,
             ]);
 
-            if (!$response->successful()) {
+            $httpStatus = $response->status();
+            $body = $response->json() ?? $response->body();
 
+            if (! $response->successful()) {
                 Log::error('AC: Error creando orden', [
                     'response' => $response->body(),
-                    'data' => $data
+                    'data' => $data,
                 ]);
 
-                return;
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'create_ecom_order',
+                    'resource' => 'ecomOrder',
+                    'http_status' => $httpStatus,
+                    'response' => $body,
+                    'error' => 'create_ecom_order_http_error',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => ActiveCampaignOperationResult::isRetryableHttpStatus($httpStatus),
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
             }
 
             Log::info('AC: Orden registrada', [
-                'external_id' => $data['externalid'],
+                'external_id' => $data['externalid'] ?? null,
             ]);
-        } catch (\Throwable $e) {
 
-            Log::error('AC: Excepción createOrder', [
-                'error' => $e->getMessage()
+            $result = ActiveCampaignOperationResult::success([
+                'operation' => 'create_ecom_order',
+                'resource' => 'ecomOrder',
+                'http_status' => $httpStatus,
+                'response' => $body,
+                'duration_ms' => $this->elapsedMs($started),
             ]);
+            $this->logOperationResult($result);
+
+            return $result;
+        } catch (\Throwable $e) {
+            Log::error('AC: Excepción createOrder', [
+                'error' => $e->getMessage(),
+            ]);
+
+            $result = ActiveCampaignOperationResult::failure([
+                'operation' => 'create_ecom_order',
+                'resource' => 'ecomOrder',
+                'http_status' => null,
+                'response' => null,
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
         }
     }
 
     /**
-     * Crear una orden para una compra de laboratorio
+     * Crear una orden para una compra de laboratorio.
      */
-    public function laboratoryPurchase($purchase): void
+    public function laboratoryPurchase($purchase): ActiveCampaignOperationResult
     {
+        $started = hrtime(true);
         Log::info('AC: laboratoryPurchase iniciado', ['purchase_id' => $purchase->id]);
 
         try {
+            $purchase->loadMissing(['customer.user', 'laboratoryPurchaseItems']);
+            $email = $purchase->customer->user->email ?? null;
 
-            $email = $purchase->customer->user->email;
+            if (! is_string($email) || trim($email) === '') {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'laboratoryPurchase',
+                    'resource' => 'ecomOrder',
+                    'error' => 'missing_email',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => false,
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
+            }
 
             $products = $purchase->laboratoryPurchaseItems->map(function ($item) {
-
                 return [
                     'name' => $item->name,
                     'price' => $item->price_cents / 100,
@@ -868,8 +968,8 @@ class ActiveCampaignService
                 ];
             })->toArray();
 
-            $this->createOrder([
-                'externalid' => 'LAB-' . $purchase->id,
+            $orderResult = $this->createOrder([
+                'externalid' => 'LAB-'.$purchase->id,
                 'email' => $email,
                 'currency' => 'MXN',
                 'totalPrice' => $purchase->total_cents / 100,
@@ -878,9 +978,70 @@ class ActiveCampaignService
                 'products' => $products,
             ]);
 
+            if (! $orderResult->success) {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'laboratoryPurchase',
+                    'resource' => 'ecomOrder',
+                    'http_status' => $orderResult->httpStatus,
+                    'response' => [
+                        'create_order' => $orderResult->toArray(),
+                    ],
+                    'error' => $orderResult->error ?? 'laboratory_purchase_order_failed',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => $orderResult->retryable,
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
+            }
+
             $tagId = (int) config('services.activecampaign.tag_laboratory_purchase_completed', 18);
+            $tagResult = null;
+            $contactId = null;
+
             if ($tagId > 0) {
-                $this->tagByEmail($email, $tagId);
+                $contactResult = $this->getContactIdByEmailPublic($email);
+                if (! $contactResult->success || ! $contactResult->contactId) {
+                    $result = ActiveCampaignOperationResult::failure([
+                        'operation' => 'laboratoryPurchase',
+                        'resource' => 'contactTag',
+                        'http_status' => $contactResult->httpStatus,
+                        'response' => [
+                            'create_order' => $orderResult->toArray(),
+                            'resolve_contact' => $contactResult->toArray(),
+                        ],
+                        'error' => $contactResult->error ?? 'contact_not_found',
+                        'duration_ms' => $this->elapsedMs($started),
+                        'retryable' => $contactResult->retryable,
+                    ]);
+                    $this->logOperationResult($result);
+
+                    return $result;
+                }
+
+                $contactId = $contactResult->contactId;
+                $tagResult = $this->addTagToContact($contactId, $tagId);
+
+                if (! $tagResult->success) {
+                    $result = ActiveCampaignOperationResult::failure([
+                        'operation' => 'laboratoryPurchase',
+                        'resource' => 'contactTag',
+                        'contact_id' => $contactId,
+                        'tag_id' => $tagId,
+                        'http_status' => $tagResult->httpStatus,
+                        'response' => [
+                            'create_order' => $orderResult->toArray(),
+                            'add_tag' => $tagResult->toArray(),
+                        ],
+                        'error' => $tagResult->error ?? 'laboratory_purchase_tag_failed',
+                        'duration_ms' => $this->elapsedMs($started),
+                        'retryable' => $tagResult->retryable,
+                    ]);
+                    $this->logOperationResult($result);
+
+                    return $result;
+                }
+
                 Log::info('AC: Tag compra laboratorio enviado', [
                     'email' => $email,
                     'purchase_id' => $purchase->id,
@@ -889,28 +1050,67 @@ class ActiveCampaignService
             }
 
             Log::info('AC: laboratoryPurchase completado', ['purchase_id' => $purchase->id, 'email' => $email]);
-        } catch (\Throwable $e) {
 
+            $result = ActiveCampaignOperationResult::success([
+                'operation' => 'laboratoryPurchase',
+                'resource' => 'ecomOrder',
+                'contact_id' => $contactId,
+                'tag_id' => $tagId > 0 ? $tagId : null,
+                'http_status' => $orderResult->httpStatus,
+                'response' => [
+                    'create_order' => $orderResult->toArray(),
+                    'add_tag' => $tagResult?->toArray(),
+                ],
+                'duration_ms' => $this->elapsedMs($started),
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
+        } catch (\Throwable $e) {
             Log::error('AC: Error laboratoryPurchase', [
                 'error' => $e->getMessage(),
-                'purchase_id' => $purchase->id
+                'purchase_id' => $purchase->id,
             ]);
+
+            $result = ActiveCampaignOperationResult::failure([
+                'operation' => 'laboratoryPurchase',
+                'resource' => 'ecomOrder',
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
         }
     }
 
     /**
-     * Crear una orden para una compra de farmacia
+     * Crear una orden para una compra de farmacia.
      */
-    public function pharmacyPurchase($purchase): void
+    public function pharmacyPurchase($purchase): ActiveCampaignOperationResult
     {
+        $started = hrtime(true);
         Log::info('AC: pharmacyPurchase iniciado', ['purchase_id' => $purchase->id]);
 
         try {
+            $purchase->loadMissing(['customer.user', 'onlinePharmacyPurchaseItems']);
+            $email = $purchase->customer->user->email ?? null;
 
-            $email = $purchase->customer->user->email;
+            if (! is_string($email) || trim($email) === '') {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'pharmacyPurchase',
+                    'resource' => 'ecomOrder',
+                    'error' => 'missing_email',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => false,
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
+            }
 
             $products = $purchase->onlinePharmacyPurchaseItems->map(function ($item) {
-
                 return [
                     'name' => $item->name,
                     'price' => $item->price_cents / 100,
@@ -919,8 +1119,8 @@ class ActiveCampaignService
                 ];
             })->toArray();
 
-            $this->createOrder([
-                'externalid' => 'PHARM-' . $purchase->id,
+            $orderResult = $this->createOrder([
+                'externalid' => 'PHARM-'.$purchase->id,
                 'email' => $email,
                 'currency' => 'MXN',
                 'totalPrice' => $purchase->total_cents / 100,
@@ -929,9 +1129,68 @@ class ActiveCampaignService
                 'products' => $products,
             ]);
 
+            if (! $orderResult->success) {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'pharmacyPurchase',
+                    'resource' => 'ecomOrder',
+                    'http_status' => $orderResult->httpStatus,
+                    'response' => ['create_order' => $orderResult->toArray()],
+                    'error' => $orderResult->error ?? 'pharmacy_purchase_order_failed',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => $orderResult->retryable,
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
+            }
+
             $tagId = (int) config('services.activecampaign.tag_pharmacy_purchase_completed', 17);
+            $tagResult = null;
+            $contactId = null;
+
             if ($tagId > 0) {
-                $this->tagByEmail($email, $tagId);
+                $contactResult = $this->getContactIdByEmailPublic($email);
+                if (! $contactResult->success || ! $contactResult->contactId) {
+                    $result = ActiveCampaignOperationResult::failure([
+                        'operation' => 'pharmacyPurchase',
+                        'resource' => 'contactTag',
+                        'http_status' => $contactResult->httpStatus,
+                        'response' => [
+                            'create_order' => $orderResult->toArray(),
+                            'resolve_contact' => $contactResult->toArray(),
+                        ],
+                        'error' => $contactResult->error ?? 'contact_not_found',
+                        'duration_ms' => $this->elapsedMs($started),
+                        'retryable' => $contactResult->retryable,
+                    ]);
+                    $this->logOperationResult($result);
+
+                    return $result;
+                }
+
+                $contactId = $contactResult->contactId;
+                $tagResult = $this->addTagToContact($contactId, $tagId);
+
+                if (! $tagResult->success) {
+                    $result = ActiveCampaignOperationResult::failure([
+                        'operation' => 'pharmacyPurchase',
+                        'resource' => 'contactTag',
+                        'contact_id' => $contactId,
+                        'tag_id' => $tagId,
+                        'http_status' => $tagResult->httpStatus,
+                        'response' => [
+                            'create_order' => $orderResult->toArray(),
+                            'add_tag' => $tagResult->toArray(),
+                        ],
+                        'error' => $tagResult->error ?? 'pharmacy_purchase_tag_failed',
+                        'duration_ms' => $this->elapsedMs($started),
+                        'retryable' => $tagResult->retryable,
+                    ]);
+                    $this->logOperationResult($result);
+
+                    return $result;
+                }
+
                 Log::info('AC: Tag compra farmacia enviado', [
                     'email' => $email,
                     'purchase_id' => $purchase->id,
@@ -940,43 +1199,135 @@ class ActiveCampaignService
             }
 
             Log::info('AC: pharmacyPurchase completado', ['purchase_id' => $purchase->id, 'email' => $email]);
-        } catch (\Throwable $e) {
 
+            $result = ActiveCampaignOperationResult::success([
+                'operation' => 'pharmacyPurchase',
+                'resource' => 'ecomOrder',
+                'contact_id' => $contactId,
+                'tag_id' => $tagId > 0 ? $tagId : null,
+                'http_status' => $orderResult->httpStatus,
+                'response' => [
+                    'create_order' => $orderResult->toArray(),
+                    'add_tag' => $tagResult?->toArray(),
+                ],
+                'duration_ms' => $this->elapsedMs($started),
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
+        } catch (\Throwable $e) {
             Log::error('AC: Error pharmacyPurchase', [
                 'error' => $e->getMessage(),
-                'purchase_id' => $purchase->id
+                'purchase_id' => $purchase->id,
             ]);
+
+            $result = ActiveCampaignOperationResult::failure([
+                'operation' => 'pharmacyPurchase',
+                'resource' => 'ecomOrder',
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
         }
     }
 
     /**
-     * Activar una membresía
+     * Activar una membresía (tag Membresía Activa).
      */
-    public function activateMembership($subscription): void
+    public function activateMembership($subscription): ActiveCampaignOperationResult
     {
+        $started = hrtime(true);
         $email = $subscription->customer->user->email ?? null;
         Log::info('AC: activateMembership iniciado', ['email' => $email, 'subscription_id' => $subscription->id ?? null]);
 
         try {
+            if (! is_string($email) || trim($email) === '') {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'activateMembership',
+                    'resource' => 'contactTag',
+                    'error' => 'missing_email',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => false,
+                ]);
+                $this->logOperationResult($result);
 
-            $contact = $this->findContactByEmail($email);
-
-            if (!$contact) {
-                Log::warning('AC: activateMembership omitido — contacto no encontrado en AC', ['email' => $email]);
-                return;
+                return $result;
             }
 
-            $this->addTagToContact(
-                $contact['id'],
-                21 // Membresía Activa
-            );
-            Log::info('AC: activateMembership completado', ['contact_id' => $contact['id'], 'email' => $email]);
-        } catch (\Throwable $e) {
+            $contactResult = $this->getContactIdByEmailPublic($email);
+            if (! $contactResult->success || ! $contactResult->contactId) {
+                Log::warning('AC: activateMembership omitido — contacto no encontrado en AC', ['email' => $email]);
 
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'activateMembership',
+                    'resource' => 'contactTag',
+                    'http_status' => $contactResult->httpStatus,
+                    'response' => $contactResult->toArray(),
+                    'error' => $contactResult->error ?? 'contact_not_found',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => $contactResult->retryable,
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
+            }
+
+            $tagId = 21; // Membresía Activa
+            $tagResult = $this->addTagToContact($contactResult->contactId, $tagId);
+
+            if (! $tagResult->success) {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'activateMembership',
+                    'resource' => 'contactTag',
+                    'contact_id' => $contactResult->contactId,
+                    'tag_id' => $tagId,
+                    'http_status' => $tagResult->httpStatus,
+                    'response' => $tagResult->toArray(),
+                    'error' => $tagResult->error ?? 'activate_membership_tag_failed',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => $tagResult->retryable,
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
+            }
+
+            Log::info('AC: activateMembership completado', [
+                'contact_id' => $contactResult->contactId,
+                'email' => $email,
+            ]);
+
+            $result = ActiveCampaignOperationResult::success([
+                'operation' => 'activateMembership',
+                'resource' => 'contactTag',
+                'contact_id' => $contactResult->contactId,
+                'tag_id' => $tagId,
+                'http_status' => $tagResult->httpStatus,
+                'response' => $tagResult->toArray(),
+                'duration_ms' => $this->elapsedMs($started),
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
+        } catch (\Throwable $e) {
             Log::error('AC: Error activateMembership', [
                 'error' => $e->getMessage(),
                 'email' => $email,
             ]);
+
+            $result = ActiveCampaignOperationResult::failure([
+                'operation' => 'activateMembership',
+                'resource' => 'contactTag',
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
         }
     }
 
@@ -1023,65 +1374,186 @@ class ActiveCampaignService
 
     /**
      * Variante pública para Jobs/servicios externos.
+     * Returns a structured operation result (contact_id when success).
      */
-    public function getContactIdByEmailPublic(string $email): ?int
+    public function getContactIdByEmailPublic(string $email): ActiveCampaignOperationResult
     {
-        return $this->getContactIdByEmail($email);
+        $started = hrtime(true);
+
+        try {
+            $response = $this->client()->get('/contacts', [
+                'email' => $email,
+            ]);
+
+            $httpStatus = $response->status();
+            $body = $response->json() ?? $response->body();
+
+            if (! $response->successful()) {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'resolve_contact',
+                    'resource' => 'contact',
+                    'http_status' => $httpStatus,
+                    'response' => $body,
+                    'error' => 'resolve_contact_http_error',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => ActiveCampaignOperationResult::isRetryableHttpStatus($httpStatus),
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
+            }
+
+            $contacts = is_array($body) ? ($body['contacts'] ?? []) : [];
+            $contact = $contacts[0] ?? null;
+            $contactId = isset($contact['id']) ? (int) $contact['id'] : null;
+
+            if ($contactId === null || $contactId <= 0) {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'resolve_contact',
+                    'resource' => 'contact',
+                    'http_status' => $httpStatus,
+                    'response' => $body,
+                    'error' => 'contact_not_found',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => false,
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
+            }
+
+            $result = ActiveCampaignOperationResult::success([
+                'operation' => 'resolve_contact',
+                'resource' => 'contact',
+                'contact_id' => $contactId,
+                'http_status' => $httpStatus,
+                'response' => $contact,
+                'duration_ms' => $this->elapsedMs($started),
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
+        } catch (\Throwable $e) {
+            $result = ActiveCampaignOperationResult::failure([
+                'operation' => 'resolve_contact',
+                'resource' => 'contact',
+                'http_status' => null,
+                'response' => null,
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
+            $this->logOperationResult($result);
+
+            Log::error('AC: Error getContactIdByEmailPublic', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $result;
+        }
     }
 
     /**
      * Resolver tagId por nombre (cacheado).
+     * Returns a structured operation result (tag_id when success).
      */
-    public function getTagIdByName(string $tagName): ?int
+    public function getTagIdByName(string $tagName): ActiveCampaignOperationResult
     {
+        $started = hrtime(true);
         $normalized = mb_strtolower(trim(preg_replace('/\s+/', ' ', $tagName)));
 
-        return Cache::remember("ac_tag_id_by_name:$normalized", now()->addHours(6), function () use ($normalized, $tagName) {
-            $tags = $this->getTags();
+        try {
+            $tagId = Cache::remember("ac_tag_id_by_name:$normalized", now()->addHours(6), function () use ($normalized, $tagName) {
+                $tags = $this->getTags();
 
-            foreach ($tags as $tag) {
-                $name = $tag['tag'] ?? $tag['name'] ?? null;
-                if (!$name) {
-                    continue;
+                foreach ($tags as $tag) {
+                    $name = $tag['tag'] ?? $tag['name'] ?? null;
+                    if (! $name) {
+                        continue;
+                    }
+
+                    $candidate = mb_strtolower(trim(preg_replace('/\s+/', ' ', $name)));
+                    if ($candidate === $normalized) {
+                        return (int) ($tag['id'] ?? 0) ?: null;
+                    }
                 }
 
-                $candidate = mb_strtolower(trim(preg_replace('/\s+/', ' ', $name)));
-                if ($candidate === $normalized) {
-                    return (int) ($tag['id'] ?? 0) ?: null;
-                }
+                Log::warning('AC: tag no encontrado por nombre', [
+                    'tag_name' => $tagName,
+                ]);
+
+                return null;
+            });
+
+            if ($tagId === null || (int) $tagId <= 0) {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'resolve_tag',
+                    'resource' => 'tag',
+                    'http_status' => null,
+                    'response' => ['tag_name' => $tagName],
+                    'error' => 'tag_not_found',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => false,
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
             }
 
-            Log::warning('AC: tag no encontrado por nombre', [
-                'tag_name' => $tagName,
+            $result = ActiveCampaignOperationResult::success([
+                'operation' => 'resolve_tag',
+                'resource' => 'tag',
+                'tag_id' => (int) $tagId,
+                'http_status' => null,
+                'response' => ['tag_name' => $tagName, 'tag_id' => (int) $tagId],
+                'duration_ms' => $this->elapsedMs($started),
             ]);
+            $this->logOperationResult($result);
 
-            return null;
-        });
+            return $result;
+        } catch (\Throwable $e) {
+            $result = ActiveCampaignOperationResult::failure([
+                'operation' => 'resolve_tag',
+                'resource' => 'tag',
+                'http_status' => null,
+                'response' => ['tag_name' => $tagName],
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
+        }
     }
 
     public function addTagToContactByName(int $contactId, string $tagName): void
     {
-        $tagId = $this->getTagIdByName($tagName);
+        $tagResult = $this->getTagIdByName($tagName);
 
-        if (!$tagId) {
+        if (! $tagResult->success || ! $tagResult->tagId) {
             Log::warning('AC: omitiendo addTagToContactByName — tag_id no resuelto', [
                 'contact_id' => $contactId,
                 'tag_name' => $tagName,
+                'operation_result' => $tagResult->toArray(),
             ]);
+
             return;
         }
 
-        $this->addTagToContact($contactId, $tagId);
+        $this->addTagToContact($contactId, $tagResult->tagId);
     }
 
     /**
-     * Registrar una compra completada
+     * Registrar una compra completada (ecom order genérico).
      */
-    public function completedPurchase(string $email, string $externalId, float $total, array $products, string $category): void
+    public function completedPurchase(string $email, string $externalId, float $total, array $products, string $category): ActiveCampaignOperationResult
     {
-        try {
+        $started = hrtime(true);
 
-            $this->createOrder([
+        try {
+            $orderResult = $this->createOrder([
                 'externalid' => $externalId,
                 'email' => $email,
                 'currency' => 'MXN',
@@ -1091,15 +1563,55 @@ class ActiveCampaignService
                 'products' => $products,
             ]);
 
+            if (! $orderResult->success) {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'completedPurchase',
+                    'resource' => 'ecomOrder',
+                    'http_status' => $orderResult->httpStatus,
+                    'response' => $orderResult->toArray(),
+                    'error' => $orderResult->error ?? 'completed_purchase_failed',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => $orderResult->retryable,
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
+            }
+
             Log::info('AC: Compra registrada', [
                 'email' => $email,
-                'external_id' => $externalId
+                'external_id' => $externalId,
+                'category' => $category,
             ]);
-        } catch (\Throwable $e) {
 
-            Log::error('AC: Error completedPurchase', [
-                'error' => $e->getMessage()
+            $result = ActiveCampaignOperationResult::success([
+                'operation' => 'completedPurchase',
+                'resource' => 'ecomOrder',
+                'http_status' => $orderResult->httpStatus,
+                'response' => [
+                    'category' => $category,
+                    'create_order' => $orderResult->toArray(),
+                ],
+                'duration_ms' => $this->elapsedMs($started),
             ]);
+            $this->logOperationResult($result);
+
+            return $result;
+        } catch (\Throwable $e) {
+            Log::error('AC: Error completedPurchase', [
+                'error' => $e->getMessage(),
+            ]);
+
+            $result = ActiveCampaignOperationResult::failure([
+                'operation' => 'completedPurchase',
+                'resource' => 'ecomOrder',
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
         }
     }
 
@@ -1473,7 +1985,9 @@ class ActiveCampaignService
             return (int) $tag;
         }
 
-        return $this->getTagIdByName($tag);
+        $result = $this->getTagIdByName($tag);
+
+        return $result->success ? $result->tagId : null;
     }
 
     public function addCouponTagByKey(int $contactId, string $dottedKey): void
@@ -1503,41 +2017,225 @@ class ActiveCampaignService
 
     public function addTagToContactOrFail(int $contactId, int $tagId): void
     {
-        $response = $this->client()->post('/contactTags', [
-            'contactTag' => [
-                'contact' => $contactId,
-                'tag' => $tagId,
-            ],
-        ]);
+        $result = $this->addTagToContact($contactId, $tagId);
 
-        if (! $response->successful()) {
+        if (! $result->success) {
             throw new ActiveCampaignSyncException(
-                "AC addTag falló (contact={$contactId}, tag={$tagId}): ".$response->body()
+                "AC addTag falló (contact={$contactId}, tag={$tagId}): ".($result->error ?? 'unknown')
             );
         }
     }
 
-    public function removeTagFromContactOrFail(int $contactId, int $tagId): void
+    /**
+     * Remove a tag from a contact without throwing.
+     * success=true for deleted or already absent (idempotent).
+     */
+    public function removeTagFromContact(int $contactId, int $tagId): ActiveCampaignOperationResult
     {
-        foreach ($this->getContactTags($contactId) as $contactTag) {
-            if ((int) ($contactTag['tag'] ?? 0) !== $tagId) {
-                continue;
+        $started = hrtime(true);
+
+        try {
+            $listResponse = $this->client()->get("/contacts/{$contactId}/contactTags");
+            $listStatus = $listResponse->status();
+            $listBody = $listResponse->json() ?? $listResponse->body();
+
+            if (! $listResponse->successful()) {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'remove_tag',
+                    'resource' => 'contactTag',
+                    'contact_id' => $contactId,
+                    'tag_id' => $tagId,
+                    'http_status' => $listStatus,
+                    'response' => $listBody,
+                    'error' => 'list_contact_tags_http_error',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => ActiveCampaignOperationResult::isRetryableHttpStatus($listStatus),
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
             }
 
-            $contactTagId = (int) ($contactTag['id'] ?? 0);
-            if ($contactTagId <= 0) {
-                continue;
+            $contactTags = is_array($listBody) ? ($listBody['contactTags'] ?? []) : [];
+            $contactTagId = null;
+
+            foreach ($contactTags as $contactTag) {
+                if ((int) ($contactTag['tag'] ?? 0) === $tagId) {
+                    $contactTagId = (int) ($contactTag['id'] ?? 0);
+                    break;
+                }
+            }
+
+            if ($contactTagId === null || $contactTagId <= 0) {
+                $result = ActiveCampaignOperationResult::success([
+                    'operation' => 'already_removed',
+                    'resource' => 'contactTag',
+                    'contact_id' => $contactId,
+                    'tag_id' => $tagId,
+                    'http_status' => $listStatus,
+                    'response' => ['already_absent' => true],
+                    'duration_ms' => $this->elapsedMs($started),
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
             }
 
             $deleteResponse = $this->client()->delete("/contactTags/{$contactTagId}");
+            $deleteStatus = $deleteResponse->status();
+            $deleteBody = $deleteResponse->json() ?? $deleteResponse->body();
+
             if (! $deleteResponse->successful()) {
-                throw new ActiveCampaignSyncException(
-                    "AC removeTag falló (contactTag={$contactTagId}): ".$deleteResponse->body()
-                );
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'remove_tag',
+                    'resource' => 'contactTag',
+                    'contact_id' => $contactId,
+                    'tag_id' => $tagId,
+                    'http_status' => $deleteStatus,
+                    'response' => $deleteBody,
+                    'error' => 'remove_tag_http_error',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => ActiveCampaignOperationResult::isRetryableHttpStatus($deleteStatus),
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
             }
 
-            return;
+            $result = ActiveCampaignOperationResult::success([
+                'operation' => 'remove_tag',
+                'resource' => 'contactTag',
+                'contact_id' => $contactId,
+                'tag_id' => $tagId,
+                'http_status' => $deleteStatus,
+                'response' => $deleteBody,
+                'duration_ms' => $this->elapsedMs($started),
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
+        } catch (\Throwable $e) {
+            $result = ActiveCampaignOperationResult::failure([
+                'operation' => 'remove_tag',
+                'resource' => 'contactTag',
+                'contact_id' => $contactId,
+                'tag_id' => $tagId,
+                'http_status' => null,
+                'response' => null,
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
         }
+    }
+
+    /**
+     * OrFail wrapper: returns structured result, throws when the remove operation failed.
+     * Idempotent absences (already_removed) are treated as success and do not throw.
+     */
+    public function removeTagFromContactOrFail(int $contactId, int $tagId): ActiveCampaignOperationResult
+    {
+        $result = $this->removeTagFromContact($contactId, $tagId);
+
+        if (! $result->success) {
+            throw new ActiveCampaignSyncException(
+                "AC removeTag falló (contact={$contactId}, tag={$tagId}): ".($result->error ?? 'unknown')
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Check whether a contact already has a tag. Structured result for payment automation.
+     */
+    public function contactHasTag(int $contactId, int $tagId): ActiveCampaignOperationResult
+    {
+        $started = hrtime(true);
+
+        try {
+            $response = $this->client()->get("/contacts/{$contactId}/contactTags");
+            $httpStatus = $response->status();
+            $body = $response->json() ?? $response->body();
+
+            if (! $response->successful()) {
+                $result = ActiveCampaignOperationResult::failure([
+                    'operation' => 'check_contact_tag',
+                    'resource' => 'contactTag',
+                    'contact_id' => $contactId,
+                    'tag_id' => $tagId,
+                    'http_status' => $httpStatus,
+                    'response' => $body,
+                    'error' => 'list_contact_tags_http_error',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => ActiveCampaignOperationResult::isRetryableHttpStatus($httpStatus),
+                ]);
+                $this->logOperationResult($result);
+
+                return $result;
+            }
+
+            $contactTags = is_array($body) ? ($body['contactTags'] ?? []) : [];
+            $hasTag = false;
+
+            foreach ($contactTags as $contactTag) {
+                if ((int) ($contactTag['tag'] ?? 0) === $tagId) {
+                    $hasTag = true;
+                    break;
+                }
+            }
+
+            $result = ActiveCampaignOperationResult::success([
+                'operation' => 'check_contact_tag',
+                'resource' => 'contactTag',
+                'contact_id' => $contactId,
+                'tag_id' => $tagId,
+                'http_status' => $httpStatus,
+                'response' => ['has_tag' => $hasTag],
+                'duration_ms' => $this->elapsedMs($started),
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
+        } catch (\Throwable $e) {
+            $result = ActiveCampaignOperationResult::failure([
+                'operation' => 'check_contact_tag',
+                'resource' => 'contactTag',
+                'contact_id' => $contactId,
+                'tag_id' => $tagId,
+                'http_status' => null,
+                'response' => null,
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
+            $this->logOperationResult($result);
+
+            return $result;
+        }
+    }
+
+    protected function logOperationResult(ActiveCampaignOperationResult $result): void
+    {
+        Log::info('[ActiveCampaign Operation]', [
+            'operation' => $result->operation,
+            'duration_ms' => $result->durationMs,
+            'http_status' => $result->httpStatus,
+            'success' => $result->success,
+            'retryable' => $result->retryable,
+            'contact_id' => $result->contactId,
+            'tag_id' => $result->tagId,
+            'error' => $result->error,
+            'resource' => $result->resource,
+        ]);
+    }
+
+    protected function elapsedMs(int $startedHrtime): int
+    {
+        return (int) round((hrtime(true) - $startedHrtime) / 1_000_000);
     }
 
     /**

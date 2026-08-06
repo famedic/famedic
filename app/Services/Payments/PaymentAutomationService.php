@@ -6,17 +6,23 @@ use App\DTOs\Payments\PaymentAutomationContext;
 use App\DTOs\Payments\PaymentAutomationResult;
 use App\Models\PaymentAttempt;
 use App\Models\Transaction;
+use App\Services\Payments\Drivers\ActiveCampaignPaymentDriver;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Single entry point for post-PaymentAttempt automations.
  *
- * Phase 2B: infrastructure only — logs + context resolution.
- * Future phases may wire ActiveCampaign, email, WhatsApp, push, webhooks, etc.
+ * Phase 2D: ActiveCampaign operations return ActiveCampaignOperationResult;
+ * the driver evaluates success explicitly (never assumes from missing exceptions).
  */
 class PaymentAutomationService
 {
+    public function __construct(
+        private ActiveCampaignPaymentDriver $activeCampaignPaymentDriver,
+    ) {
+    }
+
     public function handleApproved(PaymentAttempt $attempt): PaymentAutomationResult
     {
         return $this->runHandler('handleApproved', $attempt, PaymentAttempt::STATUS_APPROVED);
@@ -43,16 +49,20 @@ class PaymentAutomationService
             'context' => $context->toArray(),
         ]);
 
-        // Intentionally no side effects yet (AC / email / WhatsApp / push / webhooks / analytics).
-
-        $result = new PaymentAutomationResult(
-            handler: $handler,
-            status: $context->status,
-            handled: true,
-            message: 'Payment automation infrastructure stub — context prepared, no side effects executed.',
-            context: $context->toArray(),
-            automationsExecuted: false,
-        );
+        $result = match ($handler) {
+            'handleApproved' => $this->activeCampaignPaymentDriver->handleApproved($context),
+            'handleDeclined' => $this->activeCampaignPaymentDriver->handleDeclined($context),
+            'handleError' => $this->activeCampaignPaymentDriver->handleError($context),
+            default => new PaymentAutomationResult(
+                handler: $handler,
+                status: $context->status,
+                handled: false,
+                message: 'Unknown payment automation handler.',
+                context: $context->toArray(),
+                automationsExecuted: false,
+                activecampaign: PaymentAutomationResult::emptyActiveCampaignPayload('unknown_handler'),
+            ),
+        };
 
         Log::info('[PaymentAutomation] '.$handler.' completed', $result->toArray());
 
@@ -61,7 +71,7 @@ class PaymentAutomationService
 
     public function buildContext(PaymentAttempt $attempt): PaymentAutomationContext
     {
-        $attempt->loadMissing('customer');
+        $attempt->loadMissing('customer.user');
 
         $customer = $attempt->customer;
         $transaction = $this->resolveTransaction($attempt);

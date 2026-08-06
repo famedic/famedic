@@ -1,20 +1,23 @@
 <?php
 
-namespace App\DTOs\Payments;
+namespace App\DTOs\Orders;
 
-class PaymentAutomationResult
+class OrderAutomationResult
 {
     /**
      * @param  array<string, mixed>  $context
      * @param  array{
      *     executed?: bool,
      *     success?: bool|null,
+     *     operation?: string|null,
+     *     duration_ms?: int|null,
+     *     error?: string|null,
+     *     retryable?: bool|null,
+     *     contact_id?: int|null,
+     *     operations?: list<array<string, mixed>>,
      *     action?: string|null,
      *     tag?: string|null,
-     *     contact_id?: int|null,
      *     message?: string|null,
-     *     error?: string|null,
-     *     duration_ms?: int|null,
      *     reason?: string|null
      * }  $activecampaign
      */
@@ -46,17 +49,15 @@ class PaymentAutomationResult
     }
 
     /**
-     * Default ActiveCampaign audit payload.
-     *
      * @return array{
      *     executed: bool,
      *     success: bool|null,
-     *     action: string|null,
-     *     tag: string|null,
-     *     contact_id: int|null,
-     *     message: string|null,
-     *     error: string|null,
+     *     operation: string|null,
      *     duration_ms: int|null,
+     *     error: string|null,
+     *     retryable: bool|null,
+     *     contact_id: int|null,
+     *     operations: list<array<string, mixed>>,
      *     reason: string|null
      * }
      */
@@ -65,12 +66,12 @@ class PaymentAutomationResult
         return [
             'executed' => false,
             'success' => null,
-            'action' => null,
-            'tag' => null,
-            'contact_id' => null,
-            'message' => null,
-            'error' => null,
+            'operation' => null,
             'duration_ms' => null,
+            'error' => null,
+            'retryable' => null,
+            'contact_id' => null,
+            'operations' => [],
             'reason' => $reason,
         ];
     }
