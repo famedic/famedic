@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Marketing;
 
 use App\Enums\MarketingCampaignLinkPublicAvailability;
 use App\Http\Controllers\Controller;
+use App\Models\MarketingCampaignLink;
+use App\Services\Marketing\MarketingCampaignLandingViewModelFactory;
 use App\Services\Marketing\MarketingCampaignLinkAvailabilityService;
 use App\Services\Marketing\MarketingCampaignLinkLookupService;
 use App\Services\Marketing\MarketingCampaignQueryStringSanitizer;
@@ -21,6 +23,7 @@ class MarketingCampaignLinkController extends Controller
         MarketingCampaignLinkAvailabilityService $availabilityService,
         MarketingCampaignQueryStringSanitizer $querySanitizer,
         MarketingCampaignTargetResolverRegistry $targetResolvers,
+        MarketingCampaignLandingViewModelFactory $landingFactory,
     ): Response {
         $lookup = $lookupService->find($slug);
 
@@ -30,7 +33,6 @@ class MarketingCampaignLinkController extends Controller
 
         $allowedQuery = $querySanitizer->sanitize($request->query());
 
-        // Alias histórico → 302 al slug canónico (conserva query permitida).
         if (
             $lookup->wasAlias
             && $lookup->canonicalSlug !== null
@@ -62,11 +64,12 @@ class MarketingCampaignLinkController extends Controller
                 'MarketingCampaigns/Expired',
                 $this->statusPageProps(),
             )->toResponse($request),
-            MarketingCampaignLinkPublicAvailability::Available => $this->resolveAvailable(
+            MarketingCampaignLinkPublicAvailability::Available => $this->renderLanding(
                 $request,
                 $link,
                 $allowedQuery,
                 $targetResolvers,
+                $landingFactory,
             ),
         };
     }
@@ -74,28 +77,33 @@ class MarketingCampaignLinkController extends Controller
     /**
      * @param  array<string, string>  $allowedQuery
      */
-    private function resolveAvailable(
+    private function renderLanding(
         Request $request,
-        \App\Models\MarketingCampaignLink $link,
+        MarketingCampaignLink $link,
         array $allowedQuery,
         MarketingCampaignTargetResolverRegistry $targetResolvers,
+        MarketingCampaignLandingViewModelFactory $landingFactory,
     ): Response {
         $resolution = $targetResolvers->resolve($link, $allowedQuery);
 
-        if ($resolution->isInvalid()) {
+        if ($resolution->isInvalid() || ! $resolution->isResolved() || $resolution->target === null) {
             abort(404);
         }
 
-        if ($resolution->isRedirect() && is_string($resolution->url)) {
-            return redirect()->to($resolution->url, 302);
+        $campaign = $link->campaign;
+        if ($campaign === null) {
+            abort(404);
         }
 
-        if ($resolution->isInertia() && is_string($resolution->component)) {
-            return Inertia::render($resolution->component, $resolution->props)
-                ->toResponse($request);
-        }
+        $viewModel = $landingFactory->make(
+            $campaign,
+            $link,
+            $resolution->target,
+            $allowedQuery,
+        );
 
-        abort(404);
+        return Inertia::render('MarketingCampaigns/Landing', $viewModel)
+            ->toResponse($request);
     }
 
     /**

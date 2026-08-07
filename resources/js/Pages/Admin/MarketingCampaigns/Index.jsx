@@ -256,107 +256,185 @@ export default function MarketingCampaignsIndex({
 							</div>
 						)}
 						<PaginatedTable paginatedData={campaigns}>
-							<Table className="[--gutter:theme(spacing.6)]">
-								<TableHead>
-									<TableRow>
-										<TableHeader>Nombre</TableHeader>
-										<TableHeader>Estado</TableHeader>
-										<TableHeader>Inicio</TableHeader>
-										<TableHeader>Fin</TableHeader>
-										<TableHeader>Enlaces</TableHeader>
-										<TableHeader>Colecciones</TableHeader>
-										<TableHeader>Creada</TableHeader>
-										<TableHeader className="text-right">
-											Acciones
-										</TableHeader>
-									</TableRow>
-								</TableHead>
-								<TableBody>
-									{campaigns.data.map((campaign) => {
-										const canEdit = Boolean(
-											campaign.can_edit,
-										);
-										const canArchive = Boolean(
-											campaign.can_archive,
-										);
+							<div className="hidden lg:block">
+								<Table className="[--gutter:theme(spacing.6)]">
+									<TableHead>
+										<TableRow>
+											<TableHeader>Campaña</TableHeader>
+											<TableHeader>Estado</TableHeader>
+											<TableHeader>Vigencia</TableHeader>
+											<TableHeader>Enlaces</TableHeader>
+											<TableHeader>
+												Última actualización
+											</TableHeader>
+											<TableHeader className="text-right">
+												Acciones
+											</TableHeader>
+										</TableRow>
+									</TableHead>
+									<TableBody>
+										{campaigns.data.map((campaign) => {
+											const canEdit = Boolean(
+												campaign.can_edit,
+											);
+											const canArchive = Boolean(
+												campaign.can_archive,
+											);
 
-										return (
-											<TableRow key={campaign.id}>
-												<TableCell className="font-medium">
-													{campaign.name}
-												</TableCell>
-												<TableCell>
-													<MarketingCampaignStatusBadge
-														status={campaign.status}
-														label={
-															campaign.status_label
-														}
-													/>
-												</TableCell>
-												<TableCell className="text-sm">
-													{formatDateTime(
-														campaign.starts_at,
-													)}
-												</TableCell>
-												<TableCell className="text-sm">
-													{formatDateTime(
-														campaign.ends_at,
-													)}
-												</TableCell>
-												<TableCell>
-													{campaign.links_count ?? 0}
-												</TableCell>
-												<TableCell>
-													{campaign.collections_count ??
-														0}
-												</TableCell>
-												<TableCell className="text-sm">
-													{formatDateTime(
-														campaign.created_at,
-													)}
-												</TableCell>
-												<TableCell className="text-right">
-													<div className="flex justify-end gap-2">
-														<Button
-															href={route(
-																"admin.marketing-campaigns.show",
-																campaign.id,
-															)}
-															outline
-														>
-															Ver
-														</Button>
-														{canEdit && (
+											return (
+												<TableRow key={campaign.id}>
+													<TableCell className="font-medium">
+														{campaign.name}
+													</TableCell>
+													<TableCell>
+														<MarketingCampaignStatusBadge
+															status={
+																campaign.status
+															}
+															label={
+																campaign.status_label
+															}
+														/>
+													</TableCell>
+													<TableCell
+														className="text-sm"
+														title={`${formatDateTime(campaign.starts_at)} — ${formatDateTime(campaign.ends_at)}`}
+													>
+														{formatDateTime(
+															campaign.starts_at,
+														)}{" "}
+														—{" "}
+														{formatDateTime(
+															campaign.ends_at,
+														)}
+													</TableCell>
+													<TableCell>
+														{campaign.links_count ??
+															0}
+													</TableCell>
+													<TableCell className="text-sm">
+														{formatDateTime(
+															campaign.updated_at ||
+																campaign.created_at,
+														)}
+													</TableCell>
+													<TableCell className="text-right">
+														<div className="flex justify-end gap-2">
 															<Button
 																href={route(
-																	"admin.marketing-campaigns.edit",
+																	"admin.marketing-campaigns.show",
 																	campaign.id,
 																)}
 																outline
 															>
-																Editar
+																Ver
 															</Button>
+															{canEdit && (
+																<Button
+																	href={route(
+																		"admin.marketing-campaigns.edit",
+																		campaign.id,
+																	)}
+																	outline
+																>
+																	Editar
+																</Button>
+															)}
+															{canArchive && (
+																<Button
+																	type="button"
+																	color="red"
+																	onClick={() =>
+																		setArchiveTarget(
+																			campaign,
+																		)
+																	}
+																>
+																	Archivar
+																</Button>
+															)}
+														</div>
+													</TableCell>
+												</TableRow>
+											);
+										})}
+									</TableBody>
+								</Table>
+							</div>
+
+							<div className="space-y-3 lg:hidden">
+								{campaigns.data.map((campaign) => {
+									const canEdit = Boolean(campaign.can_edit);
+									const canArchive = Boolean(
+										campaign.can_archive,
+									);
+
+									return (
+										<div
+											key={campaign.id}
+											className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
+										>
+											<div className="flex items-start justify-between gap-3">
+												<div>
+													<Text className="font-semibold">
+														{campaign.name}
+													</Text>
+													<Text className="mt-1 text-sm text-zinc-500">
+														{campaign.links_count ??
+															0}{" "}
+														enlaces ·{" "}
+														{formatDateTime(
+															campaign.updated_at ||
+																campaign.created_at,
 														)}
-														{canArchive && (
-															<Button
-																type="button"
-																color="red"
-																onClick={() =>
-																	setArchiveTarget(
-																		campaign,
-																	)
-																}
-															>
-																Archivar
-															</Button>
+													</Text>
+												</div>
+												<MarketingCampaignStatusBadge
+													status={campaign.status}
+													label={
+														campaign.status_label
+													}
+												/>
+											</div>
+											<div className="mt-4 flex flex-wrap gap-2">
+												<Button
+													href={route(
+														"admin.marketing-campaigns.show",
+														campaign.id,
+													)}
+													outline
+												>
+													Ver
+												</Button>
+												{canEdit && (
+													<Button
+														href={route(
+															"admin.marketing-campaigns.edit",
+															campaign.id,
 														)}
-													</div>
-												</TableCell>
-											</TableRow>
-										);
-									})}
-								</TableBody>
-							</Table>
+														outline
+													>
+														Editar
+													</Button>
+												)}
+												{canArchive && (
+													<Button
+														type="button"
+														color="red"
+														onClick={() =>
+															setArchiveTarget(
+																campaign,
+															)
+														}
+													>
+														Archivar
+													</Button>
+												)}
+											</div>
+										</div>
+									);
+								})}
+							</div>
 						</PaginatedTable>
 					</>
 				)}

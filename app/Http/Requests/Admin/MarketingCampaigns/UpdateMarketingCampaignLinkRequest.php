@@ -13,6 +13,8 @@ use Illuminate\Validation\Validator;
 
 class UpdateMarketingCampaignLinkRequest extends FormRequest
 {
+    use MarketingCampaignLinkLandingRules;
+
     public function authorize(): bool
     {
         return $this->user()?->can('update', $this->link()) ?? false;
@@ -33,6 +35,7 @@ class UpdateMarketingCampaignLinkRequest extends FormRequest
             'utm_content' => ['nullable', 'string', 'max:160'],
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
+            ...$this->landingContentRules(),
         ];
     }
 
@@ -50,6 +53,8 @@ class UpdateMarketingCampaignLinkRequest extends FormRequest
                 'slug' => app(MarketingCampaignLinkSlugService::class)->normalize((string) $this->input('slug')),
             ]);
         }
+
+        $this->prepareLandingPayload();
     }
 
     public function withValidator(Validator $validator): void

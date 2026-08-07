@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Schema;
 function marketingCampaignIsolatedTableNames(): array
 {
     return [
+        'marketing_campaign_link_images',
+        'marketing_campaign_link_categories',
+        'marketing_campaign_link_products',
         'marketing_campaign_collection_items',
         'marketing_campaign_collections',
         'marketing_campaign_link_aliases',
@@ -104,7 +107,11 @@ function bootstrapIsolatedMarketingCampaignSchema(): void
         $table->string('gda_id')->unique();
         $table->string('name');
         $table->string('other_name')->nullable();
+        $table->text('description')->nullable();
+        $table->text('elements')->nullable();
+        $table->text('common_use')->nullable();
         $table->text('indications')->nullable();
+        $table->json('feature_list')->nullable();
         $table->boolean('requires_appointment')->default(false);
         $table->unsignedInteger('public_price_cents');
         $table->unsignedInteger('famedic_price_cents');
@@ -158,6 +165,12 @@ function bootstrapIsolatedMarketingCampaignSchema(): void
 
     $permissionMigration = require database_path('migrations/2026_08_06_230100_add_marketing_campaign_permissions.php');
     $permissionMigration->up();
+
+    $landingMigration = require database_path('migrations/2026_08_06_230200_add_landing_fields_to_marketing_campaign_links.php');
+    $landingMigration->up();
+
+    $commerceMigration = require database_path('migrations/2026_08_06_230300_add_landing_commerce_to_marketing_campaign_links.php');
+    $commerceMigration->up();
 
     app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
 }

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Enums\LaboratoryBrand;
+use App\Enums\MarketingCampaignHeroImageSource;
 use App\Enums\MarketingCampaignLinkStatus;
 use App\Enums\MarketingCampaignStatus;
 use App\Enums\MarketingCampaignTargetType;
@@ -16,7 +17,9 @@ use App\Models\Permission;
 use App\Models\User;
 use App\Support\Workspace\WorkspaceCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -531,6 +534,125 @@ class MarketingCampaignAdminTest extends TestCase
     }
 
     #[Test]
+    public function puede_crear_y_editar_contenido_de_landing_y_rechaza_valores_invalidos(): void
+    {
+        Storage::fake('local');
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+        $heroUpload = UploadedFile::fake()->image('hero.jpg');
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.links.store', $campaign), [
+                'name' => 'Link landing',
+                'slug' => 'link-landing-demo',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'public_title' => 'Título landing',
+                'public_subtitle' => 'Subtítulo landing',
+                'public_description' => 'Descripción landing',
+                'eyebrow' => 'Promo',
+                'hero_image_source' => MarketingCampaignHeroImageSource::Upload->value,
+                'hero_image' => $heroUpload,
+                'hero_image_alt' => 'Hero principal',
+                'primary_cta_label' => 'Ver ahora',
+                'secondary_cta_label' => 'Explorar',
+                'show_prices' => false,
+                'show_brand_logo' => true,
+                'show_campaign_dates' => true,
+                'landing_layout' => 'default',
+                'starts_at' => null,
+                'ends_at' => null,
+                'gallery_items' => json_encode([]),
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign))
+            ->assertSessionHas('flashMessage.message', 'Enlace creado.');
+
+        $link = MarketingCampaignLink::query()->where('slug', 'link-landing-demo')->first();
+        $this->assertNotNull($link);
+        $this->assertSame('Título landing', $link->public_title);
+        $this->assertFalse((bool) $link->show_prices);
+        $this->assertTrue((bool) $link->show_campaign_dates);
+        $this->assertSame(MarketingCampaignHeroImageSource::Upload, $link->hero_image_source);
+        $this->assertNotNull($link->hero_image_path);
+        Storage::disk('local')->assertExists($link->hero_image_path);
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.links.store', $campaign), [
+                'name' => 'Layout inválido',
+                'slug' => 'link-layout-invalido',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'landing_layout' => 'custom-freeform',
+                'gallery_items' => json_encode([]),
+            ])
+            ->assertSessionHasErrors('landing_layout');
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.links.store', $campaign), [
+                'name' => 'Hero externo inválido',
+                'slug' => 'link-hero-externo',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'hero_image_source' => MarketingCampaignHeroImageSource::External->value,
+                'hero_image_url' => 'http://inseguro.example.com/x.jpg',
+                'gallery_items' => json_encode([]),
+            ])
+            ->assertSessionHasErrors('hero_image_url');
+
+        $replacementUpload = UploadedFile::fake()->image('hero-v2.jpg');
+
+        $this->actingAs($admin)
+            ->put(route('admin.marketing-campaigns.links.update', [$campaign, $link]), [
+                'name' => 'Link landing',
+                'slug' => 'link-landing-demo',
+                'status' => MarketingCampaignLinkStatus::Active->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'public_title' => 'Título editado',
+                'public_subtitle' => 'Sub editado',
+                'public_description' => 'Desc editada',
+                'eyebrow' => 'Promo editada',
+                'hero_image_source' => MarketingCampaignHeroImageSource::Upload->value,
+                'hero_image' => $replacementUpload,
+                'hero_image_alt' => 'Hero editado',
+                'primary_cta_label' => 'CTA editado',
+                'secondary_cta_label' => null,
+                'show_prices' => true,
+                'show_brand_logo' => false,
+                'show_campaign_dates' => false,
+                'landing_layout' => 'default',
+                'starts_at' => null,
+                'ends_at' => null,
+                'gallery_items' => json_encode([]),
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $previousPath = $link->hero_image_path;
+        $link->refresh();
+        $this->assertSame('Título editado', $link->public_title);
+        $this->assertTrue((bool) $link->show_prices);
+        $this->assertFalse((bool) $link->show_brand_logo);
+        $this->assertSame(MarketingCampaignHeroImageSource::Upload, $link->hero_image_source);
+        $this->assertNotSame($previousPath, $link->hero_image_path);
+        Storage::disk('local')->assertExists($link->hero_image_path);
+        Storage::disk('local')->assertMissing($previousPath);
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.links.edit', [$campaign, $link]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/MarketingCampaigns/Links/Edit')
+                ->where('link.public_title', 'Título editado')
+                ->where('link.show_prices', true)
+                ->where('link.show_brand_logo', false)
+                ->where('link.hero_image_source', MarketingCampaignHeroImageSource::Upload->value)
+                ->where('link.landing_layout', 'default'));
+    }
+
+    #[Test]
     public function rechaza_slug_duplicado_y_alias_historico(): void
     {
         $admin = $this->makeMarketingAdmin();
@@ -645,7 +767,7 @@ class MarketingCampaignAdminTest extends TestCase
                 'is_active' => true,
                 'laboratory_test_ids' => [$second->id, $first->id],
             ])
-            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+            ->assertRedirect(route('admin.marketing-campaigns.collections.edit', [$campaign, $collection]));
 
         $this->assertSame(
             [$second->id, $first->id],
@@ -726,6 +848,587 @@ class MarketingCampaignAdminTest extends TestCase
         $tool = collect($workspace['tools'] ?? [])->firstWhere('id', 'marketing-campaigns');
         $this->assertSame('admin.marketing-campaigns.index', $tool['route'] ?? null);
         $this->assertContains('marketing-campaigns.manage', $tool['permissions'] ?? []);
+    }
+
+    #[Test]
+    public function wizard_create_carga_props_guiadas(): void
+    {
+        $admin = $this->makeMarketingAdmin();
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.create'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/MarketingCampaigns/Create')
+                ->has('statusOptions')
+                ->has('linkStatusOptions')
+                ->has('brands')
+                ->has('categories')
+                ->has('productSearchUrl')
+                ->has('utmPresets')
+                ->has('promotionOptions'));
+    }
+
+    #[Test]
+    public function setup_crea_campana_enlace_y_coleccion_inline_en_transaccion(): void
+    {
+        $admin = $this->makeMarketingAdmin();
+        $first = LaboratoryTest::factory()->create(['brand' => LaboratoryBrand::OLAB]);
+        $second = LaboratoryTest::factory()->create(['brand' => LaboratoryBrand::OLAB]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.setup.store'), [
+                'activate' => false,
+                'campaign' => [
+                    'name' => 'Campaña wizard',
+                    'description' => 'Interna',
+                    'status' => MarketingCampaignStatus::Draft->value,
+                    'starts_at' => null,
+                    'ends_at' => null,
+                ],
+                'collection' => [
+                    'name' => 'Colección inline',
+                    'public_title' => 'Estudios OLAB',
+                    'public_description' => 'Descripción pública',
+                    'laboratory_brand' => LaboratoryBrand::OLAB->value,
+                    'is_active' => true,
+                    'laboratory_test_ids' => [$first->id, $second->id],
+                ],
+                'link' => [
+                    'name' => 'Enlace principal',
+                    'slug' => 'campana-wizard-olab',
+                    'status' => MarketingCampaignLinkStatus::Draft->value,
+                    'target_type' => MarketingCampaignTargetType::Collection->value,
+                    'target_payload' => [],
+                    'public_title' => 'Estudios OLAB',
+                    'utm_source' => 'facebook',
+                    'utm_medium' => 'paid_social',
+                    'show_prices' => true,
+                    'show_brand_logo' => true,
+                    'show_campaign_dates' => false,
+                    'landing_layout' => 'default',
+                    'hero_image_source' => MarketingCampaignHeroImageSource::None->value,
+                    'primary_laboratory_test_ids' => [],
+                    'related_laboratory_test_ids' => [],
+                    'related_category_ids' => [],
+                    'gallery_items' => '[]',
+                ],
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('flashMessage.message', 'Campaña y enlace creados.');
+
+        $campaign = MarketingCampaign::query()->where('name', 'Campaña wizard')->first();
+        $this->assertNotNull($campaign);
+        $this->assertSame(1, $campaign->links()->count());
+        $this->assertSame(1, $campaign->collections()->count());
+
+        $collection = $campaign->collections()->first();
+        $link = $campaign->links()->first();
+        $this->assertSame(
+            $collection->id,
+            (int) ($link->target_payload['marketing_campaign_collection_id'] ?? 0)
+        );
+    }
+
+    #[Test]
+    public function puede_duplicar_enlace_como_borrador_con_slug_unico(): void
+    {
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+        $source = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create([
+            'name' => 'Enlace original',
+            'slug' => 'enlace-original',
+            'status' => MarketingCampaignLinkStatus::Active,
+            'target_type' => MarketingCampaignTargetType::Brand,
+            'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+            'utm_source' => 'email',
+            'utm_medium' => 'email',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.links.duplicate', [$campaign, $source]))
+            ->assertRedirect()
+            ->assertSessionHas('flashMessage.message', 'Enlace duplicado como borrador.');
+
+        $duplicate = MarketingCampaignLink::query()
+            ->where('marketing_campaign_id', $campaign->id)
+            ->where('slug', '!=', $source->slug)
+            ->first();
+
+        $this->assertNotNull($duplicate);
+        $this->assertSame(MarketingCampaignLinkStatus::Draft, $duplicate->status);
+        $this->assertSame('Copia de Enlace original', $duplicate->name);
+        $this->assertSame('email', $duplicate->utm_source);
+        $this->assertSame(2, $campaign->fresh()->links()->count());
+    }
+
+    #[Test]
+    public function show_incluye_dashboard_checklist_y_urls_publicas(): void
+    {
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create([
+            'name' => 'Dashboard campaña',
+            'status' => MarketingCampaignStatus::Draft,
+        ]);
+        MarketingCampaignLink::factory()->for($campaign, 'campaign')->create([
+            'slug' => 'dashboard-link',
+            'public_title' => 'Landing dashboard',
+            'target_type' => MarketingCampaignTargetType::Brand,
+            'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', $campaign))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/MarketingCampaigns/Show')
+                ->has('summary')
+                ->has('checklist', 8)
+                ->where('links.0.public_url', url('/c/dashboard-link'))
+                ->where('summary.links_count', 1));
+    }
+
+    #[Test]
+    public function edit_coleccion_carga_productos_ordenados_y_enlaces_que_la_usan(): void
+    {
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+        $first = LaboratoryTest::factory()->create(['brand' => LaboratoryBrand::OLAB]);
+        $second = LaboratoryTest::factory()->create(['brand' => LaboratoryBrand::OLAB]);
+
+        $collection = MarketingCampaignCollection::factory()->for($campaign, 'campaign')->create([
+            'name' => 'Colección usada',
+            'laboratory_brand' => LaboratoryBrand::OLAB,
+        ]);
+        $collection->laboratoryTests()->sync([
+            $second->id => ['position' => 0],
+            $first->id => ['position' => 1],
+        ]);
+
+        $link = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create([
+            'slug' => 'link-coleccion-usada',
+            'target_type' => MarketingCampaignTargetType::Collection,
+            'target_payload' => ['marketing_campaign_collection_id' => $collection->id],
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.collections.edit', [$campaign, $collection]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/MarketingCampaigns/Collections/Edit')
+                ->has('selectedItems', 2)
+                ->where('selectedItems.0.id', $second->id)
+                ->where('selectedItems.1.id', $first->id)
+                ->where('usingLinksCount', 1)
+                ->where('usingLinks.0.id', $link->id)
+                ->has('maxCollectionItems'));
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.collections.create', $campaign))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->has('maxCollectionItems'));
+    }
+
+    #[Test]
+    public function puede_crear_coleccion_inline_via_json(): void
+    {
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+        $test = LaboratoryTest::factory()->create(['brand' => LaboratoryBrand::OLAB]);
+
+        $response = $this->actingAs($admin)
+            ->postJson(route('admin.marketing-campaigns.collections.store', $campaign), [
+                'name' => 'Inline JSON',
+                'public_title' => 'Inline',
+                'public_description' => null,
+                'laboratory_brand' => LaboratoryBrand::OLAB->value,
+                'is_active' => true,
+                'laboratory_test_ids' => [$test->id],
+            ])
+            ->assertOk()
+            ->assertJsonPath('collection.name', 'Inline JSON');
+
+        $collectionId = $response->json('collection.id');
+        $this->assertNotNull($collectionId);
+        $this->assertSame(1, MarketingCampaignCollection::query()->find($collectionId)->items()->count());
+    }
+
+    #[Test]
+    public function create_link_compensa_hero_si_falla_la_galeria(): void
+    {
+        Storage::fake('local');
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+
+        $beforeLinks = MarketingCampaignLink::query()->count();
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.links.store', $campaign), [
+                'name' => 'Enlace con hero',
+                'slug' => 'enlace-hero-cleanup',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'hero_image_source' => MarketingCampaignHeroImageSource::Upload->value,
+                'hero_image' => UploadedFile::fake()->image('hero.jpg'),
+                'gallery_items' => json_encode([
+                    ['kind' => 'invalid'],
+                ]),
+                'landing_layout' => 'default',
+                'show_prices' => true,
+                'show_brand_logo' => true,
+                'show_campaign_dates' => false,
+            ])
+            ->assertSessionHasErrors();
+
+        $this->assertSame($beforeLinks, MarketingCampaignLink::query()->count());
+        $this->assertSame([], Storage::disk('local')->allFiles());
+    }
+
+    #[Test]
+    public function puede_crear_coleccion_con_titulo_autogenerado_desde_nombre(): void
+    {
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.collections.store', $campaign), [
+                'name' => 'Colección autotítulo',
+                'public_description' => null,
+                'laboratory_brand' => LaboratoryBrand::OLAB->value,
+                'is_active' => true,
+                'laboratory_test_ids' => [],
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $collection = MarketingCampaignCollection::query()
+            ->where('name', 'Colección autotítulo')
+            ->first();
+
+        $this->assertNotNull($collection);
+        $this->assertSame('Colección autotítulo', $collection->public_title);
+    }
+
+    #[Test]
+    public function puede_crear_coleccion_con_titulo_manual_distinto(): void
+    {
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.collections.store', $campaign), [
+                'name' => 'Nombre interno',
+                'public_title' => 'Título visible al público',
+                'public_description' => null,
+                'laboratory_brand' => LaboratoryBrand::OLAB->value,
+                'is_active' => true,
+                'laboratory_test_ids' => [],
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $collection = MarketingCampaignCollection::query()
+            ->where('name', 'Nombre interno')
+            ->first();
+
+        $this->assertNotNull($collection);
+        $this->assertSame('Título visible al público', $collection->public_title);
+    }
+
+    #[Test]
+    public function update_coleccion_cambio_marca_limpia_productos_con_payload_vacio(): void
+    {
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+        $olabTest = LaboratoryTest::factory()->create(['brand' => LaboratoryBrand::OLAB]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.collections.store', $campaign), [
+                'name' => 'Colección con estudios',
+                'public_title' => 'Colección con estudios',
+                'public_description' => null,
+                'laboratory_brand' => LaboratoryBrand::OLAB->value,
+                'is_active' => true,
+                'laboratory_test_ids' => [$olabTest->id],
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $collection = MarketingCampaignCollection::query()
+            ->where('name', 'Colección con estudios')
+            ->first();
+
+        $this->assertNotNull($collection);
+        $this->assertSame(1, $collection->items()->count());
+
+        $this->actingAs($admin)
+            ->put(route('admin.marketing-campaigns.collections.update', [$campaign, $collection]), [
+                'name' => 'Colección con estudios',
+                'public_title' => 'Colección con estudios',
+                'public_description' => null,
+                'laboratory_brand' => LaboratoryBrand::JENNER->value,
+                'is_active' => true,
+                'laboratory_test_ids' => [],
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.collections.edit', [$campaign, $collection]));
+
+        $collection->refresh();
+        $this->assertSame(LaboratoryBrand::JENNER, $collection->laboratory_brand);
+        $this->assertSame(0, $collection->items()->count());
+    }
+
+    #[Test]
+    public function update_link_compensa_hero_nuevo_y_conserva_anterior_si_falla_galeria(): void
+    {
+        Storage::fake('local');
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.links.store', $campaign), [
+                'name' => 'Enlace base',
+                'slug' => 'enlace-update-cleanup',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'hero_image_source' => MarketingCampaignHeroImageSource::Upload->value,
+                'hero_image' => UploadedFile::fake()->image('hero-original.jpg'),
+                'landing_layout' => 'default',
+                'show_prices' => true,
+                'show_brand_logo' => true,
+                'show_campaign_dates' => false,
+                'gallery_items' => json_encode([]),
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $link = MarketingCampaignLink::query()->where('slug', 'enlace-update-cleanup')->firstOrFail();
+        $originalPath = $link->hero_image_path;
+        Storage::disk('local')->assertExists($originalPath);
+
+        $this->actingAs($admin)
+            ->put(route('admin.marketing-campaigns.links.update', [$campaign, $link]), [
+                'name' => 'Enlace base',
+                'slug' => 'enlace-update-cleanup',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'hero_image_source' => MarketingCampaignHeroImageSource::Upload->value,
+                'hero_image' => UploadedFile::fake()->image('hero-nuevo.jpg'),
+                'landing_layout' => 'default',
+                'show_prices' => true,
+                'show_brand_logo' => true,
+                'show_campaign_dates' => false,
+                'gallery_items' => json_encode([
+                    ['kind' => 'invalid'],
+                ]),
+            ])
+            ->assertSessionHasErrors();
+
+        $link->refresh();
+        $this->assertSame($originalPath, $link->hero_image_path);
+        Storage::disk('local')->assertExists($originalPath);
+        $this->assertCount(1, Storage::disk('local')->allFiles());
+    }
+
+    #[Test]
+    public function update_link_exitoso_reemplaza_hero_y_elimina_anterior_cuando_no_es_compartido(): void
+    {
+        Storage::fake('local');
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.links.store', $campaign), [
+                'name' => 'Enlace reemplazo',
+                'slug' => 'enlace-reemplazo-hero',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'hero_image_source' => MarketingCampaignHeroImageSource::Upload->value,
+                'hero_image' => UploadedFile::fake()->image('hero-original.jpg'),
+                'landing_layout' => 'default',
+                'show_prices' => true,
+                'show_brand_logo' => true,
+                'show_campaign_dates' => false,
+                'gallery_items' => json_encode([]),
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $link = MarketingCampaignLink::query()->where('slug', 'enlace-reemplazo-hero')->firstOrFail();
+        $originalPath = $link->hero_image_path;
+
+        $this->actingAs($admin)
+            ->put(route('admin.marketing-campaigns.links.update', [$campaign, $link]), [
+                'name' => 'Enlace reemplazo',
+                'slug' => 'enlace-reemplazo-hero',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'hero_image_source' => MarketingCampaignHeroImageSource::Upload->value,
+                'hero_image' => UploadedFile::fake()->image('hero-nuevo.jpg'),
+                'landing_layout' => 'default',
+                'show_prices' => true,
+                'show_brand_logo' => true,
+                'show_campaign_dates' => false,
+                'gallery_items' => json_encode([]),
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $link->refresh();
+        $this->assertNotSame($originalPath, $link->hero_image_path);
+        Storage::disk('local')->assertMissing($originalPath);
+        Storage::disk('local')->assertExists($link->hero_image_path);
+    }
+
+    #[Test]
+    public function update_link_no_elimina_hero_compartido_por_duplicado(): void
+    {
+        Storage::fake('local');
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.links.store', $campaign), [
+                'name' => 'Enlace original',
+                'slug' => 'enlace-compartido-hero',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'hero_image_source' => MarketingCampaignHeroImageSource::Upload->value,
+                'hero_image' => UploadedFile::fake()->image('hero-compartido.jpg'),
+                'landing_layout' => 'default',
+                'show_prices' => true,
+                'show_brand_logo' => true,
+                'show_campaign_dates' => false,
+                'gallery_items' => json_encode([]),
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $link = MarketingCampaignLink::query()->where('slug', 'enlace-compartido-hero')->firstOrFail();
+        $sharedPath = $link->hero_image_path;
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.links.duplicate', [$campaign, $link]))
+            ->assertRedirect();
+
+        $duplicate = MarketingCampaignLink::query()
+            ->where('id', '!=', $link->id)
+            ->where('marketing_campaign_id', $campaign->id)
+            ->first();
+
+        $this->assertNotNull($duplicate);
+        $this->assertSame($sharedPath, $duplicate->hero_image_path);
+
+        $this->actingAs($admin)
+            ->put(route('admin.marketing-campaigns.links.update', [$campaign, $link]), [
+                'name' => 'Enlace original',
+                'slug' => 'enlace-compartido-hero',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'hero_image_source' => MarketingCampaignHeroImageSource::Upload->value,
+                'hero_image' => UploadedFile::fake()->image('hero-nuevo-compartido.jpg'),
+                'landing_layout' => 'default',
+                'show_prices' => true,
+                'show_brand_logo' => true,
+                'show_campaign_dates' => false,
+                'gallery_items' => json_encode([]),
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $link->refresh();
+        $this->assertNotSame($sharedPath, $link->hero_image_path);
+        Storage::disk('local')->assertExists($sharedPath);
+        Storage::disk('local')->assertExists($link->hero_image_path);
+    }
+
+    #[Test]
+    public function update_link_galeria_nueva_compensa_archivos_si_falla_despues(): void
+    {
+        Storage::fake('local');
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.links.store', $campaign), [
+                'name' => 'Enlace galería',
+                'slug' => 'enlace-galeria-cleanup',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'hero_image_source' => MarketingCampaignHeroImageSource::None->value,
+                'landing_layout' => 'default',
+                'show_prices' => true,
+                'show_brand_logo' => true,
+                'show_campaign_dates' => false,
+                'gallery_items' => json_encode([]),
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $link = MarketingCampaignLink::query()->where('slug', 'enlace-galeria-cleanup')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->put(route('admin.marketing-campaigns.links.update', [$campaign, $link]), [
+                'name' => 'Enlace galería',
+                'slug' => 'enlace-galeria-cleanup',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'hero_image_source' => MarketingCampaignHeroImageSource::None->value,
+                'landing_layout' => 'default',
+                'show_prices' => true,
+                'show_brand_logo' => true,
+                'show_campaign_dates' => false,
+                'gallery_items' => json_encode([
+                    [
+                        'kind' => 'upload',
+                        'upload_index' => 0,
+                        'alt' => 'Nueva galería',
+                    ],
+                    ['kind' => 'invalid'],
+                ]),
+                'gallery_uploads' => [
+                    UploadedFile::fake()->image('gallery-nueva.jpg'),
+                ],
+            ])
+            ->assertSessionHasErrors();
+
+        $this->assertSame([], Storage::disk('local')->allFiles());
+        $this->assertSame(0, $link->landingImages()->count());
+    }
+
+    #[Test]
+    public function update_link_hero_externo_no_elimina_archivos_inexistentes_en_storage(): void
+    {
+        Storage::fake('local');
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.links.store', $campaign), [
+                'name' => 'Enlace externo',
+                'slug' => 'enlace-hero-externo-ok',
+                'status' => MarketingCampaignLinkStatus::Draft->value,
+                'target_type' => MarketingCampaignTargetType::Brand->value,
+                'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                'hero_image_source' => MarketingCampaignHeroImageSource::External->value,
+                'hero_image_url' => 'https://cdn.example.com/hero.jpg',
+                'landing_layout' => 'default',
+                'show_prices' => true,
+                'show_brand_logo' => true,
+                'show_campaign_dates' => false,
+                'gallery_items' => json_encode([
+                    [
+                        'kind' => 'external',
+                        'url' => 'https://cdn.example.com/galeria.jpg',
+                        'alt' => 'Galería externa',
+                    ],
+                ]),
+            ])
+            ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $link = MarketingCampaignLink::query()->where('slug', 'enlace-hero-externo-ok')->firstOrFail();
+        $this->assertSame([], Storage::disk('local')->allFiles());
+        $this->assertSame(MarketingCampaignHeroImageSource::External, $link->hero_image_source);
+        $this->assertSame(1, $link->landingImages()->count());
     }
 
     #[Test]

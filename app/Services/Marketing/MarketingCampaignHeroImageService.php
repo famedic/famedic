@@ -15,15 +15,19 @@ class MarketingCampaignHeroImageService
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    public function apply(MarketingCampaignLink $link, array $data, ?UploadedFile $upload = null): array
-    {
+    public function apply(
+        MarketingCampaignLink $link,
+        array $data,
+        ?UploadedFile $upload = null,
+        bool $deferFileDeletes = false,
+    ): array {
         $source = MarketingCampaignHeroImageSource::tryFrom((string) ($data['hero_image_source'] ?? 'none'))
             ?? MarketingCampaignHeroImageSource::None;
 
         return match ($source) {
-            MarketingCampaignHeroImageSource::None => $this->clearHeroFields($link, $data),
-            MarketingCampaignHeroImageSource::External => $this->applyExternal($data),
-            MarketingCampaignHeroImageSource::Upload => $this->applyUpload($link, $data, $upload),
+            MarketingCampaignHeroImageSource::None => $this->clearHeroFields($link, $data, $deferFileDeletes),
+            MarketingCampaignHeroImageSource::External => $this->applyExternal($link, $data, $deferFileDeletes),
+            MarketingCampaignHeroImageSource::Upload => $this->applyUpload($link, $data, $upload, $deferFileDeletes),
         };
     }
 
@@ -31,40 +35,75 @@ class MarketingCampaignHeroImageService
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    private function clearHeroFields(MarketingCampaignLink $link, array $data): array
-    {
-        $this->deleteStoredFile($link);
+    private function clearHeroFields(
+        MarketingCampaignLink $link,
+        array $data,
+        bool $deferFileDeletes,
+    ): array {
+        $removed = [];
+
+        if (filled($link->hero_image_path)) {
+            if ($deferFileDeletes) {
+                $removed = [
+                    '_removed_hero_disk' => $link->hero_image_disk,
+                    '_removed_hero_path' => $link->hero_image_path,
+                ];
+            } else {
+                $this->deleteStoredFile($link);
+            }
+        }
 
         return array_merge($data, [
             'hero_image_source' => MarketingCampaignHeroImageSource::None->value,
             'hero_image_disk' => null,
             'hero_image_path' => null,
             'hero_image_url' => null,
-        ]);
+        ], $removed);
     }
 
     /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    private function applyExternal(array $data): array
-    {
+    private function applyExternal(
+        MarketingCampaignLink $link,
+        array $data,
+        bool $deferFileDeletes,
+    ): array {
         $url = trim((string) ($data['hero_image_url'] ?? ''));
         $this->assertSafeExternalUrl($url);
+
+        $removed = [];
+
+        if (filled($link->hero_image_path)) {
+            if ($deferFileDeletes) {
+                $removed = [
+                    '_removed_hero_disk' => $link->hero_image_disk,
+                    '_removed_hero_path' => $link->hero_image_path,
+                ];
+            } else {
+                $this->deleteStoredFile($link);
+            }
+        }
 
         return array_merge($data, [
             'hero_image_source' => MarketingCampaignHeroImageSource::External->value,
             'hero_image_disk' => null,
             'hero_image_path' => null,
             'hero_image_url' => $url,
-        ]);
+        ], $removed);
     }
 
     /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    private function applyUpload(MarketingCampaignLink $link, array $data, ?UploadedFile $upload): array
+    private function applyUpload(
+        MarketingCampaignLink $link,
+        array $data,
+        ?UploadedFile $upload,
+        bool $deferFileDeletes,
+    ): array
     {
         if ($upload === null) {
             // Conservar imagen existente en update sin nuevo archivo.

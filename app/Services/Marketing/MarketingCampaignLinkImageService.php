@@ -20,9 +20,17 @@ class MarketingCampaignLinkImageService
     /**
      * @param  list<array<string, mixed>>  $items
      * @param  list<UploadedFile|null>  $uploads
+     * @return list<array{disk: string, path: string}>|array{
+     *     created: list<array{disk: string, path: string}>,
+     *     removed: list<array{disk: string|null, path: string}>
+     * }
      */
-    public function sync(MarketingCampaignLink $link, array $items, array $uploads = []): void
-    {
+    public function sync(
+        MarketingCampaignLink $link,
+        array $items,
+        array $uploads = [],
+        bool $deferFileDeletion = false,
+    ): array {
         if (count($items) > self::MAX) {
             throw ValidationException::withMessages([
                 'gallery_items' => 'No puedes tener más de '.self::MAX.' imágenes en la galería.',
@@ -37,9 +45,19 @@ class MarketingCampaignLinkImageService
 
         $keptIds = [];
         $createdUploadPaths = [];
+        $removedUploadPaths = [];
 
         try {
-            DB::transaction(function () use ($link, $items, $uploads, $existingIds, &$keptIds, &$createdUploadPaths) {
+            DB::transaction(function () use (
+                $link,
+                $items,
+                $uploads,
+                $existingIds,
+                $deferFileDeletion,
+                &$keptIds,
+                &$createdUploadPaths,
+                &$removedUploadPaths,
+            ) {
                 $position = 0;
 
                 foreach ($items as $index => $item) {
@@ -66,7 +84,11 @@ class MarketingCampaignLinkImageService
                 $toDelete = array_diff($existingIds, $keptIds);
 
                 foreach ($toDelete as $imageId) {
-                    $this->deleteImageRecord((int) $imageId);
+                    $removedPath = $this->deleteImageRecord((int) $imageId, $deferFileDeletion);
+
+                    if ($removedPath !== null) {
+                        $removedUploadPaths[] = $removedPath;
+                    }
                 }
             });
         } catch (\Throwable $exception) {
@@ -76,6 +98,15 @@ class MarketingCampaignLinkImageService
 
             throw $exception;
         }
+
+        if ($deferFileDeletion) {
+            return [
+                'created' => $createdUploadPaths,
+                'removed' => $removedUploadPaths,
+            ];
+        }
+
+        return $createdUploadPaths;
     }
 
     /**
@@ -182,18 +213,29 @@ class MarketingCampaignLinkImageService
         ]);
     }
 
-    private function deleteImageRecord(int $imageId): void
+    private function deleteImageRecord(int $imageId, bool $deferFileDeletion = false): ?array
     {
         $image = MarketingCampaignLinkImage::query()->find($imageId);
 
         if ($image === null) {
-            return;
+            return null;
         }
 
+        $removedPath = null;
+
         if ($image->source === 'upload' && filled($image->path)) {
-            $this->heroImageService->deletePath($image->disk, $image->path);
+            if ($deferFileDeletion) {
+                $removedPath = [
+                    'disk' => $image->disk,
+                    'path' => $image->path,
+                ];
+            } else {
+                $this->heroImageService->deletePath($image->disk, $image->path);
+            }
         }
 
         $image->delete();
+
+        return $removedPath;
     }
 }

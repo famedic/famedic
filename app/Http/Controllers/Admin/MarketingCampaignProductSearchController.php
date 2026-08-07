@@ -44,7 +44,7 @@ class MarketingCampaignProductSearchController extends Controller
             ->orderBy('name')
             ->limit($validated['limit'] ?? 20);
 
-        $results = $query->get(['id', 'name', 'other_name', 'brand', 'gda_id', 'famedic_price_cents', 'laboratory_test_category_id'])
+        $results = $query->get(['id', 'name', 'other_name', 'brand', 'gda_id', 'famedic_price_cents', 'public_price_cents', 'requires_appointment', 'laboratory_test_category_id'])
             ->map(fn (LaboratoryTest $test) => [
                 'id' => $test->id,
                 'name' => $test->name,
@@ -54,6 +54,8 @@ class MarketingCampaignProductSearchController extends Controller
                 'category' => $test->laboratoryTestCategory?->name,
                 'gda_id' => $test->gda_id,
                 'famedic_price_cents' => $test->famedic_price_cents,
+                'public_price_cents' => $test->public_price_cents,
+                'requires_appointment' => (bool) $test->requires_appointment,
             ]);
 
         return response()->json(['data' => $results]);

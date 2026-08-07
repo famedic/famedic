@@ -142,7 +142,7 @@ class MarketingCampaignPublicLinkTest extends TestCase
     }
 
     #[Test]
-    public function alias_redirige_302_al_canonico_conservando_utms_y_limpiando_extras(): void
+    public function alias_redirige_302_al_canonico_y_luego_renderiza_landing(): void
     {
         $campaign = $this->makeActiveCampaign();
         $link = $this->makeActiveLink($campaign, ['slug' => 'slug-actual']);
@@ -165,31 +165,56 @@ class MarketingCampaignPublicLinkTest extends TestCase
         $this->get(route('campaign-links.show', [
             'slug' => 'slug-actual',
             'utm_source' => 'facebook',
-        ]))->assertRedirect();
+        ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('MarketingCampaigns/Landing')
+                ->where('link.slug', 'slug-actual'));
     }
 
     #[Test]
-    public function brand_redirige_a_catalogo_sin_url_externa(): void
+    public function brand_renderiza_landing_con_maximo_seis_productos_y_cta_interno(): void
     {
+        $category = LaboratoryTestCategory::query()->create(['name' => 'General']);
+        foreach (range(1, 8) as $index) {
+            LaboratoryTest::factory()->create([
+                'name' => sprintf('Jenner %02d', $index),
+                'brand' => LaboratoryBrand::JENNER,
+                'laboratory_test_category_id' => $category->id,
+            ]);
+        }
+
         $campaign = $this->makeActiveCampaign();
         $this->makeActiveLink($campaign, [
             'slug' => 'brand-link',
             'target_type' => MarketingCampaignTargetType::Brand,
             'target_payload' => ['brand' => LaboratoryBrand::JENNER->value],
+            'show_prices' => true,
         ]);
 
-        $response = $this->get(route('campaign-links.show', [
+        $expectedPrimaryUrl = route('laboratory-tests', [
+            'laboratory_brand' => LaboratoryBrand::JENNER->value,
+            'utm_medium' => 'cpc',
+        ]);
+
+        $this->get(route('campaign-links.show', [
             'slug' => 'brand-link',
             'utm_medium' => 'cpc',
             'hack' => 'x',
-        ]));
+        ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('MarketingCampaigns/Landing')
+                ->where('brand.value', LaboratoryBrand::JENNER->value)
+                ->where('content.show_prices', true)
+                ->where('primary_action.url', $expectedPrimaryUrl)
+                ->has('products', 6)
+                ->missing('created_by'));
 
-        $response->assertRedirect(route('laboratory-tests', [
-            'laboratory_brand' => LaboratoryBrand::JENNER->value,
-            'utm_medium' => 'cpc',
-        ]));
-
-        $this->assertStringNotContainsString('http://evil', $response->headers->get('Location') ?? '');
+        $this->assertStringNotContainsString(
+            'http://evil',
+            $expectedPrimaryUrl
+        );
     }
 
     #[Test]
@@ -206,9 +231,17 @@ class MarketingCampaignPublicLinkTest extends TestCase
     }
 
     #[Test]
-    public function category_redirige_con_parametro_category_nombre(): void
+    public function category_renderiza_landing_con_cta_de_categoria(): void
     {
         $category = LaboratoryTestCategory::query()->create(['name' => 'Chequeos']);
+        foreach (range(1, 14) as $index) {
+            LaboratoryTest::factory()->create([
+                'name' => sprintf('Cat %02d', $index),
+                'brand' => LaboratoryBrand::OLAB,
+                'laboratory_test_category_id' => $category->id,
+            ]);
+        }
+
         $campaign = $this->makeActiveCampaign();
         $this->makeActiveLink($campaign, [
             'slug' => 'cat-link',
@@ -219,11 +252,18 @@ class MarketingCampaignPublicLinkTest extends TestCase
             ],
         ]);
 
+        $expectedPrimaryUrl = route('laboratory-tests', [
+            'laboratory_brand' => LaboratoryBrand::OLAB->value,
+            'category' => 'Chequeos',
+        ]);
+
         $this->get(route('campaign-links.show', ['slug' => 'cat-link']))
-            ->assertRedirect(route('laboratory-tests', [
-                'laboratory_brand' => LaboratoryBrand::OLAB->value,
-                'category' => 'Chequeos',
-            ]));
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('MarketingCampaigns/Landing')
+                ->where('category.name', 'Chequeos')
+                ->where('primary_action.url', $expectedPrimaryUrl)
+                ->has('products', 12));
     }
 
     #[Test]
@@ -244,7 +284,7 @@ class MarketingCampaignPublicLinkTest extends TestCase
     }
 
     #[Test]
-    public function product_redirige_usando_id_y_marca_del_modelo(): void
+    public function product_renderiza_landing_con_un_producto_y_cta_a_ficha(): void
     {
         $category = LaboratoryTestCategory::query()->create(['name' => 'General']);
         $test = LaboratoryTest::factory()->create([
@@ -258,14 +298,22 @@ class MarketingCampaignPublicLinkTest extends TestCase
             'target_type' => MarketingCampaignTargetType::Product,
             'target_payload' => [
                 'laboratory_test_id' => $test->id,
-                'brand' => LaboratoryBrand::OLAB->value, // no debe usarse para invalidar si el producto existe
+                'brand' => LaboratoryBrand::OLAB->value,
             ],
         ]);
 
+        $expectedPrimaryUrl = route('laboratory-tests.test', [
+            'laboratory_test' => $test->id,
+        ]);
+
         $this->get(route('campaign-links.show', ['slug' => 'product-link']))
-            ->assertRedirect(route('laboratory-tests.test', [
-                'laboratory_test' => $test->id,
-            ]));
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('MarketingCampaigns/Landing')
+                ->has('products', 1)
+                ->where('products.0.id', $test->id)
+                ->where('brand.value', LaboratoryBrand::AZTECA->value)
+                ->where('primary_action.url', $expectedPrimaryUrl));
     }
 
     #[Test]
@@ -299,7 +347,7 @@ class MarketingCampaignPublicLinkTest extends TestCase
     }
 
     #[Test]
-    public function collection_renderiza_inertia_con_orden_y_estado_vacio(): void
+    public function collection_renderiza_landing_con_orden_y_estado_vacio(): void
     {
         $category = LaboratoryTestCategory::query()->create(['name' => 'Paquetes']);
         $first = LaboratoryTest::factory()->create([
@@ -341,15 +389,14 @@ class MarketingCampaignPublicLinkTest extends TestCase
         $this->get(route('campaign-links.show', ['slug' => 'collection-link']))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('MarketingCampaigns/Collection')
-                ->where('public_title', 'Pack verano')
-                ->where('campaign_name', 'Campaña colección')
+                ->component('MarketingCampaigns/Landing')
+                ->where('content.title', 'Pack verano')
+                ->where('campaign.name', 'Campaña colección')
                 ->where('brand.value', LaboratoryBrand::OLAB->value)
-                ->where('add_all_available', false)
                 ->has('products', 2)
                 ->where('products.0.name', 'Segundo')
                 ->where('products.1.name', 'Primero')
-                ->has('catalog_url'));
+                ->has('primary_action.url'));
 
         $empty = MarketingCampaignCollection::factory()->for($campaign, 'campaign')->create([
             'public_title' => 'Vacía',
@@ -365,7 +412,7 @@ class MarketingCampaignPublicLinkTest extends TestCase
         $this->get(route('campaign-links.show', ['slug' => 'empty-collection']))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('MarketingCampaigns/Collection')
+                ->component('MarketingCampaigns/Landing')
                 ->has('products', 0));
     }
 
@@ -460,9 +507,43 @@ class MarketingCampaignPublicLinkTest extends TestCase
         $this->get(route('campaign-links.show', ['slug' => 'mixed-col']))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('MarketingCampaigns/Collection')
+                ->component('MarketingCampaigns/Landing')
                 ->has('products', 1)
                 ->where('products.0.id', $valid->id));
+    }
+
+    #[Test]
+    public function hero_externo_no_aparece_en_landing(): void
+    {
+        $campaign = $this->makeActiveCampaign();
+        $this->makeActiveLink($campaign, [
+            'slug' => 'evil-hero',
+            'hero_image_path' => 'https://evil.com/x.jpg',
+        ]);
+
+        $this->get(route('campaign-links.show', ['slug' => 'evil-hero']))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('MarketingCampaigns/Landing')
+                ->where('content.hero_image', null));
+    }
+
+    #[Test]
+    public function public_title_y_show_prices_false_se_reflejan_en_landing(): void
+    {
+        $campaign = $this->makeActiveCampaign(['name' => 'Nombre campaña']);
+        $this->makeActiveLink($campaign, [
+            'slug' => 'landing-overrides',
+            'public_title' => 'Título público override',
+            'show_prices' => false,
+        ]);
+
+        $this->get(route('campaign-links.show', ['slug' => 'landing-overrides']))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('MarketingCampaigns/Landing')
+                ->where('content.title', 'Título público override')
+                ->where('content.show_prices', false));
     }
 
     #[Test]
@@ -479,7 +560,8 @@ class MarketingCampaignPublicLinkTest extends TestCase
         $this->assertNotContains('marketing_attribution_touches', $tablesBefore);
 
         $this->get(route('campaign-links.show', ['slug' => 'public-ok']))
-            ->assertRedirect();
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('MarketingCampaigns/Landing'));
 
         $this->assertFalse(
             collect(DB::select("SELECT name FROM sqlite_master WHERE type='table'"))
@@ -495,5 +577,73 @@ class MarketingCampaignPublicLinkTest extends TestCase
         $this->makeActiveLink($campaign, ['slug' => 'promo-ok']);
 
         $this->get('/c/Promo-OK')->assertNotFound();
+    }
+
+    #[Test]
+    public function landing_expone_logo_url_de_marca(): void
+    {
+        $campaign = $this->makeActiveCampaign();
+        $this->makeActiveLink($campaign, [
+            'slug' => 'brand-logo',
+            'target_type' => MarketingCampaignTargetType::Brand,
+            'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+        ]);
+
+        $this->get(route('campaign-links.show', ['slug' => 'brand-logo']))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('MarketingCampaigns/Landing')
+                ->where('brand.logo_url', '/images/gda/'.LaboratoryBrand::OLAB->imageSrc())
+                ->where('brand.catalog_url', route('laboratory-tests', [
+                    'laboratory_brand' => LaboratoryBrand::OLAB->value,
+                ]))
+                ->where('brand.stores_url', route('laboratory-stores.index', [
+                    'brand' => LaboratoryBrand::OLAB->value,
+                ])));
+    }
+
+    #[Test]
+    public function require_auth_guarda_intended_y_redirige_a_login(): void
+    {
+        $campaign = $this->makeActiveCampaign();
+        $this->makeActiveLink($campaign, [
+            'slug' => 'auth-return',
+            'target_type' => MarketingCampaignTargetType::Brand,
+            'target_payload' => ['brand' => LaboratoryBrand::SWISSLAB->value],
+        ]);
+
+        $this->get(route('campaign-links.require-auth', [
+            'slug' => 'auth-return',
+            'utm_source' => 'newsletter',
+        ]))
+            ->assertRedirect(route('login'));
+
+        $this->assertSame(
+            route('campaign-links.show', [
+                'slug' => 'auth-return',
+                'utm_source' => 'newsletter',
+            ]),
+            session('url.intended'),
+        );
+    }
+
+    #[Test]
+    public function landing_expone_props_de_carrito(): void
+    {
+        $campaign = $this->makeActiveCampaign();
+        $this->makeActiveLink($campaign, [
+            'slug' => 'cart-props',
+            'target_type' => MarketingCampaignTargetType::Brand,
+            'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+        ]);
+
+        $this->get(route('campaign-links.show', ['slug' => 'cart-props']))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('MarketingCampaigns/Landing')
+                ->where('cart.add_url', route('laboratory-cart-items.store'))
+                ->where('cart.requires_auth', true)
+                ->where('can_add_to_cart', true)
+                ->where('cart.login_url', route('campaign-links.require-auth', ['slug' => 'cart-props'])));
     }
 }

@@ -1,4 +1,4 @@
-import { Field, Label, ErrorMessage, Description } from "@/Components/Catalyst/fieldset";
+import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Text } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
@@ -101,9 +101,9 @@ export default function MarketingCampaignGalleryFields({
 			</div>
 
 			{(errors.gallery_items || errors.gallery_uploads) && (
-				<ErrorMessage>
+				<Text className="text-sm text-red-600 dark:text-red-500">
 					{errors.gallery_items || errors.gallery_uploads}
-				</ErrorMessage>
+				</Text>
 			)}
 
 			{items.length === 0 ? (
@@ -203,9 +203,9 @@ export default function MarketingCampaignGalleryFields({
 				</ul>
 			)}
 
-			<Description>
+			<Text className="text-sm text-zinc-500">
 				El orden aquí define el orden en la landing pública.
-			</Description>
+			</Text>
 		</div>
 	);
 }

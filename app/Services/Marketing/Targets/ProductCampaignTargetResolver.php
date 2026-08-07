@@ -5,9 +5,15 @@ namespace App\Services\Marketing\Targets;
 use App\Enums\MarketingCampaignTargetType;
 use App\Models\LaboratoryTest;
 use App\Models\MarketingCampaignLink;
+use App\Services\Marketing\MarketingCampaignBrandPresenter;
 
 class ProductCampaignTargetResolver implements MarketingCampaignTargetResolver
 {
+    public function __construct(
+        private readonly MarketingCampaignLandingProductMapper $productMapper,
+        private readonly MarketingCampaignBrandPresenter $brandPresenter,
+    ) {}
+
     public function supports(MarketingCampaignTargetType $type): bool
     {
         return $type === MarketingCampaignTargetType::Product;
@@ -22,16 +28,36 @@ class ProductCampaignTargetResolver implements MarketingCampaignTargetResolver
             return MarketingCampaignTargetResolution::invalid();
         }
 
-        $test = LaboratoryTest::query()->find((int) $testId);
+        $test = LaboratoryTest::query()
+            ->with('laboratoryTestCategory:id,name')
+            ->find((int) $testId);
+
         if ($test === null || $test->brand === null) {
             return MarketingCampaignTargetResolution::invalid();
         }
 
-        $url = route('laboratory-tests.test', [
-            'laboratory_test' => $test->id,
-            ...$allowedQuery,
-        ]);
+        $brand = $test->brand;
+        $product = $this->productMapper->map($test, $allowedQuery);
+        $detailUrl = $product['detail_url'];
 
-        return MarketingCampaignTargetResolution::redirect($url);
+        $description = $test->description
+            ?: $test->common_use
+            ?: $test->indications;
+
+        return MarketingCampaignTargetResolution::resolved(new MarketingCampaignResolvedTarget(
+            type: MarketingCampaignTargetType::Product,
+            brand: $this->brandPresenter->present($brand),
+            category: $test->laboratoryTestCategory
+                ? ['name' => $test->laboratoryTestCategory->name]
+                : null,
+            products: [$product],
+            primaryDestinationUrl: $detailUrl,
+            secondaryDestinationUrl: route('laboratory-tests', [
+                'laboratory_brand' => $brand->value,
+                ...$allowedQuery,
+            ]),
+            sourceTitle: $test->name,
+            sourceDescription: $description ? (string) $description : null,
+        ));
     }
 }

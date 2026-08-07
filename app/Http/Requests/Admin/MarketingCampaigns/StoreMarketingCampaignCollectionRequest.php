@@ -46,7 +46,23 @@ class StoreMarketingCampaignCollectionRequest extends FormRequest
             'marketing_campaign_id' => $campaign?->id ?? $this->input('marketing_campaign_id'),
             'is_active' => $this->boolean('is_active', true),
             'laboratory_test_ids' => $this->input('laboratory_test_ids', []),
+            ...$this->mergedPublicTitleFromName(),
         ]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function mergedPublicTitleFromName(): array
+    {
+        $name = trim((string) $this->input('name', ''));
+        $publicTitle = trim((string) $this->input('public_title', ''));
+
+        if ($publicTitle === '' && $name !== '') {
+            return ['public_title' => $name];
+        }
+
+        return [];
     }
 
     public function withValidator(Validator $validator): void

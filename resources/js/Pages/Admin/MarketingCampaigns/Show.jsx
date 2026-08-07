@@ -4,16 +4,20 @@ import {
 	PlusIcon,
 	PencilSquareIcon,
 	ArchiveBoxIcon,
+	ArrowTopRightOnSquareIcon,
+	ClipboardDocumentIcon,
 } from "@heroicons/react/16/solid";
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
 import { Text } from "@/Components/Catalyst/text";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
+import Card from "@/Components/Card";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import MarketingCampaignStatusBadge from "./Components/MarketingCampaignStatusBadge";
 import MarketingCampaignLinksTable from "./Components/MarketingCampaignLinksTable";
 import MarketingCampaignCollectionsTable from "./Components/MarketingCampaignCollectionsTable";
+import MarketingCampaignChecklist from "./Components/MarketingCampaignChecklist";
 
 function normalizeStatus(status) {
 	if (status == null) return "";
@@ -32,14 +36,30 @@ function formatDateTime(value) {
 	}
 }
 
+async function copyText(text) {
+	if (navigator.clipboard?.writeText) {
+		await navigator.clipboard.writeText(text);
+		return;
+	}
+	const input = document.createElement("textarea");
+	input.value = text;
+	document.body.appendChild(input);
+	input.select();
+	document.execCommand("copy");
+	document.body.removeChild(input);
+}
+
 export default function MarketingCampaignsShow({
 	campaign,
 	links = [],
 	collections = [],
+	checklist = [],
+	summary = {},
 	capabilities = {},
 }) {
 	const [archiveOpen, setArchiveOpen] = useState(false);
 	const [archiving, setArchiving] = useState(false);
+	const [copiedPrimary, setCopiedPrimary] = useState(false);
 
 	const status = normalizeStatus(campaign.status);
 	const isArchived =
@@ -74,6 +94,10 @@ export default function MarketingCampaignsShow({
 	const campaignCollections = collections.length
 		? collections
 		: campaign.collections || [];
+	const primaryLink = summary.primary_link || campaignLinks[0] || null;
+	const createLinkHref = canCreateLink
+		? route("admin.marketing-campaigns.links.create", campaign.id)
+		: null;
 
 	const confirmArchive = () => {
 		if (archiving) return;
@@ -89,6 +113,13 @@ export default function MarketingCampaignsShow({
 				},
 			},
 		);
+	};
+
+	const copyPrimaryLink = async () => {
+		if (!primaryLink?.public_url) return;
+		await copyText(primaryLink.public_url);
+		setCopiedPrimary(true);
+		setTimeout(() => setCopiedPrimary(false), 2000);
 	};
 
 	return (
@@ -125,6 +156,28 @@ export default function MarketingCampaignsShow({
 						>
 							Volver
 						</Button>
+						{primaryLink?.public_url && (
+							<>
+								<Button
+									type="button"
+									outline
+									onClick={() =>
+										window.open(
+											primaryLink.public_url,
+											"_blank",
+											"noopener,noreferrer",
+										)
+									}
+								>
+									<ArrowTopRightOnSquareIcon className="size-4" />
+									Abrir landing
+								</Button>
+								<Button type="button" outline onClick={copyPrimaryLink}>
+									<ClipboardDocumentIcon className="size-4" />
+									{copiedPrimary ? "Copiado" : "Copiar enlace"}
+								</Button>
+							</>
+						)}
 						{canEdit && (
 							<Button
 								href={route(
@@ -134,7 +187,13 @@ export default function MarketingCampaignsShow({
 								outline
 							>
 								<PencilSquareIcon className="size-4" />
-								Editar
+								Editar campaña
+							</Button>
+						)}
+						{canCreateLink && (
+							<Button href={createLinkHref} color="lime">
+								<PlusIcon className="size-4" />
+								Nuevo enlace
 							</Button>
 						)}
 						{canArchive && (
@@ -150,17 +209,44 @@ export default function MarketingCampaignsShow({
 					</div>
 				</div>
 
+				<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+					<Card className="p-4">
+						<Text className="text-sm text-zinc-500">Enlaces</Text>
+						<Text className="mt-1 text-2xl font-semibold">
+							{summary.links_count ?? campaign.links_count ?? 0}
+						</Text>
+					</Card>
+					<Card className="p-4">
+						<Text className="text-sm text-zinc-500">Colecciones</Text>
+						<Text className="mt-1 text-2xl font-semibold">
+							{summary.collections_count ??
+								campaign.collections_count ??
+								0}
+						</Text>
+					</Card>
+					<Card className="p-4">
+						<Text className="text-sm text-zinc-500">
+							Productos configurados
+						</Text>
+						<Text className="mt-1 text-2xl font-semibold">
+							{summary.configured_products_count ?? 0}
+						</Text>
+					</Card>
+					<Card className="p-4">
+						<Text className="text-sm text-zinc-500">Completitud</Text>
+						<Text className="mt-1 text-2xl font-semibold">
+							{summary.completeness_percent ?? 0}%
+						</Text>
+					</Card>
+				</div>
+
+				<MarketingCampaignChecklist items={checklist} />
+
 				<section className="space-y-4">
 					<div className="flex flex-wrap items-end justify-between gap-3">
 						<Subheading>Enlaces</Subheading>
 						{canCreateLink && (
-							<Button
-								href={route(
-									"admin.marketing-campaigns.links.create",
-									campaign.id,
-								)}
-								color="lime"
-							>
+							<Button href={createLinkHref} color="lime">
 								<PlusIcon />
 								Nuevo enlace
 							</Button>
@@ -170,12 +256,19 @@ export default function MarketingCampaignsShow({
 						campaignId={campaign.id}
 						links={campaignLinks}
 						canEdit={canEdit}
+						createHref={createLinkHref}
 					/>
 				</section>
 
 				<section className="space-y-4">
 					<div className="flex flex-wrap items-end justify-between gap-3">
-						<Subheading>Colecciones</Subheading>
+						<div>
+							<Subheading>Colecciones</Subheading>
+							<Text className="mt-1 text-sm text-zinc-500">
+								Solo necesitas una colección cuando reutilizarás
+								un grupo de estudios.
+							</Text>
+						</div>
 						{canCreateCollection && (
 							<Button
 								href={route(
@@ -185,7 +278,7 @@ export default function MarketingCampaignsShow({
 								color="lime"
 							>
 								<PlusIcon />
-								Nueva colección
+								Crear colección
 							</Button>
 						)}
 					</div>
@@ -193,6 +286,14 @@ export default function MarketingCampaignsShow({
 						campaignId={campaign.id}
 						collections={campaignCollections}
 						canEdit={canEdit}
+						createHref={
+							canCreateCollection
+								? route(
+										"admin.marketing-campaigns.collections.create",
+										campaign.id,
+									)
+								: null
+						}
 					/>
 				</section>
 			</div>

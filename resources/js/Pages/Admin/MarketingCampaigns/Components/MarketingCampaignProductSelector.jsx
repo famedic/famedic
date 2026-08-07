@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { Button } from "@/Components/Catalyst/button";
+import { Badge } from "@/Components/Catalyst/badge";
 import { Field, Label, ErrorMessage } from "@/Components/Catalyst/fieldset";
 import { Input, InputGroup } from "@/Components/Catalyst/input";
 import { Text } from "@/Components/Catalyst/text";
@@ -10,15 +11,7 @@ import {
 	ChevronDownIcon,
 	XMarkIcon,
 } from "@heroicons/react/16/solid";
-
-function formatPrice(cents) {
-	if (cents == null || cents === "") return "—";
-	const amount = Number(cents) / 100;
-	return `$${amount.toLocaleString("es-MX", {
-		minimumFractionDigits: 2,
-		maximumFractionDigits: 2,
-	})} MXN`;
-}
+import { formatCents } from "./collectionPricing";
 
 function brandLabel(item) {
 	if (!item) return "—";
@@ -33,21 +26,48 @@ function categoryLabel(item) {
 	return item?.category?.name || item?.category_name || "—";
 }
 
+const EMPTY_ID_LIST = [];
+
+function idsKey(items) {
+	if (!items?.length) return "";
+	return items
+		.map((item) => Number(item?.id ?? item))
+		.filter((id) => Number.isFinite(id))
+		.sort((a, b) => a - b)
+		.join(",");
+}
+
 export default function MarketingCampaignProductSelector({
 	brand,
-	selectedItems = [],
+	selectedItems,
 	onChange,
 	productSearchUrl,
 	error,
+	maxItems = 20,
+	excludeIds,
+	emptyMessage = "Ningún estudio seleccionado.",
+	addLabel = "Agregar estudios",
+	variant = "default",
+	showSelectedCount = true,
 }) {
+	const resolvedSelectedItems = selectedItems ?? EMPTY_ID_LIST;
+	const resolvedExcludeIds = excludeIds ?? EMPTY_ID_LIST;
+	const selectedItemsKey = idsKey(resolvedSelectedItems);
+	const excludeIdsKey = idsKey(resolvedExcludeIds);
 	const [query, setQuery] = useState("");
 	const [results, setResults] = useState([]);
 	const [searching, setSearching] = useState(false);
+	const isCollection = variant === "collection";
 
 	useEffect(() => {
 		const q = query.trim();
-		if (!brand || q.length < 2 || !productSearchUrl) {
-			setResults([]);
+		if (q.length < 2 || !productSearchUrl) {
+			setResults((current) => (current.length === 0 ? current : []));
+			return;
+		}
+
+		if (isCollection && !brand) {
+			setResults((current) => (current.length === 0 ? current : []));
 			return;
 		}
 
@@ -56,22 +76,17 @@ export default function MarketingCampaignProductSelector({
 			setSearching(true);
 			try {
 				const response = await axios.get(productSearchUrl, {
-					params: { q, brand },
+					params: { q, brand: brand || undefined },
 					signal: controller.signal,
 					withCredentials: true,
 				});
 				const rows = Array.isArray(response.data)
 					? response.data
 					: (response.data?.data ?? []);
-				const selectedIds = new Set(
-					selectedItems.map((item) => Number(item.id)),
-				);
-				setResults(
-					rows.filter((row) => !selectedIds.has(Number(row.id))),
-				);
+				setResults(rows);
 			} catch (err) {
 				if (err.name !== "CanceledError" && err.code !== "ERR_CANCELED") {
-					setResults([]);
+					setResults((current) => (current.length === 0 ? current : []));
 				}
 			} finally {
 				setSearching(false);
@@ -82,33 +97,80 @@ export default function MarketingCampaignProductSelector({
 			clearTimeout(timer);
 			controller.abort();
 		};
-	}, [query, brand, productSearchUrl, selectedItems]);
+	}, [query, brand, productSearchUrl, selectedItemsKey, excludeIdsKey, isCollection]);
+
+	const selectedIds = new Set([
+		...resolvedSelectedItems.map((item) => Number(item.id)),
+		...resolvedExcludeIds.map((id) => Number(id)),
+	]);
 
 	const addItem = (product) => {
-		if (selectedItems.some((item) => Number(item.id) === Number(product.id))) {
+		if (
+			resolvedSelectedItems.some(
+				(item) => Number(item.id) === Number(product.id),
+			) ||
+			resolvedSelectedItems.length >= maxItems
+		) {
 			return;
 		}
-		onChange([...selectedItems, product]);
+		onChange([...resolvedSelectedItems, product]);
 		setQuery("");
 		setResults([]);
 	};
 
 	const removeItem = (id) => {
-		onChange(selectedItems.filter((item) => Number(item.id) !== Number(id)));
+		onChange(
+			resolvedSelectedItems.filter(
+				(item) => Number(item.id) !== Number(id),
+			),
+		);
 	};
 
 	const moveItem = (index, direction) => {
-		const next = [...selectedItems];
+		const next = [...resolvedSelectedItems];
 		const target = index + direction;
 		if (target < 0 || target >= next.length) return;
 		[next[index], next[target]] = [next[target], next[index]];
 		onChange(next);
 	};
 
+	const renderMeta = (product, { selected = false } = {}) => {
+		const parts = [
+			product.other_name,
+			!isCollection ? brandLabel(product) : null,
+			categoryLabel(product),
+			formatCents(product.famedic_price_cents),
+		].filter(Boolean);
+
+		return (
+			<span className="text-sm text-zinc-500">
+				{parts.join(" · ")}
+				{product.requires_appointment && (
+					<Badge color="sky" className="ml-2">
+						Requiere cita
+					</Badge>
+				)}
+				{selected && (
+					<Badge color="zinc" className="ml-2">
+						Ya agregado
+					</Badge>
+				)}
+			</span>
+		);
+	};
+
 	return (
 		<div className="space-y-4">
+			{showSelectedCount && resolvedSelectedItems.length > 0 && (
+				<Text className="text-sm font-medium">
+					{resolvedSelectedItems.length} estudio
+					{resolvedSelectedItems.length === 1 ? "" : "s"} seleccionado
+					{resolvedSelectedItems.length === 1 ? "" : "s"}
+				</Text>
+			)}
+
 			<Field>
-				<Label>Agregar estudios</Label>
+				<Label>{addLabel}</Label>
 				<InputGroup>
 					<MagnifyingGlassIcon />
 					<Input
@@ -116,8 +178,8 @@ export default function MarketingCampaignProductSelector({
 						onChange={(e) => setQuery(e.target.value)}
 						placeholder={
 							brand
-								? "Buscar por nombre…"
-								: "Selecciona una marca primero"
+								? "Escribe al menos 2 caracteres…"
+								: "Selecciona una marca de laboratorio primero"
 						}
 						disabled={!brand}
 					/>
@@ -125,56 +187,71 @@ export default function MarketingCampaignProductSelector({
 				{searching && (
 					<Text className="mt-1 text-sm text-zinc-500">Buscando…</Text>
 				)}
+				{!searching && query.trim().length >= 2 && results.length === 0 && (
+					<Text className="mt-1 text-sm text-zinc-500">
+						No encontramos estudios con esa búsqueda.
+					</Text>
+				)}
 				{error && <ErrorMessage>{error}</ErrorMessage>}
 			</Field>
 
 			{results.length > 0 && (
 				<ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
-					{results.map((product) => (
-						<li key={product.id}>
-							<button
-								type="button"
-								className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"
-								onClick={() => addItem(product)}
-							>
-								<span className="font-medium">{product.name}</span>
-								<span className="text-sm text-zinc-500">
-									{[
-										product.other_name,
-										brandLabel(product),
-										categoryLabel(product),
-									]
-										.filter(Boolean)
-										.join(" · ")}
-								</span>
-							</button>
-						</li>
-					))}
+					{results.map((product) => {
+						const alreadySelected = selectedIds.has(Number(product.id));
+
+						return (
+							<li key={product.id}>
+								<button
+									type="button"
+									disabled={alreadySelected}
+									className={`flex w-full flex-col gap-1 px-3 py-2 text-left ${
+										alreadySelected
+											? "cursor-not-allowed opacity-60"
+											: "hover:bg-zinc-50 dark:hover:bg-zinc-800"
+									}`}
+									onClick={() => addItem(product)}
+								>
+									<span className="font-medium">
+										{product.name}
+									</span>
+									{renderMeta(product, {
+										selected: alreadySelected,
+									})}
+								</button>
+							</li>
+						);
+					})}
 				</ul>
 			)}
 
-			{selectedItems.length === 0 ? (
-				<Text className="text-sm text-zinc-500">
-					Ningún estudio seleccionado. Puedes guardar la colección vacía.
-				</Text>
+			{resolvedSelectedItems.length === 0 ? (
+				<Text className="text-sm text-zinc-500">{emptyMessage}</Text>
 			) : (
 				<ul className="space-y-2">
-					{selectedItems.map((item, index) => (
+					{resolvedSelectedItems.map((item, index) => (
 						<li
 							key={item.id}
 							className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700"
 						>
 							<div className="min-w-0 flex-1">
-								<div className="font-medium">{item.name}</div>
-								<div className="text-sm text-zinc-500">
+								<div className="flex flex-wrap items-center gap-2">
+									<Badge color="zinc">#{index + 1}</Badge>
+									<div className="font-medium">{item.name}</div>
+								</div>
+								<div className="mt-1 text-sm text-zinc-500">
 									{[
 										item.other_name,
-										brandLabel(item),
 										categoryLabel(item),
-										formatPrice(item.famedic_price_cents),
+										formatCents(item.famedic_price_cents),
 									]
 										.filter(Boolean)
 										.join(" · ")}
+									{item.requires_appointment && (
+										<Badge color="sky" className="ml-2">
+											Requiere cita
+										</Badge>
+									)}
 								</div>
 							</div>
 							<div className="flex items-center gap-1">
@@ -183,16 +260,18 @@ export default function MarketingCampaignProductSelector({
 									plain
 									disabled={index === 0}
 									onClick={() => moveItem(index, -1)}
-									title="Subir"
+									aria-label={`Subir ${item.name}`}
 								>
 									<ChevronUpIcon className="size-4" />
 								</Button>
 								<Button
 									type="button"
 									plain
-									disabled={index === selectedItems.length - 1}
+									disabled={
+										index === resolvedSelectedItems.length - 1
+									}
 									onClick={() => moveItem(index, 1)}
-									title="Bajar"
+									aria-label={`Bajar ${item.name}`}
 								>
 									<ChevronDownIcon className="size-4" />
 								</Button>
@@ -200,7 +279,7 @@ export default function MarketingCampaignProductSelector({
 									type="button"
 									plain
 									onClick={() => removeItem(item.id)}
-									title="Quitar"
+									aria-label={`Quitar ${item.name}`}
 								>
 									<XMarkIcon className="size-4" />
 								</Button>

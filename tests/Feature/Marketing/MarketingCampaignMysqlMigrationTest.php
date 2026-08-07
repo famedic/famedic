@@ -37,11 +37,15 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
             try {
                 DB::connection($this->connection)->statement('SET FOREIGN_KEY_CHECKS=0');
                 foreach ([
+                    'marketing_campaign_link_images',
+                    'marketing_campaign_link_categories',
+                    'marketing_campaign_link_products',
                     'marketing_campaign_collection_items',
                     'marketing_campaign_collections',
                     'marketing_campaign_link_aliases',
                     'marketing_campaign_links',
                     'marketing_campaigns',
+                    'laboratory_test_categories',
                     'laboratory_tests',
                     'administrators',
                     'users',
@@ -68,23 +72,41 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
     {
         $this->createParentTables();
 
-        $migration = require database_path('migrations/2026_08_06_230000_create_marketing_campaign_tables.php');
+        $baseMigration = require database_path('migrations/2026_08_06_230000_create_marketing_campaign_tables.php');
+        $landingMigration = require database_path('migrations/2026_08_06_230200_add_landing_fields_to_marketing_campaign_links.php');
+        $commerceMigration = require database_path('migrations/2026_08_06_230300_add_landing_commerce_to_marketing_campaign_links.php');
 
-        // Primera ejecución up
-        $this->runMigrationOnTempConnection($migration, 'up');
+        // Primera ejecución: base + landing + commerce
+        $this->runMigrationOnTempConnection($baseMigration, 'up');
+        $this->runMigrationOnTempConnection($landingMigration, 'up');
+        $this->runMigrationOnTempConnection($commerceMigration, 'up');
         $this->assertMarketingTablesExist();
         $this->assertNamedConstraints();
+        $this->assertLandingColumnsExistWithDefaults();
+        $this->assertCommerceSchemaExists();
 
-        // down completo
-        $this->runMigrationOnTempConnection($migration, 'down');
+        // down en orden inverso
+        $this->runMigrationOnTempConnection($commerceMigration, 'down');
+        $this->assertCommerceSchemaMissing();
+        $this->runMigrationOnTempConnection($landingMigration, 'down');
+        $this->assertLandingColumnsMissing();
+        $this->runMigrationOnTempConnection($baseMigration, 'down');
         $this->assertMarketingTablesMissing();
 
         // Segunda ejecución limpia
-        $this->runMigrationOnTempConnection($migration, 'up');
+        $this->runMigrationOnTempConnection($baseMigration, 'up');
+        $this->runMigrationOnTempConnection($landingMigration, 'up');
+        $this->runMigrationOnTempConnection($commerceMigration, 'up');
         $this->assertMarketingTablesExist();
         $this->assertNamedConstraints();
+        $this->assertLandingColumnsExistWithDefaults();
+        $this->assertCommerceSchemaExists();
 
-        $this->runMigrationOnTempConnection($migration, 'down');
+        $this->runMigrationOnTempConnection($commerceMigration, 'down');
+        $this->assertCommerceSchemaMissing();
+        $this->runMigrationOnTempConnection($landingMigration, 'down');
+        $this->assertLandingColumnsMissing();
+        $this->runMigrationOnTempConnection($baseMigration, 'down');
         $this->assertMarketingTablesMissing();
     }
 
@@ -178,6 +200,12 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
             $table->timestamps();
             $table->softDeletes();
         });
+
+        $schema->create('laboratory_test_categories', function ($table) {
+            $table->id();
+            $table->string('name');
+            $table->timestamps();
+        });
     }
 
     private function runMigrationOnTempConnection(object $migration, string $direction): void
@@ -256,6 +284,132 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
         foreach (['mc_links_slug_unique', 'mc_link_aliases_slug_unique', 'mc_collection_items_unique_test'] as $name) {
             $this->assertContains($name, $uniqueIndexes, "Unique ausente: {$name}");
             $this->assertLessThan(65, strlen($name));
+        }
+    }
+
+    private function assertLandingColumnsExistWithDefaults(): void
+    {
+        $schema = Schema::connection($this->connection);
+
+        foreach ([
+            'public_title',
+            'public_subtitle',
+            'public_description',
+            'eyebrow',
+            'hero_image_path',
+            'primary_cta_label',
+            'secondary_cta_label',
+            'show_prices',
+            'show_brand_logo',
+            'show_campaign_dates',
+            'landing_layout',
+        ] as $column) {
+            $this->assertTrue(
+                $schema->hasColumn('marketing_campaign_links', $column),
+                "Falta columna landing {$column}"
+            );
+        }
+
+        $defaults = collect(DB::connection($this->connection)->select(
+            'SELECT COLUMN_NAME, COLUMN_DEFAULT, DATA_TYPE, IS_NULLABLE
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
+            [$this->tempDatabase, 'marketing_campaign_links']
+        ))->keyBy('COLUMN_NAME');
+
+        $this->assertTrue(($defaults['public_title']->IS_NULLABLE ?? null) === 'YES');
+        $this->assertSame('1', (string) ($defaults['show_prices']->COLUMN_DEFAULT ?? ''));
+        $this->assertSame('1', (string) ($defaults['show_brand_logo']->COLUMN_DEFAULT ?? ''));
+        $this->assertSame('0', (string) ($defaults['show_campaign_dates']->COLUMN_DEFAULT ?? ''));
+        $this->assertSame('default', (string) ($defaults['landing_layout']->COLUMN_DEFAULT ?? ''));
+    }
+
+    private function assertLandingColumnsMissing(): void
+    {
+        $schema = Schema::connection($this->connection);
+
+        foreach (['public_title', 'show_prices', 'landing_layout'] as $column) {
+            $this->assertFalse(
+                $schema->hasColumn('marketing_campaign_links', $column),
+                "La columna {$column} no debió existir tras down de 230200"
+            );
+        }
+    }
+
+    private function assertCommerceSchemaExists(): void
+    {
+        $schema = Schema::connection($this->connection);
+
+        foreach ([
+            'marketing_campaign_link_products',
+            'marketing_campaign_link_categories',
+            'marketing_campaign_link_images',
+        ] as $table) {
+            $this->assertTrue($schema->hasTable($table), "Falta tabla {$table}");
+        }
+
+        foreach ([
+            'hero_image_source',
+            'hero_image_disk',
+            'hero_image_url',
+            'hero_image_alt',
+        ] as $column) {
+            $this->assertTrue(
+                $schema->hasColumn('marketing_campaign_links', $column),
+                "Falta columna commerce {$column}"
+            );
+        }
+
+        $database = $this->tempDatabase;
+
+        $foreignKeys = collect(DB::connection($this->connection)->select(
+            'SELECT CONSTRAINT_NAME
+             FROM information_schema.TABLE_CONSTRAINTS
+             WHERE CONSTRAINT_SCHEMA = ? AND CONSTRAINT_TYPE = ?',
+            [$database, 'FOREIGN KEY']
+        ))->pluck('CONSTRAINT_NAME')->all();
+
+        foreach ([
+            'mc_link_products_link_fk',
+            'mc_link_products_test_fk',
+            'mc_link_categories_link_fk',
+            'mc_link_categories_cat_fk',
+            'mc_link_images_link_fk',
+        ] as $name) {
+            $this->assertContains($name, $foreignKeys, "FK ausente: {$name}");
+            $this->assertLessThan(65, strlen($name));
+        }
+
+        $uniqueIndexes = collect(DB::connection($this->connection)->select(
+            'SELECT INDEX_NAME
+             FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = ? AND NON_UNIQUE = 0',
+            [$database]
+        ))->pluck('INDEX_NAME')->all();
+
+        foreach (['mc_link_products_unique', 'mc_link_categories_unique'] as $name) {
+            $this->assertContains($name, $uniqueIndexes, "Unique ausente: {$name}");
+            $this->assertLessThan(65, strlen($name));
+        }
+    }
+
+    private function assertCommerceSchemaMissing(): void
+    {
+        $schema = Schema::connection($this->connection);
+
+        foreach ([
+            'marketing_campaign_link_products',
+            'marketing_campaign_link_categories',
+            'marketing_campaign_link_images',
+        ] as $table) {
+            $this->assertFalse($schema->hasTable($table), "La tabla {$table} no debió existir tras down de 230300");
+        }
+
+        foreach (['hero_image_source', 'hero_image_url'] as $column) {
+            $this->assertFalse(
+                $schema->hasColumn('marketing_campaign_links', $column),
+                "La columna {$column} no debió existir tras down de 230300"
+            );
         }
     }
 }

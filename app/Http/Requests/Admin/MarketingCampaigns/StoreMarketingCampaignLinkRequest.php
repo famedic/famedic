@@ -15,6 +15,8 @@ use Illuminate\Validation\Validator;
 
 class StoreMarketingCampaignLinkRequest extends FormRequest
 {
+    use MarketingCampaignLinkLandingRules;
+
     public function authorize(): bool
     {
         if (! ($this->user()?->can('create', MarketingCampaignLink::class) ?? false)) {
@@ -42,6 +44,7 @@ class StoreMarketingCampaignLinkRequest extends FormRequest
             'utm_content' => ['nullable', 'string', 'max:160'],
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
+            ...$this->landingContentRules(),
         ];
     }
 
@@ -61,6 +64,8 @@ class StoreMarketingCampaignLinkRequest extends FormRequest
         if ($merge !== []) {
             $this->merge($merge);
         }
+
+        $this->prepareLandingPayload();
     }
 
     public function withValidator(Validator $validator): void

@@ -7,6 +7,7 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoiceRequests\FiscalCertificateController;
 use App\Http\Controllers\InvoiceXmlController;
 use App\Http\Controllers\LaboratoryPurchasePdfController;
+use App\Http\Controllers\Marketing\MarketingCampaignLinkAuthController;
 use App\Http\Controllers\Marketing\MarketingCampaignLinkController;
 use App\Http\Controllers\PrivacyPolicyController;
 use App\Http\Controllers\ResultsController;
@@ -22,6 +23,10 @@ Route::get('/', WelcomeController::class)->name('welcome');
 Route::get('/c/{slug}', MarketingCampaignLinkController::class)
     ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
     ->name('campaign-links.show');
+
+Route::get('/c/{slug}/auth', MarketingCampaignLinkAuthController::class)
+    ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
+    ->name('campaign-links.require-auth');
 
 // Route::get('/terms-of-service', TermsOfServiceController::class)->name('terms-of-service');
 // Route::get('/privacy-policy', PrivacyPolicyController::class)->name('privacy-policy');

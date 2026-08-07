@@ -6,9 +6,17 @@ use App\Enums\MarketingCampaignTargetType;
 use App\Models\LaboratoryTest;
 use App\Models\MarketingCampaignCollection;
 use App\Models\MarketingCampaignLink;
+use App\Services\Marketing\MarketingCampaignBrandPresenter;
 
 class CollectionCampaignTargetResolver implements MarketingCampaignTargetResolver
 {
+    private const PRODUCT_LIMIT = 50;
+
+    public function __construct(
+        private readonly MarketingCampaignLandingProductMapper $productMapper,
+        private readonly MarketingCampaignBrandPresenter $brandPresenter,
+    ) {}
+
     public function supports(MarketingCampaignTargetType $type): bool
     {
         return $type === MarketingCampaignTargetType::Collection;
@@ -24,10 +32,7 @@ class CollectionCampaignTargetResolver implements MarketingCampaignTargetResolve
         }
 
         $collection = MarketingCampaignCollection::query()
-            ->with([
-                'campaign:id,name',
-                'orderedItems.laboratoryTest.laboratoryTestCategory:id,name',
-            ])
+            ->with(['orderedItems.laboratoryTest.laboratoryTestCategory:id,name'])
             ->whereKey((int) $collectionId)
             ->where('marketing_campaign_id', $link->marketing_campaign_id)
             ->where('is_active', true)
@@ -38,53 +43,36 @@ class CollectionCampaignTargetResolver implements MarketingCampaignTargetResolve
         }
 
         $brand = $collection->laboratory_brand;
+
         $products = $collection->orderedItems
+            ->take(self::PRODUCT_LIMIT)
             ->map(function ($item) use ($brand, $allowedQuery) {
                 $test = $item->laboratoryTest;
 
-                if (! $test instanceof LaboratoryTest) {
+                if (! $test instanceof LaboratoryTest || $test->brand !== $brand) {
                     return null;
                 }
 
-                if ($test->brand !== $brand) {
-                    return null;
-                }
-
-                return [
-                    'id' => $test->id,
-                    'name' => $test->name,
-                    'other_name' => $test->other_name,
-                    'category' => $test->laboratoryTestCategory?->name,
-                    'requires_appointment' => (bool) $test->requires_appointment,
-                    'formatted_famedic_price' => $test->formatted_famedic_price,
-                    'formatted_public_price' => $test->formatted_public_price,
-                    'famedic_price_cents' => $test->famedic_price_cents,
-                    'public_price_cents' => $test->public_price_cents,
-                    'product_url' => route('laboratory-tests.test', [
-                        'laboratory_test' => $test->id,
-                        ...$allowedQuery,
-                    ]),
-                ];
+                return $this->productMapper->map($test, $allowedQuery);
             })
             ->filter()
             ->values()
             ->all();
 
-        return MarketingCampaignTargetResolution::inertia('MarketingCampaigns/Collection', [
-            'campaign_name' => $collection->campaign?->name,
-            'public_title' => $collection->public_title,
-            'public_description' => $collection->public_description,
-            'brand' => [
-                'value' => $brand->value,
-                'label' => $brand->label(),
-            ],
-            'products' => $products,
-            'catalog_url' => route('laboratory-tests', [
-                'laboratory_brand' => $brand->value,
-                ...$allowedQuery,
-            ]),
-            'brand_selection_url' => route('laboratory-brand-selection', $allowedQuery),
-            'add_all_available' => false,
+        $catalogUrl = route('laboratory-tests', [
+            'laboratory_brand' => $brand->value,
+            ...$allowedQuery,
         ]);
+
+        return MarketingCampaignTargetResolution::resolved(new MarketingCampaignResolvedTarget(
+            type: MarketingCampaignTargetType::Collection,
+            brand: $this->brandPresenter->present($brand),
+            category: null,
+            products: $products,
+            primaryDestinationUrl: $catalogUrl,
+            secondaryDestinationUrl: route('laboratory-brand-selection', $allowedQuery),
+            sourceTitle: $collection->public_title,
+            sourceDescription: $collection->public_description,
+        ));
     }
 }

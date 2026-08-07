@@ -1,60 +1,24 @@
-import { useForm } from "@inertiajs/react";
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading } from "@/Components/Catalyst/heading";
 import { Text } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
-import MarketingCampaignLinkForm from "../Components/MarketingCampaignLinkForm";
-import { fromDatetimeLocalValue } from "../Components/MarketingCampaignDateRangeFields";
+import MarketingCampaignSetupWizard from "../wizard/MarketingCampaignSetupWizard";
 
 export default function MarketingCampaignLinksCreate({
 	campaign,
 	statusOptions = {},
-	targetTypeOptions = [],
+	linkStatusOptions = {},
 	brands = {},
 	categories = [],
 	collections = [],
 	productSearchUrl,
+	utmPresets = [],
+	promotionOptions = [],
+	maxCollectionItems = 50,
 }) {
-	const { data, setData, post, processing, errors, transform } = useForm({
-		name: "",
-		slug: "",
-		status: "draft",
-		target_type: "brand",
-		target_payload: {},
-		utm_source: "",
-		utm_medium: "",
-		utm_campaign: "",
-		utm_term: "",
-		utm_content: "",
-		starts_at: "",
-		ends_at: "",
-	});
-
-	transform((form) => ({
-		...form,
-		starts_at: fromDatetimeLocalValue(form.starts_at),
-		ends_at: fromDatetimeLocalValue(form.ends_at),
-		utm_source: form.utm_source || null,
-		utm_medium: form.utm_medium || null,
-		utm_campaign: form.utm_campaign || null,
-		utm_term: form.utm_term || null,
-		utm_content: form.utm_content || null,
-	}));
-
-	const submit = (e) => {
-		e.preventDefault();
-		if (!processing) {
-			post(
-				route("admin.marketing-campaigns.links.store", {
-					marketing_campaign: campaign.id,
-				}),
-			);
-		}
-	};
-
 	return (
 		<AdminLayout title={`Nuevo enlace · ${campaign.name}`}>
-			<div className="mx-auto max-w-3xl space-y-8">
+			<div className="mx-auto max-w-5xl space-y-8">
 				<div className="flex flex-wrap items-end justify-between gap-4">
 					<div>
 						<Heading>Nuevo enlace</Heading>
@@ -73,19 +37,18 @@ export default function MarketingCampaignLinksCreate({
 					</Button>
 				</div>
 
-				<MarketingCampaignLinkForm
-					data={data}
-					setData={setData}
-					errors={errors}
-					statusOptions={statusOptions}
-					targetTypeOptions={targetTypeOptions}
+				<MarketingCampaignSetupWizard
+					mode="link"
+					campaign={campaign}
+					statusOptions={linkStatusOptions.length ? linkStatusOptions : statusOptions}
+					linkStatusOptions={linkStatusOptions}
 					brands={brands}
 					categories={categories}
 					collections={collections}
 					productSearchUrl={productSearchUrl}
-					processing={processing}
-					onSubmit={submit}
-					submitLabel="Crear enlace"
+					utmPresets={utmPresets}
+					promotionOptions={promotionOptions}
+					maxCollectionItems={maxCollectionItems ?? 50}
 				/>
 			</div>
 		</AdminLayout>

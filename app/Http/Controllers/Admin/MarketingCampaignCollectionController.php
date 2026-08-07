@@ -10,6 +10,8 @@ use App\Http\Requests\Admin\MarketingCampaigns\StoreMarketingCampaignCollectionR
 use App\Http\Requests\Admin\MarketingCampaigns\UpdateMarketingCampaignCollectionRequest;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignCollection;
+use App\Services\Marketing\MarketingCampaignCollectionLinkResolver;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -35,16 +37,29 @@ class MarketingCampaignCollectionController extends Controller
         StoreMarketingCampaignCollectionRequest $request,
         MarketingCampaign $marketingCampaign,
         CreateMarketingCampaignCollectionAction $action,
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         $this->authorize('view', $marketingCampaign);
 
-        $action(array_merge(
+        $collection = $action(array_merge(
             $request->safe()->except(['marketing_campaign_id']),
             [
                 'marketing_campaign_id' => $marketingCampaign->id,
                 'laboratory_test_ids' => $request->input('laboratory_test_ids', []),
             ],
         ));
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => 'Colección creada.',
+                'collection' => $this->collectionPayload($collection->loadCount('items')),
+            ]);
+        }
+
+        if ($request->boolean('return_to_campaign')) {
+            return redirect()
+                ->route('admin.marketing-campaigns.show', $marketingCampaign)
+                ->flashMessage('Colección creada.');
+        }
 
         return redirect()
             ->route('admin.marketing-campaigns.show', $marketingCampaign)
@@ -54,39 +69,23 @@ class MarketingCampaignCollectionController extends Controller
     public function edit(
         MarketingCampaign $marketingCampaign,
         MarketingCampaignCollection $marketingCampaignCollection,
+        MarketingCampaignCollectionLinkResolver $linkResolver,
     ): Response {
         $this->ensureCollectionBelongsToCampaign($marketingCampaign, $marketingCampaignCollection);
         $this->authorize('update', $marketingCampaignCollection);
 
         $marketingCampaignCollection->load(['orderedItems.laboratoryTest.laboratoryTestCategory']);
+        $marketingCampaignCollection->loadCount('items');
 
         return Inertia::render('Admin/MarketingCampaigns/Collections/Edit', [
             'campaign' => [
                 'id' => $marketingCampaign->id,
                 'name' => $marketingCampaign->name,
             ],
-            'collection' => [
-                'id' => $marketingCampaignCollection->id,
-                'name' => $marketingCampaignCollection->name,
-                'public_title' => $marketingCampaignCollection->public_title,
-                'public_description' => $marketingCampaignCollection->public_description,
-                'laboratory_brand' => $marketingCampaignCollection->laboratory_brand?->value
-                    ?? $marketingCampaignCollection->laboratory_brand,
-                'is_active' => $marketingCampaignCollection->is_active,
-                'items' => $marketingCampaignCollection->orderedItems->map(function ($item) {
-                    $test = $item->laboratoryTest;
-
-                    return [
-                        'id' => $test?->id,
-                        'name' => $test?->name,
-                        'other_name' => $test?->other_name,
-                        'brand' => $test?->brand?->value ?? $test?->brand,
-                        'brand_label' => $test?->brand?->label(),
-                        'category' => $test?->laboratoryTestCategory?->name,
-                        'famedic_price_cents' => $test?->famedic_price_cents,
-                    ];
-                })->filter(fn ($item) => $item['id'] !== null)->values(),
-            ],
+            'collection' => $this->collectionPayload($marketingCampaignCollection),
+            'selectedItems' => $this->selectedItemsPayload($marketingCampaignCollection),
+            'usingLinks' => $linkResolver->linkPayloads($marketingCampaignCollection),
+            'usingLinksCount' => $linkResolver->countForCollection($marketingCampaignCollection),
             ...$this->formOptions(),
         ]);
     }
@@ -107,8 +106,17 @@ class MarketingCampaignCollectionController extends Controller
             ),
         );
 
+        $redirect = route('admin.marketing-campaigns.show', $marketingCampaign);
+
+        if ($request->boolean('return_to_campaign')) {
+            return redirect($redirect)->flashMessage('Colección actualizada.');
+        }
+
         return redirect()
-            ->route('admin.marketing-campaigns.show', $marketingCampaign)
+            ->route('admin.marketing-campaigns.collections.edit', [
+                $marketingCampaign,
+                $marketingCampaignCollection,
+            ])
             ->flashMessage('Colección actualizada.');
     }
 
@@ -120,7 +128,56 @@ class MarketingCampaignCollectionController extends Controller
         return [
             'brands' => LaboratoryBrand::brandsData(),
             'productSearchUrl' => route('admin.marketing-campaigns.product-search'),
+            'maxCollectionItems' => 50,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function collectionPayload(MarketingCampaignCollection $collection): array
+    {
+        return [
+            'id' => $collection->id,
+            'name' => $collection->name,
+            'public_title' => $collection->public_title,
+            'public_description' => $collection->public_description,
+            'laboratory_brand' => $collection->laboratory_brand?->value ?? $collection->laboratory_brand,
+            'laboratory_brand_label' => $collection->laboratory_brand?->label(),
+            'is_active' => $collection->is_active,
+            'items_count' => (int) ($collection->items_count ?? $collection->orderedItems?->count() ?? 0),
+            'updated_at' => $collection->updated_at,
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function selectedItemsPayload(MarketingCampaignCollection $collection): array
+    {
+        return $collection->orderedItems
+            ->map(function ($item) {
+                $test = $item->laboratoryTest;
+
+                if (! $test) {
+                    return null;
+                }
+
+                return [
+                    'id' => $test->id,
+                    'name' => $test->name,
+                    'other_name' => $test->other_name,
+                    'brand' => $test->brand?->value ?? $test->brand,
+                    'brand_label' => $test->brand?->label(),
+                    'category_name' => $test->laboratoryTestCategory?->name,
+                    'famedic_price_cents' => $test->famedic_price_cents,
+                    'public_price_cents' => $test->public_price_cents,
+                    'requires_appointment' => (bool) $test->requires_appointment,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
     private function ensureCollectionBelongsToCampaign(
