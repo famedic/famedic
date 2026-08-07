@@ -50,6 +50,21 @@ class MarketingCampaign extends Model
         return $this->hasMany(MarketingCampaignCollection::class);
     }
 
+    public function visits(): HasMany
+    {
+        return $this->hasMany(MarketingCampaignVisit::class, 'marketing_campaign_id');
+    }
+
+    public function attributionsAsFirst(): HasMany
+    {
+        return $this->hasMany(MarketingCampaignAttribution::class, 'first_campaign_id');
+    }
+
+    public function attributionsAsLast(): HasMany
+    {
+        return $this->hasMany(MarketingCampaignAttribution::class, 'last_campaign_id');
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(Administrator::class, 'created_by');

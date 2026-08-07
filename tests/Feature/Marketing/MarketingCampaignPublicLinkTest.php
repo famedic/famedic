@@ -547,27 +547,35 @@ class MarketingCampaignPublicLinkTest extends TestCase
     }
 
     #[Test]
-    public function no_requiere_auth_y_no_escribe_visits_ni_attribution(): void
+    public function landing_publica_captura_visita_con_atribucion_habilitada(): void
     {
+        config(['marketing-attribution.enabled' => true]);
+
         $campaign = $this->makeActiveCampaign();
         $this->makeActiveLink($campaign, ['slug' => 'public-ok']);
 
-        $tablesBefore = collect(DB::select("SELECT name FROM sqlite_master WHERE type='table'"))
-            ->pluck('name')
-            ->all();
-
-        $this->assertNotContains('marketing_campaign_visits', $tablesBefore);
-        $this->assertNotContains('marketing_attribution_touches', $tablesBefore);
-
         $this->get(route('campaign-links.show', ['slug' => 'public-ok']))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->component('MarketingCampaigns/Landing'));
+            ->assertInertia(fn ($page) => $page->component('MarketingCampaigns/Landing'))
+            ->assertCookie((string) config('marketing-attribution.cookie_name'));
 
-        $this->assertFalse(
-            collect(DB::select("SELECT name FROM sqlite_master WHERE type='table'"))
-                ->pluck('name')
-                ->contains(fn ($name) => str_contains((string) $name, 'attribution') || str_contains((string) $name, 'visit'))
-        );
+        $this->assertSame(1, \App\Models\MarketingCampaignVisit::query()->count());
+        $this->assertSame(1, \App\Models\MarketingCampaignAttribution::query()->count());
+    }
+
+    #[Test]
+    public function landing_no_captura_cuando_atribucion_deshabilitada(): void
+    {
+        config(['marketing-attribution.enabled' => false]);
+
+        $campaign = $this->makeActiveCampaign();
+        $this->makeActiveLink($campaign, ['slug' => 'public-flag-off']);
+
+        $this->get(route('campaign-links.show', ['slug' => 'public-flag-off']))
+            ->assertOk()
+            ->assertCookieMissing((string) config('marketing-attribution.cookie_name'));
+
+        $this->assertSame(0, \App\Models\MarketingCampaignVisit::query()->count());
     }
 
     #[Test]

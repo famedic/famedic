@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Marketing;
 
+use App\Actions\Marketing\CaptureMarketingCampaignVisitAction;
 use App\Enums\MarketingCampaignLinkPublicAvailability;
 use App\Http\Controllers\Controller;
 use App\Models\MarketingCampaignLink;
@@ -11,6 +12,7 @@ use App\Services\Marketing\MarketingCampaignLinkLookupService;
 use App\Services\Marketing\MarketingCampaignQueryStringSanitizer;
 use App\Services\Marketing\Targets\MarketingCampaignTargetResolverRegistry;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -24,6 +26,7 @@ class MarketingCampaignLinkController extends Controller
         MarketingCampaignQueryStringSanitizer $querySanitizer,
         MarketingCampaignTargetResolverRegistry $targetResolvers,
         MarketingCampaignLandingViewModelFactory $landingFactory,
+        CaptureMarketingCampaignVisitAction $captureVisit,
     ): Response {
         $lookup = $lookupService->find($slug);
 
@@ -70,6 +73,7 @@ class MarketingCampaignLinkController extends Controller
                 $allowedQuery,
                 $targetResolvers,
                 $landingFactory,
+                $captureVisit,
             ),
         };
     }
@@ -83,6 +87,7 @@ class MarketingCampaignLinkController extends Controller
         array $allowedQuery,
         MarketingCampaignTargetResolverRegistry $targetResolvers,
         MarketingCampaignLandingViewModelFactory $landingFactory,
+        CaptureMarketingCampaignVisitAction $captureVisit,
     ): Response {
         $resolution = $targetResolvers->resolve($link, $allowedQuery);
 
@@ -102,8 +107,27 @@ class MarketingCampaignLinkController extends Controller
             $allowedQuery,
         );
 
-        return Inertia::render('MarketingCampaigns/Landing', $viewModel)
+        $response = Inertia::render('MarketingCampaigns/Landing', $viewModel)
             ->toResponse($request);
+
+        if (config('marketing-attribution.enabled', true)) {
+            try {
+                $capture = $captureVisit($link, $request, $allowedQuery, now());
+
+                if ($capture->cookie !== null) {
+                    $response->headers->setCookie($capture->cookie);
+                }
+            } catch (\Throwable $exception) {
+                Log::error('marketing_campaign_visit_capture_failed', [
+                    'marketing_campaign_id' => $campaign->id,
+                    'marketing_campaign_link_id' => $link->id,
+                    'exception' => $exception::class,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        return $response;
     }
 
     /**

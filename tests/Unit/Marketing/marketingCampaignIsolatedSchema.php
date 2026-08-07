@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Schema;
 function marketingCampaignIsolatedTableNames(): array
 {
     return [
+        'marketing_campaign_visits',
+        'marketing_campaign_attributions',
         'marketing_campaign_link_images',
         'marketing_campaign_link_categories',
         'marketing_campaign_link_products',
@@ -171,6 +173,9 @@ function bootstrapIsolatedMarketingCampaignSchema(): void
 
     $commerceMigration = require database_path('migrations/2026_08_06_230300_add_landing_commerce_to_marketing_campaign_links.php');
     $commerceMigration->up();
+
+    $attributionMigration = require database_path('migrations/2026_08_06_230400_create_marketing_campaign_attribution_tables.php');
+    $attributionMigration->up();
 
     app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
 }

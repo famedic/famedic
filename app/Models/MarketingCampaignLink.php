@@ -129,6 +129,21 @@ class MarketingCampaignLink extends Model
             ->orderBy('id');
     }
 
+    public function visits(): HasMany
+    {
+        return $this->hasMany(MarketingCampaignVisit::class, 'marketing_campaign_link_id');
+    }
+
+    public function attributionsAsFirst(): HasMany
+    {
+        return $this->hasMany(MarketingCampaignAttribution::class, 'first_link_id');
+    }
+
+    public function attributionsAsLast(): HasMany
+    {
+        return $this->hasMany(MarketingCampaignAttribution::class, 'last_link_id');
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(Administrator::class, 'created_by');
