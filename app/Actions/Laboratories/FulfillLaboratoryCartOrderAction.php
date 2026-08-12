@@ -15,9 +15,9 @@ use App\Notifications\FewDaysLeftToRequestInvoice;
 use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Services\CouponApplicationService;
+use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\Orders\OrderAutomationService;
 use App\Services\PromoCodeService;
-use App\Services\Monitoring\SyncMonitoringCartService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -33,8 +33,7 @@ class FulfillLaboratoryCartOrderAction
         private PromoCodeService $promoCodeService,
         private SyncLaboratoryCheckoutDraftAction $syncLaboratoryCheckoutDraftAction,
         private OrderAutomationService $orderAutomationService,
-    ) {
-    }
+    ) {}
 
     /**
      * Crea el pedido de laboratorio, cotización GDA, limpia carrito y notifica.
@@ -77,8 +76,8 @@ class FulfillLaboratoryCartOrderAction
             }
 
             logger('=== GDA BRAND DEBUG (FulfillLaboratoryCartOrderAction) ===');
-            logger('LaboratoryBrand Enum value: ' . $laboratoryBrand->value);
-            logger('GDA brand value: ' . $gdaBrandValue);
+            logger('LaboratoryBrand Enum value: '.$laboratoryBrand->value);
+            logger('GDA brand value: '.$gdaBrandValue);
 
             if (app()->environment('local')) {
                 $gdaQuotation = ['id' => rand(100000, 999999)];
@@ -133,7 +132,7 @@ class FulfillLaboratoryCartOrderAction
                 ->value('clinical_order_uuid');
 
             $this->syncLaboratoryCheckoutDraftAction->clearForCustomer($customer, $laboratoryBrand);
-            $this->clearCart($customer);
+            $this->clearCart($customer, $laboratoryBrand);
 
             DB::commit();
         } catch (\Throwable $th) {
@@ -268,9 +267,11 @@ class FulfillLaboratoryCartOrderAction
         }
     }
 
-    private function clearCart(Customer $customer): void
+    private function clearCart(Customer $customer, LaboratoryBrand $laboratoryBrand): void
     {
-        $customer->laboratoryCartItems()->delete();
+        $customer->laboratoryCartItems()
+            ->ofBrand($laboratoryBrand)
+            ->delete();
     }
 
     private function createLaboratoryPurchase(
@@ -324,7 +325,7 @@ class FulfillLaboratoryCartOrderAction
 
     private function checkAndSendInvoiceDeadlineNotification(LaboratoryPurchase $laboratoryPurchase): void
     {
-        if (!$laboratoryPurchase->customer->taxProfiles()->exists()) {
+        if (! $laboratoryPurchase->customer->taxProfiles()->exists()) {
             return;
         }
 

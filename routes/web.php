@@ -10,6 +10,7 @@ use App\Http\Controllers\PrivacyPolicyController;
 use App\Http\Controllers\ResultsController;
 use App\Http\Controllers\TermsOfServiceController;
 use App\Http\Controllers\DocumentsServiceController;
+use App\Http\Controllers\UserPurchasesController;
 use App\Http\Controllers\VendorPaymentController;
 use App\Http\Controllers\WelcomeController;
 use App\Http\Controllers\PaymentMethodController;
@@ -46,6 +47,7 @@ Route::middleware([
     'customer',
 ])->group(function () {
     Route::get('/home', HomeController::class)->name('home');
+    Route::get('/user/purchases', UserPurchasesController::class)->name('user.purchases.index');
     Route::get('/invoice-requests/{invoice_request}/fiscal-certificate', FiscalCertificateController::class)->name('invoice-requests.fiscal-certificate');
     Route::get('/invoice/{invoice}', InvoiceController::class)->name('invoice');
     Route::get('/invoice/{invoice}/xml', InvoiceXmlController::class)->name('invoice.xml');
