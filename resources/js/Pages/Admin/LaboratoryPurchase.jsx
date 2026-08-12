@@ -12,6 +12,7 @@ import {
 	TrashIcon,
 	CalendarDaysIcon,
 	EnvelopeIcon,
+	ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 
 import AdminLayout from "@/Layouts/AdminLayout";
@@ -74,6 +75,7 @@ function normalizePackageFeatureLabels(raw) {
 
 export default function LaboratoryPurchase({
 	laboratoryPurchase,
+	isCancelled = false,
 	couponReversal = null,
 	showDeleteButton,
 	canResendConfirmationEmail,
@@ -90,6 +92,7 @@ export default function LaboratoryPurchase({
 
 			<Header
 				laboratoryPurchase={laboratoryPurchase}
+				isCancelled={isCancelled}
 				showDeleteButton={showDeleteButton}
 				canResendConfirmationEmail={canResendConfirmationEmail}
 				canUploadInvoice={canUploadInvoice}
@@ -122,6 +125,7 @@ export default function LaboratoryPurchase({
 
 function Header({
 	laboratoryPurchase,
+	isCancelled = false,
 	showDeleteButton,
 	canResendConfirmationEmail,
 	canUploadInvoice = false,
@@ -276,6 +280,21 @@ function Header({
 				)}
 
 			</div>
+
+			{isCancelled && (
+				<div
+					role="alert"
+					className="flex w-full items-start gap-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-900 shadow-sm dark:border-red-800 dark:bg-red-950/40 dark:text-red-100"
+				>
+					<ExclamationTriangleIcon className="mt-0.5 size-6 shrink-0 text-red-600 dark:text-red-400" />
+					<div>
+						<p className="font-semibold">Pedido cancelado</p>
+						<p className="text-sm text-red-700 dark:text-red-300">
+							Este pedido fue cancelado. Algunas operaciones administrativas ya no aplican.
+						</p>
+					</div>
+				</div>
+			)}
 
 			<div className="flex flex-wrap gap-4">
 

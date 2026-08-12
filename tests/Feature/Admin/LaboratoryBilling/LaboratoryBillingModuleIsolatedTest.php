@@ -118,6 +118,45 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
     }
 
     #[Test]
+    public function cancelled_purchases_are_excluded_from_billing_queries_metrics_and_exports(): void
+    {
+        $active = $this->seedRequest([
+            'requested_at' => now()->subDays(5),
+            'gda_order_id' => 'ACTIVE-LATE',
+        ]);
+        $cancelled = $this->seedRequest([
+            'requested_at' => now()->subDays(5),
+            'gda_order_id' => 'CANCELLED-LATE',
+            'with_complete_invoice' => true,
+        ]);
+        $cancelled['purchase']->delete();
+
+        $range = LaboratoryBillingDateRange::fromInput('2026-08-01', '2026-08-10');
+        $requests = app(LaboratoryBillingRequestsQuery::class);
+        $metrics = app(LaboratoryBillingMetricsService::class);
+
+        $this->assertSame([$active['request']->id], $requests->filteredQuery([], $range)->pluck('id')->all());
+        $this->assertSame(1, $requests->paginate([], $range)->total());
+        $this->assertSame(1, $requests->statusCounts([], $range)['all']);
+        $this->assertSame(1, $requests->statusCounts(['status' => 'overdue'], $range)['overdue']);
+        $this->assertSame(1, $requests->exportRows([], $range)->count());
+
+        $counts = $metrics->requestCounts($range);
+        $this->assertSame(1, $counts['total']);
+        $this->assertSame(1, $counts['overdue']);
+        $this->assertSame(0, $counts['completed']);
+        $this->assertSame(1, $metrics->compliance($range)['received']);
+        $this->assertSame(0, collect($metrics->requestsVsInvoicesSeries($range)['points'])->sum('invoices_completed'));
+
+        $this->assertCount(0, app(LaboratoryBillingInvoicesQuery::class)->exportRows([], $range));
+
+        $cancelledProfile = app(LaboratoryBillingTaxProfilesQuery::class)->findForShow($cancelled['taxProfile']);
+        $this->assertSame(0, $cancelledProfile['invoice_requests_count']);
+        $this->assertSame([], $cancelledProfile['recent_requests']);
+        $this->assertSame([], $cancelledProfile['monthly_usage']);
+    }
+
+    #[Test]
     public function requests_query_searches_by_folio_and_rfc_and_filters_documents(): void
     {
         $this->seedRequest([
@@ -367,6 +406,13 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         $super = $super->fresh()->load('administrator');
 
         $this->assertTrue($super->can('uploadInvoice', $purchase));
+
+        $purchase->delete();
+        $cancelledPurchase = LaboratoryPurchase::withTrashed()->findOrFail($purchase->id);
+
+        $this->assertFalse($invoiceAdmin->can('uploadInvoice', $cancelledPurchase));
+        $this->assertFalse($manageAdmin->can('uploadInvoice', $cancelledPurchase));
+        $this->assertFalse($super->can('uploadInvoice', $cancelledPurchase));
     }
 
     #[Test]

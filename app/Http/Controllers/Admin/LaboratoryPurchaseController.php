@@ -82,6 +82,7 @@ class LaboratoryPurchaseController extends Controller
 
         return Inertia::render('Admin/LaboratoryPurchase', [
             'laboratoryPurchase' => $laboratoryPurchase,
+            'isCancelled' => $laboratoryPurchase->trashed(),
             'couponReversal' => $laboratoryPurchase->getCouponReversalSummary(),
             'showDeleteButton' => $request->user()->can('delete', $laboratoryPurchase),
             'canResendConfirmationEmail' => $request->user()->administrator?->hasPermissionTo('laboratory-purchases.manage') ?? false,
@@ -156,4 +157,3 @@ class LaboratoryPurchaseController extends Controller
     }
 
 }
-

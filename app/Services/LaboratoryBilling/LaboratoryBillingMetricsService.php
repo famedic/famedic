@@ -22,7 +22,7 @@ class LaboratoryBillingMetricsService
     public function baseRequestsQuery(): Builder
     {
         return InvoiceRequest::query()
-            ->where('invoice_requestable_type', LaboratoryPurchase::class);
+            ->forActiveLaboratoryPurchases();
     }
 
     public function requestsInRange(LaboratoryBillingDateRange $range): Builder
@@ -112,7 +112,7 @@ class LaboratoryBillingMetricsService
             ->count();
 
         $unused = TaxProfile::query()
-            ->whereDoesntHave('invoiceRequests', fn (Builder $q) => $q->withTrashed())
+            ->whereDoesntHave('invoiceRequests', fn (Builder $q) => $q->withTrashed()->forActiveLaboratoryPurchases())
             ->count();
 
         return [
@@ -150,7 +150,8 @@ class LaboratoryBillingMetricsService
             ->whereBetween('completed_at', [$range->from->clone()->utc(), $range->to->clone()->utc()])
             ->where('invoiceable_type', $labType)
             ->whereHasMorph('invoiceable', [LaboratoryPurchase::class], function (Builder $q) {
-                $q->withTrashed()->whereHas('invoiceRequest');
+                $q->whereNull('laboratory_purchases.deleted_at')
+                    ->whereHas('invoiceRequest');
             })
             ->get(['id', 'completed_at'])
             ->each(function (Invoice $invoice) use (&$invoiceSeries, $granularity) {
@@ -258,7 +259,7 @@ class LaboratoryBillingMetricsService
 
         $purchaseIds = $this->requestsInRange($range)->pluck('invoice_requestable_id');
 
-        LaboratoryPurchase::withTrashed()
+        LaboratoryPurchase::query()
             ->whereIn('id', $purchaseIds)
             ->whereHas('invoice')
             ->with('invoice')
@@ -404,7 +405,7 @@ class LaboratoryBillingMetricsService
         $active = TaxProfile::query()->count();
         $deleted = TaxProfile::onlyTrashed()->count();
         $unused = TaxProfile::query()
-            ->whereDoesntHave('invoiceRequests', fn (Builder $q) => $q->withTrashed())
+            ->whereDoesntHave('invoiceRequests', fn (Builder $q) => $q->withTrashed()->forActiveLaboratoryPurchases())
             ->count();
 
         return [
@@ -438,8 +439,8 @@ class LaboratoryBillingMetricsService
     {
         return TaxProfile::query()
             ->with(['customer.user'])
-            ->withCount(['invoiceRequests as invoice_requests_count' => fn ($q) => $q->withTrashed()])
-            ->whereDoesntHave('invoiceRequests', fn (Builder $q) => $q->withTrashed())
+            ->withCount(['invoiceRequests as invoice_requests_count' => fn ($q) => $q->withTrashed()->forActiveLaboratoryPurchases()])
+            ->whereDoesntHave('invoiceRequests', fn (Builder $q) => $q->withTrashed()->forActiveLaboratoryPurchases())
             ->orderBy('created_at')
             ->limit($limit)
             ->get()
