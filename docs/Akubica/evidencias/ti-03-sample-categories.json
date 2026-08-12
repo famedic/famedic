@@ -1,0 +1,62 @@
+{
+  "success": true,
+  "data": {
+    "categories": [
+      {
+        "id": 12,
+        "name": "Chequeos y Paquetes",
+        "slug": "chequeos-y-paquetes"
+      },
+      {
+        "id": 5,
+        "name": "Copro",
+        "slug": "copro"
+      },
+      {
+        "id": 6,
+        "name": "Cutánea",
+        "slug": "cutanea"
+      },
+      {
+        "id": 4,
+        "name": "Especiales",
+        "slug": "especiales"
+      },
+      {
+        "id": 3,
+        "name": "Nasofaríngeo",
+        "slug": "nasofaringeo"
+      },
+      {
+        "id": 7,
+        "name": "Rayos X",
+        "slug": "rayos-x"
+      },
+      {
+        "id": 9,
+        "name": "Resonancia",
+        "slug": "resonancia"
+      },
+      {
+        "id": 1,
+        "name": "Sanguíneo",
+        "slug": "sanguineo"
+      },
+      {
+        "id": 10,
+        "name": "Tomografía",
+        "slug": "tomografia"
+      },
+      {
+        "id": 8,
+        "name": "Ultrasonido",
+        "slug": "ultrasonido"
+      },
+      {
+        "id": 2,
+        "name": "Urianálisis",
+        "slug": "urianalisis"
+      }
+    ]
+  }
+}

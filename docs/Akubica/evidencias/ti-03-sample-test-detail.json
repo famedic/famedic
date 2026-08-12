@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "data": {
+    "id": 282,
+    "name": "(FIT) SANGRE OCULTA EN HECES",
+    "description": "Cribado de cáncer colorrectal, detección de sangrado digestivo oculto",
+    "brand": "olab",
+    "category": "Copro",
+    "price_cents": 13700,
+    "currency": "MXN",
+    "requires_appointment": false,
+    "gda_id": "35041",
+    "available": true
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "success": true,
+  "data": {
+    "laboratory_tests": [
+      {
+        "id": 282,
+        "name": "(FIT) SANGRE OCULTA EN HECES",
+        "brand": "olab",
+        "price_cents": 13700,
+        "currency": "MXN",
+        "requires_appointment": false,
+        "category": {
+          "id": 5,
+          "name": "Copro"
+        },
+        "indications": "No se requiere preparación. Indicar al paciente recolectar materia fecal, de preferencia la primera del día, en caso de no poder, realizar la recolección a cualquier hora del día. Si existe presencia de pus, moco o sangre recolectar de esa muestra para su entrega al laboratorio. Depositar una porción de la muestra (aproximadamente del tamaño de una nuez) en un contenedor para materia fecal (solicitar en el laboratorio o adquirirlo en farmacia). PEDIATRICOS que aun usen pañal a. Si las heces son sólidas o semisólidas, es aceptable defecar en el pañal y de este tomar la muestra de la parte que no tiene contacto con el pañal. No raspar el pañal y colocar en el contenedor para materia fecal. b. Si las heces son líquidas solicitar al familiar observar al paciente y en el momento de defecar recolectar la muestra en un contenedor para materia fecal. ADULTO a. Muestras sólidas o semisólidas indicar al paciente defecar sobre una superficie limpia y seca (hoja de papel de estraza, plato desechable, bolsa de plástico, papel aluminio). Tomar de la parte que no tiene contacto con la superficie y colocar en un contenedor para materia fecal. NUNCA recolectar la muestra del escusado. b. Muestras líquidas recolectar directamente en el contenedor. ",
+        "is_available": true
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "last_page": 954,
+      "per_page": 1,
+      "total": 954
+    }
+  }
+}

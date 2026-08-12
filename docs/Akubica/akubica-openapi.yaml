@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Famedic API — Integración Akubica
-  version: 1.2.2
+  version: 1.2.3
   description: |
     API REST `/api/v1` para el asistente virtual **Akubica / LeoV**.
 
@@ -501,8 +501,10 @@ paths:
         - $ref: '#/components/parameters/XCorrelationId'
         - name: state
           in: query
+          required: false
           schema:
             type: string
+            maxLength: 100
       responses:
         '200':
           description: Marcas
@@ -512,8 +514,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiSuccessResponse'
-
+                $ref: '#/components/schemas/CatalogLaboratoryBrandsResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /catalog/laboratory-tests:
     get:
       tags: [Catalog]
@@ -523,25 +526,40 @@ paths:
         - $ref: '#/components/parameters/XCorrelationId'
         - name: brand
           in: query
+          required: false
           schema:
             $ref: '#/components/schemas/LaboratoryBrand'
         - name: search
           in: query
+          required: false
           schema:
             type: string
+            maxLength: 255
         - name: category_id
           in: query
+          required: false
           schema:
             type: integer
+            minimum: 1
+        - name: requires_appointment
+          in: query
+          required: false
+          schema:
+            type: boolean
         - name: page
           in: query
+          required: false
           schema:
             type: integer
+            minimum: 1
         - name: per_page
           in: query
+          required: false
           schema:
             type: integer
+            minimum: 1
             maximum: 50
+            default: 20
       responses:
         '200':
           description: Lista paginada
@@ -551,8 +569,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiSuccessResponse'
-
+                $ref: '#/components/schemas/CatalogLaboratoryTestsResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /catalog/laboratory-test-categories:
     get:
       tags: [Catalog]
@@ -562,19 +581,21 @@ paths:
         - $ref: '#/components/parameters/XCorrelationId'
         - name: brand
           in: query
+          required: false
           schema:
             $ref: '#/components/schemas/LaboratoryBrand'
       responses:
         '200':
-          description: Categorías
+          description: Categor?as
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiSuccessResponse'
-
+                $ref: '#/components/schemas/CatalogLaboratoryTestCategoriesResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /catalog/laboratory-stores:
     get:
       tags: [Catalog]
@@ -584,12 +605,15 @@ paths:
         - $ref: '#/components/parameters/XCorrelationId'
         - name: brand
           in: query
+          required: false
           schema:
             $ref: '#/components/schemas/LaboratoryBrand'
         - name: state
           in: query
+          required: false
           schema:
             type: string
+            maxLength: 100
       responses:
         '200':
           description: Sucursales
@@ -599,8 +623,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiSuccessResponse'
-
+                $ref: '#/components/schemas/CatalogLaboratoryStoresResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /catalog/laboratory-tests/{laboratory_test_id}:
     get:
       tags: [Catalog]
@@ -2741,7 +2766,7 @@ components:
 
     LaboratoryBrand:
       type: string
-      enum: [olab, azul, jenner, liacsa]
+      enum: [olab, swisslab, jenner, liacsa, azteca]
 
     Pagination:
       type: object
@@ -2754,6 +2779,162 @@ components:
           type: integer
         last_page:
           type: integer
+
+    LaboratoryBrandCatalogItem:
+      type: object
+      required: [id, name, label, is_active, available_states, stores_count]
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/LaboratoryBrand'
+        name:
+          type: string
+        label:
+          type: string
+        is_active:
+          type: boolean
+        available_states:
+          type: array
+          items:
+            type: string
+        stores_count:
+          type: integer
+    CatalogLaboratoryBrandsResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiSuccessResponse'
+        - type: object
+          required: [success, data]
+          properties:
+            data:
+              type: object
+              required: [brands]
+              additionalProperties: false
+              properties:
+                brands:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/LaboratoryBrandCatalogItem'
+
+    LaboratoryTestCategory:
+      type: object
+      required: [id, name, slug]
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+    CatalogLaboratoryTestCategoriesResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiSuccessResponse'
+        - type: object
+          required: [success, data]
+          properties:
+            data:
+              type: object
+              required: [categories]
+              additionalProperties: false
+              properties:
+                categories:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/LaboratoryTestCategory'
+
+    LaboratoryTestListCategory:
+      type: object
+      required: [id, name]
+      additionalProperties: false
+      nullable: true
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+    LaboratoryTestListItem:
+      type: object
+      required: [id, name, brand, price_cents, currency, requires_appointment, category, indications, is_available]
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        brand:
+          $ref: '#/components/schemas/LaboratoryBrand'
+        price_cents:
+          type: integer
+        currency:
+          type: string
+          enum: [MXN]
+        requires_appointment:
+          type: boolean
+        category:
+          $ref: '#/components/schemas/LaboratoryTestListCategory'
+        indications:
+          type: string
+          nullable: true
+        is_available:
+          type: boolean
+    CatalogLaboratoryTestsResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiSuccessResponse'
+        - type: object
+          required: [success, data]
+          properties:
+            data:
+              type: object
+              required: [laboratory_tests, pagination]
+              additionalProperties: false
+              properties:
+                laboratory_tests:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/LaboratoryTestListItem'
+                pagination:
+                  $ref: '#/components/schemas/Pagination'
+
+    LaboratoryStore:
+      type: object
+      required: [id, brand, name, address, state, google_maps_url, weekly_hours, saturday_hours, sunday_hours, is_active]
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        brand:
+          $ref: '#/components/schemas/LaboratoryBrand'
+        name:
+          type: string
+        address:
+          type: string
+        state:
+          type: string
+        google_maps_url:
+          type: string
+        weekly_hours:
+          type: string
+        saturday_hours:
+          type: string
+        sunday_hours:
+          type: string
+        is_active:
+          type: boolean
+    CatalogLaboratoryStoresResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiSuccessResponse'
+        - type: object
+          required: [success, data]
+          properties:
+            data:
+              type: object
+              required: [stores]
+              additionalProperties: false
+              properties:
+                stores:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/LaboratoryStore'
 
     OtpChallenge:
       type: object
@@ -2908,19 +3089,30 @@ components:
 
     LaboratoryTest:
       type: object
+      required: [id, name, description, brand, category, price_cents, currency, requires_appointment, gda_id, available]
+      additionalProperties: false
       properties:
         id:
           type: integer
-        gda_id:
-          type: string
         name:
           type: string
+        description:
+          type: string
+          nullable: true
         brand:
           $ref: '#/components/schemas/LaboratoryBrand'
+        category:
+          type: string
+          nullable: true
         price_cents:
           type: integer
+        currency:
+          type: string
+          enum: [MXN]
         requires_appointment:
           type: boolean
+        gda_id:
+          type: string
         available:
           type: boolean
 

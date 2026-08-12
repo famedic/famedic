@@ -1,0 +1,60 @@
+{
+  "success": true,
+  "data": {
+    "brands": [
+      {
+        "id": "olab",
+        "name": "Olab",
+        "label": "Olab",
+        "is_active": true,
+        "available_states": [
+          "Ciudad de México",
+          "México"
+        ],
+        "stores_count": 33
+      },
+      {
+        "id": "swisslab",
+        "name": "Swisslab",
+        "label": "Swisslab",
+        "is_active": true,
+        "available_states": [
+          "Nuevo León"
+        ],
+        "stores_count": 30
+      },
+      {
+        "id": "jenner",
+        "name": "Jenner",
+        "label": "Jenner",
+        "is_active": true,
+        "available_states": [
+          "Ciudad de México",
+          "México"
+        ],
+        "stores_count": 25
+      },
+      {
+        "id": "liacsa",
+        "name": "Liacsa",
+        "label": "Liacsa",
+        "is_active": true,
+        "available_states": [
+          "Chihuahua"
+        ],
+        "stores_count": 9
+      },
+      {
+        "id": "azteca",
+        "name": "Azteca",
+        "label": "Azteca",
+        "is_active": true,
+        "available_states": [
+          "Ciudad de México",
+          "México"
+        ],
+        "stores_count": 29
+      }
+    ]
+  }
+}
