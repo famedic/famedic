@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Famedic API — Integración Akubica
-  version: 1.2.1
+  version: 1.2.2
   description: |
     API REST `/api/v1` para el asistente virtual **Akubica / LeoV**.
 
@@ -441,6 +441,7 @@ paths:
       summary: Descargar PDF mediante token opaco
       description: |
         **Sin Bearer.** Token de 64 hex. Secreto temporal.
+        Las ligas nuevas se emiten con TTL contractual de 60 minutos y m?ximo 3 consumos autorizados.
         Errores: `SECURE_LINK_*`, `RESULT_NOT_READY`, `INVOICE_NOT_READY`, `FEATURE_DISABLED`.
       parameters:
         - $ref: '#/components/parameters/XCorrelationId'
@@ -483,6 +484,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
@@ -673,6 +676,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
     delete:
       tags: [Cart]
       operationId: cartClear
@@ -698,6 +703,8 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /cart/totals:
     get:
       tags: [Cart]
@@ -724,6 +731,8 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /cart/items:
     post:
       tags: [Cart]
@@ -757,6 +766,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           description: LAB_TEST_NOT_FOUND
           headers:
@@ -832,6 +843,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
     post:
       tags: [Cart]
       operationId: cartCouponApply
@@ -869,6 +882,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           description: COUPON_NOT_FOUND
           headers:
@@ -912,6 +927,8 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /checkout/prepare:
     get:
       tags: [Checkout]
@@ -938,6 +955,8 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /checkout/draft:
     post:
       tags: [Checkout]
@@ -981,6 +1000,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '409':
           description: EMPTY_CART
           headers:
@@ -1029,6 +1050,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '409':
           description: EMPTY_CART / CHECKOUT_NOT_READY / APPOINTMENT_REQUIRED / IDEMPOTENCY_*
           headers:
@@ -1065,6 +1088,8 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /laboratory-appointments:
     get:
       tags: [Appointments]
@@ -1086,6 +1111,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
     post:
       tags: [Appointments]
       operationId: appointmentsStore
@@ -1128,6 +1155,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '409':
           description: EMPTY_CART / APPOINTMENT_NOT_REQUIRED / APPOINTMENT_ALREADY_EXISTS / IDEMPOTENCY_*
           headers:
@@ -1164,6 +1193,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           description: APPOINTMENT_NOT_FOUND
           headers:
@@ -1211,6 +1242,8 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /orders/results:
     get:
       tags: [Orders]
@@ -1236,6 +1269,8 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /orders/invoices:
     get:
       tags: [Orders]
@@ -1261,6 +1296,8 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /orders/{order_id}/products:
     get:
       tags: [Orders]
@@ -1283,6 +1320,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/OrderNotFound'
 
@@ -1311,6 +1350,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/OrderNotFound'
 
@@ -1328,6 +1369,12 @@ paths:
       parameters:
         - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrderRequest'
       responses:
         '503':
           $ref: '#/components/responses/FeatureDisabled'
@@ -1337,6 +1384,10 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /orders/{order_id}/results:
     get:
       tags: [Orders]
@@ -1367,6 +1418,8 @@ paths:
                         $ref: '#/components/schemas/Result'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/OrderNotFound'
 
@@ -1453,6 +1506,8 @@ paths:
                         $ref: '#/components/schemas/OtpChallenge'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/OrderNotFound'
         '409':
@@ -1498,10 +1553,14 @@ paths:
                         $ref: '#/components/schemas/OtpGrant'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/OrderNotFound'
         '422':
           $ref: '#/components/responses/OtpVerifyError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
@@ -1547,6 +1606,8 @@ paths:
                         $ref: '#/components/schemas/SecureLink'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/OrderNotFound'
         '409':
@@ -1567,6 +1628,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
@@ -1605,6 +1668,8 @@ paths:
                               $ref: '#/components/schemas/Invoice'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/OrderNotFound'
 
@@ -1698,6 +1763,8 @@ paths:
                         $ref: '#/components/schemas/OtpChallenge'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           description: ORDER_NOT_FOUND / INVOICE_NOT_FOUND
           headers:
@@ -1709,6 +1776,8 @@ paths:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '409':
           $ref: '#/components/responses/IdempotencyConflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
@@ -1749,6 +1818,8 @@ paths:
                         $ref: '#/components/schemas/OtpGrant'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           description: ORDER_NOT_FOUND / INVOICE_NOT_FOUND
           headers:
@@ -1760,6 +1831,8 @@ paths:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '422':
           $ref: '#/components/responses/OtpVerifyError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
@@ -1771,6 +1844,9 @@ paths:
       tags: [Orders]
       operationId: ordersInvoiceSecureLink
       summary: Emitir secure link de factura
+      description: |
+        Requiere `grant_id` v?lido. Las ligas nuevas se emiten con TTL contractual
+        de 60 minutos y m?ximo 3 consumos autorizados. La `url` es secreto temporal.
       security:
         - bearerAuth: []
       parameters:
@@ -1803,6 +1879,8 @@ paths:
                         $ref: '#/components/schemas/SecureLink'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           description: ORDER_NOT_FOUND / INVOICE_NOT_FOUND
           headers:
@@ -1830,6 +1908,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
         '503':
           $ref: '#/components/responses/FeatureDisabled'
 
@@ -1858,6 +1938,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/OrderNotFound'
 
@@ -1906,6 +1988,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/OrderNotFound'
         '409':
@@ -1943,6 +2027,8 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /user/payment-methods:
     get:
       tags: [User]
@@ -1968,6 +2054,8 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /user/tax-profiles:
     get:
       tags: [User]
@@ -1989,6 +2077,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
     post:
       tags: [User]
       operationId: userTaxProfilesStore
@@ -1997,6 +2087,12 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaxProfileWriteRequest'
       responses:
         '201':
           description: Creado
@@ -2013,6 +2109,10 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /user/tax-profiles/{tax_profile_id}:
     put:
       tags: [User]
@@ -2027,6 +2127,12 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaxProfileWriteRequest'
       responses:
         '200':
           description: Actualizado
@@ -2039,6 +2145,10 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
         '404':
           description: TAX_PROFILE_NOT_FOUND
           headers:
@@ -2073,6 +2183,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           description: TAX_PROFILE_NOT_FOUND
           headers:
@@ -2104,6 +2216,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
     post:
       tags: [User]
       operationId: userAddressesStore
@@ -2112,6 +2226,12 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressWriteRequest'
       responses:
         '201':
           description: Creada
@@ -2128,6 +2248,10 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /user/addresses/{address_id}:
     put:
       tags: [User]
@@ -2142,6 +2266,12 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressWriteRequest'
       responses:
         '200':
           description: Actualizada
@@ -2154,6 +2284,10 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
         '404':
           description: ADDRESS_NOT_FOUND
           headers:
@@ -2188,6 +2322,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           description: ADDRESS_NOT_FOUND
           headers:
@@ -2219,6 +2355,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
     post:
       tags: [User]
       operationId: userContactsStore
@@ -2227,6 +2365,12 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactWriteRequest'
       responses:
         '201':
           description: Creado
@@ -2243,6 +2387,10 @@ paths:
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /user/contacts/{contact_id}:
     put:
       tags: [User]
@@ -2257,6 +2405,12 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactWriteRequest'
       responses:
         '200':
           description: Actualizado
@@ -2269,6 +2423,10 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
         '404':
           description: CONTACT_NOT_FOUND
           headers:
@@ -2303,6 +2461,8 @@ paths:
                 $ref: '#/components/schemas/ApiSuccessResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           description: CONTACT_NOT_FOUND
           headers:
@@ -2646,7 +2806,7 @@ components:
       type: object
       description: |
         Liga opaca. `url` es secreto temporal — HTTPS, no logs, no persistencia.
-        Puede consumirse una sola vez si `max_opens=1`.
+        Las ligas nuevas tienen TTL contractual de 60 minutos y máximo 3 consumos autorizados.
       properties:
         url:
           type: string
@@ -2654,8 +2814,11 @@ components:
         expires_at:
           type: string
           format: date-time
+          description: Fecha/hora de expiración; para ligas nuevas corresponde a 60 minutos desde la emisión.
         max_opens:
           type: integer
+          maximum: 3
+          description: Máximo de consumos autorizados para ligas nuevas.
 
     TokenResponse:
       type: object
@@ -2854,6 +3017,91 @@ components:
         code:
           type: string
 
+    TaxProfileWriteRequest:
+      type: object
+      additionalProperties: false
+      required: [rfc, business_name, tax_regime, postal_code]
+      properties:
+        rfc:
+          type: string
+          minLength: 12
+          maxLength: 13
+        business_name:
+          type: string
+          maxLength: 255
+        tax_regime:
+          type: string
+          maxLength: 10
+        cfdi_use:
+          type: string
+          nullable: true
+          maxLength: 10
+        postal_code:
+          type: string
+          pattern: '^\d{5}$'
+        email:
+          type: string
+          format: email
+          nullable: true
+          maxLength: 255
+    AddressWriteRequest:
+      type: object
+      additionalProperties: false
+      required: [street, number, neighborhood, state, city, zipcode]
+      properties:
+        street:
+          type: string
+          maxLength: 255
+        number:
+          type: string
+          maxLength: 255
+        neighborhood:
+          type: string
+          maxLength: 255
+        state:
+          type: string
+          maxLength: 255
+        city:
+          type: string
+          maxLength: 255
+        zipcode:
+          type: string
+          maxLength: 255
+        additional_references:
+          type: string
+          nullable: true
+          maxLength: 255
+    ContactWriteRequest:
+      type: object
+      additionalProperties: false
+      required: [name, paternal_lastname, maternal_lastname, phone, phone_country, birth_date, gender]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        paternal_lastname:
+          type: string
+          maxLength: 255
+        maternal_lastname:
+          type: string
+          maxLength: 255
+        phone:
+          type: string
+        phone_country:
+          type: string
+        birth_date:
+          type: string
+          format: date
+        gender:
+          type: string
+    CancelOrderRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          nullable: true
+          maxLength: 500
     SecureLinkIssueRequest:
       type: object
       required: [grant_id]
