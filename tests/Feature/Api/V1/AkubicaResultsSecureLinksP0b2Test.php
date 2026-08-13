@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\Otp\StepUp\OtpStepUpGrantService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -84,6 +85,37 @@ function opaqueTokenFromSecureUrl(string $url): string
     expect($token)->toMatch('/^[A-Fa-f0-9]{64}$/');
 
     return $token;
+}
+
+function issueResultsSecureLink(
+    \Tests\TestCase $testCase,
+    User $user,
+    string $token,
+    int $tokenId,
+    string $path,
+    int $maxOpens = 1,
+): array
+{
+    enableAkubicaSecureLinksResultsFlags();
+    config()->set('otp.p0a.secure_links.max_opens', $maxOpens);
+    storeFakePdf($path, '%PDF-1.4 secure-link-content');
+    $order = createAkubicaLaboratoryPurchase($user, ['results' => $path]);
+    $grant = createStepUpResultsGrant($user, $order->id, $tokenId);
+
+    $url = $testCase->postJson(
+        "/api/v1/orders/{$order->id}/results/secure-link",
+        ['grant_id' => $grant->public_id],
+        authHeaders($token),
+    )->assertCreated()
+        ->assertJsonPath('data.max_opens', $maxOpens)
+        ->json('data.url');
+
+    return [$order, $grant, opaqueTokenFromSecureUrl($url)];
+}
+
+function fixedThrottleUserKey(User $user): string
+{
+    return sha1((string) $user->id);
 }
 
 beforeEach(function () {
@@ -408,6 +440,80 @@ test('p0b2 valid link downloads pdf without bearer', function () {
         ->and($cacheControl)->toContain('must-revalidate');
 });
 
+test('p0b2 secure link with max opens three allows exactly three successful consumes', function () {
+    [$user, $token, $tokenId] = secureLinkCustomerToken();
+    [, , $plain] = issueResultsSecureLink($this, $user, $token, $tokenId, 'results/p0b2-three-opens.pdf', 3);
+
+    foreach ([1, 2, 3] as $openNumber) {
+        $this->get('/api/v1/secure-downloads/'.$plain)->assertOk();
+
+        $link = OtpSecureDownloadLink::query()->first();
+        expect((int) $link->open_count)->toBe($openNumber);
+
+        if ($openNumber < 3) {
+            expect($link->consumed_at)->toBeNull();
+        } else {
+            expect($link->consumed_at)->not->toBeNull();
+        }
+    }
+
+    $this->getJson('/api/v1/secure-downloads/'.$plain)
+        ->assertStatus(410)
+        ->assertJsonPath('error.code', 'SECURE_LINK_CONSUMED');
+
+    expect((int) OtpSecureDownloadLink::query()->value('open_count'))->toBe(3);
+});
+
+test('p0b2 HEAD secure download follows GET route and consumes without response body', function () {
+    [$user, $token, $tokenId] = secureLinkCustomerToken();
+    [, , $plain] = issueResultsSecureLink($this, $user, $token, $tokenId, 'results/p0b2-head.pdf', 3);
+
+    $before = OtpSecureDownloadLink::query()->first();
+    expect((int) $before->open_count)->toBe(0)
+        ->and($before->consumed_at)->toBeNull();
+
+    $response = $this->call('HEAD', '/api/v1/secure-downloads/'.$plain);
+
+    $response->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
+
+    $after = OtpSecureDownloadLink::query()->first();
+    expect($response->getContent())->toBe('')
+        ->and((int) $after->open_count)->toBe(1)
+        ->and($after->consumed_at)->toBeNull();
+});
+
+test('p0b2 Range secure download is currently ignored and consumes a full inline pdf response', function () {
+    [$user, $token, $tokenId] = secureLinkCustomerToken();
+    [, , $plain] = issueResultsSecureLink($this, $user, $token, $tokenId, 'results/p0b2-range.pdf', 3);
+
+    $response = $this->get('/api/v1/secure-downloads/'.$plain, ['Range' => 'bytes=0-99']);
+
+    $response->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
+
+    expect($response->headers->get('Content-Range'))->toBeNull()
+        ->and($response->headers->get('Accept-Ranges'))->toBeNull()
+        ->and(strlen($response->getContent()))->toBe(strlen('%PDF-1.4 secure-link-content'))
+        ->and((int) OtpSecureDownloadLink::query()->value('open_count'))->toBe(1);
+});
+
+test('p0b2 secure download preview semantics are inline pdf and consume on response creation', function () {
+    [$user, $token, $tokenId] = secureLinkCustomerToken();
+    [$order, , $plain] = issueResultsSecureLink($this, $user, $token, $tokenId, 'results/p0b2-inline-preview.pdf', 3);
+
+    $response = $this->get('/api/v1/secure-downloads/'.$plain);
+
+    $response->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
+
+    expect($response->headers->get('Content-Disposition'))
+        ->toContain('inline')
+        ->toContain('resultado-'.$order->id.'.pdf')
+        ->and($response->getContent())->toStartWith('%PDF')
+        ->and((int) OtpSecureDownloadLink::query()->value('open_count'))->toBe(1);
+});
+
 test('p0b2 unknown token returns SECURE_LINK_NOT_FOUND', function () {
     enableAkubicaSecureLinksResultsFlags();
 
@@ -556,6 +662,71 @@ test('p0b2 concurrent consume with max_opens 1 allows only one success', functio
     expect($ok)->toBe(1)
         ->and($consumedErrors)->toBe(1)
         ->and((int) OtpSecureDownloadLink::query()->value('open_count'))->toBe(1);
+});
+
+test('p0b2 concurrent consume with max_opens 3 allows only three successes', function () {
+    [$user, $token, $tokenId] = secureLinkCustomerToken();
+    [, , $plain] = issueResultsSecureLink($this, $user, $token, $tokenId, 'results/p0b2-race-three.pdf', 3);
+
+    $service = app(\App\Services\Otp\StepUp\OtpSecureDownloadLinkService::class);
+    $ok = 0;
+    $consumedErrors = 0;
+
+    foreach ([1, 2, 3, 4, 5] as $_) {
+        try {
+            $service->consumeAndResolvePdf($plain);
+            $ok++;
+        } catch (\App\Exceptions\Otp\SecureDownloadLinkException $e) {
+            if ($e->errorCode === 'SECURE_LINK_CONSUMED') {
+                $consumedErrors++;
+            } else {
+                throw $e;
+            }
+        }
+    }
+
+    expect($ok)->toBe(3)
+        ->and($consumedErrors)->toBe(2)
+        ->and((int) OtpSecureDownloadLink::query()->value('open_count'))->toBe(3)
+        ->and(OtpSecureDownloadLink::query()->value('consumed_at'))->not->toBeNull();
+});
+
+test('p0b2 secure link issue throttle returns 429 before controller side effects', function () {
+    [$user, $token, $tokenId] = secureLinkCustomerToken();
+    $path = 'results/p0b2-issue-throttle.pdf';
+    storeFakePdf($path);
+    $order = createAkubicaLaboratoryPurchase($user, ['results' => $path]);
+    $grant = createStepUpResultsGrant($user, $order->id, $tokenId);
+    $key = fixedThrottleUserKey($user);
+
+    RateLimiter::clear($key);
+    foreach (range(1, 60) as $_) {
+        RateLimiter::hit($key, 60);
+    }
+
+    $this->postJson(
+        "/api/v1/orders/{$order->id}/results/secure-link",
+        ['grant_id' => $grant->public_id],
+        authHeaders($token),
+    )->assertStatus(429);
+
+    expect(OtpSecureDownloadLink::query()->count())->toBe(0);
+    RateLimiter::clear($key);
+});
+
+test('p0b2 secure download throttle returns 429 without consuming link', function () {
+    [$user, $token, $tokenId] = secureLinkCustomerToken();
+    [, , $plain] = issueResultsSecureLink($this, $user, $token, $tokenId, 'results/p0b2-download-throttle.pdf', 3);
+
+    foreach (range(1, 60) as $_) {
+        $this->getJson('/api/v1/secure-downloads/'.str_repeat('aa', 32));
+    }
+
+    $this->get('/api/v1/secure-downloads/'.$plain)
+        ->assertStatus(429);
+
+    expect((int) OtpSecureDownloadLink::query()->value('open_count'))->toBe(0)
+        ->and(OtpSecureDownloadLink::query()->value('consumed_at'))->toBeNull();
 });
 
 test('p0b2 issue response and db never expose token_hash path or pii', function () {

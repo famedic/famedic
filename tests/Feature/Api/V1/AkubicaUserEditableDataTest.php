@@ -54,6 +54,23 @@ test('POST /user/contacts with user without customer returns 403 FORBIDDEN', fun
         ->assertJsonPath('error.code', 'FORBIDDEN');
 });
 
+test('address and contact write routes with user without customer return 403 FORBIDDEN', function () {
+    $user = User::factory()->create();
+    $token = $user->createToken('akubica-test')->plainTextToken;
+
+    $this->postJson('/api/v1/user/addresses', validAddressPayload(), authHeaders($token))
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'FORBIDDEN');
+
+    $this->putJson('/api/v1/user/addresses/1', validAddressPayload(), authHeaders($token))
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'FORBIDDEN');
+
+    $this->putJson('/api/v1/user/contacts/1', validContactPayload(), authHeaders($token))
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'FORBIDDEN');
+});
+
 // ── Contacts ────────────────────────────────────────────────────────
 
 test('GET /user/contacts with no contacts returns empty array', function () {

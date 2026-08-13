@@ -10,6 +10,7 @@ use App\Services\Otp\Delivery\FakeOtpDeliveryProvider;
 use App\Services\Otp\StepUp\OtpStepUpGrantService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Tests\Support\Otp\FakeOtpCodeGenerator;
 
 function enableAkubicaStepUpResultsFlags(): void
@@ -36,6 +37,11 @@ function stepUpCustomerToken(array $userAttrs = []): array
     $newToken = $user->createToken('akubica-test');
 
     return [$user, $newToken->plainTextToken, (int) $newToken->accessToken->id];
+}
+
+function akubicaOtpThrottleKey(string $identity = '', string $ip = '127.0.0.1'): string
+{
+    return md5('akubica-otp'.$ip.'|'.$identity);
 }
 
 beforeEach(function () {
@@ -113,6 +119,30 @@ test('p0b1 owner request sends sms and creates step_up_results challenge', funct
         ->and(app(FakeOtpDeliveryProvider::class)->sent[0]['purpose'])->toBe('step_up_results')
         ->and(OtpDeliveryOperation::query()->where('purpose', 'step_up_results')->count())->toBe(1)
         ->and(OtpStepUpGrant::query()->count())->toBe(0);
+});
+
+test('p0b1 results step-up request throttle returns 429 before sms side effects', function () {
+    enableAkubicaStepUpResultsFlags();
+    $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
+
+    [$user, $token] = stepUpCustomerToken();
+    $order = createAkubicaLaboratoryPurchase($user);
+    $key = akubicaOtpThrottleKey();
+
+    RateLimiter::clear($key);
+    foreach (range(1, 5) as $_) {
+        RateLimiter::hit($key, 60);
+    }
+
+    $this->postJson(
+        "/api/v1/orders/{$order->id}/results/step-up/request",
+        [],
+        authHeaders($token),
+    )->assertStatus(429);
+
+    expect(OtpChallenge::query()->count())->toBe(0)
+        ->and(count(app(FakeOtpDeliveryProvider::class)->sent))->toBe(0);
+    RateLimiter::clear($key);
 });
 
 test('p0b1 third party request returns 404 without sms', function () {

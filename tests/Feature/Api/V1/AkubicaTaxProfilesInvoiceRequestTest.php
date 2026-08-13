@@ -106,6 +106,15 @@ test('POST /user/tax-profiles with user without customer returns 403 FORBIDDEN',
         ->assertJsonPath('error.code', 'FORBIDDEN');
 });
 
+test('PUT /user/tax-profiles/{id} with user without customer returns 403 FORBIDDEN', function () {
+    $user = User::factory()->create();
+    $token = $user->createToken('akubica-test')->plainTextToken;
+
+    $this->putJson('/api/v1/user/tax-profiles/1', validTaxProfilePayload(), authHeaders($token))
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'FORBIDDEN');
+});
+
 // ── Tax profiles ──────────────────────────────────────────────────────
 
 test('GET /user/tax-profiles still works after Sprint 12', function () {
