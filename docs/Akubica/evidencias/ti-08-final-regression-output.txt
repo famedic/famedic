@@ -1,0 +1,872 @@
+﻿TI08_CONTAINER_PWD
+/var/www/html
+TI08_CONTAINER_SHA
+0b46a096a3902630e6ae0e3088c266c790d31b0f
+TI08_TEST_COMMAND
+/usr/local/bin/php -d memory_limit=1G vendor/bin/pest tests/Feature/Api/V1 tests/Unit/Otp --colors=never --display-incomplete --display-skipped --do-not-cache-result --log-junit /artifacts/ti08-final-regression-junit.xml
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Api\V1\AkubicaApiInfrastructureTest
+  ✓ GET /api/v1/cart without token returns 401 JSON                      1.57s  
+  ✓ unknown /api/v1 route returns 404 JSON                               0.03s  
+  ✓ POST /api/v1/auth/login/request-code returns verification response…  0.05s  
+  ✓ POST /api/v1/auth/login/request-code validates email                 0.02s  
+  ✓ protected endpoint with invalid token returns 401 JSON               0.02s  
+  ✓ DELETE /api/v1/auth/token revokes current token                      0.03s  
+  ✓ authenticated user without customer receives 403 on protected route… 0.02s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaAuthTest
+  ✓ login request-code rejects invalid email with 422                    0.03s  
+  ✓ login request-code returns generic 200 for nonexistent email withou… 0.04s  
+  ✓ login request-code creates OTP and sends notification for existing…  0.03s  
+  ✓ login verify-code returns NO_ACTIVE_CODE when no active OTP exists   0.03s  
+  ✓ login verify-code returns INVALID_CODE for wrong code                0.03s  
+  ✓ login verify-code returns CODE_EXPIRED for expired OTP               0.03s  
+  ✓ login verify-code returns ATTEMPTS_EXHAUSTED after max failed attem… 0.02s  
+  ✓ login verify-code returns Bearer token for valid code                0.03s  
+  ✓ register rejects invalid data with 422                               0.02s  
+  ✓ register returns 409 EMAIL_ALREADY_REGISTERED for duplicate email    0.02s  
+  ✓ register returns 409 PHONE_ALREADY_REGISTERED for duplicate phone    0.03s  
+  ✓ register creates registration OTP for valid data                     0.05s  
+  ✓ register verify-code creates user and customer with Bearer token     0.03s  
+  ✓ register verify-code does not reuse consumed OTP                     0.04s  
+  ✓ registered user can access GET /api/v1/cart with token               0.04s  
+  ✓ DELETE /api/v1/auth/token revokes token without requiring customer   0.02s  
+  ✓ auth OTP is stored hashed not in plain text                          0.04s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaBearerStepUpEnforcementP0b4Test
+  ✓ p0b4 flag off allows result bearer download without grant            0.05s  
+  ✓ p0b4 results enforcement without header returns STEP_UP_REQUIRED     0.03s  
+  ✓ p0b4 valid results grant allows bearer download and is reusable      0.05s  
+  ✓ p0b4 results grant nonexistent expired revoked cross purpose and wr… 0.04s  
+  ✓ p0b4 results grant from other user or other PAT fails                0.04s  
+  ✓ p0b4 results not ready still 409 after valid grant                   0.03s  
+  ✓ p0b4 flag off allows invoice bearer download without grant           0.04s  
+  ✓ p0b4 invoices enforcement without header returns STEP_UP_REQUIRED    0.05s  
+  ✓ p0b4 valid invoice grant allows download; results grant and other i… 0.04s  
+  ✓ p0b4 invoice of other order returns 404 before grant evaluation      0.04s  
+  ✓ p0b4 invoice without pdf returns 409 after valid grant               0.04s  
+  ✓ p0b4 master flag enforces both resources; split flags are independe… 0.06s  
+  ✓ p0b4 metadata nests requires_step_up under download when enforcemen… 0.04s  
+  ✓ p0b4 secure links still work without X-Step-Up-Grant when bearer en… 0.04s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaCartCatalogTest
+  ✓ GET /cart without token returns 401 UNAUTHENTICATED                  0.03s  
+  ✓ GET /cart with user without customer returns 403 FORBIDDEN           0.04s  
+  ✓ GET /cart without brand returns 422 VALIDATION_ERROR                 0.03s  
+  ✓ GET /cart with valid token and empty cart returns empty items        0.03s  
+  ✓ GET /cart returns items and correct totals                           0.04s  
+  ✓ GET /cart filters items by brand                                     0.05s  
+  ✓ POST /cart/items with invalid body returns 422 VALIDATION_ERROR      0.04s  
+  ✓ POST /cart/items with nonexistent laboratory_test_id returns 404 LA… 0.03s  
+  ✓ POST /cart/items with brand mismatch returns 404 LAB_TEST_NOT_FOUND  0.03s  
+  ✓ POST /cart/items with valid laboratory_test_id adds item and return… 0.03s  
+  ✓ POST /cart/items duplicate returns 409 ITEM_ALREADY_IN_CART          0.04s  
+  ✓ DELETE /cart/items/{id} for nonexistent item returns 404 CART_ITEM_… 0.03s  
+  ✓ DELETE /cart/items/{id} for another customer returns 403 FORBIDDEN   0.04s  
+  ✓ DELETE /cart/items/{id} removes own item and returns updated cart    0.03s  
+  ✓ GET /catalog/laboratory-tests/{id} for nonexistent test returns 404… 0.04s  
+  ✓ GET /catalog/laboratory-tests/{id} returns laboratory test data      0.03s  
+  ✓ GET /catalog/medications/{id} returns 503 CATALOG_UNAVAILABLE        0.02s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaCartCouponTest
+  ✓ GET /cart/coupon without token returns 401                           0.03s  
+  ✓ POST /cart/coupon without token returns 401                          0.03s  
+  ✓ DELETE /cart/coupon without token returns 401                        0.02s  
+  ✓ cart coupon endpoints return 403 for user without customer           0.03s  
+  ✓ GET /cart/coupon without brand returns 422                           0.03s  
+  ✓ POST /cart/coupon without code returns 422                           0.03s  
+  ✓ POST /cart/coupon with invalid brand returns 422                     0.03s  
+  ✓ GET /cart/coupon returns null coupon when none applied               0.03s  
+  ✓ GET /cart/coupon returns applied coupon structure                    0.04s  
+  ✓ POST /cart/coupon with empty cart returns 409 EMPTY_CART             0.03s  
+  ✓ POST /cart/coupon with nonexistent code returns 404 COUPON_NOT_FOUN… 0.03s  
+  ✓ POST /cart/coupon with used coupon returns 409 COUPON_EXPIRED        0.05s  
+  ✓ POST /cart/coupon with zero balance returns 409 COUPON_EXPIRED       0.03s  
+  ✓ POST /cart/coupon with balance greater than cart total returns 409…  0.03s  
+  ✓ POST /cart/coupon with valid coupon returns coupon and totals        0.03s  
+  ✓ POST /cart/coupon updates GET /cart/totals                           0.05s  
+  ✓ POST /cart/coupon updates GET /checkout/prepare                      0.04s  
+  ✓ applying coupon does not affect another brand cart                   0.04s  
+  ✓ applying coupon does not affect another customer                     0.06s  
+  ✓ DELETE /cart/coupon without applied coupon returns removed false     0.03s  
+  ✓ DELETE /cart/coupon with applied coupon returns removed true         0.05s  
+  ✓ DELETE /cart/coupon recalculates totals without discount             0.04s  
+  ✓ DELETE /cart/coupon does not affect another brand                    0.05s  
+  ✓ DELETE /cart/coupon does not affect another customer                 0.05s  
+  ✓ payment link works with applied coupon                               0.05s  
+  ✓ payment link does not create purchase or payment                     0.04s  
+  ✓ medications catalog endpoint still returns 503                       0.03s  
+  ✓ order cancellation still returns 503                                 0.04s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaCatalogDiscoveryTest
+  ✓ GET /catalog/laboratory-brands without token returns 200             0.04s  
+  ✓ GET /catalog/laboratory-test-categories without token returns 200    0.03s  
+  ✓ GET /catalog/laboratory-tests without token returns 200              0.04s  
+  ✓ GET /catalog/laboratory-tests with search without token returns 200  0.03s  
+  ✓ GET /catalog/laboratory-tests with category_id without token return… 0.03s  
+  ✓ GET /catalog/laboratory-tests with pagination without token returns… 0.04s  
+  ✓ GET /catalog/laboratory-stores without token returns 200             0.03s  
+  ✓ GET /catalog/laboratory-tests/{id} without token returns 200         0.03s  
+  ✓ POST /cart/items without token returns 401 UNAUTHENTICATED           0.02s  
+  ✓ GET /checkout/prepare without token returns 401 UNAUTHENTICATED      0.03s  
+  ✓ GET /orders without token returns 401 UNAUTHENTICATED                0.02s  
+  ✓ GET /catalog/laboratory-brands returns brands structure              0.03s  
+  ✓ each laboratory brand includes available_states from laboratory_sto… 0.05s  
+  ✓ each laboratory brand includes stores_count from active stores       0.03s  
+  ✓ laboratory brand available_states are unique and sorted alphabetica… 0.03s  
+  ✓ soft-deleted laboratory stores do not count toward brand coverage    0.03s  
+  ✓ laboratory stores with empty state do not appear in available_state… 0.03s  
+  ✓ laboratory brand without stores returns empty available_states and…  0.04s  
+  ✓ GET /catalog/laboratory-brands?state filters brands with coverage i… 0.03s  
+  ✓ GET /catalog/laboratory-brands?state is case-insensitive             0.03s  
+  ✓ GET /catalog/laboratory-brands?state with unknown state returns emp… 0.02s  
+  ✓ GET /catalog/laboratory-tests with no tests returns empty list       0.04s  
+  ✓ GET /catalog/laboratory-tests returns tests with expected structure  0.05s  
+  ✓ GET /catalog/laboratory-tests filters by search text                 0.03s  
+  ✓ GET /catalog/laboratory-tests filters by brand                       0.03s  
+  ✓ GET /catalog/laboratory-tests filters by category_id                 0.03s  
+  ✓ GET /catalog/laboratory-tests with invalid per_page returns 422      0.03s  
+  ✓ GET /catalog/laboratory-tests paginates correctly                    0.04s  
+  ✓ GET /catalog/laboratory-tests filters by requires_appointment        0.03s  
+  ✓ GET /catalog/laboratory-test-categories returns categories structur… 0.03s  
+  ✓ GET /catalog/laboratory-test-categories with no categories returns…  0.03s  
+  ✓ GET /catalog/laboratory-stores returns store fields for assistant d… 0.03s  
+  ✓ GET /catalog/laboratory-stores filters by state                      0.04s  
+  ✓ GET /catalog/laboratory-stores state filter is case-insensitive      0.03s  
+  ✓ soft-deleted laboratory stores are excluded from catalog stores end… 0.03s  
+  ✓ GET /catalog/laboratory-stores returns stores structure              0.03s  
+  ✓ GET /catalog/laboratory-stores filters by brand                      0.03s  
+  ✓ GET /catalog/laboratory-tests/{id} still returns laboratory test de… 0.04s  
+  ✓ GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE  0.02s  
+  ✓ PUT /orders/{order_id}/cancel still returns 503 FEATURE_DISABLED     0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaCheckoutPaymentLinkTest
+  ✓ POST /checkout/payment-link without token returns 401 UNAUTHENTICAT… 0.06s  
+  ✓ POST /checkout/payment-link with user without customer returns 403…  0.03s  
+  ✓ POST /checkout/payment-link without brand returns 422 VALIDATION_ER… 0.03s  
+  ✓ POST /checkout/payment-link with invalid brand returns 422 VALIDATI… 0.03s  
+  ✓ POST /checkout/payment-link with expires_in_minutes below 5 returns… 0.04s  
+  ✓ POST /checkout/payment-link with expires_in_minutes above 1440 retu… 0.04s  
+  ✓ POST /checkout/payment-link with empty cart returns 409 EMPTY_CART   0.03s  
+  ✓ POST /checkout/payment-link with cart but no draft returns 409 CHEC… 0.03s  
+  ✓ POST /checkout/payment-link with draft missing contact_id returns 4… 0.04s  
+  ✓ POST /checkout/payment-link with draft missing address_id returns 4… 0.04s  
+  ✓ POST /checkout/payment-link when appointment required and missing r… 0.05s  
+  ✓ POST /checkout/payment-link with ready checkout returns 200 with pa… 0.04s  
+  ✓ POST /checkout/payment-link does not create LaboratoryPurchase       0.04s  
+  ✓ POST /checkout/payment-link stores token hash not plain token        0.04s  
+  ✓ POST /checkout/payment-link generates unique token hashes            0.05s  
+  ✓ GET akubica checkout link with valid token redirects to laboratory…  0.04s  
+  ✓ GET akubica checkout link with expired token redirects to login      0.03s  
+  ✓ GET akubica checkout link with invalid token redirects to login      0.02s  
+  ✓ GET akubica checkout link does not authenticate another customer     0.05s  
+  ✓ GET akubica checkout link with empty cart redirects to login with e… 0.04s  
+  ✓ GET akubica checkout link with deleted draft redirects to login wit… 0.03s  
+  ✓ GET akubica checkout link with pending appointment allows redirect…  0.04s  
+  ✓ GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE  0.04s  
+  ✓ PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED           0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaCheckoutPreparationTest
+  ✓ GET /cart/totals without token returns 401 UNAUTHENTICATED           0.04s  
+  ✓ DELETE /cart without token returns 401 UNAUTHENTICATED               0.02s  
+  ✓ GET /checkout/prepare without token returns 401 UNAUTHENTICATED      0.03s  
+  ✓ POST /checkout/draft without token returns 401 UNAUTHENTICATED       0.02s  
+  ✓ GET /checkout/prepare with user without customer returns 403 FORBID… 0.02s  
+  ✓ GET /cart/totals with empty cart returns 200 with zero totals        0.03s  
+  ✓ GET /cart/totals with items returns correct totals                   0.05s  
+  ✓ GET /cart/totals without brand returns 422 VALIDATION_ERROR          0.03s  
+  ✓ GET /cart/totals with invalid brand returns 422 VALIDATION_ERROR     0.02s  
+  ✓ DELETE /cart with empty cart returns 200 deleted_count 0             0.03s  
+  ✓ DELETE /cart with items returns correct deleted_count                0.04s  
+  ✓ DELETE /cart does not remove items from another brand                0.06s  
+  ✓ DELETE /cart does not remove items from another customer             0.04s  
+  ✓ GET /checkout/prepare with empty cart returns EMPTY_CART warning     0.03s  
+  ✓ GET /checkout/prepare with items returns cart totals contacts and a… 0.05s  
+  ✓ GET /checkout/prepare sets can_continue_to_payment_platform true wh… 0.05s  
+  ✓ GET /checkout/prepare sets requires_appointment true when cart item… 0.04s  
+  ✓ GET /checkout/prepare payment_methods do not expose sensitive token… 0.04s  
+  ✓ POST /checkout/draft with empty cart returns 409 EMPTY_CART          0.03s  
+  ✓ POST /checkout/draft with foreign contact_id returns 404 CONTACT_NO… 0.05s  
+  ✓ POST /checkout/draft with foreign address_id returns 404 ADDRESS_NO… 0.03s  
+  ✓ POST /checkout/draft with own contact and address returns 200 draft  0.04s  
+  ✓ POST /checkout/draft with foreign tax_profile_id returns 404 TAX_PR… 0.04s  
+  ✓ POST /checkout/draft with notes too long returns 422 VALIDATION_ERR… 0.05s  
+  ✓ POST /checkout/draft does not create a laboratory purchase           0.05s  
+  ✓ POST /checkout/draft does not store payment_method on draft          0.04s  
+  ✓ GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE  0.03s  
+  ✓ PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED           0.05s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaErrorsCorrelationP1a6Test
+  ✓ correlation id is generated when header is missing                   0.05s  
+  ✓ correlation id accepts a valid client header                         0.03s  
+  ✓ correlation id replaces an invalid client header                     0.02s  
+  ✓ error responses include retryable and correlation_id matching heade… 0.04s  
+  ✓ validation errors include retryable false and correlation_id         0.03s  
+  ✓ soft-deny and unknown route errors are non-retryable with correlati… 0.03s  
+  ✓ feature disabled is non-retryable                                    0.03s  
+  ✓ two requests receive distinct generated correlation ids              0.04s  
+  ✓ success envelope remains compatible without correlation_id in body   0.03s  
+  ✓ ApiErrorRetryability classifies known codes                          0.02s  
+  ✓ AkubicaCorrelationId validation rejects unsafe values                0.03s  
+  ✓ pdf download response includes correlation header without changing…  0.03s  
+  ✓ logging context receives correlation_id without secrets              0.04s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaIdempotencyP1Test
+  ✓ idempotency flag off ignores Idempotency-Key                         0.07s  
+  ✓ idempotency without header keeps current behaviour                   0.06s  
+  ✓ idempotency invalid header returns VALIDATION_ERROR                  0.03s  
+  ✓ idempotency config defaults are safe                                 0.04s  
+  ✓ idempotency payment-link first creates one link and replay returns…  0.05s  
+  ✓ idempotency payment-link same key different payload conflicts        0.05s  
+  ✓ idempotency payment-link cross-user isolation                        0.06s  
+  ✓ idempotency active processing returns IN_PROGRESS                    0.05s  
+  ✓ idempotency expired processing becomes UNCERTAIN and does not execu… 0.05s  
+  ✓ idempotency unique constraint is the concurrency barrier             0.03s  
+  ✓ idempotency oversized response marks uncertain without truncating    0.04s  
+  ✓ idempotency laboratory appointment creates once on replay            0.07s  
+  ✓ idempotency invoice-request creates once on replay                   0.04s  
+  ✓ idempotency results secure-link replays same url                     0.05s  
+  ✓ idempotency login request-code creates one challenge on replay       0.04s  
+  ✓ idempotency public actors differ by phone                            0.07s  
+  ✓ idempotency register creates one challenge on replay                 0.04s  
+  ✓ idempotency step-up results request creates one challenge on replay  0.05s  
+  ✓ idempotency invoices step-up request creates one challenge and deli… 0.05s  
+  ✓ idempotency invoices step-up same key different invoice conflicts    0.06s  
+  ✓ idempotency invoices step-up cross-user isolation                    0.07s  
+  ✓ idempotency invoices secure-link creates one link and replay return… 0.05s  
+  ✓ idempotency invoices secure-link same key different payload conflic… 0.05s  
+  ✓ idempotency invoices secure-link respects ownership isolation        0.07s  
+  ✓ idempotency failed_final 4xx is replayed without re-running control… 0.03s  
+  ✓ idempotency 5xx marks failed_uncertain without persisting body and…  0.03s  
+  ✓ idempotency 5xx uncertain same payload does not re-execute           0.03s  
+  ✓ idempotency persistence encrypts response and never stores raw key…  0.04s  
+  ✓ idempotency processing in progress and expired semantics             0.07s  
+  ✓ idempotency prune dry-run and force                                  0.04s  
+  ✓ idempotency prune scheduler is off by default                        0.07s  
+  ✓ idempotency unauthenticated does not create durable record           0.04s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaInvoicesStepUpSecureLinksP0b3Test
+  ✓ p0b3 flags off invoice step-up returns FEATURE_DISABLED              0.05s  
+  ✓ p0b3 owner requests invoice step-up and sms is sent                  0.04s  
+  ✓ p0b3 third party cannot request invoice step-up                      0.04s  
+  ✓ p0b3 nonexistent and foreign order share ORDER_NOT_FOUND without sm… 0.04s  
+  ✓ p0b3 nonexistent invoice and invoice of other order return INVOICE_… 0.03s  
+  ✓ p0b3 correct otp creates invoice grant                               0.06s  
+  ✓ p0b3 wrong expired and consumed otp never create grants              0.09s  
+  ✓ p0b3 cross purpose challenges cannot verify invoice step-up          0.04s  
+  ✓ p0b3 challenge for another invoice cannot verify                     0.05s  
+  ✓ p0b3 request rejects client identity fields                          0.03s  
+  ✓ p0b3 resend via request after cooldown invalidates previous challen… 0.15s  
+  ✓ p0b3 owner with valid grant generates invoice secure link            0.06s  
+  ✓ p0b3 invalid grants cannot issue invoice secure link                 0.09s  
+  ✓ p0b3 results grant and other invoice grant cannot issue invoice lin… 0.06s  
+  ✓ p0b3 other user or PAT cannot use invoice grant                      0.06s  
+  ✓ p0b3 invoice without pdf does not create link                        0.04s  
+  ✓ p0b3 invoice secure link downloads pdf without bearer then consumes  0.05s  
+  ✓ p0b3 invoice link expired revoked unknown and missing file behavior… 0.05s  
+  ✓ p0b3 cross resource secure links do not mix documents                0.06s  
+  ✓ p0b3 flags off keep bearer invoice download and block secure endpoi… 0.04s  
+  ✓ p0b3 invoice resource metadata additive when flags on                0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaLaboratoryAppointmentsTest
+  ✓ GET /laboratory-appointments/requirements without token returns 401… 0.05s  
+  ✓ GET /laboratory-appointments without token returns 401 UNAUTHENTICA… 0.02s  
+  ✓ POST /laboratory-appointments without token returns 401 UNAUTHENTIC… 0.02s  
+  ✓ DELETE /laboratory-appointments/{id} without token returns 401 UNAU… 0.02s  
+  ✓ GET /laboratory-appointments with user without customer returns 403… 0.03s  
+  ✓ GET /laboratory-appointments/requirements with empty cart returns w… 0.04s  
+  ✓ GET /laboratory-appointments/requirements with cart without appoint… 0.04s  
+  ✓ GET /laboratory-appointments/requirements with appointment study re… 0.04s  
+  ✓ GET /laboratory-appointments/requirements with existing appointment… 0.04s  
+  ✓ GET /laboratory-appointments with no appointments returns empty arr… 0.05s  
+  ✓ GET /laboratory-appointments returns appointments with expected str… 0.04s  
+  ✓ GET /laboratory-appointments only returns appointments of authentic… 0.04s  
+  ✓ GET /laboratory-appointments filters by brand                        0.04s  
+  ✓ GET /laboratory-appointments filters by status pending               0.05s  
+  ✓ POST /laboratory-appointments with empty cart returns 409 EMPTY_CAR… 0.04s  
+  ✓ POST /laboratory-appointments when appointment not required returns… 0.04s  
+  ✓ POST /laboratory-appointments with foreign contact returns 404 CONT… 0.04s  
+  ✓ POST /laboratory-appointments with foreign address returns 404 ADDR… 0.05s  
+  ✓ POST /laboratory-appointments with past scheduled_at returns 422 VA… 0.03s  
+  ✓ POST /laboratory-appointments with valid payload returns 201         0.04s  
+  ✓ POST /laboratory-appointments duplicate pending returns 409 APPOINT… 0.05s  
+  ✓ POST /laboratory-appointments valid allows payment link afterwards   0.06s  
+  ✓ DELETE /laboratory-appointments/{id} deletes own appointment         0.03s  
+  ✓ DELETE /laboratory-appointments/{id} for another customer returns 4… 0.03s  
+  ✓ DELETE /laboratory-appointments/{id} when not exists returns 404 AP… 0.03s  
+  ✓ DELETE required appointment blocks payment link again with APPOINTM… 0.06s  
+  ✓ POST /checkout/payment-link blocks when appointment required and mi… 0.03s  
+  ✓ GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE  0.02s  
+  ✓ PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED           0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaLoginOtpP0a4Test
+  ✓ p0a4 flags off keeps legacy login token flow and notifications       0.06s  
+  ✓ p0a4 flags off does not create challenges for nonexistent email      0.02s  
+  ✓ p0a4 resend is disabled when login otp flag is off                   0.03s  
+  ✓ p0a4 request returns 202 challenge with sms delivery without token   0.03s  
+  ✓ p0a4 request for nonexistent phone returns decoy 202 without persis… 0.03s  
+  ✓ p0a4 decoy and existing user start responses share public contract…  0.06s  
+  ✓ p0a4 verify and resend of never-issued uuid stay NO_ACTIVE_CODE      0.03s  
+  ✓ p0a4 issued decoy verify and resend match real public contracts acr… 0.08s  
+  ✓ p0a4 login otp without anti abuse returns configuration error        0.03s  
+  ✓ p0a4 login otp without sms delivery returns configuration error      0.04s  
+  ✓ p0a4 verify issues sanctum token for existing user and customer wit… 0.04s  
+  ✓ p0a4 wrong code increments attempts and never returns plaintext otp  0.06s  
+  ✓ p0a4 max attempts invalidates and blocks further success             0.05s  
+  ✓ p0a4 cooldown returns 429 with Retry-After                           0.06s  
+  ✓ p0a4 resend after cooldown invalidates previous challenge and sends… 0.07s  
+  ✓ p0a4 vonage failure returns DELIVERY_FAILED without token            0.04s  
+  ✓ p0a4 does not persist otp plaintext or full destination in abuse ev… 0.04s  
+  ✓ p0a4 sequential double verify guarantees single consumed challenge…  0.06s  
+  ✓ p0a4 failed expired superseded and exhausted paths never issue toke… 0.08s  
+  ✓ p0a4 resend rejects client-controlled identity fields                0.04s  
+  ✓ p0a4 verify ignores client phone and binds identity from challenge   0.05s  
+  ✓ p0a4 unverified phone is treated as decoy and never authenticates    0.03s  
+  ✓ p0a4 register challenge cannot be used for login verify              0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaOrderDocumentDownloadTest
+  ✓ GET result download without token returns 401                        0.04s  
+  ✓ GET invoice download without token returns 401                       0.04s  
+  ✓ document download endpoints return 403 for user without customer     0.03s  
+  ✓ result download for nonexistent order returns 404 ORDER_NOT_FOUND    0.03s  
+  ✓ result download for another customer order returns 404 ORDER_NOT_FO… 0.03s  
+  ✓ result download for order without results returns 409 RESULT_NOT_RE… 0.05s  
+  ✓ result download with manual storage PDF returns 200 application/pdf  0.03s  
+  ✓ result download with cached GDA notification returns 200 applicatio… 0.04s  
+  ✓ result download does not expose base64 or internal paths in respons… 0.04s  
+  ✓ result download response includes expected filename in Content-Disp… 0.03s  
+  ✓ result download response includes secure Cache-Control header        0.05s  
+  ✓ invoice download for nonexistent order returns 404 ORDER_NOT_FOUND   0.03s  
+  ✓ invoice download for another customer order returns 404 ORDER_NOT_F… 0.03s  
+  ✓ invoice download for nonexistent invoice returns 404 INVOICE_NOT_FO… 0.03s  
+  ✓ invoice download for invoice belonging to another order returns 404… 0.05s  
+  ✓ invoice download when PDF file is missing returns 409 INVOICE_NOT_R… 0.03s  
+  ✓ invoice download with available PDF returns 200 application/pdf      0.03s  
+  ✓ invoice download does not expose internal storage paths              0.03s  
+  ✓ invoice download response includes expected filename in Content-Dis… 0.03s  
+  ✓ invoice download response includes secure Cache-Control header       0.05s  
+  ✓ GET order results includes bearer download metadata                  0.03s  
+  ✓ GET order results with GDA notification includes bearer download me… 0.03s  
+  ✓ GET order invoices includes bearer download metadata for issued inv… 0.03s  
+  ✓ payment link still works after document download endpoints           0.05s  
+  ✓ cart coupon apply still works after document download endpoints      0.04s  
+  ✓ invoice request status endpoint still responds for owned order       0.03s  
+  ✓ medications catalog endpoint still returns 503                       0.03s  
+  ✓ order cancellation still returns 503                                 0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaOrdersBasicTest
+  ✓ GET /orders without token returns 401 UNAUTHENTICATED                0.04s  
+  ✓ GET /orders with user without customer returns 403 FORBIDDEN         0.03s  
+  ✓ GET /orders with customer and no orders returns empty array          0.03s  
+  ✓ GET /orders returns orders with expected structure                   0.03s  
+  ✓ GET /orders only returns orders of authenticated customer            0.05s  
+  ✓ GET /orders paginates correctly                                      0.04s  
+  ✓ GET /orders filters by status in_progress                            0.03s  
+  ✓ GET /orders filters by brand                                         0.05s  
+  ✓ GET /orders/{id}/products for nonexistent order returns 404 ORDER_N… 0.05s  
+  ✓ GET /orders/{id}/products for another customer order returns 404 OR… 0.03s  
+  ✓ GET /orders/{id}/products for own order without items returns empty… 0.03s  
+  ✓ GET /orders/{id}/products returns products with expected structure   0.03s  
+  ✓ GET /orders/{id}/status for nonexistent order returns 404 ORDER_NOT… 0.03s  
+  ✓ GET /orders/{id}/status returns status data for own order            0.05s  
+  ✓ GET /orders/{id}/status returns cancelled for soft-deleted order     0.03s  
+  ✓ PUT /orders/{id}/cancel returns 503 FEATURE_DISABLED                 0.04s  
+  ✓ GET /catalog/medications/{id} returns 503 CATALOG_UNAVAILABLE        0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaOrdersResultsInvoicesTest
+  ✓ GET /orders/results without token returns 401 UNAUTHENTICATED        0.05s  
+  ✓ GET /orders/invoices without token returns 401 UNAUTHENTICATED       0.02s  
+  ✓ GET /orders/results with user without customer returns 403 FORBIDDE… 0.03s  
+  ✓ GET /orders/results with no results returns empty array              0.03s  
+  ✓ GET /orders/results returns results with expected structure          0.05s  
+  ✓ GET /orders/results only returns results of authenticated customer   0.04s  
+  ✓ GET /orders/results paginates correctly                              0.03s  
+  ✓ GET /orders/{id}/results for nonexistent order returns 404 ORDER_NO… 0.03s  
+  ✓ GET /orders/{id}/results for another customer order returns 404 ORD… 0.04s  
+  ✓ GET /orders/{id}/results without results returns 404 RESULTS_NOT_AV… 0.06s  
+  ✓ GET /orders/{id}/results with manual results returns expected struc… 0.03s  
+  ✓ GET /orders/{id}/results with API notification returns expected str… 0.03s  
+  ✓ GET /orders/invoices with no invoices returns empty array            0.03s  
+  ✓ GET /orders/invoices returns issued invoices with expected structur… 0.05s  
+  ✓ GET /orders/invoices only returns invoices of authenticated custome… 0.03s  
+  ✓ GET /orders/invoices paginates correctly                             0.03s  
+  ✓ GET /orders/{id}/invoices for nonexistent order returns 404 ORDER_N… 0.03s  
+  ✓ GET /orders/{id}/invoices for another customer order returns 404 OR… 0.03s  
+  ✓ GET /orders/{id}/invoices without invoices returns empty array       0.06s  
+  ✓ GET /orders/{id}/invoices returns invoice with expected structure    0.03s  
+  ✓ GET /orders/{id}/invoices returns pending invoice request            0.03s  
+  ✓ PUT /orders/{id}/cancel returns 503 FEATURE_DISABLED                 0.03s  
+  ✓ GET /catalog/medications/{id} returns 503 CATALOG_UNAVAILABLE        0.04s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaOtpPruningP0c2Test
+  ✓ p0c2 dry-run counts but does not delete                              0.06s  
+  ✓ p0c2 active records are never deleted                                0.04s  
+  ✓ p0c2 recently expired challenge is kept until retention              0.03s  
+  ✓ p0c2 old expired challenge is deleted                                0.05s  
+  ✓ p0c2 old consumed challenge is deleted                               0.03s  
+  ✓ p0c2 challenge with remaining grant dependency is not deleted        0.03s  
+  ✓ p0c2 old challenge with registration intent is skipped               0.03s  
+  ✓ p0c2 pending delivery is never deleted                               0.02s  
+  ✓ p0c2 old terminal delivery is deleted                                0.03s  
+  ✓ p0c2 active rate limit window is kept                                0.04s  
+  ✓ p0c2 old closed rate limit is deleted                                0.02s  
+  ✓ p0c2 active grant is never deleted                                   0.03s  
+  ✓ p0c2 old expired grant is deleted                                    0.03s  
+  ✓ p0c2 old revoked grant is deleted                                    0.03s  
+  ✓ p0c2 grant with active secure link is not deleted                    0.04s  
+  ✓ p0c2 orphan grant still active is not deleted                        0.03s  
+  ✓ p0c2 orphan terminal grant past retention is deleted                 0.03s  
+  ✓ p0c2 grant with null pat and bind off is not treated as orphan-only… 0.03s  
+  ✓ p0c2 active secure link is never deleted                             0.03s  
+  ✓ p0c2 old consumed secure link is deleted                             0.04s  
+  ✓ p0c2 old expired secure link is deleted                              0.03s  
+  ✓ p0c2 old revoked secure link is deleted                              0.03s  
+  ✓ p0c2 dry-run and force share the same candidate set                  0.04s  
+  ✓ p0c2 concurrent reactivation prevents stale batch delete             0.03s  
+  ✓ p0c2 type option limits scope                                        0.05s  
+  ✓ p0c2 batch one processes all candidates                              0.04s  
+  ✓ p0c2 repeated force run is idempotent                                0.03s  
+  ✓ p0c2 command defaults to dry-run without force                       0.03s  
+  ✓ p0c2 command force deletes and invalid options fail                  0.03s  
+  ✓ p0c2 command output does not leak pii otp or hashes                  0.05s  
+  ✓ p0c2 prune log summary has no sensitive fields                       0.03s  
+  ✓ p0c2 scheduler is not registered when cleanup flag is off            0.08s  
+  ✓ p0c2 does not prune personal access tokens                           0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaOtpTestingIsolationP0t1Test
+  ✓ p0t1 phpunit baseline keeps legacy auth flags off and delivery driv… 0.04s  
+  ✓ p0t1 enabling login otp does not leave flags on for the next test b… 0.02s  
+  ✓ p0t1 next test after enable helper still starts from disabled basel… 0.02s  
+  ✓ p0t1 obsolete sms delivery provider env never selects vonage bindin… 0.02s  
+  ✓ p0t1 switching delivery driver rebinds provider without vonage       0.04s  
+  ✓ p0t1 secure link ttl overrides are suite-local and baseline restore… 0.02s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaRegisterP0a52Test
+  ✓ p0a52 flags off keep legacy register contract including 409 enumera… 0.03s  
+  ✓ p0a52 flags off keep legacy register otp and notification path       0.03s  
+  ✓ p0a52 register resend route is inert feature disabled                0.04s  
+  ✓ p0a52 secure verify request rejects identity substitution fields     0.02s  
+  ✓ p0a52 secure resend request rejects identity and code fields         0.02s  
+  ✓ p0a52 secure register request accepts minimal creation fields        0.03s  
+  ✓ p0a52 secure verify request rejects invalid uuid and code length     0.02s  
+  ✓ p0a52 does not create accounts challenges intents or tokens by itse… 0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaRegisterP0a54Test
+  ✓ p0a54 flags off keep legacy register 409 and otp notification        0.04s  
+  ✓ p0a54 flags off keep resend feature disabled                         0.02s  
+  ✓ p0a54 register without anti abuse returns configuration error        0.03s  
+  ✓ p0a54 available identity returns 202 challenge without user or deli… 0.03s  
+  ✓ p0a54 email collision returns decoy 202 without challenge or intent  0.05s  
+  ✓ p0a54 phone collision returns decoy without revealing phone already… 0.03s  
+  ✓ p0a54 decoy and real request share public contract keys              0.04s  
+  ✓ p0a54 resend after real request returns new challenge and supersede… 0.05s  
+  ✓ p0a54 decoy resend cooldown then issues new decoy id                 0.06s  
+  ✓ p0a54 resend of never issued uuid returns no active code             0.03s  
+  ✓ p0a54 verify with incomplete flags returns configuration error       0.03s  
+  ✓ p0a54 invalid register body returns 422 without creating intent      0.03s  
+  ✓ p0a54 patient ready stays false and sanctum remains 1440             0.02s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaRegisterP0a55Test
+  ✓ p0a55 flags off keep legacy verify email+code token flow             0.04s  
+  ✓ p0a55 incomplete flags do not enable verify                          0.03s  
+  ✓ p0a55 patient ready stays false and sanctum remains 1440             0.02s  
+  ✓ p0a55 happy path creates accounts consumes intent and issues one to… 0.05s  
+  ✓ p0a55 wrong otp does not create accounts or token                    0.06s  
+  ✓ p0a55 decoy verify never creates accounts or token                   0.03s  
+  ✓ p0a55 unknown challenge returns no active code                       0.02s  
+  ✓ p0a55 expired challenge returns code expired                         0.04s  
+  ✓ p0a55 verify rejects identity substitution fields                    0.05s  
+  ✓ p0a55 mid verify collision returns invalid code without accounts     0.04s  
+  ✓ p0a55 corrupt payload invalidates without leaking ciphertext         0.04s  
+  ✓ p0a55 intent serialization stays free of ciphertext and fingerprint  0.03s  
+  ✓ p0a55 create failure rolls back without consuming challenge or inte… 0.06s  
+  ✓ p0a55 token issuance failure leaves consumed registration without s… 0.05s  
+  ✓ p0a55 sequential double submit creates one account and one token     0.05s  
+  ✓ p0a55 verify path sends no notifications                             0.06s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaRegisterP0a57aTest
+  ✓ p0a57a equivalent phone formats collapse to one canonical identity   0.04s  
+  ✓ p0a57a null phones remain allowed and empty becomes null on create   0.03s  
+  ✓ p0a57a duplicate normalized phone cannot persist when unique index…  0.03s  
+  ✓ p0a57a concurrent-style phone collision via verify returns invalid…  0.07s  
+  ✓ p0a57a legacy remains with flags off                                 0.03s  
+  ✓ p0a57a auditor reports counts without pii and clean db does not blo… 0.03s  
+  ✓ p0a57a auditor detects literal duplicate groups                      0.03s  
+  ✓ p0a57a migration preflight throws when duplicates exist              0.03s  
+  ✓ p0a57a unique index exists after migrations                          0.04s  
+  ✓ p0a57a classifier maps 1213 1205 and 1062 by driver code             0.02s  
+  ✓ p0a57a mapper hides sqlstate for temporary unavailable and login re… 0.02s  
+  ✓ p0a57a token issuance failure keeps account consumed and requires l… 0.06s  
+  ✓ p0a57a happy path still issues one token without delivery            0.04s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaRegisterP0a57bTest
+  ✓ p0a57b flags off secure register sends no delivery                   0.06s  
+  ✓ p0a57b delivery on fake sends one sms operation                      0.03s  
+  ✓ p0a57b decoy register sends no sms                                   0.03s  
+  ✓ p0a57b duplicate orchestrator call does not duplicate sms            0.04s  
+  ✓ p0a57b sms timeout with email fallback sends mail notification       0.05s  
+  ✓ p0a57b permanent sms failure without fallback returns delivery fail… 0.04s  
+  ✓ p0a57b reservation store unavailable returns otp temporary unavaila… 0.03s  
+  ✓ p0a57b delivery logs exclude otp phone and email                     0.03s  
+  ✓ p0a57b secure register response includes sms channel                 0.06s  
+  ✓ p0a57b patient ready false and sanctum expiration 1440               0.04s  
+  ✓ p0a57b delivery off asserts no notifications on secure register      0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaRegisterP0a57cTest
+  ✓ p0a57c infrastructure off ignores register flag and uses legacy      0.04s  
+  ✓ p0a57c register creates intent challenge with hashed otp             0.05s  
+  ✓ p0a57c temporary sms failure without fallback returns delivery fail… 0.04s  
+  ✓ p0a57c sms success does not send email even with fallback enabled    0.03s  
+  ✓ p0a57c invalid email blocks fallback and returns failed outcome      0.03s  
+  ✓ p0a57c verify of one challenge does not consume another              0.08s  
+  ✓ p0a57c wrong code increments failed attempts                         0.05s  
+  ✓ p0a57c consumed challenge cannot be reused                           0.05s  
+  ✓ p0a57c incomplete flags without anti abuse fail safely               0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaResultsSecureLinksP0b2Test
+  ✓ p0b2 flags off secure-link issue returns FEATURE_DISABLED            0.06s  
+  ✓ p0b2 flags off public secure download returns FEATURE_DISABLED       0.03s  
+  ✓ p0b2 flags off leave bearer result download unchanged                0.03s  
+  ✓ p0b2 owner with valid grant generates secure link                    0.04s  
+  ✓ p0b2 third party cannot generate secure link                         0.05s  
+  ✓ p0b2 nonexistent and foreign order share ORDER_NOT_FOUND without li… 0.05s  
+  ✓ p0b2 missing grant returns STEP_UP_GRANT_INVALID                     0.03s  
+  ✓ p0b2 nonexistent grant returns STEP_UP_GRANT_INVALID                 0.03s  
+  ✓ p0b2 expired grant cannot issue link                                 0.03s  
+  ✓ p0b2 revoked grant cannot issue link                                 0.05s  
+  ✓ p0b2 grant of another user cannot issue link                         0.04s  
+  ✓ p0b2 grant of another PAT cannot issue link                          0.04s  
+  ✓ p0b2 grant for another order cannot issue link                       0.04s  
+  ✓ p0b2 invoices purpose grant cannot issue results link                0.07s  
+  ✓ p0b2 login or register purpose grant cannot issue results link       0.04s  
+  ✓ p0b2 result not ready does not generate link                         0.06s  
+  ✓ p0b2 valid link downloads pdf without bearer                         0.07s  
+  ✓ p0b2 secure link with max opens three allows exactly three successf… 0.14s  
+  ✓ p0b2 HEAD secure download follows GET route and consumes without re… 0.07s  
+  ✓ p0b2 Range secure download is currently ignored and consumes a full… 0.05s  
+  ✓ p0b2 secure download preview semantics are inline pdf and consume o… 0.05s  
+  ✓ p0b2 unknown token returns SECURE_LINK_NOT_FOUND                     0.03s  
+  ✓ p0b2 expired link returns SECURE_LINK_EXPIRED                        0.07s  
+  ✓ p0b2 sequential opens with max_opens 1 only first succeeds           0.04s  
+  ✓ p0b2 revoked link returns SECURE_LINK_REVOKED                        0.04s  
+  ✓ p0b2 grant expiry after issue does not break link within its ttl     0.04s  
+  ✓ p0b2 missing file returns RESULT_NOT_READY without consuming link    0.06s  
+  ✓ p0b2 concurrent consume with max_opens 1 allows only one success     0.04s  
+  ✓ p0b2 concurrent consume with max_opens 3 allows only three successe… 0.04s  
+  ✓ p0b2 secure link issue throttle returns 429 before controller side…  0.04s  
+  ✓ p0b2 secure download throttle returns 429 without consuming link     0.12s  
+  ✓ p0b2 issue response and db never expose token_hash path or pii       0.04s  
+  ✓ p0b2 results detail metadata is additive when flags on               0.04s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaRetryReadBackP0Test
+  ✓ p0 retry read-back invoice request status reconciles a prior mutati… 0.06s  
+  ✓ p0 retry read-back create without idempotency key is discoverable i… 0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaSanctumTokenExpirationP0c1Test
+  ✓ p0c1 flag off issues akubica token without pat expires_at and legac… 0.03s  
+  ✓ p0c1 flag on persists expires_at from config ttl not hardcode        0.03s  
+  ✓ p0c1 login otp verify uses 180 minute ttl when flag on               0.07s  
+  ✓ p0c1 legacy login verify uses 180 minute ttl when flag on            0.03s  
+  ✓ p0c1 register otp verify uses configured ttl when flag on            0.05s  
+  ✓ p0c1 valid token accesses private endpoint; expired token returns 4… 0.04s  
+  ✓ p0c1 expired token cannot download bearer or request step-up         0.06s  
+  ✓ p0c1 new token cannot use grant bound to previous pat                0.03s  
+  ✓ p0c1 non-akubica createToken is unchanged when flag on               0.03s  
+  ✓ p0c1 flag off does not alter sanctum.expiration config               0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaStepUpResultsP0b1Test
+  ✓ p0b1 flags off returns FEATURE_DISABLED and does not send sms        0.06s  
+  ✓ p0b1 flags off leave bearer result download unchanged                0.03s  
+  ✓ p0b1 owner request sends sms and creates step_up_results challenge   0.04s  
+  ✓ p0b1 results step-up request throttle returns 429 before sms side e… 0.03s  
+  ✓ p0b1 third party request returns 404 without sms                     0.05s  
+  ✓ p0b1 correct otp creates grant bound to user token purpose and reso… 0.04s  
+  ✓ p0b1 wrong otp does not create grant                                 0.05s  
+  ✓ p0b1 expired otp does not create grant                               0.04s  
+  ✓ p0b1 consumed otp cannot create a second grant                       0.07s  
+  ✓ p0b1 login challenge cannot be used for step-up verify               0.03s  
+  ✓ p0b1 register challenge cannot be used for step-up verify            0.04s  
+  ✓ p0b1 challenge for another order cannot verify                       0.04s  
+  ✓ p0b1 invoices purpose challenge cannot verify results step-up        0.05s  
+  ✓ p0b1 grant ttl uses configured minutes                               0.04s  
+  ✓ p0b1 different sanctum token cannot use grant                        0.05s  
+  ✓ p0b1 expired grant is invalid                                        0.05s  
+  ✓ p0b1 revoked grant is invalid                                        0.10s  
+  ✓ p0b1 request rejects client phone and purpose fields                 0.04s  
+  ✓ p0b1 verify response does not expose pii otp or storage paths        0.06s  
+  ✓ p0b1 other user cannot validate foreign grant                        0.07s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaTaxProfilesInvoiceRequestTest
+  ✓ POST /user/tax-profiles without token returns 401 UNAUTHENTICATED    0.06s  
+  ✓ POST /orders/{id}/invoice-request without token returns 401 UNAUTHE… 0.02s  
+  ✓ POST /user/tax-profiles with user without customer returns 403 FORB… 0.03s  
+  ✓ PUT /user/tax-profiles/{id} with user without customer returns 403…  0.03s  
+  ✓ GET /user/tax-profiles still works after Sprint 12                   0.03s  
+  ✓ POST /user/tax-profiles with valid payload returns 201               0.05s  
+  ✓ POST /user/tax-profiles with invalid payload returns 422 VALIDATION… 0.03s  
+  ✓ PUT /user/tax-profiles/{id} updates own profile                      0.03s  
+  ✓ PUT /user/tax-profiles/{id} for another customer returns 404 TAX_PR… 0.03s  
+  ✓ DELETE /user/tax-profiles/{id} deletes own profile                   0.05s  
+  ✓ DELETE /user/tax-profiles/{id} for another customer returns 404 TAX… 0.03s  
+  ✓ DELETE /user/tax-profiles/{id} when not exists returns 404 TAX_PROF… 0.04s  
+  ✓ POST /orders/{id}/invoice-request for nonexistent order returns 404… 0.03s  
+  ✓ POST /orders/{id}/invoice-request for another customer order return… 0.03s  
+  ✓ POST /orders/{id}/invoice-request with foreign tax profile returns…  0.05s  
+  ✓ POST /orders/{id}/invoice-request for non-invoiceable order returns… 0.03s  
+  ✓ POST /orders/{id}/invoice-request with valid payload returns 201     0.03s  
+  ✓ POST /orders/{id}/invoice-request duplicate returns 409 INVOICE_REQ… 0.03s  
+  ✓ POST /orders/{id}/invoice-request when invoice already exists retur… 0.03s  
+  ✓ GET /orders/{id}/invoice-request/status without request returns not… 0.05s  
+  ✓ GET /orders/{id}/invoice-request/status with pending request return… 0.03s  
+  ✓ GET /orders/{id}/invoice-request/status with issued invoice returns… 0.03s  
+  ✓ GET /orders/{id}/invoice-request/status for another customer order…  0.03s  
+  ✓ GET /orders/{id}/invoices still works after Sprint 12                0.05s  
+  ✓ GET /orders/invoices still works after Sprint 12                     0.04s  
+  ✓ POST /checkout/payment-link still works after Sprint 12              0.04s  
+  ✓ GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE  0.03s  
+  ✓ PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED           0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaUserEditableDataTest
+  ✓ GET /user/contacts without token returns 401 UNAUTHENTICATED         0.04s  
+  ✓ POST /user/addresses without token returns 401 UNAUTHENTICATED       0.02s  
+  ✓ POST /user/contacts with user without customer returns 403 FORBIDDE… 0.03s  
+  ✓ address and contact write routes with user without customer return…  0.03s  
+  ✓ GET /user/contacts with no contacts returns empty array              0.05s  
+  ✓ GET /user/contacts returns contacts with expected structure          0.03s  
+  ✓ GET /user/contacts only returns contacts of authenticated customer   0.03s  
+  ✓ POST /user/contacts with valid payload returns 201                   0.03s  
+  ✓ POST /user/contacts with invalid payload returns 422 VALIDATION_ERR… 0.05s  
+  ✓ PUT /user/contacts/{id} updates own contact                          0.03s  
+  ✓ PUT /user/contacts/{id} for another customer returns 404 CONTACT_NO… 0.03s  
+  ✓ DELETE /user/contacts/{id} deletes own contact                       0.03s  
+  ✓ DELETE /user/contacts/{id} for another customer returns 404 CONTACT… 0.03s  
+  ✓ DELETE /user/contacts/{id} when contact does not exist returns 404…  0.05s  
+  ✓ POST /user/addresses with valid payload returns 201                  0.03s  
+  ✓ POST /user/addresses with invalid payload returns 422 VALIDATION_ER… 0.03s  
+  ✓ PUT /user/addresses/{id} updates own address                         0.03s  
+  ✓ PUT /user/addresses/{id} for another customer returns 404 ADDRESS_N… 0.03s  
+  ✓ DELETE /user/addresses/{id} deletes own address                      0.06s  
+  ✓ DELETE /user/addresses/{id} for another customer returns 404 ADDRES… 0.03s  
+  ✓ DELETE /user/addresses/{id} when address does not exist returns 404… 0.03s  
+  ✓ GET /user/addresses still works and shows created address            0.03s  
+  ✓ GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE  0.05s  
+  ✓ PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED           0.03s  
+
+   PASS  Tests\Feature\Api\V1\AkubicaUserEndpointsTest
+  ✓ GET /user/family without token returns 401 UNAUTHENTICATED           0.04s  
+  ✓ GET /user/family with user without customer returns 403 FORBIDDEN    0.03s  
+  ✓ GET /user/family with customer and no family returns empty array     0.06s  
+  ✓ GET /user/family returns family members with expected structure      0.03s  
+  ✓ GET /user/family only returns family of authenticated customer       0.03s  
+  ✓ GET /user/tax-profiles with no profiles returns empty array          0.03s  
+  ✓ GET /user/tax-profiles returns profiles with expected structure      0.03s  
+  ✓ GET /user/tax-profiles only returns profiles of authenticated custo… 0.05s  
+  ✓ GET /user/addresses with no addresses returns empty array            0.03s  
+  ✓ GET /user/addresses returns addresses with expected structure        0.03s  
+  ✓ GET /user/addresses only returns addresses of authenticated custome… 0.03s  
+  ✓ GET /user/payment-methods with no methods returns empty array        0.05s  
+  ✓ GET /user/payment-methods returns safe payment method structure      0.03s  
+  ✓ GET /user/payment-methods does not expose sensitive fields           0.03s  
+  ✓ GET /user/payment-methods only returns methods of authenticated cus… 0.03s  
+  ✓ GET /catalog/medications/{id} returns 503 CATALOG_UNAVAILABLE        0.03s  
+
+   PASS  Tests\Feature\Api\V1\Audit\AkubicaAuditAppointmentConciergeP5Test
+  ✓ flag OFF appointment mutations work without audit inserts            0.10s  
+  ✓ block 5 does not audit GET requirements index or payment-link        0.06s  
+  ✓ block 5 does not emit payment cart document or callback_completed e… 0.05s  
+  ✓ POST laboratory-appointments success audits requested with actor re… 0.08s  
+  ✓ DELETE laboratory-appointments success audits cancelled              0.03s  
+  ✓ POST EMPTY_CART audits rejected without appointment resource         0.04s  
+  ✓ POST APPOINTMENT_NOT_REQUIRED audits rejected                        0.04s  
+  ✓ POST APPOINTMENT_ALREADY_EXISTS audits rejected                      0.07s  
+  ✓ POST foreign contact audits CONTACT_NOT_FOUND without foreign ids    0.05s  
+  ✓ POST foreign address audits ADDRESS_NOT_FOUND without foreign addre… 0.06s  
+  ✓ DELETE foreign appointment audits APPOINTMENT_NOT_FOUND without for… 0.04s  
+  ✓ DELETE missing appointment audits APPOINTMENT_NOT_FOUND              0.05s  
+  ✓ past scheduled_at VALIDATION_ERROR produces zero appointment audit…  0.04s  
+  ✓ 401 and 403 before controller produce zero appointment audit events  0.03s  
+  ✓ appointment metadata allowlist keeps safe keys and drops secrets no… 0.02s  
+  ✓ controlled state helper discards unexpected appointment_state value… 0.03s  
+  ✓ broken audit writer does not change appointment create outcome       0.08s  
+  ✓ broken audit writer does not change appointment rejection or cancel  0.05s  
+  ✓ idempotent appointment create emits one audit event and replay emit… 0.04s  
+  ✓ idempotent appointment conflict does not invent semantic audit beyo… 0.05s  
+  ✓ appointment create does not invent call or notification delivery in… 0.07s  
+  ✓ single request produces exactly one terminal appointment audit even… 0.05s  
+
+   PASS  Tests\Feature\Api\V1\Audit\AkubicaAuditAuthOtpP2Test
+  ✓ flag OFF login otp works and inserts no audit rows                   0.05s  
+  ✓ login request resend and verify emit audit events with safe metadat… 0.07s  
+  ✓ login verify with invalid code audits rejected without secrets       0.04s  
+  ✓ registration request resend verify completion audits with public th… 0.06s  
+  ✓ step-up results and invoices request verify audit with purpose meta… 0.10s  
+  ✓ step-up ownership miss audits rejection without foreign resource le… 0.04s  
+  ✓ public login and register purposes produce different actor keys      0.02s  
+  ✓ allowlisted auth metadata survives aggressive name redaction         0.03s  
+  ✓ broken audit writer does not change login status body or delivery    0.05s  
+  ✓ idempotent login request-code replay does not duplicate SMS challen… 0.07s  
+  ✓ auth otp audit does not instrument cart checkout or secure-link rou… 0.04s  
+  ✓ rate limit cooldown on login request is audited as rejected retryab… 0.04s  
+
+   PASS  Tests\Feature\Api\V1\Audit\AkubicaAuditCartCheckoutP4Test
+  ✓ flag OFF cart and checkout mutations work without audit inserts      0.07s  
+  ✓ block 4 does not audit GET cart totals coupon prepare or payment-li… 0.05s  
+  ✓ block 4 does not emit payment or orders.created events               0.04s  
+  ✓ POST cart item success audits item_added with actor resource and me… 0.04s  
+  ✓ POST cart item LAB_TEST_NOT_FOUND audits rejected without foreign t… 0.05s  
+  ✓ POST cart item wrong brand audits LAB_TEST_NOT_FOUND without leakin… 0.03s  
+  ✓ POST cart item already in cart audits ITEM_ALREADY_IN_CART           0.03s  
+  ✓ DELETE cart item success audits item_removed                         0.04s  
+  ✓ DELETE foreign cart item audits FORBIDDEN without foreign ids        0.04s  
+  ✓ DELETE missing cart item audits CART_ITEM_NOT_FOUND                  0.18s  
+  ✓ DELETE cart clear audits cart.cleared                                0.10s  
+  ✓ one cart mutation request produces one terminal audit event          0.07s  
+  ✓ POST cart coupon success audits benefit_applied without coupon code  0.09s  
+  ✓ POST cart coupon EMPTY_CART audits rejected                          0.12s  
+  ✓ POST cart coupon foreign code audits COUPON_NOT_FOUND without leaki… 0.05s  
+  ✓ POST cart coupon expired audits COUPON_EXPIRED                       0.05s  
+  ✓ POST cart coupon not applicable audits COUPON_NOT_APPLICABLE         0.05s  
+  ✓ DELETE cart coupon success audits benefit_removed; no-op produces z… 0.07s  
+  ✓ POST checkout draft success audits draft_synced                      0.04s  
+  ✓ POST checkout draft EMPTY_CART audits rejected                       0.03s  
+  ✓ POST checkout draft foreign contact audits CONTACT_NOT_FOUND withou… 0.04s  
+  ✓ normalizer keeps cart allowlisted keys and discards coupon_code and… 0.02s  
+  ✓ broken audit writer does not change cart mutation outcome            0.07s  
+  ✓ broken audit writer does not change coupon rejection or draft succe… 0.05s  
+  ✓ 401 and 403 before controller produce zero cart audit events         0.03s  
+  ✓ payment-link still creates no LaboratoryPurchase under block 4 audi… 0.04s  
+
+   PASS  Tests\Feature\Api\V1\Audit\AkubicaAuditDocumentAccessP3Test
+  ✓ flag OFF secure-link and download routes work without audit inserts  0.08s  
+  ✓ document access audit does not instrument cart checkout or catalog   0.04s  
+  ✓ results secure-link creation audits succeeded with safe metadata     0.04s  
+  ✓ invoices secure-link creation audits succeeded with invoice resourc… 0.04s  
+  ✓ results secure-link ownership reject omits foreign resource ids      0.07s  
+  ✓ results secure-link invalid grant audits rejected without public gr… 0.04s  
+  ✓ idempotent results secure-link replay does not duplicate link or au… 0.04s  
+  ✓ idempotent invoices secure-link conflict does not invent semantic a… 0.04s  
+  ✓ results secure-link open audits succeeded with public hmac actor     0.07s  
+  ✓ invoices secure-link open audits succeeded with domain-separated hm… 0.06s  
+  ✓ secure-link expired open audits rejected without consuming opens     0.04s  
+  ✓ secure-link max_opens reached audits rejected                        0.04s  
+  ✓ secure-link invalid token does not invent purpose-specific audit     0.05s  
+  ✓ secure-link revoked audits rejected                                  0.05s  
+  ✓ secure-link missing file audits rejected without consuming opens     0.04s  
+  ✓ results bearer download audits succeeded                             0.03s  
+  ✓ invoices bearer download audits succeeded                            0.06s  
+  ✓ bearer download missing step-up grant audits rejected                0.03s  
+  ✓ bearer download invalid expired and wrong-purpose grants audit reje… 0.04s  
+  ✓ bearer download grant bound to other resource audits rejected witho… 0.04s  
+  ✓ bearer download cross-user omits foreign resource ids                0.04s  
+  ✓ bearer download with valid step-up grant records step_up_row_id      0.06s  
+  ✓ bearer download missing file audits rejected                         0.03s  
+  ✓ document access metadata allowlist keeps internal ids and strips se… 0.02s  
+  ✓ broken audit writer does not alter secure-link create response       0.05s  
+  ✓ broken audit writer does not alter binary download headers or body   0.08s  
+  ✓ broken audit writer does not alter public secure-link open           0.06s  
+  ✓ unauthenticated bearer download has no audit before api.audit        0.03s  
+
+   PASS  Tests\Feature\Api\V1\Audit\AkubicaAuditInfrastructureP1Test
+  ✓ flag OFF does not insert audit rows                                  0.04s  
+  ✓ flag ON inserts a valid audit row                                    0.05s  
+  ✓ MySQL/SQLite minimum table contract holds for api_v1_audit_events    0.02s  
+  ✓ model has no updated_at and is append-only                           0.03s  
+  ✓ authenticated actor resolves customer without bearer                 0.04s  
+  ✓ public actor uses HMAC and never contains original material          0.03s  
+  ✓ different purposes produce different public actor keys               0.04s  
+  ✓ system actor only accepts allowlisted keys                           0.02s  
+  ✓ correlation and route context hydrate correctly without static leak  0.03s  
+  ✓ metadata allowlist keeps known keys and drops unknown and secrets    0.02s  
+  ✓ metadata rejects Request Response Throwable Model UploadedFile obje… 0.03s  
+  ✓ metadata enforces max depth and discards oversized JSON without tru… 0.02s  
+  ✓ writer fail-soft does not break simulated business operation and lo… 0.04s  
+  ✓ persistOrFail surfaces failures to callers                           0.02s  
+  ✓ secrets are never persisted in audit rows                            0.03s  
+  ✓ same correlation_id may hold multiple legitimate events              0.02s  
+  ✓ config defaults keep audit disabled and expose metadata limits       0.03s  
+
+   PASS  Tests\Unit\Otp\Delivery\FakeOtpDeliveryProviderTest
+  ✓ fake provider records no OTP or destination PII                      0.07s  
+  ✓ fake provider accepts configured failure sequence                    0.05s  
+
+   PASS  Tests\Unit\Otp\Delivery\OtpDeliveryClassifierTest
+  ✓ delivery classifier maps transport failures without message matchin… 0.04s  
+
+   PASS  Tests\Unit\Otp\MysqlContentionClassifierTest
+  ✓ mysql contention classifier prefers driver codes over message text   0.04s  
+
+   PASS  Tests\Unit\Otp\OtpAbuseKeyHasherTest
+  ✓ hmac identity hash is deterministic and purpose-isolated             0.04s  
+  ✓ ipv4 and ipv6 are normalized before hashing                          0.09s  
+  ✓ rate limit decision public array never exposes secrets               0.03s  
+
+   PASS  Tests\Unit\Otp\OtpChallengeStatusTest
+  ✓ status precedence is consumed over invalidated over expired over pe… 0.04s  
+  ✓ creation result toArray never exposes plain code                     0.03s  
+
+   PASS  Tests\Unit\Otp\OtpP0aConfigTest
+  ✓ p0a breaking feature flags are disabled by default                   0.02s  
+  ✓ p0a target policy values are available with approved defaults        0.05s  
+  ✓ boolean env flags are interpreted correctly                          0.03s  
+  ✓ numeric env values are cast correctly                                0.02s  
+  ✓ invalid numeric values fall back to safe defaults                    0.03s  
+  ✓ fallback mode only accepts known values                              0.02s  
+  ✓ primary channel only accepts sms or email                            0.03s  
+  ✓ sanctum keeps 1440 minutes effective while p0a target is 180         0.05s  
+  ✓ step-up grant ttl defaults to 10 minutes without enabling step-up    0.03s  
+  ✓ legacy otp and akubica defaults remain unchanged for current flows   0.02s  
+  ✓ secure link contract defaults are prepared for DEC-007               0.02s  
+  ✓ p0a3 anti-abuse config defaults are safe and flag stays off          0.02s  
+  ✓ p0a3 anti-abuse invalid env values fall back to safe defaults        0.02s  
+  ✓ p0a4 akubica login flag is disabled by default                       0.05s  
+  ✓ p0c1 sanctum token ttl env prefers TOKEN_TTL over TARGET             0.02s  
+  ✓ p0a5 akubica register flag and policy defaults are safe              0.02s  
+  ✓ p0a5 register ttl env override does not change login policy ttl      0.02s  
+  ✓ p0t1 delivery driver env selects provider and obsolete provider env… 0.02s  
+  ✓ p0t1 otp.php file default for delivery driver remains null when env… 0.02s  
+  ✓ p0b4 bearer enforcement flags default off and master or specific en… 0.05s  
+  ✓ p0c2 cleanup defaults are off with approved retention days           0.02s  
+  ✓ p0c2 cleanup retention env overrides and invalid values fall back    0.02s  
+
+   PASS  Tests\Unit\Otp\Registration\AkubicaRegistrationPolicyTest
+  ✓ akubica registration policy is off and not patient ready by default  0.04s  
+  ✓ akubica registration policy canOperate requires all three flags      0.04s  
+
+   PASS  Tests\Unit\Otp\Registration\EmailNormalizerTest
+  ✓ email normalizer trims and lowercases without changing plus aliases  0.02s  
+  ✓ email normalizer rejects empty and invalid formats with ('')         0.02s  
+  ✓ email normalizer rejects empty and invalid formats with (' ')        0.02s  
+  ✓ email normalizer rejects empty and invalid formats with ('not-an-em… 0.02s  
+  ✓ email normalizer rejects empty and invalid formats with ('@ejemplo.… 0.02s  
+  ✓ email normalizer rejects empty and invalid formats with ('user@')    0.05s  
+  ✓ normalized email object does not leak value via toString             0.02s  
+
+   PASS  Tests\Unit\Otp\Registration\MexicoPhoneNormalizerTest
+  ✓ mexico phone normalizer accepts equivalent national formats with ('… 0.03s  
+  ✓ mexico phone normalizer accepts equivalent national formats with ('… 0.02s  
+  ✓ mexico phone normalizer accepts equivalent national formats with ('… 0.03s  
+  ✓ mexico phone normalizer accepts equivalent national formats with ('… 0.05s  
+  ✓ mexico phone normalizer accepts equivalent national formats with ('… 0.02s  
+  ✓ mexico phone normalizer accepts equivalent national formats with ('… 0.02s  
+  ✓ mexico phone normalizer maps conservative +521 legacy trunk          0.02s  
+  ✓ mexico phone normalizer rejects invalid or ambiguous inputs with ('… 0.02s  
+  ✓ mexico phone normalizer rejects invalid or ambiguous inputs with ('… 0.02s  
+  ✓ mexico phone normalizer rejects invalid or ambiguous inputs with ('… 0.04s  
+  ✓ mexico phone normalizer rejects invalid or ambiguous inputs with ('… 0.02s  
+  ✓ mexico phone normalizer rejects invalid or ambiguous inputs with ('… 0.02s  
+  ✓ mexico phone normalizer rejects invalid or ambiguous inputs with ('… 0.02s  
+  ✓ mexico phone normalizer rejects invalid or ambiguous inputs with ('… 0.02s  
+  ✓ phone identity equals by comparison key                              0.03s  
+
+   PASS  Tests\Unit\Otp\SecureOtpCodeGeneratorTest
+  ✓ secure generator returns zero-padded digits of requested length      0.04s  
+  ✓ fake generator returns fixed padded code                             0.02s  
+  ✓ p0a purpose and channel enum values are stable                       0.02s  
+  ✓ otp code generator is bound to secure implementation                 0.02s  
+
+  Tests:    767 passed (3969 assertions)
+  Duration: 32.33s
+
+TI08_EXIT_CODE=0
+TI08_DURATION_SECONDS=33
