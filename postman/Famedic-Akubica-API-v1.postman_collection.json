@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "famedic-akubica-api-v1-s15",
     "name": "Famedic Akubica API v1",
-    "description": "Colección API V1 Akubica/Leo — alineada a OpenAPI v1.2.1 (61 operaciones).\n\nAmbiente recomendado: **Famedic Akubica QA**.\nIncluye correlation, idempotencia (9 rutas), step-up, secure links, Bearer PDF,\ncupones COUPON_*, ownership y casos negativos.\nXML / Business Audit / web_checkout: fuera del contrato público.\nNo versionar tokens, OTP, teléfonos reales ni URLs firmadas.",
+    "description": "Colección API V1 Akubica/Leo — alineada a OpenAPI v1.2.3 (61 operaciones contractuales).\n\nAmbiente recomendado: **Famedic Akubica QA**.\nIncluye correlation, idempotencia (9 operaciones contractuales), step-up, secure links 60 min / 3 consumos para ligas nuevas, Bearer PDF,\ncupones COUPON_*, ownership y escenarios negativos/replay/utilitarios.\nLos escenarios negativos/replay/utilitarios no agregan operaciones contractuales OpenAPI.\nXML / Business Audit / web_checkout: fuera del contrato público.\nNo versionar tokens, OTP, teléfonos reales ni URLs firmadas.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -1585,7 +1585,7 @@
           ]
         }
       ],
-      "description": "## Catálogo laboratorio (público)\n\nEndpoints de catálogo **sin** Authorization.\n\n**Prereq:** ninguno (auth noauth).\n**Vars in:** `brand` (default `olab`), `laboratory_test_id`, `category_id`.\n**Vars out:** `laboratory_test_id` / `category_id` para carrito."
+      "description": "## Catálogo laboratorio (público)\n\nEndpoints de catálogo **sin** Authorization.\n\n**Prereq:** ninguno (auth noauth).\n**Brands válidas:** `olab`, `swisslab`, `jenner`, `liacsa`, `azteca` (`brand` default `olab`).\n**Filtros:** laboratory-brands usa `state`; laboratory-tests usa `brand`, `search`, `category_id`, `requires_appointment`, `page`, `per_page`; laboratory-test-categories usa `brand`; laboratory-stores usa `brand`, `state`.\n**Paginación:** `current_page`, `last_page`, `per_page`, `total`.\n**Responses:** list de tests expone `is_available`; detail expone `available`.\n**Vars in:** `brand`, `laboratory_test_id`, `category_id`.\n**Vars out:** `laboratory_test_id` / `category_id` para carrito."
     },
     {
       "name": "05 - Carrito",
@@ -3278,7 +3278,7 @@
               }
             },
             "url": "{{base_url}}/orders/{{order_id}}/results/secure-link",
-            "description": "Emite liga opaca. Guardar URL solo en environment local (no commitear)."
+            "description": "Emite liga opaca. Contrato/runtime staging para ligas nuevas: TTL 60 minutos / max_opens 3. Guardar URL solo en environment local (no commitear)."
           }
         },
         {
@@ -3358,7 +3358,7 @@
             "auth": {
               "type": "noauth"
             },
-            "description": "Con max_opens=1 espera 410 SECURE_LINK_CONSUMED."
+            "description": "Contrato/runtime staging: 3 consumos exitosos; cuarto consumo -> 410 SECURE_LINK_CONSUMED. Si se configura max_opens=1 en local/UAT, es override de prueba para acelerar validación, no valor contractual."
           }
         },
         {
@@ -3790,7 +3790,7 @@
               }
             },
             "url": "{{base_url}}/orders/{{invoice_order_id}}/invoices/{{invoice_id}}/secure-link",
-            "description": "Emite liga opaca. Guardar URL solo en environment local (no commitear)."
+            "description": "Emite liga opaca. Contrato/runtime staging para ligas nuevas: TTL 60 minutos / max_opens 3. Guardar URL solo en environment local (no commitear)."
           }
         },
         {
@@ -3870,7 +3870,7 @@
             "auth": {
               "type": "noauth"
             },
-            "description": "Con max_opens=1 espera 410 SECURE_LINK_CONSUMED."
+            "description": "Contrato/runtime staging: 3 consumos exitosos; cuarto consumo -> 410 SECURE_LINK_CONSUMED. Si se configura max_opens=1 en local/UAT, es override de prueba para acelerar validación, no valor contractual."
           }
         },
         {
@@ -4553,7 +4553,7 @@
     },
     {
       "name": "90 - Casos negativos",
-      "description": "Ownership, auth, cupones y grants. Variables foreign_* vacías por defecto. Requieren datos preparados por Famedic. No versionar IDs reales.",
+      "description": "Ownership, auth, cupones y grants. Escenarios negativos/utilitarios; no son operaciones contractuales adicionales OpenAPI. Variables foreign_* vacías por defecto. Requieren datos preparados por Famedic. No versionar IDs reales.",
       "item": [
         {
           "name": "90.1 - Pedido ajeno (soft-deny 404)",

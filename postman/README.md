@@ -3,13 +3,16 @@
 Colección y environments para la API Akubica (`/api/v1`).
 
 - **Rama de referencia:** `feature/apis-akubica-billing-audit`
-- **Actualizado:** 2026-08-04 (Paquete Leo — Bloque Postman)
+- **Actualizado:** 2026-08-13 (TI-09 — cierre técnico Postman/bundle)
 - **Schemas:** Collection v2.1.0 · Environment v2.1.0
-- **OpenAPI:** `docs/Akubica/akubica-openapi.yaml` **v1.2.1** (61 operaciones)
+- **OpenAPI:** `docs/Akubica/akubica-openapi.yaml` **v1.2.3** (61 operaciones contractuales)
+- **Runtime validado:** Forge release `75401580`, SHA `0b46a096a3902630e6ae0e3088c266c790d31b0f`
+- **Regresión final:** `767/767 PASS`, `3969 assertions`
 
 ## Alcance
 
 - Contrato público: **61 operaciones** (núcleo, auxiliares, seguridad avanzada).
+- La colección contiene escenarios negativos, replay y utilitarios además de las operaciones contractuales; esos extras no son endpoints nuevos ni forman parte del contrato OpenAPI.
 - Incluye **secure links** y **descargas Bearer PDF** de resultados/facturas.
 - **XML** no existe en API V1 → fuera de alcance.
 - **Business Audit** y el canal interno `web_checkout` **no** son endpoints públicos.
@@ -83,6 +86,8 @@ Solo donde el código registra `api.idempotency` y el flag `API_V1_IDEMPOTENCY_E
 
 Formato key: 8–128 chars `[A-Za-z0-9._-]`.
 
+Los requests duplicados de replay/negativos pueden repetir `Idempotency-Key` únicamente cuando representan una de estas 9 operaciones contractuales.
+
 ### Cómo probar replay (carpeta 20)
 
 1. **20.0** regenera `idempotency_key` / `idempotency_original_key`
@@ -111,11 +116,47 @@ No ejecutar mutaciones reales en staging sin control UAT.
 | Mecanismo | Auth | Notas QA |
 |-----------|------|----------|
 | Step-up OTP | Bearer | challenge → grant (`*_grant_id`) |
-| Secure link | URL opaca, **sin** Bearer | TTL recomendado UAT **5 min**, `max_opens` **1** |
+| Secure link | URL opaca, **sin** Bearer | Contrato/runtime staging para ligas nuevas: TTL **60 min**, `max_opens` **3** |
 | Bearer download PDF | Bearer + `X-Step-Up-Grant` si enforcement ON | Solo PDF; XML fuera de API V1 |
 
 Flags relevantes: `OTP_P0A_STEP_UP_*`, `OTP_P0A_SECURE_LINKS_*`, `OTP_P0A_STEP_UP_BEARER_*`.
 Si están OFF → muchas requests de 18/19 responden **503 `FEATURE_DISABLED`**.
+
+Semántica actual validada en TI-06:
+
+- 3 consumos exitosos.
+- El cuarto consumo responde `410 SECURE_LINK_CONSUMED`.
+- `HEAD` actualmente consume una apertura.
+- `Range` actualmente devuelve `200` completo; no hay soporte `206` explícito.
+- Preview actual: PDF con `Content-Disposition: inline`.
+- Un override local/UAT `5 min / max_opens 1` puede usarse para acelerar pruebas, pero no es el valor contractual ni el runtime staging validado.
+
+## Catálogo laboratorio
+
+Brands válidas:
+
+- `olab`
+- `swisslab`
+- `jenner`
+- `liacsa`
+- `azteca`
+
+Variable recomendada: `brand`, con default sintético seguro `olab`.
+
+Filtros contractuales:
+
+| Endpoint | Filtros |
+|----------|---------|
+| `GET /catalog/laboratory-brands` | `state` |
+| `GET /catalog/laboratory-tests` | `brand`, `search`, `category_id`, `requires_appointment`, `page`, `per_page` |
+| `GET /catalog/laboratory-test-categories` | `brand` |
+| `GET /catalog/laboratory-stores` | `brand`, `state` |
+
+Campos relevantes:
+
+- Listado de tests: `is_available`.
+- Detalle de test: `available`.
+- Paginación: `current_page`, `last_page`, `per_page`, `total`.
 
 ## Perfiles fiscales y factura
 
@@ -159,7 +200,15 @@ No versionar: tokens, OTP, teléfonos reales, URLs firmadas, cookies, secretos V
 | `API_V1_IDEMPOTENCY_ENABLED` | ON para carpeta 20 |
 | `API_V1_AUDIT_ENABLED` / `BUSINESS_AUDIT_ENABLED` | Internos Famedic |
 
-Secure links UAT: `OTP_P0A_SECURE_LINK_TTL_MINUTES=5`, `OTP_P0A_SECURE_LINK_MAX_OPENS=1`.
+Secure links runtime staging: `OTP_P0A_SECURE_LINK_TTL_MINUTES=60`, `OTP_P0A_SECURE_LINK_MAX_OPENS=3`.
+
+Override local/UAT opcional para pruebas aceleradas: `OTP_P0A_SECURE_LINK_TTL_MINUTES=5`, `OTP_P0A_SECURE_LINK_MAX_OPENS=1`; no usarlo como contrato vigente.
+
+## Cierre y gates
+
+TI-01..TI-09 cubren el cierre técnico principal. TI-10 fixtures/control de staging pre-UAT y TI-11 observabilidad pre-UAT siguen siendo gates separados si continúan abiertos.
+
+Este material no autoriza UAT por sí mismo, no autoriza producción y no implica que commits documentales posteriores al SHA runtime hayan sido desplegados.
 
 ## Troubleshooting
 
