@@ -34,6 +34,7 @@ export default function MurguiaMonitor({
 	customers,
 	filters,
 	stats,
+	murguiaEndpoint,
 	murguiaCheck,
 	successMessage,
 	errorMessage,
@@ -164,6 +165,16 @@ export default function MurguiaMonitor({
 						<p className="font-medium text-blue-900 dark:text-blue-200">
 							Consulta Murguía — HTTP {murguiaCheck.http}
 						</p>
+						{murguiaCheck.endpoint && (
+							<div className="mt-2 grid gap-1 text-xs text-blue-900 dark:text-blue-100 sm:grid-cols-2">
+								<span>
+									Ambiente: <strong>{murguiaCheck.endpoint.environment}</strong>
+								</span>
+								<span className="break-all font-mono">
+									URL validacion: {murguiaCheck.endpoint.check_status_url}
+								</span>
+							</div>
+						)}
 						<pre className="mt-2 max-h-40 overflow-auto rounded bg-white/80 p-2 text-xs text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
 							{JSON.stringify(murguiaCheck.body, null, 2)}
 						</pre>
@@ -187,6 +198,33 @@ export default function MurguiaMonitor({
 						</Button>
 					</div>
 				</div>
+
+				{murguiaEndpoint && (
+					<div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+						<div className="flex flex-wrap items-center gap-2">
+							<span className="font-semibold">Destino Murguia</span>
+							<Badge color={murguiaEndpoint.environment === "Productivo" ? "red" : "amber"}>
+								{murguiaEndpoint.environment}
+							</Badge>
+						</div>
+						<div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
+							<div>
+								<span className="block font-medium">Base URL</span>
+								<code className="break-all font-mono">{murguiaEndpoint.base_url}</code>
+							</div>
+							<div>
+								<span className="block font-medium">Validacion de membresias</span>
+								<code className="break-all font-mono">
+									{murguiaEndpoint.check_status_url}
+								</code>
+							</div>
+							<div>
+								<span className="block font-medium">Autenticacion previa</span>
+								<code className="break-all font-mono">{murguiaEndpoint.auth_url}</code>
+							</div>
+						</div>
+					</div>
+				)}
 
 				<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 					<div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
@@ -465,6 +503,16 @@ export default function MurguiaMonitor({
 								<p className="font-medium text-blue-900">
 									Respuesta Murguía — HTTP {creditResult.http ?? "—"}
 								</p>
+								{creditResult.endpoint && (
+									<div className="grid gap-1 text-xs text-blue-900 sm:grid-cols-2">
+										<span>
+											Ambiente: <strong>{creditResult.endpoint.environment}</strong>
+										</span>
+										<span className="break-all font-mono">
+											URL validacion: {creditResult.endpoint.check_status_url}
+										</span>
+									</div>
+								)}
 								{creditResult.matched_customer && (
 									<p className="text-blue-800">
 										Cliente local: {creditResult.matched_customer.name || "—"} (
