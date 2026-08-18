@@ -36,6 +36,15 @@ return [
             ['manage' => 'Administrar membresías médicas'],
             ['manage.export' => 'Descargar membresías médicas'],
         ],
+        'odessa-reconciliation' => [
+            ['view' => 'Ver historial y resultados de conciliaciones ODESSA'],
+            ['manage' => 'Analizar y exportar conciliaciones ODESSA'],
+            ['review' => 'Actualizar estados de revisión de conciliaciones ODESSA'],
+            ['actions.email' => 'Ejecutar correcciones de email desde conciliación ODESSA'],
+            ['actions.odessa' => 'Ejecutar correcciones de relación ODESSA desde conciliación'],
+            ['actions.membership' => 'Ejecutar correcciones de membresía desde conciliación ODESSA'],
+            ['actions.murguia' => 'Reintentar sincronizaciones Murguía desde conciliación ODESSA'],
+        ],
         'subscription-invoices' => [
             ['manage' => 'Administrar membresías médicas'],
             ['manage.invoices' => 'Subir y actualizar facturas'],
@@ -110,6 +119,13 @@ return [
         env('MURGUIA_INSTITUTIONAL_ALLOW_NON_ODESSA', false),
         FILTER_VALIDATE_BOOLEAN
     ),
+
+    'odessa_reconciliation_actions' => [
+        'enabled' => filter_var(
+            env('ODESSA_RECONCILIATION_ACTIONS_ENABLED', in_array(env('APP_ENV'), ['local', 'testing'], true)),
+            FILTER_VALIDATE_BOOLEAN
+        ),
+    ],
 
     'storage_paths' => [
         'laboratory_purchase_pdfs' => env('LABORATORY_PURCHASE_PDFS_PATH', 'pdfs/laboratory-purchases'),

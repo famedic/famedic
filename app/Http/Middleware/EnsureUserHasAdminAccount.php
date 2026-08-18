@@ -224,6 +224,10 @@ class EnsureUserHasAdminAccount
             || $this->adminHasPermission($administrator, 'administrators.manage')
             || $this->adminHasPermission($administrator, 'logs-general.manage')
             || $this->adminHasPermission($administrator, 'view_config_monitor');
+        $canViewOdessaReconciliation = $this->adminHasPermission($administrator, 'odessa-reconciliation.view')
+            || $this->adminHasPermission($administrator, 'odessa-reconciliation.manage')
+            || $this->adminHasPermission($administrator, 'odessa-reconciliation.review')
+            || $request->user()->administrator->roles()->where('roles.id', 1)->exists();
 
         $intelligenceItems = array_values(array_filter([
             $canOpenWorkspace ? [
@@ -322,7 +326,7 @@ class EnsureUserHasAdminAccount
                     ] : null,
                 ])),
             ],
-            $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+            ($request->user()->administrator->roles()->where('roles.id', 1)->exists() || $canViewOdessaReconciliation) ? [
                 'label' => 'Admin Membresías',
                 'icon' => 'IdentificationIcon',
                 'items' => [
@@ -351,6 +355,12 @@ class EnsureUserHasAdminAccount
                             'admin.murguia.logs',
                         ], true),
                     ],
+                    ...($canViewOdessaReconciliation ? [[
+                        'label' => 'ODESSA — conciliación',
+                        'url' => route('admin.odessa.reconciliations.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.odessa.reconciliation.')
+                            || str_starts_with((string) Route::currentRouteName(), 'admin.odessa.reconciliations.'),
+                    ]] : []),
                 ],
             ] : null,
         ]));
