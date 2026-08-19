@@ -19,3 +19,7 @@ if (config('services.activecampaign.coupons_expiring_enabled', false)) {
         ->dailyAt('08:00')
         ->withoutOverlapping(30);
 }
+
+Schedule::command('odessa:prune-pre-enrollment-import-runs')
+    ->dailyAt('02:30')
+    ->withoutOverlapping(30);

@@ -1,5 +1,5 @@
 import { Link, useForm } from "@inertiajs/react";
-import { ArrowLeftIcon, DocumentMagnifyingGlassIcon } from "@heroicons/react/16/solid";
+import { ArrowLeftIcon, DocumentMagnifyingGlassIcon, InboxArrowDownIcon } from "@heroicons/react/16/solid";
 
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Badge } from "@/Components/Catalyst/badge";
@@ -8,14 +8,24 @@ import { Heading } from "@/Components/Catalyst/heading";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Catalyst/table";
 import { Text } from "@/Components/Catalyst/text";
 
-export default function Import({ preview, errors = {} }) {
+export default function Import({ preview, canImport, importEnabled, successMessage, errors = {} }) {
 	const form = useForm({ source_file: null });
+	const confirmForm = useForm({ run_uuid: preview?.meta?.run_uuid || "", source_file: null, confirmation: "" });
 	const submit = (event) => {
 		event.preventDefault();
 		form.post(route("admin.odessa.pre-enrollments.import.preview"), {
 			forceFormData: true,
 			preserveScroll: true,
 		});
+	};
+	const confirm = (event) => {
+		event.preventDefault();
+		confirmForm
+			.transform((data) => ({ ...data, run_uuid: preview?.meta?.run_uuid || "" }))
+			.post(route("admin.odessa.pre-enrollments.import.confirm"), {
+				forceFormData: true,
+				preserveScroll: true,
+			});
 	};
 
 	return (
@@ -32,6 +42,8 @@ export default function Import({ preview, errors = {} }) {
 						Analiza el Excel y detecta duplicados/conflictos. No crea registros ni genera noCredito.
 					</Text>
 				</div>
+
+				{successMessage ? <Notice>{successMessage}</Notice> : null}
 
 				<form onSubmit={submit} className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
 					<input
@@ -50,6 +62,57 @@ export default function Import({ preview, errors = {} }) {
 				</form>
 
 				{preview ? <PreviewResult preview={preview} /> : null}
+				{preview ? (
+					<form onSubmit={confirm} className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
+						<div className="flex flex-wrap items-start justify-between gap-4">
+							<div>
+								<p className="text-sm font-semibold">Confirmación de importación</p>
+								<Text className="mt-1 text-sm text-zinc-500">
+									El análisis no ha guardado registros. Vuelve a seleccionar el mismo archivo antes de confirmar.
+								</Text>
+								<Text className="mt-1 text-xs text-zinc-500">
+									Expira: {preview.meta.expires_at || "—"}
+								</Text>
+							</div>
+							<Badge color={preview.meta.importable ? "green" : "zinc"}>
+								{Number(preview.meta.ready_rows || 0).toLocaleString("es-MX")} importables
+							</Badge>
+						</div>
+						<div className="mt-4 grid gap-3 md:grid-cols-[1fr_12rem_auto]">
+							<input
+								type="file"
+								accept=".xlsx,.xls"
+								onChange={(event) => confirmForm.setData("source_file", event.target.files?.[0] || null)}
+								className="block w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-zinc-700"
+							/>
+							<input
+								value={confirmForm.data.confirmation}
+								onChange={(event) => confirmForm.setData("confirmation", event.target.value)}
+								placeholder="IMPORTAR"
+								className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+							/>
+							<Button
+								type="submit"
+								disabled={
+									confirmForm.processing ||
+									!preview.meta.importable ||
+									!canImport ||
+									!importEnabled ||
+									!confirmForm.data.source_file ||
+									confirmForm.data.confirmation !== "IMPORTAR"
+								}
+							>
+								<InboxArrowDownIcon data-slot="icon" />
+								Confirmar importación de {Number(preview.meta.ready_rows || 0).toLocaleString("es-MX")} registros
+							</Button>
+						</div>
+						{errors.import || confirmForm.errors.import || confirmForm.errors.source_file ? (
+							<Text className="mt-2 text-sm text-red-600">{errors.import || confirmForm.errors.import || confirmForm.errors.source_file}</Text>
+						) : null}
+						{!importEnabled ? <Text className="mt-2 text-sm text-amber-600">La importación persistente está deshabilitada por configuración.</Text> : null}
+						{!canImport ? <Text className="mt-2 text-sm text-amber-600">Tu usuario no tiene permiso para confirmar importaciones.</Text> : null}
+					</form>
+				) : null}
 			</div>
 		</AdminLayout>
 	);
@@ -97,6 +160,10 @@ function PreviewResult({ preview }) {
 			</div>
 		</div>
 	);
+}
+
+function Notice({ children }) {
+	return <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{children}</div>;
 }
 
 function Metric({ label, value, color }) {

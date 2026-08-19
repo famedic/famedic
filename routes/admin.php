@@ -436,7 +436,10 @@ Route::prefix('admin')->middleware([
         Route::prefix('odessa/pre-enrollments')->name('odessa.pre-enrollments.')->group(function () {
             Route::get('/', [OdessaPreEnrollmentController::class, 'index'])->name('index');
             Route::get('/import', [OdessaPreEnrollmentController::class, 'import'])->name('import');
-            Route::post('/import/preview', [OdessaPreEnrollmentController::class, 'previewImport'])->name('import.preview');
+            Route::get('/import/preview', fn () => redirect()->route('admin.odessa.pre-enrollments.import'));
+            Route::post('/import/preview', [OdessaPreEnrollmentController::class, 'previewImport'])->middleware('throttle:odessa-pre-enrollments-preview')->name('import.preview');
+            Route::get('/import/confirm', fn () => redirect()->route('admin.odessa.pre-enrollments.import'));
+            Route::post('/import/confirm', [OdessaPreEnrollmentController::class, 'confirmImport'])->middleware('throttle:odessa-pre-enrollments-confirm')->name('import.confirm');
             Route::get('/export', [OdessaPreEnrollmentController::class, 'export'])->name('export');
             Route::get('/{preEnrollment}', [OdessaPreEnrollmentController::class, 'show'])->name('show');
             Route::get('/{preEnrollment}/generate-credit/preview', [OdessaPreEnrollmentController::class, 'generateCreditPreview'])->name('generate-credit.preview');

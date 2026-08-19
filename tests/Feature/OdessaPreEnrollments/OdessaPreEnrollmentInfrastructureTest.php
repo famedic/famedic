@@ -500,6 +500,10 @@ it('blocks all pre enrollment admin routes while the module feature flag is off'
         ->assertNotFound();
 
     $this->actingAs($admin)
+        ->post(route('admin.odessa.pre-enrollments.import.confirm'))
+        ->assertNotFound();
+
+    $this->actingAs($admin)
         ->get(route('admin.odessa.pre-enrollments.export'))
         ->assertNotFound();
 

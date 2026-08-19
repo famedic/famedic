@@ -4,12 +4,18 @@ namespace App\Services\Odessa\PreEnrollment;
 
 use App\Models\OdessaAfiliateAccount;
 use App\Models\OdessaPreEnrollment;
+use App\Models\OdessaPreEnrollmentImportRun;
+use App\Models\OdessaPreEnrollmentImportRunAudit;
+use App\Models\OdessaPreEnrollmentImportRunRow;
 use App\Models\User;
 use App\Services\Odessa\Reconciliation\OdessaCollaboratorMatcher;
 use App\Services\Odessa\Reconciliation\OdessaReconciliationDbIndex;
 use App\Services\Odessa\Reconciliation\OdessaReconciliationMatchTypes;
 use App\Services\Odessa\Reconciliation\OdessaReconciliationNormalizer;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
+use Normalizer;
 
 class OdessaPreEnrollmentPreviewService
 {
@@ -26,7 +32,15 @@ class OdessaPreEnrollmentPreviewService
         private readonly OdessaPreEnrollmentExcelParser $parser,
     ) {}
 
-    public function preview(UploadedFile|string $file): array
+    public function preview(UploadedFile|string $file, ?User $actor = null): array
+    {
+        $analysis = $this->analyze($file);
+        $run = $this->createImportRun($analysis, $actor);
+
+        return $this->publicPreview($analysis, $run);
+    }
+
+    public function analyze(UploadedFile|string $file): array
     {
         $path = $file instanceof UploadedFile ? $file->getRealPath() : $file;
         if (! $path || ! is_file($path)) {
@@ -42,10 +56,12 @@ class OdessaPreEnrollmentPreviewService
         $famedicMatcher = new OdessaCollaboratorMatcher(OdessaReconciliationDbIndex::build());
         $uploadDuplicates = $this->uploadDuplicates($sourceRows);
 
-        $rows = array_map(
-            fn (OdessaPreEnrollmentSourceRow $row) => $this->diagnose($row, $preIndex, $famedicMatcher, $uploadDuplicates),
-            $sourceRows,
-        );
+        $rows = array_map(function (OdessaPreEnrollmentSourceRow $row) use ($preIndex, $famedicMatcher, $uploadDuplicates) {
+            $diagnosis = $this->diagnose($row, $preIndex, $famedicMatcher, $uploadDuplicates);
+            $diagnosis['_source'] = $row;
+
+            return $diagnosis;
+        }, $sourceRows);
 
         return [
             'meta' => [
@@ -58,7 +74,55 @@ class OdessaPreEnrollmentPreviewService
             'summary' => collect($rows)->countBy('diagnostic_status')->all(),
             'source_actions' => collect($rows)->countBy('source_action')->all(),
             'rows' => $rows,
+            'source_file_hash' => hash_file('sha256', $path),
         ];
+    }
+
+    public function publicPreview(array $analysis, ?OdessaPreEnrollmentImportRun $run = null): array
+    {
+        $meta = $analysis['meta'];
+        if ($run) {
+            $meta['run_uuid'] = $run->uuid;
+            $meta['expires_at'] = $run->expires_at?->toDateTimeString();
+            $meta['ready_rows'] = $run->ready_rows;
+            $meta['excluded_rows'] = $run->excluded_rows;
+            $meta['importable'] = $run->ready_rows > 0;
+        }
+
+        return [
+            'meta' => $meta,
+            'summary' => $analysis['summary'],
+            'source_actions' => $analysis['source_actions'],
+            'rows' => array_map(fn (array $row) => $this->publicRow($row), $analysis['rows']),
+        ];
+    }
+
+    public function counts(array $analysis): array
+    {
+        $summary = $analysis['summary'];
+        $ready = (int) ($summary[self::READY_TO_PRELOAD] ?? 0);
+        $existing = (int) ($summary[self::EXISTING_FAMEDIC_USER] ?? 0) + (int) ($summary[self::EXISTING_ODESSA_ACCOUNT] ?? 0);
+        $other = (int) ($summary[self::OTHER_EMAIL] ?? 0);
+        $possible = (int) ($summary[self::POSSIBLE_DUPLICATE] ?? 0) + (int) ($summary[self::IDENTITY_CONFLICT] ?? 0);
+        $blocked = (int) ($summary[self::BLOCKED] ?? 0);
+        $total = count($analysis['rows']);
+
+        return [
+            'total_rows' => $total,
+            'ready_rows' => $ready,
+            'excluded_rows' => max(0, $total - $ready),
+            'existing_user_rows' => $existing,
+            'other_email_rows' => $other,
+            'possible_duplicate_rows' => $possible,
+            'blocked_rows' => $blocked,
+        ];
+    }
+
+    public function rowHashes(array $analysis, string $key): array
+    {
+        return collect($analysis['rows'])
+            ->mapWithKeys(fn (array $row) => [(int) $row['source_row'] => $this->sourceRowHmac($row['_source'], $key)])
+            ->all();
     }
 
     private function diagnose(
@@ -285,5 +349,87 @@ class OdessaPreEnrollmentPreviewService
             $notes,
             fn (string $note) => in_array($note, $allowed, true)
         )));
+    }
+
+    private function createImportRun(array $analysis, ?User $actor): OdessaPreEnrollmentImportRun
+    {
+        return DB::transaction(function () use ($analysis, $actor) {
+            $counts = $this->counts($analysis);
+            $rowHmacKey = random_bytes(32);
+            $run = OdessaPreEnrollmentImportRun::create(array_merge($counts, [
+                'source_file_hash' => $analysis['source_file_hash'],
+                'source_sheet' => $analysis['meta']['sheet'],
+                'status' => OdessaPreEnrollmentImportRun::STATUS_PREVIEWED,
+                'previewed_by' => $actor?->id,
+                'previewed_at' => now(),
+                'expires_at' => now()->addMinutes(30),
+                'row_hmac_key_encrypted' => Crypt::encryptString(base64_encode($rowHmacKey)),
+            ]));
+
+            $rowHashes = $this->rowHashes($analysis, $rowHmacKey);
+            foreach ($analysis['rows'] as $row) {
+                OdessaPreEnrollmentImportRunRow::create([
+                    'import_run_id' => $run->id,
+                    'source_row' => (int) $row['source_row'],
+                    'diagnostic_status' => (string) $row['diagnostic_status'],
+                    'ready_to_preload' => (bool) $row['ready_to_preload'],
+                    'source_row_hash' => (string) $rowHashes[(int) $row['source_row']],
+                ]);
+            }
+
+            OdessaPreEnrollmentImportRunAudit::create([
+                'import_run_id' => $run->id,
+                'performed_by' => $actor?->id,
+                'event' => 'IMPORT_PREVIEWED',
+                'counts_json' => $counts,
+                'result_code' => 'previewed',
+                'performed_at' => now(),
+            ]);
+
+            return $run;
+        });
+    }
+
+    private function publicRow(array $row): array
+    {
+        unset($row['_source'], $row['_source_row_hash']);
+
+        return $row;
+    }
+
+    public function sourceRowHmac(OdessaPreEnrollmentSourceRow $row, string $key): string
+    {
+        return hash_hmac('sha256', $this->canonicalRow($row), $key);
+    }
+
+    private function canonicalRow(OdessaPreEnrollmentSourceRow $row): string
+    {
+        return json_encode([
+            'source_sheet' => $this->canonicalText($row->sourceSheet),
+            'source_row' => (string) $row->sourceRow,
+            'company_external_identifier' => $this->canonicalText($row->companyExternalIdentifier),
+            'employee_identifier' => $this->canonicalText($row->employeeIdentifier),
+            'first_name' => $this->canonicalText($row->firstName),
+            'paternal_last_name' => $this->canonicalText($row->paternalLastName),
+            'maternal_last_name' => $this->canonicalText($row->maternalLastName),
+            'birth_date' => $row->birthDate?->toDateString() ?? '__NULL__',
+            'source_email' => $this->canonicalText($row->sourceEmail),
+            'odessa_identifier' => $this->canonicalText($row->odessaIdentifier),
+            'source_action' => $this->canonicalText($row->sourceAction),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    private function canonicalText(?string $value): string
+    {
+        if ($value === null) {
+            return '__NULL__';
+        }
+
+        $value = trim($value);
+        if (class_exists(Normalizer::class)) {
+            $value = Normalizer::normalize($value, Normalizer::FORM_C) ?: $value;
+        }
+
+        return mb_strtolower($value);
     }
 }
