@@ -63,10 +63,10 @@ class MurguiaMonitorSingleCustomerAction
             Log::error('MurguiaMonitorSingleCustomerAction failed', [
                 'customer_id' => $customerId,
                 'action' => $action,
-                'error' => $e->getMessage(),
+                'error_type' => $e::class,
             ]);
 
-            return ['ok' => false, 'message' => 'Error interno: ' . $e->getMessage()];
+            return ['ok' => false, 'message' => 'Error interno al procesar Murguía.'];
         }
     }
 
