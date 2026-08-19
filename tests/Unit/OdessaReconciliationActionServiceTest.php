@@ -10,11 +10,11 @@ use App\Models\OdessaReconciliationRun;
 use App\Models\RegularAccount;
 use App\Models\User;
 use App\Services\Odessa\Reconciliation\OdessaReconciliationActionService;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Mockery\MockInterface;
 
-uses(DatabaseTransactions::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     if (! Schema::hasTable('odessa_reconciliation_runs') || ! Schema::hasTable('odessa_reconciliation_item_actions')) {

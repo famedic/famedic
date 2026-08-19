@@ -444,6 +444,9 @@ Route::prefix('admin')->middleware([
             Route::get('/{preEnrollment}', [OdessaPreEnrollmentController::class, 'show'])->name('show');
             Route::get('/{preEnrollment}/generate-credit/preview', [OdessaPreEnrollmentController::class, 'generateCreditPreview'])->name('generate-credit.preview');
             Route::post('/{preEnrollment}/generate-credit', [OdessaPreEnrollmentController::class, 'generateCredit'])->name('generate-credit');
+            Route::post('/{preEnrollment}/murguia/register', [OdessaPreEnrollmentController::class, 'registerMurguia'])->middleware('throttle:odessa-pre-enrollments-murguia-register')->name('murguia.register');
+            Route::post('/{preEnrollment}/murguia/verify', [OdessaPreEnrollmentController::class, 'verifyMurguia'])->middleware('throttle:odessa-pre-enrollments-murguia-verify')->name('murguia.verify');
+            Route::post('/{preEnrollment}/murguia/retry', [OdessaPreEnrollmentController::class, 'retryMurguia'])->middleware('throttle:odessa-pre-enrollments-murguia-retry')->name('murguia.retry');
         });
         Route::prefix('odessa/reconciliations')->name('odessa.reconciliations.')->group(function () {
             Route::get('/', [OdessaReconciliationController::class, 'index'])->name('index');

@@ -9,11 +9,45 @@ import { Input } from "@/Components/Catalyst/input";
 import { Text } from "@/Components/Catalyst/text";
 import { Textarea } from "@/Components/Catalyst/textarea";
 
-export default function Show({ preEnrollment, canGenerateCredit, generateCreditEnabled, successMessage, errors = {} }) {
+export default function Show({
+	preEnrollment,
+	canGenerateCredit,
+	creditGenerationEnabled,
+	canRegisterMurguia,
+	canVerifyMurguia,
+	canRetryMurguia,
+	murguiaEnabled,
+	murguiaRetryEnabled,
+	murguiaContractConfigured,
+	successMessage,
+	errors = {},
+}) {
 	const form = useForm({ reason: "", confirmation: "" });
+	const registerForm = useForm({ confirmation: "" });
+	const verifyForm = useForm({});
+	const retryForm = useForm({ confirmation: "" });
+	const retryStatusAllowed = ["FAILED", "INACTIVE", "PENDING"].includes(preEnrollment.murguia_status);
 	const submit = (event) => {
 		event.preventDefault();
-		form.post(route("admin.odessa.pre-enrollments.generate-credit", preEnrollment.id), { preserveScroll: true });
+		form.post(route("admin.odessa.pre-enrollments.generate-credit", preEnrollment.uuid), { preserveScroll: true });
+	};
+	const register = (event) => {
+		event.preventDefault();
+		if (!window.confirm("Se enviará un alta externa individual a Murguía con identidad minimizada autorizada. El identificador completo no se mostrará.")) {
+			return;
+		}
+		registerForm.post(route("admin.odessa.pre-enrollments.murguia.register", preEnrollment.uuid), { preserveScroll: true });
+	};
+	const verify = (event) => {
+		event.preventDefault();
+		verifyForm.post(route("admin.odessa.pre-enrollments.murguia.verify", preEnrollment.uuid), { preserveScroll: true });
+	};
+	const retry = (event) => {
+		event.preventDefault();
+		if (!window.confirm("Se verificará primero Murguía y sólo se reintentará el alta si el resultado es seguro.")) {
+			return;
+		}
+		retryForm.post(route("admin.odessa.pre-enrollments.murguia.retry", preEnrollment.uuid), { preserveScroll: true });
 	};
 
 	return (
@@ -39,6 +73,9 @@ export default function Show({ preEnrollment, canGenerateCredit, generateCreditE
 
 				{successMessage ? <Notice>{successMessage}</Notice> : null}
 				{errors.generate_credit ? <Notice color="red">{errors.generate_credit}</Notice> : null}
+				{errors.murguia_register ? <Notice color="red">{errors.murguia_register}</Notice> : null}
+				{errors.murguia_verify ? <Notice color="red">{errors.murguia_verify}</Notice> : null}
+				{errors.murguia_retry ? <Notice color="red">{errors.murguia_retry}</Notice> : null}
 
 					<div className="grid gap-4 lg:grid-cols-2">
 						<Panel title="Datos ODESSA" items={[
@@ -60,6 +97,12 @@ export default function Show({ preEnrollment, canGenerateCredit, generateCreditE
 					<Panel title="Murguía" items={[
 						["Status", preEnrollment.murguia_status],
 						["Sync", preEnrollment.murguia_synced_at],
+						["Intentos", preEnrollment.murguia_attempts],
+						["Pendiente desde", preEnrollment.murguia_pending_since],
+						["Alta aceptada", preEnrollment.murguia_registration_acknowledged_at],
+						["Última verificación", preEnrollment.murguia_checked_at],
+						["HTTP", preEnrollment.murguia_last_http_status],
+						["Resultado técnico", preEnrollment.murguia_last_event_label || preEnrollment.murguia_last_event_code],
 						["Error registrado", preEnrollment.matching?.murguia_error_available ? "Sí" : "No"],
 					]} />
 						<Panel title="FAMEDIC" items={[
@@ -80,15 +123,55 @@ export default function Show({ preEnrollment, canGenerateCredit, generateCreditE
 					<section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
 						<Subheading>Generar noCredito</Subheading>
 						<Text className="mt-1 text-sm text-zinc-500">
-							Feature flag: {generateCreditEnabled ? "habilitado" : "deshabilitado"}. Esta acción no crea Customer, ODESSA account, membresía ni Murguía.
+							Feature flag: {creditGenerationEnabled ? "habilitado" : "deshabilitado"}. Esta acción no crea Customer, ODESSA account, membresía ni Murguía.
 						</Text>
 						<form onSubmit={submit} className="mt-4 grid gap-3 md:grid-cols-[1fr_14rem_auto]">
 							<Textarea value={form.data.reason} onChange={(e) => form.setData("reason", e.target.value)} placeholder="Motivo obligatorio" />
 							<Input value={form.data.confirmation} onChange={(e) => form.setData("confirmation", e.target.value)} placeholder="CONFIRMAR" />
-							<Button type="submit" disabled={form.processing || !generateCreditEnabled}>
+							<Button type="submit" disabled={form.processing || !creditGenerationEnabled}>
 								Generar noCredito
 							</Button>
 						</form>
+					</section>
+				) : null}
+
+				{canRegisterMurguia || canVerifyMurguia || canRetryMurguia ? (
+					<section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
+						<Subheading>Acciones Murguía individuales</Subheading>
+						<Text className="mt-1 text-sm text-zinc-500">
+							Feature flag alta/verificación: {murguiaEnabled ? "habilitado" : "deshabilitado"}. Reintento: {murguiaRetryEnabled ? "habilitado" : "deshabilitado"}.
+						</Text>
+						{!murguiaContractConfigured ? (
+							<Text className="mt-2 text-sm text-amber-700 dark:text-amber-300">Configuración contractual Murguía pendiente.</Text>
+						) : null}
+						<div className="mt-4 grid gap-3 lg:grid-cols-3">
+							{canRegisterMurguia ? (
+								<form onSubmit={register} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+									<Text className="text-sm">Alta individual externa. Identidad: {preEnrollment.identity?.name_initials || "—"} · {preEnrollment.identity?.source_email_masked || "—"}.</Text>
+									<Input className="mt-3" value={registerForm.data.confirmation} onChange={(e) => registerForm.setData("confirmation", e.target.value)} placeholder="REGISTRAR" />
+									<Button className="mt-3" type="submit" disabled={registerForm.processing || !murguiaEnabled || !murguiaContractConfigured || !preEnrollment.has_medical_attention_identifier || registerForm.data.confirmation !== "REGISTRAR"}>
+										Dar de alta en Murguía
+									</Button>
+								</form>
+							) : null}
+							{canVerifyMurguia ? (
+								<form onSubmit={verify} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+									<Text className="text-sm">Consulta read-back por identificador reservado sin mostrar su valor.</Text>
+									<Button className="mt-3" type="submit" disabled={verifyForm.processing || !murguiaEnabled || !preEnrollment.has_medical_attention_identifier}>
+										Verificar estado
+									</Button>
+								</form>
+							) : null}
+							{canRetryMurguia ? (
+								<form onSubmit={retry} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+									<Text className="text-sm">Reintento seguro: primero verifica Murguía y conserva la misma reserva.</Text>
+									<Input className="mt-3" value={retryForm.data.confirmation} onChange={(e) => retryForm.setData("confirmation", e.target.value)} placeholder="REINTENTAR" />
+									<Button className="mt-3" type="submit" disabled={retryForm.processing || !murguiaEnabled || !murguiaRetryEnabled || !retryStatusAllowed || !preEnrollment.has_medical_attention_identifier || retryForm.data.confirmation !== "REINTENTAR"}>
+										Reintentar
+									</Button>
+								</form>
+							) : null}
+						</div>
 					</section>
 				) : null}
 
@@ -101,6 +184,8 @@ export default function Show({ preEnrollment, canGenerateCredit, generateCreditE
 								<div className="mt-1 text-zinc-500">{audit.reason || "Sin motivo"}</div>
 								<div className="mt-1 text-xs text-zinc-500">
 									noCredito: {audit.summary?.credit_was_present ? "existía" : "no existía"} → {audit.summary?.credit_is_present ? "reservado" : "sin reserva"}
+									{audit.summary?.murguia_last_event_code ? ` · Murguía: ${audit.summary.murguia_last_event_code}` : ""}
+									{audit.summary?.http_status ? ` · HTTP ${audit.summary.http_status}` : ""}
 								</div>
 							</div>
 						))}

@@ -120,6 +120,18 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(3)->by((string) ($request->user()?->id ?: 'guest'));
         });
 
+        RateLimiter::for('odessa-pre-enrollments-murguia-register', function (Request $request) {
+            return Limit::perMinute(3)->by((string) ($request->user()?->id ?: 'guest'));
+        });
+
+        RateLimiter::for('odessa-pre-enrollments-murguia-verify', function (Request $request) {
+            return Limit::perMinute(5)->by((string) ($request->user()?->id ?: 'guest'));
+        });
+
+        RateLimiter::for('odessa-pre-enrollments-murguia-retry', function (Request $request) {
+            return Limit::perMinute(3)->by((string) ($request->user()?->id ?: 'guest'));
+        });
+
         Event::listen(Verified::class, LinkPendingCouponBeneficiaries::class);
         Event::listen(MessageSending::class, ApplyMailSafetyPolicy::class);
 

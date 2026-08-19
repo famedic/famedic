@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Actions\Odessa\GeneratePreEnrollmentMedicalAttentionIdAction;
+use App\Actions\Odessa\RegisterPreEnrollmentWithMurguiaAction;
+use App\Actions\Odessa\RetryPreEnrollmentMurguiaAction;
+use App\Actions\Odessa\VerifyPreEnrollmentMurguiaStatusAction;
 use App\Exports\OdessaPreEnrollmentsExport;
 use App\Http\Controllers\Controller;
 use App\Models\OdessaPreEnrollment;
+use App\Services\Odessa\PreEnrollment\OdessaPreEnrollmentMurguiaRegistrationPayload;
 use App\Services\Odessa\PreEnrollment\OdessaPreEnrollmentImportService;
 use App\Services\Odessa\PreEnrollment\OdessaPreEnrollmentPreviewService;
 use Illuminate\Http\RedirectResponse;
@@ -22,6 +26,9 @@ class OdessaPreEnrollmentController extends Controller
     private const MANAGE_PERMISSION = 'odessa-pre-enrollments.manage';
     private const GENERATE_CREDIT_PERMISSION = 'odessa-pre-enrollments.actions.generate-credit';
     private const IMPORT_PERMISSION = 'odessa-pre-enrollments.actions.import';
+    private const MURGUIA_REGISTER_PERMISSION = 'odessa-pre-enrollments.actions.murguia-register';
+    private const MURGUIA_VERIFY_PERMISSION = 'odessa-pre-enrollments.actions.murguia-verify';
+    private const MURGUIA_RETRY_PERMISSION = 'odessa-pre-enrollments.actions.murguia-retry';
 
     public function index(Request $request): Response
     {
@@ -47,6 +54,12 @@ class OdessaPreEnrollmentController extends Controller
             'canManage' => $canManage,
             'canGenerateCredit' => $this->can($request, self::GENERATE_CREDIT_PERMISSION),
             'generateCreditEnabled' => (bool) config('famedic.odessa_pre_enrollments.generate_credit_enabled', false),
+            'canRegisterMurguia' => $this->canManageAction($request, self::MURGUIA_REGISTER_PERMISSION),
+            'canVerifyMurguia' => $this->canManageAction($request, self::MURGUIA_VERIFY_PERMISSION),
+            'canRetryMurguia' => $this->canManageAction($request, self::MURGUIA_RETRY_PERMISSION),
+            'murguiaEnabled' => (bool) config('famedic.odessa_pre_enrollments.murguia_enabled', false),
+            'murguiaRetryEnabled' => (bool) config('famedic.odessa_pre_enrollments.murguia_retry_enabled', false),
+            'murguiaContractConfigured' => OdessaPreEnrollmentMurguiaRegistrationPayload::isConfigured(),
             'successMessage' => $request->session()->get('success'),
         ]);
     }
@@ -61,7 +74,13 @@ class OdessaPreEnrollmentController extends Controller
         return Inertia::render('Admin/Odessa/PreEnrollments/Show', [
             'preEnrollment' => $this->detailRow($preEnrollment, $request),
             'canGenerateCredit' => $this->can($request, self::GENERATE_CREDIT_PERMISSION),
-            'generateCreditEnabled' => (bool) config('famedic.odessa_pre_enrollments.generate_credit_enabled', false),
+            'creditGenerationEnabled' => (bool) config('famedic.odessa_pre_enrollments.generate_credit_enabled', false),
+            'canRegisterMurguia' => $this->canManageAction($request, self::MURGUIA_REGISTER_PERMISSION),
+            'canVerifyMurguia' => $this->canManageAction($request, self::MURGUIA_VERIFY_PERMISSION),
+            'canRetryMurguia' => $this->canManageAction($request, self::MURGUIA_RETRY_PERMISSION),
+            'murguiaEnabled' => (bool) config('famedic.odessa_pre_enrollments.murguia_enabled', false),
+            'murguiaRetryEnabled' => (bool) config('famedic.odessa_pre_enrollments.murguia_retry_enabled', false),
+            'murguiaContractConfigured' => OdessaPreEnrollmentMurguiaRegistrationPayload::isConfigured(),
             'successMessage' => $request->session()->get('success'),
         ]);
     }
@@ -178,8 +197,58 @@ class OdessaPreEnrollmentController extends Controller
         $redirect = redirect()->route('admin.odessa.pre-enrollments.show', $preEnrollment);
 
         return ($result['ok'] ?? false)
-            ? $redirect->with('success', $result['message'] ?? 'noCredito generado.')
-            : $redirect->withErrors(['generate_credit' => $result['message'] ?? 'No se pudo generar noCredito.']);
+            ? $redirect->with('success', $result['message'] ?? 'Identificador reservado.')
+            : $redirect->withErrors(['generate_credit' => $result['message'] ?? 'No se pudo reservar el identificador.']);
+    }
+
+    public function registerMurguia(
+        Request $request,
+        OdessaPreEnrollment $preEnrollment,
+        RegisterPreEnrollmentWithMurguiaAction $action,
+    ): RedirectResponse {
+        $this->ensureEnabled();
+        $this->authorizeAccess($request, self::MANAGE_PERMISSION);
+        $this->authorizeAccess($request, self::MURGUIA_REGISTER_PERMISSION);
+
+        $validated = $request->validate([
+            'confirmation' => ['required', 'string', 'in:REGISTRAR'],
+        ]);
+
+        $result = $action->execute($preEnrollment, $request->user());
+
+        return $this->murguiaRedirect($preEnrollment, $result, 'murguia_register');
+    }
+
+    public function verifyMurguia(
+        Request $request,
+        OdessaPreEnrollment $preEnrollment,
+        VerifyPreEnrollmentMurguiaStatusAction $action,
+    ): RedirectResponse {
+        $this->ensureEnabled();
+        $this->authorizeAccess($request, self::MANAGE_PERMISSION);
+        $this->authorizeAccess($request, self::MURGUIA_VERIFY_PERMISSION);
+
+        $result = $action->execute($preEnrollment, $request->user());
+
+        return $this->murguiaRedirect($preEnrollment, $result, 'murguia_verify');
+    }
+
+    public function retryMurguia(
+        Request $request,
+        OdessaPreEnrollment $preEnrollment,
+        RetryPreEnrollmentMurguiaAction $action,
+    ): RedirectResponse {
+        $this->ensureEnabled();
+        $this->authorizeAccess($request, self::MANAGE_PERMISSION);
+        $this->authorizeAccess($request, self::MURGUIA_RETRY_PERMISSION);
+
+        $validated = $request->validate([
+            'confirmation' => ['required', 'string', 'in:REINTENTAR'],
+        ]);
+
+        $result = $action->execute($preEnrollment, $request->user());
+
+        return $this->murguiaRedirect($preEnrollment, $result, 'murguia_retry');
     }
 
     private function dashboard(): array
@@ -237,6 +306,13 @@ class OdessaPreEnrollmentController extends Controller
             'membership_start_date' => $item->membership_start_date?->toDateString(),
             'membership_end_date' => $item->membership_end_date?->toDateString(),
             'murguia_synced_at' => $item->murguia_synced_at?->toDateTimeString(),
+            'murguia_pending_since' => $item->murguia_pending_since?->toDateTimeString(),
+            'murguia_registration_acknowledged_at' => $item->murguia_registration_acknowledged_at?->toDateTimeString(),
+            'murguia_checked_at' => $item->murguia_checked_at?->toDateTimeString(),
+            'murguia_attempts' => (int) ($item->murguia_attempts ?? 0),
+            'murguia_last_http_status' => $item->murguia_last_http_status,
+            'murguia_last_event_code' => $item->murguia_last_event_code,
+            'murguia_last_event_label' => $this->murguiaEventLabel($item->murguia_last_event_code),
             'blocked_reason' => $item->blocked_reason,
             'identity' => $canViewMinimizedIdentity ? [
                 'company_external_identifier_masked' => $this->maskIdentifier($item->company_external_identifier),
@@ -296,6 +372,11 @@ class OdessaPreEnrollmentController extends Controller
         return $administrator->roles()->where('roles.id', 1)->exists();
     }
 
+    private function canManageAction(Request $request, string $permission): bool
+    {
+        return $this->can($request, self::MANAGE_PERMISSION) && $this->can($request, $permission);
+    }
+
     private function auditSummary(array $before, array $after): array
     {
         return [
@@ -303,7 +384,41 @@ class OdessaPreEnrollmentController extends Controller
             'credit_is_present' => (bool) ($after['has_medical_attention_identifier'] ?? false),
             'status' => $after['status'] ?? null,
             'link_status' => $after['link_status'] ?? null,
+            'murguia_status' => $after['murguia_status'] ?? null,
+            'murguia_attempts' => $after['murguia_attempts'] ?? null,
+            'murguia_last_event_code' => $after['murguia_last_event_code'] ?? $after['event_code'] ?? null,
+            'http_status' => $after['http_status'] ?? null,
         ];
+    }
+
+    private function murguiaRedirect(OdessaPreEnrollment $preEnrollment, array $result, string $errorKey): RedirectResponse
+    {
+        $redirect = redirect()->route('admin.odessa.pre-enrollments.show', $preEnrollment);
+
+        return ($result['ok'] ?? false)
+            ? $redirect->with('success', $result['message'] ?? 'Operación Murguía procesada.')
+            : $redirect->withErrors([$errorKey => $result['message'] ?? 'No se pudo procesar la operación Murguía.']);
+    }
+
+    private function murguiaEventLabel(?string $code): ?string
+    {
+        return match ($code) {
+            'MURGUIA_REGISTER_STARTED' => 'Alta iniciada',
+            'MURGUIA_REGISTER_ACCEPTED' => 'Alta aceptada',
+            'MURGUIA_REGISTER_REJECTED' => 'Alta rechazada',
+            'MURGUIA_REGISTER_OUTCOME_UNKNOWN' => 'Resultado desconocido',
+            'MURGUIA_CONTRACT_NOT_CONFIGURED' => 'Contrato pendiente',
+            'MURGUIA_MEMBERSHIP_DATES_MISMATCH' => 'Vigencia no coincide',
+            'MURGUIA_READBACK_STARTED' => 'Verificación iniciada',
+            'MURGUIA_READBACK_ACTIVE' => 'Activo confirmado',
+            'MURGUIA_READBACK_INACTIVE' => 'Inactivo confirmado',
+            'MURGUIA_READBACK_NOT_FOUND' => 'No encontrado',
+            'MURGUIA_READBACK_UNKNOWN' => 'Verificación no concluyente',
+            'MURGUIA_READBACK_FAILED' => 'Verificación fallida',
+            'MURGUIA_RETRY_STARTED' => 'Reintento iniciado',
+            'STALE_OPERATION_RESULT_IGNORED' => 'Respuesta anterior ignorada',
+            default => null,
+        };
     }
 
     private function maskIdentifier(?string $value): ?string
