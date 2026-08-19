@@ -20,12 +20,23 @@ export default function Import({ preview, canImport, importEnabled, successMessa
 	};
 	const confirm = (event) => {
 		event.preventDefault();
-		confirmForm
-			.transform((data) => ({ ...data, run_uuid: preview?.meta?.run_uuid || "" }))
-			.post(route("admin.odessa.pre-enrollments.import.confirm"), {
-				forceFormData: true,
-				preserveScroll: true,
-			});
+		if (
+			confirmForm.processing ||
+			!preview?.meta?.importable ||
+			!canImport ||
+			!importEnabled ||
+			!confirmForm.data.source_file ||
+			confirmForm.data.confirmation !== "IMPORTAR"
+		) {
+			return;
+		}
+
+		confirmForm.transform((data) => ({ ...data, run_uuid: preview?.meta?.run_uuid || "" }));
+
+		confirmForm.post(route("admin.odessa.pre-enrollments.import.confirm"), {
+			forceFormData: true,
+			preserveScroll: true,
+		});
 	};
 
 	return (
@@ -103,7 +114,9 @@ export default function Import({ preview, canImport, importEnabled, successMessa
 								}
 							>
 								<InboxArrowDownIcon data-slot="icon" />
-								Confirmar importación de {Number(preview.meta.ready_rows || 0).toLocaleString("es-MX")} registros
+								{confirmForm.processing
+									? "Importando..."
+									: `Confirmar importación de ${Number(preview.meta.ready_rows || 0).toLocaleString("es-MX")} registros`}
 							</Button>
 						</div>
 						{errors.import || confirmForm.errors.import || confirmForm.errors.source_file ? (
