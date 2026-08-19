@@ -52,6 +52,9 @@ return [
             ['actions' => 'Ejecutar acciones de preafiliaciones ODESSA'],
             ['actions.generate-credit' => 'Reservar noCredito para preafiliaciones ODESSA'],
             ['actions.import' => 'Importar preafiliaciones ODESSA analizadas'],
+            ['actions.murguia-register' => 'Alta individual Murguía desde preafiliación ODESSA'],
+            ['actions.murguia-verify' => 'Verificar estado Murguía de preafiliación ODESSA'],
+            ['actions.murguia-retry' => 'Reintentar alta Murguía de preafiliación ODESSA'],
         ],
         'subscription-invoices' => [
             ['manage' => 'Administrar membresías médicas'],
@@ -152,6 +155,20 @@ return [
             env('ODESSA_PRE_ENROLLMENTS_MURGUIA_ENABLED', false),
             FILTER_VALIDATE_BOOLEAN
         ),
+        'murguia_retry_enabled' => filter_var(
+            env('ODESSA_PRE_ENROLLMENTS_MURGUIA_RETRY_ENABLED', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
+        'murguia_product' => env('ODESSA_PRE_ENROLLMENTS_MURGUIA_PRODUCT'),
+        'murguia_subproduct' => env('ODESSA_PRE_ENROLLMENTS_MURGUIA_SUBPRODUCT'),
+        'membership_starts_at' => env('ODESSA_PRE_ENROLLMENTS_MEMBERSHIP_STARTS_AT'),
+        'membership_ends_at' => env('ODESSA_PRE_ENROLLMENTS_MEMBERSHIP_ENDS_AT'),
+        'murguia_not_found_codes' => collect(explode(',', (string) env('ODESSA_PRE_ENROLLMENTS_MURGUIA_NOT_FOUND_CODES', '')))
+            ->map(fn (string $code) => strtoupper(trim($code)))
+            ->filter(fn (string $code) => preg_match('/^[A-Z0-9_:-]{2,64}$/', $code))
+            ->values()
+            ->all(),
+        'murguia_lease_minutes' => (int) env('ODESSA_PRE_ENROLLMENTS_MURGUIA_LEASE_MINUTES', 5),
         'import_expected_sheet' => env('ODESSA_PRE_ENROLLMENTS_IMPORT_EXPECTED_SHEET', 'Sin Registro'),
         'import_max_sheets' => (int) env('ODESSA_PRE_ENROLLMENTS_IMPORT_MAX_SHEETS', 5),
         'import_max_rows' => (int) env('ODESSA_PRE_ENROLLMENTS_IMPORT_MAX_ROWS', 1000),

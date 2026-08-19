@@ -44,6 +44,8 @@ class OdessaPreEnrollment extends Model
         'source_snapshot_json',
         'metadata_json',
         'medical_attention_identifier',
+        'murguia_correlation_id',
+        'murguia_operation_token',
     ];
 
     protected function casts(): array
@@ -53,11 +55,19 @@ class OdessaPreEnrollment extends Model
             'membership_start_date' => 'date',
             'membership_end_date' => 'date',
             'murguia_synced_at' => 'datetime',
+            'murguia_pending_since' => 'datetime',
+            'murguia_registration_acknowledged_at' => 'datetime',
+            'murguia_checked_at' => 'datetime',
             'linked_at' => 'datetime',
             'data_quality_flags' => 'array',
             'source_snapshot_json' => 'array',
             'metadata_json' => 'array',
         ];
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'uuid';
     }
 
     protected static function booted(): void

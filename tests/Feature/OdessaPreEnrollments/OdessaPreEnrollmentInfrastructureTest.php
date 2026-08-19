@@ -314,7 +314,7 @@ it('reserves credit on ready pre enrollment only when flag is enabled and audits
 
     expect($result['ok'])->toBeTrue()
         ->and($preEnrollment->fresh()->medical_attention_identifier)->not->toBeNull()
-        ->and($preEnrollment->audits()->where('action_type', 'GENERATE_CREDIT_NUMBER')->count())->toBe(1)
+        ->and($preEnrollment->audits()->where('action_type', 'CREDIT_RESERVED')->count())->toBe(1)
         ->and($second['ok'])->toBeTrue()
         ->and(Customer::count())->toBe(0)
         ->and(User::count())->toBe(1);
@@ -340,7 +340,7 @@ it('does not return the generated credit number in the route response flash', fu
 
     $response->assertRedirect(route('admin.odessa.pre-enrollments.show', $preEnrollment));
     expect($identifier)->not->toBeNull()
-        ->and(session('success'))->toBe('noCredito reservado para la preafiliación.')
+        ->and(session('success'))->toBe('Identificador reservado para la preafiliación.')
         ->and(session('success'))->not->toContain($identifier);
 });
 
@@ -517,6 +517,18 @@ it('blocks all pre enrollment admin routes while the module feature flag is off'
 
     $this->actingAs($admin)
         ->post(route('admin.odessa.pre-enrollments.generate-credit', $preEnrollment))
+        ->assertNotFound();
+
+    $this->actingAs($admin)
+        ->post(route('admin.odessa.pre-enrollments.murguia.register', $preEnrollment), ['confirmation' => 'REGISTRAR'])
+        ->assertNotFound();
+
+    $this->actingAs($admin)
+        ->post(route('admin.odessa.pre-enrollments.murguia.verify', $preEnrollment))
+        ->assertNotFound();
+
+    $this->actingAs($admin)
+        ->post(route('admin.odessa.pre-enrollments.murguia.retry', $preEnrollment), ['confirmation' => 'REINTENTAR'])
         ->assertNotFound();
 });
 

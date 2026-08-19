@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Schema;
 
 class GeneratePreEnrollmentMedicalAttentionIdAction
 {
+    public const EVENT_CREDIT_RESERVED = 'CREDIT_RESERVED';
+
     public function __construct(
         private GenerateUniqueMedicalAttentionIdAction $generateUniqueMedicalAttentionIdAction,
     ) {}
@@ -22,7 +24,7 @@ class GeneratePreEnrollmentMedicalAttentionIdAction
         return [
             'allowed' => $allowed,
             'message' => $allowed
-                ? 'Se reservará un noCredito único de 10 dígitos para esta preafiliación. No se creará Customer ni se llamará Murguía.'
+                ? 'Se reservará un identificador único de 10 dígitos para esta preafiliación. No se creará Customer ni se llamará Murguía.'
                 : $this->blockedReason($preEnrollment),
             'before' => $this->auditState($preEnrollment->only(['medical_attention_identifier', 'status', 'link_status'])),
         ];
@@ -41,7 +43,7 @@ class GeneratePreEnrollmentMedicalAttentionIdAction
         if ($preEnrollment->medical_attention_identifier) {
             return [
                 'ok' => true,
-                'message' => 'La preafiliación ya tenía noCredito reservado.',
+                'message' => 'La preafiliación ya tenía identificador reservado.',
             ];
         }
 
@@ -58,7 +60,7 @@ class GeneratePreEnrollmentMedicalAttentionIdAction
             if ($preEnrollment->medical_attention_identifier) {
                 return [
                     'ok' => true,
-                    'message' => 'La preafiliación ya tenía noCredito reservado.',
+                    'message' => 'La preafiliación ya tenía identificador reservado.',
                 ];
             }
 
@@ -80,7 +82,7 @@ class GeneratePreEnrollmentMedicalAttentionIdAction
             OdessaPreEnrollmentAudit::create([
                 'odessa_pre_enrollment_id' => $preEnrollment->id,
                 'performed_by' => $actor->id,
-                'action_type' => 'GENERATE_CREDIT_NUMBER',
+                'action_type' => self::EVENT_CREDIT_RESERVED,
                 'before_json' => $this->auditState($before),
                 'after_json' => $this->auditState($preEnrollment->fresh()->only(['medical_attention_identifier', 'status', 'link_status'])),
                 'reason' => $reason,
@@ -89,7 +91,7 @@ class GeneratePreEnrollmentMedicalAttentionIdAction
 
             return [
                 'ok' => true,
-                'message' => 'noCredito reservado para la preafiliación.',
+                'message' => 'Identificador reservado para la preafiliación.',
             ];
         });
     }
@@ -108,10 +110,10 @@ class GeneratePreEnrollmentMedicalAttentionIdAction
     private function blockedReason(OdessaPreEnrollment $preEnrollment): string
     {
         if ($preEnrollment->medical_attention_identifier) {
-            return 'La preafiliación ya tiene noCredito.';
+            return 'La preafiliación ya tiene identificador reservado.';
         }
         if ($preEnrollment->status !== OdessaPreEnrollment::STATUS_READY) {
-            return 'Solo se puede generar noCredito para preafiliaciones READY.';
+            return 'Solo se puede reservar identificador para preafiliaciones READY.';
         }
         if (! empty($preEnrollment->data_quality_flags)) {
             return 'La preafiliación tiene alertas de calidad o conflicto.';
