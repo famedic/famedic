@@ -46,6 +46,13 @@ return [
             ['actions.membership' => 'Ejecutar correcciones de membresía desde conciliación ODESSA'],
             ['actions.murguia' => 'Reintentar sincronizaciones Murguía desde conciliación ODESSA'],
         ],
+        'odessa-pre-enrollments' => [
+            ['view' => 'Ver preafiliaciones ODESSA'],
+            ['manage' => 'Analizar preafiliaciones ODESSA'],
+            ['actions' => 'Ejecutar acciones de preafiliaciones ODESSA'],
+            ['actions.generate-credit' => 'Reservar noCredito para preafiliaciones ODESSA'],
+            ['actions.import' => 'Importar preafiliaciones ODESSA analizadas'],
+        ],
         'subscription-invoices' => [
             ['manage' => 'Administrar membresías médicas'],
             ['manage.invoices' => 'Subir y actualizar facturas'],
@@ -137,6 +144,10 @@ return [
             env('ODESSA_PRE_ENROLLMENTS_GENERATE_CREDIT_ENABLED', false),
             FILTER_VALIDATE_BOOLEAN
         ),
+        'import_enabled' => filter_var(
+            env('ODESSA_PRE_ENROLLMENTS_IMPORT_ENABLED', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
         'murguia_enabled' => filter_var(
             env('ODESSA_PRE_ENROLLMENTS_MURGUIA_ENABLED', false),
             FILTER_VALIDATE_BOOLEAN
@@ -146,6 +157,7 @@ return [
         'import_max_rows' => (int) env('ODESSA_PRE_ENROLLMENTS_IMPORT_MAX_ROWS', 1000),
         'import_max_columns' => (int) env('ODESSA_PRE_ENROLLMENTS_IMPORT_MAX_COLUMNS', 30),
         'import_max_file_kb' => (int) env('ODESSA_PRE_ENROLLMENTS_IMPORT_MAX_FILE_KB', 20480),
+        'import_run_retention_days' => (int) env('ODESSA_PRE_ENROLLMENTS_IMPORT_RUN_RETENTION_DAYS', 90),
     ],
 
     'storage_paths' => [

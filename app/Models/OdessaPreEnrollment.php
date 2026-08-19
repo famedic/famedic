@@ -38,6 +38,14 @@ class OdessaPreEnrollment extends Model
 
     protected $guarded = [];
 
+    protected $hidden = [
+        'source_file_hash',
+        'source_row_hash',
+        'source_snapshot_json',
+        'metadata_json',
+        'medical_attention_identifier',
+    ];
+
     protected function casts(): array
     {
         return [
@@ -158,6 +166,16 @@ class OdessaPreEnrollment extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function importRun(): BelongsTo
+    {
+        return $this->belongsTo(OdessaPreEnrollmentImportRun::class, 'import_run_id');
+    }
+
+    public function importer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'imported_by');
     }
 
     public function audits(): HasMany

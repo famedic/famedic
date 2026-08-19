@@ -112,6 +112,14 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(8)->by((string) ($request->user()?->id ?: $request->ip()));
         });
 
+        RateLimiter::for('odessa-pre-enrollments-preview', function (Request $request) {
+            return Limit::perMinute(5)->by((string) ($request->user()?->id ?: 'guest'));
+        });
+
+        RateLimiter::for('odessa-pre-enrollments-confirm', function (Request $request) {
+            return Limit::perMinute(3)->by((string) ($request->user()?->id ?: 'guest'));
+        });
+
         Event::listen(Verified::class, LinkPendingCouponBeneficiaries::class);
         Event::listen(MessageSending::class, ApplyMailSafetyPolicy::class);
 

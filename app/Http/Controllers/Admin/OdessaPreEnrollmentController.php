@@ -6,6 +6,7 @@ use App\Actions\Odessa\GeneratePreEnrollmentMedicalAttentionIdAction;
 use App\Exports\OdessaPreEnrollmentsExport;
 use App\Http\Controllers\Controller;
 use App\Models\OdessaPreEnrollment;
+use App\Services\Odessa\PreEnrollment\OdessaPreEnrollmentImportService;
 use App\Services\Odessa\PreEnrollment\OdessaPreEnrollmentPreviewService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,6 +21,7 @@ class OdessaPreEnrollmentController extends Controller
     private const VIEW_PERMISSION = 'odessa-pre-enrollments.view';
     private const MANAGE_PERMISSION = 'odessa-pre-enrollments.manage';
     private const GENERATE_CREDIT_PERMISSION = 'odessa-pre-enrollments.actions.generate-credit';
+    private const IMPORT_PERMISSION = 'odessa-pre-enrollments.actions.import';
 
     public function index(Request $request): Response
     {
@@ -71,6 +73,9 @@ class OdessaPreEnrollmentController extends Controller
 
         return Inertia::render('Admin/Odessa/PreEnrollments/Import', [
             'preview' => null,
+            'canImport' => $this->can($request, self::IMPORT_PERMISSION),
+            'importEnabled' => (bool) config('famedic.odessa_pre_enrollments.import_enabled', false),
+            'successMessage' => $request->session()->get('success'),
         ]);
     }
 
@@ -84,7 +89,7 @@ class OdessaPreEnrollmentController extends Controller
         ]);
 
         try {
-            $preview = $service->preview($request->file('source_file'));
+            $preview = $service->preview($request->file('source_file'), $request->user());
         } catch (\Throwable $exception) {
             return back()
                 ->withErrors(['source_file' => $exception instanceof \InvalidArgumentException ? $exception->getMessage() : 'No se pudo analizar el Excel.'])
@@ -93,7 +98,44 @@ class OdessaPreEnrollmentController extends Controller
 
         return Inertia::render('Admin/Odessa/PreEnrollments/Import', [
             'preview' => $preview,
+            'canImport' => $this->can($request, self::IMPORT_PERMISSION),
+            'importEnabled' => (bool) config('famedic.odessa_pre_enrollments.import_enabled', false),
         ]);
+    }
+
+    public function confirmImport(Request $request, OdessaPreEnrollmentImportService $service): RedirectResponse
+    {
+        $this->ensureEnabled();
+        $this->authorizeAccess($request, self::MANAGE_PERMISSION);
+        $this->authorizeAccess($request, self::IMPORT_PERMISSION);
+
+        if (! config('famedic.odessa_pre_enrollments.import_enabled', false)) {
+            return back()->withErrors(['import' => 'La importación persistente de preafiliaciones está deshabilitada por configuración.']);
+        }
+
+        $validated = $request->validate([
+            'run_uuid' => ['required', 'uuid'],
+            'source_file' => ['required', 'file', 'max:20480', 'mimes:xlsx,xls'],
+            'confirmation' => ['required', 'string', 'in:IMPORTAR'],
+        ]);
+
+        $result = $service->confirm(
+            (string) $validated['run_uuid'],
+            $request->file('source_file'),
+            $request->user(),
+        );
+
+        if (! ($result['ok'] ?? false)) {
+            return back()->withErrors(['import' => $result['message'] ?? 'No se pudo confirmar la importación.']);
+        }
+
+        return redirect()
+            ->route('admin.odessa.pre-enrollments.index')
+            ->with('success', sprintf(
+                'Importación completada. Creados=%d, omitidos=%d.',
+                (int) ($result['created'] ?? 0),
+                (int) ($result['omitted'] ?? 0),
+            ));
     }
 
     public function export(Request $request): BinaryFileResponse
