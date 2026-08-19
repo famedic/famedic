@@ -53,7 +53,8 @@ class UpdateStatusAction
             ];
             Log::info('Murguia update payload (extended)', [
                 'customer_id' => $customer->id,
-                'payload' => $payload,
+                'payload_mode' => 'extended',
+                'payload_fields_count' => count($payload),
             ]);
         } else {
             $payload = [
@@ -62,7 +63,8 @@ class UpdateStatusAction
             ];
             Log::info('Murguia update payload (minimal)', [
                 'customer_id' => $customer->id,
-                'payload' => $payload,
+                'payload_mode' => 'minimal',
+                'payload_fields_count' => count($payload),
             ]);
         }
 
@@ -76,7 +78,6 @@ class UpdateStatusAction
                 'customer_id' => $customer->id,
                 'minimal' => ! $extendedPayload,
                 'http_status' => $response->status(),
-                'body' => $response->json() ?? $response->body(),
             ]);
         }
 

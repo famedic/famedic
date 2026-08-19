@@ -228,6 +228,9 @@ class EnsureUserHasAdminAccount
             || $this->adminHasPermission($administrator, 'odessa-reconciliation.manage')
             || $this->adminHasPermission($administrator, 'odessa-reconciliation.review')
             || $request->user()->administrator->roles()->where('roles.id', 1)->exists();
+        $canViewOdessaPreEnrollments = $this->adminHasPermission($administrator, 'odessa-pre-enrollments.view')
+            || $this->adminHasPermission($administrator, 'odessa-pre-enrollments.manage')
+            || $request->user()->administrator->roles()->where('roles.id', 1)->exists();
 
         $intelligenceItems = array_values(array_filter([
             $canOpenWorkspace ? [
@@ -326,7 +329,7 @@ class EnsureUserHasAdminAccount
                     ] : null,
                 ])),
             ],
-            ($request->user()->administrator->roles()->where('roles.id', 1)->exists() || $canViewOdessaReconciliation) ? [
+            ($request->user()->administrator->roles()->where('roles.id', 1)->exists() || $canViewOdessaReconciliation || $canViewOdessaPreEnrollments) ? [
                 'label' => 'Admin Membresías',
                 'icon' => 'IdentificationIcon',
                 'items' => [
@@ -360,6 +363,11 @@ class EnsureUserHasAdminAccount
                         'url' => route('admin.odessa.reconciliations.index'),
                         'current' => str_starts_with((string) Route::currentRouteName(), 'admin.odessa.reconciliation.')
                             || str_starts_with((string) Route::currentRouteName(), 'admin.odessa.reconciliations.'),
+                    ]] : []),
+                    ...($canViewOdessaPreEnrollments ? [[
+                        'label' => 'ODESSA — preafiliaciones',
+                        'url' => route('admin.odessa.pre-enrollments.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.odessa.pre-enrollments.'),
                     ]] : []),
                 ],
             ] : null,

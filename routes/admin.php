@@ -47,6 +47,7 @@ use App\Http\Controllers\Admin\MurguiaMonitorController;
 use App\Http\Controllers\Admin\MurguiaReconciliationController;
 use App\Http\Controllers\Admin\MurguiaReportController;
 use App\Http\Controllers\Admin\OdessaReconciliationController;
+use App\Http\Controllers\Admin\OdessaPreEnrollmentController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\DevAssistanceRequestController as OnlinePharmacyDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\InvoiceController as OnlinePharmacyPurchasesInvoiceController;
@@ -432,6 +433,15 @@ Route::prefix('admin')->middleware([
 
         Route::redirect('odessa/reconciliation', '/admin/odessa/reconciliations/create')
             ->name('odessa.reconciliation.index');
+        Route::prefix('odessa/pre-enrollments')->name('odessa.pre-enrollments.')->group(function () {
+            Route::get('/', [OdessaPreEnrollmentController::class, 'index'])->name('index');
+            Route::get('/import', [OdessaPreEnrollmentController::class, 'import'])->name('import');
+            Route::post('/import/preview', [OdessaPreEnrollmentController::class, 'previewImport'])->name('import.preview');
+            Route::get('/export', [OdessaPreEnrollmentController::class, 'export'])->name('export');
+            Route::get('/{preEnrollment}', [OdessaPreEnrollmentController::class, 'show'])->name('show');
+            Route::get('/{preEnrollment}/generate-credit/preview', [OdessaPreEnrollmentController::class, 'generateCreditPreview'])->name('generate-credit.preview');
+            Route::post('/{preEnrollment}/generate-credit', [OdessaPreEnrollmentController::class, 'generateCredit'])->name('generate-credit');
+        });
         Route::prefix('odessa/reconciliations')->name('odessa.reconciliations.')->group(function () {
             Route::get('/', [OdessaReconciliationController::class, 'index'])->name('index');
             Route::get('/create', [OdessaReconciliationController::class, 'create'])->name('create');

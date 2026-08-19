@@ -40,6 +40,7 @@ return [
             ['view' => 'Ver historial y resultados de conciliaciones ODESSA'],
             ['manage' => 'Analizar y exportar conciliaciones ODESSA'],
             ['review' => 'Actualizar estados de revisión de conciliaciones ODESSA'],
+            ['actions' => 'Ejecutar acciones desde conciliación ODESSA'],
             ['actions.email' => 'Ejecutar correcciones de email desde conciliación ODESSA'],
             ['actions.odessa' => 'Ejecutar correcciones de relación ODESSA desde conciliación'],
             ['actions.membership' => 'Ejecutar correcciones de membresía desde conciliación ODESSA'],
@@ -125,6 +126,26 @@ return [
             env('ODESSA_RECONCILIATION_ACTIONS_ENABLED', in_array(env('APP_ENV'), ['local', 'testing'], true)),
             FILTER_VALIDATE_BOOLEAN
         ),
+    ],
+
+    'odessa_pre_enrollments' => [
+        'enabled' => filter_var(
+            env('ODESSA_PRE_ENROLLMENTS_ENABLED', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
+        'generate_credit_enabled' => filter_var(
+            env('ODESSA_PRE_ENROLLMENTS_GENERATE_CREDIT_ENABLED', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
+        'murguia_enabled' => filter_var(
+            env('ODESSA_PRE_ENROLLMENTS_MURGUIA_ENABLED', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
+        'import_expected_sheet' => env('ODESSA_PRE_ENROLLMENTS_IMPORT_EXPECTED_SHEET', 'Sin Registro'),
+        'import_max_sheets' => (int) env('ODESSA_PRE_ENROLLMENTS_IMPORT_MAX_SHEETS', 5),
+        'import_max_rows' => (int) env('ODESSA_PRE_ENROLLMENTS_IMPORT_MAX_ROWS', 1000),
+        'import_max_columns' => (int) env('ODESSA_PRE_ENROLLMENTS_IMPORT_MAX_COLUMNS', 30),
+        'import_max_file_kb' => (int) env('ODESSA_PRE_ENROLLMENTS_IMPORT_MAX_FILE_KB', 20480),
     ],
 
     'storage_paths' => [

@@ -2,6 +2,7 @@
 
 namespace App\Services\Murguia;
 
+use App\Actions\Customers\GenerateUniqueMedicalAttentionIdAction;
 use App\Actions\Customers\CreateRegularAccountCustomerAction;
 use App\Actions\MedicalAttention\CheckStatusAction;
 use App\Actions\MedicalAttention\CreateRegularSubscriptionAction;
@@ -14,6 +15,7 @@ use App\Models\MurguiaSyncLog;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 class MurguiaInsuredExcelRowProcessor
@@ -24,7 +26,8 @@ class MurguiaInsuredExcelRowProcessor
         private CreateRegularSubscriptionAction $createRegularSubscriptionAction,
         private SyncSubscriptionToMurguiaAction $syncSubscriptionToMurguiaAction,
         private CreateUserAction $createUserAction,
-        private CreateRegularAccountCustomerAction $createRegularAccountCustomerAction
+        private CreateRegularAccountCustomerAction $createRegularAccountCustomerAction,
+        private GenerateUniqueMedicalAttentionIdAction $generateUniqueMedicalAttentionIdAction,
     ) {}
 
     /**
@@ -45,16 +48,31 @@ class MurguiaInsuredExcelRowProcessor
             default => $accion,
         };
 
-        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if ($identifier !== null && ! $this->generateUniqueMedicalAttentionIdAction->isValidIdentifier($identifier)) {
             $this->log(
                 null,
-                $email ?: null,
-                $identifier,
+                null,
+                null,
                 $accion ?: 'unknown',
                 [],
                 null,
                 MurguiaSyncLog::STATUS_FAILED,
-                "Fila {$rowNumber}: email inválido o vacío."
+                'murguia.identifier.invalid'
+            );
+
+            return;
+        }
+
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->log(
+                null,
+                null,
+                null,
+                $accion ?: 'unknown',
+                [],
+                null,
+                MurguiaSyncLog::STATUS_FAILED,
+                'murguia.email.invalid'
             );
 
             return;
@@ -67,13 +85,13 @@ class MurguiaInsuredExcelRowProcessor
         ], true)) {
             $this->log(
                 null,
-                $email,
-                $identifier,
+                null,
+                null,
                 $accion ?: 'unknown',
                 [],
                 null,
                 MurguiaSyncLog::STATUS_FAILED,
-                "Fila {$rowNumber}: acción no reconocida (use alta, baja o validacion)."
+                'murguia.action.invalid'
             );
 
             return;
@@ -88,20 +106,19 @@ class MurguiaInsuredExcelRowProcessor
             };
         } catch (Throwable $e) {
             Log::error('Murguia Excel row failed', [
-                'row' => $rowNumber,
-                'email' => $email,
-                'error' => $e->getMessage(),
+                'email_present' => $email !== '',
+                'error_type' => $e::class,
             ]);
 
             $this->log(
                 null,
-                $email,
-                $identifier,
+                null,
+                null,
                 $accion,
-                $row,
-                ['exception' => $e->getMessage()],
+                [],
+                ['exception_type' => $e::class],
                 MurguiaSyncLog::STATUS_FAILED,
-                $e->getMessage()
+                'murguia.row.failed'
             );
         }
     }
@@ -130,19 +147,17 @@ class MurguiaInsuredExcelRowProcessor
         if (! $customer) {
             $this->log(
                 null,
-                $email,
-                $identifier,
+                null,
+                null,
                 MurguiaSyncLog::ACTION_VALIDACION,
-                ['noCredito' => $identifier],
+                [],
                 null,
                 MurguiaSyncLog::STATUS_NOT_FOUND,
-                "Fila {$rowNumber}: usuario no encontrado."
+                'murguia.validation.customer_not_found'
             );
 
             return;
         }
-
-        $requestPayload = ['noCredito' => (string) $customer->medical_attention_identifier];
 
         $response = ($this->checkStatusAction)($customer);
         $body = $response->json() ?? [];
@@ -151,13 +166,13 @@ class MurguiaInsuredExcelRowProcessor
 
         $this->log(
             $customer->id,
-            $email,
-            $identifier,
+            null,
+            null,
             MurguiaSyncLog::ACTION_VALIDACION,
-            $requestPayload,
-            array_merge($body, ['_interpretation' => $interpretation]),
+            [],
+            ['http_status' => $response->status(), 'result_code' => $interpretation],
             $response->successful() ? MurguiaSyncLog::STATUS_SUCCESS : MurguiaSyncLog::STATUS_FAILED,
-            "Fila {$rowNumber}: {$interpretation} (HTTP {$response->status()})"
+            'murguia.validation.completed'
         );
     }
 
@@ -168,35 +183,29 @@ class MurguiaInsuredExcelRowProcessor
         if (! $customer) {
             $this->log(
                 null,
-                $email,
-                $identifier,
+                null,
+                null,
                 MurguiaSyncLog::ACTION_BAJA,
                 [],
                 null,
                 MurguiaSyncLog::STATUS_NOT_FOUND,
-                "Fila {$rowNumber}: usuario no encontrado."
+                'murguia.deactivation.customer_not_found'
             );
 
             return;
         }
 
-        $payload = [
-            'noCredito' => $customer->medical_attention_identifier,
-            'estatus' => 'inactivo',
-        ];
-
         $response = ($this->updateStatusAction)($customer, 'inactivo');
-        $body = $response->json() ?? [];
 
         $this->log(
             $customer->id,
-            $email,
-            $identifier,
+            null,
+            null,
             MurguiaSyncLog::ACTION_BAJA,
-            $payload,
-            $body,
+            [],
+            ['http_status' => $response->status(), 'result_code' => $response->successful() ? 'success' : 'failed'],
             $response->successful() ? MurguiaSyncLog::STATUS_SUCCESS : MurguiaSyncLog::STATUS_FAILED,
-            "Fila {$rowNumber}: baja Murguía " . ($response->successful() ? 'OK' : 'falló') . " (HTTP {$response->status()})"
+            'murguia.deactivation.completed'
         );
     }
 
@@ -208,13 +217,13 @@ class MurguiaInsuredExcelRowProcessor
             if ($identifier && Customer::where('medical_attention_identifier', $identifier)->exists()) {
                 $this->log(
                     null,
-                    $email,
-                    $identifier,
+                    null,
+                    null,
                     MurguiaSyncLog::ACTION_ALTA,
                     [],
                     null,
                     MurguiaSyncLog::STATUS_FAILED,
-                    "Fila {$rowNumber}: medical_attention_identifier ya existe en otro cliente."
+                    'murguia.activation.identifier_conflict'
                 );
 
                 return;
@@ -238,19 +247,39 @@ class MurguiaInsuredExcelRowProcessor
             if (! $customer) {
                 $this->log(
                     null,
-                    $email,
-                    $identifier,
+                    null,
+                    null,
                     MurguiaSyncLog::ACTION_ALTA,
                     [],
                     null,
                     MurguiaSyncLog::STATUS_FAILED,
-                    "Fila {$rowNumber}: no se pudo crear u obtener el cliente."
+                    'murguia.activation.customer_unavailable'
                 );
 
                 return;
             }
 
             if ($identifier) {
+                if (! $this->generateUniqueMedicalAttentionIdAction->reserveExistingIdentifier(
+                    $identifier,
+                    'murguia_provider_assignment',
+                    Customer::class,
+                    $customer->id,
+                )) {
+                    $this->log(
+                        $customer->id,
+                        null,
+                        null,
+                        MurguiaSyncLog::ACTION_ALTA,
+                        [],
+                        null,
+                        MurguiaSyncLog::STATUS_FAILED,
+                        'murguia.activation.identifier_reserved'
+                    );
+
+                    return;
+                }
+
                 $customer->update(['medical_attention_identifier' => $identifier]);
             }
         }
@@ -263,24 +292,16 @@ class MurguiaInsuredExcelRowProcessor
             $subscription = ($this->createRegularSubscriptionAction)($customer);
             $this->log(
                 $customer->id,
-                $email,
-                $identifier,
+                null,
+                null,
                 MurguiaSyncLog::ACTION_ALTA,
-                ['created_subscription_id' => $subscription->id],
-                ['note' => 'Suscripción creada; sincronización despachada a cola.'],
+                [],
+                ['result_code' => 'subscription_created'],
                 MurguiaSyncLog::STATUS_SUCCESS,
-                "Fila {$rowNumber}: alta — suscripción creada y job de sync Murguía despachado."
+                'murguia.activation.subscription_created'
             );
 
             return;
-        }
-
-        if ($subscription->type === MedicalSubscriptionType::TRIAL) {
-            $label = 'trial';
-        } elseif ($subscription->type === MedicalSubscriptionType::REGULAR) {
-            $label = 'regular';
-        } else {
-            $label = (string) $subscription->type->value;
         }
 
         $ok = ($this->syncSubscriptionToMurguiaAction)(
@@ -292,13 +313,13 @@ class MurguiaInsuredExcelRowProcessor
 
         $this->log(
             $customer->id,
-            $email,
-            $identifier,
+            null,
+            null,
             MurguiaSyncLog::ACTION_ALTA,
-            ['subscription_id' => $subscription->id, 'subscription_type' => $label],
+            [],
             ['synced' => $ok],
             $ok ? MurguiaSyncLog::STATUS_SUCCESS : MurguiaSyncLog::STATUS_FAILED,
-            "Fila {$rowNumber}: alta — sync Murguía " . ($ok ? 'OK' : 'falló') . " (suscripción existente)."
+            'murguia.activation.sync_completed'
         );
     }
 
@@ -320,15 +341,36 @@ class MurguiaInsuredExcelRowProcessor
         MurguiaSyncLog::create([
             'customer_id' => $customerId,
             'triggered_by' => $triggeredBy,
-            'email' => $email,
-            'medical_attention_identifier' => $identifier,
+            'email' => null,
+            'medical_attention_identifier' => null,
             'action' => $action,
-            'request_payload' => $requestPayload ?: null,
-            'response_payload' => $responsePayload,
+            'request_payload' => null,
+            'response_payload' => $this->sanitizedResponsePayload($responsePayload),
             'status' => $status,
-            'message' => $message,
+            'message' => $this->sanitizeEventCode($message),
             'entry_type' => $entryType,
         ]);
+    }
+
+    private function sanitizedResponsePayload(?array $payload): ?array
+    {
+        if (! $payload) {
+            return null;
+        }
+
+        return array_filter([
+            'http_status' => isset($payload['http_status']) ? (int) $payload['http_status'] : null,
+            'result_code' => isset($payload['result_code']) ? $this->sanitizeEventCode((string) $payload['result_code']) : null,
+            'error_code' => isset($payload['exception_type']) ? class_basename((string) $payload['exception_type']) : null,
+            'synced' => array_key_exists('synced', $payload) ? (bool) $payload['synced'] : null,
+        ], fn ($value) => $value !== null);
+    }
+
+    private function sanitizeEventCode(string $value): string
+    {
+        $code = Str::of($value)->lower()->replaceMatches('/[^a-z0-9_.-]+/', '_')->trim('_')->toString();
+
+        return $code !== '' ? mb_substr($code, 0, 120) : 'murguia.event';
     }
 
     private function interpretCheckStatus(array $body): string
@@ -338,7 +380,7 @@ class MurguiaInsuredExcelRowProcessor
         }
 
         if (isset($body['estatus'])) {
-            return 'estatus: ' . $body['estatus'];
+            return 'status_present';
         }
 
         return 'no_registrado_o_respuesta_no_estandar';

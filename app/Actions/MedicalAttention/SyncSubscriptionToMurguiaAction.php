@@ -59,8 +59,7 @@ class SyncSubscriptionToMurguiaAction
             } else {
                 Log::error("Murguia {$action} failed", [
                     'subscription_id' => $subscription->id,
-                    'status' => $syncResponse->status(),
-                    'response' => $syncResponse->json(),
+                    'http_status' => $syncResponse->status(),
                 ]);
                 return false;
             }
@@ -68,7 +67,7 @@ class SyncSubscriptionToMurguiaAction
         } catch (\Exception $e) {
             Log::error('Murguia sync exception', [
                 'subscription_id' => $subscription->id,
-                'error' => $e->getMessage(),
+                'error_type' => $e::class,
             ]);
             return false;
         }

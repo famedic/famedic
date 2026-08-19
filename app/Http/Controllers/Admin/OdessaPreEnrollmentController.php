@@ -1,0 +1,298 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Actions\Odessa\GeneratePreEnrollmentMedicalAttentionIdAction;
+use App\Exports\OdessaPreEnrollmentsExport;
+use App\Http\Controllers\Controller;
+use App\Models\OdessaPreEnrollment;
+use App\Services\Odessa\PreEnrollment\OdessaPreEnrollmentPreviewService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
+use Maatwebsite\Excel\Facades\Excel;
+use Spatie\Permission\Exceptions\PermissionDoesNotExist;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+
+class OdessaPreEnrollmentController extends Controller
+{
+    private const VIEW_PERMISSION = 'odessa-pre-enrollments.view';
+    private const MANAGE_PERMISSION = 'odessa-pre-enrollments.manage';
+    private const GENERATE_CREDIT_PERMISSION = 'odessa-pre-enrollments.actions.generate-credit';
+
+    public function index(Request $request): Response
+    {
+        $this->ensureEnabled();
+        $this->authorizeAccess($request, self::VIEW_PERMISSION);
+
+        $filters = $request->only(['search', 'source_action', 'status', 'link_status', 'murguia_status', 'credit', 'flag']);
+        $canManage = $this->can($request, self::MANAGE_PERMISSION);
+        $query = OdessaPreEnrollment::query()
+            ->with(['linkedUser', 'linkedCustomer', 'linkedOdessaAccount'])
+            ->filter($filters, $canManage);
+
+        return Inertia::render('Admin/Odessa/PreEnrollments/Index', [
+            'preEnrollments' => $query->latest()->paginate(25)->withQueryString()->through(fn (OdessaPreEnrollment $item) => $this->indexRow($item)),
+            'dashboard' => $this->dashboard(),
+            'filters' => $filters,
+            'filterOptions' => [
+                'statuses' => OdessaPreEnrollment::statuses(),
+                'link_statuses' => OdessaPreEnrollment::linkStatuses(),
+                'murguia_statuses' => OdessaPreEnrollment::murguiaStatuses(),
+                'source_actions' => OdessaPreEnrollment::sourceActions(),
+            ],
+            'canManage' => $canManage,
+            'canGenerateCredit' => $this->can($request, self::GENERATE_CREDIT_PERMISSION),
+            'generateCreditEnabled' => (bool) config('famedic.odessa_pre_enrollments.generate_credit_enabled', false),
+            'successMessage' => $request->session()->get('success'),
+        ]);
+    }
+
+    public function show(Request $request, OdessaPreEnrollment $preEnrollment): Response
+    {
+        $this->ensureEnabled();
+        $this->authorizeAccess($request, self::VIEW_PERMISSION);
+
+        $preEnrollment->load(['linkedUser', 'linkedCustomer', 'linkedOdessaAccount', 'creator', 'audits.performer']);
+
+        return Inertia::render('Admin/Odessa/PreEnrollments/Show', [
+            'preEnrollment' => $this->detailRow($preEnrollment, $request),
+            'canGenerateCredit' => $this->can($request, self::GENERATE_CREDIT_PERMISSION),
+            'generateCreditEnabled' => (bool) config('famedic.odessa_pre_enrollments.generate_credit_enabled', false),
+            'successMessage' => $request->session()->get('success'),
+        ]);
+    }
+
+    public function import(Request $request): Response
+    {
+        $this->ensureEnabled();
+        $this->authorizeAccess($request, self::MANAGE_PERMISSION);
+
+        return Inertia::render('Admin/Odessa/PreEnrollments/Import', [
+            'preview' => null,
+        ]);
+    }
+
+    public function previewImport(Request $request, OdessaPreEnrollmentPreviewService $service): Response|RedirectResponse
+    {
+        $this->ensureEnabled();
+        $this->authorizeAccess($request, self::MANAGE_PERMISSION);
+
+        $request->validate([
+            'source_file' => ['required', 'file', 'max:20480', 'mimes:xlsx,xls'],
+        ]);
+
+        try {
+            $preview = $service->preview($request->file('source_file'));
+        } catch (\Throwable $exception) {
+            return back()
+                ->withErrors(['source_file' => $exception instanceof \InvalidArgumentException ? $exception->getMessage() : 'No se pudo analizar el Excel.'])
+                ->withInput();
+        }
+
+        return Inertia::render('Admin/Odessa/PreEnrollments/Import', [
+            'preview' => $preview,
+        ]);
+    }
+
+    public function export(Request $request): BinaryFileResponse
+    {
+        $this->ensureEnabled();
+        $this->authorizeAccess($request, self::VIEW_PERMISSION);
+
+        return Excel::download(
+            new OdessaPreEnrollmentsExport($request->only(['search', 'source_action', 'status', 'link_status', 'murguia_status', 'credit', 'flag'])),
+            'odessa-preafiliaciones-'.now()->format('Y-m-d_His').'.xlsx',
+        );
+    }
+
+    public function generateCreditPreview(
+        Request $request,
+        OdessaPreEnrollment $preEnrollment,
+        GeneratePreEnrollmentMedicalAttentionIdAction $action,
+    ) {
+        $this->ensureEnabled();
+        $this->authorizeAccess($request, self::GENERATE_CREDIT_PERMISSION);
+
+        return response()->json($action->preview($preEnrollment));
+    }
+
+    public function generateCredit(
+        Request $request,
+        OdessaPreEnrollment $preEnrollment,
+        GeneratePreEnrollmentMedicalAttentionIdAction $action,
+    ): RedirectResponse {
+        $this->ensureEnabled();
+        $this->authorizeAccess($request, self::GENERATE_CREDIT_PERMISSION);
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:2000'],
+            'confirmation' => ['required', 'string', 'in:CONFIRMAR'],
+        ]);
+
+        $result = $action->execute($preEnrollment, $request->user(), $validated['reason']);
+
+        $redirect = redirect()->route('admin.odessa.pre-enrollments.show', $preEnrollment);
+
+        return ($result['ok'] ?? false)
+            ? $redirect->with('success', $result['message'] ?? 'noCredito generado.')
+            : $redirect->withErrors(['generate_credit' => $result['message'] ?? 'No se pudo generar noCredito.']);
+    }
+
+    private function dashboard(): array
+    {
+        $base = OdessaPreEnrollment::query();
+
+        return [
+            'total' => (clone $base)->count(),
+            'altas' => (clone $base)->where('source_action', OdessaPreEnrollment::ACTION_ALTA)->count(),
+            'historicos' => (clone $base)->where('source_action', OdessaPreEnrollment::ACTION_HISTORICO)->count(),
+            'pending_account' => (clone $base)->where('link_status', OdessaPreEnrollment::LINK_PENDING_ACCOUNT)->count(),
+            'ready' => (clone $base)->where('status', OdessaPreEnrollment::STATUS_READY)->count(),
+            'linked' => (clone $base)->where('link_status', OdessaPreEnrollment::LINK_LINKED)->count(),
+            'blocked' => (clone $base)->where('status', OdessaPreEnrollment::STATUS_BLOCKED)->count(),
+            'with_credit' => (clone $base)->whereNotNull('medical_attention_identifier')->count(),
+            'without_credit' => (clone $base)->whereNull('medical_attention_identifier')->count(),
+            'murguia_active' => (clone $base)->where('murguia_status', OdessaPreEnrollment::MURGUIA_ACTIVE)->count(),
+            'murguia_pending' => (clone $base)->where('murguia_status', OdessaPreEnrollment::MURGUIA_PENDING)->count(),
+            'murguia_error' => (clone $base)->where('murguia_status', OdessaPreEnrollment::MURGUIA_FAILED)->count(),
+            'possible_duplicates' => (clone $base)->where(function ($q) {
+                $q->where('link_status', OdessaPreEnrollment::LINK_POSSIBLE_DUPLICATE)
+                    ->orWhereJsonContains('data_quality_flags', 'POSSIBLE_DUPLICATE_PERSON');
+            })->count(),
+        ];
+    }
+
+    private function indexRow(OdessaPreEnrollment $item): array
+    {
+        return [
+            'id' => $item->id,
+            'uuid' => $item->uuid,
+            'source_row' => $item->source_row,
+            'source_action' => $item->source_action,
+            'murguia_status' => $item->murguia_status,
+            'status' => $item->status,
+            'link_status' => $item->link_status,
+            'data_quality_flags' => $item->data_quality_flags ?? [],
+            'has_medical_attention_identifier' => filled($item->medical_attention_identifier),
+            'has_linked_user' => filled($item->linked_user_id),
+            'has_linked_customer' => filled($item->linked_customer_id),
+            'has_linked_odessa_account' => filled($item->linked_odessa_account_id),
+            'has_other_famedic_email' => filled($item->metadata_json['other_famedic_email'] ?? null),
+            'has_murguia_error' => filled($item->metadata_json['murguia_error'] ?? null),
+            'show_url' => route('admin.odessa.pre-enrollments.show', $item, absolute: false),
+        ];
+    }
+
+    private function detailRow(OdessaPreEnrollment $item, Request $request): array
+    {
+        $canViewMinimizedIdentity = $this->can($request, self::MANAGE_PERMISSION);
+
+        return array_merge($this->indexRow($item), [
+            'source_sheet' => $item->source_sheet,
+            'membership_type' => $item->membership_type,
+            'membership_start_date' => $item->membership_start_date?->toDateString(),
+            'membership_end_date' => $item->membership_end_date?->toDateString(),
+            'murguia_synced_at' => $item->murguia_synced_at?->toDateTimeString(),
+            'blocked_reason' => $item->blocked_reason,
+            'identity' => $canViewMinimizedIdentity ? [
+                'company_external_identifier_masked' => $this->maskIdentifier($item->company_external_identifier),
+                'employee_identifier_masked' => $this->maskIdentifier($item->employee_identifier),
+                'odessa_identifier_masked' => $this->maskIdentifier($item->odessa_identifier),
+                'source_email_masked' => $this->maskEmail($item->source_email),
+                'name_initials' => $this->initials($item),
+                'birth_year' => $item->birth_date?->format('Y'),
+            ] : null,
+            'matching' => [
+                'flags' => $item->data_quality_flags ?? [],
+                'blocked_reason' => $item->blocked_reason,
+                'other_famedic_email_available' => filled($item->metadata_json['other_famedic_email'] ?? null),
+                'murguia_error_available' => filled($item->metadata_json['murguia_error'] ?? null),
+            ],
+            'linked_user' => $item->linkedUser ? ['id' => $item->linkedUser->id, 'present' => true] : null,
+            'linked_customer' => $item->linkedCustomer ? ['id' => $item->linkedCustomer->id, 'present' => true] : null,
+            'linked_odessa_account' => $item->linkedOdessaAccount ? ['id' => $item->linkedOdessaAccount->id, 'present' => true] : null,
+            'created_by' => $item->creator ? ['id' => $item->creator->id, 'present' => true] : null,
+            'created_at' => $item->created_at?->toDateTimeString(),
+            'updated_at' => $item->updated_at?->toDateTimeString(),
+            'audits' => $item->audits->map(fn ($audit) => [
+                'action_type' => $audit->action_type,
+                'performed_by' => $audit->performer ? ['id' => $audit->performer->id, 'present' => true] : null,
+                'performed_at' => $audit->performed_at?->toDateTimeString(),
+                'summary' => $this->auditSummary($audit->before_json ?? [], $audit->after_json ?? []),
+                'reason' => $audit->reason,
+            ])->values(),
+        ]);
+    }
+
+    private function ensureEnabled(): void
+    {
+        abort_unless((bool) config('famedic.odessa_pre_enrollments.enabled', false), 404);
+    }
+
+    private function authorizeAccess(Request $request, string $permission): void
+    {
+        $this->can($request, $permission) || abort(403);
+    }
+
+    private function can(Request $request, string $permission): bool
+    {
+        $administrator = $request->user()?->administrator;
+        if (! $administrator) {
+            return false;
+        }
+
+        try {
+            if ($administrator->hasPermissionTo($permission)) {
+                return true;
+            }
+        } catch (PermissionDoesNotExist) {
+            //
+        }
+
+        return $administrator->roles()->where('roles.id', 1)->exists();
+    }
+
+    private function auditSummary(array $before, array $after): array
+    {
+        return [
+            'credit_was_present' => (bool) ($before['has_medical_attention_identifier'] ?? false),
+            'credit_is_present' => (bool) ($after['has_medical_attention_identifier'] ?? false),
+            'status' => $after['status'] ?? null,
+            'link_status' => $after['link_status'] ?? null,
+        ];
+    }
+
+    private function maskIdentifier(?string $value): ?string
+    {
+        $value = OdessaPreEnrollment::normalizeIdentifier($value);
+        if (! $value) {
+            return null;
+        }
+
+        return str_repeat('*', max(0, strlen($value) - 2)).substr($value, -2);
+    }
+
+    private function maskEmail(?string $value): ?string
+    {
+        if (! $value || ! str_contains($value, '@')) {
+            return null;
+        }
+
+        [$local, $domain] = explode('@', $value, 2);
+        $first = substr($local, 0, 1);
+
+        return $first.'***@'.$domain;
+    }
+
+    private function initials(OdessaPreEnrollment $item): ?string
+    {
+        $parts = array_filter([$item->first_name, $item->paternal_last_name, $item->maternal_last_name]);
+        if ($parts === []) {
+            return null;
+        }
+
+        return implode('', array_map(fn (string $part) => mb_substr(trim($part), 0, 1), $parts));
+    }
+}
