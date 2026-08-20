@@ -156,9 +156,13 @@ class ActiveCampaignMirrorService
             return null;
         }
 
-        $id = $this->activeCampaign->getContactIdByEmailPublic($email);
+        $result = $this->activeCampaign->getContactIdByEmailPublic($email);
 
-        return $id && $id > 0 ? (int) $id : null;
+        if (! $result->success || ! $result->contactId) {
+            return null;
+        }
+
+        return $result->contactId > 0 ? $result->contactId : null;
     }
 
     protected function resolveEmail(Customer $customer): ?string
