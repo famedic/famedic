@@ -3,9 +3,8 @@ import { Text } from "@/Components/Catalyst/text";
 import SettingsLayout from "@/Layouts/SettingsLayout";
 import EmptyPendingPurchases from "@/Pages/User/Components/EmptyPendingPurchases";
 import PendingPurchaseCard from "@/Pages/User/Components/PendingPurchaseCard";
-import PendingPurchasesSummary from "@/Pages/User/Components/PendingPurchasesSummary";
 
-export default function Purchases({ pendingPurchases = [], summary = {} }) {
+export default function Purchases({ pendingPurchases = [] }) {
 	const purchases = Array.isArray(pendingPurchases) ? pendingPurchases : [];
 	const hasPurchases = purchases.length > 0;
 
@@ -25,24 +24,17 @@ export default function Purchases({ pendingPurchases = [], summary = {} }) {
 			</section>
 
 			{hasPurchases ? (
-				<>
-					<PendingPurchasesSummary summary={summary} />
-
-					<section
-						className="space-y-4"
-						aria-label="Compras pendientes"
-					>
-						{purchases.map((purchase, index) => (
-							<PendingPurchaseCard
-								key={
-									purchase.key ??
-									`${purchase.type ?? "purchase"}-${index}`
-								}
-								purchase={purchase}
-							/>
-						))}
-					</section>
-				</>
+				<section className="space-y-4" aria-label="Compras pendientes">
+					{purchases.map((purchase, index) => (
+						<PendingPurchaseCard
+							key={
+								purchase.key ??
+								`${purchase.type ?? "purchase"}-${index}`
+							}
+							purchase={purchase}
+						/>
+					))}
+				</section>
 			) : (
 				<EmptyPendingPurchases />
 			)}
