@@ -27,6 +27,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     config(['famedic.odessa_pre_enrollments.enabled' => true]);
@@ -34,7 +35,7 @@ beforeEach(function () {
 
 function odessaPreEnrollmentAdmin(array $permissions = ['odessa-pre-enrollments.view', 'odessa-pre-enrollments.manage', 'odessa-pre-enrollments.actions.generate-credit']): User
 {
-    $role = Role::firstOrCreate(['name' => 'PreEnrollment Admin', 'guard_name' => 'web']);
+    $role = Role::firstOrCreate(['name' => 'PreEnrollment Admin '.md5(implode('|', $permissions)), 'guard_name' => 'web']);
     foreach ($permissions as $permission) {
         $role->givePermissionTo(Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']));
     }
@@ -361,6 +362,8 @@ it('does not expose credit numbers from generation preview endpoints', function 
 });
 
 it('requires generation permission and the specific generation feature flag', function () {
+    config(['famedic.odessa_pre_enrollments.generate_credit_enabled' => false]);
+
     $preEnrollment = OdessaPreEnrollment::factory()->create([
         'status' => OdessaPreEnrollment::STATUS_READY,
         'link_status' => OdessaPreEnrollment::LINK_PENDING_ACCOUNT,
@@ -563,6 +566,194 @@ it('does not expose sensitive pre enrollment props in index or detail responses'
     }
 });
 
+it('sends full collaborator identity on detail only to manage users', function () {
+    $manage = odessaPreEnrollmentAdmin(['odessa-pre-enrollments.view', 'odessa-pre-enrollments.manage']);
+    $viewOnly = odessaPreEnrollmentAdmin(['odessa-pre-enrollments.view']);
+    $preEnrollment = OdessaPreEnrollment::factory()->create([
+        'source_sheet' => 'Sin Registro',
+        'source_row' => 30,
+        'source_action' => OdessaPreEnrollment::ACTION_ALTA,
+        'company_external_identifier' => '5000',
+        'employee_identifier' => '12381238',
+        'odessa_identifier' => 'ODESSA-9988',
+        'first_name' => 'Laura',
+        'paternal_last_name' => 'Segura',
+        'maternal_last_name' => 'ODESSA',
+        'source_email' => 'laura.segura@odessa.com.mx',
+        'birth_date' => '1990-01-01',
+        'medical_attention_identifier' => '4234567890',
+        'source_snapshot_json' => ['raw' => 'hidden'],
+        'metadata_json' => ['request' => ['payload' => 'hidden']],
+        'murguia_operation_token' => 'operation-token-hidden',
+        'murguia_correlation_id' => 'correlation-hidden',
+    ]);
+
+    $this->actingAs($manage)
+        ->get(route('admin.odessa.pre-enrollments.show', $preEnrollment))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Odessa/PreEnrollments/Show')
+            ->where('preEnrollment.identity.access', 'full')
+            ->where('preEnrollment.identity.full_name', 'Laura Segura ODESSA')
+            ->where('preEnrollment.identity.company', '5000')
+            ->where('preEnrollment.identity.employee_identifier', '12381238')
+            ->where('preEnrollment.identity.odessa_identifier', 'ODESSA-9988')
+            ->where('preEnrollment.identity.masked_email', 'l***@odessa.com.mx')
+            ->where('preEnrollment.identity.birth_year', '1990')
+            ->where('preEnrollment.identity.source_action', OdessaPreEnrollment::ACTION_ALTA)
+            ->where('preEnrollment.identity.source_sheet', 'Sin Registro')
+            ->where('preEnrollment.identity.source_row', 30)
+            ->where('preEnrollment.medical_attention_identifier', '4234567890')
+            ->missing('preEnrollment.birth_date')
+            ->missing('preEnrollment.source_snapshot_json')
+            ->missing('preEnrollment.metadata_json')
+            ->missing('preEnrollment.murguia_operation_token')
+            ->missing('preEnrollment.murguia_correlation_id')
+        )
+        ->assertDontSee('laura.segura@odessa.com.mx')
+        ->assertDontSee('1990-01-01')
+        ->assertDontSee('operation-token-hidden')
+        ->assertDontSee('correlation-hidden')
+        ->assertDontSee('payload');
+
+    $this->actingAs($viewOnly)
+        ->get(route('admin.odessa.pre-enrollments.show', $preEnrollment))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Odessa/PreEnrollments/Show')
+            ->where('preEnrollment.identity.access', 'minimized')
+            ->where('preEnrollment.identity.name_initials', 'LSO')
+            ->where('preEnrollment.identity.company_masked', '**00')
+            ->where('preEnrollment.identity.employee_identifier_masked', '******38')
+            ->where('preEnrollment.identity.odessa_identifier_masked', '*********88')
+            ->where('preEnrollment.identity.masked_email', 'l***@odessa.com.mx')
+            ->missing('preEnrollment.identity.full_name')
+            ->missing('preEnrollment.identity.company')
+            ->missing('preEnrollment.identity.employee_identifier')
+            ->missing('preEnrollment.identity.odessa_identifier')
+            ->missing('preEnrollment.identity.birth_year')
+            ->missing('preEnrollment.identity.source_sheet')
+            ->missing('preEnrollment.medical_attention_identifier')
+        )
+        ->assertDontSee('Laura')
+        ->assertDontSee('Segura')
+        ->assertDontSee('12381238')
+        ->assertDontSee('ODESSA-9988')
+        ->assertDontSee('laura.segura@odessa.com.mx')
+        ->assertDontSee('1990-01-01')
+        ->assertDontSee('4234567890');
+});
+
+it('keeps detail identity props safe when collaborator references are missing', function () {
+    $manage = odessaPreEnrollmentAdmin(['odessa-pre-enrollments.view', 'odessa-pre-enrollments.manage']);
+    $preEnrollment = OdessaPreEnrollment::factory()->create([
+        'source_sheet' => '',
+        'source_row' => null,
+        'company_external_identifier' => '',
+        'employee_identifier' => '',
+        'odessa_identifier' => null,
+        'first_name' => '',
+        'paternal_last_name' => '',
+        'maternal_last_name' => null,
+        'source_email' => null,
+    ]);
+
+    $this->actingAs($manage)
+        ->get(route('admin.odessa.pre-enrollments.show', $preEnrollment))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('preEnrollment.identity.access', 'full')
+            ->where('preEnrollment.identity.full_name', null)
+            ->where('preEnrollment.identity.company', null)
+            ->where('preEnrollment.identity.employee_identifier', null)
+            ->where('preEnrollment.identity.odessa_identifier', null)
+            ->where('preEnrollment.identity.masked_email', null)
+            ->where('preEnrollment.identity.source_sheet', null)
+            ->where('preEnrollment.identity.source_row', null)
+        );
+});
+
+it('sends minimized collaborator identity on index only to manage users', function () {
+    config(['famedic.odessa_pre_enrollments.generate_credit_enabled' => true]);
+    $manage = odessaPreEnrollmentAdmin(['odessa-pre-enrollments.view', 'odessa-pre-enrollments.manage']);
+    $viewOnly = odessaPreEnrollmentAdmin(['odessa-pre-enrollments.view']);
+    $preEnrollment = OdessaPreEnrollment::factory()->create([
+        'company_external_identifier' => '5000',
+        'employee_identifier' => '12381238',
+        'first_name' => 'Laura',
+        'paternal_last_name' => 'Segura',
+        'maternal_last_name' => 'ODESSA',
+        'source_email' => 'laura.segura@odessa.com.mx',
+        'birth_date' => '1990-01-01',
+        'medical_attention_identifier' => '4234567890',
+        'source_snapshot_json' => ['raw' => 'hidden'],
+        'metadata_json' => ['other_famedic_email' => 'otro@example.test'],
+        'murguia_operation_token' => 'operation-token-hidden',
+        'murguia_correlation_id' => 'correlation-hidden',
+    ]);
+
+    $this->actingAs($manage)
+        ->get(route('admin.odessa.pre-enrollments.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Odessa/PreEnrollments/Index')
+            ->where('preEnrollments.data.0.uuid', $preEnrollment->uuid)
+            ->where('preEnrollments.data.0.identity.full_name', 'Laura Segura ODESSA')
+            ->where('preEnrollments.data.0.identity.company', '5000')
+            ->where('preEnrollments.data.0.identity.employee_identifier_masked', '****1238')
+            ->where('preEnrollments.data.0.identity.source_email_masked', 'l***@odessa.com.mx')
+            ->where('preEnrollments.data.0.medical_attention_identifier', '4234567890')
+            ->missing('preEnrollments.data.0.birth_date')
+            ->missing('preEnrollments.data.0.source_snapshot_json')
+            ->missing('preEnrollments.data.0.metadata_json')
+            ->missing('preEnrollments.data.0.murguia_operation_token')
+            ->missing('preEnrollments.data.0.murguia_correlation_id')
+        )
+        ->assertDontSee('laura.segura@odessa.com.mx')
+        ->assertDontSee('1990-01-01')
+        ->assertDontSee('operation-token-hidden')
+        ->assertDontSee('correlation-hidden')
+        ->assertDontSee('otro@example.test');
+
+    $this->actingAs($viewOnly)
+        ->get(route('admin.odessa.pre-enrollments.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Odessa/PreEnrollments/Index')
+            ->where('preEnrollments.data.0.uuid', $preEnrollment->uuid)
+            ->missing('preEnrollments.data.0.identity')
+            ->missing('preEnrollments.data.0.medical_attention_identifier')
+        )
+        ->assertDontSee('Laura')
+        ->assertDontSee('Segura')
+        ->assertDontSee('laura.segura@odessa.com.mx')
+        ->assertDontSee('l***@odessa.com.mx')
+        ->assertDontSee('4234567890');
+});
+
+it('keeps index identity props nullable when optional collaborator references are missing', function () {
+    $manage = odessaPreEnrollmentAdmin(['odessa-pre-enrollments.view', 'odessa-pre-enrollments.manage']);
+    $preEnrollment = OdessaPreEnrollment::factory()->create([
+        'company_external_identifier' => '',
+        'employee_identifier' => '',
+        'first_name' => '',
+        'paternal_last_name' => '',
+        'maternal_last_name' => null,
+        'source_email' => null,
+    ]);
+
+    $this->actingAs($manage)
+        ->get(route('admin.odessa.pre-enrollments.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('preEnrollments.data.0.uuid', $preEnrollment->uuid)
+            ->where('preEnrollments.data.0.identity.full_name', null)
+            ->where('preEnrollments.data.0.identity.company', null)
+            ->where('preEnrollments.data.0.identity.employee_identifier_masked', null)
+            ->where('preEnrollments.data.0.identity.source_email_masked', null)
+        );
+});
+
 it('does not let view-only users infer pre enrollment identity through search filters', function (string $search) {
     $preEnrollment = OdessaPreEnrollment::factory()->create([
         'uuid' => '11111111-1111-4111-8111-111111111111',
@@ -590,11 +781,15 @@ it('does not let view-only users infer pre enrollment identity through search fi
     'credit' => '4234567890',
 ]);
 
-it('lets manage users use administrative identity search without adding sensitive props', function () {
+it('lets manage users use administrative identity search with minimized index props', function () {
+    $admin = odessaPreEnrollmentAdmin(['odessa-pre-enrollments.view', 'odessa-pre-enrollments.manage']);
     $preEnrollment = OdessaPreEnrollment::factory()->create([
         'uuid' => '22222222-2222-4222-8222-222222222222',
+        'company_external_identifier' => '7000',
+        'employee_identifier' => '99887766',
         'first_name' => 'Persona',
         'paternal_last_name' => 'Autorizada',
+        'maternal_last_name' => null,
         'source_email' => 'persona.autorizada@example.test',
         'odessa_identifier' => 'ODESSA-AUTORIZADO',
         'medical_attention_identifier' => '5234567890',
@@ -605,6 +800,19 @@ it('lets manage users use administrative identity search without adding sensitiv
         ->pluck('uuid');
 
     expect($results)->toContain($preEnrollment->uuid);
+
+    $this->actingAs($admin)
+        ->get(route('admin.odessa.pre-enrollments.index', ['search' => 'Autorizada']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('preEnrollments.data.0.uuid', $preEnrollment->uuid)
+            ->where('preEnrollments.data.0.identity.full_name', 'Persona Autorizada')
+            ->where('preEnrollments.data.0.identity.company', '7000')
+            ->where('preEnrollments.data.0.identity.employee_identifier_masked', '****7766')
+            ->where('preEnrollments.data.0.identity.source_email_masked', 'p***@example.test')
+            ->where('preEnrollments.data.0.medical_attention_identifier', '5234567890')
+        )
+        ->assertDontSee('persona.autorizada@example.test');
 });
 
 it('ignores sensitive credit filters for view-only users', function () {

@@ -274,7 +274,7 @@ it('active pre enrollments do not register again', function () {
     expect($preEnrollment->fresh()->murguia_attempts)->toBe(1);
 });
 
-it('does not expose identifiers through detail props after Murguia operations', function () {
+it('exposes the reserved identifier to manage users without exposing operation tokens', function () {
     $admin = odessaMurguiaAdmin();
     $preEnrollment = odessaMurguiaPreEnrollment();
     odessaMurguiaHttpSequence(
@@ -288,9 +288,11 @@ it('does not expose identifiers through detail props after Murguia operations', 
     $this->actingAs($admin)
         ->get(route('admin.odessa.pre-enrollments.show', $preEnrollment->fresh()))
         ->assertOk()
-        ->assertDontSee('7345678901')
         ->assertDontSee('murguia_operation_token')
-        ->assertDontSee('"medical_attention_identifier"', false);
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('preEnrollment.medical_attention_identifier', '7345678901')
+            ->missing('preEnrollment.murguia_operation_token')
+            ->missing('preEnrollment.murguia_correlation_id'));
 });
 
 it('sends complete sanitized Murguia props to show', function () {
@@ -310,7 +312,7 @@ it('sends complete sanitized Murguia props to show', function () {
             ->where('murguiaEnabled', true)
             ->where('murguiaRetryEnabled', true)
             ->where('murguiaContractConfigured', true)
-            ->missing('preEnrollment.medical_attention_identifier')
+            ->where('preEnrollment.medical_attention_identifier', '7345678901')
             ->missing('preEnrollment.murguia_operation_token')
             ->missing('preEnrollment.murguia_correlation_id'));
 });
