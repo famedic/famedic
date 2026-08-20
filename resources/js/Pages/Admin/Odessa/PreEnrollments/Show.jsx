@@ -19,6 +19,7 @@ export default function Show({
 	murguiaEnabled,
 	murguiaRetryEnabled,
 	murguiaContractConfigured,
+	murguiaEndpointLabel,
 	successMessage,
 	errors = {},
 }) {
@@ -27,24 +28,30 @@ export default function Show({
 	const verifyForm = useForm({});
 	const retryForm = useForm({ confirmation: "" });
 	const retryStatusAllowed = ["FAILED", "INACTIVE", "PENDING"].includes(preEnrollment.murguia_status);
+	const identityLabel = preEnrollment.identity?.full_name || preEnrollment.identity?.name_initials || "—";
+	const identityEmail = preEnrollment.identity?.masked_email || "—";
+	const endpointLabel = murguiaEndpointLabel || "No configurado";
 	const submit = (event) => {
 		event.preventDefault();
 		form.post(route("admin.odessa.pre-enrollments.generate-credit", preEnrollment.uuid), { preserveScroll: true });
 	};
 	const register = (event) => {
 		event.preventDefault();
-		if (!window.confirm("Se enviará un alta externa individual a Murguía con identidad minimizada autorizada. El identificador completo no se mostrará.")) {
+		if (!window.confirm(`Se enviará un alta externa individual a Murguía con identidad minimizada autorizada. El identificador completo no se mostrará.\n\nMURGUIA_URL: ${endpointLabel}`)) {
 			return;
 		}
 		registerForm.post(route("admin.odessa.pre-enrollments.murguia.register", preEnrollment.uuid), { preserveScroll: true });
 	};
 	const verify = (event) => {
 		event.preventDefault();
+		if (!window.confirm(`Se consultará el estado en Murguía sin mostrar el identificador completo.\n\nMURGUIA_URL: ${endpointLabel}`)) {
+			return;
+		}
 		verifyForm.post(route("admin.odessa.pre-enrollments.murguia.verify", preEnrollment.uuid), { preserveScroll: true });
 	};
 	const retry = (event) => {
 		event.preventDefault();
-		if (!window.confirm("Se verificará primero Murguía y sólo se reintentará el alta si el resultado es seguro.")) {
+		if (!window.confirm(`Se verificará primero Murguía y sólo se reintentará el alta si el resultado es seguro.\n\nMURGUIA_URL: ${endpointLabel}`)) {
 			return;
 		}
 		retryForm.post(route("admin.odessa.pre-enrollments.murguia.retry", preEnrollment.uuid), { preserveScroll: true });
@@ -77,19 +84,15 @@ export default function Show({
 				{errors.murguia_verify ? <Notice color="red">{errors.murguia_verify}</Notice> : null}
 				{errors.murguia_retry ? <Notice color="red">{errors.murguia_retry}</Notice> : null}
 
+					<CollaboratorIdentity identity={preEnrollment.identity} />
+
 					<div className="grid gap-4 lg:grid-cols-2">
 						<Panel title="Datos ODESSA" items={[
 							["Acción", preEnrollment.source_action],
 							["Fuente", `${preEnrollment.source_sheet || "—"} fila ${preEnrollment.source_row || "—"}`],
-							["Empresa", preEnrollment.identity?.company_external_identifier_masked],
-							["Empleado", preEnrollment.identity?.employee_identifier_masked],
-							["ID ODESSA", preEnrollment.identity?.odessa_identifier_masked],
-							["Iniciales", preEnrollment.identity?.name_initials],
-							["Año nacimiento", preEnrollment.identity?.birth_year],
-							["Correo ODESSA", preEnrollment.identity?.source_email_masked],
 						]} />
 						<Panel title="Membresía preparada" items={[
-							["noCredito", preEnrollment.has_medical_attention_identifier ? "Reservado" : "Pendiente"],
+							["noCredito", preEnrollment.medical_attention_identifier || (preEnrollment.has_medical_attention_identifier ? "Reservado" : "Pendiente")],
 							["Tipo", preEnrollment.membership_type],
 							["Inicio", preEnrollment.membership_start_date],
 							["Fin", preEnrollment.membership_end_date],
@@ -147,7 +150,7 @@ export default function Show({
 						<div className="mt-4 grid gap-3 lg:grid-cols-3">
 							{canRegisterMurguia ? (
 								<form onSubmit={register} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
-									<Text className="text-sm">Alta individual externa. Identidad: {preEnrollment.identity?.name_initials || "—"} · {preEnrollment.identity?.source_email_masked || "—"}.</Text>
+									<Text className="text-sm">Alta individual externa. Identidad: {identityLabel} · {identityEmail}.</Text>
 									<Input className="mt-3" value={registerForm.data.confirmation} onChange={(e) => registerForm.setData("confirmation", e.target.value)} placeholder="REGISTRAR" />
 									<Button className="mt-3" type="submit" disabled={registerForm.processing || !murguiaEnabled || !murguiaContractConfigured || !preEnrollment.has_medical_attention_identifier || registerForm.data.confirmation !== "REGISTRAR"}>
 										Dar de alta en Murguía
@@ -193,6 +196,40 @@ export default function Show({
 				</section>
 			</div>
 		</AdminLayout>
+	);
+}
+
+function CollaboratorIdentity({ identity }) {
+	const fullAccess = identity?.access === "full";
+	const title = fullAccess ? identity?.full_name : identity?.name_initials;
+	const items = fullAccess ? [
+		["Empresa", identity?.company],
+		["Número de empleado", identity?.employee_identifier],
+		["ID ODESSA", identity?.odessa_identifier],
+		["Correo ODESSA", identity?.masked_email],
+		["Año de nacimiento", identity?.birth_year],
+		["Acción", identity?.source_action],
+		["Hoja/fila de origen", `${identity?.source_sheet || "—"} fila ${identity?.source_row || "—"}`],
+	] : [
+		["Empresa", identity?.company_masked],
+		["Empleado", identity?.employee_identifier_masked],
+		["ID ODESSA", identity?.odessa_identifier_masked],
+		["Correo ODESSA", identity?.masked_email],
+	];
+
+	return (
+		<section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
+			<Subheading>Identificación del colaborador</Subheading>
+			<div className="mt-3 text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title || "—"}</div>
+			<dl className="mt-3 grid gap-x-4 gap-y-2 text-sm sm:grid-cols-[11rem_1fr]">
+				{items.map(([label, value]) => (
+					<div key={label} className="contents">
+						<dt className="text-zinc-500">{label}</dt>
+						<dd className="break-words">{value || "—"}</dd>
+					</div>
+				))}
+			</dl>
+		</section>
 	);
 }
 

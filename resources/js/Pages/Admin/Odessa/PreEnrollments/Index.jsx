@@ -72,32 +72,34 @@ export default function Index({ preEnrollments, dashboard, filters = {}, filterO
 						<TableHead>
 							<TableRow>
 								<TableHeader>Acción</TableHeader>
-									<TableHeader>Fila</TableHeader>
-									<TableHeader>Estado</TableHeader>
-									<TableHeader>noCredito</TableHeader>
-									<TableHeader>Murguía</TableHeader>
-									<TableHeader>Cuenta FAMEDIC</TableHeader>
-									<TableHeader>Estado vínculo</TableHeader>
-									<TableHeader>Alertas</TableHeader>
+								{canManage ? <TableHeader>Colaborador</TableHeader> : null}
+								<TableHeader>Fila</TableHeader>
+								<TableHeader>Estado</TableHeader>
+								<TableHeader>noCredito</TableHeader>
+								<TableHeader>Murguía</TableHeader>
+								<TableHeader>Cuenta FAMEDIC</TableHeader>
+								<TableHeader>Estado vínculo</TableHeader>
+								<TableHeader>Alertas</TableHeader>
 								<TableHeader />
 							</TableRow>
 						</TableHead>
 						<TableBody>
 							{preEnrollments.data.length === 0 ? (
 								<TableRow>
-									<TableCell colSpan={13} className="py-10 text-center text-zinc-500">
+									<TableCell colSpan={canManage ? 10 : 9} className="py-10 text-center text-zinc-500">
 										Todavía no hay preafiliaciones.
 									</TableCell>
 								</TableRow>
 							) : preEnrollments.data.map((item) => (
 								<TableRow key={item.id}>
 									<TableCell><SourceAction action={item.source_action} /></TableCell>
-										<TableCell>{item.source_row || "—"}</TableCell>
-										<TableCell><Badge color={statusColor(item.status)}>{item.status}</Badge></TableCell>
-										<TableCell>{item.has_medical_attention_identifier ? <Badge color="green">Reservado</Badge> : <Badge color="amber">Pendiente</Badge>}</TableCell>
-										<TableCell><Badge color={murguiaColor(item.murguia_status)}>{item.murguia_status}</Badge></TableCell>
-										<TableCell>{item.has_linked_user || item.has_linked_customer || item.has_linked_odessa_account ? "Detectada" : "—"}</TableCell>
-										<TableCell><Badge color={linkColor(item.link_status)}>{item.link_status}</Badge></TableCell>
+									{canManage ? <TableCell><Collaborator identity={item.identity} /></TableCell> : null}
+									<TableCell>{item.source_row || "—"}</TableCell>
+									<TableCell><Badge color={statusColor(item.status)}>{item.status}</Badge></TableCell>
+									<TableCell><MembershipIdentifier item={item} canManage={canManage} /></TableCell>
+									<TableCell><Badge color={murguiaColor(item.murguia_status)}>{item.murguia_status}</Badge></TableCell>
+									<TableCell>{item.has_linked_user || item.has_linked_customer || item.has_linked_odessa_account ? "Detectada" : "—"}</TableCell>
+									<TableCell><Badge color={linkColor(item.link_status)}>{item.link_status}</Badge></TableCell>
 									<TableCell><Flags flags={item.data_quality_flags} /></TableCell>
 									<TableCell className="text-right">
 										<Button href={item.show_url} outline>
@@ -154,6 +156,33 @@ function FilterSelect({ label, value, values, onChange }) {
 
 function SourceAction({ action }) {
 	return <Badge color={action === "ALTA" ? "green" : action === "BAJA" ? "amber" : "zinc"}>{action}</Badge>;
+}
+
+function MembershipIdentifier({ item, canManage }) {
+	if (!item.has_medical_attention_identifier) {
+		return <Badge color="amber">Pendiente</Badge>;
+	}
+
+	if (canManage && item.medical_attention_identifier) {
+		return <span className="font-mono text-sm tabular-nums">{item.medical_attention_identifier}</span>;
+	}
+
+	return <Badge color="green">Reservado</Badge>;
+}
+
+function Collaborator({ identity }) {
+	const name = identity?.full_name || "—";
+	const company = identity?.company || "—";
+	const employee = identity?.employee_identifier_masked || "—";
+	const email = identity?.source_email_masked || "—";
+
+	return (
+		<div className="min-w-56 max-w-80">
+			<div className="font-medium text-zinc-900 dark:text-zinc-100">{name}</div>
+			<div className="mt-0.5 text-xs text-zinc-500">{company} · Empleado {employee}</div>
+			<div className="mt-0.5 text-xs text-zinc-500">{email}</div>
+		</div>
+	);
 }
 
 function Flags({ flags = [] }) {

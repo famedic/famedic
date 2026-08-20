@@ -42,7 +42,7 @@ class OdessaPreEnrollmentController extends Controller
             ->filter($filters, $canManage);
 
         return Inertia::render('Admin/Odessa/PreEnrollments/Index', [
-            'preEnrollments' => $query->latest()->paginate(25)->withQueryString()->through(fn (OdessaPreEnrollment $item) => $this->indexRow($item)),
+            'preEnrollments' => $query->latest()->paginate(25)->withQueryString()->through(fn (OdessaPreEnrollment $item) => $this->indexRow($item, $canManage)),
             'dashboard' => $this->dashboard(),
             'filters' => $filters,
             'filterOptions' => [
@@ -60,6 +60,7 @@ class OdessaPreEnrollmentController extends Controller
             'murguiaEnabled' => (bool) config('famedic.odessa_pre_enrollments.murguia_enabled', false),
             'murguiaRetryEnabled' => (bool) config('famedic.odessa_pre_enrollments.murguia_retry_enabled', false),
             'murguiaContractConfigured' => OdessaPreEnrollmentMurguiaRegistrationPayload::isConfigured(),
+            'murguiaEndpointLabel' => $this->murguiaEndpointLabel($request),
             'successMessage' => $request->session()->get('success'),
         ]);
     }
@@ -275,9 +276,9 @@ class OdessaPreEnrollmentController extends Controller
         ];
     }
 
-    private function indexRow(OdessaPreEnrollment $item): array
+    private function indexRow(OdessaPreEnrollment $item, bool $includeIdentity = false): array
     {
-        return [
+        $row = [
             'id' => $item->id,
             'uuid' => $item->uuid,
             'source_row' => $item->source_row,
@@ -294,11 +295,28 @@ class OdessaPreEnrollmentController extends Controller
             'has_murguia_error' => filled($item->metadata_json['murguia_error'] ?? null),
             'show_url' => route('admin.odessa.pre-enrollments.show', $item, absolute: false),
         ];
+
+        if ($includeIdentity) {
+            $row['identity'] = $this->indexIdentityRow($item);
+            $row['medical_attention_identifier'] = $this->safeDisplayText($item->medical_attention_identifier);
+        }
+
+        return $row;
+    }
+
+    private function indexIdentityRow(OdessaPreEnrollment $item): array
+    {
+        return [
+            'full_name' => $this->safeDisplayText($item->full_name),
+            'company' => $this->safeDisplayText($item->company_external_identifier),
+            'employee_identifier_masked' => $this->maskEmployeeIdentifier($item->employee_identifier),
+            'source_email_masked' => $this->maskEmail($item->source_email),
+        ];
     }
 
     private function detailRow(OdessaPreEnrollment $item, Request $request): array
     {
-        $canViewMinimizedIdentity = $this->can($request, self::MANAGE_PERMISSION);
+        $canViewFullIdentity = $this->can($request, self::MANAGE_PERMISSION);
 
         return array_merge($this->indexRow($item), [
             'source_sheet' => $item->source_sheet,
@@ -314,14 +332,8 @@ class OdessaPreEnrollmentController extends Controller
             'murguia_last_event_code' => $item->murguia_last_event_code,
             'murguia_last_event_label' => $this->murguiaEventLabel($item->murguia_last_event_code),
             'blocked_reason' => $item->blocked_reason,
-            'identity' => $canViewMinimizedIdentity ? [
-                'company_external_identifier_masked' => $this->maskIdentifier($item->company_external_identifier),
-                'employee_identifier_masked' => $this->maskIdentifier($item->employee_identifier),
-                'odessa_identifier_masked' => $this->maskIdentifier($item->odessa_identifier),
-                'source_email_masked' => $this->maskEmail($item->source_email),
-                'name_initials' => $this->initials($item),
-                'birth_year' => $item->birth_date?->format('Y'),
-            ] : null,
+            ...($canViewFullIdentity ? ['medical_attention_identifier' => $this->safeDisplayText($item->medical_attention_identifier)] : []),
+            'identity' => $canViewFullIdentity ? $this->detailFullIdentityRow($item) : $this->detailMinimizedIdentityRow($item),
             'matching' => [
                 'flags' => $item->data_quality_flags ?? [],
                 'blocked_reason' => $item->blocked_reason,
@@ -342,6 +354,34 @@ class OdessaPreEnrollmentController extends Controller
                 'reason' => $audit->reason,
             ])->values(),
         ]);
+    }
+
+    private function detailFullIdentityRow(OdessaPreEnrollment $item): array
+    {
+        return [
+            'access' => 'full',
+            'full_name' => $this->safeDisplayText($item->full_name),
+            'company' => $this->safeDisplayText($item->company_external_identifier),
+            'employee_identifier' => $this->safeDisplayText($item->employee_identifier),
+            'odessa_identifier' => $this->safeDisplayText($item->odessa_identifier),
+            'masked_email' => $this->maskEmail($item->source_email),
+            'birth_year' => $item->birth_date?->format('Y'),
+            'source_action' => $item->source_action,
+            'source_sheet' => $this->safeDisplayText($item->source_sheet),
+            'source_row' => $item->source_row,
+        ];
+    }
+
+    private function detailMinimizedIdentityRow(OdessaPreEnrollment $item): array
+    {
+        return [
+            'access' => 'minimized',
+            'name_initials' => $this->initials($item),
+            'company_masked' => $this->maskIdentifier($item->company_external_identifier),
+            'employee_identifier_masked' => $this->maskIdentifier($item->employee_identifier),
+            'odessa_identifier_masked' => $this->maskIdentifier($item->odessa_identifier),
+            'masked_email' => $this->maskEmail($item->source_email),
+        ];
     }
 
     private function ensureEnabled(): void
@@ -375,6 +415,31 @@ class OdessaPreEnrollmentController extends Controller
     private function canManageAction(Request $request, string $permission): bool
     {
         return $this->can($request, self::MANAGE_PERMISSION) && $this->can($request, $permission);
+    }
+
+    private function murguiaEndpointLabel(Request $request): ?string
+    {
+        if (! $this->canManageAction($request, self::MURGUIA_REGISTER_PERMISSION)
+            && ! $this->canManageAction($request, self::MURGUIA_VERIFY_PERMISSION)
+            && ! $this->canManageAction($request, self::MURGUIA_RETRY_PERMISSION)) {
+            return null;
+        }
+
+        $url = trim((string) config('services.murguia.url', ''));
+        if ($url === '') {
+            return null;
+        }
+
+        $parts = parse_url($url);
+        if (! is_array($parts) || empty($parts['host'])) {
+            return $this->safeDisplayText($url);
+        }
+
+        $scheme = isset($parts['scheme']) ? $parts['scheme'].'://' : '';
+        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+        $path = isset($parts['path']) ? rtrim($parts['path'], '/') : '';
+
+        return $this->safeDisplayText($scheme.$parts['host'].$port.$path);
     }
 
     private function auditSummary(array $before, array $after): array
@@ -431,6 +496,18 @@ class OdessaPreEnrollmentController extends Controller
         return str_repeat('*', max(0, strlen($value) - 2)).substr($value, -2);
     }
 
+    private function maskEmployeeIdentifier(?string $value): ?string
+    {
+        $value = OdessaPreEnrollment::normalizeIdentifier($value);
+        if (! $value) {
+            return null;
+        }
+
+        $visibleLength = min(4, strlen($value));
+
+        return $this->safeDisplayText(str_repeat('*', max(4, strlen($value) - $visibleLength)).substr($value, -$visibleLength));
+    }
+
     private function maskEmail(?string $value): ?string
     {
         if (! $value || ! str_contains($value, '@')) {
@@ -440,7 +517,18 @@ class OdessaPreEnrollmentController extends Controller
         [$local, $domain] = explode('@', $value, 2);
         $first = substr($local, 0, 1);
 
-        return $first.'***@'.$domain;
+        return $this->safeDisplayText($first.'***@'.$domain);
+    }
+
+    private function safeDisplayText(mixed $value): ?string
+    {
+        $text = trim(strip_tags((string) $value));
+        $text = preg_replace('/[\x00-\x1F\x7F]/u', '', $text) ?? '';
+        if ($text === '') {
+            return null;
+        }
+
+        return preg_match('/^[=+\-@]/', $text) ? "'".$text : $text;
     }
 
     private function initials(OdessaPreEnrollment $item): ?string
