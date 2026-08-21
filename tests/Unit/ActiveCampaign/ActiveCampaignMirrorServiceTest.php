@@ -1,12 +1,14 @@
 <?php
 
 use App\DataTransferObjects\ActiveCampaign\ActiveCampaignContactSnapshot;
+use App\Models\ActiveCampaignWebActivity;
 use App\Models\Customer;
 use App\Models\User;
 use App\Services\ActiveCampaign\ActiveCampaignCacheService;
 use App\Services\ActiveCampaign\ActiveCampaignMirrorService;
 use App\Services\ActiveCampaign\ActiveCampaignReadService;
 use App\Services\ActiveCampaign\ActiveCampaignService;
+use App\Services\ActiveCampaign\ActiveCampaignWebActivitySyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -23,8 +25,29 @@ beforeEach(function () {
     Cache::flush();
 });
 
-function fakeAcMirrorApi($contactDataResponse = null): void
+function fakeAcMirrorApi($contactDataResponse = null, ?array $activities = null): void
 {
+    $activities ??= [
+        [
+            'id' => '100',
+            'tstamp' => '2026-08-04T18:00:00-05:00',
+            'reference_type' => 'SubscriberEmail',
+            'reference_id' => '13',
+            'reference_action' => 'open',
+            'referenceModelName' => 'contact-email',
+            'subscriberid' => '42',
+        ],
+        [
+            'id' => '99',
+            'tstamp' => '2026-08-03T10:00:00-05:00',
+            'reference_type' => 'SubscriberTag',
+            'reference_id' => '7',
+            'reference_action' => '',
+            'referenceModelName' => 'contact-tag',
+            'subscriberid' => '42',
+        ],
+    ];
+
     Http::fake([
         'https://ac.test/api/3/contacts/42' => Http::response([
             'contact' => [
@@ -103,26 +126,7 @@ function fakeAcMirrorApi($contactDataResponse = null): void
             'meta' => ['total' => 1],
         ], 200),
         'https://ac.test/api/3/activities*' => Http::response([
-            'activities' => [
-                [
-                    'id' => '100',
-                    'tstamp' => '2026-08-04T18:00:00-05:00',
-                    'reference_type' => 'SubscriberEmail',
-                    'reference_id' => '13',
-                    'reference_action' => 'open',
-                    'referenceModelName' => 'contact-email',
-                    'subscriberid' => '42',
-                ],
-                [
-                    'id' => '99',
-                    'tstamp' => '2026-08-03T10:00:00-05:00',
-                    'reference_type' => 'SubscriberTag',
-                    'reference_id' => '7',
-                    'reference_action' => '',
-                    'referenceModelName' => 'contact-tag',
-                    'subscriberid' => '42',
-                ],
-            ],
+            'activities' => $activities,
         ], 200),
         'https://ac.test/api/3/tags*' => Http::response([
             'tags' => [['id' => '7', 'tag' => 'RegistroNuevo']],
@@ -233,6 +237,71 @@ test('ActiveCampaignMirrorService snapshot orquesta lectura y persiste ac_contac
     $cached = $mirror->snapshot($customer);
     expect($cached?->fromCache)->toBeTrue();
     expect($cached?->acContactId)->toBe(42);
+});
+
+test('ActiveCampaignMirrorService persists valid Site Tracking logs from existing activities payload', function () {
+    fakeAcMirrorApi(null, [
+        [
+            'id' => 'web-activity',
+            'tstamp' => '2026-08-21T13:41:00-05:00',
+            'reference_type' => 'TrackingLog',
+            'reference_id' => 'tracking-log-1',
+            'reference_action' => '',
+            'subscriberid' => '42',
+            'jsonData' => [
+                'url' => 'https://famedic.com.mx/laboratory/olab/checkout?brand=olab#step',
+                'title' => 'Checkout OLAB',
+            ],
+        ],
+        [
+            'id' => 'generic-log',
+            'tstamp' => '2026-08-21T13:42:00-05:00',
+            'reference_type' => 'Log',
+            'reference_id' => 'mail-log',
+            'subscriberid' => '42',
+        ],
+    ]);
+
+    $user = User::factory()->create(['email' => 'cliente@example.com']);
+    $customer = Customer::factory()->withRegularAccount()->create(['user_id' => $user->id]);
+
+    app(ActiveCampaignMirrorService::class)->snapshot($customer);
+    app(ActiveCampaignMirrorService::class)->forget($customer);
+    app(ActiveCampaignMirrorService::class)->snapshot($customer->refresh(), forceRefresh: true);
+
+    expect(ActiveCampaignWebActivity::query()->count())->toBe(1);
+
+    $activity = ActiveCampaignWebActivity::query()->first();
+    expect($activity->path)->toBe('/laboratory/olab/checkout')
+        ->and($activity->title)->toBe('Checkout OLAB')
+        ->and($activity->raw_reference_type)->toBe('TrackingLog')
+        ->and($activity->raw_reference_id)->toBe('tracking-log-1');
+});
+
+test('ActiveCampaignMirrorService web activity sync error does not break snapshot', function () {
+    fakeAcMirrorApi();
+
+    $this->app->instance(
+        ActiveCampaignWebActivitySyncService::class,
+        new class extends ActiveCampaignWebActivitySyncService
+        {
+            public function __construct() {}
+
+            public function syncForCustomer(Customer $customer, int $acContactId, array $activities): void
+            {
+                throw new RuntimeException('db unavailable');
+            }
+        },
+    );
+
+    $user = User::factory()->create(['email' => 'cliente@example.com']);
+    $customer = Customer::factory()->withRegularAccount()->create(['user_id' => $user->id]);
+
+    $snapshot = app(ActiveCampaignMirrorService::class)->snapshot($customer);
+
+    expect($snapshot)->not->toBeNull()
+        ->and($snapshot->acContactId)->toBe(42)
+        ->and(ActiveCampaignWebActivity::query()->count())->toBe(0);
 });
 
 test('ActiveCampaignMirrorService does not invent location when contactData has no geo values', function () {

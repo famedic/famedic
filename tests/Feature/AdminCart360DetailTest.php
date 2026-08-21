@@ -3,6 +3,7 @@
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
+use App\Models\ActiveCampaignWebActivity;
 use App\Models\Cart;
 use App\Models\ActiveCampaignDispatch;
 use App\Models\CartEvent;
@@ -751,4 +752,120 @@ it('does not invent ActiveCampaign data when there is no local evidence', functi
         ->assertOk()
         ->assertJsonPath('data.activecampaign.has_data', false)
         ->assertJsonCount(0, 'data.activecampaign.items');
+});
+
+it('returns correlated web activity in drawer payload without unsafe URL data', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser, [
+        'created_at' => now()->subHour(),
+        'updated_at' => now()->subMinutes(20),
+    ]);
+
+    ActiveCampaignWebActivity::query()->create([
+        'customer_id' => $customerUser->customer->id,
+        'ac_contact_id' => 316,
+        'path' => '/laboratory/olab/checkout',
+        'title' => 'Checkout OLAB',
+        'label' => 'Checkout',
+        'occurred_at' => now()->subMinutes(45),
+        'source' => 'activecampaign_site_tracking',
+        'raw_reference_type' => 'TrackingLog',
+        'raw_reference_id' => 'track-drawer-1',
+        'activity_hash' => hash('sha256', 'track-drawer-1'),
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.web_activity.has_data', true)
+        ->assertJsonPath('data.web_activity.count', 1)
+        ->assertJsonPath('data.web_activity.items.0.path', '/laboratory/olab/checkout')
+        ->assertJsonPath('data.web_activity.items.0.label', 'Checkout')
+        ->assertJsonPath('data.web_activity.items.0.title', 'Checkout OLAB')
+        ->assertJsonPath('data.web_activity.items.0.source', 'activecampaign_site_tracking')
+        ->assertJsonMissingPath('data.web_activity.items.0.email')
+        ->assertJsonMissingPath('data.web_activity.items.0.ip')
+        ->assertJsonMissingPath('data.web_activity.items.0.raw_reference_id');
+});
+
+it('keeps web activity scoped to customer and cart window with max 10 chronological rows', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $otherUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser, [
+        'created_at' => now()->subHour(),
+        'updated_at' => now()->subMinutes(20),
+    ]);
+
+    foreach (range(1, 12) as $index) {
+        ActiveCampaignWebActivity::query()->create([
+            'customer_id' => $customerUser->customer->id,
+            'ac_contact_id' => 316,
+            'path' => '/laboratories/'.$index,
+            'label' => 'Pagina visitada',
+            'occurred_at' => now()->subMinutes(55 - $index),
+            'source' => 'activecampaign_site_tracking',
+            'raw_reference_type' => 'TrackingLog',
+            'raw_reference_id' => 'drawer-'.$index,
+            'activity_hash' => hash('sha256', 'drawer-'.$index),
+        ]);
+    }
+
+    ActiveCampaignWebActivity::query()->create([
+        'customer_id' => $customerUser->customer->id,
+        'ac_contact_id' => 316,
+        'path' => '/laboratories/outside',
+        'label' => 'Pagina visitada',
+        'occurred_at' => now()->subHours(3),
+        'source' => 'activecampaign_site_tracking',
+        'raw_reference_type' => 'TrackingLog',
+        'raw_reference_id' => 'drawer-outside',
+        'activity_hash' => hash('sha256', 'drawer-outside'),
+    ]);
+
+    ActiveCampaignWebActivity::query()->create([
+        'customer_id' => $otherUser->customer->id,
+        'ac_contact_id' => 999,
+        'path' => '/laboratories/other',
+        'label' => 'Pagina visitada',
+        'occurred_at' => now()->subMinutes(45),
+        'source' => 'activecampaign_site_tracking',
+        'raw_reference_type' => 'TrackingLog',
+        'raw_reference_id' => 'drawer-other',
+        'activity_hash' => hash('sha256', 'drawer-other'),
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonCount(10, 'data.web_activity.items')
+        ->assertJsonPath('data.web_activity.items.0.path', '/laboratories/1')
+        ->assertJsonPath('data.web_activity.items.9.path', '/laboratories/10');
+});
+
+it('returns empty web activity contract for carts without local Site Tracking evidence', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.web_activity.has_data', false)
+        ->assertJsonPath('data.web_activity.count', 0)
+        ->assertJsonCount(0, 'data.web_activity.items');
+});
+
+it('keeps web activity drawer UI conditional and sanitized', function () {
+    $component = file_get_contents(resource_path('js/Components/Admin/Carts/CartDetailDrawer.jsx'));
+
+    expect($component)->toContain('Actividad web')
+        ->and($component)->toContain('webActivity?.has_data')
+        ->and($component)->toContain('WebActivityTimeline')
+        ->and($component)->not->toContain('raw_reference_id')
+        ->and($component)->not->toContain('activity_hash');
 });

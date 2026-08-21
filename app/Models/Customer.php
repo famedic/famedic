@@ -208,6 +208,11 @@ class Customer extends Model
         return $this->hasMany(LaboratoryAppointment::class);
     }
 
+    public function activeCampaignWebActivities(): HasMany
+    {
+        return $this->hasMany(ActiveCampaignWebActivity::class);
+    }
+
     public function onlinePharmacyCartItems(): HasMany
     {
         return $this->hasMany(OnlinePharmacyCartItem::class);

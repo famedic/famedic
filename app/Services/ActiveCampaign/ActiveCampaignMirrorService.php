@@ -19,6 +19,7 @@ class ActiveCampaignMirrorService
         protected ActiveCampaignReadService $read,
         protected ActiveCampaignCacheService $cache,
         protected ActiveCampaignLocationMapper $locationMapper,
+        protected ActiveCampaignWebActivitySyncService $webActivitySync,
     ) {}
 
     /**
@@ -49,12 +50,14 @@ class ActiveCampaignMirrorService
         }
 
         $contactData = null;
-        $snapshot = $this->fetchSnapshot($acContactId, (int) $customer->id, $contactData);
+        $activitiesPayload = [];
+        $snapshot = $this->fetchSnapshot($acContactId, (int) $customer->id, $contactData, $activitiesPayload);
         if ($snapshot === null) {
             return null;
         }
 
         $this->persistMirrorPointers($customer, $acContactId, $contactData);
+        $this->syncWebActivities($customer, $acContactId, $activitiesPayload['activities'] ?? []);
         $this->cache->putSnapshot((int) $customer->id, $snapshot);
 
         return $snapshot;
@@ -77,7 +80,8 @@ class ActiveCampaignMirrorService
         }
 
         $contactData = null;
-        $snapshot = $this->fetchSnapshot($acContactId, $customerId, $contactData);
+        $activitiesPayload = [];
+        $snapshot = $this->fetchSnapshot($acContactId, $customerId, $contactData, $activitiesPayload);
         if ($snapshot === null) {
             return null;
         }
@@ -86,6 +90,7 @@ class ActiveCampaignMirrorService
             $customer = Customer::query()->find($customerId);
             if ($customer) {
                 $this->persistMirrorPointers($customer, $acContactId, $contactData);
+                $this->syncWebActivities($customer, $acContactId, $activitiesPayload['activities'] ?? []);
             }
 
             $this->cache->putSnapshot($customerId, $snapshot);
@@ -106,8 +111,14 @@ class ActiveCampaignMirrorService
 
     /**
      * @param  array<string, mixed>|null  $contactData
+     * @param  array<string, mixed>  $activitiesPayload
      */
-    protected function fetchSnapshot(int $acContactId, ?int $customerId, ?array &$contactData = null): ?ActiveCampaignContactSnapshot
+    protected function fetchSnapshot(
+        int $acContactId,
+        ?int $customerId,
+        ?array &$contactData = null,
+        array &$activitiesPayload = [],
+    ): ?ActiveCampaignContactSnapshot
     {
         // getContact primero: AC genera activities al recuperar el contacto.
         $contact = $this->activeCampaign->getContact($acContactId);
@@ -209,6 +220,22 @@ class ActiveCampaignMirrorService
 
         if ($dirty) {
             $customer->save();
+        }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $activities
+     */
+    protected function syncWebActivities(Customer $customer, int $acContactId, array $activities): void
+    {
+        try {
+            $this->webActivitySync->syncForCustomer($customer, $acContactId, $activities);
+        } catch (\Throwable $e) {
+            Log::warning('AC Mirror: web activity sync omitido', [
+                'customer_id' => $customer->id,
+                'ac_contact_id' => $acContactId,
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 }

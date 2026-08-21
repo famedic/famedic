@@ -19,6 +19,7 @@ use App\Models\PaymentAttempt;
 use App\Models\Transaction;
 use App\Services\Carts\CartOperationalInsightResolver;
 use App\Services\Carts\CartPaymentAttemptCorrelator;
+use App\Services\ActiveCampaign\ActiveCampaignWebActivitySyncService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -571,6 +572,7 @@ class CartController extends Controller
             'contact' => $appointment ? $this->serialize360Contact($appointment) : null,
             'activecampaign' => $this->serialize360ActiveCampaign($cart),
             'client_context' => $this->serialize360ClientContext($events, $cart),
+            'web_activity' => $this->serialize360WebActivity($cart),
             'events' => $events,
             'history' => $this->serialize360History($cart),
             'links' => $this->serialize360Links($cart, $request, $purchase, $appointment),
@@ -1181,6 +1183,31 @@ class CartController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array{has_data: bool, count: int, items: list<array<string, mixed>>}
+     */
+    private function serialize360WebActivity(Cart $cart): array
+    {
+        $items = app(ActiveCampaignWebActivitySyncService::class)
+            ->forCart($cart, 10)
+            ->map(fn ($activity) => [
+                'path' => $activity->path,
+                'label' => $activity->label,
+                'title' => $activity->title,
+                'occurred_at' => $activity->occurred_at?->toIso8601String(),
+                'occurred_at_human' => $activity->occurred_at?->timezone('America/Monterrey')->format('d/m/Y H:i'),
+                'source' => $activity->source,
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'has_data' => $items !== [],
+            'count' => count($items),
+            'items' => $items,
+        ];
     }
 
     /**
