@@ -1156,10 +1156,16 @@ class CartController extends Controller
      */
     private function serialize360Events(Cart $cart): array
     {
-        $events = $cart->relationLoaded('events') ? $cart->events : $cart->events()->orderBy('occurred_at')->get();
+        $events = $cart->relationLoaded('events')
+            ? $cart->events
+            : $cart->events()->orderBy('occurred_at')->orderBy('id')->get();
 
         return $events
-            ->sortBy('occurred_at')
+            ->sortBy(function (CartEvent $event) {
+                $occurredAt = $event->occurred_at?->format('U.u') ?? '0.000000';
+
+                return $occurredAt.'-'.str_pad((string) $event->id, 20, '0', STR_PAD_LEFT);
+            })
             ->map(function (CartEvent $event) {
                 $metadata = is_array($event->metadata) ? $event->metadata : [];
                 $client = $this->safeCartEventClientContext($metadata['client'] ?? null);
@@ -1171,6 +1177,7 @@ class CartController extends Controller
                     'label' => $this->cartEventLabel($eventValue),
                     'occurred_at' => $event->occurred_at?->toIso8601String(),
                     'occurred_at_human' => $event->occurred_at?->timezone('America/Monterrey')->format('d/m/Y H:i'),
+                    'occurred_at_human_with_seconds' => $event->occurred_at?->timezone('America/Monterrey')->format('d/m/Y H:i:s'),
                     'metadata' => $this->safeCartEventMetadata($metadata),
                     'source' => $event->source,
                 ];

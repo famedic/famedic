@@ -13,6 +13,10 @@ import {
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
+import {
+	displayStatusLabel,
+	paymentHistorySummary,
+} from "@/lib/cartDrawerDisplay";
 
 const STATUS_TONE = {
 	approved: "green",
@@ -97,11 +101,21 @@ function formatTime(value, fallback) {
 	}).format(parsed);
 }
 
-function compactStatusLabel(value) {
-	return String(value || "")
-		.replace(/^Pago /i, "")
-		.replace(/^Intento /i, "")
-		.trim();
+function formatTimeWithSeconds(value, fallback) {
+	if (!value) {
+		return fallback || null;
+	}
+
+	const parsed = new Date(value);
+	if (Number.isNaN(parsed.getTime())) {
+		return fallback || value;
+	}
+
+	return new Intl.DateTimeFormat("es-MX", {
+		hour: "numeric",
+		minute: "2-digit",
+		second: "2-digit",
+	}).format(parsed);
 }
 
 function Section({ title, icon: Icon, children, flush = false }) {
@@ -242,38 +256,6 @@ function DisclosureSection({
 	);
 }
 
-function PaymentSummary({ items = [] }) {
-	const attempts = items.filter(
-		(item) => item.type === "payment_attempt",
-	).length;
-	const failed = items.filter((item) =>
-		["declined", "error", "failed"].includes(item.status),
-	).length;
-	const approved = items.filter(
-		(item) =>
-			["approved", "completed", "success", "succeeded"].includes(
-				item.status,
-			) || item.type === "final_payment",
-	).length;
-
-	if (!items.length) {
-		return "Sin registros";
-	}
-
-	if (failed || approved) {
-		return [
-			failed ? `${failed} fallido${failed === 1 ? "" : "s"}` : null,
-			approved
-				? `${approved} aprobado${approved === 1 ? "" : "s"}`
-				: null,
-		]
-			.filter(Boolean)
-			.join(" | ");
-	}
-
-	return `${attempts || items.length} intento${(attempts || items.length) === 1 ? "" : "s"}`;
-}
-
 function PaymentTimeline({ items = [] }) {
 	if (!items.length) {
 		return (
@@ -319,7 +301,7 @@ function PaymentTimeline({ items = [] }) {
 									<Badge color="green">Pago final</Badge>
 								) : null}
 								<Badge color={statusTone(item.status)}>
-									{compactStatusLabel(
+									{displayStatusLabel(
 										item.status_label || item.status,
 									)}
 								</Badge>
@@ -400,7 +382,11 @@ function AppointmentJourney({ steps = [], appointment }) {
 	);
 }
 
-function SimpleTimeline({ items = [], empty = "Sin datos" }) {
+function SimpleTimeline({
+	items = [],
+	empty = "Sin datos",
+	showSeconds = false,
+}) {
 	if (!items.length) {
 		return <p className="text-sm text-zinc-500">{empty}</p>;
 	}
@@ -413,7 +399,16 @@ function SimpleTimeline({ items = [], empty = "Sin datos" }) {
 					className="grid grid-cols-[3.25rem_1fr] gap-3 text-sm"
 				>
 					<div className="text-right text-xs tabular-nums text-zinc-500">
-						{formatTime(item.occurred_at, item.occurred_at_human)}
+						{showSeconds
+							? formatTimeWithSeconds(
+									item.occurred_at,
+									item.occurred_at_human_with_seconds ||
+										item.occurred_at_human,
+								)
+							: formatTime(
+									item.occurred_at,
+									item.occurred_at_human,
+								)}
 					</div>
 					<div className="border-l border-zinc-200 pl-3 dark:border-zinc-700">
 						<div className="flex flex-wrap items-center gap-2">
@@ -422,11 +417,11 @@ function SimpleTimeline({ items = [], empty = "Sin datos" }) {
 							</p>
 							{item.status ? (
 								<Badge color={statusTone(item.status)}>
-									{item.status}
+									{displayStatusLabel(item.status)}
 								</Badge>
 							) : null}
 							{item.confidence === "customer_legacy" ? (
-								<Badge color="zinc">Dato de contacto</Badge>
+								<Badge color="zinc">Evento historico</Badge>
 							) : null}
 						</div>
 						{item.message ? (
@@ -457,6 +452,10 @@ function ActiveCampaignSummary(activeCampaign) {
 	const items = activeCampaign?.items || [];
 	if (!items.length) {
 		return "Sin datos";
+	}
+
+	if (items.every((item) => item.confidence === "customer_legacy")) {
+		return `${items.length} evento${items.length === 1 ? "" : "s"}`;
 	}
 
 	const failed = items.filter((item) => item.status === "failed").length;
@@ -880,7 +879,9 @@ export default function CartDetailDrawer({
 									<DisclosureSection
 										title="Historial de pagos"
 										icon={CreditCardIcon}
-										summary={PaymentSummary(paymentHistory)}
+										summary={paymentHistorySummary(
+											paymentHistory,
+										)}
 									>
 										<PaymentTimeline
 											items={paymentHistory}
@@ -1006,6 +1007,7 @@ export default function CartDetailDrawer({
 										<SimpleTimeline
 											items={events}
 											empty="Sin eventos instrumentados"
+											showSeconds
 										/>
 									</DisclosureSection>
 								) : null}

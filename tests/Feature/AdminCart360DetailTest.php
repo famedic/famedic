@@ -484,6 +484,36 @@ it('returns cart events timeline and keeps legacy carts empty', function () {
         ->assertJsonCount(0, 'data.events');
 });
 
+it('returns cart events in deterministic chronological order for same-second activity', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser);
+    $sameSecond = now()->subMinutes(10)->setMicrosecond(0);
+
+    $first = CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => 'payment_started',
+        'metadata' => ['status' => 'processing'],
+        'occurred_at' => $sameSecond,
+    ]);
+    $second = CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => 'payment_approved',
+        'metadata' => ['status' => 'approved'],
+        'occurred_at' => $sameSecond,
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.events.0.id', $first->id)
+        ->assertJsonPath('data.events.0.label', 'Pago iniciado')
+        ->assertJsonPath('data.events.0.occurred_at_human_with_seconds', $sameSecond->timezone('America/Monterrey')->format('d/m/Y H:i:s'))
+        ->assertJsonPath('data.events.1.id', $second->id)
+        ->assertJsonPath('data.events.1.label', 'Pago aprobado');
+});
+
 it('returns session context from the latest cart event with client metadata', function () {
     $admin = cart360AdminUserWithCartDetailPermission();
     $customerUser = User::factory()->withRegularCustomer()->create();
@@ -629,6 +659,15 @@ it('keeps approximate location copy visible in the drawer UI component', functio
 
     expect($component)->toContain('Ubicacion aproximada')
         ->and($component)->toContain('Fuente:');
+});
+
+it('keeps cart activity seconds and legacy ActiveCampaign copy visible in the drawer UI component', function () {
+    $component = file_get_contents(resource_path('js/Components/Admin/Carts/CartDetailDrawer.jsx'));
+
+    expect($component)->toContain('formatTimeWithSeconds')
+        ->and($component)->toContain('showSeconds')
+        ->and($component)->toContain('Evento historico')
+        ->and($component)->not->toContain('Dato de contacto');
 });
 
 it('returns administrative links according to permissions', function () {
