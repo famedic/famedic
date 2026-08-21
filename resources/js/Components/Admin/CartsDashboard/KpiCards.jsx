@@ -10,7 +10,6 @@ import {
 	MinusIcon,
 	ShoppingCartIcon,
 	XCircleIcon,
-	ArrowPathIcon,
 	CheckCircleIcon,
 	BanknotesIcon,
 	CurrencyDollarIcon,
@@ -20,6 +19,9 @@ import {
 	BuildingStorefrontIcon,
 	HeartIcon,
 	TagIcon,
+	ExclamationTriangleIcon,
+	CalendarDaysIcon,
+	PhoneIcon,
 } from "@heroicons/react/16/solid";
 import { Text } from "@/Components/Catalyst/text";
 import { DASHBOARD_COLORS, TONE_CLASSES } from "./chartTheme.jsx";
@@ -27,10 +29,11 @@ import { DASHBOARD_COLORS, TONE_CLASSES } from "./chartTheme.jsx";
 const ICONS = {
 	created: ShoppingCartIcon,
 	abandoned: XCircleIcon,
-	recovered: ArrowPathIcon,
 	sales: CheckCircleIcon,
+	completed: CheckCircleIcon,
 	lost_value: BanknotesIcon,
-	recovered_value: CurrencyDollarIcon,
+	abandoned_amount: BanknotesIcon,
+	completed_amount: CurrencyDollarIcon,
 	conversion: ChartBarIcon,
 	avg_ticket: ReceiptPercentIcon,
 	lab: BeakerIcon,
@@ -46,6 +49,12 @@ const ICONS = {
 	with_cart: ShoppingCartIcon,
 	purchased: CheckCircleIcon,
 	abandonment: XCircleIcon,
+	attention_required: ExclamationTriangleIcon,
+	payment_incidents: BanknotesIcon,
+	payment_declined: XCircleIcon,
+	payment_error: ExclamationTriangleIcon,
+	appointments_to_handle: CalendarDaysIcon,
+	contact_requested: PhoneIcon,
 	time_to_purchase: ChartBarIcon,
 	retention_30: CheckCircleIcon,
 	retention_60: ChartBarIcon,
@@ -120,18 +129,24 @@ function Sparkline({ data, color }) {
 	);
 }
 
-export default function KpiCards({ kpis = [], columnsClassName = "grid gap-4 sm:grid-cols-2 xl:grid-cols-4" }) {
+export default function KpiCards({ kpis = [], columnsClassName = "grid gap-4 sm:grid-cols-2 xl:grid-cols-4", cartsIndexUrl = null }) {
 	return (
 		<div className={columnsClassName}>
 			{kpis.map((kpi) => {
 				const Icon = ICONS[kpi.id] || ShoppingCartIcon;
 				const tone = TONE_CLASSES[kpi.tone] || TONE_CLASSES.blue;
 				const color = DASHBOARD_COLORS[kpi.tone] || DASHBOARD_COLORS.blue;
+				const monitorHref =
+					cartsIndexUrl && kpi.monitor_query
+						? `${cartsIndexUrl}?${kpi.monitor_query}`
+						: null;
+				const Tag = monitorHref ? "a" : "div";
 
 				return (
-					<div
+					<Tag
 						key={kpi.id}
-						className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
+						href={monitorHref || undefined}
+						className="block rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600"
 					>
 						<div className="flex items-start justify-between gap-3">
 							<div
@@ -161,9 +176,13 @@ export default function KpiCards({ kpis = [], columnsClassName = "grid gap-4 sm:
 							</div>
 						) : null}
 						<p className="mt-1 text-[11px] text-zinc-400">
-							Periodo anterior: {kpi.previous_formatted}
+							{kpi.previous_formatted
+								? `Periodo anterior: ${kpi.previous_formatted}`
+								: monitorHref
+									? "Ver carritos"
+									: ""}
 						</p>
-					</div>
+					</Tag>
 				);
 			})}
 		</div>

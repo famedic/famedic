@@ -12,9 +12,14 @@ use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryTest;
+use App\Models\OnlinePharmacyPurchase;
+use App\Models\PaymentAttempt;
 use App\Models\Transaction;
+use App\Services\Carts\CartOperationalInsightResolver;
+use App\Services\Carts\CartPaymentAttemptCorrelator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class CartController extends Controller
@@ -27,9 +32,26 @@ class CartController extends Controller
             'search',
             'type',
             'display_status',
+            'operational_filter',
+            'operational_bucket',
+            'payment_status',
+            'checkout_stage',
+            'appointment_filter',
+            'contact_filter',
+            'customer_segment',
+            'brand',
+            'amount_range',
+            'inactivity_range',
             'start_date',
             'end_date',
         ]))->filter(fn ($v) => $v !== null && $v !== '')->all();
+
+        $today = now('America/Monterrey');
+        $usingDefaultPeriod = empty($filters['start_date']) && empty($filters['end_date']);
+        if ($usingDefaultPeriod) {
+            $filters['start_date'] = $today->copy()->subDays(6)->toDateString();
+            $filters['end_date'] = $today->toDateString();
+        }
 
         $start = ! empty($filters['start_date'])
             ? Carbon::parse($filters['start_date'], 'America/Monterrey')->startOfDay()->utc()
@@ -39,8 +61,25 @@ class CartController extends Controller
             : null;
 
         $query = Cart::query()
+            ->addSelect('carts.*')
+            ->addSelect([
+                'previous_laboratory_purchases_count' => DB::table('laboratory_purchases')
+                    ->join('customers as purchase_customers', 'purchase_customers.id', '=', 'laboratory_purchases.customer_id')
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('purchase_customers.user_id', 'carts.user_id')
+                    ->whereNull('laboratory_purchases.deleted_at')
+                    ->whereColumn('laboratory_purchases.created_at', '<', 'carts.created_at'),
+                'previous_online_pharmacy_purchases_count' => DB::table('online_pharmacy_purchases')
+                    ->join('customers as pharmacy_purchase_customers', 'pharmacy_purchase_customers.id', '=', 'online_pharmacy_purchases.customer_id')
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('pharmacy_purchase_customers.user_id', 'carts.user_id')
+                    ->whereNull('online_pharmacy_purchases.deleted_at')
+                    ->whereColumn('online_pharmacy_purchases.created_at', '<', 'carts.created_at'),
+            ])
             ->with([
                 'items',
+                'laboratoryAppointments.laboratoryStore',
+                'laboratoryPurchases.transactions',
                 'user.customer.laboratoryCartItems.laboratoryTest',
                 'user.customer.laboratoryAppointments',
                 'user.customer.laboratoryCheckoutDrafts.contact',
@@ -52,15 +91,29 @@ class CartController extends Controller
             ->orderByDesc('updated_at');
 
         $carts = $query->paginate(25)->withQueryString();
+        $paymentInsights = app(CartPaymentAttemptCorrelator::class)->forCarts($carts->getCollection());
 
+        $trayFilters = collect($filters)
+            ->except([
+                'display_status',
+                'operational_filter',
+                'operational_bucket',
+                'payment_status',
+                'checkout_stage',
+                'appointment_filter',
+                'contact_filter',
+            ])
+            ->all();
+        $statusMetricFilters = collect($filters)->except(['display_status'])->all();
         $metricsBase = Cart::query()
-            ->when($filters['type'] ?? null, fn ($q, string $type) => $q->where('type', $type))
-            ->when($start, fn ($q, $d) => $q->where('updated_at', '>=', $d))
-            ->when($end, fn ($q, $d) => $q->where('updated_at', '<=', $d));
+            ->adminMonitoringFilter($statusMetricFilters, $start, $end);
+        $trayMetricsBase = Cart::query()
+            ->adminMonitoringFilter($trayFilters, $start, $end);
 
         $staleBefore = now()->subMinutes(Cart::ABANDONED_AFTER_MINUTES);
 
         $metrics = [
+            'total' => (clone $trayMetricsBase)->count(),
             'active' => (clone $metricsBase)
                 ->where('status', MonitoringCartStatus::Active)
                 ->where('updated_at', '>=', $staleBefore)
@@ -76,19 +129,30 @@ class CartController extends Controller
             'appointment_confirmed_pending_payment' => (clone $metricsBase)
                 ->appointmentConfirmedPendingPayment()
                 ->count(),
+            'no_progress' => (clone $trayMetricsBase)
+                ->checkoutStageFilter('no_progress')
+                ->count(),
         ];
 
         $den = $metrics['completed'] + $metrics['abandoned'];
         $metrics['conversion_percent'] = $den > 0
             ? round(100 * $metrics['completed'] / $den, 1)
             : null;
+        $metrics['attention_required'] = (clone $trayMetricsBase)->operationalBucket('attention')->count();
+        $metrics['payment_attention'] = (clone $trayMetricsBase)->operationalBucket('payment')->count();
+        $metrics['appointment_attention'] = (clone $trayMetricsBase)->operationalBucket('appointment')->count();
+        $metrics['contact_attention'] = (clone $trayMetricsBase)->operationalBucket('contact')->count();
 
-        $carts->getCollection()->transform(fn (Cart $cart) => $this->serializeCartRow($cart));
+        $operationalResolver = app(CartOperationalInsightResolver::class);
+        $carts->getCollection()->transform(
+            fn (Cart $cart) => $this->serializeCartRow($cart, $paymentInsights[(int) $cart->id] ?? null, $operationalResolver),
+        );
 
         return Inertia::render('Admin/Carts', [
             'carts' => $carts,
             'filters' => $filters,
             'metrics' => $metrics,
+            'usingDefaultPeriod' => $usingDefaultPeriod,
             'abandonedThresholdMinutes' => Cart::ABANDONED_AFTER_MINUTES,
             'canViewCartDetails' => $request->user()->administrator->hasPermissionTo('view cart details'),
             'canExport' => $request->user()->administrator->hasPermissionTo('view carts'),
@@ -99,22 +163,56 @@ class CartController extends Controller
     {
         $request->user()->administrator->hasPermissionTo('view cart details') || abort(403);
 
+        $this->attachPreviousPurchaseCounts($cart);
+
         $cart->load([
             'items',
-            'user.customer.laboratoryAppointments',
+            'laboratoryAppointments.laboratoryStore',
+            'laboratoryPurchases.transactions',
+            'user.customer.laboratoryAppointments.laboratoryStore',
             'user.customer.laboratoryCheckoutDrafts.contact',
             'user.customer.laboratoryCheckoutDrafts.address',
             'user.customer.laboratoryPurchases.transactions',
+            'user.customer.onlinePharmacyPurchases',
         ]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'data' => $this->serializeCart360Detail($cart, $request),
+            ]);
+        }
 
         return Inertia::render('Admin/CartShow', [
             'cart' => $this->serializeCartDetail($cart),
         ]);
     }
 
-    private function serializeCartRow(Cart $cart): array
+    private function attachPreviousPurchaseCounts(Cart $cart): void
+    {
+        $cart->setAttribute('previous_laboratory_purchases_count', DB::table('laboratory_purchases')
+            ->join('customers as purchase_customers', 'purchase_customers.id', '=', 'laboratory_purchases.customer_id')
+            ->where('purchase_customers.user_id', $cart->user_id)
+            ->whereNull('laboratory_purchases.deleted_at')
+            ->where('laboratory_purchases.created_at', '<', $cart->created_at)
+            ->count());
+
+        $cart->setAttribute('previous_online_pharmacy_purchases_count', DB::table('online_pharmacy_purchases')
+            ->join('customers as pharmacy_purchase_customers', 'pharmacy_purchase_customers.id', '=', 'online_pharmacy_purchases.customer_id')
+            ->where('pharmacy_purchase_customers.user_id', $cart->user_id)
+            ->whereNull('online_pharmacy_purchases.deleted_at')
+            ->where('online_pharmacy_purchases.created_at', '<', $cart->created_at)
+            ->count());
+    }
+
+    private function serializeCartRow(
+        Cart $cart,
+        ?array $paymentInsight = null,
+        ?CartOperationalInsightResolver $operationalResolver = null,
+    ): array
     {
         $display = $cart->displayStatus();
+        $operationalResolver ??= app(CartOperationalInsightResolver::class);
+        $operationalInsight = $operationalResolver->resolve($cart, $paymentInsight);
 
         return [
             'id' => $cart->id,
@@ -123,9 +221,11 @@ class CartController extends Controller
                 'full_name' => $cart->user->full_name,
                 'email' => $cart->user->email,
             ] : null,
+            'customer_history' => $this->serializeCustomerHistory($cart),
             'type' => $cart->type->value,
             'type_label' => $cart->type === MonitoringCartType::Pharmacy ? 'Farmacia' : 'Laboratorio',
             'lab_brands' => $cart->labBrands(),
+            'cart_summary' => $this->serializeCartSummary($cart),
             'appointment_pending_confirmation' => $cart->hasAppointmentPendingConfirmation(),
             'appointment_confirmed_pending_payment' => $cart->hasAppointmentConfirmedPendingPayment(),
             'items_count' => $cart->items_count ?? $cart->items->count(),
@@ -142,7 +242,665 @@ class CartController extends Controller
             'checkout_summary' => $cart->type === MonitoringCartType::Lab
                 ? $this->serializeCheckoutSummaryForRow($cart)
                 : null,
+            'payment_insight' => $paymentInsight,
+            'operational_insight' => $operationalInsight,
+            'current_stage' => $this->serializeCurrentStageForRow($cart, $paymentInsight),
+            'operational_signals' => $this->serializeOperationalSignalsForRow($cart, $paymentInsight),
         ];
+    }
+
+    /**
+     * @return array{previous_purchases_count: int, segment: string, label: string}
+     */
+    private function serializeCustomerHistory(Cart $cart): array
+    {
+        $previousPurchases = (int) ($cart->previous_laboratory_purchases_count ?? 0)
+            + (int) ($cart->previous_online_pharmacy_purchases_count ?? 0);
+
+        $segment = match (true) {
+            $previousPurchases >= 2 => 'recurrent',
+            $previousPurchases === 1 => 'existing',
+            default => 'new',
+        };
+
+        $segmentLabel = match ($segment) {
+            'recurrent' => 'Cliente recurrente',
+            'existing' => 'Cliente existente',
+            default => 'Cliente nuevo',
+        };
+
+        return [
+            'previous_purchases_count' => $previousPurchases,
+            'segment' => $segment,
+            'label' => $previousPurchases > 0
+                ? $segmentLabel.' · '.$previousPurchases.' '.($previousPurchases === 1 ? 'compra' : 'compras')
+                : $segmentLabel,
+        ];
+    }
+
+    /**
+     * @return array{brand_label: string|null, items_label: string, total_label: string}
+     */
+    private function serializeCartSummary(Cart $cart): array
+    {
+        $itemsCount = (int) ($cart->items_count ?? $cart->items->count());
+        $itemNoun = $cart->type === MonitoringCartType::Lab
+            ? ($itemsCount === 1 ? 'estudio' : 'estudios')
+            : ($itemsCount === 1 ? 'producto' : 'productos');
+
+        return [
+            'brand_label' => collect($cart->labBrands())->pluck('label')->filter()->implode(', ') ?: null,
+            'items_label' => $itemsCount.' '.$itemNoun,
+            'total_label' => formattedPrice((float) $cart->total),
+        ];
+    }
+
+    /**
+     * @return array{key: string, label: string, detail: string|null, tone: string}
+     */
+    private function serializeCurrentStageForRow(Cart $cart, ?array $paymentInsight = null): array
+    {
+        if ($cart->displayStatus() === 'completed') {
+            return [
+                'key' => 'completed',
+                'label' => 'Compra completada',
+                'detail' => 'Monitoreo completado',
+                'tone' => 'green',
+            ];
+        }
+
+        if (($paymentInsight['should_display'] ?? false) === true) {
+            $status = $paymentInsight['status'] ?? null;
+            if ($status === PaymentAttempt::STATUS_DECLINED || $status === PaymentAttempt::STATUS_ERROR) {
+                return [
+                    'key' => 'payment_'.$status,
+                    'label' => $status === PaymentAttempt::STATUS_DECLINED ? 'Pago rechazado' : 'Error al pagar',
+                    'detail' => $this->paymentAttemptCountLabel((int) ($paymentInsight['attempts_count'] ?? 0)),
+                    'tone' => 'red',
+                ];
+            }
+
+            if ($status === PaymentAttempt::STATUS_PENDING || $status === PaymentAttempt::STATUS_PROCESSING) {
+                return [
+                    'key' => 'payment_pending',
+                    'label' => 'Intento de pago pendiente',
+                    'detail' => $this->paymentAttemptCountLabel((int) ($paymentInsight['attempts_count'] ?? 0)),
+                    'tone' => 'amber',
+                ];
+            }
+        }
+
+        if ($cart->type !== MonitoringCartType::Lab) {
+            return [
+                'key' => 'cart',
+                'label' => 'Carrito activo',
+                'detail' => 'Farmacia',
+                'tone' => 'slate',
+            ];
+        }
+
+        $appointments = $cart->laboratoryAppointmentsForDisplay();
+        $appointment = $appointments->first();
+        if ($appointment) {
+            if ($appointment->confirmed_at !== null && $appointment->laboratory_purchase_id === null) {
+                return [
+                    'key' => 'appointment_confirmed_pending_payment',
+                    'label' => 'Cita confirmada sin pago',
+                    'detail' => 'Pendiente de pago',
+                    'tone' => 'violet',
+                ];
+            }
+
+            if ($appointment->confirmed_at === null) {
+                return [
+                    'key' => 'appointment_pending',
+                    'label' => 'Cita pendiente',
+                    'detail' => 'Esperando confirmación',
+                    'tone' => 'amber',
+                ];
+            }
+
+            return [
+                'key' => 'appointment_confirmed',
+                'label' => 'Cita confirmada',
+                'detail' => 'Con cita',
+                'tone' => 'green',
+            ];
+        }
+
+        $entries = $this->serializeCheckoutSummaryForRow($cart);
+        $step = collect($entries)->pluck('checkout_step')->filter()->first();
+
+        if (! is_string($step) || $step === '') {
+            return [
+                'key' => 'incomplete',
+                'label' => 'Checkout incompleto',
+                'detail' => null,
+                'tone' => 'zinc',
+            ];
+        }
+
+        $stepNumber = $this->checkoutStepNumber($step);
+        $stepLabel = $this->checkoutStepLabel($step);
+        $prefix = $cart->displayStatus() === 'abandoned' ? 'Abandonó en ' : 'En ';
+
+        return [
+            'key' => $step,
+            'label' => $prefix.mb_strtolower($stepLabel),
+            'detail' => $stepNumber ? 'Paso '.$stepNumber.' de 5' : null,
+            'tone' => $step === 'payment' ? 'sky' : 'slate',
+        ];
+    }
+
+    /**
+     * @return list<array{key: string, label: string, tone: string, detail?: string|null}>
+     */
+    private function serializeOperationalSignalsForRow(Cart $cart, ?array $paymentInsight = null): array
+    {
+        if ($cart->type !== MonitoringCartType::Lab) {
+            return [];
+        }
+
+        $signals = [];
+        $paymentSignal = $this->paymentSignal($paymentInsight);
+
+        if ($paymentSignal !== null) {
+            $signals[] = $paymentSignal;
+        }
+
+        $appointment = $cart->laboratoryAppointmentsForDisplay()->first();
+
+        if ($appointment) {
+            if ($appointment->confirmed_at !== null && $appointment->laboratory_purchase_id === null) {
+                $signals[] = ['key' => 'appointment_confirmed_pending_payment', 'label' => 'Cita confirmada sin pago', 'tone' => 'violet'];
+            } elseif ($appointment->confirmed_at === null) {
+                $signals[] = [
+                    'key' => 'appointment_pending',
+                    'label' => 'Cita pendiente',
+                    'tone' => 'amber',
+                    'detail' => $this->appointmentPendingForLabel($appointment),
+                ];
+            } else {
+                $signals[] = ['key' => 'appointment_confirmed', 'label' => 'Cita confirmada', 'tone' => 'green'];
+            }
+
+            if ($appointment->has_left_callback_info) {
+                $signals[] = ['key' => 'callback_requested', 'label' => 'Solicitó llamada', 'tone' => 'violet'];
+            }
+
+            if ($appointment->phone_call_intent_at !== null) {
+                $signals[] = ['key' => 'phone_call_intent', 'label' => 'Intentó llamar', 'tone' => 'sky'];
+            }
+        } elseif ($cart->hasAppointmentPendingConfirmation() || $cart->hasAppointmentConfirmedPendingPayment()) {
+            // Los scopes de métricas detectan cita por marca aunque no podamos asociar una sola cita al snapshot.
+            $signals[] = [
+                'key' => 'appointment_signal',
+                'label' => $cart->hasAppointmentConfirmedPendingPayment() ? 'Cita confirmada sin pago' : 'Cita pendiente',
+                'tone' => $cart->hasAppointmentConfirmedPendingPayment() ? 'violet' : 'amber',
+            ];
+        }
+
+        return collect($signals)->take(3)->values()->all();
+    }
+
+    /**
+     * @return array{key: string, label: string, tone: string, detail?: string|null}|null
+     */
+    private function paymentSignal(?array $paymentInsight): ?array
+    {
+        if (($paymentInsight['should_display'] ?? false) !== true) {
+            return null;
+        }
+
+        $status = $paymentInsight['status'] ?? null;
+        if (! in_array($status, [
+            PaymentAttempt::STATUS_ERROR,
+            PaymentAttempt::STATUS_DECLINED,
+            PaymentAttempt::STATUS_PENDING,
+            PaymentAttempt::STATUS_PROCESSING,
+        ], true)) {
+            return null;
+        }
+
+        $lastAttempt = $paymentInsight['last_attempt'] ?? [];
+        $processorCode = $lastAttempt['processor_code'] ?? null;
+        $processorMessage = $lastAttempt['processor_message'] ?? null;
+        $elapsed = $lastAttempt['occurred_for_label'] ?? null;
+
+        $detailParts = [];
+        if ($status === PaymentAttempt::STATUS_DECLINED && filled($processorCode)) {
+            $detailParts[] = 'Código '.$processorCode;
+        } elseif ($status === PaymentAttempt::STATUS_ERROR && filled($processorMessage)) {
+            $detailParts[] = $processorMessage;
+        }
+        if (filled($elapsed)) {
+            $detailParts[] = $elapsed;
+        }
+
+        return [
+            'key' => 'payment_'.$status,
+            'label' => match ($status) {
+                PaymentAttempt::STATUS_ERROR => 'Error técnico',
+                PaymentAttempt::STATUS_DECLINED => 'Pago rechazado',
+                default => 'Intento pendiente',
+            },
+            'tone' => $status === PaymentAttempt::STATUS_PENDING || $status === PaymentAttempt::STATUS_PROCESSING ? 'amber' : 'red',
+            'detail' => $detailParts !== [] ? implode(' · ', $detailParts) : null,
+        ];
+    }
+
+    private function paymentAttemptCountLabel(int $count): ?string
+    {
+        if ($count <= 0) {
+            return null;
+        }
+
+        return $count.' '.($count === 1 ? 'intento' : 'intentos');
+    }
+
+    private function appointmentPendingForLabel(LaboratoryAppointment $appointment): ?string
+    {
+        if ($appointment->confirmed_at !== null || ! $appointment->created_at) {
+            return null;
+        }
+
+        $minutes = max(0, $appointment->created_at->diffInMinutes(now()));
+        if ($minutes < 60) {
+            return $minutes.' min';
+        }
+
+        $hours = intdiv($minutes, 60);
+        if ($hours < 24) {
+            return $hours.' h';
+        }
+
+        return intdiv($hours, 24).' d';
+    }
+
+    private function checkoutStepNumber(string $step): ?int
+    {
+        return match ($step) {
+            'patient' => 1,
+            'address' => 2,
+            'appointment' => 3,
+            'payment' => 4,
+            'confirmation' => 5,
+            default => null,
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeCart360Detail(Cart $cart, Request $request): array
+    {
+        $paymentInsight = app(CartPaymentAttemptCorrelator::class)
+            ->forCarts(collect([$cart]))[(int) $cart->id] ?? null;
+        $purchase = $cart->type === MonitoringCartType::Lab ? $cart->relatedLaboratoryPurchase() : null;
+        $appointment = $cart->type === MonitoringCartType::Lab
+            ? $cart->laboratoryAppointmentsForDisplay()->first()
+            : null;
+        $checkoutEntries = $cart->type === MonitoringCartType::Lab
+            ? $this->serializeCheckoutSummaryForRow($cart)
+            : [];
+
+        return [
+            'cart' => $this->serialize360Cart($cart, $purchase),
+            'customer' => $this->serialize360Customer($cart),
+            'operational_insight' => app(CartOperationalInsightResolver::class)->resolve($cart, $paymentInsight),
+            'checkout' => [
+                'stage' => $this->serializeCurrentStageForRow($cart, $paymentInsight),
+                'signals' => $this->serializeOperationalSignalsForRow($cart, $paymentInsight),
+                'journey' => $this->serialize360Journey($cart, $checkoutEntries, $appointment, $purchase, $paymentInsight),
+                'entries' => $checkoutEntries,
+            ],
+            'payment' => $this->serialize360Payment($paymentInsight),
+            'appointment' => $appointment ? $this->serialize360Appointment($appointment) : null,
+            'contact' => $appointment ? $this->serialize360Contact($appointment) : null,
+            'history' => $this->serialize360History($cart),
+            'links' => $this->serialize360Links($cart, $request, $purchase, $appointment),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serialize360Cart(Cart $cart, ?LaboratoryPurchase $purchase): array
+    {
+        return [
+            'id' => $cart->id,
+            'type' => $cart->type->value,
+            'type_label' => $cart->type === MonitoringCartType::Pharmacy ? 'Farmacia' : 'Laboratorio',
+            'brand_label' => collect($cart->labBrands())->pluck('label')->filter()->implode(', ') ?: null,
+            'items_count' => $cart->items->count(),
+            'items_label' => $this->serializeCartSummary($cart)['items_label'],
+            'total_formatted' => formattedPrice((float) $cart->total),
+            'display_status' => $cart->displayStatus(),
+            'display_status_label' => $cart->displayStatusLabel(),
+            'status_summary' => $cart->displayStatus() === 'abandoned' && $cart->inactiveForLabel()
+                ? 'Abandonado hace '.$cart->inactiveForLabel()
+                : $cart->displayStatusLabel(),
+            'updated_at_human' => $cart->updated_at?->format('d/m/Y H:i'),
+            'created_at_human' => $cart->created_at?->format('d/m/Y H:i'),
+            'completed_at_human' => $cart->completed_at?->format('d/m/Y H:i'),
+            'related_purchase' => $purchase ? [
+                'label' => 'Compra #'.$purchase->id,
+                'created_at_human' => $purchase->created_at?->format('d/m/Y H:i'),
+                'total_formatted' => $purchase->formatted_total ?? formattedPrice((float) $purchase->total),
+            ] : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serialize360Customer(Cart $cart): array
+    {
+        $history = $this->serializeCustomerHistory($cart);
+
+        return [
+            'name' => $cart->user?->full_name,
+            'email' => $cart->user?->email,
+            'phone' => $cart->user?->full_phone,
+            'registered_at_human' => $cart->user?->created_at?->format('d/m/Y H:i'),
+            'segment' => $history['segment'],
+            'segment_label' => match ($history['segment']) {
+                'recurrent' => 'Cliente recurrente',
+                'existing' => 'Cliente existente',
+                default => 'Cliente nuevo',
+            },
+            'previous_purchases_count' => $history['previous_purchases_count'],
+            'previous_purchases_label' => $history['previous_purchases_count'].' '.($history['previous_purchases_count'] === 1 ? 'compra anterior' : 'compras anteriores'),
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $checkoutEntries
+     * @return list<array<string, mixed>>
+     */
+    private function serialize360Journey(
+        Cart $cart,
+        array $checkoutEntries,
+        ?LaboratoryAppointment $appointment,
+        ?LaboratoryPurchase $purchase,
+        ?array $paymentInsight,
+    ): array {
+        $hasItems = $cart->items->isNotEmpty();
+        $hasPatient = collect($checkoutEntries)->contains(fn (array $entry) => filled($entry['patient_name'] ?? null))
+            || $purchase !== null;
+        $hasAddress = collect($checkoutEntries)->contains(fn (array $entry) => filled($entry['address_short'] ?? null))
+            || $purchase !== null;
+        $requiresAppointment = $this->cartRequiresAppointment($cart);
+        $paymentStatus = $this->paymentJourneyStatus($paymentInsight);
+        $isCompleted = $cart->status === MonitoringCartStatus::Completed && $purchase !== null;
+
+        return [
+            [
+                'key' => 'items',
+                'label' => 'Estudios',
+                'state' => $hasItems ? 'completed' : 'current',
+                'detail' => $hasItems ? $this->serializeCartSummary($cart)['items_label'] : 'Sin items',
+            ],
+            [
+                'key' => 'patient',
+                'label' => 'Paciente',
+                'state' => $hasPatient ? 'completed' : 'pending',
+                'detail' => $hasPatient ? 'Registrado' : 'No registrado',
+            ],
+            [
+                'key' => 'address',
+                'label' => 'Dirección',
+                'state' => $hasAddress ? 'completed' : 'pending',
+                'detail' => $hasAddress ? 'Registrada' : 'No registrada',
+            ],
+            [
+                'key' => 'appointment',
+                'label' => 'Cita',
+                'state' => $this->appointmentJourneyState($requiresAppointment, $appointment),
+                'detail' => $this->appointmentJourneyDetail($requiresAppointment, $appointment),
+            ],
+            [
+                'key' => 'payment',
+                'label' => 'Pago',
+                'state' => $paymentStatus['state'],
+                'detail' => $paymentStatus['detail'],
+            ],
+            [
+                'key' => 'purchase',
+                'label' => 'Compra',
+                'state' => $isCompleted ? 'completed' : 'pending',
+                'detail' => $isCompleted ? 'Compra registrada' : 'Sin compra',
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function serialize360Payment(?array $paymentInsight): ?array
+    {
+        if ($paymentInsight === null) {
+            return null;
+        }
+
+        if (($paymentInsight['confidence'] ?? null) === 'ambiguous') {
+            return [
+                'confidence' => 'ambiguous',
+                'status' => 'ambiguous',
+                'status_label' => 'Información de pago no determinada',
+                'note' => 'Se encontraron intentos que no pueden asociarse de forma confiable a este carrito.',
+            ];
+        }
+
+        if (($paymentInsight['should_display'] ?? false) !== true) {
+            return null;
+        }
+
+        return [
+            'confidence' => $paymentInsight['confidence'] ?? 'high',
+            'gateway_label' => 'Efevoo',
+            'status' => $paymentInsight['status'] ?? null,
+            'status_label' => $paymentInsight['status_label'] ?? null,
+            'status_tone' => $paymentInsight['status_tone'] ?? 'zinc',
+            'attempts_count' => (int) ($paymentInsight['attempts_count'] ?? 0),
+            'last_attempt' => $paymentInsight['last_attempt'] ?? null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serialize360Appointment(LaboratoryAppointment $appointment): array
+    {
+        $status = $appointment->confirmed_at === null
+            ? 'Pendiente'
+            : ($appointment->laboratory_purchase_id === null ? 'Confirmada sin pago' : 'Confirmada');
+
+        return [
+            'brand_label' => $appointment->brand->label(),
+            'store_name' => $appointment->laboratoryStore?->name,
+            'store_address' => $appointment->laboratoryStore?->address,
+            'appointment_date_human' => $appointment->formatted_appointment_date,
+            'status_label' => $status,
+            'waiting_label' => $appointment->confirmed_at === null ? 'Esperando confirmación '.$this->appointmentPendingForLabel($appointment) : null,
+            'confirmed_at_human' => $appointment->confirmed_at?->format('d/m/Y H:i'),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function serialize360Contact(LaboratoryAppointment $appointment): ?array
+    {
+        $hasPhoneIntent = $appointment->phone_call_intent_at !== null;
+        $hasCallback = (bool) $appointment->has_left_callback_info;
+
+        if (! $hasPhoneIntent && ! $hasCallback) {
+            return null;
+        }
+
+        return [
+            'phone_call_intent' => $hasPhoneIntent ? [
+                'label' => 'Intentó llamar',
+                'at_human' => $appointment->formatted_phone_call_intent_at,
+            ] : null,
+            'callback_requested' => $hasCallback ? [
+                'label' => 'Solicitó llamada',
+                'availability_label' => $appointment->formatted_callback_availability_range,
+                'comment' => $this->shortText($appointment->patient_callback_comment, 120),
+            ] : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serialize360History(Cart $cart): array
+    {
+        $customer = $cart->user?->customer;
+        if (! $customer) {
+            return [
+                'registered_at_human' => $cart->user?->created_at?->format('d/m/Y H:i'),
+                'previous_purchases_count' => 0,
+                'last_purchase_label' => 'Sin compras anteriores',
+                'historical_value_formatted' => formattedPrice(0),
+            ];
+        }
+
+        $labPurchases = $customer->relationLoaded('laboratoryPurchases')
+            ? $customer->laboratoryPurchases
+            : $customer->laboratoryPurchases()->get();
+        $pharmacyPurchases = $customer->relationLoaded('onlinePharmacyPurchases')
+            ? $customer->onlinePharmacyPurchases
+            : $customer->onlinePharmacyPurchases()->get();
+
+        $previousLab = $labPurchases->filter(fn (LaboratoryPurchase $purchase) => $purchase->created_at && $purchase->created_at->lt($cart->created_at));
+        $previousPharmacy = $pharmacyPurchases->filter(fn (OnlinePharmacyPurchase $purchase) => $purchase->created_at && $purchase->created_at->lt($cart->created_at));
+        $previousPurchases = $previousLab
+            ->map(fn (LaboratoryPurchase $purchase) => [
+                'created_at' => $purchase->created_at,
+                'amount' => (float) $purchase->total,
+            ])
+            ->concat($previousPharmacy->map(fn (OnlinePharmacyPurchase $purchase) => [
+                'created_at' => $purchase->created_at,
+                'amount' => ((float) ($purchase->total_cents ?? 0)) / 100,
+            ]))
+            ->sortByDesc('created_at')
+            ->values();
+
+        $lastPurchase = $previousPurchases->first();
+
+        return [
+            'registered_at_human' => $cart->user?->created_at?->format('d/m/Y H:i'),
+            'previous_purchases_count' => $previousPurchases->count(),
+            'last_purchase_label' => $lastPurchase
+                ? 'Última compra: '.$lastPurchase['created_at']->format('d/m/Y')
+                : 'Sin compras anteriores',
+            'historical_value_formatted' => formattedPrice((float) $previousPurchases->sum('amount')),
+        ];
+    }
+
+    /**
+     * @return array<string, string|null>
+     */
+    private function serialize360Links(
+        Cart $cart,
+        Request $request,
+        ?LaboratoryPurchase $purchase,
+        ?LaboratoryAppointment $appointment,
+    ): array {
+        $administrator = $request->user()->administrator;
+
+        return [
+            'cart_url' => route('admin.carts.show', $cart),
+            'purchase_url' => $purchase && $this->adminCanIfPermissionExists($administrator, 'laboratory-purchases.manage')
+                ? route('admin.laboratory-purchases.show', $purchase)
+                : null,
+            'appointment_url' => $appointment && $administrator->laboratoryConcierge
+                ? route('admin.laboratory-appointments.show', $appointment)
+                : null,
+        ];
+    }
+
+    private function adminCanIfPermissionExists(mixed $administrator, string $permission): bool
+    {
+        if (! \Spatie\Permission\Models\Permission::query()
+            ->where('name', $permission)
+            ->where('guard_name', 'web')
+            ->exists()) {
+            return false;
+        }
+
+        return $administrator->hasPermissionTo($permission);
+    }
+
+    private function cartRequiresAppointment(Cart $cart): bool
+    {
+        if ($cart->type !== MonitoringCartType::Lab) {
+            return false;
+        }
+
+        $testIds = $cart->items->pluck('product_id')->filter()->unique()->values();
+        if ($testIds->isEmpty()) {
+            return $cart->hasAppointmentPendingConfirmation() || $cart->hasAppointmentConfirmedPendingPayment();
+        }
+
+        return LaboratoryTest::query()
+            ->whereIn('id', $testIds)
+            ->where('requires_appointment', true)
+            ->exists();
+    }
+
+    private function appointmentJourneyState(bool $requiresAppointment, ?LaboratoryAppointment $appointment): string
+    {
+        if (! $requiresAppointment) {
+            return 'pending';
+        }
+
+        if (! $appointment) {
+            return 'pending';
+        }
+
+        return $appointment->confirmed_at === null ? 'current' : 'completed';
+    }
+
+    private function appointmentJourneyDetail(bool $requiresAppointment, ?LaboratoryAppointment $appointment): string
+    {
+        if (! $requiresAppointment) {
+            return 'No aplica';
+        }
+
+        if (! $appointment) {
+            return 'No seleccionada';
+        }
+
+        if ($appointment->confirmed_at === null) {
+            return 'Pendiente';
+        }
+
+        return $appointment->laboratory_purchase_id === null ? 'Confirmada sin pago' : 'Confirmada';
+    }
+
+    /**
+     * @return array{state: string, detail: string}
+     */
+    private function paymentJourneyStatus(?array $paymentInsight): array
+    {
+        if ($paymentInsight === null) {
+            return ['state' => 'pending', 'detail' => 'No iniciado'];
+        }
+
+        if (($paymentInsight['confidence'] ?? null) === 'ambiguous') {
+            return ['state' => 'pending', 'detail' => 'Información no determinada'];
+        }
+
+        return match ($paymentInsight['status'] ?? null) {
+            PaymentAttempt::STATUS_APPROVED => ['state' => 'completed', 'detail' => 'Aprobado'],
+            PaymentAttempt::STATUS_DECLINED => ['state' => 'failed', 'detail' => 'Rechazado'],
+            PaymentAttempt::STATUS_ERROR => ['state' => 'failed', 'detail' => 'Error técnico'],
+            PaymentAttempt::STATUS_PENDING, PaymentAttempt::STATUS_PROCESSING => ['state' => 'current', 'detail' => 'Pendiente'],
+            default => ['state' => 'pending', 'detail' => 'No iniciado'],
+        };
     }
 
     private function serializeCartDetail(Cart $cart): array
@@ -798,12 +1556,26 @@ class CartController extends Controller
             return null;
         }
 
+        $explicit = $cart->relationLoaded('laboratoryAppointments')
+            ? $cart->laboratoryAppointments
+            : $cart->laboratoryAppointments()->get();
+
+        $explicitForBrand = $explicit
+            ->filter(fn (LaboratoryAppointment $appointment) => $appointment->brand === $brand)
+            ->sortByDesc('updated_at')
+            ->first();
+
+        if ($explicitForBrand) {
+            return $explicitForBrand;
+        }
+
         $appointments = $customer->relationLoaded('laboratoryAppointments')
             ? $customer->laboratoryAppointments
             : $customer->laboratoryAppointments()->get();
 
         return $appointments
-            ->filter(fn (LaboratoryAppointment $appointment) => $appointment->brand === $brand)
+            ->filter(fn (LaboratoryAppointment $appointment) => $appointment->cart_id === null
+                && $appointment->brand === $brand)
             ->sortByDesc('updated_at')
             ->first();
     }

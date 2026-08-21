@@ -3,6 +3,7 @@
 namespace App\Services\CartsDashboard;
 
 use App\Enums\LaboratoryBrand;
+use App\Models\Cart;
 use App\Support\CartsDashboard\CartsDashboardFilter;
 use Illuminate\Support\Facades\Cache;
 
@@ -21,61 +22,54 @@ class CartsAnalyticsService
         $resolver = function () use ($filter) {
             $current = $this->repository->summary($filter, $filter->start, $filter->end);
             $previous = $this->repository->summary($filter, $filter->previousStart, $filter->previousEnd);
-            $daily = $this->repository->dailySalesVsAbandoned($filter);
-            $createdSpark = $this->buildCreatedSparkline($filter, $daily);
+            $daily = $this->repository->dailyCarts($filter);
+            $operational = $this->repository->operationalSummary($filter);
             $laboratories = $this->repository->laboratoryRanking($filter);
-            $topStudies = $this->repository->topStudies($filter);
-            $revenueDistribution = $this->repository->revenueDistribution($filter);
 
             return [
-                'kpis' => $this->buildKpis($current, $previous, $daily, $createdSpark),
-                'sales_vs_abandoned' => [
-                    'daily' => $daily,
+                'kpis' => $this->buildExecutiveKpis($current, $previous, $daily),
+                'operational_kpis' => $this->buildOperationalKpis($operational),
+                'daily' => [
+                    'rows' => $daily,
                     'totals' => [
-                        'sold_amount' => round(collect($daily)->sum('sold_amount'), 2),
-                        'abandoned_amount' => round(collect($daily)->sum('abandoned_amount'), 2),
-                        'sold_count' => (int) collect($daily)->sum('sold_count'),
+                        'created_count' => (int) collect($daily)->sum('created_count'),
                         'abandoned_count' => (int) collect($daily)->sum('abandoned_count'),
+                        'completed_count' => (int) collect($daily)->sum('completed_count'),
+                        'created_amount' => round((float) collect($daily)->sum('created_amount'), 2),
+                        'abandoned_amount' => round((float) collect($daily)->sum('abandoned_amount'), 2),
+                        'completed_amount' => round((float) collect($daily)->sum('completed_amount'), 2),
                     ],
                 ],
-                'trends' => [
-                    'sales_count' => collect($daily)->map(fn (array $row) => [
-                        'date' => $row['date'],
-                        'label' => $row['label'],
-                        'value' => $row['sold_count'],
-                    ])->values()->all(),
-                    'abandoned_count' => collect($daily)->map(fn (array $row) => [
-                        'date' => $row['date'],
-                        'label' => $row['label'],
-                        'value' => $row['abandoned_count'],
-                    ])->values()->all(),
-                    'sold_amount' => collect($daily)->map(fn (array $row) => [
-                        'date' => $row['date'],
-                        'label' => $row['label'],
-                        'value' => $row['sold_amount'],
-                    ])->values()->all(),
-                    'abandoned_amount' => collect($daily)->map(fn (array $row) => [
-                        'date' => $row['date'],
-                        'label' => $row['label'],
-                        'value' => $row['abandoned_amount'],
-                    ])->values()->all(),
+                'funnel' => [
+                    'stages' => $this->repository->checkoutFunnel($filter),
+                    'abandonment_by_stage' => $this->repository->abandonmentByStage($filter),
+                    'confidence' => [
+                        'Carrito y compra se calculan desde carts.',
+                        'Checkout iniciado usa drafts, citas o pago correlacionado; si el draft ya no existe, no se inventa la etapa.',
+                        'Pago intentado usa solo PaymentAttempt Efevoo correlacionado de forma conservadora.',
+                    ],
                 ],
+                'payments' => $this->repository->paymentAnalytics($filter),
+                'appointments' => $this->repository->appointmentAnalytics($filter),
+                'contact' => $this->repository->contactAnalytics($filter),
                 'laboratories' => $laboratories,
                 'laboratory_charts' => $this->buildLaboratoryCharts($laboratories),
-                'top_studies' => $topStudies,
-                'revenue_distribution' => $revenueDistribution,
+                'customer_profile' => $this->repository->customerProfile($filter),
+                'ticket_averages' => $this->repository->ticketAverages($filter),
+                'top_studies' => $this->repository->topStudies($filter),
                 'meta' => [
-                    'generated_at' => now('America/Monterrey')->format('d/m/Y H:i'),
+                    'generated_at' => now(config('app.timezone', 'America/Monterrey'))->format('d/m/Y H:i'),
                     'previous_period' => [
-                        'start_date' => $filter->previousStart->timezone('America/Monterrey')->toDateString(),
-                        'end_date' => $filter->previousEnd->timezone('America/Monterrey')->toDateString(),
+                        'start_date' => $filter->previousStart->timezone(config('app.timezone', 'America/Monterrey'))->toDateString(),
+                        'end_date' => $filter->previousEnd->timezone(config('app.timezone', 'America/Monterrey'))->toDateString(),
                     ],
                     'definitions' => [
-                        'abandoned' => 'Carrito activo sin compra con ≥ 30 min sin actividad.',
-                        'recovered' => 'Estimado: compra posterior a tag de abandono ActiveCampaign.',
-                        'revenue' => 'Suma de pedidos de laboratorio/farmacia en el periodo.',
-                        'lost_value' => 'Suma del total snapshot de carritos abandonados en el periodo.',
+                        'abandoned' => 'Abandono: sin actividad por mas de '.Cart::ABANDONED_AFTER_MINUTES.' min.',
+                        'conversion' => 'Conversion = comprados / (comprados + abandonados).',
+                        'cart_amounts' => 'Montos calculados con carts.total; no son ingreso contable.',
+                        'payments' => 'Pagos Efevoo correlacionados por cliente, monto y ventana; se excluyen ambiguos.',
                     ],
+                    'abandoned_threshold_minutes' => Cart::ABANDONED_AFTER_MINUTES,
                 ],
             ];
         };
@@ -91,127 +85,46 @@ class CartsAnalyticsService
      * @param  array<string, mixed>  $current
      * @param  array<string, mixed>  $previous
      * @param  list<array<string, mixed>>  $daily
-     * @param  list<array<string, mixed>>  $createdSpark
      * @return list<array<string, mixed>>
      */
-    private function buildKpis(array $current, array $previous, array $daily, array $createdSpark): array
+    private function buildExecutiveKpis(array $current, array $previous, array $daily): array
     {
-        $soldSpark = collect($daily)->map(fn (array $row) => [
-            'date' => $row['date'],
-            'label' => $row['label'],
-            'value' => $row['sold_count'],
-        ])->take(-14)->values()->all();
-
-        $abandonedCountSpark = collect($daily)->map(fn (array $row) => [
-            'date' => $row['date'],
-            'label' => $row['label'],
-            'value' => $row['abandoned_count'],
-        ])->take(-14)->values()->all();
-
-        $soldAmountSpark = collect($daily)->map(fn (array $row) => [
-            'date' => $row['date'],
-            'label' => $row['label'],
-            'value' => $row['sold_amount'],
-        ])->take(-14)->values()->all();
-
-        $abandonedAmountSpark = collect($daily)->map(fn (array $row) => [
-            'date' => $row['date'],
-            'label' => $row['label'],
-            'value' => $row['abandoned_amount'],
-        ])->take(-14)->values()->all();
-
         return [
-            $this->kpi(
-                id: 'created',
-                label: 'Carritos creados',
-                value: $current['created'],
-                previous: $previous['created'],
-                format: 'number',
-                tone: 'blue',
-                sparkline: $createdSpark,
-            ),
-            $this->kpi(
-                id: 'abandoned',
-                label: 'Carritos abandonados',
-                value: $current['abandoned'],
-                previous: $previous['abandoned'],
-                format: 'number',
-                tone: 'red',
-                sparkline: $abandonedCountSpark,
-                higherIsWorse: true,
-            ),
-            $this->kpi(
-                id: 'recovered',
-                label: 'Carritos recuperados',
-                value: $current['recovered'],
-                previous: $previous['recovered'],
-                format: 'number',
-                tone: 'green',
-                sparkline: $soldSpark,
-                hint: 'Estimado (tag AC + compra)',
-            ),
-            $this->kpi(
-                id: 'sales',
-                label: 'Ventas realizadas',
-                value: $current['completed'],
-                previous: $previous['completed'],
-                format: 'number',
-                tone: 'green',
-                sparkline: $soldSpark,
-            ),
-            $this->kpi(
-                id: 'lost_value',
-                label: 'Valor potencial perdido',
-                value: $current['abandoned_value'],
-                previous: $previous['abandoned_value'],
-                format: 'money',
-                tone: 'red',
-                sparkline: $abandonedAmountSpark,
-                higherIsWorse: true,
-            ),
-            $this->kpi(
-                id: 'recovered_value',
-                label: 'Valor recuperado',
-                value: $current['recovered_value'],
-                previous: $previous['recovered_value'],
-                format: 'money',
-                tone: 'green',
-                sparkline: $soldAmountSpark,
-                hint: 'Estimado',
-            ),
-            $this->kpi(
-                id: 'conversion',
-                label: 'Conversión',
-                value: $current['conversion_percent'],
-                previous: $previous['conversion_percent'],
-                format: 'percent',
-                tone: 'purple',
-                sparkline: $soldSpark,
-            ),
-            $this->kpi(
-                id: 'avg_ticket',
-                label: 'Ticket promedio',
-                value: $current['avg_ticket'],
-                previous: $previous['avg_ticket'],
-                format: 'money',
-                tone: 'blue',
-                sparkline: $soldAmountSpark,
-            ),
+            $this->kpi('created', 'Carritos creados', $current['created'], $previous['created'], 'number', 'blue', $this->spark($daily, 'created_count')),
+            $this->kpi('abandoned', 'Abandonados', $current['abandoned'], $previous['abandoned'], 'number', 'red', $this->spark($daily, 'abandoned_count'), true, $this->formatValue($current['abandonment_percent'], 'percent')),
+            $this->kpi('completed', 'Comprados', $current['completed'], $previous['completed'], 'number', 'green', $this->spark($daily, 'completed_count')),
+            $this->kpi('conversion', 'Conversion', $current['conversion_percent'], $previous['conversion_percent'], 'percent', 'purple', $this->spark($daily, 'completed_count'), false, 'Comprados / (comprados + abandonados)'),
+            $this->kpi('abandoned_amount', 'Monto abandonado', $current['abandoned_value'], $previous['abandoned_value'], 'money', 'orange', $this->spark($daily, 'abandoned_amount'), true),
+            $this->kpi('completed_amount', 'Monto de carritos comprados', $current['completed_value'], $previous['completed_value'], 'money', 'green', $this->spark($daily, 'completed_amount')),
         ];
     }
 
     /**
-     * @param  list<array<string, mixed>>  $daily
+     * @param  array<string, int>  $operational
      * @return list<array<string, mixed>>
      */
-    private function buildCreatedSparkline(CartsDashboardFilter $filter, array $daily): array
+    private function buildOperationalKpis(array $operational): array
     {
-        $counts = $this->repository->dailyCreatedCounts($filter);
+        return [
+            $this->plainKpi('attention_required', 'Atencion requerida', $operational['attention_required'], 'number', 'red', 'operational_bucket=attention'),
+            $this->plainKpi('payment_incidents', 'Pagos con incidencia', $operational['payment_incidents'], 'number', 'orange', 'operational_bucket=payment'),
+            $this->plainKpi('payment_declined', 'Pago rechazado', $operational['payment_declined'], 'number', 'red', 'payment_status=declined'),
+            $this->plainKpi('payment_error', 'Error tecnico', $operational['payment_error'], 'number', 'red', 'payment_status=error'),
+            $this->plainKpi('appointments_to_handle', 'Citas por atender', $operational['appointments_to_handle'], 'number', 'purple', 'operational_bucket=appointment'),
+            $this->plainKpi('contact_requested', 'Solicitaron contacto', $operational['contact_requested'], 'number', 'blue', 'operational_bucket=contact'),
+        ];
+    }
 
-        return collect($daily)->map(fn (array $row) => [
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array{date: string, label: string, value: float|int}>
+     */
+    private function spark(array $rows, string $key): array
+    {
+        return collect($rows)->map(fn (array $row) => [
             'date' => $row['date'],
             'label' => $row['label'],
-            'value' => (int) ($counts[$row['date']] ?? 0),
+            'value' => $row[$key] ?? 0,
         ])->take(-14)->values()->all();
     }
 
@@ -232,20 +145,37 @@ class CartsAnalyticsService
     ): array {
         $delta = $this->delta($value, $previous, $higherIsWorse);
 
+        return array_merge($this->plainKpi($id, $label, $value, $format, $tone, null, $hint), [
+            'previous_value' => $previous,
+            'previous_formatted' => $this->formatValue($previous, $format),
+            'delta_percent' => $delta['percent'],
+            'delta_direction' => $delta['direction'],
+            'delta_is_positive' => $delta['is_positive'],
+            'sparkline' => $sparkline,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function plainKpi(
+        string $id,
+        string $label,
+        int|float|null $value,
+        string $format,
+        string $tone,
+        ?string $monitorQuery = null,
+        ?string $hint = null,
+    ): array {
         return [
             'id' => $id,
             'label' => $label,
             'value' => $value,
             'value_formatted' => $this->formatValue($value, $format),
-            'previous_value' => $previous,
-            'previous_formatted' => $this->formatValue($previous, $format),
             'format' => $format,
             'tone' => $tone,
-            'delta_percent' => $delta['percent'],
-            'delta_direction' => $delta['direction'],
-            'delta_is_positive' => $delta['is_positive'],
-            'sparkline' => $sparkline,
             'hint' => $hint,
+            'monitor_query' => $monitorQuery,
         ];
     }
 
@@ -264,30 +194,32 @@ class CartsAnalyticsService
             }
 
             $direction = $current > 0 ? 'up' : 'down';
-            $isPositive = $higherIsWorse ? $direction === 'down' : $direction === 'up';
 
-            return ['percent' => 100.0, 'direction' => $direction, 'is_positive' => $isPositive];
+            return [
+                'percent' => 100.0,
+                'direction' => $direction,
+                'is_positive' => $higherIsWorse ? $direction === 'down' : $direction === 'up',
+            ];
         }
 
         $raw = (($current - $previous) / abs($previous)) * 100;
         $direction = $raw > 0.05 ? 'up' : ($raw < -0.05 ? 'down' : 'flat');
-        $isPositive = match ($direction) {
-            'flat' => null,
-            'up' => ! $higherIsWorse,
-            'down' => $higherIsWorse,
-        };
 
         return [
             'percent' => round(abs($raw), 1),
             'direction' => $direction,
-            'is_positive' => $isPositive,
+            'is_positive' => match ($direction) {
+                'flat' => null,
+                'up' => ! $higherIsWorse,
+                'down' => $higherIsWorse,
+            },
         ];
     }
 
     private function formatValue(int|float|null $value, string $format): string
     {
         if ($value === null) {
-            return '—';
+            return '--';
         }
 
         return match ($format) {
@@ -303,33 +235,27 @@ class CartsAnalyticsService
      */
     private function buildLaboratoryCharts(array $laboratories): array
     {
-        $sortedBySales = collect($laboratories)->sortByDesc('sales_count')->values();
-        $sortedByAbandoned = collect($laboratories)->sortByDesc('abandoned_count')->values();
-        $sortedByConversion = collect($laboratories)->sortByDesc('conversion_percent')->values();
-        $sortedByRevenue = collect($laboratories)->sortByDesc('revenue')->values();
-        $sortedByLost = collect($laboratories)->sortByDesc('abandoned_value')->values();
-
         return [
-            'sales' => $sortedBySales->map(fn (array $row) => [
+            'created' => collect($laboratories)->sortByDesc('carts_count')->map(fn (array $row) => [
                 'label' => $row['brand_label'],
-                'value' => $row['sales_count'],
-            ])->all(),
-            'abandoned' => $sortedByAbandoned->map(fn (array $row) => [
+                'value' => $row['carts_count'],
+            ])->values()->all(),
+            'abandoned' => collect($laboratories)->sortByDesc('abandoned_count')->map(fn (array $row) => [
                 'label' => $row['brand_label'],
                 'value' => $row['abandoned_count'],
-            ])->all(),
-            'conversion' => $sortedByConversion->map(fn (array $row) => [
+            ])->values()->all(),
+            'completed' => collect($laboratories)->sortByDesc('completed_count')->map(fn (array $row) => [
+                'label' => $row['brand_label'],
+                'value' => $row['completed_count'],
+            ])->values()->all(),
+            'conversion' => collect($laboratories)->sortByDesc('conversion_percent')->map(fn (array $row) => [
                 'label' => $row['brand_label'],
                 'value' => $row['conversion_percent'],
-            ])->all(),
-            'revenue' => $sortedByRevenue->map(fn (array $row) => [
-                'label' => $row['brand_label'],
-                'value' => $row['revenue'],
-            ])->all(),
-            'lost_value' => $sortedByLost->map(fn (array $row) => [
+            ])->values()->all(),
+            'abandoned_value' => collect($laboratories)->sortByDesc('abandoned_value')->map(fn (array $row) => [
                 'label' => $row['brand_label'],
                 'value' => $row['abandoned_value'],
-            ])->all(),
+            ])->values()->all(),
         ];
     }
 

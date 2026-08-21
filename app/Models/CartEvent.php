@@ -2,27 +2,25 @@
 
 namespace App\Models;
 
+use App\Enums\CartEventType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class CartItem extends Model
+class CartEvent extends Model
 {
     protected $guarded = [];
 
     protected function casts(): array
     {
         return [
-            'price' => 'decimal:2',
+            'event' => CartEventType::class,
+            'metadata' => 'array',
+            'occurred_at' => 'datetime',
         ];
     }
 
     public function cart(): BelongsTo
     {
         return $this->belongsTo(Cart::class);
-    }
-
-    public function laboratoryTest(): BelongsTo
-    {
-        return $this->belongsTo(LaboratoryTest::class, 'product_id');
     }
 }

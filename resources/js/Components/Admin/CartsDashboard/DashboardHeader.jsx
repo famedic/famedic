@@ -3,14 +3,12 @@ import { Text } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
 import {
 	ArrowPathIcon,
-	ArrowDownTrayIcon,
 	ArrowLeftIcon,
 } from "@heroicons/react/16/solid";
 
 export default function DashboardHeader({
 	cartsIndexUrl,
 	onRefresh,
-	onExport,
 	refreshing = false,
 	generatedAt,
 }) {
@@ -38,10 +36,6 @@ export default function DashboardHeader({
 				<Button outline onClick={onRefresh} disabled={refreshing}>
 					<ArrowPathIcon className="size-4" />
 					Actualizar
-				</Button>
-				<Button outline onClick={onExport}>
-					<ArrowDownTrayIcon className="size-4" />
-					Exportar
 				</Button>
 			</div>
 		</div>

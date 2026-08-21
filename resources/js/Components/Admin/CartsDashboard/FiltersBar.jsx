@@ -7,11 +7,11 @@ import { ChartCard } from "./chartTheme.jsx";
 
 export default function FiltersBar({ filters, filterOptions }) {
 	const { data, setData, get, processing } = useForm({
+		period: filters.period || "last_30_days",
 		start_date: filters.start_date || "",
 		end_date: filters.end_date || "",
 		brand: filters.brand || "",
-		display_status: filters.display_status || "",
-		payment_method: filters.payment_method || "",
+		type: filters.type || "",
 	});
 
 	const apply = (e) => {
@@ -19,27 +19,49 @@ export default function FiltersBar({ filters, filterOptions }) {
 		get(route("admin.carts.dashboard"), { preserveState: true });
 	};
 
+	const isCustom = data.period === "custom";
+
 	return (
 		<ChartCard
 			title="Filtros"
-			description="El periodo anterior se calcula automáticamente para los deltas."
+			description="Las fechas se agrupan desde backend con la zona horaria del negocio."
 		>
 			<form
 				onSubmit={apply}
-				className="grid gap-4 md:grid-cols-3 xl:grid-cols-4"
+				className="grid gap-4 md:grid-cols-3 xl:grid-cols-6"
 			>
+				<ListboxFilter
+					label="Periodo"
+					placeholder="Ultimos 30 dias"
+					value={data.period}
+					onChange={(value) => setData("period", value)}
+				>
+					{(filterOptions.periods || []).map((period) => (
+						<ListboxOption key={period.value} value={period.value}>
+							<ListboxLabel>{period.label}</ListboxLabel>
+						</ListboxOption>
+					))}
+				</ListboxFilter>
 				<DateFilter
 					label="Desde"
 					value={data.start_date}
-					onChange={(value) => setData("start_date", value)}
+					onChange={(value) => {
+						setData("period", "custom");
+						setData("start_date", value);
+					}}
+					disabled={!isCustom}
 				/>
 				<DateFilter
 					label="Hasta"
 					value={data.end_date}
-					onChange={(value) => setData("end_date", value)}
+					onChange={(value) => {
+						setData("period", "custom");
+						setData("end_date", value);
+					}}
+					disabled={!isCustom}
 				/>
 				<ListboxFilter
-					label="Marca / laboratorio"
+					label="Marca"
 					placeholder="Todas"
 					value={data.brand}
 					onChange={(value) => setData("brand", value)}
@@ -54,42 +76,23 @@ export default function FiltersBar({ filters, filterOptions }) {
 					))}
 				</ListboxFilter>
 				<ListboxFilter
-					label="Estado"
+					label="Tipo"
 					placeholder="Todos"
-					value={data.display_status}
-					onChange={(value) => setData("display_status", value)}
+					value={data.type}
+					onChange={(value) => setData("type", value)}
 				>
 					<ListboxOption value="">
 						<ListboxLabel>Todos</ListboxLabel>
 					</ListboxOption>
-					<ListboxOption value="completed">
-						<ListboxLabel>Comprado</ListboxLabel>
-					</ListboxOption>
-					<ListboxOption value="abandoned">
-						<ListboxLabel>Abandonado</ListboxLabel>
-					</ListboxOption>
-					<ListboxOption value="active">
-						<ListboxLabel>Activo</ListboxLabel>
-					</ListboxOption>
-				</ListboxFilter>
-				<ListboxFilter
-					label="Método de pago"
-					placeholder="Todos"
-					value={data.payment_method}
-					onChange={(value) => setData("payment_method", value)}
-				>
-					<ListboxOption value="">
-						<ListboxLabel>Todos</ListboxLabel>
-					</ListboxOption>
-					{(filterOptions.payment_methods || []).map((method) => (
-						<ListboxOption key={method.value} value={method.value}>
-							<ListboxLabel>{method.label}</ListboxLabel>
+					{(filterOptions.types || []).map((type) => (
+						<ListboxOption key={type.value} value={type.value}>
+							<ListboxLabel>{type.label}</ListboxLabel>
 						</ListboxOption>
 					))}
 				</ListboxFilter>
-				<div className="flex items-end md:col-span-2 xl:col-span-1">
+				<div className="flex items-end">
 					<Button type="submit" disabled={processing} className="w-full">
-						Aplicar filtros
+						Aplicar
 					</Button>
 				</div>
 			</form>

@@ -2,18 +2,59 @@
 
 namespace App\Actions\Laboratories;
 
+use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
 use App\Models\Customer;
+use App\Services\Carts\CartEventRecorder;
+use App\Services\Monitoring\SyncMonitoringCartService;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class CreateLaboratoryAppointmentAction
 {
+    public function __construct(
+        private SyncMonitoringCartService $syncMonitoringCartService,
+        private CartEventRecorder $cartEventRecorder,
+    ) {}
+
     public function __invoke(Customer $customer, LaboratoryBrand $laboratoryBrand)
     {
         $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand)
             ?? $customer->getPendingLaboratoryAppointment($laboratoryBrand);
 
-        return $laboratoryAppointment ?? $customer->laboratoryAppointments()->create([
+        $this->syncMonitoringCartService->syncLaboratory($customer);
+        $cart = $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
+
+        if (! $cart && $customer->user_id && $customer->laboratoryCartItems()->ofBrand($laboratoryBrand)->exists()) {
+            Log::warning('[CartTraceability] Laboratory appointment could not resolve monitoring cart', [
+                'customer_id' => $customer->id,
+                'user_id' => $customer->user_id,
+                'brand' => $laboratoryBrand->value,
+            ]);
+        }
+
+        $laboratoryAppointment ??= $customer->laboratoryAppointments()->create([
             'brand' => $laboratoryBrand,
         ]);
+
+        if ($cart && Schema::hasColumn('laboratory_appointments', 'cart_id') && ! $laboratoryAppointment->cart_id) {
+            $laboratoryAppointment->forceFill(['cart_id' => $cart->id])->save();
+        }
+
+        if ($cart) {
+            $this->cartEventRecorder->recordOnce(
+                $cart,
+                CartEventType::AppointmentRequested,
+                "laboratory_appointment:{$laboratoryAppointment->id}:requested",
+                [
+                    'laboratory_appointment_id' => $laboratoryAppointment->id,
+                    'brand' => $laboratoryBrand->value,
+                ],
+                $laboratoryAppointment->created_at,
+                'laboratory_checkout',
+            );
+        }
+
+        return $laboratoryAppointment;
     }
 }

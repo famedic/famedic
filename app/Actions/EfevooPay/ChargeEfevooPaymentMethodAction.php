@@ -3,12 +3,16 @@
 namespace App\Actions\EfevooPay;
 
 use App\Models\Customer;
+use App\Models\Cart;
 use App\Models\Transaction;
 use App\Models\PaymentAttempt;
 use App\Contracts\EfevooPayGateway;
+use App\Enums\CartEventType;
+use App\Services\Carts\CartEventRecorder;
 use App\Support\MockEfevooPaymentSupport;
 use App\Services\Payments\PaymentAutomationService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use App\Exceptions\EfevooPaymentException;
 
 class ChargeEfevooPaymentMethodAction
@@ -18,11 +22,12 @@ class ChargeEfevooPaymentMethodAction
     public function __construct(
         EfevooPayGateway $efevooPayService,
         private PaymentAutomationService $paymentAutomationService,
+        private CartEventRecorder $cartEventRecorder,
     ) {
         $this->efevooPayService = $efevooPayService;
     }
 
-    public function __invoke(Customer $customer, int $amountCents, string $paymentMethod): Transaction
+    public function __invoke(Customer $customer, int $amountCents, string $paymentMethod, ?Cart $cart = null): Transaction
     {
         $chargeData = [];
         $token = null;
@@ -86,14 +91,22 @@ class ChargeEfevooPaymentMethodAction
                 ];
 
                 // Registrar intento ANTES de llamar al gateway (rastreo desde el inicio)
-                $attempt = PaymentAttempt::create([
+                $attemptPayload = [
                     'customer_id' => $customer->id,
                     'token_id' => $token->id,
                     'amount_cents' => $amountCents,
                     'gateway' => 'efevoopay',
                     'reference' => $reference,
                     'status' => PaymentAttempt::STATUS_PROCESSING,
-                ]);
+                ];
+
+                if ($cart && Schema::hasColumn('payment_attempts', 'cart_id')) {
+                    $attemptPayload['cart_id'] = $cart->id;
+                }
+
+                $attempt = PaymentAttempt::create($attemptPayload);
+
+                $this->recordPaymentEventForAttempt($attempt, CartEventType::PaymentStarted, $cart);
 
                 Log::info('[EfevooPay] PaymentAttempt creado, llamando al gateway', [
                     'attempt_id' => $attempt->id,
@@ -127,6 +140,12 @@ class ChargeEfevooPaymentMethodAction
                     'raw_response' => $result['raw'] ?? null,
                     'processed_at' => now(),
                 ]);
+
+                $this->recordPaymentEventForAttempt($attempt->refresh(), match ($attemptStatus) {
+                    PaymentAttempt::STATUS_APPROVED => CartEventType::PaymentApproved,
+                    PaymentAttempt::STATUS_DECLINED => CartEventType::PaymentDeclined,
+                    default => CartEventType::PaymentError,
+                }, $cart);
 
                 Log::info('[EfevooPay] PaymentAttempt actualizado con respuesta del gateway', [
                     'attempt_id' => $attempt->id,
@@ -426,10 +445,39 @@ class ChargeEfevooPaymentMethodAction
             'processed_at' => now(),
         ], array_filter($extra, fn ($value) => $value !== null)));
 
+        $this->recordPaymentEventForAttempt($attempt->refresh(), CartEventType::PaymentError);
+
         Log::info('[EfevooPay] PaymentAttempt marked as technical error', [
             'attempt_id' => $attempt->id,
             'status' => PaymentAttempt::STATUS_ERROR,
             'message' => $message,
         ]);
+    }
+
+    private function recordPaymentEventForAttempt(
+        PaymentAttempt $attempt,
+        CartEventType $event,
+        ?Cart $fallbackCart = null,
+    ): void {
+        $cart = $fallbackCart ?? $attempt->cart;
+
+        if (! $cart) {
+            return;
+        }
+
+        $this->cartEventRecorder->recordOnce(
+            $cart,
+            $event,
+            "payment_attempt:{$attempt->id}:{$event->value}",
+            [
+                'payment_attempt_id' => $attempt->id,
+                'gateway' => $attempt->gateway,
+                'status' => $attempt->status,
+                'processor_code' => $attempt->processor_code,
+                'amount_cents' => $attempt->amount_cents,
+            ],
+            $attempt->processed_at ?? $attempt->updated_at ?? $attempt->created_at,
+            'efevoopay',
+        );
     }
 }

@@ -2,8 +2,10 @@
 
 namespace App\Actions\Laboratories;
 
+use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
 use App\Models\Address;
+use App\Models\Cart;
 use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\LaboratoryAppointment;
@@ -15,12 +17,14 @@ use App\Notifications\FewDaysLeftToRequestInvoice;
 use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Services\CouponApplicationService;
+use App\Services\Carts\CartEventRecorder;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\Orders\OrderAutomationService;
 use App\Services\PromoCodeService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Propaganistas\LaravelPhone\PhoneNumber;
 use Throwable;
 
@@ -33,6 +37,7 @@ class FulfillLaboratoryCartOrderAction
         private PromoCodeService $promoCodeService,
         private SyncLaboratoryCheckoutDraftAction $syncLaboratoryCheckoutDraftAction,
         private OrderAutomationService $orderAutomationService,
+        private CartEventRecorder $cartEventRecorder,
     ) {}
 
     /**
@@ -51,7 +56,19 @@ class FulfillLaboratoryCartOrderAction
         ?int $couponId = null,
         ?string $promoValidationToken = null,
         ?string $cartHash = null,
+        ?Cart $cart = null,
     ): LaboratoryPurchase {
+        $cart ??= $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
+
+        if (! $cart && $customer->user_id && $laboratoryCartItems->isNotEmpty()) {
+            Log::warning('[CartTraceability] Laboratory purchase could not resolve monitoring cart', [
+                'customer_id' => $customer->id,
+                'user_id' => $customer->user_id,
+                'laboratory_cart_items_count' => $laboratoryCartItems->count(),
+                'brand' => $laboratoryBrand->value,
+            ]);
+        }
+
         DB::beginTransaction();
 
         $clinicalOrderUuid = null;
@@ -62,8 +79,24 @@ class FulfillLaboratoryCartOrderAction
                 $laboratoryBrand,
                 $contact,
                 $address,
-                $laboratoryCartItems
+                $laboratoryCartItems,
+                $cart,
             );
+
+            if ($cart) {
+                $this->cartEventRecorder->recordOnce(
+                    $cart,
+                    CartEventType::PurchaseCreated,
+                    "laboratory_purchase:{$laboratoryPurchase->id}:created",
+                    [
+                        'laboratory_purchase_id' => $laboratoryPurchase->id,
+                        'brand' => $laboratoryBrand->value,
+                        'total_cents' => $laboratoryPurchase->total_cents,
+                    ],
+                    $laboratoryPurchase->created_at,
+                    'laboratory_order',
+                );
+            }
 
             $laboratoryPurchase->transactions()->attach($transaction);
 
@@ -72,6 +105,9 @@ class FulfillLaboratoryCartOrderAction
                 && $customer->getHasLaboratoryCartItemRequiringAppointment($laboratoryBrand)
             ) {
                 $laboratoryAppointment->laboratory_purchase_id = $laboratoryPurchase->id;
+                if ($cart && Schema::hasColumn('laboratory_appointments', 'cart_id')) {
+                    $laboratoryAppointment->cart_id ??= $cart->id;
+                }
                 $laboratoryAppointment->save();
             }
 
@@ -124,7 +160,7 @@ class FulfillLaboratoryCartOrderAction
                 );
             }
 
-            $this->syncMonitoringCartService->markLaboratoryCartCompleted($customer);
+            $this->syncMonitoringCartService->markLaboratoryCartCompleted($customer, $laboratoryBrand);
 
             $clinicalOrderUuid = LaboratoryCheckoutDraft::query()
                 ->where('customer_id', $customer->id)
@@ -279,32 +315,39 @@ class FulfillLaboratoryCartOrderAction
         LaboratoryBrand $laboratoryBrand,
         Contact $contact,
         Address $address,
-        Collection $laboratoryCartItems
+        Collection $laboratoryCartItems,
+        ?Cart $cart = null,
     ): LaboratoryPurchase {
         $totalCents = $laboratoryCartItems->sum(function ($laboratoryCartItem) {
             return $laboratoryCartItem->laboratoryTest->famedic_price_cents;
         });
 
+        $payload = [
+            'gda_order_id' => 0,
+            'brand' => $laboratoryBrand->value,
+            'name' => $contact->name,
+            'paternal_lastname' => $contact->paternal_lastname,
+            'maternal_lastname' => $contact->maternal_lastname,
+            'phone' => str_replace(' ', '', (new PhoneNumber($contact->phone, $contact->phone_country))->formatNational()),
+            'phone_country' => $contact->phone_country,
+            'birth_date' => $contact->birth_date,
+            'gender' => $contact->gender,
+            'street' => $address->street,
+            'number' => $address->number,
+            'neighborhood' => $address->neighborhood,
+            'state' => $address->state,
+            'city' => $address->city,
+            'zipcode' => $address->zipcode,
+            'additional_references' => $address->additional_references,
+            'total_cents' => $totalCents,
+        ];
+
+        if ($cart && Schema::hasColumn('laboratory_purchases', 'cart_id')) {
+            $payload['cart_id'] = $cart->id;
+        }
+
         $laboratoryPurchase = $customer->laboratoryPurchases()->save(
-            new LaboratoryPurchase([
-                'gda_order_id' => 0,
-                'brand' => $laboratoryBrand->value,
-                'name' => $contact->name,
-                'paternal_lastname' => $contact->paternal_lastname,
-                'maternal_lastname' => $contact->maternal_lastname,
-                'phone' => str_replace(' ', '', (new PhoneNumber($contact->phone, $contact->phone_country))->formatNational()),
-                'phone_country' => $contact->phone_country,
-                'birth_date' => $contact->birth_date,
-                'gender' => $contact->gender,
-                'street' => $address->street,
-                'number' => $address->number,
-                'neighborhood' => $address->neighborhood,
-                'state' => $address->state,
-                'city' => $address->city,
-                'zipcode' => $address->zipcode,
-                'additional_references' => $address->additional_references,
-                'total_cents' => $totalCents,
-            ])
+            new LaboratoryPurchase($payload)
         );
 
         foreach ($laboratoryCartItems as $laboratoryCartItem) {

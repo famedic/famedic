@@ -28,9 +28,10 @@ class ProcessCartsSpreadsheetExport implements ShouldQueue
 
     public function handle(): void
     {
-        $fileName = 'carts/exports/'.$this->user->email.'/carts '.localizedDate(now())->format('jS M g.i').strtolower(localizedDate(now())->format('A')).'.xlsx';
+        $filters = CartsExport::normalizeFilters($this->filters);
+        $fileName = 'carts/exports/'.$this->user->email.'/carritos-famedic-'.CartsExport::fileDateSegment($filters).'.xlsx';
 
-        Excel::store(new CartsExport($this->filters), $fileName);
+        Excel::store(new CartsExport($filters), $fileName);
 
         $downloadLink = Storage::temporaryUrl($fileName, now()->addMinutes(120));
 

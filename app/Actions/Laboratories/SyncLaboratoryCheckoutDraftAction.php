@@ -2,15 +2,21 @@
 
 namespace App\Actions\Laboratories;
 
+use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
 use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\LaboratoryCheckoutDraft;
+use App\Services\Carts\CartEventRecorder;
 
 class SyncLaboratoryCheckoutDraftAction
 {
+    public function __construct(
+        private CartEventRecorder $cartEventRecorder,
+    ) {}
+
     /**
      * @param  array{
      *     step: string,
@@ -70,6 +76,7 @@ class SyncLaboratoryCheckoutDraftAction
         );
 
         $this->touchMonitoringCart($customer);
+        $this->recordCheckoutEvents($customer, $laboratoryBrand, $payload);
 
         return $draft->fresh(['contact', 'address', 'coupon']);
     }
@@ -96,5 +103,69 @@ class SyncLaboratoryCheckoutDraftAction
             ->where('type', MonitoringCartType::Lab)
             ->where('status', MonitoringCartStatus::Active)
             ->update(['updated_at' => now()]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function recordCheckoutEvents(Customer $customer, LaboratoryBrand $laboratoryBrand, array $payload): void
+    {
+        $cart = $this->activeLaboratoryCart($customer, $laboratoryBrand);
+        if (! $cart) {
+            return;
+        }
+
+        $this->cartEventRecorder->recordOnce(
+            $cart,
+            CartEventType::CheckoutStarted,
+            "cart:{$cart->id}:checkout_started",
+            ['brand' => $laboratoryBrand->value],
+            source: 'laboratory_checkout',
+        );
+
+        if (array_key_exists('contact_id', $payload) && $payload['contact_id'] !== null) {
+            $this->cartEventRecorder->recordOnce(
+                $cart,
+                CartEventType::PatientSelected,
+                "cart:{$cart->id}:patient:{$payload['contact_id']}",
+                [
+                    'contact_id' => (int) $payload['contact_id'],
+                    'brand' => $laboratoryBrand->value,
+                ],
+                source: 'laboratory_checkout',
+            );
+        }
+
+        if (array_key_exists('address_id', $payload) && $payload['address_id'] !== null) {
+            $this->cartEventRecorder->recordOnce(
+                $cart,
+                CartEventType::AddressSelected,
+                "cart:{$cart->id}:address:{$payload['address_id']}",
+                [
+                    'address_id' => (int) $payload['address_id'],
+                    'brand' => $laboratoryBrand->value,
+                ],
+                source: 'laboratory_checkout',
+            );
+        }
+    }
+
+    private function activeLaboratoryCart(Customer $customer, LaboratoryBrand $laboratoryBrand): ?Cart
+    {
+        if (! $customer->user_id) {
+            return null;
+        }
+
+        return Cart::query()
+            ->with('items')
+            ->where('user_id', $customer->user_id)
+            ->where('type', MonitoringCartType::Lab)
+            ->where('status', MonitoringCartStatus::Active)
+            ->get()
+            ->first(function (Cart $cart) use ($laboratoryBrand) {
+                $brands = collect($cart->labBrands())->pluck('value')->filter()->values();
+
+                return $brands->count() === 1 && $brands->first() === $laboratoryBrand->value;
+            });
     }
 }

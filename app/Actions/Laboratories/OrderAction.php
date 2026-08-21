@@ -10,17 +10,20 @@ use App\Enums\LaboratoryBrand;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\UnmatchingTotalPriceException;
 use App\Models\Address;
+use App\Models\Cart;
 use App\Models\Contact;
 use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\Transaction;
 use App\Services\CouponApplicationService;
+use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\PromoCodeService;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Notifications\FewDaysLeftToRequestInvoice;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Propaganistas\LaravelPhone\PhoneNumber;
 
 class OrderAction
@@ -34,6 +37,7 @@ class OrderAction
     private PromoCodeService $promoCodeService;
     private CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction;
     private FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction;
+    private SyncMonitoringCartService $syncMonitoringCartService;
 
     private Collection $laboratoryCartItems;
 
@@ -46,7 +50,8 @@ class OrderAction
         CouponApplicationService $couponApplicationService,
         PromoCodeService $promoCodeService,
         CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction,
-        FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction
+        FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction,
+        SyncMonitoringCartService $syncMonitoringCartService,
     ) {
         $this->calculateTotalsAndDiscountAction = $calculateTotalsAndDiscountAction;
         $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction;
@@ -57,6 +62,7 @@ class OrderAction
         $this->promoCodeService = $promoCodeService;
         $this->createCouponBalanceTransactionAction = $createCouponBalanceTransactionAction;
         $this->fulfillLaboratoryCartOrderAction = $fulfillLaboratoryCartOrderAction;
+        $this->syncMonitoringCartService = $syncMonitoringCartService;
     }
 
     public function __invoke(
@@ -111,6 +117,7 @@ class OrderAction
         }
 
         $amountToChargeCents = $calculatedTotalCents - $discountCents;
+        $monitoringCart = $this->resolveMonitoringCart($customer, $laboratoryBrand);
 
         $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand);
 
@@ -143,7 +150,7 @@ class OrderAction
 
         try {
             if ($amountToChargeCents > 0) {
-                $transaction = $this->chargeAndCreateTransaction($amountToChargeCents, $paymentMethod, $customer);
+                $transaction = $this->chargeAndCreateTransaction($amountToChargeCents, $paymentMethod, $customer, $monitoringCart);
             } else {
                 $transaction = ($this->createCouponBalanceTransactionAction)(
                     $customer,
@@ -173,6 +180,7 @@ class OrderAction
                 $couponId,
                 $promoValidationToken,
                 $cartHash,
+                $monitoringCart,
             );
         } catch (\Throwable $th) {
             if (DB::transactionLevel() > 0) {
@@ -227,7 +235,7 @@ class OrderAction
         ]);
     }
 
-    private function chargeAndCreateTransaction(int $amountCents, string $paymentMethod, Customer $customer): Transaction
+    private function chargeAndCreateTransaction(int $amountCents, string $paymentMethod, Customer $customer, ?Cart $cart): Transaction
     {
         if ($paymentMethod === 'odessa') {
             return ($this->chargeOdessaAction)($customer->customerable, $amountCents);
@@ -237,7 +245,26 @@ class OrderAction
         return ($this->chargeEfevooPaymentMethodAction)(
             $customer,
             $amountCents,
-            $paymentMethod
+            $paymentMethod,
+            $cart,
         );
+    }
+
+    private function resolveMonitoringCart(Customer $customer, LaboratoryBrand $laboratoryBrand): ?Cart
+    {
+        $this->syncMonitoringCartService->syncLaboratory($customer);
+
+        $cart = $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
+
+        if (! $cart && $customer->user_id && $this->laboratoryCartItems->isNotEmpty()) {
+            Log::warning('[CartTraceability] Laboratory checkout could not resolve monitoring cart before payment', [
+                'customer_id' => $customer->id,
+                'user_id' => $customer->user_id,
+                'laboratory_cart_items_count' => $this->laboratoryCartItems->count(),
+                'brand' => $laboratoryBrand->value,
+            ]);
+        }
+
+        return $cart;
     }
 }

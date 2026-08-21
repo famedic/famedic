@@ -58,6 +58,11 @@ class LaboratoryAppointment extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function cart(): BelongsTo
+    {
+        return $this->belongsTo(Cart::class);
+    }
+
     public function laboratoryStore(): BelongsTo
     {
         return $this->belongsTo(LaboratoryStore::class);

@@ -12,6 +12,8 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class Cart extends Model
 {
@@ -37,6 +39,26 @@ class Cart extends Model
     public function items(): HasMany
     {
         return $this->hasMany(CartItem::class);
+    }
+
+    public function paymentAttempts(): HasMany
+    {
+        return $this->hasMany(PaymentAttempt::class);
+    }
+
+    public function laboratoryPurchases(): HasMany
+    {
+        return $this->hasMany(LaboratoryPurchase::class);
+    }
+
+    public function laboratoryAppointments(): HasMany
+    {
+        return $this->hasMany(LaboratoryAppointment::class);
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(CartEvent::class);
     }
 
     /**
@@ -151,6 +173,16 @@ class Cart extends Model
             })
             ->when($filters['type'] ?? null, fn (Builder $q, string $type) => $q->where('type', $type))
             ->when($filters['display_status'] ?? null, fn (Builder $q, string $status) => $q->displayStatusFilter($status))
+            ->when($filters['operational_filter'] ?? null, fn (Builder $q, string $filter) => $q->operationalFilter($filter))
+            ->when($filters['payment_status'] ?? null, fn (Builder $q, string $status) => $q->relatedPaymentAttemptStatus($status))
+            ->when($filters['operational_bucket'] ?? null, fn (Builder $q, string $bucket) => $q->operationalBucket($bucket))
+            ->when($filters['checkout_stage'] ?? null, fn (Builder $q, string $stage) => $q->checkoutStageFilter($stage))
+            ->when($filters['appointment_filter'] ?? null, fn (Builder $q, string $filter) => $q->appointmentFilter($filter))
+            ->when($filters['contact_filter'] ?? null, fn (Builder $q, string $filter) => $q->contactFilter($filter))
+            ->when($filters['customer_segment'] ?? null, fn (Builder $q, string $segment) => $q->customerSegmentFilter($segment))
+            ->when($filters['brand'] ?? null, fn (Builder $q, string $brand) => $q->labBrandFilter($brand))
+            ->when($filters['amount_range'] ?? null, fn (Builder $q, string $range) => $q->amountRangeFilter($range))
+            ->when($filters['inactivity_range'] ?? null, fn (Builder $q, string $range) => $q->inactivityRangeFilter($range))
             ->when($start, fn (Builder $q, Carbon $d) => $q->where('updated_at', '>=', $d))
             ->when($end, fn (Builder $q, Carbon $d) => $q->where('updated_at', '<=', $d));
     }
@@ -166,6 +198,253 @@ class Cart extends Model
             $query->where('status', MonitoringCartStatus::Active->value)
                 ->where('updated_at', '>=', now()->subMinutes(self::ABANDONED_AFTER_MINUTES));
         }
+    }
+
+    public function scopeOperationalFilter(Builder $query, string $filter): void
+    {
+        if ($filter === 'appointment_pending') {
+            $query->appointmentPendingConfirmation();
+        } elseif ($filter === 'appointment_confirmed_pending_payment') {
+            $query->appointmentConfirmedPendingPayment();
+        } elseif ($filter === 'callback_requested') {
+            $query->where('type', MonitoringCartType::Lab)
+                ->whereExists($this->appointmentCartExistsSubquery(
+                    fn (QueryBuilder $appointment) => $appointment->where(function (QueryBuilder $callback) {
+                        $callback->whereNotNull('la.callback_availability_starts_at')
+                            ->orWhereNotNull('la.callback_availability_ends_at')
+                            ->orWhere(function (QueryBuilder $comment) {
+                                $comment->whereNotNull('la.patient_callback_comment')
+                                    ->where('la.patient_callback_comment', '!=', '');
+                            });
+                    }),
+                ));
+        }
+    }
+
+    public function scopeRelatedPaymentAttemptStatus(Builder $query, string $status): void
+    {
+        $statuses = match ($status) {
+            PaymentAttempt::STATUS_PENDING => [PaymentAttempt::STATUS_PENDING, PaymentAttempt::STATUS_PROCESSING],
+            PaymentAttempt::STATUS_APPROVED => [PaymentAttempt::STATUS_APPROVED],
+            PaymentAttempt::STATUS_DECLINED => [PaymentAttempt::STATUS_DECLINED],
+            PaymentAttempt::STATUS_ERROR => [PaymentAttempt::STATUS_ERROR],
+            default => [],
+        };
+
+        if ($statuses === []) {
+            return;
+        }
+
+        $query->where('type', MonitoringCartType::Lab);
+
+        if (! $this->paymentAttemptsHaveCartId()) {
+            $query->whereExists($this->legacyPaymentStatusExistsSubquery($statuses));
+
+            return;
+        }
+
+        $query->where(function (Builder $payment) use ($statuses) {
+            $payment
+                ->whereExists($this->explicitPaymentStatusExistsSubquery($statuses))
+                ->orWhere(function (Builder $legacy) use ($statuses) {
+                    $legacy
+                        ->whereNotExists($this->explicitPaymentAttemptExistsSubquery())
+                        ->whereExists($this->legacyPaymentStatusExistsSubquery($statuses));
+                });
+            });
+    }
+
+    public function scopeOperationalBucket(Builder $query, string $bucket): void
+    {
+        if ($bucket === 'no_progress') {
+            $query->checkoutStageFilter('no_progress');
+        } elseif ($bucket === 'payment') {
+            $query->operationalPaymentBucket();
+        } elseif ($bucket === 'appointment') {
+            $query->operationalAppointmentBucket();
+        } elseif ($bucket === 'contact') {
+            $query->operationalContactBucket();
+        } elseif ($bucket === 'attention') {
+            $query->where('status', '!=', MonitoringCartStatus::Completed->value)
+                ->where(function (Builder $attention) {
+                    $attention
+                        ->where(fn (Builder $q) => $q->operationalPaymentBucket())
+                        ->orWhere(fn (Builder $q) => $q->operationalAppointmentBucket())
+                        ->orWhere(fn (Builder $q) => $q->operationalContactBucket());
+                });
+        }
+    }
+
+    public function scopeCheckoutStageFilter(Builder $query, string $stage): void
+    {
+        if ($stage === 'no_progress') {
+            $query->where('type', MonitoringCartType::Lab)
+                ->where('status', MonitoringCartStatus::Active)
+                ->where('updated_at', '<', now()->subMinutes(self::ABANDONED_AFTER_MINUTES))
+                ->whereNotExists($this->checkoutDraftExistsSubquery(
+                    fn (QueryBuilder $draft) => $draft->whereNotNull('lcd.contact_id'),
+                ));
+
+            return;
+        }
+
+        if ($stage === 'patient') {
+            $query->whereExists($this->checkoutDraftExistsSubquery(
+                fn (QueryBuilder $draft) => $draft->whereNotNull('lcd.contact_id'),
+            ));
+        } elseif ($stage === 'address') {
+            $query->whereExists($this->checkoutDraftExistsSubquery(
+                fn (QueryBuilder $draft) => $draft->whereNotNull('lcd.address_id'),
+            ));
+        } elseif ($stage === 'payment') {
+            $query->whereExists($this->checkoutDraftExistsSubquery(
+                fn (QueryBuilder $draft) => $draft->whereNotNull('lcd.payment_method'),
+            ));
+        } elseif ($stage === 'appointment') {
+            $query->whereExists($this->appointmentCartExistsSubquery(fn (QueryBuilder $appointment) => $appointment));
+        } elseif ($stage === 'confirmation') {
+            $query->whereExists($this->checkoutDraftExistsSubquery(
+                fn (QueryBuilder $draft) => $draft->where('lcd.checkout_step', 'confirmation'),
+            ));
+        } elseif ($stage === 'completed') {
+            $query->where('status', MonitoringCartStatus::Completed);
+        }
+    }
+
+    public function scopeAppointmentFilter(Builder $query, string $filter): void
+    {
+        if ($filter === 'none') {
+            $query->where('type', MonitoringCartType::Lab)
+                ->whereNotExists($this->appointmentCartExistsSubquery(fn (QueryBuilder $appointment) => $appointment));
+        } elseif ($filter === 'pending') {
+            $query->appointmentPendingConfirmation();
+        } elseif ($filter === 'confirmed') {
+            $query->whereExists($this->appointmentCartExistsSubquery(
+                fn (QueryBuilder $appointment) => $appointment->whereNotNull('la.confirmed_at'),
+            ));
+        } elseif ($filter === 'confirmed_without_payment') {
+            $query->appointmentConfirmedPendingPayment();
+        }
+    }
+
+    public function scopeContactFilter(Builder $query, string $filter): void
+    {
+        if ($filter === 'callback_requested') {
+            $query->whereExists($this->appointmentCartExistsSubquery(
+                fn (QueryBuilder $appointment) => $appointment->where(function (QueryBuilder $callback) {
+                    $callback->whereNotNull('la.callback_availability_starts_at')
+                        ->orWhereNotNull('la.callback_availability_ends_at')
+                        ->orWhere(function (QueryBuilder $comment) {
+                            $comment->whereNotNull('la.patient_callback_comment')
+                                ->where('la.patient_callback_comment', '!=', '');
+                        });
+                }),
+            ));
+        } elseif ($filter === 'phone_call_intent') {
+            $query->whereExists($this->appointmentCartExistsSubquery(
+                fn (QueryBuilder $appointment) => $appointment->whereNotNull('la.phone_call_intent_at'),
+            ));
+        }
+    }
+
+    public function scopeCustomerSegmentFilter(Builder $query, string $segment): void
+    {
+        $query->whereHas('user.customer', function (Builder $customer) use ($segment) {
+            $customer->where(function (Builder $inner) use ($segment) {
+                $purchaseCountSql = '(SELECT COUNT(*) FROM laboratory_purchases lp WHERE lp.customer_id = customers.id AND lp.deleted_at IS NULL AND lp.created_at < carts.created_at)
+                    + (SELECT COUNT(*) FROM online_pharmacy_purchases opp WHERE opp.customer_id = customers.id AND opp.deleted_at IS NULL AND opp.created_at < carts.created_at)';
+
+                if ($segment === 'new') {
+                    $inner->whereRaw("{$purchaseCountSql} = 0");
+                } elseif ($segment === 'existing') {
+                    $inner->whereRaw("{$purchaseCountSql} = 1");
+                } elseif ($segment === 'recurrent') {
+                    $inner->whereRaw("{$purchaseCountSql} >= 2");
+                }
+            });
+        });
+    }
+
+    public function scopeLabBrandFilter(Builder $query, string $brand): void
+    {
+        $query->where('type', MonitoringCartType::Lab);
+
+        if ($brand === 'unknown') {
+            $query->whereNotExists($this->cartItemBrandExistsSubquery());
+
+            return;
+        }
+
+        if (! LaboratoryBrand::tryFrom($brand)) {
+            return;
+        }
+
+        $query->whereExists($this->cartItemBrandExistsSubquery($brand));
+    }
+
+    public function scopeAmountRangeFilter(Builder $query, string $range): void
+    {
+        match ($range) {
+            'lt_1000' => $query->where('total', '<', 1000),
+            '1000_2000' => $query->whereBetween('total', [1000, 2000]),
+            '2000_5000' => $query->whereBetween('total', [2000, 5000]),
+            'gt_5000' => $query->where('total', '>', 5000),
+            default => null,
+        };
+    }
+
+    public function scopeInactivityRangeFilter(Builder $query, string $range): void
+    {
+        $query->where('status', '!=', MonitoringCartStatus::Completed->value);
+
+        match ($range) {
+            'lt_1h' => $query->where('updated_at', '>=', now()->subHour()),
+            '1_3h' => $query->whereBetween('updated_at', [now()->subHours(3), now()->subHour()]),
+            '3_24h' => $query->whereBetween('updated_at', [now()->subDay(), now()->subHours(3)]),
+            '1_3d' => $query->whereBetween('updated_at', [now()->subDays(3), now()->subDay()]),
+            'gt_3d' => $query->where('updated_at', '<', now()->subDays(3)),
+            default => null,
+        };
+    }
+
+    public function scopeOperationalPaymentBucket(Builder $query): void
+    {
+        $query->where('status', '!=', MonitoringCartStatus::Completed->value)
+            ->where(fn (Builder $q) => $q->relatedPaymentAttemptStatus(PaymentAttempt::STATUS_ERROR)
+                ->orWhere(fn (Builder $inner) => $inner->relatedPaymentAttemptStatus(PaymentAttempt::STATUS_DECLINED))
+                ->orWhere(fn (Builder $inner) => $inner->relatedPaymentAttemptStatus(PaymentAttempt::STATUS_PENDING)));
+    }
+
+    public function scopeOperationalAppointmentBucket(Builder $query): void
+    {
+        $query->where('status', '!=', MonitoringCartStatus::Completed->value)
+            ->where(function (Builder $appointments) {
+                $appointments
+                    ->where(fn (Builder $q) => $q->appointmentPendingConfirmation())
+                    ->orWhere(fn (Builder $q) => $q->appointmentConfirmedPendingPayment());
+            });
+    }
+
+    public function scopeOperationalContactBucket(Builder $query): void
+    {
+        $query->where('type', MonitoringCartType::Lab)
+            ->where('status', '!=', MonitoringCartStatus::Completed->value)
+            ->where(function (Builder $contact) {
+                $contact
+                    ->whereExists($this->appointmentCartExistsSubquery(
+                        fn (QueryBuilder $appointment) => $appointment->where(function (QueryBuilder $callback) {
+                            $callback->whereNotNull('la.callback_availability_starts_at')
+                                ->orWhereNotNull('la.callback_availability_ends_at')
+                                ->orWhere(function (QueryBuilder $comment) {
+                                    $comment->whereNotNull('la.patient_callback_comment')
+                                        ->where('la.patient_callback_comment', '!=', '');
+                                });
+                        }),
+                    ))
+                    ->orWhereExists($this->appointmentCartExistsSubquery(
+                        fn (QueryBuilder $appointment) => $appointment->whereNotNull('la.phone_call_intent_at'),
+                    ));
+            });
     }
 
     public function scopeAppointmentPendingConfirmation(Builder $query): void
@@ -225,12 +504,8 @@ class Cart extends Model
             return false;
         }
 
-        $customer = $this->user?->customer;
-        if (! $customer) {
-            return false;
-        }
-
-        return $this->appointmentBrandsRequiringConfirmation($customer)->isNotEmpty();
+        return $this->laboratoryAppointmentsForDisplay()
+            ->contains(fn (LaboratoryAppointment $appointment) => $appointment->confirmed_at === null);
     }
 
     public function hasAppointmentConfirmedPendingPayment(): bool
@@ -239,18 +514,23 @@ class Cart extends Model
             return false;
         }
 
-        $customer = $this->user?->customer;
-        if (! $customer) {
-            return false;
-        }
-
-        return $this->appointmentBrandsConfirmedPendingPayment($customer)->isNotEmpty();
+        return $this->laboratoryAppointmentsForDisplay()
+            ->contains(fn (LaboratoryAppointment $appointment) => $appointment->confirmed_at !== null
+                && $appointment->laboratory_purchase_id === null);
     }
 
     public function relatedLaboratoryPurchase(): ?LaboratoryPurchase
     {
         if ($this->type !== MonitoringCartType::Lab) {
             return null;
+        }
+
+        $explicit = $this->relationLoaded('laboratoryPurchases')
+            ? $this->laboratoryPurchases->sortByDesc('created_at')->first()
+            : $this->laboratoryPurchases()->latest()->first();
+
+        if ($explicit) {
+            return $explicit;
         }
 
         $customerId = $this->user?->customer?->id;
@@ -290,6 +570,14 @@ class Cart extends Model
             return collect();
         }
 
+        $explicitAppointments = $this->relationLoaded('laboratoryAppointments')
+            ? $this->laboratoryAppointments
+            : $this->laboratoryAppointments()->get();
+
+        if ($explicitAppointments->isNotEmpty()) {
+            return $explicitAppointments->sortByDesc('updated_at')->values();
+        }
+
         $brandValues = collect($this->labBrands())->pluck('value')->filter()->values();
 
         $appointments = $customer->relationLoaded('laboratoryAppointments')
@@ -303,6 +591,7 @@ class Cart extends Model
                     fn (LaboratoryAppointment $appointment) => $brandValues->contains($appointment->brand->value),
                 ),
             )
+            ->filter(fn (LaboratoryAppointment $appointment) => $appointment->cart_id === null)
             ->values();
 
         if ($candidates->isEmpty()) {
@@ -373,18 +662,219 @@ class Cart extends Model
     {
         return function ($sub) use ($appointmentConstraint) {
             $sub->selectRaw('1')
-                ->from('customers as c')
-                ->join('laboratory_appointments as la', 'la.customer_id', '=', 'c.id')
-                ->join('laboratory_cart_items as lci', 'lci.customer_id', '=', 'c.id')
-                ->join('laboratory_tests as lt', 'lt.id', '=', 'lci.laboratory_test_id')
-                ->whereColumn('c.user_id', 'carts.user_id')
-                ->where('lt.requires_appointment', true)
-                ->whereColumn('la.brand', 'lt.brand')
-                ->whereNull('lci.deleted_at')
-                ->whereNull('la.deleted_at');
+                ->from('laboratory_appointments as la')
+                ->whereNull('la.deleted_at')
+                ->where(function ($match) {
+                    if ($this->laboratoryAppointmentsHaveCartId()) {
+                        $match
+                            ->whereColumn('la.cart_id', 'carts.id')
+                            ->orWhere(function ($legacy) {
+                                $legacy
+                                    ->whereNull('la.cart_id')
+                                    ->whereExists($this->legacyAppointmentCartMatchSubquery());
+                            });
+
+                        return;
+                    }
+
+                    $match->whereExists($this->legacyAppointmentCartMatchSubquery());
+                });
 
             $appointmentConstraint($sub);
         };
+    }
+
+    private function legacyAppointmentCartMatchSubquery(): \Closure
+    {
+        return function ($sub) {
+            $sub->selectRaw('1')
+                ->from('customers as c')
+                ->whereColumn('c.user_id', 'carts.user_id')
+                ->whereColumn('la.customer_id', 'c.id')
+                ->whereNull('la.cart_id')
+                ->whereExists(function ($brandSub) {
+                    $brandSub->selectRaw('1')
+                        ->from('cart_items as ci_appointment_brand')
+                        ->join('laboratory_tests as lt_appointment_brand', function ($join) {
+                            $join->whereRaw('lt_appointment_brand.id = ci_appointment_brand.product_id');
+                        })
+                        ->whereColumn('ci_appointment_brand.cart_id', 'carts.id')
+                        ->whereColumn('lt_appointment_brand.brand', 'la.brand');
+                });
+        };
+    }
+
+    private function checkoutDraftExistsSubquery(callable $draftConstraint): \Closure
+    {
+        return function ($sub) use ($draftConstraint) {
+            $sub->selectRaw('1')
+                ->from('customers as cd_customer')
+                ->join('laboratory_checkout_drafts as lcd', 'lcd.customer_id', '=', 'cd_customer.id')
+                ->whereColumn('cd_customer.user_id', 'carts.user_id')
+                ->where(function ($brandMatch) {
+                    $brandMatch
+                        ->whereExists(function ($brandSub) {
+                            $brandSub->selectRaw('1')
+                                ->from('cart_items as ci_brand')
+                                ->join('laboratory_tests as lt_brand', function ($join) {
+                                    $join->whereRaw('lt_brand.id = ci_brand.product_id');
+                                })
+                                ->whereColumn('ci_brand.cart_id', 'carts.id')
+                                ->whereColumn('lt_brand.brand', 'lcd.laboratory_brand');
+                        })
+                        ->orWhereNotExists($this->cartItemBrandExistsSubquery());
+                });
+
+            $draftConstraint($sub);
+        };
+    }
+
+    private function cartItemBrandExistsSubquery(?string $brand = null): \Closure
+    {
+        return function ($sub) use ($brand) {
+            $sub->selectRaw('1')
+                ->from('cart_items as ci')
+                ->join('laboratory_tests as lt', function ($join) {
+                    $join->whereRaw('lt.id = ci.product_id');
+                })
+                ->whereColumn('ci.cart_id', 'carts.id')
+                ->when($brand !== null, fn ($query) => $query->where('lt.brand', $brand));
+        };
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function paymentAttemptWindowStartSql(string $cartAlias): string
+    {
+        $driver = DB::connection()->getDriverName();
+
+        if ($driver === 'sqlite') {
+            return "datetime({$cartAlias}.created_at, '-5 minutes')";
+        }
+
+        if ($driver === 'pgsql') {
+            return "{$cartAlias}.created_at - INTERVAL '5 minutes'";
+        }
+
+        return "DATE_SUB({$cartAlias}.created_at, INTERVAL 5 MINUTE)";
+    }
+
+    private function paymentAttemptWindowEndSql(string $cartAlias): string
+    {
+        $driver = DB::connection()->getDriverName();
+
+        if ($driver === 'sqlite') {
+            return "datetime(COALESCE({$cartAlias}.completed_at, {$cartAlias}.updated_at), '+2 hours')";
+        }
+
+        if ($driver === 'pgsql') {
+            return "COALESCE({$cartAlias}.completed_at, {$cartAlias}.updated_at) + INTERVAL '2 hours'";
+        }
+
+        return "DATE_ADD(COALESCE({$cartAlias}.completed_at, {$cartAlias}.updated_at), INTERVAL 2 HOUR)";
+    }
+
+    private function latestPaymentAttemptIdSql(string $cartAlias, string $customerAlias): string
+    {
+        $sortSql = DB::connection()->getDriverName() === 'sqlite'
+            ? 'COALESCE(pa_latest.processed_at, pa_latest.updated_at, pa_latest.created_at)'
+            : 'COALESCE(pa_latest.processed_at, pa_latest.updated_at, pa_latest.created_at)';
+
+        $explicitGuard = $this->paymentAttemptsHaveCartId() ? 'AND pa_latest.cart_id IS NULL' : '';
+
+        return "(SELECT pa_latest.id
+            FROM payment_attempts pa_latest
+            WHERE pa_latest.customer_id = {$customerAlias}.id
+                AND pa_latest.gateway = 'efevoopay'
+                {$explicitGuard}
+                AND ABS(pa_latest.amount_cents - ROUND({$cartAlias}.total * 100)) <= 100
+                AND pa_latest.created_at >= ".$this->paymentAttemptWindowStartSql($cartAlias)."
+                AND pa_latest.created_at <= ".$this->paymentAttemptWindowEndSql($cartAlias)."
+            ORDER BY {$sortSql} DESC, pa_latest.id DESC
+            LIMIT 1)";
+    }
+
+    private function ambiguousPaymentAttemptExistsSubquery(string $paymentAttemptAlias): \Closure
+    {
+        return function ($sub) use ($paymentAttemptAlias) {
+            $sub->selectRaw('1')
+                ->from('carts as competing_carts')
+                ->join('customers as competing_customers', 'competing_customers.user_id', '=', 'competing_carts.user_id')
+                ->whereColumn('competing_carts.id', '!=', 'carts.id')
+                ->whereColumn('competing_customers.id', "{$paymentAttemptAlias}.customer_id")
+                ->whereRaw("ABS({$paymentAttemptAlias}.amount_cents - ROUND(competing_carts.total * 100)) <= 100")
+                ->whereRaw("{$paymentAttemptAlias}.created_at >= ".$this->paymentAttemptWindowStartSql('competing_carts'))
+                ->whereRaw("{$paymentAttemptAlias}.created_at <= ".$this->paymentAttemptWindowEndSql('competing_carts'));
+        };
+    }
+
+    /**
+     * @param  list<string>  $statuses
+     */
+    private function explicitPaymentStatusExistsSubquery(array $statuses): \Closure
+    {
+        return function ($sub) use ($statuses) {
+            $sub->selectRaw('1')
+                ->from('payment_attempts as pa_explicit')
+                ->whereColumn('pa_explicit.cart_id', 'carts.id')
+                ->where('pa_explicit.gateway', 'efevoopay')
+                ->whereIn('pa_explicit.status', $statuses)
+                ->whereRaw('pa_explicit.id = '.$this->latestExplicitPaymentAttemptIdSql('carts'));
+        };
+    }
+
+    private function explicitPaymentAttemptExistsSubquery(): \Closure
+    {
+        return function ($sub) {
+            $sub->selectRaw('1')
+                ->from('payment_attempts as pa_any_explicit')
+                ->whereColumn('pa_any_explicit.cart_id', 'carts.id')
+                ->where('pa_any_explicit.gateway', 'efevoopay');
+        };
+    }
+
+    /**
+     * @param  list<string>  $statuses
+     */
+    private function legacyPaymentStatusExistsSubquery(array $statuses): \Closure
+    {
+        return function ($sub) use ($statuses) {
+            $sub->selectRaw('1')
+                ->from('customers as payment_customers')
+                ->join('payment_attempts as pa', 'pa.customer_id', '=', 'payment_customers.id')
+                ->whereColumn('payment_customers.user_id', 'carts.user_id')
+                ->where('pa.gateway', 'efevoopay')
+                ->when($this->paymentAttemptsHaveCartId(), fn ($query) => $query->whereNull('pa.cart_id'))
+                ->whereIn('pa.status', $statuses)
+                ->whereRaw('ABS(pa.amount_cents - ROUND(carts.total * 100)) <= 100')
+                ->whereRaw('pa.created_at >= '.$this->paymentAttemptWindowStartSql('carts'))
+                ->whereRaw('pa.created_at <= '.$this->paymentAttemptWindowEndSql('carts'))
+                ->whereRaw('pa.id = '.$this->latestPaymentAttemptIdSql('carts', 'payment_customers'))
+                ->whereNotExists($this->ambiguousPaymentAttemptExistsSubquery('pa'));
+        };
+    }
+
+    private function latestExplicitPaymentAttemptIdSql(string $cartAlias): string
+    {
+        $sortSql = 'COALESCE(pa_latest.processed_at, pa_latest.updated_at, pa_latest.created_at)';
+
+        return "(SELECT pa_latest.id
+            FROM payment_attempts pa_latest
+            WHERE pa_latest.cart_id = {$cartAlias}.id
+                AND pa_latest.gateway = 'efevoopay'
+            ORDER BY {$sortSql} DESC, pa_latest.id DESC
+            LIMIT 1)";
+    }
+
+    private function paymentAttemptsHaveCartId(): bool
+    {
+        return Schema::hasColumn('payment_attempts', 'cart_id');
+    }
+
+    private function laboratoryAppointmentsHaveCartId(): bool
+    {
+        return Schema::hasColumn('laboratory_appointments', 'cart_id');
     }
 
     /**
@@ -404,6 +894,14 @@ class Cart extends Model
 
         if ($testIds->isEmpty()) {
             return collect();
+        }
+
+        if ($items->every(fn ($item) => $item->relationLoaded('laboratoryTest'))) {
+            return $items
+                ->map(fn ($item) => $item->laboratoryTest?->brand)
+                ->filter()
+                ->unique(fn (LaboratoryBrand $brand) => $brand->value)
+                ->values();
         }
 
         return LaboratoryTest::query()

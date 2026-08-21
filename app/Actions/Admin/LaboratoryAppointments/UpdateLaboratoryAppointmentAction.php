@@ -2,14 +2,20 @@
 
 namespace App\Actions\Admin\LaboratoryAppointments;
 
+use App\Enums\CartEventType;
 use App\Enums\Gender;
 use App\Models\LaboratoryAppointment;
+use App\Services\Carts\CartEventRecorder;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Propaganistas\LaravelPhone\PhoneNumber;
 
 class UpdateLaboratoryAppointmentAction
 {
+    public function __construct(
+        private CartEventRecorder $cartEventRecorder,
+    ) {}
+
     /**
      * Fecha/hora de cita en zona de negocio (Monterrey).
      *
@@ -68,6 +74,22 @@ class UpdateLaboratoryAppointmentAction
             'notes' => $notes,
         ]);
 
-        return $laboratoryAppointment->refresh();
+        $laboratoryAppointment = $laboratoryAppointment->refresh();
+
+        if ($laboratoryAppointment->cart) {
+            $this->cartEventRecorder->recordOnce(
+                $laboratoryAppointment->cart,
+                CartEventType::AppointmentConfirmed,
+                "laboratory_appointment:{$laboratoryAppointment->id}:confirmed",
+                [
+                    'laboratory_appointment_id' => $laboratoryAppointment->id,
+                    'brand' => $laboratoryAppointment->brand?->value,
+                ],
+                $laboratoryAppointment->confirmed_at,
+                'admin_laboratory_appointments',
+            );
+        }
+
+        return $laboratoryAppointment;
     }
 }

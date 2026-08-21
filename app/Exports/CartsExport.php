@@ -2,96 +2,51 @@
 
 namespace App\Exports;
 
-use App\Enums\MonitoringCartType;
-use App\Models\Cart;
-use Carbon\Carbon;
-use Maatwebsite\Excel\Concerns\FromQuery;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithChunkReading;
-use Maatwebsite\Excel\Concerns\WithColumnFormatting;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithMapping;
-use PhpOffice\PhpSpreadsheet\Shared\Date;
-use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use App\Exports\Carts\CartItemsSheet;
+use App\Exports\Carts\CartsSheet;
+use App\Exports\Carts\CartsSummarySheet;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
-class CartsExport implements FromQuery, ShouldAutoSize, WithChunkReading, WithColumnFormatting, WithHeadings, WithMapping
+class CartsExport implements WithMultipleSheets
 {
     public array $filters;
 
     public function __construct(array $filters = [])
     {
-        $this->filters = $filters;
+        $this->filters = self::normalizeFilters($filters);
     }
 
-    public function query()
+    public static function normalizeFilters(array $filters): array
     {
-        $start = ! empty($this->filters['start_date'])
-            ? Carbon::parse($this->filters['start_date'], 'America/Monterrey')->startOfDay()->utc()
-            : null;
-        $end = ! empty($this->filters['end_date'])
-            ? Carbon::parse($this->filters['end_date'], 'America/Monterrey')->endOfDay()->utc()
-            : null;
+        $filters = collect($filters)->filter(fn ($value) => $value !== null && $value !== '')->all();
 
-        return Cart::query()
-            ->with([
-                'items',
-                'user.customer.laboratoryCartItems.laboratoryTest',
-                'user.customer.laboratoryAppointments',
-            ])
-            ->withCount('items')
-            ->adminMonitoringFilter($this->filters, $start, $end)
-            ->orderByDesc('updated_at');
+        if (empty($filters['start_date']) && empty($filters['end_date'])) {
+            $today = now('America/Monterrey');
+            $filters['start_date'] = $today->copy()->subDays(6)->toDateString();
+            $filters['end_date'] = $today->toDateString();
+            $filters['_using_default_period'] = true;
+        } else {
+            $filters['_using_default_period'] = false;
+        }
+
+        return $filters;
     }
 
-    public function chunkSize(): int
+    public static function fileDateSegment(array $filters): string
     {
-        return 50;
+        $filters = self::normalizeFilters($filters);
+
+        return ($filters['start_date'] ?? now('America/Monterrey')->toDateString())
+            .'-a-'
+            .($filters['end_date'] ?? now('America/Monterrey')->toDateString());
     }
 
-    public function headings(): array
-    {
-        return [
-            'Nombre',
-            'Apellidos',
-            'Correo',
-            'Marcas de laboratorio',
-            'Tipo',
-            'Número de ítems',
-            'Total',
-            'Estatus',
-            'Estatus cita',
-            'Fecha última actividad',
-        ];
-    }
-
-    public function map($cart): array
-    {
-        /** @var Cart $cart */
-        $user = $cart->user;
-        $lastNames = trim(collect([$user?->paternal_lastname, $user?->maternal_lastname])->filter()->implode(' '));
-        $labBrands = $cart->type === MonitoringCartType::Lab
-            ? collect($cart->labBrands())->pluck('label')->implode(', ')
-            : '';
-
-        return [
-            $user?->name,
-            $lastNames !== '' ? $lastNames : null,
-            $user?->email,
-            $labBrands !== '' ? $labBrands : null,
-            $cart->type === MonitoringCartType::Pharmacy ? 'Farmacia' : 'Laboratorio',
-            $cart->items_count ?? $cart->items->count(),
-            (float) $cart->total,
-            $cart->displayStatusLabel(),
-            $cart->appointmentExportStatus(),
-            $cart->updated_at ? Date::dateTimeToExcel(localizedDate($cart->updated_at)) : null,
-        ];
-    }
-
-    public function columnFormats(): array
+    public function sheets(): array
     {
         return [
-            'G' => NumberFormat::FORMAT_CURRENCY_USD,
-            'J' => NumberFormat::FORMAT_DATE_XLSX22,
+            new CartsSheet($this->filters),
+            new CartItemsSheet($this->filters),
+            new CartsSummarySheet($this->filters),
         ];
     }
 }
