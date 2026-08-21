@@ -57,6 +57,7 @@ class FulfillLaboratoryCartOrderAction
         ?string $promoValidationToken = null,
         ?string $cartHash = null,
         ?Cart $cart = null,
+        ?array $clientContext = null,
     ): LaboratoryPurchase {
         $cart ??= $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
 
@@ -88,11 +89,11 @@ class FulfillLaboratoryCartOrderAction
                     $cart,
                     CartEventType::PurchaseCreated,
                     "laboratory_purchase:{$laboratoryPurchase->id}:created",
-                    [
+                    $this->withClientContext([
                         'laboratory_purchase_id' => $laboratoryPurchase->id,
                         'brand' => $laboratoryBrand->value,
                         'total_cents' => $laboratoryPurchase->total_cents,
-                    ],
+                    ], $clientContext),
                     $laboratoryPurchase->created_at,
                     'laboratory_order',
                 );
@@ -160,7 +161,7 @@ class FulfillLaboratoryCartOrderAction
                 );
             }
 
-            $this->syncMonitoringCartService->markLaboratoryCartCompleted($customer, $laboratoryBrand);
+            $this->syncMonitoringCartService->markLaboratoryCartCompleted($customer, $laboratoryBrand, $clientContext);
 
             $clinicalOrderUuid = LaboratoryCheckoutDraft::query()
                 ->where('customer_id', $customer->id)
@@ -217,6 +218,20 @@ class FulfillLaboratoryCartOrderAction
         $this->checkAndSendInvoiceDeadlineNotification($laboratoryPurchase);
 
         return $laboratoryPurchase;
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @param  array<string, mixed>|null  $clientContext
+     * @return array<string, mixed>
+     */
+    private function withClientContext(array $metadata, ?array $clientContext): array
+    {
+        if ($clientContext === null || $clientContext === []) {
+            return $metadata;
+        }
+
+        return array_merge($metadata, ['client' => $clientContext]);
     }
 
     /**

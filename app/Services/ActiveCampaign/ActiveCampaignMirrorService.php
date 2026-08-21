@@ -18,6 +18,7 @@ class ActiveCampaignMirrorService
         protected ActiveCampaignService $activeCampaign,
         protected ActiveCampaignReadService $read,
         protected ActiveCampaignCacheService $cache,
+        protected ActiveCampaignLocationMapper $locationMapper,
     ) {}
 
     /**
@@ -47,12 +48,13 @@ class ActiveCampaignMirrorService
             return null;
         }
 
-        $snapshot = $this->fetchSnapshot($acContactId, (int) $customer->id);
+        $contactData = null;
+        $snapshot = $this->fetchSnapshot($acContactId, (int) $customer->id, $contactData);
         if ($snapshot === null) {
             return null;
         }
 
-        $this->persistMirrorPointers($customer, $acContactId);
+        $this->persistMirrorPointers($customer, $acContactId, $contactData);
         $this->cache->putSnapshot((int) $customer->id, $snapshot);
 
         return $snapshot;
@@ -74,12 +76,18 @@ class ActiveCampaignMirrorService
             }
         }
 
-        $snapshot = $this->fetchSnapshot($acContactId, $customerId);
+        $contactData = null;
+        $snapshot = $this->fetchSnapshot($acContactId, $customerId, $contactData);
         if ($snapshot === null) {
             return null;
         }
 
         if ($customerId !== null) {
+            $customer = Customer::query()->find($customerId);
+            if ($customer) {
+                $this->persistMirrorPointers($customer, $acContactId, $contactData);
+            }
+
             $this->cache->putSnapshot($customerId, $snapshot);
         }
 
@@ -96,7 +104,10 @@ class ActiveCampaignMirrorService
         }
     }
 
-    protected function fetchSnapshot(int $acContactId, ?int $customerId): ?ActiveCampaignContactSnapshot
+    /**
+     * @param  array<string, mixed>|null  $contactData
+     */
+    protected function fetchSnapshot(int $acContactId, ?int $customerId, ?array &$contactData = null): ?ActiveCampaignContactSnapshot
     {
         // getContact primero: AC genera activities al recuperar el contacto.
         $contact = $this->activeCampaign->getContact($acContactId);
@@ -174,7 +185,10 @@ class ActiveCampaignMirrorService
         return $email !== '' ? $email : null;
     }
 
-    protected function persistMirrorPointers(Customer $customer, int $acContactId): void
+    /**
+     * @param  array<string, mixed>|null  $contactData
+     */
+    protected function persistMirrorPointers(Customer $customer, int $acContactId, ?array $contactData = null): void
     {
         $dirty = false;
 
@@ -185,6 +199,13 @@ class ActiveCampaignMirrorService
 
         $customer->ac_last_sync_at = now();
         $dirty = true;
+
+        if ($contactData !== null) {
+            $location = $this->locationMapper->fromContactData($contactData);
+            $customer->ac_location = $location;
+            $customer->ac_location_cached_at = $location !== null ? now() : null;
+            $dirty = true;
+        }
 
         if ($dirty) {
             $customer->save();

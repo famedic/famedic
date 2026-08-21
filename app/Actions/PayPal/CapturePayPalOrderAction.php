@@ -17,9 +17,10 @@ class CapturePayPalOrderAction
     }
 
     /**
+     * @param  array<string, mixed>|null  $clientContext
      * @return array{purchase: ?LaboratoryPurchase, status: string, message?: string}
      */
-    public function __invoke(string $paypalOrderId, Customer $customer): array
+    public function __invoke(string $paypalOrderId, Customer $customer, ?array $clientContext = null): array
     {
         $transaction = Transaction::query()
             ->where('payment_method', 'paypal')
@@ -82,7 +83,7 @@ class CapturePayPalOrderAction
             return ['purchase' => null, 'status' => 'invalid_capture', 'message' => 'Respuesta de PayPal incompleta.'];
         }
 
-        $purchase = ($this->finalizeLaboratoryPayPalPaymentAction)($transaction, $capturePayload);
+        $purchase = ($this->finalizeLaboratoryPayPalPaymentAction)($transaction, $capturePayload, $clientContext);
 
         return [
             'purchase' => $purchase,

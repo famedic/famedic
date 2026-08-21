@@ -33,6 +33,8 @@ class Customer extends Model
             'medical_attention_subscription_expires_at' => 'datetime',
             'ac_last_sync_at' => 'datetime',
             'ac_contact_id' => 'integer',
+            'ac_location' => 'array',
+            'ac_location_cached_at' => 'datetime',
         ];
     }
 

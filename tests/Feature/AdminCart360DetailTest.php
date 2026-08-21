@@ -4,12 +4,15 @@ use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
 use App\Models\Cart;
+use App\Models\ActiveCampaignDispatch;
+use App\Models\CartEvent;
 use App\Models\CartItem;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
 use App\Models\PaymentAttempt;
+use App\Models\Transaction;
 use App\Models\User;
 use Spatie\Permission\Models\Permission;
 
@@ -48,6 +51,65 @@ function cart360LabCart(User $customerUser, array $attributes = []): Cart
     ]);
 
     return $cart;
+}
+
+
+function cart360PurchaseWithTransaction(Cart $cart, string $method = 'paypal', array $transactionAttributes = []): LaboratoryPurchase
+{
+    $purchase = LaboratoryPurchase::query()->create([
+        'customer_id' => $cart->user->customer->id,
+        'cart_id' => $cart->id,
+        'brand' => LaboratoryBrand::OLAB->value,
+        'gda_order_id' => 'gda-cart-'.$cart->id.'-'.$method,
+        'name' => 'Paciente',
+        'paternal_lastname' => 'Compra',
+        'maternal_lastname' => 'Final',
+        'phone' => '8111111111',
+        'phone_country' => 'MX',
+        'birth_date' => '1990-01-01',
+        'gender' => null,
+        'street' => 'Calle',
+        'number' => '1',
+        'neighborhood' => 'Centro',
+        'state' => 'Nuevo Leon',
+        'city' => 'Monterrey',
+        'zipcode' => '64000',
+        'total_cents' => 100000,
+        'created_at' => now()->subMinutes(5),
+    ]);
+
+    $transaction = Transaction::query()->create(array_merge([
+        'transaction_amount_cents' => 100000,
+        'payment_method' => $method,
+        'gateway' => $method,
+        'payment_status' => 'completed',
+        'reference_id' => 'ref-'.$cart->id.'-'.$method,
+        'created_at' => now()->subMinutes(4),
+        'gateway_processed_at' => now()->subMinutes(4),
+    ], $transactionAttributes));
+
+    $purchase->transactions()->attach($transaction->id);
+
+    return $purchase->refresh()->load('transactions');
+}
+
+function cart360PaymentAttempt(Cart $cart, string $status, array $attributes = []): PaymentAttempt
+{
+    $attempt = new PaymentAttempt(array_merge([
+        'customer_id' => $cart->user->customer->id,
+        'cart_id' => $cart->id,
+        'amount_cents' => 100000,
+        'gateway' => 'efevoopay',
+        'status' => $status,
+        'processor_code' => $status === PaymentAttempt::STATUS_DECLINED ? '87' : null,
+        'processor_message' => $status === PaymentAttempt::STATUS_ERROR ? 'Timeout' : 'Transaccion rechazada',
+        'processed_at' => now()->subMinutes(12),
+    ], $attributes));
+    $attempt->created_at = $attributes['created_at'] ?? now()->subMinutes(13);
+    $attempt->updated_at = $attributes['updated_at'] ?? now()->subMinutes(12);
+    $attempt->save();
+
+    return $attempt;
 }
 
 it('returns drawer payload for a new customer without previous purchases', function () {
@@ -286,4 +348,407 @@ it('rejects drawer access without cart detail permission', function () {
     $this->actingAs($admin);
 
     $this->getJson(route('admin.carts.show', $cart))->assertForbidden();
+});
+
+
+it('uses final transaction as payment journey source over previous attempts', function (string $attemptStatus, string $method, string $label) {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser, [
+        'status' => MonitoringCartStatus::Completed->value,
+        'completed_at' => now()->subMinutes(3),
+        'updated_at' => now()->subMinutes(3),
+    ]);
+
+    cart360PaymentAttempt($cart, $attemptStatus);
+    cart360PurchaseWithTransaction($cart, $method);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.final_payment.method', $method)
+        ->assertJsonPath('data.final_payment.method_label', $label)
+        ->assertJsonPath('data.journey.4.state', 'completed')
+        ->assertJsonPath('data.journey.4.detail', $label)
+        ->assertJsonPath('data.journey.5.state', 'completed')
+        ->assertJsonPath('data.payment_history.0.type', 'payment_attempt')
+        ->assertJsonPath('data.payment_history.1.type', 'final_payment')
+        ->assertJsonPath('data.payment_history.1.label', 'Pago final');
+})->with([
+    'A error plus final PayPal approved' => [PaymentAttempt::STATUS_ERROR, 'paypal', 'PayPal'],
+    'B declined plus final Efevoo approved' => [PaymentAttempt::STATUS_DECLINED, 'efevoopay', 'Efevoo'],
+    'C Efevoo failed plus final Odessa' => [PaymentAttempt::STATUS_ERROR, 'odessa', 'Caja de ahorro / Odessa'],
+    'D final Stripe' => [PaymentAttempt::STATUS_ERROR, 'stripe', 'Tarjeta / Stripe'],
+]);
+
+it('supports final purchase payment without payment attempts', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser, [
+        'status' => MonitoringCartStatus::Completed->value,
+        'completed_at' => now()->subMinutes(3),
+        'updated_at' => now()->subMinutes(3),
+    ]);
+    cart360PurchaseWithTransaction($cart, 'stripe');
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonCount(1, 'data.payment_history')
+        ->assertJsonPath('data.payment_history.0.type', 'final_payment')
+        ->assertJsonPath('data.journey.4.detail', 'Tarjeta / Stripe');
+});
+
+it('returns appointment journey for pending and confirmed appointments without payment', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser);
+
+    LaboratoryAppointment::factory()->confirmed(now()->addDay(), now()->subMinutes(30))->create([
+        'customer_id' => $customerUser->customer->id,
+        'cart_id' => $cart->id,
+        'brand' => LaboratoryBrand::OLAB->value,
+        'laboratory_purchase_id' => null,
+        'patient_gender' => null,
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.appointment_journey.0.state', 'completed')
+        ->assertJsonPath('data.appointment_journey.1.state', 'completed')
+        ->assertJsonPath('data.appointment_journey.2.state', 'completed')
+        ->assertJsonPath('data.appointment_journey.4.state', 'pending')
+        ->assertJsonPath('data.appointment_journey.5.state', 'pending');
+});
+
+it('returns appointment journey completed when appointment has purchase and final payment', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser, [
+        'status' => MonitoringCartStatus::Completed->value,
+        'completed_at' => now()->subMinutes(3),
+        'updated_at' => now()->subMinutes(3),
+    ]);
+    $purchase = cart360PurchaseWithTransaction($cart, 'paypal');
+    LaboratoryAppointment::factory()->confirmed(now()->addDay(), now()->subMinutes(30))->create([
+        'customer_id' => $customerUser->customer->id,
+        'cart_id' => $cart->id,
+        'brand' => LaboratoryBrand::OLAB->value,
+        'laboratory_purchase_id' => $purchase->id,
+        'patient_gender' => null,
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.appointment_journey.4.state', 'completed')
+        ->assertJsonPath('data.appointment_journey.5.state', 'completed');
+});
+
+it('returns cart events timeline and keeps legacy carts empty', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser);
+    $legacyCart = cart360LabCart($customerUser, ['total' => 2000]);
+
+    CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => 'cart_created',
+        'metadata' => ['step' => 'cart', 'token' => 'hidden'],
+        'occurred_at' => now()->subMinutes(20),
+    ]);
+    CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => 'payment_error',
+        'metadata' => ['status' => 'error'],
+        'occurred_at' => now()->subMinutes(10),
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.events.0.label', 'Carrito creado')
+        ->assertJsonPath('data.events.0.metadata.step', 'cart')
+        ->assertJsonMissingPath('data.events.0.metadata.token')
+        ->assertJsonPath('data.events.1.label', 'Error tecnico');
+
+    $this->getJson(route('admin.carts.show', $legacyCart))
+        ->assertOk()
+        ->assertJsonCount(0, 'data.events');
+});
+
+it('returns session context from the latest cart event with client metadata', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser);
+
+    CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => 'cart_created',
+        'metadata' => [
+            'client' => ['device_type' => 'mobile', 'browser' => 'Chrome', 'os' => 'Android', 'source' => 'request_user_agent'],
+        ],
+        'occurred_at' => now()->subMinutes(20),
+    ]);
+    CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => 'payment_started',
+        'metadata' => [
+            'status' => 'processing',
+            'client' => ['device_type' => 'desktop', 'browser' => 'Chrome', 'os' => 'Windows', 'source' => 'request_user_agent'],
+        ],
+        'occurred_at' => now()->subMinutes(10),
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.client_context.has_data', true)
+        ->assertJsonPath('data.client_context.last_device.device_type', 'desktop')
+        ->assertJsonPath('data.client_context.last_device.device_label', 'Desktop')
+        ->assertJsonPath('data.client_context.last_device.browser', 'Chrome')
+        ->assertJsonPath('data.client_context.last_device.os', 'Windows')
+        ->assertJsonPath('data.client_context.has_device_change', true)
+        ->assertJsonPath('data.client_context.devices_seen.0', 'mobile')
+        ->assertJsonPath('data.client_context.devices_seen.1', 'desktop')
+        ->assertJsonPath('data.events.0.client.device_label', 'Móvil')
+        ->assertJsonPath('data.events.1.client.device_label', 'Desktop');
+});
+
+it('does not flag device change when device type stays the same', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser);
+
+    CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => 'checkout_started',
+        'metadata' => [
+            'client' => ['device_type' => 'mobile', 'browser' => 'Safari', 'os' => 'iOS', 'source' => 'request_user_agent'],
+        ],
+        'occurred_at' => now()->subMinutes(20),
+    ]);
+    CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => 'patient_selected',
+        'metadata' => [
+            'client' => ['device_type' => 'mobile', 'browser' => 'Chrome', 'os' => 'Android', 'source' => 'request_user_agent'],
+        ],
+        'occurred_at' => now()->subMinutes(10),
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.client_context.has_data', true)
+        ->assertJsonPath('data.client_context.has_device_change', false)
+        ->assertJsonCount(1, 'data.client_context.devices_seen');
+});
+
+it('keeps drawer payload valid for legacy events without client metadata', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser);
+
+    CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => 'checkout_started',
+        'metadata' => ['brand' => 'olab'],
+        'occurred_at' => now()->subMinutes(20),
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.client_context.has_data', false)
+        ->assertJsonPath('data.client_context.last_device', null)
+        ->assertJsonMissingPath('data.events.0.client');
+});
+
+it('returns approximate ActiveCampaign location from local customer cache', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser);
+
+    $customerUser->customer->update([
+        'ac_location' => [
+            'city' => 'Monterrey',
+            'state' => 'Nuevo Leon',
+            'country' => 'Mexico',
+            'timezone' => 'America/Monterrey',
+            'source' => 'activecampaign',
+            'geoIp4' => '187.190.1.1',
+            'geoLat' => '25.686600',
+            'geoLon' => '-100.316100',
+        ],
+        'ac_location_cached_at' => now()->subDay(),
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.client_context.location.has_data', true)
+        ->assertJsonPath('data.client_context.location.city', 'Monterrey')
+        ->assertJsonPath('data.client_context.location.state', 'Nuevo Leon')
+        ->assertJsonPath('data.client_context.location.country', 'Mexico')
+        ->assertJsonPath('data.client_context.location.timezone', 'America/Monterrey')
+        ->assertJsonPath('data.client_context.location.source', 'activecampaign')
+        ->assertJsonMissingPath('data.client_context.location.geoIp4')
+        ->assertJsonMissingPath('data.client_context.location.geoLat')
+        ->assertJsonMissingPath('data.client_context.location.geoLon')
+        ->assertJsonMissingPath('data.client_context.location.ip')
+        ->assertJsonMissingPath('data.client_context.location.lat')
+        ->assertJsonMissingPath('data.client_context.location.lon');
+});
+
+it('returns null approximate location when customer has no local ActiveCampaign location', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.client_context.location', null);
+});
+
+it('keeps approximate location copy visible in the drawer UI component', function () {
+    $component = file_get_contents(resource_path('js/Components/Admin/Carts/CartDetailDrawer.jsx'));
+
+    expect($component)->toContain('Ubicacion aproximada')
+        ->and($component)->toContain('Fuente:');
+});
+
+it('returns administrative links according to permissions', function () {
+    Permission::findOrCreate('view cart details', 'web');
+    Permission::findOrCreate('users.manage', 'web');
+    Permission::findOrCreate('customers.manage', 'web');
+    Permission::findOrCreate('laboratory-purchases.manage', 'web');
+
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser, [
+        'status' => MonitoringCartStatus::Completed->value,
+        'completed_at' => now()->subMinutes(3),
+    ]);
+    $purchase = cart360PurchaseWithTransaction($cart, 'paypal');
+    $appointment = LaboratoryAppointment::factory()->confirmed(now()->addDay(), now()->subMinutes(30))->create([
+        'customer_id' => $customerUser->customer->id,
+        'cart_id' => $cart->id,
+        'brand' => LaboratoryBrand::OLAB->value,
+        'laboratory_purchase_id' => $purchase->id,
+        'patient_gender' => null,
+    ]);
+
+    $this->actingAs($admin);
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.links.user_url', null)
+        ->assertJsonPath('data.links.customer_url', null)
+        ->assertJsonPath('data.links.purchase_url', null)
+        ->assertJsonPath('data.links.appointment_url', null);
+
+    $admin->administrator->givePermissionTo('users.manage', 'customers.manage', 'laboratory-purchases.manage');
+    $admin->administrator->laboratoryConcierge()->create();
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.links.user_url', route('admin.users.show', $customerUser))
+        ->assertJsonPath('data.links.customer_url', route('admin.customers.show', $customerUser->customer))
+        ->assertJsonPath('data.links.purchase_url', route('admin.laboratory-purchases.show', $purchase))
+        ->assertJsonPath('data.links.appointment_url', route('admin.laboratory-appointments.show', $appointment));
+});
+
+it('returns local ActiveCampaign dispatches and legacy tag conservatively', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser);
+
+    ActiveCampaignDispatch::query()->create([
+        'event_type' => 'cart_abandoned',
+        'entity_type' => 'cart',
+        'entity_id' => $cart->id,
+        'customer_id' => $customerUser->customer->id,
+        'email' => $customerUser->email,
+        'idempotency_key' => 'cart:'.$cart->id.':synced',
+        'status' => 'synced',
+        'synced_at' => now()->subMinutes(5),
+    ]);
+    ActiveCampaignDispatch::query()->create([
+        'event_type' => 'cart_abandoned',
+        'entity_type' => 'customer',
+        'entity_id' => $customerUser->customer->id,
+        'customer_id' => $customerUser->customer->id,
+        'email' => $customerUser->email,
+        'idempotency_key' => 'customer-only-failed',
+        'status' => 'failed',
+        'last_error' => 'API token secret should be hidden',
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonCount(1, 'data.activecampaign.items')
+        ->assertJsonPath('data.activecampaign.items.0.status', 'synced')
+        ->assertJsonPath('data.activecampaign.items.0.confidence', 'explicit');
+
+    $legacyUser = User::factory()->withRegularCustomer()->create();
+    $legacyUser->customer->update(['cart_abandoned_tagged_at' => now()->subDay()]);
+    $legacyCart = cart360LabCart($legacyUser);
+
+    $this->getJson(route('admin.carts.show', $legacyCart))
+        ->assertOk()
+        ->assertJsonPath('data.activecampaign.items.0.label', 'Carrito abandonado marcado')
+        ->assertJsonPath('data.activecampaign.items.0.source', 'customer')
+        ->assertJsonPath('data.activecampaign.items.0.confidence', 'customer_legacy');
+});
+
+
+it('returns failed local ActiveCampaign dispatch with safe message', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser);
+
+    ActiveCampaignDispatch::query()->create([
+        'event_type' => 'cart_abandoned',
+        'entity_type' => 'cart',
+        'entity_id' => $cart->id,
+        'customer_id' => $customerUser->customer->id,
+        'email' => $customerUser->email,
+        'idempotency_key' => 'cart:'.$cart->id.':failed',
+        'status' => 'failed',
+        'last_error' => 'API token secret leaked by provider',
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.activecampaign.items.0.status', 'failed')
+        ->assertJsonPath('data.activecampaign.items.0.message', 'Error de sincronizacion');
+});
+
+it('does not invent ActiveCampaign data when there is no local evidence', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $cart = cart360LabCart($customerUser);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cart))
+        ->assertOk()
+        ->assertJsonPath('data.activecampaign.has_data', false)
+        ->assertJsonCount(0, 'data.activecampaign.items');
 });

@@ -17,12 +17,15 @@ class CreateLaboratoryAppointmentAction
         private CartEventRecorder $cartEventRecorder,
     ) {}
 
-    public function __invoke(Customer $customer, LaboratoryBrand $laboratoryBrand)
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    public function __invoke(Customer $customer, LaboratoryBrand $laboratoryBrand, ?array $clientContext = null)
     {
         $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand)
             ?? $customer->getPendingLaboratoryAppointment($laboratoryBrand);
 
-        $this->syncMonitoringCartService->syncLaboratory($customer);
+        $this->syncMonitoringCartService->syncLaboratory($customer, $clientContext);
         $cart = $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
 
         if (! $cart && $customer->user_id && $customer->laboratoryCartItems()->ofBrand($laboratoryBrand)->exists()) {
@@ -46,15 +49,29 @@ class CreateLaboratoryAppointmentAction
                 $cart,
                 CartEventType::AppointmentRequested,
                 "laboratory_appointment:{$laboratoryAppointment->id}:requested",
-                [
+                $this->withClientContext([
                     'laboratory_appointment_id' => $laboratoryAppointment->id,
                     'brand' => $laboratoryBrand->value,
-                ],
+                ], $clientContext),
                 $laboratoryAppointment->created_at,
                 'laboratory_checkout',
             );
         }
 
         return $laboratoryAppointment;
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @param  array<string, mixed>|null  $clientContext
+     * @return array<string, mixed>
+     */
+    private function withClientContext(array $metadata, ?array $clientContext): array
+    {
+        if ($clientContext === null || $clientContext === []) {
+            return $metadata;
+        }
+
+        return array_merge($metadata, ['client' => $clientContext]);
     }
 }

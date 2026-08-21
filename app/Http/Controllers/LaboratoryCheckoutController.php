@@ -14,6 +14,7 @@ use App\Enums\LaboratoryBrand;
 use App\Http\Requests\LaboratoryCheckout\SyncLaboratoryAppointmentRequest;
 use App\Services\CouponService;
 use App\Support\AppEnvironmentLabel;
+use App\Support\ClientContext;
 use App\Support\MockEfevooPaymentSupport;
 use Illuminate\Http\Request;
 use App\Services\Tracking\InitiateCheckout;
@@ -251,6 +252,7 @@ class LaboratoryCheckoutController extends Controller
                 'payment_method' => $validated['payment_method'] ?? null,
                 'coupon_id' => isset($validated['coupon_id']) ? (int) $validated['coupon_id'] : null,
             ],
+            ClientContext::fromRequest($request),
         );
 
         $query = array_filter([

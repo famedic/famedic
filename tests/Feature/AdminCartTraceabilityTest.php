@@ -5,11 +5,18 @@ use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
 use App\Models\Cart;
+use App\Models\Address;
+use App\Models\Contact;
 use App\Models\LaboratoryAppointment;
+use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryPurchase;
+use App\Models\LaboratoryTest;
 use App\Models\PaymentAttempt;
 use App\Models\User;
 use App\Services\Carts\CartEventRecorder;
+use App\Services\Monitoring\SyncMonitoringCartService;
+use App\Actions\Laboratories\SyncLaboratoryCheckoutDraftAction;
+use App\Support\ClientContext;
 
 function traceabilityUser(): User
 {
@@ -77,6 +84,107 @@ it('records idempotent cart events and removes sensitive metadata', function () 
         ->and($event->metadata)->toHaveKey('processor_code')
         ->and($event->metadata)->not->toHaveKey('raw_response')
         ->and($event->metadata)->not->toHaveKey('card_token');
+});
+
+it('captures mobile client context on checkout cart events and preserves functional metadata', function () {
+    $user = traceabilityUser();
+    $test = LaboratoryTest::factory()->create([
+        'brand' => LaboratoryBrand::OLAB->value,
+        'requires_appointment' => true,
+    ]);
+    LaboratoryCartItem::factory()->create([
+        'customer_id' => $user->customer->id,
+        'laboratory_test_id' => $test->id,
+    ]);
+    app(SyncMonitoringCartService::class)->syncLaboratory($user->customer);
+    $cart = Cart::query()->where('user_id', $user->id)->where('type', MonitoringCartType::Lab)->first();
+    Contact::factory()->create(['customer_id' => $user->customer->id]);
+
+    app(SyncLaboratoryCheckoutDraftAction::class)(
+        $user->customer,
+        LaboratoryBrand::OLAB,
+        [
+            'step' => 'patient',
+            'contact_id' => $user->customer->contacts()->first()->id,
+        ],
+        ClientContext::fromUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'),
+    );
+
+    $event = $cart->events()->where('event', CartEventType::PatientSelected->value)->first();
+
+    expect($event)->not->toBeNull()
+        ->and($event->metadata['brand'])->toBe(LaboratoryBrand::OLAB->value)
+        ->and($event->metadata['contact_id'])->toBe($user->customer->contacts()->first()->id)
+        ->and($event->metadata['client']['device_type'])->toBe('mobile')
+        ->and($event->metadata['client']['browser'])->toBe('Safari')
+        ->and($event->metadata['client']['os'])->toBe('iOS');
+});
+
+it('captures desktop client context on checkout cart events', function () {
+    $user = traceabilityUser();
+    $test = LaboratoryTest::factory()->create([
+        'brand' => LaboratoryBrand::OLAB->value,
+        'requires_appointment' => true,
+    ]);
+    LaboratoryCartItem::factory()->create([
+        'customer_id' => $user->customer->id,
+        'laboratory_test_id' => $test->id,
+    ]);
+    app(SyncMonitoringCartService::class)->syncLaboratory($user->customer);
+    $cart = Cart::query()->where('user_id', $user->id)->where('type', MonitoringCartType::Lab)->first();
+    $contact = Contact::factory()->create(['customer_id' => $user->customer->id]);
+    $address = Address::factory()->create(['customer_id' => $user->customer->id]);
+
+    app(SyncLaboratoryCheckoutDraftAction::class)(
+        $user->customer,
+        LaboratoryBrand::OLAB,
+        [
+            'step' => 'address',
+            'contact_id' => $contact->id,
+            'address_id' => $address->id,
+        ],
+        ClientContext::fromUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'),
+    );
+
+    $event = $cart->events()->where('event', CartEventType::AddressSelected->value)->first();
+
+    expect($event)->not->toBeNull()
+        ->and($event->metadata['client']['device_type'])->toBe('desktop')
+        ->and($event->metadata['client']['browser'])->toBe('Chrome')
+        ->and($event->metadata['client']['os'])->toBe('Windows');
+});
+
+it('keeps recordOnce idempotent when client metadata changes', function () {
+    $cart = traceabilityCart(traceabilityUser());
+    $recorder = app(CartEventRecorder::class);
+
+    $recorder->recordOnce($cart, CartEventType::CheckoutStarted, 'same-key', [
+        'brand' => 'olab',
+        'client' => ['device_type' => 'mobile', 'browser' => 'Safari', 'os' => 'iOS', 'source' => 'request_user_agent'],
+    ]);
+    $recorder->recordOnce($cart, CartEventType::CheckoutStarted, 'same-key', [
+        'brand' => 'olab',
+        'client' => ['device_type' => 'desktop', 'browser' => 'Chrome', 'os' => 'Windows', 'source' => 'request_user_agent'],
+    ]);
+
+    $event = $cart->events()->first();
+
+    expect($cart->events()->count())->toBe(1)
+        ->and($event->metadata['client']['device_type'])->toBe('mobile');
+});
+
+it('does not invent client context for async events without request context', function () {
+    $cart = traceabilityCart(traceabilityUser());
+
+    app(CartEventRecorder::class)->recordOnce(
+        $cart,
+        CartEventType::CartCompleted,
+        'async-completed',
+        ['status' => 'completed'],
+        source: 'job',
+    );
+
+    expect($cart->events()->first()->metadata)->not->toHaveKey('client');
 });
 
 it('uses explicit purchase and appointment links before historical fallback', function () {

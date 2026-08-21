@@ -27,7 +27,10 @@ class ChargeEfevooPaymentMethodAction
         $this->efevooPayService = $efevooPayService;
     }
 
-    public function __invoke(Customer $customer, int $amountCents, string $paymentMethod, ?Cart $cart = null): Transaction
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    public function __invoke(Customer $customer, int $amountCents, string $paymentMethod, ?Cart $cart = null, ?array $clientContext = null): Transaction
     {
         $chargeData = [];
         $token = null;
@@ -106,7 +109,7 @@ class ChargeEfevooPaymentMethodAction
 
                 $attempt = PaymentAttempt::create($attemptPayload);
 
-                $this->recordPaymentEventForAttempt($attempt, CartEventType::PaymentStarted, $cart);
+                $this->recordPaymentEventForAttempt($attempt, CartEventType::PaymentStarted, $cart, $clientContext);
 
                 Log::info('[EfevooPay] PaymentAttempt creado, llamando al gateway', [
                     'attempt_id' => $attempt->id,
@@ -454,10 +457,14 @@ class ChargeEfevooPaymentMethodAction
         ]);
     }
 
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
     private function recordPaymentEventForAttempt(
         PaymentAttempt $attempt,
         CartEventType $event,
         ?Cart $fallbackCart = null,
+        ?array $clientContext = null,
     ): void {
         $cart = $fallbackCart ?? $attempt->cart;
 
@@ -469,15 +476,29 @@ class ChargeEfevooPaymentMethodAction
             $cart,
             $event,
             "payment_attempt:{$attempt->id}:{$event->value}",
-            [
+            $this->withClientContext([
                 'payment_attempt_id' => $attempt->id,
                 'gateway' => $attempt->gateway,
                 'status' => $attempt->status,
                 'processor_code' => $attempt->processor_code,
                 'amount_cents' => $attempt->amount_cents,
-            ],
+            ], $clientContext),
             $attempt->processed_at ?? $attempt->updated_at ?? $attempt->created_at,
             'efevoopay',
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @param  array<string, mixed>|null  $clientContext
+     * @return array<string, mixed>
+     */
+    private function withClientContext(array $metadata, ?array $clientContext): array
+    {
+        if ($clientContext === null || $clientContext === []) {
+            return $metadata;
+        }
+
+        return array_merge($metadata, ['client' => $clientContext]);
     }
 }

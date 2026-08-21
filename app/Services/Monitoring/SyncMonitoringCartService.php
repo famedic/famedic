@@ -26,7 +26,10 @@ class SyncMonitoringCartService
     ) {
     }
 
-    public function syncLaboratory(Customer $customer): void
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    public function syncLaboratory(Customer $customer, ?array $clientContext = null): void
     {
         $userId = $customer->user_id;
         if (! $userId) {
@@ -45,7 +48,7 @@ class SyncMonitoringCartService
             return;
         }
 
-        DB::transaction(function () use ($userId, $items) {
+        DB::transaction(function () use ($userId, $items, $clientContext) {
             $itemsByBrand = $items->groupBy(
                 fn (LaboratoryCartItem $row) => $row->laboratoryTest?->brand?->value ?? '__unknown',
             );
@@ -56,8 +59,8 @@ class SyncMonitoringCartService
 
             foreach ($itemsByBrand as $brandValue => $brandItems) {
                 $cart = $brandValue !== '__unknown'
-                    ? $this->firstOrCreateActiveLaboratoryCartForBrand($userId, LaboratoryBrand::from($brandValue))
-                    : $this->firstOrCreateBrandlessActiveLaboratoryCart($userId);
+                    ? $this->firstOrCreateActiveLaboratoryCartForBrand($userId, LaboratoryBrand::from($brandValue), $clientContext)
+                    : $this->firstOrCreateBrandlessActiveLaboratoryCart($userId, $clientContext);
                 $this->replaceLaboratorySnapshot($cart, $brandItems);
             }
 
@@ -65,7 +68,10 @@ class SyncMonitoringCartService
         });
     }
 
-    public function syncPharmacy(Customer $customer): void
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    public function syncPharmacy(Customer $customer, ?array $clientContext = null): void
     {
         $userId = $customer->user_id;
         if (! $userId) {
@@ -80,8 +86,8 @@ class SyncMonitoringCartService
             return;
         }
 
-        DB::transaction(function () use ($userId, $items) {
-            $cart = $this->firstOrCreateActiveCart($userId, MonitoringCartType::Pharmacy);
+        DB::transaction(function () use ($userId, $items, $clientContext) {
+            $cart = $this->firstOrCreateActiveCart($userId, MonitoringCartType::Pharmacy, $clientContext);
             $cart->items()->delete();
 
             $total = 0;
@@ -115,9 +121,12 @@ class SyncMonitoringCartService
         });
     }
 
-    public function markLaboratoryCartCompleted(Customer $customer, ?LaboratoryBrand $brand = null): ?Cart
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    public function markLaboratoryCartCompleted(Customer $customer, ?LaboratoryBrand $brand = null, ?array $clientContext = null): ?Cart
     {
-        $this->syncLaboratory($customer);
+        $this->syncLaboratory($customer, $clientContext);
         $userId = $customer->user_id;
         if (! $userId) {
             return null;
@@ -137,6 +146,7 @@ class SyncMonitoringCartService
                 $cart->refresh(),
                 CartEventType::CartCompleted,
                 "cart:{$cart->id}:completed",
+                $this->withClientContext([], $clientContext),
                 source: 'monitoring_cart_sync',
             );
         }
@@ -201,7 +211,10 @@ class SyncMonitoringCartService
             ->first();
     }
 
-    private function firstOrCreateActiveCart(int $userId, MonitoringCartType $type): Cart
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    private function firstOrCreateActiveCart(int $userId, MonitoringCartType $type, ?array $clientContext = null): Cart
     {
         $existing = Cart::query()
             ->where('user_id', $userId)
@@ -213,10 +226,13 @@ class SyncMonitoringCartService
             return $existing;
         }
 
-        return $this->createActiveCart($userId, $type);
+        return $this->createActiveCart($userId, $type, $clientContext);
     }
 
-    private function createActiveCart(int $userId, MonitoringCartType $type): Cart
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    private function createActiveCart(int $userId, MonitoringCartType $type, ?array $clientContext = null): Cart
     {
         $cart = Cart::create([
             'user_id' => $userId,
@@ -229,14 +245,17 @@ class SyncMonitoringCartService
             $cart,
             CartEventType::CartCreated,
             "cart:{$cart->id}:created",
-            ['type' => $type->value],
+            $this->withClientContext(['type' => $type->value], $clientContext),
             source: 'monitoring_cart_sync',
         );
 
         return $cart;
     }
 
-    private function firstOrCreateActiveLaboratoryCartForBrand(int $userId, LaboratoryBrand $brand): Cart
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    private function firstOrCreateActiveLaboratoryCartForBrand(int $userId, LaboratoryBrand $brand, ?array $clientContext = null): Cart
     {
         $existing = $this->activeLaboratoryCartForBrand($userId, $brand);
 
@@ -244,10 +263,13 @@ class SyncMonitoringCartService
             return $existing;
         }
 
-        return $this->createActiveCart($userId, MonitoringCartType::Lab);
+        return $this->createActiveCart($userId, MonitoringCartType::Lab, $clientContext);
     }
 
-    private function firstOrCreateBrandlessActiveLaboratoryCart(int $userId): Cart
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    private function firstOrCreateBrandlessActiveLaboratoryCart(int $userId, ?array $clientContext = null): Cart
     {
         $existing = Cart::query()
             ->with('items')
@@ -257,7 +279,21 @@ class SyncMonitoringCartService
             ->get()
             ->first(fn (Cart $cart) => collect($cart->labBrands())->isEmpty());
 
-        return $existing ?? $this->createActiveCart($userId, MonitoringCartType::Lab);
+        return $existing ?? $this->createActiveCart($userId, MonitoringCartType::Lab, $clientContext);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @param  array<string, mixed>|null  $clientContext
+     * @return array<string, mixed>
+     */
+    private function withClientContext(array $metadata, ?array $clientContext): array
+    {
+        if ($clientContext === null || $clientContext === []) {
+            return $metadata;
+        }
+
+        return array_merge($metadata, ['client' => $clientContext]);
     }
 
     private function activeLaboratoryCartForBrand(int $userId, LaboratoryBrand $brand): ?Cart

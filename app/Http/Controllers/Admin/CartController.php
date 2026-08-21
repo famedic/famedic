@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
+use App\Models\ActiveCampaignDispatch;
 use App\Models\Cart;
+use App\Models\CartEvent;
 use App\Models\EfevooToken;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryCheckoutDraft;
@@ -20,6 +22,7 @@ use App\Services\Carts\CartPaymentAttemptCorrelator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
 class CartController extends Controller
@@ -167,6 +170,8 @@ class CartController extends Controller
 
         $cart->load([
             'items',
+            'events',
+            'paymentAttempts',
             'laboratoryAppointments.laboratoryStore',
             'laboratoryPurchases.transactions',
             'user.customer.laboratoryAppointments.laboratoryStore',
@@ -543,6 +548,9 @@ class CartController extends Controller
         $checkoutEntries = $cart->type === MonitoringCartType::Lab
             ? $this->serializeCheckoutSummaryForRow($cart)
             : [];
+        $finalPayment = $this->serialize360FinalPayment($purchase);
+        $journey = $this->serialize360Journey($cart, $checkoutEntries, $appointment, $purchase, $paymentInsight, $finalPayment);
+        $events = $this->serialize360Events($cart);
 
         return [
             'cart' => $this->serialize360Cart($cart, $purchase),
@@ -551,12 +559,19 @@ class CartController extends Controller
             'checkout' => [
                 'stage' => $this->serializeCurrentStageForRow($cart, $paymentInsight),
                 'signals' => $this->serializeOperationalSignalsForRow($cart, $paymentInsight),
-                'journey' => $this->serialize360Journey($cart, $checkoutEntries, $appointment, $purchase, $paymentInsight),
+                'journey' => $journey,
                 'entries' => $checkoutEntries,
             ],
+            'journey' => $journey,
             'payment' => $this->serialize360Payment($paymentInsight),
+            'final_payment' => $finalPayment,
+            'payment_history' => $this->serialize360PaymentHistory($cart, $paymentInsight, $finalPayment),
             'appointment' => $appointment ? $this->serialize360Appointment($appointment) : null,
+            'appointment_journey' => $this->serialize360AppointmentJourney($cart, $appointment, $purchase, $finalPayment),
             'contact' => $appointment ? $this->serialize360Contact($appointment) : null,
+            'activecampaign' => $this->serialize360ActiveCampaign($cart),
+            'client_context' => $this->serialize360ClientContext($events, $cart),
+            'events' => $events,
             'history' => $this->serialize360History($cart),
             'links' => $this->serialize360Links($cart, $request, $purchase, $appointment),
         ];
@@ -624,6 +639,7 @@ class CartController extends Controller
         ?LaboratoryAppointment $appointment,
         ?LaboratoryPurchase $purchase,
         ?array $paymentInsight,
+        ?array $finalPayment = null,
     ): array {
         $hasItems = $cart->items->isNotEmpty();
         $hasPatient = collect($checkoutEntries)->contains(fn (array $entry) => filled($entry['patient_name'] ?? null))
@@ -631,7 +647,9 @@ class CartController extends Controller
         $hasAddress = collect($checkoutEntries)->contains(fn (array $entry) => filled($entry['address_short'] ?? null))
             || $purchase !== null;
         $requiresAppointment = $this->cartRequiresAppointment($cart);
-        $paymentStatus = $this->paymentJourneyStatus($paymentInsight);
+        $paymentStatus = $finalPayment !== null
+            ? ['state' => 'completed', 'detail' => $finalPayment['method_label']]
+            : $this->paymentJourneyStatus($paymentInsight);
         $isCompleted = $cart->status === MonitoringCartStatus::Completed && $purchase !== null;
 
         return [
@@ -705,6 +723,148 @@ class CartController extends Controller
             'attempts_count' => (int) ($paymentInsight['attempts_count'] ?? 0),
             'last_attempt' => $paymentInsight['last_attempt'] ?? null,
         ];
+    }
+
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function serialize360FinalPayment(?LaboratoryPurchase $purchase): ?array
+    {
+        $transaction = $this->finalTransactionForPurchase($purchase);
+
+        if ($transaction === null) {
+            return null;
+        }
+
+        $method = strtolower((string) ($transaction->payment_method ?: $transaction->gateway));
+        $paidAt = $transaction->gateway_processed_at ?? $transaction->created_at;
+
+        return [
+            'method' => $method ?: null,
+            'method_label' => $this->paymentMethodDisplayLabel($method),
+            'status' => $transaction->payment_status ?: $transaction->gateway_status ?: 'approved',
+            'status_label' => 'Aprobado',
+            'amount' => $transaction->transaction_amount_cents !== null
+                ? formattedCentsPrice((int) $transaction->transaction_amount_cents)
+                : ($purchase?->formatted_net_total ?? $purchase?->formatted_total),
+            'paid_at' => $paidAt?->toIso8601String(),
+            'paid_at_human' => $paidAt?->timezone('America/Monterrey')->format('d/m/Y H:i'),
+            'source' => 'transaction',
+        ];
+    }
+
+    private function finalTransactionForPurchase(?LaboratoryPurchase $purchase): ?Transaction
+    {
+        if ($purchase === null) {
+            return null;
+        }
+
+        $transactions = $purchase->relationLoaded('transactions')
+            ? $purchase->transactions
+            : $purchase->transactions()->get();
+
+        return $transactions
+            ->filter(fn (Transaction $transaction) => $transaction->isSuccessfulPayment())
+            ->sortByDesc(fn (Transaction $transaction) => ($transaction->gateway_processed_at ?? $transaction->created_at)?->timestamp ?? 0)
+            ->first();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function serialize360PaymentHistory(Cart $cart, ?array $paymentInsight, ?array $finalPayment): array
+    {
+        $history = $this->paymentAttemptsForHistory($cart, $paymentInsight)
+            ->map(function (PaymentAttempt $attempt) use ($paymentInsight) {
+                $occurredAt = $attempt->processed_at ?? $attempt->updated_at ?? $attempt->created_at;
+
+                return [
+                    'id' => 'attempt-'.$attempt->id,
+                    'type' => 'payment_attempt',
+                    'occurred_at' => $occurredAt?->toIso8601String(),
+                    'occurred_at_human' => $occurredAt?->timezone('America/Monterrey')->format('d/m/Y H:i'),
+                    'gateway' => $attempt->gateway,
+                    'gateway_label' => $this->paymentMethodDisplayLabel($attempt->gateway),
+                    'status' => $attempt->status,
+                    'status_label' => $this->paymentAttemptStatusLabel((string) $attempt->status),
+                    'processor_code' => $this->safeProcessorCode($attempt->processor_code),
+                    'processor_message' => $this->safeProcessorMessage($attempt->processor_message, (string) $attempt->status),
+                    'correlation' => $attempt->cart_id ? 'explicit' : ($paymentInsight['confidence'] ?? 'legacy_high'),
+                ];
+            })
+            ->values();
+
+        if ($finalPayment !== null && ! $this->historyHasEquivalentApprovedAttempt($history, $finalPayment)) {
+            $history->push([
+                'id' => 'final-payment',
+                'type' => 'final_payment',
+                'label' => 'Pago final',
+                'occurred_at' => $finalPayment['paid_at'] ?? null,
+                'occurred_at_human' => $finalPayment['paid_at_human'] ?? null,
+                'gateway' => $finalPayment['method'] ?? null,
+                'gateway_label' => $finalPayment['method_label'] ?? null,
+                'status' => $finalPayment['status'] ?? 'approved',
+                'status_label' => 'Aprobado',
+                'processor_code' => null,
+                'processor_message' => null,
+                'correlation' => 'transaction',
+            ]);
+        }
+
+        return $history
+            ->sortBy(fn (array $row) => $row['occurred_at'] ?? '')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, PaymentAttempt>
+     */
+    private function paymentAttemptsForHistory(Cart $cart, ?array $paymentInsight): \Illuminate\Support\Collection
+    {
+        if (Schema::hasColumn('payment_attempts', 'cart_id')) {
+            $explicit = PaymentAttempt::query()
+                ->where('cart_id', $cart->id)
+                ->orderBy('created_at')
+                ->get();
+
+            if ($explicit->isNotEmpty()) {
+                return $explicit;
+            }
+        }
+
+        if (($paymentInsight['confidence'] ?? null) !== 'legacy_high') {
+            return collect();
+        }
+
+        $customerId = $cart->user?->customer?->id;
+        if (! $customerId || ! $cart->created_at || ! $cart->updated_at) {
+            return collect();
+        }
+
+        return PaymentAttempt::query()
+            ->where('customer_id', $customerId)
+            ->where('gateway', 'efevoopay')
+            ->when(Schema::hasColumn('payment_attempts', 'cart_id'), fn ($query) => $query->whereNull('cart_id'))
+            ->whereBetween('created_at', [
+                $cart->created_at->copy()->subMinutes(5),
+                ($cart->completed_at ?? $cart->updated_at)->copy()->addHours(2),
+            ])
+            ->whereBetween('amount_cents', [
+                (int) round((float) $cart->total * 100) - 100,
+                (int) round((float) $cart->total * 100) + 100,
+            ])
+            ->orderBy('created_at')
+            ->get();
+    }
+
+    private function historyHasEquivalentApprovedAttempt(\Illuminate\Support\Collection $history, array $finalPayment): bool
+    {
+        return $history->contains(function (array $row) use ($finalPayment) {
+            return $row['status'] === PaymentAttempt::STATUS_APPROVED
+                && ($row['gateway'] ?? null) === ($finalPayment['method'] ?? null);
+        });
     }
 
     /**
@@ -813,10 +973,16 @@ class CartController extends Controller
 
         return [
             'cart_url' => route('admin.carts.show', $cart),
+            'user_url' => $cart->user && $this->adminCanIfPermissionExists($administrator, 'users.manage')
+                ? route('admin.users.show', $cart->user)
+                : null,
+            'customer_url' => $cart->user?->customer && $this->adminCanIfPermissionExists($administrator, 'customers.manage')
+                ? route('admin.customers.show', $cart->user->customer)
+                : null,
             'purchase_url' => $purchase && $this->adminCanIfPermissionExists($administrator, 'laboratory-purchases.manage')
                 ? route('admin.laboratory-purchases.show', $purchase)
                 : null,
-            'appointment_url' => $appointment && $administrator->laboratoryConcierge
+            'appointment_url' => $appointment && $administrator->laboratoryConcierge()->exists()
                 ? route('admin.laboratory-appointments.show', $appointment)
                 : null,
         ];
@@ -900,6 +1066,380 @@ class CartController extends Controller
             PaymentAttempt::STATUS_ERROR => ['state' => 'failed', 'detail' => 'Error técnico'],
             PaymentAttempt::STATUS_PENDING, PaymentAttempt::STATUS_PROCESSING => ['state' => 'current', 'detail' => 'Pendiente'],
             default => ['state' => 'pending', 'detail' => 'No iniciado'],
+        };
+    }
+
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function serialize360AppointmentJourney(
+        Cart $cart,
+        ?LaboratoryAppointment $appointment,
+        ?LaboratoryPurchase $purchase,
+        ?array $finalPayment,
+    ): array {
+        $requiresAppointment = $this->cartRequiresAppointment($cart);
+
+        return [
+            ['key' => 'requires_appointment', 'label' => 'Requiere cita', 'state' => $requiresAppointment ? 'completed' : 'pending', 'detail' => $requiresAppointment ? 'Si' : 'No aplica'],
+            ['key' => 'appointment_requested', 'label' => 'Cita solicitada', 'state' => $appointment ? 'completed' : 'pending', 'detail' => $appointment?->created_at?->timezone('America/Monterrey')->format('d/m/Y H:i') ?? 'Sin solicitud'],
+            ['key' => 'appointment_confirmed', 'label' => 'Confirmada', 'state' => $appointment?->confirmed_at ? 'completed' : 'pending', 'detail' => $appointment?->confirmed_at?->timezone('America/Monterrey')->format('d/m/Y H:i') ?? 'Sin confirmar'],
+            ['key' => 'appointment_scheduled', 'label' => 'Cita programada', 'state' => $appointment?->appointment_date ? 'completed' : 'pending', 'detail' => $appointment?->formatted_appointment_date ?? 'Sin fecha'],
+            ['key' => 'payment', 'label' => 'Pago', 'state' => $finalPayment ? 'completed' : 'pending', 'detail' => $finalPayment['method_label'] ?? 'Sin pago'],
+            ['key' => 'purchase', 'label' => 'Compra', 'state' => $purchase ? 'completed' : 'pending', 'detail' => $purchase ? 'Compra #'.$purchase->id : 'Sin compra'],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serialize360ActiveCampaign(Cart $cart): array
+    {
+        $customer = $cart->user?->customer;
+        $rows = collect();
+
+        if (Schema::hasTable('activecampaign_dispatches')) {
+            $rows = ActiveCampaignDispatch::query()
+                ->where(function ($query) use ($cart) {
+                    $query
+                        ->where(fn ($q) => $q->where('entity_type', 'cart')->where('entity_id', $cart->id))
+                        ->orWhere(fn ($q) => $q->where('related_entity_type', 'cart')->where('related_entity_id', $cart->id))
+                        ->orWhere('idempotency_key', 'like', '%cart:'.$cart->id.'%');
+                })
+                ->orderBy('created_at')
+                ->limit(20)
+                ->get()
+                ->map(function (ActiveCampaignDispatch $dispatch) {
+                    $occurredAt = $dispatch->synced_at ?? $dispatch->updated_at ?? $dispatch->created_at;
+
+                    return [
+                        'id' => $dispatch->id,
+                        'event' => $dispatch->event_type,
+                        'label' => $this->activeCampaignEventLabel($dispatch->event_type),
+                        'status' => $dispatch->status,
+                        'occurred_at' => $occurredAt?->toIso8601String(),
+                        'occurred_at_human' => $occurredAt?->timezone('America/Monterrey')->format('d/m/Y H:i'),
+                        'message' => $this->safeActiveCampaignMessage($dispatch->last_error),
+                        'source' => 'dispatch',
+                        'confidence' => 'explicit',
+                    ];
+                })
+                ->values();
+        }
+
+        if ($rows->isEmpty() && $customer?->cart_abandoned_tagged_at) {
+            $taggedAt = $customer->cart_abandoned_tagged_at instanceof Carbon
+                ? $customer->cart_abandoned_tagged_at
+                : Carbon::parse($customer->cart_abandoned_tagged_at);
+
+            $rows->push([
+                'id' => 'customer-cart-abandoned',
+                'event' => 'cart_abandoned_tagged',
+                'label' => 'Carrito abandonado marcado',
+                'status' => 'synced',
+                'occurred_at' => $taggedAt->toIso8601String(),
+                'occurred_at_human' => $taggedAt->timezone('America/Monterrey')->format('d/m/Y H:i'),
+                'message' => null,
+                'source' => 'customer',
+                'confidence' => 'customer_legacy',
+            ]);
+        }
+
+        return ['items' => $rows->all(), 'has_data' => $rows->isNotEmpty()];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function serialize360Events(Cart $cart): array
+    {
+        $events = $cart->relationLoaded('events') ? $cart->events : $cart->events()->orderBy('occurred_at')->get();
+
+        return $events
+            ->sortBy('occurred_at')
+            ->map(function (CartEvent $event) {
+                $metadata = is_array($event->metadata) ? $event->metadata : [];
+                $client = $this->safeCartEventClientContext($metadata['client'] ?? null);
+                $eventValue = $event->event?->value ?? (string) $event->event;
+
+                $row = [
+                    'id' => $event->id,
+                    'event' => $eventValue,
+                    'label' => $this->cartEventLabel($eventValue),
+                    'occurred_at' => $event->occurred_at?->toIso8601String(),
+                    'occurred_at_human' => $event->occurred_at?->timezone('America/Monterrey')->format('d/m/Y H:i'),
+                    'metadata' => $this->safeCartEventMetadata($metadata),
+                    'source' => $event->source,
+                ];
+
+                if ($client !== null) {
+                    $row['client'] = $client;
+                }
+
+                return $row;
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $events
+     * @return array<string, mixed>
+     */
+    private function serialize360ClientContext(array $events, Cart $cart): array
+    {
+        $eventsWithClient = collect($events)
+            ->filter(fn (array $event) => is_array($event['client'] ?? null))
+            ->values();
+        $location = $this->serialize360ClientLocation($cart);
+
+        if ($eventsWithClient->isEmpty()) {
+            return [
+                'last_device' => null,
+                'devices_seen' => [],
+                'devices_seen_labels' => [],
+                'has_device_change' => false,
+                'timeline' => [],
+                'location' => $location,
+                'has_data' => $location !== null,
+            ];
+        }
+
+        $devicesSeen = $eventsWithClient
+            ->pluck('client.device_type')
+            ->filter(fn ($device) => is_string($device) && $device !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        $last = $eventsWithClient->last();
+        $lastClient = $last['client'];
+
+        return [
+            'last_device' => [
+                'device_type' => $lastClient['device_type'],
+                'device_label' => $lastClient['device_label'],
+                'browser' => $lastClient['browser'],
+                'os' => $lastClient['os'],
+                'occurred_at' => $last['occurred_at'],
+                'occurred_at_human' => $last['occurred_at_human'],
+            ],
+            'devices_seen' => $devicesSeen,
+            'devices_seen_labels' => collect($devicesSeen)->map(fn (string $device) => $this->deviceTypeLabel($device))->all(),
+            'has_device_change' => count($devicesSeen) > 1,
+            'timeline' => $eventsWithClient
+                ->map(fn (array $event) => [
+                    'id' => $event['id'],
+                    'event' => $event['event'],
+                    'label' => $event['label'],
+                    'occurred_at' => $event['occurred_at'],
+                    'occurred_at_human' => $event['occurred_at_human'],
+                    'client' => $event['client'],
+                ])
+                ->all(),
+            'location' => $location,
+            'has_data' => true,
+        ];
+    }
+
+    /**
+     * @return array{has_data: bool, city: string|null, state: string|null, country: string|null, timezone: string|null, source: string, cached_at: string|null, cached_at_human: string|null}|null
+     */
+    private function serialize360ClientLocation(Cart $cart): ?array
+    {
+        $customer = $cart->user?->customer;
+        $location = is_array($customer?->ac_location) ? $customer->ac_location : null;
+
+        if ($location === null || $location === []) {
+            return null;
+        }
+
+        $safe = [
+            'city' => $this->shortText(trim((string) ($location['city'] ?? '')), 120),
+            'state' => $this->shortText(trim((string) ($location['state'] ?? '')), 120),
+            'country' => $this->shortText(trim((string) ($location['country'] ?? '')), 120),
+            'timezone' => $this->shortText(trim((string) ($location['timezone'] ?? '')), 120),
+        ];
+
+        $safe = array_map(fn (?string $value) => $value !== '' ? $value : null, $safe);
+
+        if (! array_filter($safe)) {
+            return null;
+        }
+
+        $cachedAt = $customer?->ac_location_cached_at instanceof Carbon
+            ? $customer->ac_location_cached_at
+            : ($customer?->ac_location_cached_at ? Carbon::parse($customer->ac_location_cached_at) : null);
+
+        return [
+            'has_data' => true,
+            'city' => $safe['city'],
+            'state' => $safe['state'],
+            'country' => $safe['country'],
+            'timezone' => $safe['timezone'],
+            'source' => 'activecampaign',
+            'cached_at' => $cachedAt?->toIso8601String(),
+            'cached_at_human' => $cachedAt?->timezone('America/Monterrey')->format('d/m/Y'),
+        ];
+    }
+
+    private function paymentMethodDisplayLabel(?string $method): string
+    {
+        return match (strtolower((string) $method)) {
+            'stripe' => 'Tarjeta / Stripe',
+            'efevoopay' => 'Efevoo',
+            'odessa' => 'Caja de ahorro / Odessa',
+            'paypal' => 'PayPal',
+            default => filled($method) ? ucfirst((string) $method) : 'Pago',
+        };
+    }
+
+    private function paymentAttemptStatusLabel(string $status): string
+    {
+        return match ($status) {
+            PaymentAttempt::STATUS_PENDING, PaymentAttempt::STATUS_PROCESSING => 'Intento pendiente',
+            PaymentAttempt::STATUS_APPROVED => 'Pago aprobado',
+            PaymentAttempt::STATUS_DECLINED => 'Pago rechazado',
+            PaymentAttempt::STATUS_ERROR => 'Error tecnico',
+            PaymentAttempt::STATUS_REFUNDED => 'Reembolsado',
+            default => 'Pago no determinado',
+        };
+    }
+
+    private function safeProcessorCode(?string $code): ?string
+    {
+        $code = trim((string) $code);
+        if ($code === '') {
+            return null;
+        }
+
+        $safe = preg_replace('/[^A-Za-z0-9._:-]/', '', $code);
+
+        return $safe !== '' ? mb_substr($safe, 0, 24) : null;
+    }
+
+    private function safeProcessorMessage(?string $message, string $status): ?string
+    {
+        $message = trim((string) $message);
+        if ($message === '') {
+            return $status === PaymentAttempt::STATUS_ERROR ? 'Error del procesador' : null;
+        }
+
+        $message = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $message) ?? '';
+        $message = preg_replace('/\s+/', ' ', $message) ?? '';
+        $lower = mb_strtolower($message);
+
+        if (str_contains($lower, 'timeout') || str_contains($lower, 'time out')) {
+            return 'Tiempo de espera agotado';
+        }
+
+        if (str_contains($lower, 'declin') || str_contains($lower, 'rechaz')) {
+            return 'Transaccion rechazada';
+        }
+
+        if (str_contains($lower, 'token') || str_contains($lower, 'card') || str_contains($lower, 'tarjeta') || str_contains($lower, '{') || str_contains($lower, '[')) {
+            return $status === PaymentAttempt::STATUS_ERROR ? 'Error del procesador' : null;
+        }
+
+        return mb_strlen($message) > 80 ? mb_substr($message, 0, 77).'...' : $message;
+    }
+
+
+    private function safeActiveCampaignMessage(?string $message): ?string
+    {
+        $message = trim((string) $message);
+        if ($message === '') {
+            return null;
+        }
+
+        $message = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $message) ?? '';
+        $message = preg_replace('/\s+/', ' ', $message) ?? '';
+        $lower = mb_strtolower($message);
+
+        if (str_contains($lower, 'token') || str_contains($lower, 'secret') || str_contains($lower, 'password') || str_contains($lower, 'api key')) {
+            return 'Error de sincronizacion';
+        }
+
+        return $this->shortText($message, 120);
+    }
+
+    private function activeCampaignEventLabel(?string $event): string
+    {
+        $event = trim((string) $event);
+
+        return match ($event) {
+            'cart_abandoned', 'cart_abandoned_tagged' => 'Carrito abandonado marcado',
+            'purchase_created', 'laboratory_purchase_created' => 'Compra enviada',
+            default => $event !== '' ? str($event)->replace(['_', '-'], ' ')->title()->toString() : 'Evento ActiveCampaign',
+        };
+    }
+
+    private function cartEventLabel(string $event): string
+    {
+        return match ($event) {
+            'cart_created' => 'Carrito creado',
+            'checkout_started' => 'Checkout iniciado',
+            'patient_selected' => 'Paciente seleccionado',
+            'address_selected' => 'Direccion seleccionada',
+            'appointment_requested' => 'Cita solicitada',
+            'appointment_confirmed' => 'Cita confirmada',
+            'payment_started' => 'Pago iniciado',
+            'payment_declined' => 'Pago rechazado',
+            'payment_error' => 'Error tecnico',
+            'payment_approved' => 'Pago aprobado',
+            'purchase_created' => 'Compra creada',
+            'cart_completed' => 'Carrito completado',
+            default => str($event)->replace(['_', '-'], ' ')->title()->toString(),
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function safeCartEventMetadata(array $metadata): array
+    {
+        return collect($metadata)
+            ->only(['brand', 'brand_label', 'step', 'status', 'reason', 'appointment_id', 'purchase_id'])
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->all();
+    }
+
+    /**
+     * @return array{device_type: string, device_label: string, browser: string, os: string, source: string}|null
+     */
+    private function safeCartEventClientContext(mixed $client): ?array
+    {
+        if (! is_array($client)) {
+            return null;
+        }
+
+        $deviceType = (string) ($client['device_type'] ?? '');
+        if (! in_array($deviceType, ['mobile', 'tablet', 'desktop', 'unknown'], true)) {
+            $deviceType = 'unknown';
+        }
+
+        $browser = trim((string) ($client['browser'] ?? ''));
+        $os = trim((string) ($client['os'] ?? ''));
+        $source = trim((string) ($client['source'] ?? ''));
+
+        return [
+            'device_type' => $deviceType,
+            'device_label' => $this->deviceTypeLabel($deviceType),
+            'browser' => $browser !== '' ? mb_substr($browser, 0, 64) : 'Unknown',
+            'os' => $os !== '' ? mb_substr($os, 0, 64) : 'Unknown',
+            'source' => $source !== '' ? mb_substr($source, 0, 64) : 'request_user_agent',
+        ];
+    }
+
+    private function deviceTypeLabel(string $deviceType): string
+    {
+        return match ($deviceType) {
+            'mobile' => 'Móvil',
+            'tablet' => 'Tablet',
+            'desktop' => 'Desktop',
+            default => 'No identificado',
         };
     }
 

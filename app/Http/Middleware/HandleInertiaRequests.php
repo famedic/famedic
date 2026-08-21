@@ -48,6 +48,14 @@ class HandleInertiaRequests extends Middleware
                     ]
                     : null,
             ],
+            'activeCampaignSiteTracking' => fn () => [
+                'enabled' => app()->environment(['production', 'testing']),
+                'email' => app()->environment(['production', 'testing']) &&
+                    $request->user() &&
+                    ! $request->user()->administrator
+                    ? $request->user()->email
+                    : null,
+            ],
             ...($request->user() ? [
                 'medicalAttentionSubscriptionIsActive' => $request->user()->customer?->medical_attention_subscription_is_active,
                 'formattedMedicalAttentionSubscriptionExpiresAt' => $request->user()->customer?->formatted_medical_attention_subscription_expires_at,

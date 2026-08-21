@@ -4,6 +4,7 @@ import { registerServiceWorker } from "./serviceworker";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { createInertiaApp } from "@inertiajs/react";
 import { resolvePageComponent } from "laravel-vite-plugin/inertia-helpers";
+import { initActiveCampaignSiteTracking } from "./lib/activeCampaignSiteTracking";
 import { initZohoSalesIQTracking } from "./lib/zohoSalesIQ";
 import React from "react";
 
@@ -25,12 +26,16 @@ createInertiaApp({
 			);
 
 			initZohoSalesIQTracking();
+			initActiveCampaignSiteTracking({ initialPage: props.initialPage });
 			registerServiceWorker();
 			return;
 		}
 
 		hydrateRoot(el, <App {...props} />);
-		queueMicrotask(() => initZohoSalesIQTracking());
+		queueMicrotask(() => {
+			initZohoSalesIQTracking();
+			initActiveCampaignSiteTracking({ initialPage: props.initialPage });
+		});
 		registerServiceWorker();
 	},
 	progress: {

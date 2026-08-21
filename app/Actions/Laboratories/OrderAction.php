@@ -74,6 +74,7 @@ class OrderAction
         int $totalCents,
         ?int $couponId = null,
         ?string $promoValidationToken = null,
+        ?array $clientContext = null,
     ): LaboratoryPurchase {
 
         $this->laboratoryCartItems = $customer->laboratoryCartItems()
@@ -117,7 +118,7 @@ class OrderAction
         }
 
         $amountToChargeCents = $calculatedTotalCents - $discountCents;
-        $monitoringCart = $this->resolveMonitoringCart($customer, $laboratoryBrand);
+        $monitoringCart = $this->resolveMonitoringCart($customer, $laboratoryBrand, $clientContext);
 
         $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand);
 
@@ -150,7 +151,7 @@ class OrderAction
 
         try {
             if ($amountToChargeCents > 0) {
-                $transaction = $this->chargeAndCreateTransaction($amountToChargeCents, $paymentMethod, $customer, $monitoringCart);
+                $transaction = $this->chargeAndCreateTransaction($amountToChargeCents, $paymentMethod, $customer, $monitoringCart, $clientContext);
             } else {
                 $transaction = ($this->createCouponBalanceTransactionAction)(
                     $customer,
@@ -181,6 +182,7 @@ class OrderAction
                 $promoValidationToken,
                 $cartHash,
                 $monitoringCart,
+                $clientContext,
             );
         } catch (\Throwable $th) {
             if (DB::transactionLevel() > 0) {
@@ -235,7 +237,10 @@ class OrderAction
         ]);
     }
 
-    private function chargeAndCreateTransaction(int $amountCents, string $paymentMethod, Customer $customer, ?Cart $cart): Transaction
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    private function chargeAndCreateTransaction(int $amountCents, string $paymentMethod, Customer $customer, ?Cart $cart, ?array $clientContext = null): Transaction
     {
         if ($paymentMethod === 'odessa') {
             return ($this->chargeOdessaAction)($customer->customerable, $amountCents);
@@ -247,12 +252,16 @@ class OrderAction
             $amountCents,
             $paymentMethod,
             $cart,
+            $clientContext,
         );
     }
 
-    private function resolveMonitoringCart(Customer $customer, LaboratoryBrand $laboratoryBrand): ?Cart
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    private function resolveMonitoringCart(Customer $customer, LaboratoryBrand $laboratoryBrand, ?array $clientContext = null): ?Cart
     {
-        $this->syncMonitoringCartService->syncLaboratory($customer);
+        $this->syncMonitoringCartService->syncLaboratory($customer, $clientContext);
 
         $cart = $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
 

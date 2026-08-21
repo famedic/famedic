@@ -9,6 +9,7 @@ use App\Http\Requests\LaboratoryAppointments\RecordLaboratoryAppointmentPhoneInt
 use App\Http\Requests\LaboratoryAppointments\UpdateLaboratoryAppointmentCallbackAvailabilityRequest;
 use App\Models\LaboratoryAppointment;
 use App\Services\Monitoring\SyncMonitoringCartService;
+use App\Support\ClientContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -30,7 +31,7 @@ class LaboratoryAppointmentController extends Controller
 
     public function store(Request $request, LaboratoryBrand $laboratoryBrand, CreateLaboratoryAppointmentAction $action)
     {
-        $laboratoryAppointment = $action($request->user()->customer, $laboratoryBrand);
+        $laboratoryAppointment = $action($request->user()->customer, $laboratoryBrand, ClientContext::fromRequest($request));
 
         return redirect()->route('laboratory-appointments.show', [
             'laboratory_brand' => $laboratoryBrand,

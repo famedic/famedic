@@ -15,6 +15,7 @@ use App\Models\Contact;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use App\Services\Tracking\Purchase;
+use App\Support\ClientContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -35,6 +36,7 @@ class LaboratoryPurchaseController extends Controller
                 promoValidationToken: $request->filled('promo_validation_token')
                     ? (string) $request->input('promo_validation_token')
                     : null,
+                clientContext: ClientContext::fromRequest($request),
             );
         } catch (EfevooPaymentException $e) {
             return redirect()->back()

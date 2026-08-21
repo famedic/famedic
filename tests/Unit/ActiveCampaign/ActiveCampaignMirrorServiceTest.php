@@ -23,7 +23,7 @@ beforeEach(function () {
     Cache::flush();
 });
 
-function fakeAcMirrorApi(): void
+function fakeAcMirrorApi($contactDataResponse = null): void
 {
     Http::fake([
         'https://ac.test/api/3/contacts/42' => Http::response([
@@ -39,7 +39,7 @@ function fakeAcMirrorApi(): void
                 'owner' => '3',
             ],
         ], 200),
-        'https://ac.test/api/3/contacts/42/contactData' => Http::response([
+        'https://ac.test/api/3/contacts/42/contactData' => $contactDataResponse ?? Http::response([
             'contactDatum' => [
                 'geoCity' => 'Monterrey',
                 'geoState' => 'Nuevo León',
@@ -218,10 +218,65 @@ test('ActiveCampaignMirrorService snapshot orquesta lectura y persiste ac_contac
     $customer->refresh();
     expect((int) $customer->ac_contact_id)->toBe(42);
     expect($customer->ac_last_sync_at)->not->toBeNull();
+    expect($customer->ac_location)->toBe([
+        'city' => 'Monterrey',
+        'state' => 'Nuevo León',
+        'country' => 'Mexico',
+        'timezone' => 'America/Monterrey',
+        'source' => 'activecampaign',
+    ]);
+    expect($customer->ac_location_cached_at)->not->toBeNull();
+    expect($customer->ac_location)->not->toHaveKey('geoIp4');
+    expect($customer->ac_location)->not->toHaveKey('geoLat');
+    expect($customer->ac_location)->not->toHaveKey('geoLon');
 
     $cached = $mirror->snapshot($customer);
     expect($cached?->fromCache)->toBeTrue();
     expect($cached?->acContactId)->toBe(42);
+});
+
+test('ActiveCampaignMirrorService does not invent location when contactData has no geo values', function () {
+    fakeAcMirrorApi(Http::response([
+        'contactDatum' => [
+            'geoCity' => '',
+            'geoState' => '',
+            'geo_country' => '',
+            'geoCountry2' => '',
+            'geoTz' => '',
+        ],
+    ], 200));
+
+    $user = User::factory()->create(['email' => 'cliente@example.com']);
+    $customer = Customer::factory()->withRegularAccount()->create(['user_id' => $user->id]);
+
+    $snapshot = app(ActiveCampaignMirrorService::class)->snapshot($customer);
+
+    expect($snapshot)->not->toBeNull();
+    expect($customer->refresh()->ac_location)->toBeNull();
+    expect($customer->ac_location_cached_at)->toBeNull();
+});
+
+test('ActiveCampaignMirrorService contactData error does not break snapshot or write unsafe location', function () {
+    fakeAcMirrorApi(Http::response(['message' => 'temporary error'], 500));
+
+    $user = User::factory()->create(['email' => 'cliente@example.com']);
+    $customer = Customer::factory()->withRegularAccount()->create([
+        'user_id' => $user->id,
+        'ac_location' => [
+            'city' => 'Monterrey',
+            'state' => 'Nuevo Leon',
+            'country' => 'Mexico',
+            'timezone' => 'America/Monterrey',
+            'source' => 'activecampaign',
+        ],
+        'ac_location_cached_at' => now()->subDay(),
+    ]);
+
+    $snapshot = app(ActiveCampaignMirrorService::class)->snapshot($customer);
+
+    expect($snapshot)->not->toBeNull();
+    expect($customer->refresh()->ac_location['city'])->toBe('Monterrey');
+    expect($customer->ac_last_sync_at)->not->toBeNull();
 });
 
 test('ActiveCampaignCacheService usa TTL de 5 minutos', function () {

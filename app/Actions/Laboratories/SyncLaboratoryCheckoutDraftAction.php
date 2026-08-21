@@ -26,11 +26,13 @@ class SyncLaboratoryCheckoutDraftAction
      *     coupon_id?: int|null,
      *     promo_validation_token?: string|null,
      * }  $payload
+     * @param  array<string, mixed>|null  $clientContext
      */
     public function __invoke(
         Customer $customer,
         LaboratoryBrand $laboratoryBrand,
         array $payload,
+        ?array $clientContext = null,
     ): LaboratoryCheckoutDraft {
         $requiresAppointment = $customer->getHasLaboratoryCartItemRequiringAppointment($laboratoryBrand);
 
@@ -76,7 +78,7 @@ class SyncLaboratoryCheckoutDraftAction
         );
 
         $this->touchMonitoringCart($customer);
-        $this->recordCheckoutEvents($customer, $laboratoryBrand, $payload);
+        $this->recordCheckoutEvents($customer, $laboratoryBrand, $payload, $clientContext);
 
         return $draft->fresh(['contact', 'address', 'coupon']);
     }
@@ -107,8 +109,9 @@ class SyncLaboratoryCheckoutDraftAction
 
     /**
      * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>|null  $clientContext
      */
-    private function recordCheckoutEvents(Customer $customer, LaboratoryBrand $laboratoryBrand, array $payload): void
+    private function recordCheckoutEvents(Customer $customer, LaboratoryBrand $laboratoryBrand, array $payload, ?array $clientContext = null): void
     {
         $cart = $this->activeLaboratoryCart($customer, $laboratoryBrand);
         if (! $cart) {
@@ -119,7 +122,7 @@ class SyncLaboratoryCheckoutDraftAction
             $cart,
             CartEventType::CheckoutStarted,
             "cart:{$cart->id}:checkout_started",
-            ['brand' => $laboratoryBrand->value],
+            $this->withClientContext(['brand' => $laboratoryBrand->value], $clientContext),
             source: 'laboratory_checkout',
         );
 
@@ -128,10 +131,10 @@ class SyncLaboratoryCheckoutDraftAction
                 $cart,
                 CartEventType::PatientSelected,
                 "cart:{$cart->id}:patient:{$payload['contact_id']}",
-                [
+                $this->withClientContext([
                     'contact_id' => (int) $payload['contact_id'],
                     'brand' => $laboratoryBrand->value,
-                ],
+                ], $clientContext),
                 source: 'laboratory_checkout',
             );
         }
@@ -141,13 +144,27 @@ class SyncLaboratoryCheckoutDraftAction
                 $cart,
                 CartEventType::AddressSelected,
                 "cart:{$cart->id}:address:{$payload['address_id']}",
-                [
+                $this->withClientContext([
                     'address_id' => (int) $payload['address_id'],
                     'brand' => $laboratoryBrand->value,
-                ],
+                ], $clientContext),
                 source: 'laboratory_checkout',
             );
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @param  array<string, mixed>|null  $clientContext
+     * @return array<string, mixed>
+     */
+    private function withClientContext(array $metadata, ?array $clientContext): array
+    {
+        if ($clientContext === null || $clientContext === []) {
+            return $metadata;
+        }
+
+        return array_merge($metadata, ['client' => $clientContext]);
     }
 
     private function activeLaboratoryCart(Customer $customer, LaboratoryBrand $laboratoryBrand): ?Cart
