@@ -42,6 +42,10 @@ trait BuildsCartExportQuery
                     ->whereColumn('online_pharmacy_purchases.created_at', '<', 'carts.created_at'),
             ])
             ->with([
+                'events' => fn ($query) => $query
+                    ->select('id', 'cart_id', 'metadata', 'occurred_at')
+                    ->orderBy('occurred_at')
+                    ->orderBy('id'),
                 'items.laboratoryTest',
                 'laboratoryAppointments.laboratoryStore',
                 'laboratoryPurchases.transactions',

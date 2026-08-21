@@ -2,7 +2,6 @@
 
 namespace App\Exports\Carts;
 
-use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
 use App\Exports\Carts\Concerns\BuildsCartExportQuery;
 use App\Exports\Carts\Concerns\FormatsCartExportSheet;
@@ -77,13 +76,25 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
             'Metodo de pago seleccionado',
             'Requiere cita',
             'Situacion actual',
+            'Requiere atencion',
+            'Tipo de atencion',
+            'Motivo de atencion',
+            'Accion sugerida',
+            'Ultimo dispositivo',
+            'Sistema operativo',
+            'Navegador',
+            'Cambio de dispositivo',
+            'Dispositivos detectados',
             'Tiene cita',
             'Estado cita',
             'ID cita',
+            'Fecha creacion cita',
+            'Hora creacion cita',
             'Fecha cita',
             'Hora cita',
+            'Fecha confirmacion cita',
+            'Hora confirmacion cita',
             'Sucursal',
-            'Cita confirmada',
             'Tiempo esperando confirmacion',
             'Intento llamar',
             'Fecha intento llamada',
@@ -99,10 +110,6 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
             'Mensaje pago',
             'Fecha ultimo intento',
             'Tipo correlacion pago',
-            'Atencion requerida',
-            'Categoria atencion',
-            'Razon atencion',
-            'Accion sugerida',
             'Fecha registro',
         ];
     }
@@ -118,13 +125,17 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
             'J' => NumberFormat::FORMAT_CURRENCY_USD,
             'K' => NumberFormat::FORMAT_DATE_XLSX22,
             'L' => NumberFormat::FORMAT_DATE_XLSX22,
-            'Y' => NumberFormat::FORMAT_DATE_XLSX22,
-            'AB' => NumberFormat::FORMAT_DATE_XLSX22,
-            'AE' => NumberFormat::FORMAT_DATE_XLSX22,
-            'AG' => NumberFormat::FORMAT_DATE_XLSX22,
-            'AH' => NumberFormat::FORMAT_DATE_XLSX22,
-            'AP' => NumberFormat::FORMAT_DATE_XLSX22,
-            'AV' => NumberFormat::FORMAT_DATE_XLSX22,
+            'AH' => 'dd/mm/yyyy',
+            'AI' => 'hh:mm',
+            'AJ' => 'dd/mm/yyyy',
+            'AK' => 'hh:mm',
+            'AL' => 'dd/mm/yyyy',
+            'AM' => 'hh:mm',
+            'AQ' => NumberFormat::FORMAT_DATE_XLSX22,
+            'AS' => NumberFormat::FORMAT_DATE_XLSX22,
+            'AT' => NumberFormat::FORMAT_DATE_XLSX22,
+            'BB' => NumberFormat::FORMAT_DATE_XLSX22,
+            'BD' => NumberFormat::FORMAT_DATE_XLSX22,
         ];
     }
 
@@ -140,6 +151,7 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
         $checkout = $this->checkoutSummary($cart, $draft, $appointment, $paymentInsight);
         $payment = $this->paymentSummary($paymentInsight);
         $operational = $operationalResolver->resolve($cart, $paymentInsight);
+        $clientContext = $this->clientContext($cart);
 
         return [
             $cart->id,
@@ -163,13 +175,25 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
             $checkout['has_payment_method'],
             $this->requiresAppointment($cart) ? 'Si' : 'No',
             $checkout['situation'],
+            $operational['requires_attention'] ? 'Si' : 'No',
+            $this->attentionTypeLabel($operational),
+            $this->attentionReasonLabel($operational),
+            $this->attentionActionLabel($operational),
+            $clientContext['last_device'],
+            $clientContext['os'],
+            $clientContext['browser'],
+            $clientContext['has_device_change'] ? 'Si' : 'No',
+            $clientContext['devices_seen'],
             $appointment ? 'Si' : 'No',
             $this->appointmentStatus($cart, $appointment),
             $appointment?->id,
+            $this->excelDate($appointment?->created_at),
+            $this->excelTime($appointment?->created_at),
             $this->excelDate($appointment?->appointment_date),
-            $appointment?->appointment_date_time,
-            $appointment?->laboratoryStore?->name,
+            $this->excelTime($appointment?->appointment_date),
             $this->excelDate($appointment?->confirmed_at),
+            $this->excelTime($appointment?->confirmed_at),
+            $appointment?->laboratoryStore?->name,
             $appointment?->confirmed_at === null ? $this->appointmentWaitingLabel($appointment) : null,
             $appointment?->phone_call_intent_at ? 'Si' : 'No',
             $this->excelDate($appointment?->phone_call_intent_at),
@@ -185,10 +209,6 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
             $payment['processor_message'],
             $payment['last_attempt_at'],
             $payment['correlation_type'],
-            $operational['requires_attention'] ? 'Si' : 'No',
-            $operational['category'],
-            $operational['reason'],
-            $operational['recommended_action'],
             $this->excelDate($cart->user?->created_at),
         ];
     }
@@ -330,7 +350,7 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
                 'processor_code' => null,
                 'processor_message' => null,
                 'last_attempt_at' => null,
-                'correlation_type' => 'No determinada',
+                'correlation_type' => 'Relacion ambigua',
             ];
         }
 
@@ -358,8 +378,10 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
             'processor_message' => $lastAttempt['processor_message'] ?? null,
             'last_attempt_at' => $this->excelDate(! empty($lastAttempt['occurred_at']) ? Carbon::parse($lastAttempt['occurred_at']) : null),
             'correlation_type' => match ($paymentInsight['confidence'] ?? null) {
-                'explicit' => 'Explicita',
-                'legacy_high' => 'Legacy confiable',
+                'explicit' => 'Relacion explicita',
+                'legacy_high' => 'Relacion historica confiable',
+                'ambiguous' => 'Relacion ambigua',
+                'transaction' => 'Transaccion final',
                 default => 'No determinada',
             },
         ];
@@ -373,7 +395,143 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
             PaymentAttempt::STATUS_DECLINED => 'Rechazado',
             PaymentAttempt::STATUS_ERROR => 'Error tecnico',
             PaymentAttempt::STATUS_REFUNDED => 'Reembolsado',
+            'failed' => 'Fallido',
+            'skipped' => 'Omitido',
+            'synced' => 'Sincronizado',
             default => 'No determinada',
+        };
+    }
+
+    /**
+     * @return array{last_device: string, os: string, browser: string, has_device_change: bool, devices_seen: string}
+     */
+    private function clientContext(Cart $cart): array
+    {
+        $events = $cart->relationLoaded('events')
+            ? $cart->events
+            : $cart->events()->orderBy('occurred_at')->orderBy('id')->get();
+
+        $clients = $events
+            ->sortBy(fn ($event) => ($event->occurred_at?->format('U.u') ?? '0.000000').'-'.str_pad((string) $event->id, 20, '0', STR_PAD_LEFT))
+            ->map(fn ($event) => $this->safeClientContext(is_array($event->metadata) ? ($event->metadata['client'] ?? null) : null))
+            ->filter()
+            ->values();
+
+        if ($clients->isEmpty()) {
+            return [
+                'last_device' => 'No identificado',
+                'os' => 'No identificado',
+                'browser' => 'No identificado',
+                'has_device_change' => false,
+                'devices_seen' => 'Sin informacion',
+            ];
+        }
+
+        $devicesSeen = $clients
+            ->pluck('device_type')
+            ->filter()
+            ->unique()
+            ->values();
+        $last = $clients->last();
+
+        return [
+            'last_device' => $last['device_label'],
+            'os' => $last['os'],
+            'browser' => $last['browser'],
+            'has_device_change' => $devicesSeen->count() > 1,
+            'devices_seen' => $devicesSeen
+                ->map(fn (string $deviceType) => $this->deviceTypeLabel($deviceType))
+                ->implode(' -> '),
+        ];
+    }
+
+    /**
+     * @return array{device_type: string, device_label: string, browser: string, os: string}|null
+     */
+    private function safeClientContext(mixed $client): ?array
+    {
+        if (! is_array($client)) {
+            return null;
+        }
+
+        $deviceType = (string) ($client['device_type'] ?? '');
+        if (! in_array($deviceType, ['mobile', 'tablet', 'desktop', 'unknown'], true)) {
+            $deviceType = 'unknown';
+        }
+
+        $browser = trim((string) ($client['browser'] ?? ''));
+        $os = trim((string) ($client['os'] ?? ''));
+
+        return [
+            'device_type' => $deviceType,
+            'device_label' => $this->deviceTypeLabel($deviceType),
+            'browser' => $browser !== '' ? mb_substr($browser, 0, 64) : 'No identificado',
+            'os' => $os !== '' ? mb_substr($os, 0, 64) : 'No identificado',
+        ];
+    }
+
+    private function deviceTypeLabel(?string $deviceType): string
+    {
+        return match ($deviceType) {
+            'mobile' => 'Movil',
+            'tablet' => 'Tablet',
+            'desktop' => 'Desktop',
+            default => 'No identificado',
+        };
+    }
+
+    /**
+     * @param  array{requires_attention: bool, category: string, reason: string, label: string, recommended_action: string, tone: string}  $operational
+     */
+    private function attentionTypeLabel(array $operational): string
+    {
+        return match ($operational['reason'] ?? null) {
+            'payment_error' => 'Error tecnico de pago',
+            'payment_declined' => 'Pago rechazado',
+            'callback_requested' => 'Solicitud de llamada',
+            'appointment_confirmed_without_payment' => 'Cita confirmada sin pago',
+            'appointment_pending' => 'Cita pendiente de confirmacion',
+            'phone_call_intent' => 'Intento llamar',
+            'payment_pending' => 'Pago pendiente',
+            'abandoned' => 'Carrito abandonado',
+            'none' => 'Sin atencion requerida',
+            default => $this->shortText($operational['label'] ?? 'Sin atencion requerida', 120),
+        };
+    }
+
+    /**
+     * @param  array{requires_attention: bool, category: string, reason: string, label: string, recommended_action: string, tone: string}  $operational
+     */
+    private function attentionReasonLabel(array $operational): string
+    {
+        return match ($operational['reason'] ?? null) {
+            'payment_error' => 'Ultimo intento de pago con error tecnico',
+            'payment_declined' => 'Ultimo intento de pago rechazado',
+            'callback_requested' => 'Paciente solicito llamada',
+            'appointment_confirmed_without_payment' => 'Cita confirmada sin pago registrado',
+            'appointment_pending' => 'Cita pendiente de confirmacion',
+            'phone_call_intent' => 'Paciente intento llamar',
+            'payment_pending' => 'Pago pendiente de confirmacion',
+            'abandoned' => 'Carrito sin actividad reciente',
+            'none' => 'Sin atencion requerida',
+            default => $this->shortText($operational['label'] ?? 'Sin atencion requerida', 180),
+        };
+    }
+
+    /**
+     * @param  array{requires_attention: bool, category: string, reason: string, label: string, recommended_action: string, tone: string}  $operational
+     */
+    private function attentionActionLabel(array $operational): string
+    {
+        return match ($operational['reason'] ?? null) {
+            'payment_error' => 'Revisar incidente de pago',
+            'payment_declined' => 'Contactar al paciente para apoyar con el pago',
+            'callback_requested' => 'Llamar al paciente',
+            'appointment_confirmed_without_payment' => 'Recordar completar el pago',
+            'appointment_pending' => 'Dar seguimiento a la confirmacion',
+            'phone_call_intent' => 'Dar seguimiento al contacto',
+            'payment_pending' => 'Revisar estado antes de contactar',
+            default => $this->shortText($operational['recommended_action'] ?? 'Sin accion inmediata', 180),
         };
     }
 
@@ -436,7 +594,23 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
 
     private function excelDate($date): ?float
     {
-        return $date ? Date::dateTimeToExcel(localizedDate($date)) : null;
+        return $this->excelSerial($date);
+    }
+
+    private function excelTime($date): ?float
+    {
+        return $this->excelSerial($date);
+    }
+
+    private function excelSerial($date): ?float
+    {
+        if (! $date) {
+            return null;
+        }
+
+        $local = Carbon::parse($date)->setTimezone('America/Monterrey');
+
+        return Date::dateTimeToExcel(new \DateTimeImmutable($local->format('Y-m-d H:i:s')));
     }
 
     protected function freezePaneCell(): string
@@ -448,9 +622,9 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
     {
         return [
             'I' => 45,
-            'AI' => 45,
-            'AO' => 36,
-            'AU' => 32,
+            'AD' => 24,
+            'AU' => 45,
+            'BA' => 36,
         ];
     }
 }

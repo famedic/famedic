@@ -10,11 +10,11 @@ use App\Exports\CartsExport;
 use App\Jobs\ProcessCartsSpreadsheetExport;
 use App\Models\Address;
 use App\Models\Cart;
+use App\Models\CartEvent;
 use App\Models\CartItem;
 use App\Models\Contact;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryCheckoutDraft;
-use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
 use App\Models\PaymentAttempt;
@@ -86,6 +86,13 @@ function cartsExportAssoc(array $row): array
     return array_combine((new CartsSheet)->headings(), $row);
 }
 
+function cartsExportExcelDate(Carbon $date): float
+{
+    $local = $date->copy()->setTimezone('America/Monterrey');
+
+    return \PhpOffice\PhpSpreadsheet\Shared\Date::dateTimeToExcel(new DateTimeImmutable($local->format('Y-m-d H:i:s')));
+}
+
 it('exports one cart row per brand and individual rows in estudios sheet', function () {
     $user = cartsExportUser();
     $olabA = LaboratoryTest::factory()->create(['brand' => LaboratoryBrand::OLAB->value, 'name' => 'OLAB A', 'famedic_price_cents' => 100000]);
@@ -108,6 +115,7 @@ it('exports one cart row per brand and individual rows in estudios sheet', funct
 });
 
 it('exports appointment, callback, phone intent and checkout fields from the same cart brand', function () {
+    Carbon::setTestNow(Carbon::parse('2026-08-21 15:00:00', 'America/Monterrey'));
     $user = cartsExportUser();
     $cart = cartsExportCart($user, LaboratoryBrand::OLAB);
     $store = LaboratoryStore::factory()->create([
@@ -131,17 +139,21 @@ it('exports appointment, callback, phone intent and checkout fields from the sam
         'payment_method' => 'card',
         'checkout_step' => 'payment',
     ]);
+    $appointmentCreatedAt = Carbon::parse('2026-08-21 14:32:00', 'America/Monterrey');
+    $appointmentDate = Carbon::parse('2026-08-22 09:15:00', 'America/Monterrey');
+
     LaboratoryAppointment::factory()->create([
         'customer_id' => $user->customer->id,
         'cart_id' => $cart->id,
         'brand' => LaboratoryBrand::OLAB->value,
         'laboratory_store_id' => $store->id,
-        'appointment_date' => now()->addDay(),
+        'appointment_date' => $appointmentDate,
         'phone_call_intent_at' => now()->subHour(),
         'callback_availability_starts_at' => now()->addHours(2),
         'callback_availability_ends_at' => now()->addHours(4),
         'patient_callback_comment' => '  Prefiere contacto por la tarde   con espacios   ',
         'confirmed_at' => null,
+        'created_at' => $appointmentCreatedAt,
     ]);
 
     $row = cartsExportAssoc(cartsExportRows()[0]);
@@ -154,6 +166,10 @@ it('exports appointment, callback, phone intent and checkout fields from the sam
         ->and($row['Tiene cita'])->toBe('Si')
         ->and($row['Estado cita'])->toBe('Pendiente')
         ->and($row['Sucursal'])->toBe('Sucursal Centro')
+        ->and($row['Fecha creacion cita'])->toBe(cartsExportExcelDate($appointmentCreatedAt))
+        ->and($row['Hora creacion cita'])->toBe(cartsExportExcelDate($appointmentCreatedAt))
+        ->and($row['Fecha cita'])->toBe(cartsExportExcelDate($appointmentDate))
+        ->and($row['Hora cita'])->toBe(cartsExportExcelDate($appointmentDate))
         ->and($row['Intento llamar'])->toBe('Si')
         ->and($row['Solicito llamada'])->toBe('Si')
         ->and($row['Comentario callback'])->toBe('Prefiere contacto por la tarde con espacios');
@@ -190,9 +206,14 @@ it('exports explicit declined and error payment attempts without sensitive field
     $rows = collect(cartsExportRows())->map(fn (array $row) => cartsExportAssoc($row))->keyBy('ID carrito');
 
     expect($rows[$declined->id]['Estado ultimo intento'])->toBe('Rechazado')
-        ->and($rows[$declined->id]['Tipo correlacion pago'])->toBe('Explicita')
+        ->and($rows[$declined->id]['Tipo correlacion pago'])->toBe('Relacion explicita')
+        ->and($rows[$declined->id]['Requiere atencion'])->toBe('Si')
+        ->and($rows[$declined->id]['Tipo de atencion'])->toBe('Pago rechazado')
+        ->and($rows[$declined->id]['Motivo de atencion'])->toBe('Ultimo intento de pago rechazado')
+        ->and($rows[$declined->id]['Accion sugerida'])->toBe('Contactar al paciente para apoyar con el pago')
         ->and($rows[$declined->id]['Mensaje pago'])->toBe('Transacción rechazada')
         ->and($rows[$error->id]['Estado ultimo intento'])->toBe('Error tecnico')
+        ->and($rows[$error->id]['Tipo de atencion'])->toBe('Error tecnico de pago')
         ->and($rows[$error->id]['Mensaje pago'])->toBe('Tiempo de espera agotado')
         ->and(json_encode($rows->all()))->not->toContain('tok_123')
         ->and(json_encode($rows->all()))->not->toContain('secret-transaction');
@@ -240,10 +261,121 @@ it('exports reliable legacy payments and does not assert ambiguous payments', fu
     $rows = collect(cartsExportRows())->map(fn (array $row) => cartsExportAssoc($row))->keyBy('ID carrito');
 
     expect($rows[$legacy->id]['Estado ultimo intento'])->toBe('Aprobado')
-        ->and($rows[$legacy->id]['Tipo correlacion pago'])->toBe('Legacy confiable')
+        ->and($rows[$legacy->id]['Tipo correlacion pago'])->toBe('Relacion historica confiable')
         ->and($rows[$ambiguousA->id]['Estado ultimo intento'])->toBe('No determinada')
-        ->and($rows[$ambiguousA->id]['Tipo correlacion pago'])->toBe('No determinada')
+        ->and(json_encode($rows->all()))->not->toContain('legacy_high')
+        ->and(json_encode($rows->all()))->not->toContain('ambiguous')
         ->and($rows[$ambiguousB->id]['Estado ultimo intento'])->toBe('No determinada');
+});
+
+it('exports device context from cart events without raw request metadata', function () {
+    $user = cartsExportUser();
+    $cart = cartsExportCart($user, LaboratoryBrand::OLAB);
+
+    CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => 'cart_created',
+        'metadata' => [
+            'client' => ['device_type' => 'mobile', 'browser' => 'Chrome', 'os' => 'Android', 'source' => 'request_user_agent'],
+            'user_agent' => 'raw agent',
+            'ip' => '127.0.0.1',
+        ],
+        'occurred_at' => now()->subMinutes(30),
+    ]);
+    CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => 'payment_started',
+        'metadata' => [
+            'client' => ['device_type' => 'desktop', 'browser' => 'Chrome', 'os' => 'Windows', 'source' => 'request_user_agent'],
+        ],
+        'occurred_at' => now()->subMinutes(10),
+    ]);
+
+    $row = cartsExportAssoc(cartsExportRows()[0]);
+
+    expect($row['Ultimo dispositivo'])->toBe('Desktop')
+        ->and($row['Sistema operativo'])->toBe('Windows')
+        ->and($row['Navegador'])->toBe('Chrome')
+        ->and($row['Cambio de dispositivo'])->toBe('Si')
+        ->and($row['Dispositivos detectados'])->toBe('Movil -> Desktop')
+        ->and(json_encode($row))->not->toContain('raw agent')
+        ->and(json_encode($row))->not->toContain('127.0.0.1')
+        ->and(json_encode($row))->not->toContain('mobile');
+});
+
+it('exports unidentified device context when cart events have no client metadata', function () {
+    $user = cartsExportUser();
+    cartsExportCart($user, LaboratoryBrand::OLAB);
+
+    $row = cartsExportAssoc(cartsExportRows()[0]);
+
+    expect($row['Ultimo dispositivo'])->toBe('No identificado')
+        ->and($row['Sistema operativo'])->toBe('No identificado')
+        ->and($row['Navegador'])->toBe('No identificado')
+        ->and($row['Cambio de dispositivo'])->toBe('No')
+        ->and($row['Dispositivos detectados'])->toBe('Sin informacion');
+});
+
+it('exports confirmed appointment timestamps separately from scheduled appointment timestamps', function () {
+    $user = cartsExportUser();
+    $cart = cartsExportCart($user, LaboratoryBrand::OLAB);
+    $appointmentCreatedAt = Carbon::parse('2026-08-21 14:32:00', 'America/Monterrey');
+    $appointmentDate = Carbon::parse('2026-08-22 09:15:00', 'America/Monterrey');
+    $confirmedAt = Carbon::parse('2026-08-21 14:45:00', 'America/Monterrey');
+
+    LaboratoryAppointment::factory()->create([
+        'customer_id' => $user->customer->id,
+        'cart_id' => $cart->id,
+        'brand' => LaboratoryBrand::OLAB->value,
+        'appointment_date' => $appointmentDate,
+        'created_at' => $appointmentCreatedAt,
+        'confirmed_at' => $confirmedAt,
+    ]);
+
+    $row = cartsExportAssoc(cartsExportRows()[0]);
+
+    expect($row['Fecha creacion cita'])->toBe(cartsExportExcelDate($appointmentCreatedAt))
+        ->and($row['Hora creacion cita'])->toBe(cartsExportExcelDate($appointmentCreatedAt))
+        ->and($row['Fecha cita'])->toBe(cartsExportExcelDate($appointmentDate))
+        ->and($row['Hora cita'])->toBe(cartsExportExcelDate($appointmentDate))
+        ->and($row['Fecha confirmacion cita'])->toBe(cartsExportExcelDate($confirmedAt))
+        ->and($row['Hora confirmacion cita'])->toBe(cartsExportExcelDate($confirmedAt));
+});
+
+it('exports attention labels for callback and confirmed appointment without payment', function () {
+    $callbackUser = cartsExportUser();
+    $callbackCart = cartsExportCart($callbackUser, LaboratoryBrand::OLAB, ['total' => 800.00]);
+    LaboratoryAppointment::factory()->create([
+        'customer_id' => $callbackUser->customer->id,
+        'cart_id' => $callbackCart->id,
+        'brand' => LaboratoryBrand::OLAB->value,
+        'patient_callback_comment' => 'Favor de llamar',
+        'confirmed_at' => null,
+    ]);
+
+    $confirmedUser = cartsExportUser();
+    $confirmedCart = cartsExportCart($confirmedUser, LaboratoryBrand::SWISSLAB, ['total' => 900.00]);
+    LaboratoryAppointment::factory()->create([
+        'customer_id' => $confirmedUser->customer->id,
+        'cart_id' => $confirmedCart->id,
+        'brand' => LaboratoryBrand::SWISSLAB->value,
+        'confirmed_at' => now()->subMinutes(20),
+        'laboratory_purchase_id' => null,
+    ]);
+
+    $rows = collect(cartsExportRows())->map(fn (array $row) => cartsExportAssoc($row))->keyBy('ID carrito');
+
+    expect($rows[$callbackCart->id]['Tipo de atencion'])->toBe('Solicitud de llamada')
+        ->and($rows[$confirmedCart->id]['Tipo de atencion'])->toBe('Cita confirmada sin pago');
+});
+
+it('keeps carts export as three sheets', function () {
+    $sheets = (new CartsExport)->sheets();
+
+    expect($sheets)->toHaveCount(3)
+        ->and($sheets[0]->title())->toBe('Carritos')
+        ->and($sheets[1]->title())->toBe('Estudios')
+        ->and($sheets[2]->title())->toBe('Resumen');
 });
 
 it('respects filters and uses the default seven day export period', function () {
@@ -269,5 +401,6 @@ it('respects filters and uses the default seven day export period', function () 
     expect($filteredRows)->toHaveCount(1)
         ->and(cartsExportAssoc($filteredRows->first())['ID carrito'])->toBe($match->id)
         ->and($summary['Periodo utilizado'])->toBe('Ultimos 7 dias: 2026-08-14 a 2026-08-20')
+        ->and($summary['Filtros activos'])->toBe('Marca='.LaboratoryBrand::OLAB->label().'; Fecha inicio=2026-08-14; Fecha fin=2026-08-20')
         ->and($summary['Total carritos'])->toBe(1);
 });
