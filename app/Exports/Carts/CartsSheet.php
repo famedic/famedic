@@ -552,7 +552,13 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
 
     private function brandLabel(Cart $cart): ?string
     {
-        return collect($cart->labBrands())->pluck('label')->filter()->implode(', ') ?: null;
+        $brands = collect($cart->labBrands())->filter();
+
+        if ($brands->count() > 1) {
+            return 'Inconsistencia: multiples marcas';
+        }
+
+        return $brands->pluck('label')->filter()->implode(', ') ?: null;
     }
 
     private function requiresAppointment(Cart $cart): bool

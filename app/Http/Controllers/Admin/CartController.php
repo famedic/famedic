@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
+use App\Http\Controllers\Controller;
 use App\Models\ActiveCampaignDispatch;
 use App\Models\Cart;
 use App\Models\CartEvent;
@@ -17,12 +17,13 @@ use App\Models\LaboratoryTest;
 use App\Models\OnlinePharmacyPurchase;
 use App\Models\PaymentAttempt;
 use App\Models\Transaction;
+use App\Services\ActiveCampaign\ActiveCampaignWebActivitySyncService;
 use App\Services\Carts\CartOperationalInsightResolver;
 use App\Services\Carts\CartPaymentAttemptCorrelator;
-use App\Services\ActiveCampaign\ActiveCampaignWebActivitySyncService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
@@ -214,8 +215,7 @@ class CartController extends Controller
         Cart $cart,
         ?array $paymentInsight = null,
         ?CartOperationalInsightResolver $operationalResolver = null,
-    ): array
-    {
+    ): array {
         $display = $cart->displayStatus();
         $operationalResolver ??= app(CartOperationalInsightResolver::class);
         $operationalInsight = $operationalResolver->resolve($cart, $paymentInsight);
@@ -293,11 +293,51 @@ class CartController extends Controller
         $itemNoun = $cart->type === MonitoringCartType::Lab
             ? ($itemsCount === 1 ? 'estudio' : 'estudios')
             : ($itemsCount === 1 ? 'producto' : 'productos');
+        $brandIntegrity = $this->serializeLabBrandIntegrity($cart);
 
         return [
-            'brand_label' => collect($cart->labBrands())->pluck('label')->filter()->implode(', ') ?: null,
+            'brand_label' => $brandIntegrity['has_multiple_brands']
+                ? 'Inconsistencia: multiples marcas'
+                : (collect($cart->labBrands())->pluck('label')->filter()->implode(', ') ?: null),
+            'brand_integrity' => $brandIntegrity,
             'items_label' => $itemsCount.' '.$itemNoun,
             'total_label' => formattedPrice((float) $cart->total),
+        ];
+    }
+
+    /**
+     * @return array{has_multiple_brands: bool, brands: list<string>, message: string|null}
+     */
+    private function serializeLabBrandIntegrity(Cart $cart): array
+    {
+        if ($cart->type !== MonitoringCartType::Lab || $cart->status !== MonitoringCartStatus::Active) {
+            return [
+                'has_multiple_brands' => false,
+                'brands' => [],
+                'message' => null,
+            ];
+        }
+
+        $brands = collect($cart->labBrands())->pluck('value')->filter()->unique()->values();
+
+        if ($brands->count() <= 1) {
+            return [
+                'has_multiple_brands' => false,
+                'brands' => $brands->all(),
+                'message' => null,
+            ];
+        }
+
+        Log::warning('[CartMonitoring] Active laboratory cart has multiple brands in snapshot', [
+            'cart_id' => $cart->id,
+            'user_id' => $cart->user_id,
+            'brands' => $brands->all(),
+        ]);
+
+        return [
+            'has_multiple_brands' => true,
+            'brands' => $brands->all(),
+            'message' => 'Requiere reconciliacion por marca',
         ];
     }
 
@@ -727,7 +767,6 @@ class CartController extends Controller
         ];
     }
 
-
     /**
      * @return array<string, mixed>|null
      */
@@ -1071,7 +1110,6 @@ class CartController extends Controller
         };
     }
 
-
     /**
      * @return list<array<string, mixed>>
      */
@@ -1379,7 +1417,6 @@ class CartController extends Controller
         return mb_strlen($message) > 80 ? mb_substr($message, 0, 77).'...' : $message;
     }
 
-
     private function safeActiveCampaignMessage(?string $message): ?string
     {
         $message = trim((string) $message);
@@ -1492,7 +1529,7 @@ class CartController extends Controller
             }
         }
 
-        $items = $cart->items->map(function ($row) use ($isLab, $testsById) {
+        $items = $cart->items->map(function ($row) use ($testsById) {
             $test = $testsById->get((string) $row->product_id);
 
             return [

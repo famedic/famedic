@@ -15,7 +15,6 @@ use App\Models\OnlinePharmacyCartItem;
 use App\Services\Carts\CartEventRecorder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class SyncMonitoringCartService
@@ -23,8 +22,8 @@ class SyncMonitoringCartService
     public function __construct(
         private FetchProductAction $fetchProductAction,
         private CartEventRecorder $cartEventRecorder,
-    ) {
-    }
+        private MultibrandCartReconciler $multibrandCartReconciler,
+    ) {}
 
     /**
      * @param  array<string, mixed>|null  $clientContext
@@ -53,7 +52,7 @@ class SyncMonitoringCartService
                 fn (LaboratoryCartItem $row) => $row->laboratoryTest?->brand?->value ?? '__unknown',
             );
 
-            if (! $this->reconcileActiveLaboratoryCartsByBrand($userId, $itemsByBrand)) {
+            if (! $this->multibrandCartReconciler->reconcileActiveCartsForUser($userId, $itemsByBrand)) {
                 return;
             }
 
@@ -93,7 +92,7 @@ class SyncMonitoringCartService
             $total = 0;
             foreach ($items as $row) {
                 /** @var OnlinePharmacyCartItem $row */
-                $name = 'Producto #' . $row->vitau_product_id;
+                $name = 'Producto #'.$row->vitau_product_id;
                 $unit = 0.0;
                 try {
                     $product = ($this->fetchProductAction)((string) $row->vitau_product_id);
@@ -308,163 +307,6 @@ class SyncMonitoringCartService
                 $brands = collect($cart->labBrands())->pluck('value');
 
                 return $brands->count() === 1 && $brands->contains($brand->value);
-            });
-    }
-
-    /**
-     * @param  Collection<string, Collection<int, LaboratoryCartItem>>  $itemsByBrand
-     */
-    private function reconcileActiveLaboratoryCartsByBrand(int $userId, Collection $itemsByBrand): bool
-    {
-        $activeCarts = Cart::query()
-            ->with(['items', 'paymentAttempts', 'laboratoryAppointments', 'laboratoryPurchases', 'events'])
-            ->where('user_id', $userId)
-            ->where('type', MonitoringCartType::Lab)
-            ->where('status', MonitoringCartStatus::Active)
-            ->get();
-
-        foreach ($activeCarts as $cart) {
-            $brands = collect($cart->labBrands())->pluck('value')->filter()->unique()->values();
-
-            if ($brands->count() <= 1) {
-                continue;
-            }
-
-            $brandToKeep = $this->brandThatKeepsLegacyCartId($cart, $itemsByBrand);
-
-            if ($brandToKeep === null) {
-                Log::warning('[CartMonitoring] Active laboratory cart split skipped because explicit relations are mixed or ambiguous', [
-                    'cart_id' => $cart->id,
-                    'user_id' => $userId,
-                    'brands' => $brands->all(),
-                ]);
-
-                return false;
-            }
-
-            foreach ($brands as $brandValue) {
-                $brandItems = $itemsByBrand->get($brandValue, collect());
-                if ($brandItems->isEmpty()) {
-                    continue;
-                }
-
-                $targetCart = $brandValue === $brandToKeep
-                    ? $cart
-                    : $this->singleBrandActiveCart($userId, $brandValue, $cart->id)
-                        ?? $this->createActiveCart($userId, MonitoringCartType::Lab);
-
-                $this->replaceLaboratorySnapshot($targetCart, $brandItems);
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * @param  Collection<string, Collection<int, LaboratoryCartItem>>  $itemsByBrand
-     */
-    private function brandThatKeepsLegacyCartId(Cart $cart, Collection $itemsByBrand): ?string
-    {
-        $explicitBrands = $this->explicitRelationBrands($cart, $itemsByBrand);
-
-        if ($explicitBrands === null || $explicitBrands->count() > 1) {
-            return null;
-        }
-
-        if ($explicitBrands->count() === 1) {
-            return $explicitBrands->first();
-        }
-
-        return $itemsByBrand
-            ->map(function (Collection $items, string $brandValue) {
-                return [
-                    'brand' => $brandValue,
-                    'count' => $items->count(),
-                    'total' => $this->laboratoryItemsTotal($items),
-                ];
-            })
-            ->filter(fn (array $group) => $group['brand'] !== '__unknown')
-            ->sortBy([
-                ['total', 'desc'],
-                ['count', 'desc'],
-                ['brand', 'asc'],
-            ])
-            ->first()['brand'] ?? null;
-    }
-
-    /**
-     * @param  Collection<string, Collection<int, LaboratoryCartItem>>  $itemsByBrand
-     * @return Collection<int, string>|null
-     */
-    private function explicitRelationBrands(Cart $cart, Collection $itemsByBrand): ?Collection
-    {
-        $brands = collect();
-
-        $cart->laboratoryAppointments->each(function ($appointment) use ($brands) {
-            if ($appointment->brand instanceof LaboratoryBrand) {
-                $brands->push($appointment->brand->value);
-            }
-        });
-
-        $cart->laboratoryPurchases->each(function ($purchase) use ($brands) {
-            if ($purchase->brand instanceof LaboratoryBrand) {
-                $brands->push($purchase->brand->value);
-            }
-        });
-
-        $cart->events->each(function ($event) use ($brands) {
-            $brand = $event->metadata['brand'] ?? null;
-            if (is_string($brand) && LaboratoryBrand::tryFrom($brand)) {
-                $brands->push($brand);
-            }
-        });
-
-        foreach ($cart->paymentAttempts as $paymentAttempt) {
-            $brand = $this->brandForPaymentAttempt($paymentAttempt->amount_cents, $itemsByBrand);
-            if ($brand === null) {
-                return null;
-            }
-            $brands->push($brand);
-        }
-
-        return $brands->filter()->unique()->values();
-    }
-
-    /**
-     * @param  Collection<string, Collection<int, LaboratoryCartItem>>  $itemsByBrand
-     */
-    private function brandForPaymentAttempt(?int $amountCents, Collection $itemsByBrand): ?string
-    {
-        if ($amountCents === null) {
-            return null;
-        }
-
-        $matches = $itemsByBrand
-            ->map(fn (Collection $items, string $brandValue) => [
-                'brand' => $brandValue,
-                'amount_cents' => (int) round($this->laboratoryItemsTotal($items) * 100),
-            ])
-            ->filter(fn (array $group) => $group['brand'] !== '__unknown' && $group['amount_cents'] === $amountCents)
-            ->pluck('brand')
-            ->unique()
-            ->values();
-
-        return $matches->count() === 1 ? $matches->first() : null;
-    }
-
-    private function singleBrandActiveCart(int $userId, string $brandValue, int $exceptCartId): ?Cart
-    {
-        return Cart::query()
-            ->with('items')
-            ->where('user_id', $userId)
-            ->where('type', MonitoringCartType::Lab)
-            ->where('status', MonitoringCartStatus::Active)
-            ->whereKeyNot($exceptCartId)
-            ->get()
-            ->first(function (Cart $cart) use ($brandValue) {
-                $brands = collect($cart->labBrands())->pluck('value')->filter()->values();
-
-                return $brands->count() === 1 && $brands->first() === $brandValue;
             });
     }
 

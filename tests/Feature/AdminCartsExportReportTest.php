@@ -378,6 +378,26 @@ it('keeps carts export as three sheets', function () {
         ->and($sheets[2]->title())->toBe('Resumen');
 });
 
+it('flags mixed active laboratory cart brands in export instead of presenting a combined brand label', function () {
+    $user = cartsExportUser();
+    $olab = LaboratoryTest::factory()->create([
+        'brand' => LaboratoryBrand::OLAB->value,
+        'name' => 'OLAB A',
+        'famedic_price_cents' => 100000,
+    ]);
+    $swiss = LaboratoryTest::factory()->create([
+        'brand' => LaboratoryBrand::SWISSLAB->value,
+        'name' => 'Swiss B',
+        'famedic_price_cents' => 200000,
+    ]);
+    $cart = cartsExportCart($user, LaboratoryBrand::OLAB, [], [$olab, $swiss]);
+
+    $row = collect(cartsExportRows())->map(fn (array $row) => cartsExportAssoc($row))->firstWhere('ID carrito', $cart->id);
+
+    expect($row['Marca'])->toBe('Inconsistencia: multiples marcas')
+        ->and($row['Marca'])->not->toContain(LaboratoryBrand::OLAB->label().', '.LaboratoryBrand::SWISSLAB->label());
+});
+
 it('respects filters and uses the default seven day export period', function () {
     Carbon::setTestNow(Carbon::parse('2026-08-20 12:00:00', 'America/Monterrey'));
     Queue::fake();

@@ -184,6 +184,18 @@ it('reconciles a legacy mixed active lab cart into one active cart per brand', f
         ->where('type', MonitoringCartType::Lab)
         ->where('status', MonitoringCartStatus::Active)
         ->get();
+    $cartIdsAfterSecondSync = $carts->pluck('id')->sort()->values()->all();
+
+    app(SyncMonitoringCartService::class)->syncLaboratory($user->customer);
+
+    $cartIdsAfterThirdSync = Cart::query()
+        ->where('user_id', $user->id)
+        ->where('type', MonitoringCartType::Lab)
+        ->where('status', MonitoringCartStatus::Active)
+        ->pluck('id')
+        ->sort()
+        ->values()
+        ->all();
 
     $olab = $carts->first(fn (Cart $cart) => collect($cart->labBrands())->pluck('value')->contains(LaboratoryBrand::OLAB->value));
     $swisslab = $carts->first(fn (Cart $cart) => collect($cart->labBrands())->pluck('value')->contains(LaboratoryBrand::SWISSLAB->value));
@@ -196,7 +208,51 @@ it('reconciles a legacy mixed active lab cart into one active cart per brand', f
         ->and($swisslab->items)->toHaveCount(1)
         ->and((float) $swisslab->total)->toBe(1471.59)
         ->and($carts->every(fn (Cart $cart) => collect($cart->labBrands())->count() === 1))->toBeTrue()
-        ->and(Cart::query()->whereKey($legacy)->exists())->toBeTrue();
+        ->and(Cart::query()->whereKey($legacy)->exists())->toBeTrue()
+        ->and($cartIdsAfterThirdSync)->toBe($cartIdsAfterSecondSync);
+});
+
+it('does not return a mixed active laboratory cart as the cart for a specific brand', function () {
+    $user = cartsUxUser();
+    $olab = cartsUxSourceItem($user, LaboratoryBrand::OLAB, 100000, 'OLAB A');
+    $swiss = cartsUxSourceItem($user, LaboratoryBrand::SWISSLAB, 300000, 'Swiss C');
+    $legacy = cartsUxLegacyLabCart($user, [$olab, $swiss]);
+
+    $cart = app(SyncMonitoringCartService::class)->activeLaboratoryCart($user->customer, LaboratoryBrand::OLAB);
+
+    expect($cart)->toBeNull()
+        ->and(collect($legacy->labBrands())->pluck('value')->sort()->values()->all())
+        ->toBe([LaboratoryBrand::OLAB->value, LaboratoryBrand::SWISSLAB->value]);
+});
+
+it('keeps the legacy cart id for the highest amount brand when no explicit relation exists', function () {
+    $user = cartsUxUser();
+    $olab = cartsUxSourceItem($user, LaboratoryBrand::OLAB, 100000, 'OLAB A');
+    $swiss = cartsUxSourceItem($user, LaboratoryBrand::SWISSLAB, 300000, 'Swiss C');
+    $legacy = cartsUxLegacyLabCart($user, [$olab, $swiss]);
+
+    app(SyncMonitoringCartService::class)->syncLaboratory($user->customer);
+
+    $legacy->refresh()->load('items');
+
+    expect(collect($legacy->labBrands())->pluck('value')->all())->toBe([LaboratoryBrand::SWISSLAB->value])
+        ->and((float) $legacy->total)->toBe(3000.00);
+});
+
+it('flags mixed active laboratory carts in admin rows instead of presenting combined brands as normal', function () {
+    $admin = cartsUxAdmin();
+    $user = cartsUxUser();
+    $olab = cartsUxSourceItem($user, LaboratoryBrand::OLAB, 100000, 'OLAB A');
+    $swiss = cartsUxSourceItem($user, LaboratoryBrand::SWISSLAB, 300000, 'Swiss C');
+    $legacy = cartsUxLegacyLabCart($user, [$olab, $swiss], ['updated_at' => now()]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.carts.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('carts.data.0.id', $legacy->id)
+            ->where('carts.data.0.cart_summary.brand_label', 'Inconsistencia: multiples marcas')
+            ->where('carts.data.0.cart_summary.brand_integrity.has_multiple_brands', true)
+        );
 });
 
 it('uses explicit same-brand relations to decide which brand keeps the legacy cart id', function () {
