@@ -14,6 +14,7 @@ use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryPurchase;
 use App\Models\Transaction;
 use App\Services\PayPalService;
+use App\Support\PaymentAuthenticationRecoveryPayPalOrderHelper;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Propaganistas\LaravelPhone\PhoneNumber;
@@ -25,6 +26,7 @@ class FinalizeLaboratoryPayPalPaymentAction
         private PayPalService $payPalService,
         private CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
         private FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction,
+        private PaymentAuthenticationRecoveryPayPalOrderHelper $recoveryPayPalOrderHelper,
     ) {
     }
 
@@ -74,13 +76,18 @@ class FinalizeLaboratoryPayPalPaymentAction
         });
 
         if ($existingPurchase !== null) {
+            $this->recoveryPayPalOrderHelper->maybeMarkRecovered($transaction->fresh());
+
             return $existingPurchase;
         }
 
         $transaction->refresh();
 
         try {
-            return $this->runFulfillment($transaction, $clientContext);
+            $purchase = $this->runFulfillment($transaction, $clientContext);
+            $this->recoveryPayPalOrderHelper->maybeMarkRecovered($transaction->fresh());
+
+            return $purchase;
         } catch (Throwable $e) {
             Log::error('[PayPal] Fallo al generar pedido tras captura; intentando reembolso', [
                 'transaction_id' => $transaction->id,

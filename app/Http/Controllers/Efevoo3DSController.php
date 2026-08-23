@@ -4,10 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Efevoo3dsSession;
 use App\Services\EfevooPayService;
+use App\Support\EfevooPayLogSanitizer;
+use App\Support\PaymentAuthenticationSensitiveCardDataStore;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Session;
 
+/**
+ * @deprecated Legacy 3DS API — routes are commented out in routes/settings.php.
+ *             Active flows must use PaymentMethodController + PaymentAuthenticationSensitiveCardDataStore.
+ */
 class Efevoo3DSController extends Controller
 {
     protected EfevooPayService $efevooService;
@@ -17,22 +22,21 @@ class Efevoo3DSController extends Controller
         $this->efevooService = $efevooService;
     }
 
-    /* ==========================================================
-     * 1️⃣ INICIAR 3DS
-     * ========================================================== */
-
     public function initiate3DS(Request $request)
     {
+        if (config('efevoopay.sensitive_card_data.containment_enabled', true)) {
+            abort(410, 'Legacy 3DS endpoint disabled. Use payment-methods store flow.');
+        }
+
         $validated = $request->validate([
             'card_number'  => 'required|string|size:16',
-            'expiration'   => 'required|string|size:4', // MMYY
+            'expiration'   => 'required|string|size:4',
             'cvv'          => 'required|string|min:3|max:4',
             'card_holder'  => 'required|string|max:100',
             'amount'       => 'required|numeric|min:0.01',
         ]);
 
         try {
-
             $cardData = [
                 'card_number' => $validated['card_number'],
                 'expiration'  => $validated['expiration'],
@@ -41,8 +45,7 @@ class Efevoo3DSController extends Controller
                 'amount'      => $validated['amount'],
             ];
 
-            // Guardamos datos temporalmente en sesión
-            Session::put('3ds_card_data', $cardData);
+            Log::warning('[3DS] Legacy initiate3DS invoked — unsuffixed session key is deprecated');
 
             $result = $this->efevooService->initiate3DS(
                 $cardData,
@@ -50,7 +53,11 @@ class Efevoo3DSController extends Controller
             );
 
             if (!$result['success']) {
-                return response()->json($result, 400);
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['message'] ?? 'Error iniciando verificacion 3DS',
+                    'error_type' => $result['error_type'] ?? null,
+                ], 400);
             }
 
             return response()->json([
@@ -63,7 +70,7 @@ class Efevoo3DSController extends Controller
         } catch (\Throwable $e) {
 
             Log::error('[3DS] initiate error', [
-                'error' => $e->getMessage()
+                ...EfevooPayLogSanitizer::exception($e),
             ]);
 
             return response()->json([
@@ -73,58 +80,10 @@ class Efevoo3DSController extends Controller
         }
     }
 
-    /* ==========================================================
-     * 2️⃣ CALLBACK DEL BANCO (REDIRECCIÓN REAL)
-     * ========================================================== */
-
     public function handleCallback(Request $request)
     {
-        Log::info('[3DS] Callback recibido', $request->all());
-
-        try {
-
-            $orderId = $request->input('order_id');
-
-            if (!$orderId) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Order ID no recibido'
-                ], 400);
-            }
-
-            $session = Efevoo3dsSession::where('order_id', $orderId)->firstOrFail();
-
-            $cardData = Session::get('3ds_card_data');
-
-            if (!$cardData) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Datos de tarjeta no encontrados en sesión'
-                ], 400);
-            }
-
-            $result = $this->efevooService->complete3DS($session, $cardData);
-
-            return redirect()->route('payment-methods.3ds-result', [
-                'sessionId' => $session->id
-            ]);
-
-        } catch (\Throwable $e) {
-
-            Log::error('[3DS] Callback error', [
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Error procesando callback 3DS'
-            ], 500);
-        }
+        abort(410, 'Legacy 3DS callback disabled.');
     }
-
-    /* ==========================================================
-     * 3️⃣ VER RESULTADO
-     * ========================================================== */
 
     public function showResult($sessionId)
     {
@@ -139,10 +98,6 @@ class Efevoo3DSController extends Controller
         ]);
     }
 
-    /* ==========================================================
-     * 4️⃣ REFUND
-     * ========================================================== */
-
     public function refundTransaction(Request $request, $transactionId)
     {
         try {
@@ -150,7 +105,11 @@ class Efevoo3DSController extends Controller
             $result = $this->efevooService->refundTransaction((int)$transactionId);
 
             if (!$result['success']) {
-                return response()->json($result, 400);
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['message'] ?? 'Error procesando reembolso',
+                    'code' => $result['error_code'] ?? null,
+                ], 400);
             }
 
             return response()->json([
@@ -162,7 +121,8 @@ class Efevoo3DSController extends Controller
         } catch (\Throwable $e) {
 
             Log::error('[Refund] Error', [
-                'error' => $e->getMessage()
+                'transaction_id' => $transactionId,
+                ...EfevooPayLogSanitizer::exception($e),
             ]);
 
             return response()->json([

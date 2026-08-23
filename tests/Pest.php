@@ -71,3 +71,39 @@ function medicalAttentionUser(array $customerAttributes = []): \App\Models\User
 
     return $user->fresh(['customer']);
 }
+
+function threeDsAdminCustomer(): \App\Models\User
+{
+    return medicalAttentionUser();
+}
+
+function threeDsAdmin(array $permissions = ['payment-attempts.manage']): \App\Models\User
+{
+    $user = \App\Models\User::factory()
+        ->withCompleteProfile()
+        ->withAdministrator()
+        ->create([
+            'documentation_accepted_at' => now(),
+        ]);
+
+    foreach ($permissions as $permission) {
+        \Spatie\Permission\Models\Permission::firstOrCreate([
+            'name' => $permission,
+            'guard_name' => 'web',
+        ]);
+    }
+
+    $user->administrator->givePermissionTo($permissions);
+
+    return $user->fresh(['administrator.permissions']);
+}
+
+function threeDsAdminAttempt(\App\Models\User $customerUser, array $overrides = []): \App\Models\PaymentAuthenticationAttempt
+{
+    return \App\Models\PaymentAuthenticationAttempt::factory()->create(array_merge([
+        'customer_id' => $customerUser->customer->id,
+        'started_at' => now()->subMinutes(3),
+        'finished_at' => now()->subMinute(),
+        'status' => \App\Enums\PaymentAuthenticationAttemptStatus::Completed->value,
+    ], $overrides));
+}

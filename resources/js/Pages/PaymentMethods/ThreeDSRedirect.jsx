@@ -14,7 +14,8 @@ import { router } from "@inertiajs/react";
 export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
 
     const iframeRef = useRef(null);
-    const pollingMountedRef = useRef(false);
+    const challengeSubmittedRef = useRef(false);
+    const pollingStartedRef = useRef(false);
 
     const isFrictionless = !url3ds || !token3ds;
 
@@ -34,6 +35,9 @@ export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
     useEffect(() => {
         if (isFrictionless) return;
         if (!iframeRef.current) return;
+        if (challengeSubmittedRef.current) return;
+
+        challengeSubmittedRef.current = true;
 
         const form = document.createElement("form");
         form.method = "POST";
@@ -49,7 +53,6 @@ export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
         document.body.appendChild(form);
         form.submit();
         document.body.removeChild(form);
-
     }, [url3ds, token3ds, isFrictionless]);
 
     /* ==========================================================
@@ -59,32 +62,27 @@ export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
     const POLLING_INTERVAL = 5000;
 
     useEffect(() => {
+        if (pollingStartedRef.current) return;
+        pollingStartedRef.current = true;
 
         let interval = null;
 
         const startPolling = () => {
-
             interval = setInterval(() => {
-
                 fetch(route("payment-methods.3ds-status", { sessionId }))
-                    .then(res => res.json())
-                    .then(data => {
-
+                    .then((res) => res.json())
+                    .then((data) => {
                         if (data.final) {
-
                             clearInterval(interval);
 
                             if (data.status === "completed") {
-
                                 setStatus("success");
                                 setMessage(data.message ?? "Tarjeta verificada correctamente");
 
                                 setTimeout(() => {
                                     router.visit(route("payment-methods.3ds-result", { sessionId }));
                                 }, 1500);
-
                             } else {
-
                                 setStatus("error");
                                 setMessage(data.message ?? "No se pudo completar la verificación");
                                 setTimeout(() => {
@@ -92,36 +90,23 @@ export default function ThreeDSRedirect({ sessionId, url3ds, token3ds }) {
                                 }, 2500);
                             }
                         }
-
                     })
                     .catch(() => {
-
                         clearInterval(interval);
-
                         setStatus("error");
                         setMessage("Error verificando estado");
-
                     });
-
             }, POLLING_INTERVAL);
-
         };
 
-        // ⏳ esperar 5 segundos antes de empezar polling
         const delay = setTimeout(() => {
-
             startPolling();
-
         }, POLLING_DELAY);
 
         return () => {
-
             clearTimeout(delay);
             if (interval) clearInterval(interval);
-            pollingMountedRef.current = false;
-
         };
-
     }, [sessionId]);
 
     return (

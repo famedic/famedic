@@ -45,6 +45,7 @@ export default function PaymentMethodStep({
     hasOdessaPay,
     hasPayPal = false,
     addCardReturnUrl,
+    addCardParams = null,
     forceMobile = false,
     paymentUsesMock = false,
     variant = "accordion",
@@ -94,6 +95,7 @@ export default function PaymentMethodStep({
                     variant={variant}
                     forceMobile={isWizard || forceMobile}
                     addCardReturnUrl={addCardReturnUrl}
+                    addCardParams={addCardParams}
                     setData={setData}
                     paymentMethods={paymentMethods}
                     hasOdessaPay={hasOdessaPay}
@@ -199,6 +201,7 @@ export default function PaymentMethodStep({
                         variant="accordion"
                         forceMobile={forceMobile}
                         addCardReturnUrl={addCardReturnUrl}
+                        addCardParams={addCardParams}
                         setData={setData}
                         paymentMethods={paymentMethods}
                         hasOdessaPay={hasOdessaPay}
@@ -228,6 +231,7 @@ function PaymentMethodSelectionAccordion(props) {
 function PaymentMethodSelectionInner({
     setData,
     addCardReturnUrl,
+    addCardParams = null,
     paymentMethods,
     hasOdessaPay,
     hasPayPal = false,
@@ -249,10 +253,18 @@ function PaymentMethodSelectionInner({
     };
 
     const addCardUrl = useMemo(() => {
-        return route("payment-methods.create", {
-            return_url: addCardReturnUrl,
-        });
-    }, [addCardReturnUrl]);
+        if (addCardParams && Object.keys(addCardParams).length > 0) {
+            return route("payment-methods.create", addCardParams);
+        }
+
+        if (addCardReturnUrl) {
+            return route("payment-methods.create", {
+                return_url: addCardReturnUrl,
+            });
+        }
+
+        return route("payment-methods.create");
+    }, [addCardParams, addCardReturnUrl]);
 
     return (
         <ul

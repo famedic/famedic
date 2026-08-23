@@ -304,6 +304,8 @@ class LaboratoryPurchaseCouponReversalIsolatedTest extends TestCase
         Schema::dropIfExists('users');
 
         Schema::enableForeignKeyConstraints();
+
+        restoreMonolithicTestDatabase();
     }
 
     /**

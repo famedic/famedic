@@ -1,11 +1,12 @@
 <?php
 
+use App\Actions\Laboratories\SyncLaboratoryCheckoutDraftAction;
 use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
-use App\Models\Cart;
 use App\Models\Address;
+use App\Models\Cart;
 use App\Models\Contact;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryCartItem;
@@ -15,10 +16,9 @@ use App\Models\PaymentAttempt;
 use App\Models\User;
 use App\Services\Carts\CartEventRecorder;
 use App\Services\Monitoring\SyncMonitoringCartService;
-use App\Actions\Laboratories\SyncLaboratoryCheckoutDraftAction;
 use App\Support\ClientContext;
 
-function traceabilityUser(): User
+function cartTraceabilityUser(): User
 {
     return User::factory()->withRegularCustomer()->create();
 }
@@ -59,7 +59,7 @@ function traceabilityPurchase(User $user, array $attributes = []): LaboratoryPur
 }
 
 it('records idempotent cart events and removes sensitive metadata', function () {
-    $cart = traceabilityCart(traceabilityUser());
+    $cart = traceabilityCart(cartTraceabilityUser());
 
     $recorder = app(CartEventRecorder::class);
     $recorder->recordOnce(
@@ -87,7 +87,7 @@ it('records idempotent cart events and removes sensitive metadata', function () 
 });
 
 it('captures mobile client context on checkout cart events and preserves functional metadata', function () {
-    $user = traceabilityUser();
+    $user = cartTraceabilityUser();
     $test = LaboratoryTest::factory()->create([
         'brand' => LaboratoryBrand::OLAB->value,
         'requires_appointment' => true,
@@ -121,7 +121,7 @@ it('captures mobile client context on checkout cart events and preserves functio
 });
 
 it('captures desktop client context on checkout cart events', function () {
-    $user = traceabilityUser();
+    $user = cartTraceabilityUser();
     $test = LaboratoryTest::factory()->create([
         'brand' => LaboratoryBrand::OLAB->value,
         'requires_appointment' => true,
@@ -155,7 +155,7 @@ it('captures desktop client context on checkout cart events', function () {
 });
 
 it('keeps recordOnce idempotent when client metadata changes', function () {
-    $cart = traceabilityCart(traceabilityUser());
+    $cart = traceabilityCart(cartTraceabilityUser());
     $recorder = app(CartEventRecorder::class);
 
     $recorder->recordOnce($cart, CartEventType::CheckoutStarted, 'same-key', [
@@ -174,7 +174,7 @@ it('keeps recordOnce idempotent when client metadata changes', function () {
 });
 
 it('does not invent client context for async events without request context', function () {
-    $cart = traceabilityCart(traceabilityUser());
+    $cart = traceabilityCart(cartTraceabilityUser());
 
     app(CartEventRecorder::class)->recordOnce(
         $cart,
@@ -188,7 +188,7 @@ it('does not invent client context for async events without request context', fu
 });
 
 it('uses explicit purchase and appointment links before historical fallback', function () {
-    $user = traceabilityUser();
+    $user = cartTraceabilityUser();
     $cart = traceabilityCart($user, [
         'status' => MonitoringCartStatus::Completed->value,
         'completed_at' => now()->subMinutes(10),
@@ -225,7 +225,7 @@ it('uses explicit purchase and appointment links before historical fallback', fu
 });
 
 it('filters payment status by explicit attempts before legacy fallback', function () {
-    $user = traceabilityUser();
+    $user = cartTraceabilityUser();
     $explicitCart = traceabilityCart($user);
 
     PaymentAttempt::query()->create([
@@ -246,7 +246,7 @@ it('filters payment status by explicit attempts before legacy fallback', functio
         'processed_at' => now()->subMinutes(5),
     ]);
 
-    $legacyUser = traceabilityUser();
+    $legacyUser = cartTraceabilityUser();
     $legacyCart = traceabilityCart($legacyUser, ['total' => 700.00]);
     PaymentAttempt::query()->create([
         'customer_id' => $legacyUser->customer->id,

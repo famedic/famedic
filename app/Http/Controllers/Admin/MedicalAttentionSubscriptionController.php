@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\MedicalAttentionSubscriptions\IndexMedicalAttentionS
 use App\Http\Requests\Admin\MedicalAttentionSubscriptions\ShowMedicalAttentionSubscriptionRequest;
 use App\Models\FamilyAccount;
 use App\Models\MedicalAttentionSubscription;
+use App\Support\EfevooPayAdminResource;
 use Carbon\Carbon;
 use Inertia\Inertia;
 
@@ -67,6 +68,11 @@ class MedicalAttentionSubscriptionController extends Controller
         if ($medicalAttentionSubscription->customer->customerable_type === 'App\\Models\\FamilyAccount' && $medicalAttentionSubscription->customer->customerable) {
             $medicalAttentionSubscription->customer->customerable->load('parentCustomer.user');
         }
+
+        $medicalAttentionSubscription->setRelation(
+            'transactions',
+            $medicalAttentionSubscription->transactions->map(fn ($transaction) => EfevooPayAdminResource::transaction($transaction))
+        );
 
         return Inertia::render('Admin/MedicalAttentionSubscription', [
             'subscription' => $medicalAttentionSubscription,

@@ -60,6 +60,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
     {
         Carbon::setTestNow();
         $this->dropSchema();
+        restoreMonolithicTestDatabase();
         parent::tearDown();
     }
 

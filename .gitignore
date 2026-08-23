@@ -7,6 +7,8 @@
 /storage/*.key
 /vendor
 /database/test_db.sqlite
+/database/famedic_jun_23
+/database/famedic_jun_*
 .env
 # Claves SSH deben vivir en ~/.ssh del sistema, no en el repo.
 id_ed25519_famedic
@@ -40,3 +42,9 @@ start-dev.bat
 start-dev.ps1
 refund_logs.txt
 .env_backup_laptop
+
+# EfevooPay local debug artifacts. Do not commit provider responses, curl captures, or raw payloads.
+/curl_last.log
+/efevoopay-debug*.log
+/efevoopay-response*.json
+/efevoopay-curl*.txt

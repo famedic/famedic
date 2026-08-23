@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\MedicalAttentionSubscription;
 use App\Models\Transaction;
 use App\Services\PayPalService;
+use App\Support\PaymentAuthenticationRecoveryPayPalOrderHelper;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -16,6 +17,7 @@ class FinalizeMedicalAttentionPayPalPaymentAction
     public function __construct(
         private PayPalService $payPalService,
         private CreateRegularSubscriptionAction $createRegularSubscriptionAction,
+        private PaymentAuthenticationRecoveryPayPalOrderHelper $recoveryPayPalOrderHelper,
     ) {
     }
 
@@ -64,13 +66,18 @@ class FinalizeMedicalAttentionPayPalPaymentAction
         });
 
         if ($existingSubscription !== null) {
+            $this->recoveryPayPalOrderHelper->maybeMarkRecovered($transaction->fresh());
+
             return $existingSubscription;
         }
 
         $transaction->refresh();
 
         try {
-            return $this->runFulfillment($transaction);
+            $subscription = $this->runFulfillment($transaction);
+            $this->recoveryPayPalOrderHelper->maybeMarkRecovered($transaction->fresh());
+
+            return $subscription;
         } catch (Throwable $e) {
             Log::error('[PayPal][MedicalAttention] Fallo al crear membresía tras captura; intentando reembolso', [
                 'transaction_id' => $transaction->id,

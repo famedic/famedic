@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Services\EfevooPayService;
+use App\Support\EfevooPayLogSanitizer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class EfevooPayController extends Controller
 {
@@ -21,16 +23,15 @@ class EfevooPayController extends Controller
             
             return response()->json([
                 'success' => true,
-                'token' => $response['token'] ?? null,
                 'expires_in' => $response['expires_in'] ?? null,
-                'full_response' => $response, // Solo para desarrollo
             ]);
             
         } catch (\Exception $e) {
+            Log::error('[EfevooPay] getToken failed', EfevooPayLogSanitizer::exception($e));
+
             return response()->json([
                 'success' => false,
-                'error' => $e->getMessage(),
-                'code' => $e->getCode(),
+                'message' => 'No fue posible obtener el token de cliente.',
             ], 500);
         }
     }
@@ -42,7 +43,10 @@ class EfevooPayController extends Controller
     {
         $result = $this->efevooPay->testCredentials();
         
-        return response()->json($result);
+        return response()->json([
+            'success' => (bool) ($result['success'] ?? false),
+            'status' => $result['status'] ?? null,
+        ]);
     }
 
     /**
@@ -77,13 +81,14 @@ class EfevooPayController extends Controller
                 'success' => isset($response['payment_url']),
                 'payment_url' => $response['payment_url'] ?? null,
                 'transaction_id' => $response['transaction_id'] ?? null,
-                'response' => $response,
             ]);
             
         } catch (\Exception $e) {
+            Log::error('[EfevooPay] createPayment failed', EfevooPayLogSanitizer::exception($e));
+
             return response()->json([
                 'success' => false,
-                'error' => $e->getMessage(),
+                'message' => 'No fue posible crear el pago.',
             ], 500);
         }
     }

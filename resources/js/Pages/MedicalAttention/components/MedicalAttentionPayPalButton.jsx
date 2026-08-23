@@ -30,10 +30,41 @@ function loadPayPalScript(clientId) {
 export default function MedicalAttentionPayPalButton({
     paypalClientId,
     disabled = false,
+    recoveryContextUuid = null,
+    recoveryPayPalCancelUrl = null,
 }) {
     const containerRef = useRef(null);
+    const transactionIdRef = useRef(null);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    const notifyPayPalCancel = async () => {
+        if (!recoveryPayPalCancelUrl || !recoveryContextUuid) {
+            return;
+        }
+
+        const csrf =
+            document.querySelector('meta[name="csrf-token"]')?.content || "";
+
+        try {
+            await axios.post(
+                recoveryPayPalCancelUrl,
+                {
+                    recovery_context_uuid: recoveryContextUuid,
+                    transaction_id: transactionIdRef.current,
+                },
+                {
+                    headers: {
+                        "X-CSRF-TOKEN": csrf,
+                        "X-Requested-With": "XMLHttpRequest",
+                        Accept: "application/json",
+                    },
+                },
+            );
+        } catch {
+            // Best-effort cancel notification.
+        }
+    };
 
     useEffect(() => {
         if (!paypalClientId || disabled) {
@@ -58,11 +89,18 @@ export default function MedicalAttentionPayPalButton({
                                     'meta[name="csrf-token"]',
                                 )?.content || "";
                             try {
+                                const payload = {};
+
+                                if (recoveryContextUuid) {
+                                    payload.recovery_context_uuid =
+                                        recoveryContextUuid;
+                                }
+
                                 const { data } = await axios.post(
                                     route(
                                         "medical-attention.paypal.create-order",
                                     ),
-                                    {},
+                                    payload,
                                     {
                                         headers: {
                                             "X-CSRF-TOKEN": csrf,
@@ -71,12 +109,19 @@ export default function MedicalAttentionPayPalButton({
                                         },
                                     },
                                 );
+                                transactionIdRef.current =
+                                    data.transaction_id ?? null;
+
                                 return data.order_id;
                             } catch (err) {
-                                const msg =
-                                    err.response?.data?.message ||
+                                const data = err.response?.data ?? {};
+                                let msg =
+                                    data.message ||
                                     err.message ||
                                     "No se pudo iniciar el pago con PayPal.";
+                                if (data.support_reference) {
+                                    msg += ` Referencia: ${data.support_reference}`;
+                                }
                                 setError(msg);
                                 throw new Error(msg);
                             }
@@ -120,6 +165,7 @@ export default function MedicalAttentionPayPalButton({
                         },
                         onCancel: () => {
                             setError(null);
+                            notifyPayPalCancel();
                         },
                     })
                     .render(containerRef.current);
@@ -139,7 +185,12 @@ export default function MedicalAttentionPayPalButton({
                 containerRef.current.innerHTML = "";
             }
         };
-    }, [paypalClientId, disabled]);
+    }, [
+        paypalClientId,
+        disabled,
+        recoveryContextUuid,
+        recoveryPayPalCancelUrl,
+    ]);
 
     if (!paypalClientId) {
         return (

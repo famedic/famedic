@@ -337,6 +337,16 @@ class Customer extends Model
         return $this->hasMany(EfevooToken::class, 'customer_id');
     }
 
+    public function paymentAuthenticationAttempts(): HasMany
+    {
+        return $this->hasMany(PaymentAuthenticationAttempt::class);
+    }
+
+    public function paymentAuthenticationRecoveryContexts(): HasMany
+    {
+        return $this->hasMany(PaymentAuthenticationRecoveryContext::class);
+    }
+
     /**
      * Obtener el total del carrito de laboratorio para una marca específica
      */

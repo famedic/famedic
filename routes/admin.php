@@ -46,8 +46,8 @@ use App\Http\Controllers\Admin\MurguiaDashboardController;
 use App\Http\Controllers\Admin\MurguiaMonitorController;
 use App\Http\Controllers\Admin\MurguiaReconciliationController;
 use App\Http\Controllers\Admin\MurguiaReportController;
-use App\Http\Controllers\Admin\OdessaReconciliationController;
 use App\Http\Controllers\Admin\OdessaPreEnrollmentController;
+use App\Http\Controllers\Admin\OdessaReconciliationController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\DevAssistanceRequestController as OnlinePharmacyDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\InvoiceController as OnlinePharmacyPurchasesInvoiceController;
@@ -56,6 +56,7 @@ use App\Http\Controllers\Admin\OnlinePharmacyPurchases\UnresolvedDevAssistanceRe
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\VendorPaymentsController as OnlinePharmacyVendorPaymentsController;
 use App\Http\Controllers\Admin\OtpSimulatorController;
 use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
+use App\Http\Controllers\Admin\PaymentAuthenticationAttemptController as AdminPaymentAuthenticationAttemptController;
 use App\Http\Controllers\Admin\PromoCodeController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SimulatorController;
@@ -275,6 +276,11 @@ Route::prefix('admin')->middleware([
 
         // Intentos de pago
         Route::resource('payment-attempts', AdminPaymentAttemptController::class)->only(['index', 'show']);
+
+        // Intentos 3DS EfevooPay (consulta de sólo lectura)
+        Route::get('payment-authentication-attempts/export', [AdminPaymentAuthenticationAttemptController::class, 'export'])
+            ->name('payment-authentication-attempts.export');
+        Route::resource('payment-authentication-attempts', AdminPaymentAuthenticationAttemptController::class)->only(['index', 'show']);
 
         // Monitoreo de notificaciones de laboratorio (toma de muestra vs resultados)
         Route::get('laboratory-notifications-monitor', [LaboratoryNotificationMonitorController::class, 'index'])

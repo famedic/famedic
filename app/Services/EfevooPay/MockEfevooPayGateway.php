@@ -5,6 +5,7 @@ namespace App\Services\EfevooPay;
 use App\Contracts\EfevooPayGateway;
 use App\Models\Efevoo3dsSession;
 use App\Models\EfevooToken;
+use App\Support\MockEfevooPayGatewayCallRecorder;
 use App\Support\MockEfevooPaymentSupport;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -27,6 +28,10 @@ class MockEfevooPayGateway implements EfevooPayGateway
 
     public function chargeCard(array $data): array
     {
+        MockEfevooPayGatewayCallRecorder::record('chargeCard', [
+            'has_cvv' => array_key_exists('cvv', $data) && $data['cvv'] !== null && $data['cvv'] !== '',
+        ]);
+
         Log::info('Mock payment executed', [
             'operation' => 'chargeCard',
             'app_env' => app()->environment(),
@@ -161,6 +166,11 @@ class MockEfevooPayGateway implements EfevooPayGateway
 
     public function initiate3DS(array $cardData, int $customerId): array
     {
+        MockEfevooPayGatewayCallRecorder::record('initiate3DS', [
+            'has_cvv' => array_key_exists('cvv', $cardData) && $cardData['cvv'] !== null && $cardData['cvv'] !== '',
+            'amount' => $cardData['amount'] ?? null,
+        ]);
+
         Log::info('Mock payment executed', [
             'operation' => 'initiate3DS',
             'customer_id' => $customerId,
@@ -194,19 +204,83 @@ class MockEfevooPayGateway implements EfevooPayGateway
 
     public function complete3DS(Efevoo3dsSession $session, array $cardData): array
     {
+        $status = $this->poll3DSAuthentication($session, $cardData);
+
+        if (($status['phase'] ?? '') === 'pending') {
+            return [
+                'success' => false,
+                'message' => $status['message'] ?? '3DS aún pendiente',
+                'error_type' => 'pending',
+                'simulated' => true,
+            ];
+        }
+
+        if (($status['phase'] ?? '') !== 'authenticated') {
+            return array_merge([
+                'success' => (bool) ($status['success'] ?? false),
+                'message' => $status['message'] ?? 'Proceso finalizado',
+                'error_type' => $status['error_type'] ?? null,
+            ], ['simulated' => true]);
+        }
+
+        return array_merge(
+            $this->finalize3DSTokenization($session, $this->normalizeCardInput($cardData)),
+            ['simulated' => true]
+        );
+    }
+
+    public function poll3DSAuthentication(Efevoo3dsSession $session, array $cardData): array
+    {
+        MockEfevooPayGatewayCallRecorder::record('poll3DSAuthentication', [
+            'session_id' => $session->id,
+            'has_cvv' => array_key_exists('cvv', $cardData) && $cardData['cvv'] !== null && $cardData['cvv'] !== '',
+        ]);
+
         Log::info('Mock payment executed', [
-            'operation' => 'complete3DS',
+            'operation' => 'poll3DSAuthentication',
             'session_id' => $session->id,
             'status' => $session->status,
         ]);
 
-        if (in_array($session->status, ['completed', 'declined', 'tokenization_failed'], true)) {
+        if (in_array($session->status, ['completed', 'declined', 'tokenization_failed', 'cancelled'], true)) {
             return [
+                'phase' => 'already_processed',
                 'success' => $session->status === 'completed',
                 'message' => $session->status === 'completed'
                     ? '3DS completado (simulación)'
                     : ($session->error_message ?? 'Proceso finalizado'),
-                'simulated' => true,
+            ];
+        }
+
+        if ($session->status === 'mock_pending') {
+            $cardData = $this->normalizeCardInput($cardData);
+            $pan = $cardData['card_number'] ?? '';
+            $scenario = $this->detectScenarioFromPan($pan);
+
+            if ($scenario === 'decline') {
+                $session->update([
+                    'status' => 'declined',
+                    'error_message' => 'Tarjeta rechazada (simulación)',
+                    'status_checked_at' => now(),
+                ]);
+
+                return [
+                    'phase' => 'declined',
+                    'success' => false,
+                    'message' => 'Tarjeta rechazada (simulación)',
+                    'error_type' => 'bank',
+                ];
+            }
+
+            $session->update([
+                'status' => 'authenticated',
+                'status_checked_at' => now(),
+            ]);
+
+            return [
+                'phase' => 'authenticated',
+                'success' => true,
+                'message' => '3DS autenticado (simulación)',
             ];
         }
 
@@ -222,12 +296,40 @@ class MockEfevooPayGateway implements EfevooPayGateway
             ]);
 
             return [
+                'phase' => 'declined',
                 'success' => false,
                 'message' => 'Tarjeta rechazada (simulación)',
                 'error_type' => 'bank',
-                'simulated' => true,
             ];
         }
+
+        $session->update([
+            'status' => 'authenticated',
+            'status_checked_at' => now(),
+        ]);
+
+        return [
+            'phase' => 'authenticated',
+            'success' => true,
+            'message' => '3DS autenticado (simulación)',
+        ];
+    }
+
+    public function finalize3DSTokenization(Efevoo3dsSession $session, array $cardData): array
+    {
+        MockEfevooPayGatewayCallRecorder::record('finalize3DSTokenization', [
+            'session_id' => $session->id,
+            'has_cvv' => array_key_exists('cvv', $cardData) && $cardData['cvv'] !== null && $cardData['cvv'] !== '',
+            'amount' => $cardData['amount'] ?? null,
+        ]);
+
+        unset($cardData['cvv']);
+        $cardData = $this->normalizeCardInput($cardData);
+
+        Log::info('Mock payment executed', [
+            'operation' => 'finalize3DSTokenization',
+            'session_id' => $session->id,
+        ]);
 
         $tokenResult = $this->tokenizeCard($cardData, $session->customer_id);
 

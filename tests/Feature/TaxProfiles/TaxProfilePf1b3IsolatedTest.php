@@ -10,7 +10,6 @@ use App\Models\Customer;
 use App\Models\InvoiceRequest;
 use App\Models\LaboratoryPurchase;
 use App\Models\OnlinePharmacyPurchase;
-use App\Models\TaxProfile;
 use App\Models\User;
 use App\Policies\TaxProfilePolicy;
 use Illuminate\Database\Schema\Blueprint;
@@ -59,6 +58,7 @@ class TaxProfilePf1b3IsolatedTest extends TestCase
     protected function tearDown(): void
     {
         $this->dropSchema();
+        restoreMonolithicTestDatabase();
 
         if (! empty($this->storageRoot) && is_dir($this->storageRoot)) {
             $files = new \RecursiveIteratorIterator(

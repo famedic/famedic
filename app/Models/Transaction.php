@@ -43,8 +43,14 @@ class Transaction extends Model
         'deleted_at' => 'datetime',
     ];
 
+    protected $hidden = [
+        'gateway_response',
+        'raw_response',
+        'gateway_token',
+    ];
+
     protected static $unguarded = true;
-    
+
     protected $appends = [
         'formatted_amount',
         'formatted_created_at',
@@ -98,7 +104,7 @@ class Transaction extends Model
     protected function formattedCommission(): Attribute
     {
         return Attribute::make(
-            get: fn() => formattedCentsPrice($this->commission_cents)
+            get: fn () => formattedCentsPrice($this->commission_cents)
         );
     }
 
@@ -180,6 +186,7 @@ class Transaction extends Model
         if ($customerId) {
             return Customer::find($customerId);
         }
+
         return null;
     }
 
@@ -192,6 +199,7 @@ class Transaction extends Model
         if ($tokenId) {
             return EfevooToken::find($tokenId);
         }
+
         return null;
     }
 

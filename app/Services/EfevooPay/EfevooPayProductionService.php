@@ -5,12 +5,13 @@ namespace App\Services\EfevooPay;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Services\EfevooPayService as BaseEfevooPayService;
+use App\Support\EfevooPayLogSanitizer;
 
 class EfevooPayProductionService
 {
     protected BaseEfevooPayService $baseService;
     protected string $environment = 'production';
-    protected string $baseUrl;
+    protected ?string $baseUrl;
 
     public function __construct()
     {
@@ -19,7 +20,7 @@ class EfevooPayProductionService
             'efevoo.force_production_url',
             config(
                 'efevoopay.production.api_url',
-                config('efevoo.api_url', 'https://test-intgapi.efevoopay.com/v1/apiservice')
+                config('efevoo.api_url')
             )
         );
 
@@ -27,16 +28,14 @@ class EfevooPayProductionService
         $this->baseService = new BaseEfevooPayService();
 
         // Sobreescribir configuración de URL si es necesario
-        if ($this->baseUrl !== 'https://test-intgapi.efevoopay.com/v1/apiservice') {
+        if (!empty($this->baseUrl)) {
             config(['efevoo.api_url' => $this->baseUrl]);
             config(['efevoopay.api_url' => $this->baseUrl]);
         }
 
         Log::info('EfevooPayProductionService inicializado', [
             'environment' => $this->environment,
-            'base_url' => $this->baseUrl,
             'using_base_service' => true,
-            'config_url' => config('efevoo.api_url'),
         ]);
     }
 
@@ -49,7 +48,6 @@ class EfevooPayProductionService
             'customer_id' => $customerId,
             'card_data_masked' => $this->maskSensitiveData($cardData),
             'environment' => $this->environment,
-            'base_url' => $this->baseUrl,
         ]);
 
         try {
@@ -58,13 +56,13 @@ class EfevooPayProductionService
 
         } catch (\Exception $e) {
             Log::error('Error en EfevooPayProductionService::tokenizeCard', [
-                'error' => $e->getMessage(),
                 'customer_id' => $customerId,
+                ...EfevooPayLogSanitizer::exception($e),
             ]);
 
             return [
                 'success' => false,
-                'message' => 'Error en tokenización: ' . $e->getMessage(),
+                'message' => 'Error en tokenización.',
             ];
         }
     }
@@ -91,12 +89,12 @@ class EfevooPayProductionService
 
         } catch (\Exception $e) {
             Log::error('Error en EfevooPayProductionService::chargeCard', [
-                'error' => $e->getMessage(),
+                ...EfevooPayLogSanitizer::exception($e),
             ]);
 
             return [
                 'success' => false,
-                'message' => 'Error al procesar el cargo: ' . $e->getMessage(),
+                'message' => 'Error al procesar el cargo.',
             ];
         }
     }
@@ -150,19 +148,20 @@ class EfevooPayProductionService
     {
         $masked = $data;
 
-        if (isset($masked['card_number'])) {
-            $masked['card_number'] = '**** **** **** ' . substr(str_replace(' ', '', $masked['card_number']), -4);
-        }
-
-        if (isset($masked['cvv'])) {
-            $masked['cvv'] = '***';
-        }
-
         if (isset($masked['token_id'])) {
             $masked['token_id'] = substr($masked['token_id'], 0, 8) . '...';
         }
 
-        unset($masked['cvv']);
+        unset(
+            $masked['authorization'],
+            $masked['card_number'],
+            $masked['card_token'],
+            $masked['cav'],
+            $masked['client_token'],
+            $masked['cvv'],
+            $masked['token'],
+            $masked['track2']
+        );
 
         return $masked;
     }

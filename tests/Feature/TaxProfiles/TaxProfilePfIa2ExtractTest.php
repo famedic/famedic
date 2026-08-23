@@ -67,6 +67,7 @@ class TaxProfilePfIa2ExtractTest extends TestCase
     protected function tearDown(): void
     {
         $this->dropSchema();
+        restoreMonolithicTestDatabase();
         $this->cleanupDir($this->storageRoot);
         parent::tearDown();
     }

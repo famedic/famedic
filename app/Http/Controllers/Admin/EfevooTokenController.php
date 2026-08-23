@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\EfevooToken;
+use App\Support\EfevooPayAdminResource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -24,16 +25,15 @@ class EfevooTokenController extends Controller
         $query = EfevooToken::with(['customer.user'])
             ->when($filters['search'] ?? null, function (Builder $query, string $search) {
                 $query->where(function (Builder $query) use ($search) {
-                    $query->where('alias', 'like', '%' . $search . '%')
-                        ->orWhere('card_last_four', 'like', '%' . $search . '%')
-                        ->orWhere('card_holder', 'like', '%' . $search . '%')
-                        ->orWhere('card_brand', 'like', '%' . $search . '%')
-                        ->orWhere('client_token', 'like', '%' . $search . '%')
+                    $query->where('alias', 'like', '%'.$search.'%')
+                        ->orWhere('card_last_four', 'like', '%'.$search.'%')
+                        ->orWhere('card_holder', 'like', '%'.$search.'%')
+                        ->orWhere('card_brand', 'like', '%'.$search.'%')
                         ->orWhereHas('customer.user', function (Builder $query) use ($search) {
-                            $query->where('name', 'like', '%' . $search . '%')
-                                ->orWhere('paternal_lastname', 'like', '%' . $search . '%')
-                                ->orWhere('maternal_lastname', 'like', '%' . $search . '%')
-                                ->orWhere('email', 'like', '%' . $search . '%');
+                            $query->where('name', 'like', '%'.$search.'%')
+                                ->orWhere('paternal_lastname', 'like', '%'.$search.'%')
+                                ->orWhere('maternal_lastname', 'like', '%'.$search.'%')
+                                ->orWhere('email', 'like', '%'.$search.'%');
                         });
                 });
             })
@@ -64,14 +64,10 @@ class EfevooTokenController extends Controller
             })
             ->orderByDesc('created_at');
 
-        $tokens = $query->paginate(25)->withQueryString();
-
-        $tokens->getCollection()->transform(function (EfevooToken $token) {
-            $token->formatted_environment = $token->environment === 'production' ? 'Producción' : 'Pruebas';
-            $token->is_expired = $token->isExpired();
-
-            return $token;
-        });
+        $tokens = EfevooPayAdminResource::transformPaginator(
+            $query->paginate(25)->withQueryString(),
+            fn (EfevooToken $token) => EfevooPayAdminResource::efevooToken($token)
+        );
 
         return Inertia::render('Admin/EfevooTokens', [
             'tokens' => $tokens,
@@ -87,12 +83,8 @@ class EfevooTokenController extends Controller
             $query->latest()->limit(20);
         }]);
 
-        $efevooToken->formatted_environment = $efevooToken->environment === 'production' ? 'Producción' : 'Pruebas';
-        $efevooToken->is_expired = $efevooToken->isExpired();
-
         return Inertia::render('Admin/EfevooToken', [
-            'token' => $efevooToken,
+            'token' => EfevooPayAdminResource::efevooToken($efevooToken, includeTransactions: true),
         ]);
     }
 }
-

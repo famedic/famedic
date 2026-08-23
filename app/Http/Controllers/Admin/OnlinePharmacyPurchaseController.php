@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\OnlinePharmacyPurchases\IndexOnlinePharmacyPurchaseRequest;
 use App\Http\Requests\Admin\OnlinePharmacyPurchases\ShowOnlinePharmacyPurchaseRequest;
 use App\Models\OnlinePharmacyPurchase;
+use App\Support\EfevooPayAdminResource;
 use Carbon\Carbon;
 use Inertia\Inertia;
 
@@ -54,17 +55,23 @@ class OnlinePharmacyPurchaseController extends Controller
 
     public function show(ShowOnlinePharmacyPurchaseRequest $request, OnlinePharmacyPurchase $onlinePharmacyPurchase)
     {
+        $onlinePharmacyPurchase->load([
+            'transactions',
+            'vendorPayments',
+            'onlinePharmacyPurchaseItems',
+            'customer.user',
+            'invoice',
+            'invoiceRequest',
+            'devAssistanceRequests.administrator.user',
+            'devAssistanceRequests.comments.administrator.user',
+        ]);
+        $onlinePharmacyPurchase->setRelation(
+            'transactions',
+            $onlinePharmacyPurchase->transactions->map(fn ($transaction) => EfevooPayAdminResource::transaction($transaction))
+        );
+
         return Inertia::render('Admin/OnlinePharmacyPurchase', [
-            'onlinePharmacyPurchase' => $onlinePharmacyPurchase->load([
-                'transactions',
-                'vendorPayments',
-                'onlinePharmacyPurchaseItems',
-                'customer.user',
-                'invoice',
-                'invoiceRequest',
-                'devAssistanceRequests.administrator.user',
-                'devAssistanceRequests.comments.administrator.user',
-            ]),
+            'onlinePharmacyPurchase' => $onlinePharmacyPurchase,
         ]);
     }
 }

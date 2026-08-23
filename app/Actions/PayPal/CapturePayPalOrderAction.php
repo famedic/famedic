@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\Transaction;
 use App\Services\PayPalService;
+use App\Support\PaymentAuthenticationRecoveryPayPalOrderHelper;
 use Illuminate\Support\Facades\Log;
 
 class CapturePayPalOrderAction
@@ -13,8 +14,8 @@ class CapturePayPalOrderAction
     public function __construct(
         private PayPalService $payPalService,
         private FinalizeLaboratoryPayPalPaymentAction $finalizeLaboratoryPayPalPaymentAction,
-    ) {
-    }
+        private PaymentAuthenticationRecoveryPayPalOrderHelper $recoveryPayPalOrderHelper,
+    ) {}
 
     /**
      * @param  array<string, mixed>|null  $clientContext
@@ -30,7 +31,7 @@ class CapturePayPalOrderAction
             })
             ->first();
 
-        if (!$transaction) {
+        if (! $transaction) {
             Log::warning('[PayPal] Capture: transacción no encontrada', ['order_id' => $paypalOrderId]);
 
             return ['purchase' => null, 'status' => 'not_found', 'message' => 'Orden no encontrada.'];
@@ -47,11 +48,15 @@ class CapturePayPalOrderAction
         }
 
         if ($transaction->laboratoryPurchases()->exists()) {
+            $this->recoveryPayPalOrderHelper->validateCaptureOwnership($customer, $transaction);
+
             return [
                 'purchase' => $transaction->laboratoryPurchases()->first(),
                 'status' => 'already_processed',
             ];
         }
+
+        $this->recoveryPayPalOrderHelper->validateCaptureOwnership($customer, $transaction);
 
         if (($transaction->payment_status ?? '') === 'failed') {
             return ['purchase' => null, 'status' => 'failed', 'message' => 'El pago fue rechazado.'];
@@ -71,6 +76,23 @@ class CapturePayPalOrderAction
                     'order_id' => $paypalOrderId,
                     'error' => $e2->getMessage(),
                 ]);
+
+                $recovery = $this->recoveryPayPalOrderHelper->resolveRecoveryParticipantsFromTransaction($transaction);
+                if ($recovery) {
+                    $this->recoveryPayPalOrderHelper->markCaptureConfirmationPending(
+                        $recovery['context'],
+                        $transaction,
+                        $recovery['attempt'],
+                    );
+
+                    return [
+                        'purchase' => null,
+                        'status' => 'confirmation_pending',
+                        'error' => 'recovery_confirmation_pending',
+                        'message' => 'No pudimos confirmar PayPal en este momento. No vuelvas a intentarlo mientras verificamos el estado.',
+                        'support_reference' => $recovery['attempt']->support_reference,
+                    ];
+                }
 
                 return ['purchase' => null, 'status' => 'error', 'message' => 'No se pudo capturar el pago.'];
             }

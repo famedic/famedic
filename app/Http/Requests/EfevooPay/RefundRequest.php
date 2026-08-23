@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Requests/EfevooPay/RefundRequest.php
 
 namespace App\Http\Requests\EfevooPay;
@@ -11,11 +12,12 @@ class RefundRequest extends FormRequest
     {
         return true;
     }
-    
+
     public function rules(): array
     {
         return [
             'transaction_id' => 'required|integer|exists:efevoo_transactions,id',
+            'amount' => 'nullable|numeric|min:0.01',
         ];
     }
 }

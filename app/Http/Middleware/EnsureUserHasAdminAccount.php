@@ -316,6 +316,11 @@ class EnsureUserHasAdminAccount
                         'current' => Route::currentRouteName() === 'admin.payment-attempts.index'
                             || Route::currentRouteName() === 'admin.payment-attempts.show',
                     ] : null,
+                    $request->user()->administrator->hasPermissionTo('payment-attempts.manage') ? [
+                        'label' => 'Intentos 3DS',
+                        'url' => route('admin.payment-authentication-attempts.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.payment-authentication-attempts'),
+                    ] : null,
                     $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') ? [
                         'label' => 'Monitor notificaciones lab',
                         'url' => route('admin.laboratory-notifications-monitor.index'),

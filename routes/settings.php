@@ -4,16 +4,14 @@ use App\Http\Controllers\AddressController;
 use App\Http\Controllers\Checkout\AddressController as CheckoutAddressController;
 use App\Http\Controllers\Checkout\ContactController as CheckoutContactController;
 use App\Http\Controllers\ContactController;
-use App\Http\Controllers\FamilyController;
-use App\Http\Controllers\LaboratoryPurchaseController;
-use App\Http\Controllers\LaboratoryResultController;
-use App\Http\Controllers\LaboratoryQuoteController;
 use App\Http\Controllers\EfevooWebhookController;
-//use App\Http\Controllers\Efevoo3DSController;
-//use App\Http\Controllers\TestEfevooController;
-//use App\Http\Controllers\TestEfevooFinalController;
-use App\Http\Controllers\OnlinePharmacyPurchaseController;
+use App\Http\Controllers\FamilyController;
 use App\Http\Controllers\InAppNotificationController;
+use App\Http\Controllers\LaboratoryPurchaseController;
+use App\Http\Controllers\LaboratoryQuoteController;
+// use App\Http\Controllers\Efevoo3DSController;
+use App\Http\Controllers\LaboratoryResultController;
+use App\Http\Controllers\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\TaxProfileController;
 use App\Http\Controllers\TaxProfiles\FiscalCertificateController;
@@ -41,12 +39,12 @@ Route::middleware([
     Route::resource('contacts', ContactController::class)->except('show');
     Route::post('checkout/contacts', CheckoutContactController::class)->name('checkout.contacts.store');
 
-    // Métodos de pago con EfevooPay        
+    // Métodos de pago con EfevooPay
     Route::resource('payment-methods', PaymentMethodController::class)->only([
         'index',
         'create',
         'store',
-        'destroy'
+        'destroy',
     ]);
 
     Route::post('in-app-notifications/{in_app_notification}/read', [InAppNotificationController::class, 'markRead'])
@@ -71,13 +69,34 @@ Route::middleware([
     Route::get('/payment-methods/3ds/result/{sessionId}', [PaymentMethodController::class, 'show3dsResult'])
         ->name('payment-methods.3ds-result');
 
+    Route::get('/payment-methods/3ds/result/{sessionId}/status', [PaymentMethodController::class, 'refresh3dsResultStatus'])
+        ->middleware('throttle:efevoopay-recovery-status')
+        ->name('payment-methods.3ds-result-status');
+
+    Route::post('/payment-methods/3ds/result/{sessionId}/sync', [PaymentMethodController::class, 'sync3dsResultStatus'])
+        ->middleware('throttle:efevoopay-recovery-sync')
+        ->name('payment-methods.3ds-result-sync');
+
+    Route::post('/payment-methods/recovery/start', [PaymentMethodController::class, 'startRecovery'])
+        ->middleware('throttle:efevoopay-recovery')
+        ->name('payment-methods.recovery.start');
+
+    Route::post('/payment-methods/recovery/paypal/start', [PaymentMethodController::class, 'startPayPalRecovery'])
+        ->middleware('throttle:efevoopay-recovery')
+        ->name('payment-methods.recovery.paypal.start');
+
+    Route::post('/payment-methods/recovery/paypal/cancel', [PaymentMethodController::class, 'cancelPayPalRecovery'])
+        ->middleware('throttle:efevoopay-recovery')
+        ->name('payment-methods.recovery.paypal.cancel');
+
     Route::post('/payment-methods/3ds/cancel/{sessionId}', [PaymentMethodController::class, 'cancel3dsSession'])
         ->name('payment-methods.3ds-cancel');
 
     Route::get(
         '/payment-methods/3ds-status/{sessionId}',
         [PaymentMethodController::class, 'check3dsStatus']
-    )->name('payment-methods.3ds-status');    
+    )->middleware('throttle:efevoopay-3ds-status')
+        ->name('payment-methods.3ds-status');
 
     // Webhook para notificaciones de EfevooPay
     Route::post('efevoo/webhook', [EfevooWebhookController::class, 'handle'])

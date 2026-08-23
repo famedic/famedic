@@ -16,27 +16,27 @@ export default function MedicalAttentionCheckout({
     hasPayPal = false,
     paypalClientId = null,
     hasOdessaAfiliateAccount = false,
-    checkoutReturnUrl,
+    checkoutReturnUrl: _checkoutReturnUrl,
+    recoveryPayPal = null,
 }) {
+    const params = new URLSearchParams(window.location.search);
     const initialPaymentMethod =
-        new URLSearchParams(window.location.search).get("payment_method") ||
+        params.get("payment_method") ||
+        params.get("recovery_payment") ||
+        recoveryPayPal?.selected_payment_method ||
         null;
 
     const { data, setData, post, processing, errors, clearErrors } = useForm({
         payment_method: initialPaymentMethod,
     });
 
-    const addCardReturnUrl = useMemo(() => {
-        const params = {};
-        if (data.payment_method) {
-            params.payment_method = data.payment_method;
-        }
-
-        return (
-            checkoutReturnUrl ||
-            route("medical-attention.checkout", params)
-        );
-    }, [data.payment_method, checkoutReturnUrl]);
+    const addCardParams = useMemo(
+        () => ({
+            origin: "medical-attention-checkout",
+            step: "payment",
+        }),
+        [],
+    );
 
     const summaryDetails = useMemo(
         () => [
@@ -98,6 +98,12 @@ export default function MedicalAttentionCheckout({
                     <MedicalAttentionPayPalButton
                         paypalClientId={paypalClientId}
                         disabled={processing}
+                        recoveryContextUuid={recoveryPayPal?.context_uuid ?? null}
+                        recoveryPayPalCancelUrl={
+                            recoveryPayPal?.context_uuid
+                                ? route("payment-methods.recovery.paypal.cancel")
+                                : null
+                        }
                     />
                 ) : undefined
             }
@@ -143,7 +149,7 @@ export default function MedicalAttentionCheckout({
                 hasOdessaPay={hasOdessaPay}
                 hasPayPal={hasPayPal}
                 paymentUsesMock={paymentUsesMock}
-                addCardReturnUrl={addCardReturnUrl}
+                addCardParams={addCardParams}
                 description="Selecciona cómo deseas pagar tu membresía anual."
             />
         </CheckoutLayout>

@@ -5,18 +5,69 @@ import { Text } from "@/Components/Catalyst/text";
 import { useForm, Link } from "@inertiajs/react";
 import {
     ArrowLeftIcon,
+    ShieldCheckIcon,
     InformationCircleIcon,
-    ChevronDownIcon,
-    ChevronUpIcon,
-    LockClosedIcon,
-    CreditCardIcon,
-    ShieldCheckIcon
 } from "@heroicons/react/24/outline";
-import { useState } from "react";
-import CreditCardBrand from "@/Components/CreditCardBrand";
+import { useEffect, useState } from "react";
 import SimpleField from "@/Components/Form/SimpleField";
 import SimpleInput from "@/Components/Form/SimpleInput";
 import EnvironmentBadge from "@/Components/EnvironmentBadge";
+
+function createAttemptUuid() {
+    if (window.crypto?.randomUUID) {
+        return window.crypto.randomUUID();
+    }
+
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+        const random = Math.floor(Math.random() * 16);
+        const value = char === "x" ? random : (random & 0x3) | 0x8;
+
+        return value.toString(16);
+    });
+}
+
+function loadAttemptUuid(storageKey, isRecoveryForm = false) {
+    if (!storageKey) return createAttemptUuid();
+
+    try {
+        const recoveryKey = `${storageKey}:recovery`;
+
+        if (isRecoveryForm) {
+            const existingRecovery = window.sessionStorage.getItem(recoveryKey);
+
+            if (existingRecovery) {
+                return existingRecovery;
+            }
+
+            window.sessionStorage.removeItem(storageKey);
+            const next = createAttemptUuid();
+            window.sessionStorage.setItem(recoveryKey, next);
+
+            return next;
+        }
+
+        const existing = window.sessionStorage.getItem(storageKey);
+
+        if (existing) return existing;
+
+        const next = createAttemptUuid();
+        window.sessionStorage.setItem(storageKey, next);
+
+        return next;
+    } catch {
+        return createAttemptUuid();
+    }
+}
+
+function clearSensitiveFormState(setData) {
+    setData({
+        card_number: "",
+        exp_month: "",
+        exp_year: "",
+        cvv: "",
+        card_holder: "",
+    });
+}
 
 export default function Create({
     efevooConfig = {},
@@ -24,9 +75,16 @@ export default function Create({
     paymentUsesMock = false,
     mockTestCards = [],
     returnUrl = null,
+    recoveryContext = null,
+    recoveryForm = null,
+    isRecoveryForm = false,
+    paymentAuthStorageKey = null,
 }) {
+    const [attemptUuid] = useState(() => loadAttemptUuid(paymentAuthStorageKey, isRecoveryForm));
+    const safeReturnHref =
+        recoveryContext?.return_action?.href || returnUrl || route("payment-methods.index");
 
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, transform } = useForm({
         card_number: "",
         exp_month: "",
         exp_year: "",
@@ -34,11 +92,14 @@ export default function Create({
         card_holder: "",
         alias: "",
         terms_accepted: false,
+        attempt_uuid: attemptUuid,
+        recovery_context_uuid: recoveryContext?.context_uuid || "",
     });
 
     const [cardType, setCardType] = useState("");
     const [showSecurityInfo, setShowSecurityInfo] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [conflictAttempt, setConflictAttempt] = useState(null);
 
     const currentYear = new Date().getFullYear();
     const months = Array.from({ length: 12 }, (_, i) =>
@@ -46,9 +107,19 @@ export default function Create({
     );
     const years = Array.from({ length: 11 }, (_, i) => currentYear + i);
 
-    /* ==========================================================
-     * DETECT CARD TYPE
-     * ========================================================== */
+    useEffect(() => {
+        return () => {
+            clearSensitiveFormState(setData);
+        };
+    }, [setData]);
+
+    useEffect(() => {
+        const payload = window.history?.state?.props?.payment_authentication_attempt;
+
+        if (payload) {
+            setConflictAttempt(payload);
+        }
+    }, []);
 
     const applyTestCard = (card) => {
         const raw = String(card.number).replace(/\D/g, "");
@@ -86,55 +157,60 @@ export default function Create({
         return groups ? groups.join(" ") : "";
     };
 
-    /* ==========================================================
-     * SUBMIT
-     * ========================================================== */
-
     const handleSubmit = (e) => {
         e.preventDefault();
 
         if (!data.terms_accepted) return;
 
         setSubmitting(true);
+        setConflictAttempt(null);
 
         const formattedData = {
             ...data,
+            attempt_uuid: attemptUuid,
+            recovery_context_uuid: recoveryContext?.context_uuid || data.recovery_context_uuid || "",
             exp_month: String(data.exp_month).padStart(2, "0"),
             exp_year: String(data.exp_year).slice(-2),
         };
 
+        transform(() => formattedData);
+
         post(route("payment-methods.store"), {
-            data: formattedData,
-            return_url: returnUrl,
             preserveScroll: true,
+            onError: (formErrors) => {
+                if (formErrors.error?.includes("verificacion") || formErrors.error?.includes("verificación")) {
+                    const active = window.history?.state?.props?.payment_authentication_attempt;
+                    if (active) setConflictAttempt(active);
+                }
+            },
             onFinish: () => setSubmitting(false),
         });
     };
 
-    /* ==========================================================
-     * VIEW
-     * ========================================================== */
+    const heading = isRecoveryForm ? "Verificar tarjeta nuevamente" : "Agregar nueva tarjeta";
 
     return (
-        <SettingsLayout title="Agregar tarjeta">
-
+        <SettingsLayout title={heading}>
             <div className="flex items-center gap-3 mb-6">
-                <Button
-                    href={returnUrl ?? route("payment-methods.index")}
-                    outline
-                    className="size-9 p-0"
-                >
+                <Button href={safeReturnHref} outline className="size-9 p-0">
                     <ArrowLeftIcon className="size-4" />
                 </Button>
                 <div className="flex flex-wrap items-center gap-2">
-                    <GradientHeading noDivider>
-                        Agregar nueva tarjeta
-                    </GradientHeading>
+                    <GradientHeading noDivider>{heading}</GradientHeading>
                     <EnvironmentBadge />
                 </div>
             </div>
 
-            {paymentUsesMock && mockTestCards.length > 0 && (
+            {isRecoveryForm && recoveryForm?.context_message && (
+                <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-100">
+                    <div className="flex items-start gap-2">
+                        <InformationCircleIcon className="mt-0.5 size-5 shrink-0" />
+                        <p>{recoveryForm.context_message}</p>
+                    </div>
+                </div>
+            )}
+
+            {paymentUsesMock && mockTestCards.length > 0 && !isRecoveryForm && (
                 <div className="mb-6 rounded-lg border border-amber-200/80 bg-amber-50/70 p-4 dark:border-amber-800/50 dark:bg-amber-950/30">
                     <Text className="text-sm font-medium text-amber-900 dark:text-amber-100">
                         Tarjetas de prueba (sin cargo real)
@@ -159,41 +235,51 @@ export default function Create({
                 <div className="mb-6 rounded-lg bg-blue-50 p-4 text-sm text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                     <div className="flex items-center gap-2">
                         <ShieldCheckIcon className="size-4" />
-                        <span>
-                            Tu banco puede solicitar verificación adicional (3D Secure)
-                        </span>
+                        <span>Tu banco puede solicitar verificación adicional (3D Secure)</span>
                     </div>
                 </div>
             )}
 
-            {errors.error && (
-                <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+            {(errors.error || conflictAttempt) && (
+                <div
+                    className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200"
+                    role="alert"
+                    aria-live="assertive"
+                >
                     <p className="font-medium">No se pudo iniciar la verificación</p>
-                    <p className="mt-1">{errors.error}</p>
+                    <p className="mt-1">{errors.error || "Ya tienes una verificación en proceso."}</p>
+                    {conflictAttempt?.redirect_url && (
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                            <Button href={conflictAttempt.redirect_url}>Continuar verificación activa</Button>
+                            {conflictAttempt.result_url && (
+                                <Button outline href={conflictAttempt.result_url}>
+                                    Consultar intento activo
+                                </Button>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="max-w-2xl relative">
-
-                {/* Overlay mientras envía */}
+            <form onSubmit={handleSubmit} className="max-w-2xl relative" autoComplete="off">
                 {submitting && (
-                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/80 dark:bg-black/60 backdrop-blur-sm rounded-lg">
-                        <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
-                        <p className="mt-4 font-medium">
-                            Preparando verificación segura...
-                        </p>
-                        <p className="text-sm text-gray-500 mt-1">
-                            No cierres esta ventana
-                        </p>
+                    <div
+                        className="absolute inset-0 z-50 flex flex-col items-center justify-center rounded-lg bg-white/80 backdrop-blur-sm dark:bg-black/60"
+                        aria-live="polite"
+                        aria-busy="true"
+                    >
+                        <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+                        <p className="mt-4 font-medium">Preparando verificación segura...</p>
+                        <p className="mt-1 text-sm text-gray-500">No cierres esta ventana</p>
                     </div>
                 )}
 
                 <div className="space-y-5">
-
                     <SimpleField>
                         <SimpleInput
                             label="Número de tarjeta"
                             value={formatCardNumber(data.card_number)}
+                            autoComplete="off"
                             onChange={(e) => {
                                 const raw = e.target.value.replace(/\D/g, "");
                                 if (raw.length <= 16) {
@@ -206,16 +292,17 @@ export default function Create({
                         />
                     </SimpleField>
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Mes
                             </label>
                             <select
                                 value={data.exp_month}
                                 onChange={(e) => setData("exp_month", e.target.value)}
                                 required
-                                className={`block w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 dark:bg-gray-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 ${
+                                autoComplete="off"
+                                className={`block w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 dark:bg-gray-800 dark:text-gray-100 ${
                                     errors.exp_month
                                         ? "border-red-300 focus:ring-red-500/25 dark:border-red-700"
                                         : "border-gray-300 focus:ring-blue-500/25 dark:border-gray-600"
@@ -228,21 +315,17 @@ export default function Create({
                                     </option>
                                 ))}
                             </select>
-                            {errors.exp_month && (
-                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                                    {errors.exp_month}
-                                </p>
-                            )}
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Año
                             </label>
                             <select
                                 value={data.exp_year}
                                 onChange={(e) => setData("exp_year", e.target.value)}
                                 required
-                                className={`block w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 dark:bg-gray-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 ${
+                                autoComplete="off"
+                                className={`block w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 dark:bg-gray-800 dark:text-gray-100 ${
                                     errors.exp_year
                                         ? "border-red-300 focus:ring-red-500/25 dark:border-red-700"
                                         : "border-gray-300 focus:ring-blue-500/25 dark:border-gray-600"
@@ -255,16 +338,12 @@ export default function Create({
                                     </option>
                                 ))}
                             </select>
-                            {errors.exp_year && (
-                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                                    {errors.exp_year}
-                                </p>
-                            )}
                         </div>
                         <SimpleInput
                             label="CVV"
                             type="password"
                             value={data.cvv}
+                            autoComplete="off"
                             onChange={(e) => setData("cvv", e.target.value.replace(/\D/g, ""))}
                             maxLength={4}
                             required
@@ -274,6 +353,7 @@ export default function Create({
                     <SimpleInput
                         label="Nombre del titular"
                         value={data.card_holder}
+                        autoComplete="off"
                         onChange={(e) => setData("card_holder", e.target.value.toUpperCase())}
                         required
                     />
@@ -294,33 +374,26 @@ export default function Create({
                         />
                         <span className="text-sm text-white/80 dark:text-white/70">
                             Acepto los{" "}
-                            <Link
-                                href={route("terms-of-service")}
-                                target="_blank"
-                                className="text-blue-600 underline"
-                            >
+                            <Link href={route("terms-of-service")} target="_blank" className="text-blue-600 underline">
                                 términos y condiciones
                             </Link>
                         </span>
                     </div>
 
-                    <div className="flex gap-3 pt-4">
+                    <div className="flex flex-col gap-3 pt-4 sm:flex-row">
                         <Button
                             type="submit"
                             disabled={processing || submitting}
-                            className="flex-1"
+                            className="w-full sm:flex-1"
+                            aria-busy={processing || submitting}
                         >
-                            Guardar tarjeta
+                            {isRecoveryForm ? "Iniciar verificación" : "Guardar tarjeta"}
                         </Button>
 
-                        <Button
-                            href={route("payment-methods.index")}
-                            outline
-                        >
+                        <Button href={safeReturnHref} outline className="w-full sm:w-auto">
                             Cancelar
                         </Button>
                     </div>
-
                 </div>
             </form>
         </SettingsLayout>

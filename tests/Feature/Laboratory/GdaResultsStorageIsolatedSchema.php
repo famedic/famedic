@@ -157,5 +157,7 @@ trait GdaResultsStorageIsolatedSchema
         }
 
         Schema::enableForeignKeyConstraints();
+
+        restoreMonolithicTestDatabase();
     }
 }

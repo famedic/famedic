@@ -9,10 +9,11 @@ use App\Http\Requests\Admin\LaboratoryPurchases\DestroyLaboratoryPurchaseRequest
 use App\Http\Requests\Admin\LaboratoryPurchases\IndexLaboratoryPurchaseRequest;
 use App\Http\Requests\Admin\LaboratoryPurchases\ResendLaboratoryPurchaseConfirmationRequest;
 use App\Http\Requests\Admin\LaboratoryPurchases\ShowLaboratoryPurchaseRequest;
-use App\Notifications\LaboratoryPurchaseCreated;
-use Illuminate\Support\Facades\Log;
 use App\Models\LaboratoryPurchase;
+use App\Notifications\LaboratoryPurchaseCreated;
+use App\Support\EfevooPayAdminResource;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class LaboratoryPurchaseController extends Controller
@@ -47,11 +48,11 @@ class LaboratoryPurchaseController extends Controller
             ->paginate()
             ->withQueryString();
 
-        if (!empty($filters['start_date'])) {
+        if (! empty($filters['start_date'])) {
             $filters['formatted_start_date'] = Carbon::parse($filters['start_date'], 'America/Monterrey')->isoFormat('MMM D, Y');
         }
 
-        if (!empty($filters['end_date'])) {
+        if (! empty($filters['end_date'])) {
             $filters['formatted_end_date'] = Carbon::parse($filters['end_date'], 'America/Monterrey')->isoFormat('MMM D, Y');
         }
 
@@ -79,6 +80,10 @@ class LaboratoryPurchaseController extends Controller
         ]);
 
         $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
+        $laboratoryPurchase->setRelation(
+            'transactions',
+            $laboratoryPurchase->transactions->map(fn ($transaction) => EfevooPayAdminResource::transaction($transaction))
+        );
 
         return Inertia::render('Admin/LaboratoryPurchase', [
             'laboratoryPurchase' => $laboratoryPurchase,
@@ -131,7 +136,7 @@ class LaboratoryPurchaseController extends Controller
             ]);
 
             return back()->flashMessage(
-                'No se pudo cancelar el pedido: ' . $e->getMessage(),
+                'No se pudo cancelar el pedido: '.$e->getMessage(),
                 'error'
             );
         }
@@ -155,5 +160,4 @@ class LaboratoryPurchaseController extends Controller
             'Se reenvió el correo de confirmación de compra a '.$user->email.'.'
         );
     }
-
 }

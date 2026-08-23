@@ -14,7 +14,8 @@ test('new users can register', function () {
         'birth_date' => '1990-01-01',
         'gender' => 1,
         'email' => 'test@example.com',
-        'phone' => '1234567890',
+        'phone' => '5512345678',
+        'phone_country' => 'MX',
         'password' => 'password',
         'password_confirmation' => 'password',
     ]);

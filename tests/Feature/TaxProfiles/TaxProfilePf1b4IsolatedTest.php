@@ -7,7 +7,6 @@ use App\Actions\TaxProfiles\DestroyTaxProfileAction;
 use App\Actions\TaxProfiles\SetDefaultTaxProfileAction;
 use App\Actions\TaxProfiles\UpdateTaxProfileAction;
 use App\Models\Customer;
-use App\Models\InvoiceRequest;
 use App\Models\LaboratoryPurchase;
 use App\Models\OnlinePharmacyPurchase;
 use App\Models\TaxProfile;
@@ -65,6 +64,7 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
     protected function tearDown(): void
     {
         $this->dropSchema();
+        restoreMonolithicTestDatabase();
 
         if (! empty($this->storageRoot) && is_dir($this->storageRoot)) {
             $files = new \RecursiveIteratorIterator(

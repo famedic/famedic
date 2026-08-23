@@ -5,6 +5,8 @@ namespace App\Actions\EfevooPay;
 use App\Models\Customer;
 use App\Models\Transaction;
 use App\Services\EfevooPayService;
+use App\Support\EfevooPayLogSanitizer;
+use App\Support\EfevooPayPersistenceNormalizer;
 use Illuminate\Support\Facades\Log;
 
 class ChargeEfevooPaymentMethodAction
@@ -22,8 +24,7 @@ class ChargeEfevooPaymentMethodAction
 
             Log::info('Iniciando cargo con EfevooPay', [
                 'customer_id' => $customer->id,
-                'amount_cents' => $amountCents,
-                'payment_method_id' => $paymentMethod,
+                'token_id' => $paymentMethod,
             ]);
 
             // 🔥 1. Buscar token real en base de datos
@@ -35,7 +36,6 @@ class ChargeEfevooPaymentMethodAction
             Log::info('Token encontrado', [
                 'token_id_db' => $token->id,
                 'environment_token' => $token->environment,
-                'card_token_preview' => substr($token->card_token, 0, 20)
             ]);
 
             // 🔥 2. Validar ambiente
@@ -47,13 +47,16 @@ class ChargeEfevooPaymentMethodAction
             $chargeData = [
                 'card_token' => $token->card_token,
                 'amount' => $amountCents / 100,
-                'reference' => 'LAB-' . $customer->id . '-' . time(),
+                'reference' => 'LAB-'.$customer->id.'-'.time(),
             ];
 
             $result = $this->efevooPayService->chargeCard($chargeData);
 
-            if (!$result['success']) {
-                throw new \Exception($result['message'] ?? 'Error al procesar el pago');
+            if (! $result['success']) {
+                throw new \Exception(
+                    EfevooPayLogSanitizer::providerMessage($result['message'] ?? null)
+                        ?? 'Error al procesar el pago'
+                );
             }
 
             // 🔥 4. Crear transacción
@@ -66,7 +69,10 @@ class ChargeEfevooPaymentMethodAction
                 'authorization_code' => $result['authorization_code'] ?? null,
                 'status' => $result['status'] ?? 'completed',
                 'metadata' => [
-                    'efevoo_response' => $result,
+                    'efevoo_response' => EfevooPayPersistenceNormalizer::paymentResult($result, 'payment', [
+                        'amount' => $amountCents / 100,
+                        'currency' => 'MXN',
+                    ]),
                     'efevoo_token_id' => $token->id,
                 ],
             ]);
@@ -74,12 +80,11 @@ class ChargeEfevooPaymentMethodAction
         } catch (\Exception $e) {
 
             Log::error('Error en ChargeEfevooPaymentMethodAction', [
-                'error' => $e->getMessage(),
                 'customer_id' => $customer->id,
+                ...EfevooPayLogSanitizer::exception($e),
             ]);
 
             throw $e;
         }
     }
-
 }

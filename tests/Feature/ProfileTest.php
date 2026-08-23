@@ -38,13 +38,14 @@ test('basic info can be updated', function () {
 });
 
 test('contact info can be updated', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withVerifiedPhone()->create();
 
     $response = $this
         ->actingAs($user)
         ->put('/contact-info', [
             'email' => 'new@email.com',
-            'phone' => '987654321',
+            'phone' => '5519876543',
+            'phone_country' => 'MX',
         ]);
 
     $response
@@ -54,19 +55,20 @@ test('contact info can be updated', function () {
     $user->refresh();
 
     $this->assertSame('new@email.com', $user->email);
-    $this->assertSame('987654321', $user->phone);
+    $this->assertSame('5519876543', str_replace(' ', '', $user->phone->formatNational()));
     $this->assertNull($user->email_verified_at);
     $this->assertNull($user->phone_verified_at);
 });
 
 test('email and phone verification status is unchanged when unchanged', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withCompleteProfile()->create();
 
     $response = $this
         ->actingAs($user)
         ->put('/contact-info', [
             'email' => $user->email,
-            'phone' => $user->phone,
+            'phone' => str_replace(' ', '', $user->phone->formatNational()),
+            'phone_country' => $user->phone_country,
         ]);
 
     $response

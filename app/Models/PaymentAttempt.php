@@ -44,6 +44,10 @@ class PaymentAttempt extends Model
         'processed_at' => 'datetime',
     ];
 
+    protected $hidden = [
+        'raw_response',
+    ];
+
     /**
      * Outcomes that must not be overwritten by a later catch block.
      *

@@ -7,15 +7,17 @@ use App\Actions\PayPal\CreatePayPalOrderAction;
 use App\Actions\PayPal\HandlePayPalWebhookAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\CouponApplicationException;
-use App\Exceptions\PromoCodeException;
 use App\Exceptions\MissingLaboratoryAppointmentException;
-use App\Exceptions\UnmatchingTotalPriceException;
 use App\Exceptions\PayPalPaymentException;
+use App\Exceptions\PayPalRecoveryConfirmationPendingException;
+use App\Exceptions\PromoCodeException;
+use App\Exceptions\UnmatchingTotalPriceException;
 use App\Models\Address;
 use App\Models\Contact;
 use App\Services\CouponApplicationService;
 use App\Services\PayPalService;
 use App\Support\ClientContext;
+use App\Support\PaymentAuthenticationRecoveryStartException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -35,6 +37,7 @@ class PayPalController extends Controller
             'total' => ['required', 'integer', 'min:1'],
             'coupon_id' => ['nullable', 'integer', 'exists:coupons,id'],
             'promo_validation_token' => ['nullable', 'string', 'max:64'],
+            'recovery_context_uuid' => ['nullable', 'uuid'],
         ]);
 
         $brandRaw = $validated['laboratory_brand'];
@@ -42,26 +45,26 @@ class PayPalController extends Controller
             ? $brandRaw
             : LaboratoryBrand::from((string) $brandRaw);
 
-        if (!$customer->getHasLaboratoryCartItemRequiringAppointment($brand) && empty($validated['patient_id'])) {
+        if (! $customer->getHasLaboratoryCartItemRequiringAppointment($brand) && empty($validated['patient_id'])) {
             throw ValidationException::withMessages(['patient_id' => 'Selecciona un paciente.']);
         }
 
         $address = Address::find($validated['address_id']);
-        if (!$address || $address->customer_id !== $customer->id) {
+        if (! $address || $address->customer_id !== $customer->id) {
             throw ValidationException::withMessages(['address_id' => 'Dirección no válida.']);
         }
 
         $contact = null;
-        if (!empty($validated['patient_id'])) {
+        if (! empty($validated['patient_id'])) {
             $contact = Contact::find($validated['patient_id']);
-            if (!$contact || $contact->customer_id !== $customer->id) {
+            if (! $contact || $contact->customer_id !== $customer->id) {
                 throw ValidationException::withMessages(['patient_id' => 'Paciente no válido.']);
             }
         }
 
         try {
-            $couponId = !empty($validated['coupon_id']) ? (int) $validated['coupon_id'] : null;
-            $promoValidationToken = !empty($validated['promo_validation_token'])
+            $couponId = ! empty($validated['coupon_id']) ? (int) $validated['coupon_id'] : null;
+            $promoValidationToken = ! empty($validated['promo_validation_token'])
                 ? (string) $validated['promo_validation_token']
                 : null;
 
@@ -88,6 +91,7 @@ class PayPalController extends Controller
                 $couponId,
                 $promoValidationToken,
                 ClientContext::fromRequest($request),
+                $validated['recovery_context_uuid'] ?? null,
             );
         } catch (MissingLaboratoryAppointmentException $e) {
             throw ValidationException::withMessages(['patient_id' => 'Debes completar la cita en laboratorio para este pedido.']);
@@ -105,6 +109,18 @@ class PayPalController extends Controller
                     ? $e->getMessage()
                     : 'PayPal no está disponible en este momento. Si el problema continúa, revisa la configuración de credenciales.',
             ], 503);
+        } catch (PaymentAuthenticationRecoveryStartException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error' => $e->error,
+            ], $e->status);
+        } catch (PayPalRecoveryConfirmationPendingException $e) {
+            Log::warning('[PayPal] create-order confirmación pendiente', [
+                'customer_id' => $customer->id,
+                'support_reference' => $e->supportReference,
+            ]);
+
+            return response()->json($e->toArray(), $e->httpStatus);
         }
 
         Log::info('[PayPal] create-order OK', [
@@ -136,11 +152,15 @@ class PayPalController extends Controller
             ], 404);
         }
 
-        if ($status === 'failed' || $status === 'error' || $status === 'invalid_capture') {
-            return response()->json([
+        if (in_array($status, ['failed', 'error', 'invalid_capture', 'confirmation_pending'], true)) {
+            $httpStatus = $status === 'confirmation_pending' ? 503 : 422;
+
+            return response()->json(array_filter([
                 'status' => $status,
                 'message' => $result['message'] ?? 'No se pudo completar el pago.',
-            ], 422);
+                'error' => $result['error'] ?? null,
+                'support_reference' => $result['support_reference'] ?? null,
+            ]), $httpStatus);
         }
 
         session()->flash('confetti', true);
@@ -167,7 +187,7 @@ class PayPalController extends Controller
             'transmission_time' => $request->header('PAYPAL-TRANSMISSION-TIME'),
         ];
 
-        if (!$payPalService->verifyWebhookSignature($payload, $headers)) {
+        if (! $payPalService->verifyWebhookSignature($payload, $headers)) {
             Log::warning('[PayPal] Webhook firma no verificada');
 
             return response()->json(['status' => 'ignored'], 400);

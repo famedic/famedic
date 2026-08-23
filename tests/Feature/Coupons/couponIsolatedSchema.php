@@ -68,11 +68,13 @@ function isolatedCouponDropTables(array $tables): void
 function tearDownIsolatedCouponModuleSchema(): void
 {
     isolatedCouponDropTables(isolatedCouponModuleTableNames());
+    restoreMonolithicTestDatabase();
 }
 
 function tearDownIsolatedCouponReversalSchema(): void
 {
     isolatedCouponDropTables(isolatedCouponReversalTableNames());
+    restoreMonolithicTestDatabase();
 }
 
 function bootstrapIsolatedCouponModuleSchema(): void

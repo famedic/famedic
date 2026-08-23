@@ -317,7 +317,7 @@ function SubscribeToMedicalAttention({
 							clearErrors={clearErrors}
 							paymentMethods={paymentMethods}
 							hasOdessaPay={true}
-							addCardReturnUrl={route("medical-attention")}
+							addCardParams={{ origin: "medical-attention-modal" }}
 						/>
 					)}
 				</DialogDescription>

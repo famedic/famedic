@@ -2,12 +2,14 @@
 
 namespace App\Actions\Transactions;
 
-use App\Models\Transaction;
 use App\Models\Customer;
+use App\Models\Transaction;
 use App\Notifications\OdessaPaymentRefunded;
 use App\Services\PayPalService;
-use Illuminate\Support\Facades\Notification;
+use App\Support\EfevooPayLogSanitizer;
+use App\Support\EfevooPayPersistenceNormalizer;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class RefundTransactionAction
 {
@@ -26,7 +28,6 @@ class RefundTransactionAction
         }
     }
 
-
     private function refundStripeTransactionOld(Transaction $transaction)
     {
         $customer = $this->getCustomerFromTransaction($transaction);
@@ -42,7 +43,7 @@ class RefundTransactionAction
             $customer = $this->getCustomerFromTransaction($transaction);
 
             // Ensure we have an OdessaAfiliateAccount
-            if (!$customer->customerable instanceof \App\Models\OdessaAfiliateAccount) {
+            if (! $customer->customerable instanceof \App\Models\OdessaAfiliateAccount) {
                 throw new \Exception('Transaction is marked as Odessa but customer does not have OdessaAfiliateAccount');
             }
 
@@ -120,6 +121,7 @@ class RefundTransactionAction
                             'gateway_transaction_id' => $transaction->gateway_transaction_id,
                         ],
                     ]);
+
                     return false;
             }
 
@@ -195,8 +197,9 @@ class RefundTransactionAction
                 'gateway_transaction_id' => $transaction->gateway_transaction_id,
             ]);
 
-            if (!$transaction->gateway_transaction_id) {
+            if (! $transaction->gateway_transaction_id) {
                 Log::error('No existe gateway_transaction_id');
+
                 return false;
             }
 
@@ -206,10 +209,13 @@ class RefundTransactionAction
                 (int) $transaction->gateway_transaction_id
             );
 
-            Log::info('Refund response EfevooPay', $response);
+            Log::info('Refund response EfevooPay', EfevooPayPersistenceNormalizer::refundResult($response, [
+                'original_transaction_id' => $transaction->gateway_transaction_id,
+            ]) ?? []);
 
-            if (!$response['success']) {
+            if (! $response['success']) {
                 Log::error('Refund falló por HTTP');
+
                 return false;
             }
 
@@ -217,14 +223,17 @@ class RefundTransactionAction
 
             // Validar código de negocio
             if (isset($data['codigo']) && $data['codigo'] !== '00') {
-                Log::error('Refund rechazado por EfevooPay', $data);
+                Log::error('Refund rechazado por EfevooPay', EfevooPayLogSanitizer::providerResult(['data' => $data]));
+
                 return false;
             }
 
             $transaction->update([
                 'refunded_at' => now(),
                 'gateway_status' => 'refunded',
-                'gateway_response' => $response, // SIN json_encode
+                'gateway_response' => EfevooPayPersistenceNormalizer::refundResult($response, [
+                    'original_transaction_id' => $transaction->gateway_transaction_id,
+                ]),
             ]);
 
             return true;
@@ -237,9 +246,6 @@ class RefundTransactionAction
             return false;
         }
     }
-
-
-
 
     /**
      * Reembolso para transacciones Stripe (nuevo método con Customer param)
@@ -286,7 +292,7 @@ class RefundTransactionAction
     {
         try {
             $captureId = $this->resolvePayPalCaptureId($transaction);
-            if (!$captureId) {
+            if (! $captureId) {
                 Log::error('PayPal refund: sin capture id', [
                     'transaction_id' => $transaction->id,
                     'reference_id' => $transaction->reference_id,
@@ -372,7 +378,7 @@ class RefundTransactionAction
                 $payload = json_decode($payload, true);
             }
 
-            if (!is_array($payload)) {
+            if (! is_array($payload)) {
                 continue;
             }
 
@@ -452,7 +458,6 @@ class RefundTransactionAction
             }
 
             throw new \Exception("No se pudo encontrar el cliente para la transacción {$transaction->id}");
-
         } catch (\Exception $e) {
             Log::error('Error obteniendo cliente de transacción', [
                 'transaction_id' => $transaction->id,
@@ -460,7 +465,7 @@ class RefundTransactionAction
                 'transaction_data' => [
                     'reference_id' => $transaction->reference_id,
                     'details' => $transaction->details,
-                    'gateway_response' => $transaction->gateway_response,
+                    'gateway_response_available' => filled($transaction->gateway_response),
                 ],
             ]);
 

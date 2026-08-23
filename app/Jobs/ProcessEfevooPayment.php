@@ -9,6 +9,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use App\Services\EfevooPayService;
+use App\Support\EfevooPayLogSanitizer;
 use Illuminate\Support\Facades\Log;
 
 class ProcessEfevooPayment implements ShouldQueue
@@ -29,7 +30,7 @@ class ProcessEfevooPayment implements ShouldQueue
 
     public function handle(EfevooPayService $efevooService)
     {
-        Log::info("Procesando pago Efevoo ({$this->operation})", $this->paymentData);
+        Log::info("Procesando pago Efevoo ({$this->operation})", $this->safeLogContext());
 
         try {
             switch ($this->operation) {
@@ -74,16 +75,34 @@ class ProcessEfevooPayment implements ShouldQueue
             
             Log::info("Pago Efevoo procesado ({$this->operation})", [
                 'success' => $result['success'] ?? false,
-                'transaction' => $result['data']['transaccion'] ?? null
+                'transaction_id' => $result['transaction_id'] ?? ($result['data']['transaccion'] ?? null),
+                ...$this->safeLogContext(),
             ]);
 
         } catch (\Exception $e) {
             Log::error("Error procesando pago Efevoo ({$this->operation})", [
-                'error' => $e->getMessage(),
-                'data' => $this->paymentData
+                ...$this->safeLogContext(),
+                ...EfevooPayLogSanitizer::exception($e),
             ]);
             
             $this->fail($e);
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function safeLogContext(): array
+    {
+        return EfevooPayLogSanitizer::context([
+            'operation' => $this->operation,
+            'user_id' => $this->paymentData['user_id'] ?? null,
+            'customer_id' => $this->paymentData['customer_id'] ?? null,
+            'cart_id' => $this->paymentData['cart_id'] ?? null,
+            'purchase_id' => $this->paymentData['purchase_id'] ?? null,
+            'payment_attempt_id' => $this->paymentData['payment_attempt_id'] ?? null,
+            'reference' => $this->paymentData['referencia'] ?? ($this->paymentData['reference'] ?? null),
+            'token_id' => $this->paymentData['token_id'] ?? null,
+        ]);
     }
 }

@@ -502,5 +502,7 @@ class GdaWebhookGabineteIsolatedTest extends TestCase
         }
 
         Schema::enableForeignKeyConstraints();
+
+        restoreMonolithicTestDatabase();
     }
 }

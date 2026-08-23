@@ -1,8 +1,9 @@
 <?php
+
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Efevoo3dsSession extends Model
 {
@@ -12,6 +13,7 @@ class Efevoo3dsSession extends Model
 
     protected $fillable = [
         'customer_id',
+        'payment_authentication_attempt_id',
         'card_last_four',
         'amount',
         'status',
@@ -46,15 +48,32 @@ class Efevoo3dsSession extends Model
         'cancelled_at' => 'datetime',
     ];
 
+    protected $hidden = [
+        'request_data',
+        'response_data',
+        'status_check_response',
+        'callback_data',
+        'token_3dsecure',
+        'url_3dsecure',
+    ];
+
     // Estados posibles
     const STATUS_PENDING = 'pending';
+
     const STATUS_REDIRECT_REQUIRED = 'redirect_required';
+
     const STATUS_NO_3DS_REQUIRED = 'no_3ds_required';
+
     const STATUS_AUTHENTICATED = 'authenticated';
+
     const STATUS_COMPLETED = 'completed';
+
     const STATUS_FAILED = 'failed';
+
     const STATUS_TOKENIZATION_FAILED = 'tokenization_failed';
+
     const STATUS_ERROR = 'error';
+
     const STATUS_CANCELLED = 'cancelled';
 
     // Relaciones
@@ -66,6 +85,11 @@ class Efevoo3dsSession extends Model
     public function efevooToken()
     {
         return $this->belongsTo(EfevooToken::class);
+    }
+
+    public function paymentAuthenticationAttempt()
+    {
+        return $this->belongsTo(PaymentAuthenticationAttempt::class);
     }
 
     // Scopes

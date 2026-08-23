@@ -128,7 +128,7 @@ test('checkout steps use four steps without appointment and five with appointmen
         ->get(route('user.purchases.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('pendingPurchases', fn (array $rows) => collect($rows)
+            ->where('pendingPurchases', fn ($rows) => collect($rows)
                 ->pluck('checkout.total_steps')
                 ->sort()
                 ->values()
@@ -228,7 +228,7 @@ test('continue urls point to cart for saved carts and checkout for drafts', func
         ->get(route('user.purchases.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('pendingPurchases', fn (array $rows) => collect($rows)
+            ->where('pendingPurchases', fn ($rows) => collect($rows)
                 ->contains(fn (array $row) => $row['key'] === 'laboratory:olab'
                     && $row['urls']['continue'] === route('laboratory.checkout', [
                         'laboratory_brand' => LaboratoryBrand::OLAB,

@@ -1,6 +1,6 @@
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading } from "@/Components/Catalyst/heading";
-import { Text, Strong, Code } from "@/Components/Catalyst/text";
+import { Text, Strong } from "@/Components/Catalyst/text";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import CustomerInfo from "@/Components/CustomerInfo";
@@ -19,30 +19,19 @@ import {
 	GlobeAltIcon,
 } from "@heroicons/react/16/solid";
 
-function maskToken(value, visibleChars = 8) {
-	if (!value) return "—";
-	const s = String(value);
-	if (s.length <= visibleChars) return s;
-	return `...${s.slice(-visibleChars)}`;
-}
-
 export default function EfevooToken({ token }) {
 	return (
 		<AdminLayout title={`Token ${token.alias || token.id}`}>
 			<div className="space-y-6">
 				<div className="flex items-center justify-between gap-4">
 					<div className="space-y-2">
-						<Heading>
-							Token {token.alias || `#${token.id}`}
-						</Heading>
+						<Heading>Token {token.alias || `#${token.id}`}</Heading>
 						<div className="flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
 							<CreditCardIcon className="size-4" />
 							<span>
 								{token.card_brand || "Tarjeta"} ••••{" "}
-								{token.card_last_four}
+								{token.card_last_four || "—"}
 							</span>
-							<span>·</span>
-							<span>{token.card_holder}</span>
 						</div>
 					</div>
 					<Button
@@ -95,13 +84,10 @@ export default function EfevooToken({ token }) {
 								/>
 							</Text>
 							<Text>
-								<Strong>Expiración:</Strong>{" "}
-								{token.expires_at ? (
-									token.formatted_expiration ||
-									token.expires_at
-								) : (
-									"Sin expiración"
-								)}
+								<Strong>Expiracion:</Strong>{" "}
+								{token.expires_at
+									? token.formatted_expiration || token.expires_at
+									: "Sin expiracion"}
 							</Text>
 							<Text>
 								<Strong>Creado:</Strong>{" "}
@@ -128,7 +114,7 @@ export default function EfevooToken({ token }) {
 
 				<div className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
 					<Heading level={3} className="text-base">
-						Últimas transacciones
+						Ultimas transacciones
 					</Heading>
 
 					{token.transactions && token.transactions.length > 0 ? (
@@ -168,16 +154,15 @@ export default function EfevooToken({ token }) {
 						Identificadores
 					</Heading>
 					<Text>
-						<Strong>Client token:</Strong>{" "}
-						<Code>{maskToken(token.client_token, 12)}</Code>
+						<Strong>ID interno:</Strong> {token.id}
 					</Text>
 					<Text>
-						<Strong>Card token:</Strong>{" "}
-						<Code>{maskToken(token.card_token, 12)}</Code>
+						<Strong>Tarjeta:</Strong>{" "}
+						{token.card_brand || "Tarjeta"} ••••{" "}
+						{token.card_last_four || "—"}
 					</Text>
 				</div>
 			</div>
 		</AdminLayout>
 	);
 }
-

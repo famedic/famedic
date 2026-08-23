@@ -2,37 +2,37 @@
 
 namespace App\Providers;
 
+use App\Listeners\ApplyMailSafetyPolicy;
+use App\Listeners\LinkPendingCouponBeneficiaries;
 use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\OnlinePharmacyPurchase;
-use App\Listeners\ApplyMailSafetyPolicy;
-use App\Listeners\LinkPendingCouponBeneficiaries;
-use App\Services\ConstanciaFiscalService;
-use App\Services\Tracking\Tracking;
+use App\Services\ClinicalLearning\LearningSuggestionRecorder;
+use App\Services\ClinicalLearning\LearningSuggestionRecorderInterface;
 use App\Services\ClinicalMatching\Catalog\CatalogAdapterInterface;
 use App\Services\ClinicalMatching\Catalog\CompositeCatalogAdapter;
 use App\Services\ClinicalMatching\Catalog\LaboratoryCatalogAdapter;
 use App\Services\ClinicalMatching\Catalog\NullMedicationCatalogAdapter;
+use App\Services\ConstanciaFiscalService;
 use App\Services\DocumentInterpretation\DocumentInterpreterInterface;
 use App\Services\DocumentInterpretation\OpenAIVisionInterpreter;
 use App\Services\DocumentInterpretation\Prompts\FilePromptRepository;
 use App\Services\DocumentInterpretation\Prompts\PromptRepositoryInterface;
-use App\Services\ClinicalLearning\LearningSuggestionRecorder;
-use App\Services\ClinicalLearning\LearningSuggestionRecorderInterface;
+use App\Services\Tracking\Tracking;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Mail\Events\MessageSending;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Routing\Redirector;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Inertia\Inertia;
 use Laravel\Cashier\Cashier;
-use Stripe\StripeClient;
-//use App\Services\EfevooPayService;
+// use App\Services\EfevooPayService;
 /*
 use App\Services\EfevooPayFactoryService;
 use App\Services\EfevooPaySimulatorService;
@@ -40,14 +40,14 @@ use App\Actions\Efevoo\ChargeEfevooTokenAction;
 use App\Actions\Efevoo\RefundEfevooTransactionAction;
 use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction;
 */
-use Inertia\Inertia;
+use Stripe\StripeClient;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //$this->app->singleton(ChargeEfevooTokenAction::class);
-        //$this->app->singleton(RefundEfevooTransactionAction::class);
+        // $this->app->singleton(ChargeEfevooTokenAction::class);
+        // $this->app->singleton(RefundEfevooTransactionAction::class);
 
         $this->app->singleton(StripeClient::class, function ($app) {
             return new StripeClient(config('services.stripe.secret'));
@@ -62,7 +62,7 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->app->singleton(ConstanciaFiscalService::class, function ($app) {
-            return new ConstanciaFiscalService();
+            return new ConstanciaFiscalService;
         });
 
         $this->app->singleton(CatalogAdapterInterface::class, function ($app) {
@@ -87,19 +87,19 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(EfevooPaySimulatorService::class)
             );
         });*/
-        
-        //$this->app->singleton(EfevooPayService::class);
-        //$this->app->singleton(EfevooPaySimulatorService::class);
-        
+
+        // $this->app->singleton(EfevooPayService::class);
+        // $this->app->singleton(EfevooPaySimulatorService::class);
+
         /*
         // Acciones de EfevooPay
         $this->app->singleton(ChargeEfevooTokenAction::class);
         $this->app->singleton(RefundEfevooTransactionAction::class);
         $this->app->singleton(ChargeEfevooPaymentMethodAction::class);
         */
-        
+
         // También mantener el servicio original disponible
-        //$this->app->singleton(EfevooPayFactoryService::class);
+        // $this->app->singleton(EfevooPayFactoryService::class);
     }
 
     public function boot(): void
@@ -132,6 +132,17 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(3)->by((string) ($request->user()?->id ?: 'guest'));
         });
 
+        RateLimiter::for('efevoopay-health', fn (Request $request) => $this->efevooPayLimit('health', $request));
+        RateLimiter::for('efevoopay-tokenize', fn (Request $request) => $this->efevooPayLimit('tokenize', $request));
+        RateLimiter::for('efevoopay-tokens', fn (Request $request) => $this->efevooPayLimit('tokens', $request));
+        RateLimiter::for('efevoopay-payment', fn (Request $request) => $this->efevooPayLimit('payment', $request));
+        RateLimiter::for('efevoopay-refund', fn (Request $request) => $this->efevooPayLimit('refund', $request));
+        RateLimiter::for('efevoopay-search', fn (Request $request) => $this->efevooPayLimit('search', $request));
+        RateLimiter::for('efevoopay-3ds-status', fn (Request $request) => $this->efevooPayLimit('3ds_status', $request));
+        RateLimiter::for('efevoopay-recovery', fn (Request $request) => $this->efevooPayLimit('recovery', $request));
+        RateLimiter::for('efevoopay-recovery-status', fn (Request $request) => $this->efevooPayLimit('recovery_status', $request));
+        RateLimiter::for('efevoopay-recovery-sync', fn (Request $request) => $this->efevooPayLimit('recovery_sync', $request));
+
         Event::listen(Verified::class, LinkPendingCouponBeneficiaries::class);
         Event::listen(MessageSending::class, ApplyMailSafetyPolicy::class);
 
@@ -163,10 +174,10 @@ class AppServiceProvider extends ServiceProvider
                 'type' => $type,
                 'message' => $message,
             ]);
-        });       
+        });
 
-        Cashier::useCustomerModel(Customer::class);       
-        
+        Cashier::useCustomerModel(Customer::class);
+
         Inertia::share([
             'flash' => function () {
                 return [
@@ -177,5 +188,15 @@ class AppServiceProvider extends ServiceProvider
                 ];
             },
         ]);
+    }
+
+    private function efevooPayLimit(string $operation, Request $request): Limit
+    {
+        $settings = config("efevoopay.rate_limits.{$operation}", []);
+        $maxAttempts = max(1, (int) ($settings['max_attempts'] ?? 10));
+        $decayMinutes = max(1, (int) ($settings['decay_minutes'] ?? 1));
+
+        return Limit::perMinutes($decayMinutes, $maxAttempts)
+            ->by((string) ($request->user()?->id ?: $request->ip()));
     }
 }

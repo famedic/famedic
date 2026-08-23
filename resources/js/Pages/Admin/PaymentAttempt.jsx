@@ -15,7 +15,6 @@ import {
 	BanknotesIcon,
 	CreditCardIcon,
 	ClockIcon,
-	InformationCircleIcon,
 } from "@heroicons/react/16/solid";
 
 export default function PaymentAttemptPage({ attempt }) {
@@ -112,17 +111,29 @@ export default function PaymentAttemptPage({ attempt }) {
 						</Text>
 					</div>
 
-					{attempt.raw_response && (
+					{attempt.diagnostic && (
 						<div className="space-y-2">
-							<div className="flex items-center gap-1 text-xs text-zinc-500">
-								<InformationCircleIcon className="size-4" />
-								<Text className="text-xs">
-									Payload completo retornado por el procesador:
+							<Text className="text-xs text-zinc-500">
+								Diagnóstico operativo normalizado.
+							</Text>
+							<div className="grid gap-2 text-sm sm:grid-cols-2">
+								<Text>
+									<Strong>Resultado:</Strong>{" "}
+									{attempt.diagnostic.normalized_result || "—"}
+								</Text>
+								<Text>
+									<Strong>Autorización:</Strong>{" "}
+									{attempt.diagnostic.authorization_code || "—"}
+								</Text>
+								<Text>
+									<Strong>Tipo de error:</Strong>{" "}
+									{attempt.diagnostic.error_type || "—"}
+								</Text>
+								<Text>
+									<Strong>Registrado:</Strong>{" "}
+									{attempt.diagnostic.recorded_at || "—"}
 								</Text>
 							</div>
-							<pre className="max-h-96 overflow-auto rounded-lg bg-zinc-900 p-4 text-xs text-zinc-100">
-								{JSON.stringify(attempt.raw_response, null, 2)}
-							</pre>
 						</div>
 					)}
 				</div>
@@ -130,4 +141,3 @@ export default function PaymentAttemptPage({ attempt }) {
 		</AdminLayout>
 	);
 }
-

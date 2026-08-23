@@ -146,13 +146,17 @@ function resolveInitialStepIndex(
     return 0;
 }
 
-function resolveInitialCheckoutData(savedCheckout = null) {
+function resolveInitialCheckoutData(savedCheckout = null, recoveryPayPal = null) {
     const params = new URLSearchParams(window.location.search);
 
     const fromParams = {
         contact: params.get("contact") || null,
         address: params.get("address") || null,
-        payment_method: params.get("payment_method") || null,
+        payment_method:
+            params.get("payment_method") ||
+            params.get("recovery_payment") ||
+            recoveryPayPal?.selected_payment_method ||
+            null,
         coupon_id: params.get("coupon_id")
             ? Number(params.get("coupon_id"))
             : null,
@@ -210,6 +214,7 @@ export default function LaboratoryCheckout({
     contacts,
     paymentUsesMock = false,
     defaultMockPaymentMethodId = null,
+    recoveryPayPal = null,
 }) {
     const {
         laboratoryCartItemToDelete,
@@ -220,7 +225,7 @@ export default function LaboratoryCheckout({
 
     const { url } = usePage();
 
-    const initialFormData = resolveInitialCheckoutData(savedCheckout);
+    const initialFormData = resolveInitialCheckoutData(savedCheckout, recoveryPayPal);
 
     const {
         data,
@@ -701,20 +706,20 @@ export default function LaboratoryCheckout({
         window.history.replaceState({}, "", currentUrl);
     }, [data, currentStep.id, laboratoryBrand.value]);
 
-    const addCardReturnUrl = useMemo(() => {
-        const filteredData = Object.fromEntries(
-            Object.entries(data).filter(
-                ([_, value]) =>
-                    value !== undefined && value !== null && value !== "",
-            ),
-        );
-
-        return route("laboratory.checkout", {
+    const addCardParams = useMemo(() => {
+        const params = {
+            origin: "laboratory",
             laboratory_brand: laboratoryBrand.value,
             step: currentStep?.id ?? "payment",
-            ...filteredData,
-        });
-    }, [data, laboratoryBrand.value, currentStep?.id]);
+        };
+
+        if (data.contact) params.contact = data.contact;
+        if (data.address) params.address = data.address;
+        if (laboratoryAppointment?.id) params.appointment = laboratoryAppointment.id;
+        if (data.coupon_id) params.coupon_id = data.coupon_id;
+
+        return params;
+    }, [data.contact, data.address, data.coupon_id, laboratoryBrand.value, currentStep?.id, laboratoryAppointment?.id]);
 
     const floatingWizardFooter = ["patient", "address", "payment", "appointment"].includes(
         currentStep.id,
@@ -1066,6 +1071,12 @@ export default function LaboratoryCheckout({
                             totalCents={total}
                             couponId={data.coupon_id}
                             promoValidationToken={data.promo_validation_token}
+                            recoveryContextUuid={recoveryPayPal?.context_uuid ?? null}
+                            recoveryPayPalCancelUrl={
+                                recoveryPayPal?.context_uuid
+                                    ? route("payment-methods.recovery.paypal.cancel")
+                                    : null
+                            }
                             disabled={onlinePaymentDisabled}
                         />
                     ) : (
@@ -1192,7 +1203,7 @@ export default function LaboratoryCheckout({
                         paymentMethods={paymentMethods}
                         hasOdessaPay={hasOdessaPay}
                         hasPayPal={hasPayPal}
-                        addCardReturnUrl={addCardReturnUrl}
+                        addCardParams={addCardParams}
                         paymentUsesMock={paymentUsesMock}
                         disabled={
                             amountAfterCoupon === 0 &&

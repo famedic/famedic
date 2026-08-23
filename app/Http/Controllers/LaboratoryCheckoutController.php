@@ -16,6 +16,9 @@ use App\Services\CouponService;
 use App\Support\AppEnvironmentLabel;
 use App\Support\ClientContext;
 use App\Support\MockEfevooPaymentSupport;
+use App\Support\PaymentAuthenticationRecoveryContextManager;
+use App\Support\PaymentAuthenticationRecoveryPayPalNavigator;
+use App\Enums\PaymentAuthenticationRecoveryContextStatus;
 use Illuminate\Http\Request;
 use App\Services\Tracking\InitiateCheckout;
 use Illuminate\Support\Facades\Log;
@@ -157,6 +160,13 @@ class LaboratoryCheckoutController extends Controller
 
         Log::info('Laboratory checkout: building inertia response', ['user_id' => $userId]);
 
+        $recoveryRedirect = $this->resolveRecoveryPayPalRedirect($request, $customer, $laboratoryBrand);
+        if ($recoveryRedirect) {
+            return $recoveryRedirect;
+        }
+
+        $recoveryPayPal = $this->resolveRecoveryPayPalPresentation($request, $customer);
+
         try {
             return Inertia::render('LaboratoryCheckout', [
             'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryBrand),
@@ -180,6 +190,7 @@ class LaboratoryCheckoutController extends Controller
             'appEnvLabel' => AppEnvironmentLabel::current(),
             'hasOdessaPay' => $request->user()->customer->has_odessa_afiliate_account,
             'mexicanStates' => config('mexicanstates'),
+            'recoveryPayPal' => $recoveryPayPal,
             ]);
         } catch (\Throwable $e) {
             Log::error('Laboratory checkout: render failed', [
@@ -398,5 +409,63 @@ class LaboratoryCheckoutController extends Controller
             $laboratoryBrand,
             $contact,
         );
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveRecoveryPayPalPresentation(Request $request, Customer $customer): ?array
+    {
+        if ($request->query('recovery_payment') !== 'paypal' && ! $request->filled('recovery_context_uuid')) {
+            return null;
+        }
+
+        $navigator = app(PaymentAuthenticationRecoveryPayPalNavigator::class);
+        $prepared = $navigator->consumePreparedCheckout($customer);
+        $uuid = $request->query('recovery_context_uuid') ?: ($prepared['recovery_context_uuid'] ?? null);
+
+        if (! is_string($uuid) || $uuid === '') {
+            return null;
+        }
+
+        $context = app(PaymentAuthenticationRecoveryContextManager::class)->findOwned($customer, $uuid);
+
+        if (! $context || $context->status === PaymentAuthenticationRecoveryContextStatus::Recovered) {
+            return null;
+        }
+
+        return [
+            'context_uuid' => $context->context_uuid,
+            'highlight' => true,
+            'selected_payment_method' => 'paypal',
+        ];
+    }
+
+    private function resolveRecoveryPayPalRedirect(
+        Request $request,
+        Customer $customer,
+        LaboratoryBrand $laboratoryBrand
+    ): ?\Illuminate\Http\RedirectResponse {
+        $uuid = $request->query('recovery_context_uuid');
+
+        if (! is_string($uuid) || $uuid === '') {
+            return null;
+        }
+
+        $context = app(PaymentAuthenticationRecoveryContextManager::class)->findOwned($customer, $uuid);
+
+        if (! $context || $context->status !== PaymentAuthenticationRecoveryContextStatus::Recovered) {
+            return null;
+        }
+
+        $purchase = $context->recoveredTransaction?->laboratoryPurchases()->first();
+
+        if ($purchase) {
+            return redirect()->route('laboratory-purchases.show', [
+                'laboratory_purchase' => $purchase->id,
+            ]);
+        }
+
+        return null;
     }
 }

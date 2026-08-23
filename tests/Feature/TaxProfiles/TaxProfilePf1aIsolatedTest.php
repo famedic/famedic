@@ -63,6 +63,7 @@ class TaxProfilePf1aIsolatedTest extends TestCase
     protected function tearDown(): void
     {
         $this->dropSchema();
+        restoreMonolithicTestDatabase();
 
         if (! empty($this->storageRoot) && is_dir($this->storageRoot)) {
             $files = new \RecursiveIteratorIterator(

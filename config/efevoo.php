@@ -6,15 +6,15 @@ return [
     
     // Configuración única (misma para test y producción)
     'api_url' => env('EFEVOO_API_URL', 'https://test-intgapi.efevoopay.com/v1/apiservice'),
-    'api_user' => env('EFEVOO_API_USER', 'Efevoo Pay'),
-    'api_key' => env('EFEVOO_API_KEY', 'Hq#J0hs)jK+YqF6J'),
-    'totp_secret' => env('EFEVOO_TOTP_SECRET', 'I7WHOTIN7VVQFAMSDI4X2WFTTAEP653Q'),
-    'clave' => env('EFEVOO_CLAVE', '6nugHedWzw27MNB8'),
-    'cliente' => env('EFEVOO_CLIENTE', 'TestFAMEDIC'),
-    'vector' => env('EFEVOO_VECTOR', 'MszjlcnTjGLNpNy3'),
+    'api_user' => env('EFEVOO_API_USER'),
+    'api_key' => env('EFEVOO_API_KEY'),
+    'totp_secret' => env('EFEVOO_TOTP_SECRET'),
+    'clave' => env('EFEVOO_CLAVE'),
+    'cliente' => env('EFEVOO_CLIENTE'),
+    'vector' => env('EFEVOO_VECTOR'),
     
     // Configuración para forzar URL específica en producción
-    'force_production_url' => env('EFEVOO_FORCE_PRODUCTION_URL', 'https://test-intgapi.efevoopay.com/v1/apiservice'),
+    'force_production_url' => env('EFEVOO_FORCE_PRODUCTION_URL'),
     
     // Configuración global
     'timeout' => 30,
@@ -58,7 +58,7 @@ return [
     
     // Configuración específica para producción (si se usa EfevooPayProductionService)
     'production' => [
-        'api_url' => env('EFEVOO_PRODUCTION_API_URL', 'https://test-intgapi.efevoopay.com/v1/apiservice'),
+        'api_url' => env('EFEVOO_PRODUCTION_API_URL'),
         'api_key' => env('EFEVOO_PRODUCTION_API_KEY', env('EFEVOO_API_KEY')),
     ],
 ];

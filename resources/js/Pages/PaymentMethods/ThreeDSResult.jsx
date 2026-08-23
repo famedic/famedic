@@ -1,42 +1,96 @@
 import SettingsLayout from "@/Layouts/SettingsLayout";
-import { GradientHeading } from "@/Components/Catalyst/heading";
 import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
 import {
     CheckCircleIcon,
-    XCircleIcon,
-    ArrowLeftIcon,
+    ExclamationTriangleIcon,
+    ArrowPathIcon,
     CreditCardIcon,
-    ShieldCheckIcon
+    ClipboardDocumentIcon,
+    ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { router } from "@inertiajs/react";
+
+function clearAttemptStorage(storageKey, recovery = false) {
+    if (!storageKey) return;
+
+    try {
+        window.sessionStorage.removeItem(storageKey);
+        if (recovery) {
+            window.sessionStorage.removeItem(`${storageKey}:recovery`);
+        }
+    } catch {
+        // Never persist card data in storage.
+    }
+}
+
+function formatCooldown(seconds) {
+    if (seconds <= 0) return null;
+    if (seconds < 60) return `${seconds} s`;
+
+    return `${Math.ceil(seconds / 60)} min`;
+}
 
 export default function ThreeDSResult({
     sessionId,
-    success,
-    message,
-    errorDetail,
-    status,
-    cardLastFour,
-    amount,
-    createdAt,
+    result,
+    paymentAuthStorageKey = null,
+    // Legacy fallbacks
+    success = false,
+    recoveryContext = null,
     returnUrl = null,
 }) {
+    const payload = result ?? buildLegacyResult({
+        success,
+        recoveryContext,
+        returnUrl,
+        sessionId,
+    });
 
+    const [liveResult, setLiveResult] = useState(payload);
     const [countdown, setCountdown] = useState(5);
-    const redirectTarget =
-        success && returnUrl ? returnUrl : route("payment-methods.index");
+    const [copyState, setCopyState] = useState("idle");
+    const [recoveryLoading, setRecoveryLoading] = useState(null);
+    const [refreshLoading, setRefreshLoading] = useState(false);
+    const [statusMessage, setStatusMessage] = useState("");
 
-    /* ==========================================================
-     * AUTO REDIRECT
-     * ========================================================== */
+    const presentation = liveResult.presentation;
+    const copy = liveResult.copy ?? {};
+    const recovery = liveResult.recovery;
+    const isSuccess = liveResult.success || presentation === "completed";
+    const redirectTarget =
+        recovery?.return_action?.href ||
+        returnUrl ||
+        route("payment-methods.index");
+
+    const showRecoveryActions =
+        !isSuccess &&
+        !["unknown", "provider_confirmation_pending", "authenticated", "tokenizing", "context_unavailable"].includes(presentation);
+
+    const showRefresh =
+        recovery?.actions?.refresh_status ||
+        ["unknown", "provider_confirmation_pending", "authenticated", "tokenizing"].includes(presentation);
+
+    const prioritizeDifferentCard = recovery?.prioritize_different_card ?? false;
+    const cooldownLabel = formatCooldown(liveResult.cooldown_remaining_seconds ?? 0);
 
     useEffect(() => {
-        if (!success) return;
+        if (isSuccess) {
+            clearAttemptStorage(paymentAuthStorageKey, true);
+            return;
+        }
+
+        if (["declined", "cancelled", "expired", "technical_error", "context_unavailable"].includes(presentation)) {
+            clearAttemptStorage(paymentAuthStorageKey);
+        }
+    }, [isSuccess, presentation, paymentAuthStorageKey]);
+
+    useEffect(() => {
+        if (!isSuccess) return undefined;
 
         const interval = setInterval(() => {
-            setCountdown((prev) => prev - 1);
+            setCountdown((prev) => Math.max(0, prev - 1));
         }, 1000);
 
         const redirectTimer = setTimeout(() => {
@@ -47,177 +101,402 @@ export default function ThreeDSResult({
             clearInterval(interval);
             clearTimeout(redirectTimer);
         };
-    }, [success, redirectTarget]);
+    }, [isSuccess, redirectTarget]);
 
-    const goNow = () => {
-        router.visit(redirectTarget);
+    const statusSummary = useMemo(() => {
+        const labels = {
+            declined: "No completada",
+            cancelled: "Interrumpida",
+            expired: "Expirada",
+            technical_error: "Error técnico",
+            unknown: "En confirmación",
+            provider_confirmation_pending: "Confirmación pendiente",
+            authenticated: "Autenticada",
+            tokenizing: "Guardando tarjeta",
+            completed: "Completada",
+            context_unavailable: "Contexto no disponible",
+            processing: "En proceso",
+        };
+
+        return labels[presentation] ?? presentation;
+    }, [presentation]);
+
+    const startRecovery = (recoveryAction) => {
+        if (!recovery?.recovery_start_url || !recovery?.context_uuid) {
+            router.visit(route("payment-methods.create"));
+            return;
+        }
+
+        setRecoveryLoading(recoveryAction);
+        setStatusMessage("");
+
+        router.post(
+            recovery.recovery_start_url,
+            {
+                session_id: sessionId,
+                recovery_context_uuid: recovery.context_uuid,
+                recovery_action: recoveryAction,
+            },
+            {
+                preserveScroll: true,
+                onError: (errors) => {
+                    setStatusMessage(errors.error || "No fue posible iniciar la recuperación.");
+                },
+                onFinish: () => setRecoveryLoading(null),
+            }
+        );
     };
+
+    const startPayPalRecovery = () => {
+        if (!recovery?.recovery_paypal_start_url || !recovery?.context_uuid) {
+            return;
+        }
+
+        setRecoveryLoading("paypal");
+        setStatusMessage("");
+
+        router.post(
+            recovery.recovery_paypal_start_url,
+            {
+                session_id: sessionId,
+                recovery_context_uuid: recovery.context_uuid,
+            },
+            {
+                preserveScroll: true,
+                onError: (errors) => {
+                    setStatusMessage(errors.error || "No fue posible preparar PayPal.");
+                },
+                onFinish: () => setRecoveryLoading(null),
+            }
+        );
+    };
+
+    const refreshStatus = async () => {
+        const syncUrl = liveResult.status_sync_url || liveResult.status_refresh_url;
+        if (!syncUrl) return;
+
+        setRefreshLoading(true);
+        setStatusMessage("");
+
+        try {
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
+            const isSync = Boolean(liveResult.status_sync_url);
+            const response = await fetch(syncUrl, {
+                method: isSync ? "POST" : "GET",
+                headers: {
+                    Accept: "application/json",
+                    ...(isSync
+                        ? {
+                              "Content-Type": "application/json",
+                              "X-CSRF-TOKEN": csrf,
+                              "X-Requested-With": "XMLHttpRequest",
+                          }
+                        : {}),
+                },
+                ...(isSync ? { body: JSON.stringify({}) } : {}),
+            });
+            const data = await response.json();
+
+            if (data.result) {
+                setLiveResult(data.result);
+
+                if (data.result.success) {
+                    clearAttemptStorage(paymentAuthStorageKey, true);
+                    router.visit(redirectTarget);
+                }
+            }
+        } catch {
+            setStatusMessage("No pudimos actualizar el estado. Intenta de nuevo.");
+        } finally {
+            setRefreshLoading(false);
+        }
+    };
+
+    const copyReference = async () => {
+        const reference = liveResult.support?.reference;
+
+        if (!reference) return;
+
+        try {
+            await navigator.clipboard.writeText(reference);
+            setCopyState("copied");
+            setTimeout(() => setCopyState("idle"), 2000);
+        } catch {
+            setCopyState("failed");
+        }
+    };
+
+    const iconTone = isSuccess
+        ? "text-green-600"
+        : ["unknown", "provider_confirmation_pending", "authenticated", "tokenizing"].includes(presentation)
+          ? "text-amber-500"
+          : "text-amber-600";
 
     return (
         <SettingsLayout title="Resultado de verificación">
-
-            <div className="flex items-center gap-4">
-                <Button
-                    href={route("payment-methods.index")}
-                    outline
-                    className="size-10 p-0"
+            <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-1 sm:px-0">
+                <div
+                    className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 sm:p-8"
+                    aria-live="polite"
                 >
-                    <ArrowLeftIcon />
-                </Button>
-                <GradientHeading noDivider>
-                    {success ? "Tarjeta verificada" : "Verificación no completada"}
-                </GradientHeading>
-            </div>
-
-            <div className="mt-12 max-w-2xl">
-
-                {/* RESULT CARD */}
-                <div className={`rounded-2xl p-10 text-center shadow-sm border ${
-                    success
-                        ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
-                        : "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20"
-                }`}>
-
-                    <div className="flex flex-col items-center">
-
-                        <div className={`relative ${
-                            success ? "text-green-600" : "text-red-600"
-                        }`}>
-                            {success ? (
-                                <CheckCircleIcon className="size-20 animate-bounce" />
+                    <div className="flex flex-col items-center text-center">
+                        <div className={iconTone}>
+                            {isSuccess ? (
+                                <CheckCircleIcon className="size-16 sm:size-20" aria-hidden="true" />
                             ) : (
-                                <XCircleIcon className="size-20" />
+                                <ExclamationTriangleIcon className="size-16 sm:size-20" aria-hidden="true" />
                             )}
                         </div>
 
-                        <h2 className={`mt-6 text-2xl font-bold ${
-                            success
-                                ? "text-green-800 dark:text-green-300"
-                                : "text-red-800 dark:text-red-300"
-                        }`}>
-                            {success ? "Tarjeta verificada correctamente" : "Verificación no completada"}
-                        </h2>
+                        <h1 className="mt-5 text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
+                            {copy.title}
+                        </h1>
 
-                        <p className="mt-4 text-zinc-600 dark:text-zinc-400 max-w-md">
-                            {success
-                                ? "Tu tarjeta fue verificada correctamente y ahora está lista para usarse."
-                                : message}
+                        <p className="mt-3 max-w-lg text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                            {copy.message}
                         </p>
 
-                        {!success && errorDetail && errorDetail !== message && (
-                            <div className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 p-4 text-left">
-                                <p className="text-xs font-medium uppercase tracking-wide text-red-600 dark:text-red-400">Motivo</p>
-                                <p className="mt-1 text-sm text-red-800 dark:text-red-200">{errorDetail}</p>
+                        {copy.hint && (
+                            <p className="mt-2 max-w-lg text-sm text-zinc-500 dark:text-zinc-400">
+                                {copy.hint}
+                            </p>
+                        )}
+
+                        <div className="mt-6 w-full rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-left dark:border-zinc-700 dark:bg-zinc-950/40">
+                            <Text className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                                Resumen
+                            </Text>
+                            <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                                <p>
+                                    <span className="text-zinc-500">Estado:</span>{" "}
+                                    <span className="font-medium text-zinc-900 dark:text-zinc-100">{statusSummary}</span>
+                                </p>
+                                {liveResult.attempt_number && (
+                                    <p>
+                                        <span className="text-zinc-500">Intento:</span>{" "}
+                                        <span className="font-medium">{liveResult.attempt_number} de {liveResult.maximum_attempts}</span>
+                                    </p>
+                                )}
+                                {liveResult.card_last_four && (
+                                    <p className="inline-flex items-center gap-2 sm:col-span-2">
+                                        <CreditCardIcon className="size-4 text-zinc-400" aria-hidden="true" />
+                                        <span>Tarjeta terminada en {liveResult.card_last_four}</span>
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+
+                        {!isSuccess && liveResult.verification_charge?.message && (
+                            <p className="mt-4 max-w-lg text-sm text-zinc-600 dark:text-zinc-300">
+                                {liveResult.verification_charge.message}
+                            </p>
+                        )}
+
+                        {statusMessage && (
+                            <p className="mt-4 text-sm text-red-600 dark:text-red-400" role="alert">
+                                {statusMessage}
+                            </p>
+                        )}
+
+                        {liveResult.active_attempt?.result_url && recovery?.block_reason === "active_attempt_exists" && (
+                            <div className="mt-4 w-full rounded-xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
+                                <p className="font-medium">Ya tienes una verificación en proceso</p>
+                                <p className="mt-1">Puedes continuar con el intento activo o consultar su estado.</p>
+                                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                                    {liveResult.active_attempt.redirect_url && (
+                                        <Button href={liveResult.active_attempt.redirect_url} className="w-full sm:w-auto">
+                                            Continuar verificación
+                                        </Button>
+                                    )}
+                                    <Button outline href={liveResult.active_attempt.result_url} className="w-full sm:w-auto">
+                                        Ver intento activo
+                                    </Button>
+                                </div>
                             </div>
                         )}
 
-                        {/* CARD INFO */}
-                        {cardLastFour && (
-                            <div className="mt-8 w-full rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 p-6 text-left">
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <CreditCardIcon className="size-6 text-zinc-400" />
-                                        <div>
-                                            <Text className="font-medium">
-                                                **** **** **** {cardLastFour}
-                                            </Text>
-                                            <Text className="text-xs text-zinc-500">
-                                                {new Date(createdAt).toLocaleDateString("es-MX")}
-                                            </Text>
-                                        </div>
-                                    </div>
-
-                                    <span className={`px-3 py-1 text-xs rounded-full font-medium ${
-                                        success
-                                            ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                                            : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                                    }`}>
-                                        {success ? "ACTIVA" : "NO VERIFICADA"}
-                                    </span>
+                        {isSuccess && (
+                            <div className="mt-8 w-full">
+                                <div className="h-2 w-full overflow-hidden rounded-full bg-green-100 dark:bg-green-900/40">
+                                    <div
+                                        className="h-full bg-green-500 transition-all duration-1000"
+                                        style={{ width: `${(5 - countdown) * 20}%` }}
+                                        aria-hidden="true"
+                                    />
                                 </div>
+                                <Text className="mt-3 text-sm text-green-700 dark:text-green-300">
+                                    Redirigiendo en {countdown} segundos...
+                                </Text>
+                                <Button onClick={() => router.visit(redirectTarget)} className="mt-4 w-full sm:w-auto">
+                                    Ir ahora
+                                </Button>
+                            </div>
+                        )}
 
-                                {amount && (
-                                    <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-700">
-                                        <Text className="text-sm">
-                                            Cargo de verificación: <strong>${amount} MXN</strong>
-                                        </Text>
-                                        <Text className="text-xs text-zinc-500">
-                                            Se reembolsará en 24–48 horas
-                                        </Text>
-                                    </div>
+                        {showRefresh && (
+                            <Button
+                                outline
+                                className="mt-6 w-full sm:w-auto"
+                                onClick={refreshStatus}
+                                disabled={refreshLoading}
+                                aria-busy={refreshLoading}
+                            >
+                                <ArrowPathIcon className={`size-4 ${refreshLoading ? "animate-spin" : ""}`} />
+                                {refreshLoading ? "Actualizando..." : "Actualizar estado"}
+                            </Button>
+                        )}
+
+                        {showRecoveryActions && (
+                            <div className="mt-6 flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
+                                {recovery?.actions?.retry && (
+                                    <Button
+                                        className={`w-full sm:w-auto ${prioritizeDifferentCard ? "order-2 sm:order-2" : "order-1 sm:order-1"}`}
+                                        onClick={() => startRecovery("retry")}
+                                        disabled={recoveryLoading !== null || (cooldownLabel && presentation === "technical_error")}
+                                        aria-busy={recoveryLoading === "retry"}
+                                    >
+                                        {recoveryLoading === "retry" ? "Preparando..." : "Volver a intentar"}
+                                    </Button>
+                                )}
+
+                                {recovery?.actions?.different_card && (
+                                    <Button
+                                        className={`w-full sm:w-auto ${prioritizeDifferentCard ? "order-1 sm:order-1" : "order-2 sm:order-2"}`}
+                                        color={prioritizeDifferentCard ? undefined : "dark/zinc"}
+                                        onClick={() => startRecovery("different_card")}
+                                        disabled={recoveryLoading !== null}
+                                        aria-busy={recoveryLoading === "different_card"}
+                                    >
+                                        {recoveryLoading === "different_card" ? "Preparando..." : "Usar otra tarjeta"}
+                                    </Button>
+                                )}
+
+                                {recovery?.actions?.paypal && recovery?.recovery_paypal_start_url && (
+                                    <Button
+                                        className={`w-full sm:w-auto ${prioritizeDifferentCard ? "order-2 sm:order-3" : "order-3 sm:order-3"}`}
+                                        color="dark/zinc"
+                                        onClick={startPayPalRecovery}
+                                        disabled={recoveryLoading !== null}
+                                        aria-busy={recoveryLoading === "paypal"}
+                                    >
+                                        {recoveryLoading === "paypal" ? "Preparando PayPal..." : "Pagar con PayPal"}
+                                    </Button>
+                                )}
+
+                                {recovery?.return_action?.href && (
+                                    <Button outline href={recovery.return_action.href} className="order-4 w-full sm:w-auto">
+                                        {safeReturnLabel(recovery.context_type)}
+                                    </Button>
                                 )}
                             </div>
                         )}
 
-                        {/* REDIRECT PROGRESS */}
-                        {success && (
-                            <div className="mt-8 w-full">
-
-                                <div className="h-2 w-full rounded-full bg-green-100 dark:bg-green-900/40 overflow-hidden">
-                                    <div
-                                        className="h-full bg-green-500 transition-all duration-1000"
-                                        style={{ width: `${(5 - countdown) * 20}%` }}
-                                    />
-                                </div>
-
-                                <Text className="mt-3 text-sm text-green-700 dark:text-green-300">
-                                    Redirigiendo en {countdown} segundos...
-                                </Text>
-
-                                <Button
-                                    onClick={goNow}
-                                    className="mt-4"
-                                >
-                                    Ir ahora
-                                </Button>
-
-                            </div>
+                        {recovery?.actions?.paypal && recoveryLoading === "paypal" && (
+                            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
+                                Continuarás mediante PayPal. FAMEDIC conservará el contexto de tu carrito.
+                            </p>
                         )}
 
-                        {!success && (
-                            <div className="mt-8 flex gap-4">
-                                <Button
-                                    href={route("payment-methods.create")}
-                                >
-                                    Intentar nuevamente
-                                </Button>
-
-                                <Button
-                                    href={`mailto:soporte@famedic.com?subject=Problema%203DS&body=ID%20de%20sesión:%20${sessionId}`}
-                                    outline
-                                >
-                                    Contactar soporte
-                                </Button>
-                            </div>
+                        {cooldownLabel && presentation === "technical_error" && (
+                            <p className="mt-3 text-sm text-zinc-500">
+                                Podrás volver a intentar en {cooldownLabel}.
+                            </p>
                         )}
 
+                        {recovery?.block_reason === "recovery_limit_reached" && (
+                            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
+                                Alcanzaste el máximo de intentos permitidos. Comunícate con soporte o regresa más tarde.
+                            </p>
+                        )}
+
+                        {presentation === "context_unavailable" && (
+                            <Button href={route("payment-methods.index")} className="mt-6 w-full sm:w-auto">
+                                Regresar
+                            </Button>
+                        )}
                     </div>
                 </div>
 
-                {/* INFO 3DS */}
-                <div className="mt-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6">
+                {liveResult.support?.reference && (
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <Text className="font-medium">Referencia de soporte</Text>
+                                <p className="mt-1 font-mono text-sm text-zinc-800 dark:text-zinc-200">
+                                    {liveResult.support.reference}
+                                </p>
+                                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                                    Comparte esta referencia para que podamos revisar tu intento.
+                                </p>
+                            </div>
+                            <Button outline onClick={copyReference} className="w-full sm:w-auto">
+                                <ClipboardDocumentIcon className="size-4" />
+                                {copyState === "copied" ? "Copiado" : "Copiar referencia"}
+                            </Button>
+                        </div>
+                        <p className="mt-4 text-xs text-zinc-500">
+                            No compartas el número completo de tu tarjeta ni tu código de seguridad.
+                        </p>
+                        <p className="mt-2 text-sm">
+                            Escríbenos a{" "}
+                            <a
+                                href={`mailto:${liveResult.support.email}?subject=Soporte%203DS%20${encodeURIComponent(liveResult.support.reference)}`}
+                                className="font-medium text-blue-600 underline dark:text-blue-400"
+                            >
+                                {liveResult.support.channel_label}
+                            </a>
+                        </p>
+                    </div>
+                )}
 
+                <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
                     <div className="flex items-start gap-3">
-                        <ShieldCheckIcon className="size-5 text-zinc-500 mt-1" />
+                        <ShieldCheckIcon className="mt-0.5 size-5 text-zinc-500" aria-hidden="true" />
                         <div>
-                            <Text className="font-medium">
-                                Seguridad 3D Secure
-                            </Text>
+                            <Text className="font-medium">Seguridad 3D Secure</Text>
                             <Text className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                                Es una verificación adicional requerida por tu banco para confirmar
-                                que eres el titular legítimo de la tarjeta.
+                                Es una verificación adicional para confirmar que eres el titular legítimo de la tarjeta.
                             </Text>
                         </div>
                     </div>
-
-                    <div className="mt-6 border-t border-zinc-200 dark:border-zinc-700 pt-4 text-xs text-zinc-500">
-                        ID sesión: {sessionId} · Estado: {status}
-                    </div>
-
                 </div>
-
             </div>
         </SettingsLayout>
     );
+}
+
+function safeReturnLabel(contextType) {
+    return {
+        payment_method_settings: "Regresar a métodos de pago",
+        laboratory_checkout: "Regresar al checkout",
+        medical_attention_checkout: "Regresar a membresía",
+        medical_attention_modal: "Regresar a membresía",
+        online_pharmacy_checkout: "Regresar al checkout",
+    }[contextType] ?? "Regresar";
+}
+
+function buildLegacyResult({ success, recoveryContext, returnUrl, sessionId }) {
+    return {
+        success,
+        presentation: success ? "completed" : "declined",
+        copy: {
+            title: success ? "Tarjeta verificada correctamente" : "Verificación no completada",
+            message: success
+                ? "Tu tarjeta fue verificada correctamente."
+                : "No se completó la verificación de tu tarjeta.",
+            hint: null,
+        },
+        recovery: recoveryContext,
+        support: {
+            reference: recoveryContext?.support_reference ?? null,
+            email: "soporte@famedic.com",
+            channel_label: "soporte@famedic.com",
+        },
+        status_refresh_url: route("payment-methods.3ds-result-status", { sessionId }),
+        status_sync_url: route("payment-methods.3ds-result-sync", { sessionId }),
+        verification_charge: {
+            message: "Puede aparecer una verificación temporal de seguridad. Si permanece reflejada, comunícate con soporte.",
+        },
+        redirectTarget: recoveryContext?.return_action?.href || returnUrl || route("payment-methods.index"),
+    };
 }

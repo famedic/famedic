@@ -90,18 +90,16 @@ export default function OnlinePharmacyCheckout({
 		}
 	}, [data.address]);
 
-	const addCardReturnUrl = useMemo(() => {
-		const filteredData = Object.fromEntries(
-			Object.entries(data).filter(
-				([_, value]) =>
-					value !== undefined && value !== null && value !== "",
-			),
-		);
+	const addCardParams = useMemo(() => {
+		const params = {
+			origin: "online-pharmacy",
+		};
 
-		return route("online-pharmacy.checkout", {
-			...filteredData,
-		});
-	}, [data]);
+		if (data.contact) params.contact = data.contact;
+		if (data.address) params.address = data.address;
+
+		return params;
+	}, [data.contact, data.address]);
 
 	return (
 		<>
@@ -193,7 +191,7 @@ export default function OnlinePharmacyCheckout({
 					clearErrors={clearErrors}
 					paymentMethods={paymentMethods}
 					hasOdessaPay={hasOdessaPay}
-					addCardReturnUrl={addCardReturnUrl}
+					addCardParams={addCardParams}
 				/>
 			</CheckoutLayout>
 

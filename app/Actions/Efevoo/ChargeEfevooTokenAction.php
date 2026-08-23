@@ -1,11 +1,14 @@
 <?php
+
 namespace App\Actions\Efevoo;
 
 use App\Models\Customer;
-use App\Models\Transaction;
 use App\Models\EfevooToken;
 use App\Models\EfevooTransaction;
+use App\Models\Transaction;
 use App\Services\EfevooPayFactoryService;
+use App\Support\EfevooPayLogSanitizer;
+use App\Support\EfevooPayPersistenceNormalizer;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -22,7 +25,6 @@ class ChargeEfevooTokenAction
     {
         Log::info('Iniciando cargo con EfevooPay', [
             'customer_id' => $customer->id,
-            'amount_cents' => $amountCents,
             'efevoo_token_id' => $efevooTokenId,
         ]);
 
@@ -35,12 +37,12 @@ class ChargeEfevooTokenAction
 
             // 2. Preparar datos para el pago
             $amountDecimal = $amountCents / 100;
-            
+
             $paymentData = [
                 'amount' => $amountDecimal,
                 'currency' => 'MXN',
                 'description' => 'Compra Famedic',
-                'reference' => 'FMD-' . time() . '-' . $customer->id,
+                'reference' => 'FMD-'.time().'-'.$customer->id,
                 'metadata' => [
                     'customer_id' => $customer->id,
                     'user_email' => $customer->user->email,
@@ -57,19 +59,22 @@ class ChargeEfevooTokenAction
 
             Log::info('Resultado de pago EfevooPay', [
                 'success' => $paymentResult['success'],
-                'message' => $paymentResult['message'],
+                'response_code' => $paymentResult['code'] ?? null,
                 'transaction_id' => $paymentResult['transaction_id'] ?? null,
-                'authorization_code' => $paymentResult['authorization_code'] ?? null,
             ]);
 
             // 4. Si el pago falla, lanzar excepción
-            if (!$paymentResult['success']) {
+            if (! $paymentResult['success']) {
                 Log::error('Pago EfevooPay fallido', [
-                    'error' => $paymentResult['message'],
                     'code' => $paymentResult['code'] ?? null,
                 ]);
 
-                throw new \Exception('Pago declinado: ' . ($paymentResult['message'] ?? 'Error de procesamiento'));
+                throw new \Exception(
+                    'Pago declinado: '.(
+                        EfevooPayLogSanitizer::providerMessage($paymentResult['message'] ?? null)
+                        ?? 'Error de procesamiento'
+                    )
+                );
             }
 
             // 5. Crear registro en EfevooTransaction
@@ -91,7 +96,6 @@ class ChargeEfevooTokenAction
             Log::info('Pago procesado exitosamente', [
                 'transaction_id' => $transaction->id,
                 'efevoo_transaction_id' => $efevooTransaction->id,
-                'amount' => $amountCents,
             ]);
 
             return $transaction;
@@ -108,7 +112,7 @@ class ChargeEfevooTokenAction
     ): EfevooTransaction {
         return EfevooTransaction::create([
             'efevoo_token_id' => $efevooToken->id,
-            'reference' => $paymentResult['reference'] ?? ('EVE-' . time()),
+            'reference' => $paymentResult['reference'] ?? ('EVE-'.time()),
             'amount' => $amount,
             'currency' => 'MXN',
             'status' => EfevooTransaction::STATUS_APPROVED,
@@ -117,7 +121,10 @@ class ChargeEfevooTokenAction
             'transaction_type' => EfevooTransaction::TYPE_PAYMENT,
             'metadata' => [
                 'authorization_code' => $paymentResult['authorization_code'] ?? null,
-                'payment_result' => $paymentResult,
+                'payment_summary' => EfevooPayPersistenceNormalizer::paymentResult($paymentResult, 'payment', [
+                    'amount' => $amount,
+                    'currency' => 'MXN',
+                ]),
                 'customer_id' => $efevooToken->customer_id,
             ],
             'request_data' => [
@@ -125,7 +132,10 @@ class ChargeEfevooTokenAction
                 'currency' => 'MXN',
                 'description' => 'Compra Famedic',
             ],
-            'response_data' => $paymentResult['data'] ?? $paymentResult,
+            'response_data' => EfevooPayPersistenceNormalizer::paymentResult($paymentResult, 'payment', [
+                'amount' => $amount,
+                'currency' => 'MXN',
+            ]),
             'cav' => $paymentResult['authorization_code'] ?? null,
             'processed_at' => now(),
         ]);
@@ -156,7 +166,10 @@ class ChargeEfevooTokenAction
                 'card_holder' => $efevooToken->card_holder,
                 'customer_name' => $customer->user->name,
                 'customer_email' => $customer->user->email,
-                'payment_result' => $paymentResult,
+                'payment_summary' => EfevooPayPersistenceNormalizer::paymentResult($paymentResult, 'payment', [
+                    'amount' => $amountCents / 100,
+                    'currency' => 'MXN',
+                ]),
                 'commission_cents' => $this->calculateCommission($amountCents),
                 'commission_fetched_at' => now()->toIso8601String(),
             ],

@@ -51,6 +51,7 @@ class InvoiceXmlSupportIsolatedTest extends TestCase
     {
         Carbon::setTestNow();
         $this->dropSchema();
+        restoreMonolithicTestDatabase();
 
         if (! empty($this->storageRoot) && is_dir($this->storageRoot)) {
             $files = new \RecursiveIteratorIterator(

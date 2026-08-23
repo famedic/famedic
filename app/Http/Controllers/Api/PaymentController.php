@@ -33,12 +33,17 @@ class PaymentController extends Controller
                 $request->amount
             );
 
-            return response()->json($result);
+            return response()->json([
+                'success' => (bool) ($result['success'] ?? false),
+                'message' => $result['message'] ?? null,
+                'token_id' => $result['token_id'] ?? null,
+                'code' => $result['error_code'] ?? null,
+            ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'error' => $e->getMessage()
+                'message' => 'Error al tokenizar tarjeta',
             ], 500);
         }
     }
@@ -80,12 +85,17 @@ class PaymentController extends Controller
                 );
             }
 
-            return response()->json($result);
+            return response()->json([
+                'success' => (bool) ($result['success'] ?? false),
+                'message' => $result['message'] ?? null,
+                'transaction_id' => $result['transaction_id'] ?? null,
+                'code' => $result['error_code'] ?? null,
+            ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'error' => $e->getMessage()
+                'message' => 'Error al procesar pago',
             ], 500);
         }
     }
@@ -118,7 +128,6 @@ class PaymentController extends Controller
             'success' => true,
             'message' => 'Pago en procesamiento',
             'job_id' => uniqid(),
-            'cav' => $request->cav
         ]);
     }
 }

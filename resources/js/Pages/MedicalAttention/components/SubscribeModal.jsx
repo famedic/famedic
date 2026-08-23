@@ -88,7 +88,7 @@ export default function SubscribeModal({
                             paymentMethods={paymentMethods}
                             hasOdessaPay={hasOdessaAfiliateAccount}
                             paymentUsesMock={paymentUsesMock}
-                            addCardReturnUrl={route("medical-attention")}
+                            addCardParams={{ origin: "medical-attention-modal" }}
                         />
                     )}
                 </DialogDescription>

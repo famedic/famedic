@@ -38,11 +38,42 @@ export default function LaboratoryPayPalButton({
     totalCents,
     couponId = null,
     promoValidationToken = null,
+    recoveryContextUuid = null,
+    recoveryPayPalCancelUrl = null,
     disabled,
 }) {
     const containerRef = useRef(null);
+    const transactionIdRef = useRef(null);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    const notifyPayPalCancel = async () => {
+        if (!recoveryPayPalCancelUrl || !recoveryContextUuid) {
+            return;
+        }
+
+        const csrf =
+            document.querySelector('meta[name="csrf-token"]')?.content || "";
+
+        try {
+            await axios.post(
+                recoveryPayPalCancelUrl,
+                {
+                    recovery_context_uuid: recoveryContextUuid,
+                    transaction_id: transactionIdRef.current,
+                },
+                {
+                    headers: {
+                        "X-CSRF-TOKEN": csrf,
+                        "X-Requested-With": "XMLHttpRequest",
+                        Accept: "application/json",
+                    },
+                },
+            );
+        } catch {
+            // Best-effort; PayPal onCancel is the authoritative user action.
+        }
+    };
 
     useEffect(() => {
         if (!paypalClientId || disabled) {
@@ -67,17 +98,24 @@ export default function LaboratoryPayPalButton({
                                     'meta[name="csrf-token"]',
                                 )?.content || "";
                             try {
+                                const payload = {
+                                    patient_id: patientId || null,
+                                    address_id: addressId,
+                                    laboratory_brand: laboratoryBrand,
+                                    total: totalCents,
+                                    coupon_id: couponId,
+                                    promo_validation_token:
+                                        promoValidationToken,
+                                };
+
+                                if (recoveryContextUuid) {
+                                    payload.recovery_context_uuid =
+                                        recoveryContextUuid;
+                                }
+
                                 const { data } = await axios.post(
                                     route("paypal.create-order"),
-                                    {
-                                        patient_id: patientId || null,
-                                        address_id: addressId,
-                                        laboratory_brand: laboratoryBrand,
-                                        total: totalCents,
-                                        coupon_id: couponId,
-                                        promo_validation_token:
-                                            promoValidationToken,
-                                    },
+                                    payload,
                                     {
                                         headers: {
                                             "X-CSRF-TOKEN": csrf,
@@ -86,12 +124,19 @@ export default function LaboratoryPayPalButton({
                                         },
                                     },
                                 );
+                                transactionIdRef.current =
+                                    data.transaction_id ?? null;
+
                                 return data.order_id;
                             } catch (err) {
-                                const msg =
-                                    err.response?.data?.message ||
+                                const data = err.response?.data ?? {};
+                                let msg =
+                                    data.message ||
                                     err.message ||
                                     "No se pudo iniciar el pago con PayPal.";
+                                if (data.support_reference) {
+                                    msg += ` Referencia: ${data.support_reference}`;
+                                }
                                 setError(msg);
                                 throw new Error(msg);
                             }
@@ -138,6 +183,7 @@ export default function LaboratoryPayPalButton({
                         },
                         onCancel: () => {
                             setError(null);
+                            notifyPayPalCancel();
                         },
                     })
                     .render(containerRef.current);
@@ -165,6 +211,8 @@ export default function LaboratoryPayPalButton({
         totalCents,
         couponId,
         promoValidationToken,
+        recoveryContextUuid,
+        recoveryPayPalCancelUrl,
         disabled,
     ]);
 

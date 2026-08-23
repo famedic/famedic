@@ -35,6 +35,7 @@ class TaxProfilePf1b1IsolatedTest extends TestCase
     protected function tearDown(): void
     {
         $this->dropSchema();
+        restoreMonolithicTestDatabase();
 
         parent::tearDown();
     }

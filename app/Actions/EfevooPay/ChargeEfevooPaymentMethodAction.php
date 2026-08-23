@@ -2,18 +2,20 @@
 
 namespace App\Actions\EfevooPay;
 
-use App\Models\Customer;
-use App\Models\Cart;
-use App\Models\Transaction;
-use App\Models\PaymentAttempt;
 use App\Contracts\EfevooPayGateway;
 use App\Enums\CartEventType;
+use App\Exceptions\EfevooPaymentException;
+use App\Models\Cart;
+use App\Models\Customer;
+use App\Models\PaymentAttempt;
+use App\Models\Transaction;
 use App\Services\Carts\CartEventRecorder;
-use App\Support\MockEfevooPaymentSupport;
 use App\Services\Payments\PaymentAutomationService;
+use App\Support\EfevooPayLogSanitizer;
+use App\Support\EfevooPayPersistenceNormalizer;
+use App\Support\MockEfevooPaymentSupport;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
-use App\Exceptions\EfevooPaymentException;
 
 class ChargeEfevooPaymentMethodAction
 {
@@ -44,8 +46,7 @@ class ChargeEfevooPaymentMethodAction
 
                 Log::info('[EfevooPay] ChargeEfevooPaymentMethodAction - Iniciando', [
                     'customer_id' => $customer->id,
-                    'amount_cents' => $amountCents,
-                    'payment_method_input' => $paymentMethod,
+                    'token_id' => $paymentMethod,
                 ]);
 
                 if (empty($paymentMethod)) {
@@ -59,7 +60,7 @@ class ChargeEfevooPaymentMethodAction
                     ->where('id', $tokenId)
                     ->first();
 
-                if (!$token) {
+                if (! $token) {
                     throw new EfevooPaymentException(
                         'El método de pago seleccionado no está disponible o ha expirado.'
                     );
@@ -85,7 +86,7 @@ class ChargeEfevooPaymentMethodAction
                     );
                 }
 
-                $reference = 'LAB-' . $customer->id . '-' . time() . '-' . rand(1000, 9999);
+                $reference = 'LAB-'.$customer->id.'-'.time().'-'.rand(1000, 9999);
 
                 $chargeData = [
                     'card_token' => $cardToken,
@@ -128,6 +129,7 @@ class ChargeEfevooPaymentMethodAction
                     ?? $rawData['descripcion']
                     ?? $rawData['msg']
                     ?? null;
+                $processorMessage = EfevooPayLogSanitizer::providerMessage($processorMessage);
                 $processorTransactionId = $result['transaction_id']
                     ?? $rawData['id']
                     ?? $rawData['numtxn']
@@ -140,7 +142,11 @@ class ChargeEfevooPaymentMethodAction
                     'processor_code' => $processorCode !== null ? (string) $processorCode : null,
                     'processor_message' => is_string($processorMessage) ? $processorMessage : json_encode($processorMessage),
                     'processor_transaction_id' => $processorTransactionId,
-                    'raw_response' => $result['raw'] ?? null,
+                    'raw_response' => EfevooPayPersistenceNormalizer::paymentResult($result, 'payment', [
+                        'amount' => $amountCents / 100,
+                        'currency' => 'MXN',
+                        'reference' => $reference,
+                    ]),
                     'processed_at' => now(),
                 ]);
 
@@ -158,12 +164,12 @@ class ChargeEfevooPaymentMethodAction
                     'error_type' => $result['error_type'] ?? null,
                 ]);
 
-                if (!$result['success']) {
+                if (! $result['success']) {
                     $message = $attemptStatus === PaymentAttempt::STATUS_DECLINED
                         ? \App\Support\PaymentErrorClassifier::message(
                             $processorCode !== null ? (string) $processorCode : null
                         )
-                        : ($result['message'] ?? 'Error al procesar el pago con EfevooPay.');
+                        : ($processorMessage ?? 'Error al procesar el pago con EfevooPay.');
 
                     throw new EfevooPaymentException(
                         $message,
@@ -175,12 +181,12 @@ class ChargeEfevooPaymentMethodAction
                     $result['transaction_id']
                     ?? $result['efevoo_transaction_id']
                     ?? $rawData['id']
-                    ?? 'EFV-' . time();
+                    ?? 'EFV-'.time();
 
             } catch (EfevooPaymentException $e) {
 
                 // Do not overwrite declined / approved / error / refunded set from the gateway response.
-                $this->markAttemptAsTechnicalErrorIfStillOpen($attempt, $e->getMessage(), [
+                $this->markAttemptAsTechnicalErrorIfStillOpen($attempt, 'Error al procesar el pago con EfevooPay.', [
                     'processor_code' => $e->getEfevooErrorCode(),
                 ]);
 
@@ -188,17 +194,17 @@ class ChargeEfevooPaymentMethodAction
             } catch (\Exception $e) {
 
                 Log::error('[EfevooPay] Excepción en ChargeEfevooPaymentMethodAction', [
-                    'error' => $e->getMessage(),
                     'customer_id' => $customer->id,
                     'attempt_id' => $attempt?->id,
+                    ...EfevooPayLogSanitizer::exception($e),
                 ]);
 
-                $this->markAttemptAsTechnicalErrorIfStillOpen($attempt, $e->getMessage(), [
-                    'raw_response' => ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()],
+                $this->markAttemptAsTechnicalErrorIfStillOpen($attempt, 'Error tecnico al procesar el pago.', [
+                    'raw_response' => EfevooPayPersistenceNormalizer::exceptionSummary($e, 'payment'),
                 ]);
 
                 throw new EfevooPaymentException(
-                    'Error al procesar el pago con EfevooPay: ' . $e->getMessage()
+                    'Error al procesar el pago con EfevooPay.'
                 );
             }
 
@@ -217,8 +223,12 @@ class ChargeEfevooPaymentMethodAction
                     'gateway' => 'efevoopay',
                     'gateway_transaction_id' => $gatewayTransactionId,
                     'gateway_status' => 'completed',
-                    'gateway_response' => $result, // 👈 SIN json_encode
-                    'gateway_token' => 'efv-token-ref:' . substr(md5($cardToken), 0, 20),
+                    'gateway_response' => EfevooPayPersistenceNormalizer::paymentResult($result, 'payment', [
+                        'amount' => $amountCents / 100,
+                        'currency' => 'MXN',
+                        'reference' => $reference,
+                    ]),
+                    'gateway_token' => 'efv-token-ref:'.substr(md5($cardToken), 0, 20),
                     'gateway_processed_at' => now(),
 
                     // 👇 TODO lo contextual va dentro de details
@@ -267,12 +277,12 @@ class ChargeEfevooPaymentMethodAction
             } catch (\Exception $e) {
 
                 Log::error('Error creando transacción en base de datos', [
-                    'error' => $e->getMessage(),
                     'customer_id' => $customer->id,
+                    ...EfevooPayLogSanitizer::exception($e),
                 ]);
 
                 throw new EfevooPaymentException(
-                    'Error al guardar la transacción en la base de datos: ' . $e->getMessage()
+                    'Error al guardar la transacción en la base de datos.'
                 );
             }
         } finally {
@@ -310,7 +320,7 @@ class ChargeEfevooPaymentMethodAction
             Log::error('[PaymentAutomation] Failed to dispatch from ChargeEfevooPaymentMethodAction', [
                 'attempt_id' => $attempt->id,
                 'status' => $attempt->status,
-                'error' => $e->getMessage(),
+                ...EfevooPayLogSanitizer::exception($e),
             ]);
         }
     }
@@ -361,7 +371,7 @@ class ChargeEfevooPaymentMethodAction
         if (is_string($value)) {
             $normalized = str_replace([',', '$', 'MXN', 'mxn', ' '], ['', '', '', '', ''], $value);
 
-            if (!is_numeric($normalized)) {
+            if (! is_numeric($normalized)) {
                 return null;
             }
 
@@ -436,7 +446,6 @@ class ChargeEfevooPaymentMethodAction
             Log::info('[EfevooPay] PaymentAttempt status preserved after exception', [
                 'attempt_id' => $attempt->id,
                 'status' => $attempt->status,
-                'message' => $message,
             ]);
 
             return;
@@ -453,7 +462,6 @@ class ChargeEfevooPaymentMethodAction
         Log::info('[EfevooPay] PaymentAttempt marked as technical error', [
             'attempt_id' => $attempt->id,
             'status' => PaymentAttempt::STATUS_ERROR,
-            'message' => $message,
         ]);
     }
 

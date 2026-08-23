@@ -4,6 +4,8 @@ namespace App\Actions\Efevoo;
 
 use App\Models\Transaction;
 use App\Services\EfevooPayFactoryService;
+use App\Support\EfevooPayLogSanitizer;
+use App\Support\EfevooPayPersistenceNormalizer;
 use Illuminate\Support\Facades\Log;
 
 class RefundEfevooTransactionAction
@@ -21,7 +23,6 @@ class RefundEfevooTransactionAction
             Log::info('Iniciando reembolso EfevooPay', [
                 'transaction_id' => $transaction->id,
                 'gateway_transaction_id' => $transaction->gateway_transaction_id,
-                'amount_cents' => $transaction->amount_cents,
             ]);
 
             // Verificar si la transacción fue procesada por EfevooPay
@@ -29,6 +30,7 @@ class RefundEfevooTransactionAction
                 Log::warning('Transacción no es de EfevooPay', [
                     'payment_gateway' => $transaction->payment_gateway,
                 ]);
+
                 return false;
             }
 
@@ -37,6 +39,7 @@ class RefundEfevooTransactionAction
                 Log::warning('Transacción ya fue reembolsada', [
                     'refunded_at' => $transaction->refunded_at,
                 ]);
+
                 return false;
             }
 
@@ -50,11 +53,12 @@ class RefundEfevooTransactionAction
             // Realizar reembolso
             $result = $this->efevooPayService->refundTransaction($refundData);
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 Log::error('Error en reembolso EfevooPay', [
-                    'result' => $result,
+                    ...EfevooPayLogSanitizer::providerResult($result),
                     'transaction_id' => $transaction->id,
                 ]);
+
                 return false;
             }
 
@@ -65,7 +69,9 @@ class RefundEfevooTransactionAction
                 'metadata' => array_merge(
                     $transaction->metadata ?? [],
                     [
-                        'refund_response' => $result,
+                        'refund_response' => EfevooPayPersistenceNormalizer::refundResult($result, [
+                            'original_transaction_id' => $transaction->gateway_transaction_id,
+                        ]),
                         'refund_id' => $result['refund_id'] ?? null,
                         'refunded_at' => now()->toISOString(),
                     ]
@@ -81,10 +87,10 @@ class RefundEfevooTransactionAction
 
         } catch (\Exception $e) {
             Log::error('Excepción en RefundEfevooTransactionAction', [
-                'error' => $e->getMessage(),
                 'transaction_id' => $transaction->id,
-                'trace' => $e->getTraceAsString(),
+                ...EfevooPayLogSanitizer::exception($e),
             ]);
+
             return false;
         }
     }
