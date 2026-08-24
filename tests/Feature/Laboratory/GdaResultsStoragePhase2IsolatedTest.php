@@ -78,7 +78,7 @@ class GdaResultsStoragePhase2IsolatedTest extends TestCase
     }
 
     #[Test]
-    public function no_despacha_job_si_purchase_results_ya_existe(): void
+    public function no_despacha_job_si_pdf_manual(): void
     {
         Bus::fake();
 
@@ -99,6 +99,64 @@ class GdaResultsStoragePhase2IsolatedTest extends TestCase
         );
 
         Bus::assertNotDispatched(SyncGdaResultPdfToStorageJob::class);
+    }
+
+    #[Test]
+    public function no_despacha_job_si_pdf_gda_current(): void
+    {
+        Bus::fake();
+
+        $this->travelTo(\Carbon\Carbon::parse('2026-08-21 17:00:00'));
+
+        $purchase = $this->seedPurchase(['gda_order_id' => 'HD0L001392']);
+        $path = sprintf(\App\Support\Laboratory\GdaResultsPdfStatus::GDA_STORED_PATH_PATTERN, $purchase->id, 'currentpdf12');
+        Storage::put($path, $this->samplePdfBinary());
+        $purchase->update(['results' => $path]);
+
+        $notification = $this->seedResultsNotificationRecord($purchase);
+        $payload = $this->resultsWebhookPayload('HD0L001392');
+        unset($payload['infogda_resultado_b64']);
+
+        // Handle pisa results_received_at con now(); el PDF debe ser posterior a ese instante.
+        touch(Storage::path($path), now()->addMinute()->timestamp);
+
+        app(HandleResultsNotificationAction::class)->execute(
+            $notification,
+            $payload,
+            ['purchase_id' => $purchase->id, 'gda' => ['gda_order_id' => 'HD0L001392', 'gda_consecutivo' => 1392]]
+        );
+
+        Bus::assertNotDispatched(SyncGdaResultPdfToStorageJob::class);
+    }
+
+    #[Test]
+    public function despacha_job_si_pdf_gda_stale(): void
+    {
+        Bus::fake();
+
+        $this->travelTo(\Carbon\Carbon::parse('2026-08-21 16:38:00'));
+        $purchase = $this->seedPurchase(['gda_order_id' => 'HD0L001392']);
+        $path = sprintf(\App\Support\Laboratory\GdaResultsPdfStatus::GDA_STORED_PATH_PATTERN, $purchase->id, 'oldpdfstored');
+        Storage::put($path, $this->samplePdfBinary());
+        touch(Storage::path($path), now()->timestamp);
+        $purchase->update(['results' => $path]);
+        $this->seedResultsNotificationRecord($purchase);
+
+        $this->travelTo(\Carbon\Carbon::parse('2026-08-24 12:17:00'));
+        $notification = $this->seedResultsNotificationRecord($purchase);
+        $payload = $this->resultsWebhookPayload('HD0L001392');
+        unset($payload['infogda_resultado_b64']);
+
+        app(HandleResultsNotificationAction::class)->execute(
+            $notification,
+            $payload,
+            ['purchase_id' => $purchase->id, 'gda' => ['gda_order_id' => 'HD0L001392', 'gda_consecutivo' => 1392]]
+        );
+
+        Bus::assertDispatched(SyncGdaResultPdfToStorageJob::class, function (SyncGdaResultPdfToStorageJob $job) use ($purchase, $notification) {
+            return $job->purchaseId === $purchase->id
+                && $job->notificationId === $notification->id;
+        });
     }
 
     #[Test]
@@ -147,7 +205,7 @@ class GdaResultsStoragePhase2IsolatedTest extends TestCase
     }
 
     #[Test]
-    public function job_sale_temprano_si_pdf_ya_existe(): void
+    public function job_sale_temprano_si_pdf_manual(): void
     {
         $purchase = $this->seedPurchase(['results' => 'results/existing.pdf']);
         Storage::put('results/existing.pdf', $this->samplePdfBinary());
@@ -160,6 +218,29 @@ class GdaResultsStoragePhase2IsolatedTest extends TestCase
         $path = app(SyncGdaResultPdfToStorageAction::class)->execute($purchase->id, $notification->id);
 
         $this->assertSame('results/existing.pdf', $path);
+    }
+
+    #[Test]
+    public function job_sale_temprano_si_pdf_gda_current(): void
+    {
+        $this->travelTo(\Carbon\Carbon::parse('2026-08-21 17:00:00'));
+        $purchase = $this->seedPurchase();
+        $path = sprintf(\App\Support\Laboratory\GdaResultsPdfStatus::GDA_STORED_PATH_PATTERN, $purchase->id, 'currentpdf12');
+        Storage::put($path, $this->samplePdfBinary());
+        touch(Storage::path($path), now()->timestamp);
+        $purchase->update(['results' => $path]);
+
+        $this->travelTo(\Carbon\Carbon::parse('2026-08-21 16:00:00'));
+        $notification = $this->seedResultsNotificationRecord($purchase);
+        $notification->update(['results_received_at' => now()]);
+
+        $this->mock(\App\Actions\Laboratories\GetGDAResultsAction::class, function ($mock) {
+            $mock->shouldReceive('__invoke')->never();
+        });
+
+        $result = app(SyncGdaResultPdfToStorageAction::class)->execute($purchase->id, $notification->id);
+
+        $this->assertSame($path, $result);
     }
 
     #[Test]

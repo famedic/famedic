@@ -3,6 +3,7 @@
 namespace App\Actions\Laboratories;
 
 use App\Models\LaboratoryPurchase;
+use App\Support\Laboratory\GdaResultsPdfStatus;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -28,12 +29,22 @@ class StoreLaboratoryResultPdfAction
         }
 
         $path = $metadata['path'] ?? sprintf(
-            'results/gda-%d-%s.pdf',
+            GdaResultsPdfStatus::GDA_STORED_PATH_PATTERN,
             $laboratoryPurchase->id,
             substr(hash('sha256', $pdfBinary), 0, 12)
         );
 
         $existingResults = $laboratoryPurchase->results;
+
+        if ($existingResults === $path && Storage::exists($path)) {
+            Log::info('GDA results PDF unchanged, reusing existing path', [
+                'purchase_id' => $laboratoryPurchase->id,
+                'notification_id' => $metadata['notification_id'] ?? null,
+                'path' => $path,
+            ]);
+
+            return $path;
+        }
 
         Storage::put($path, $pdfBinary);
 

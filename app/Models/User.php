@@ -221,12 +221,23 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
     }
 
     /**
-     * Accesor: cantidad de resultados listos sin descargar
+     * Accesor: pedidos con resultados nuevos no vistos por el paciente.
+     * Misma semántica que LaboratoryPurchase::hasUnseenResultsForPatient() / is_new_result.
      */
     protected function pendingResultsCount(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->pendingLaboratoryResults()->count()
+            get: function () {
+                $customer = $this->customer;
+
+                if (! $customer) {
+                    return 0;
+                }
+
+                return $customer->laboratoryPurchases
+                    ->filter(fn (LaboratoryPurchase $purchase) => $purchase->hasUnseenResultsForPatient())
+                    ->count();
+            }
         );
     }
 

@@ -13,6 +13,7 @@ use App\Models\LabOrderEventState;
 use App\Models\LaboratoryNotification;
 use App\Models\User;
 use App\Support\GDA\GdaPayloadSanitizer;
+use App\Support\Laboratory\GdaResultsPdfStatus;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -714,10 +715,15 @@ class LaboratoryNotificationMonitorController extends Controller
         }
 
         $purchase = $latest->laboratoryPurchase;
-        $hasPdfInStorage = $purchase && ! empty($purchase->results) && Storage::exists($purchase->results);
-        $isGdaAutomatic = $hasPdfInStorage && str_contains($purchase->results ?? '', 'results/gda-');
-        $isManual = $hasPdfInStorage && ! $isGdaAutomatic;
-        $availableAtGda = $latest->hasAvailableResults();
+        $assessment = GdaResultsPdfStatus::assess($purchase, $resultsNotifications);
+        $tz = config('app.timezone', 'UTC');
+
+        $hasPdfInStorage = $assessment->hasPdfInStorage;
+        $isGdaAutomatic = $assessment->isGdaManaged;
+        $isManual = $assessment->isManual;
+        $availableAtGda = $assessment->availableAtGda;
+        $isStale = $assessment->isStale;
+        $hasNewerResults = $assessment->hasNewerResults;
 
         $cachedNotification = $resultsNotifications
             ->filter(fn (LaboratoryNotification $n) => $n->hasResults())
@@ -726,7 +732,6 @@ class LaboratoryNotificationMonitorController extends Controller
 
         $hasPdfInDb = $cachedNotification !== null;
         $servingNotification = $cachedNotification ?? $latest;
-        $isStale = ! $hasPdfInStorage && $latest->shouldRefreshPdfFromGda();
 
         $lastSyncAt = data_get($latest->gda_message, 'results_fetched_at');
         $lastSyncError = data_get($latest->gda_message, 'results_storage_error');
@@ -736,7 +741,21 @@ class LaboratoryNotificationMonitorController extends Controller
         $consultIdResolution = $this->resolveConsultIdForNotification($latest);
         $storagePath = $hasPdfInStorage ? $purchase->results : data_get($latest->gda_message, 'results_storage_path');
 
-        if ($hasPdfInStorage) {
+        $pdfKind = $assessment->pdfKind;
+        $freshnessStatus = $assessment->freshnessStatus;
+        $freshnessStatusLabel = $assessment->freshnessStatusLabel;
+
+        if ($hasPdfInDb && ! $hasPdfInStorage) {
+            $pdfKind = 'legacy';
+            $freshnessStatus = $isStale ? 'legacy_stale' : 'legacy';
+            $freshnessStatusLabel = GdaResultsPdfStatus::freshnessStatusLabel($freshnessStatus);
+        }
+
+        if ($hasPdfInStorage && $isStale && $isGdaAutomatic) {
+            $location = 'storage_stale';
+            $label = 'PDF GDA desactualizado — hay notificaciones más recientes';
+            $pdfSource = data_get($latest->gda_message, 'results_source') ?? 'gda';
+        } elseif ($hasPdfInStorage) {
             $location = 'storage';
             $label = $isManual
                 ? 'PDF manual almacenado en storage/S3'
@@ -755,7 +774,7 @@ class LaboratoryNotificationMonitorController extends Controller
                 : 'PDF almacenado en BD (webhook o carga previa)';
         } elseif ($availableAtGda) {
             $location = 'gda_provider';
-            $label = 'PDF disponible en proveedor GDA (sin descargar)';
+            $label = 'Resultados notificados en GDA — sin PDF en storage';
             $pdfSource = null;
         } else {
             $location = 'none';
@@ -776,10 +795,19 @@ class LaboratoryNotificationMonitorController extends Controller
             'has_pdf_in_db' => $hasPdfInDb,
             'available_at_gda' => $availableAtGda,
             'is_stale' => $isStale,
-            'has_newer_results' => $isStale,
+            'has_newer_results' => $hasNewerResults,
+            'is_automatic_overwrite_candidate' => $assessment->isAutomaticOverwriteCandidate,
+            'pdf_kind' => $pdfKind,
+            'pdf_kind_label' => GdaResultsPdfStatus::pdfKindLabel($pdfKind),
+            'freshness_status' => $freshnessStatus,
+            'freshness_status_label' => $freshnessStatusLabel,
             'pdf_source' => $pdfSource,
             'pdf_source_label' => $this->pdfSourceLabel($pdfSource),
-            'latest_results_at' => $latest->results_received_at?->toIso8601String(),
+            'latest_results_at' => $this->toTimezone($assessment->latestResultsAt, $tz)?->toIso8601String(),
+            'stored_pdf_at' => $this->toTimezone($assessment->storedPdfAt, $tz)?->toIso8601String(),
+            'stored_pdf_at_source' => $assessment->storedPdfAtSource,
+            'stale_lag_label' => $assessment->staleLagLabel,
+            'stored_pdf_timestamp_unreliable' => $assessment->storedPdfTimestampUnreliable,
             'pdf_fetched_at' => $servingNotification->pdfFetchedAt()?->toIso8601String(),
             'last_sync_at' => $lastSyncAt,
             'last_sync_error' => $lastSyncError,
@@ -813,9 +841,18 @@ class LaboratoryNotificationMonitorController extends Controller
             'available_at_gda' => false,
             'is_stale' => false,
             'has_newer_results' => false,
+            'is_automatic_overwrite_candidate' => false,
+            'pdf_kind' => GdaResultsPdfStatus::PDF_KIND_NONE,
+            'pdf_kind_label' => GdaResultsPdfStatus::pdfKindLabel(GdaResultsPdfStatus::PDF_KIND_NONE),
+            'freshness_status' => 'none',
+            'freshness_status_label' => GdaResultsPdfStatus::freshnessStatusLabel('none'),
             'pdf_source' => null,
             'pdf_source_label' => null,
             'latest_results_at' => null,
+            'stored_pdf_at' => null,
+            'stored_pdf_at_source' => null,
+            'stale_lag_label' => null,
+            'stored_pdf_timestamp_unreliable' => false,
             'pdf_fetched_at' => null,
             'last_sync_at' => null,
             'last_sync_error' => null,
@@ -924,7 +961,7 @@ class LaboratoryNotificationMonitorController extends Controller
                 $purchase = $n->laboratoryPurchase;
 
                 $storedInStorage = ! empty($purchase?->results) && Storage::exists($purchase->results);
-                $skippedManual = $storedInStorage && ! str_contains($purchase->results ?? '', 'results/gda-');
+                $skippedManual = $storedInStorage && GdaResultsPdfStatus::isManualPath($purchase->results);
                 $skippedExisting = $storedInStorage && ! $skippedManual;
 
                 return [

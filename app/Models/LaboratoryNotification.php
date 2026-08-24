@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Laboratory\GdaResultsPdfAssessment;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -542,6 +543,10 @@ class LaboratoryNotification extends Model
         return $latest?->results_received_at;
     }
 
+    /**
+     * Momento en que FAMEDIC consultó/guardó el PDF desde GDA.
+     * No representa acceso del paciente.
+     */
     public function pdfFetchedAt(): ?Carbon
     {
         $fetchedAt = data_get($this->gda_message, 'results_fetched_at');
@@ -549,31 +554,47 @@ class LaboratoryNotification extends Model
         return $fetchedAt ? Carbon::parse($fetchedAt) : null;
     }
 
+    /**
+     * Última vez que el paciente accedió a resultados de esta orden.
+     * Solo usa read_at. results_fetched_at es sync GDA, no vista del paciente.
+     */
     public static function lastPatientResultsAccessAtForOrder(
         ?int $purchaseId = null,
         ?string $gdaOrderId = null,
         ?string $gdaConsecutivo = null
     ): ?Carbon {
-        $notifications = static::resultsNotificationsForOrderQuery($purchaseId, $gdaOrderId, $gdaConsecutivo)
-            ->get(['read_at', 'gda_message']);
+        $lastReadAt = static::resultsNotificationsForOrderQuery($purchaseId, $gdaOrderId, $gdaConsecutivo)
+            ->whereNotNull('read_at')
+            ->max('read_at');
 
-        $accessTimes = [];
+        return $lastReadAt ? Carbon::parse($lastReadAt) : null;
+    }
 
-        foreach ($notifications as $notification) {
-            if ($notification->read_at) {
-                $accessTimes[] = $notification->read_at;
-            }
-
-            if ($fetchedAt = $notification->pdfFetchedAt()) {
-                $accessTimes[] = $fetchedAt;
-            }
+    /**
+     * Marca como leídas las notificaciones de resultados ya cubiertas por el PDF servido.
+     * No toca notificaciones posteriores al timestamp del PDF.
+     */
+    public static function markResultsCoveredByServedPdfAsRead(
+        LaboratoryPurchase $purchase,
+        GdaResultsPdfAssessment $assessment
+    ): int {
+        if (! $assessment->isGdaCurrent() && ! $assessment->isManual()) {
+            return 0;
         }
 
-        if ($accessTimes === []) {
-            return null;
+        $query = static::resultsNotificationsForOrderQuery(
+            $purchase->id,
+            $purchase->gda_order_id,
+            $purchase->gda_consecutivo
+        )
+            ->whereNotNull('results_received_at')
+            ->whereNull('read_at');
+
+        if ($assessment->storedPdfAt) {
+            $query->where('results_received_at', '<=', $assessment->storedPdfAt);
         }
 
-        return collect($accessTimes)->sort()->last();
+        return $query->update(['read_at' => now()]);
     }
 
     public static function hasUpdatedResultsSinceLastPatientAccess(

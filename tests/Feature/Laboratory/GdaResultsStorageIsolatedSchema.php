@@ -16,6 +16,7 @@ trait GdaResultsStorageIsolatedSchema
             'lab_order_event_states',
             'laboratory_notifications',
             'laboratory_purchase_items',
+            'laboratory_quotes',
             'laboratory_purchases',
             'customers',
             'users',
@@ -73,6 +74,15 @@ trait GdaResultsStorageIsolatedSchema
             $table->softDeletes();
         });
 
+        Schema::create('laboratory_quotes', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('contact_id')->nullable();
+            $table->timestamp('ready_at')->nullable();
+            $table->timestamp('results_downloaded_at')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
         Schema::create('laboratory_purchase_items', function (Blueprint $table) {
             $table->id();
             $table->foreignId('laboratory_purchase_id')->constrained();
@@ -100,6 +110,7 @@ trait GdaResultsStorageIsolatedSchema
             $table->json('gda_message')->nullable();
             $table->longText('results_pdf_base64')->nullable();
             $table->timestamp('results_received_at')->nullable();
+            $table->timestamp('read_at')->nullable();
             $table->timestamp('email_sent_at')->nullable();
             $table->unsignedBigInteger('email_recipient_id')->nullable();
             $table->string('email_recipient_email')->nullable();
@@ -149,6 +160,7 @@ trait GdaResultsStorageIsolatedSchema
             'lab_order_event_states',
             'laboratory_notifications',
             'laboratory_purchase_items',
+            'laboratory_quotes',
             'laboratory_purchases',
             'customers',
             'users',

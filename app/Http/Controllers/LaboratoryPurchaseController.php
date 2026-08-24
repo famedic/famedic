@@ -291,14 +291,14 @@ class LaboratoryPurchaseController extends Controller
 
         $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
 
-        $hasManualResults = !empty($laboratoryPurchase->results);
+        $hasStoredResults = ! empty($laboratoryPurchase->results);
         $hasSampleCollected = false;
         $hasResultsAvailable = false;
         $latestSampleCollectionAt = null;
         $latestResultsAt = null;
         $hasResultsPdfCached = false;
 
-        if (!$hasManualResults) {
+        if (! $hasStoredResults) {
             $hasSampleCollected = $laboratoryPurchase->hasSampleCollected();
             $hasResultsAvailable = $laboratoryPurchase->hasResultsAvailable();
 
@@ -312,19 +312,15 @@ class LaboratoryPurchaseController extends Controller
             $hasResultsPdfCached = (bool) $latestResultsNotification?->hasResults();
         }
 
-        if ($hasManualResults) {
+        if ($hasStoredResults) {
             $hasResultsAvailable = true;
         }
 
-        if ($hasManualResults || $hasResultsAvailable) {
+        if ($hasStoredResults || $hasResultsAvailable) {
             $latestResultsAt = $laboratoryPurchase->formatLatestResultsAt();
         }
 
-        $isNewResult = ! $hasManualResults && LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(
-            $laboratoryPurchase->id,
-            $laboratoryPurchase->gda_order_id,
-            $laboratoryPurchase->gda_consecutivo
-        );
+        $isNewResult = $laboratoryPurchase->hasUnseenResultsForPatient();
 
         return Inertia::render('LaboratoryPurchase', [
             'laboratoryPurchase' => tap($laboratoryPurchase, function (LaboratoryPurchase $purchase) {

@@ -53,9 +53,14 @@ class GdaResultsQaReviewIsolatedTest extends TestCase
     #[Test]
     public function monitor_muestra_archivo_en_storage_si_cuando_purchase_results_existe(): void
     {
+        $this->travelTo(now()->subHour());
         $purchase = $this->seedPurchase(['results' => 'results/gda-1-abc.pdf']);
         Storage::put('results/gda-1-abc.pdf', $this->samplePdfBinary());
-        $notification = $this->seedResultsNotificationRecord($purchase);
+        touch(Storage::path('results/gda-1-abc.pdf'), now()->timestamp);
+        $this->seedResultsNotificationRecord($purchase, [
+            'results_received_at' => now()->subMinutes(10),
+        ]);
+        $this->travelBack();
 
         $user = $this->seedAdminUser();
         $orderKey = $purchase->gda_order_id;
@@ -67,6 +72,48 @@ class GdaResultsQaReviewIsolatedTest extends TestCase
         $response->assertJsonPath('summary.results_pdf.has_pdf_in_storage', true);
         $response->assertJsonPath('summary.results_pdf.location', 'storage');
         $response->assertJsonPath('summary.results_pdf.is_gda_automatic', true);
+        $response->assertJsonPath('summary.results_pdf.is_stale', false);
+        $response->assertJsonPath('summary.results_pdf.freshness_status', 'gda_current');
+    }
+
+    #[Test]
+    public function monitor_marca_stale_si_pdf_gda_en_storage_y_notificacion_mas_nueva(): void
+    {
+        $this->travelTo(now()->subDays(3));
+        $purchase = $this->seedPurchase(['results' => 'results/gda-2309-oldhash12.pdf']);
+        Storage::put('results/gda-2309-oldhash12.pdf', $this->samplePdfBinary());
+        touch(Storage::path('results/gda-2309-oldhash12.pdf'), now()->timestamp);
+        $this->seedResultsNotificationRecord($purchase, [
+            'results_received_at' => now(),
+            'gda_message' => [
+                'results_source' => 'storage',
+                'results_fetched_at' => now()->toISOString(),
+            ],
+        ]);
+
+        $this->travelBack();
+        $this->seedResultsNotificationRecord($purchase, [
+            'results_received_at' => now(),
+        ]);
+
+        $user = $this->seedAdminUser();
+        $orderKey = $purchase->gda_order_id;
+
+        $response = $this->actingAs($user)
+            ->getJson(route('admin.laboratory-notifications-monitor.order-details', ['orderKey' => $orderKey]));
+
+        $response->assertOk();
+        $response->assertJsonPath('summary.results_pdf.has_pdf_in_storage', true);
+        $response->assertJsonPath('summary.results_pdf.available_at_gda', true);
+        $response->assertJsonPath('summary.results_pdf.is_stale', true);
+        $response->assertJsonPath('summary.results_pdf.has_newer_results', true);
+        $response->assertJsonPath('summary.results_pdf.is_automatic_overwrite_candidate', true);
+        $response->assertJsonPath('summary.results_pdf.location', 'storage_stale');
+        $response->assertJsonPath('summary.results_pdf.freshness_status', 'gda_stale');
+        $response->assertJsonPath('summary.results_pdf.is_manual_result', false);
+        $this->assertNotEmpty($response->json('summary.results_pdf.stale_lag_label'));
+        $this->assertNotEmpty($response->json('summary.results_pdf.stored_pdf_at'));
+        $this->assertNotEmpty($response->json('summary.results_pdf.latest_results_at'));
     }
 
     #[Test]

@@ -24,6 +24,8 @@ export function pdfLocationBadge(pdf) {
 	switch (pdf.location) {
 		case "storage":
 			return { color: "emerald", label: pdf.label };
+		case "storage_stale":
+			return { color: "amber", label: pdf.label };
 		case "db_base64":
 			return { color: "famedic-lime", label: pdf.label };
 		case "db_base64_stale":
@@ -213,7 +215,27 @@ export default function LaboratoryNotificationResultsPdfActions({
 	return (
 		<div className="space-y-4">
 			<div className="space-y-2">
-				<Badge color={pdfBadge.color}>{pdfBadge.label}</Badge>
+				<div className="flex flex-wrap gap-2">
+					<Badge color={pdfBadge.color}>{pdfBadge.label}</Badge>
+					{resultsPdf.freshness_status_label && (
+						<Badge
+							color={
+								resultsPdf.freshness_status === "gda_stale" ||
+								resultsPdf.freshness_status === "legacy_stale"
+									? "amber"
+									: resultsPdf.freshness_status === "gda_current"
+										? "emerald"
+										: resultsPdf.freshness_status === "manual"
+											? "violet"
+											: resultsPdf.freshness_status === "gda_available"
+												? "sky"
+												: "slate"
+							}
+						>
+							{resultsPdf.freshness_status_label}
+						</Badge>
+					)}
+				</div>
 
 				{resultsPdf.has_newer_results && (
 					<div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-950/30">
@@ -245,6 +267,22 @@ export default function LaboratoryNotificationResultsPdfActions({
 				<Text>
 					Base64 legacy en BD:{" "}
 					<Strong>{resultsPdf.has_pdf_in_db ? "Sí" : "No"}</Strong>
+				</Text>
+				<Text>
+					Tipo de PDF:{" "}
+					<Strong>{resultsPdf.pdf_kind_label ?? "Sin PDF"}</Strong>
+				</Text>
+				<Text>
+					Última notificación GDA:{" "}
+					<Strong>{formatDateTime(resultsPdf.latest_results_at)}</Strong>
+				</Text>
+				<Text>
+					PDF almacenado:{" "}
+					<Strong>{formatDateTime(resultsPdf.stored_pdf_at)}</Strong>
+				</Text>
+				<Text>
+					Diferencia:{" "}
+					<Strong>{resultsPdf.stale_lag_label ?? "—"}</Strong>
 				</Text>
 				<Text>
 					Disponible en GDA:{" "}
@@ -315,7 +353,9 @@ export default function LaboratoryNotificationResultsPdfActions({
 					Disponible en GDA: {resultsPdf.available_at_gda ? "Sí" : "No"}
 				</Badge>
 				{resultsPdf.is_stale && (
-					<Badge color="amber">Caché posiblemente desactualizada</Badge>
+					<Badge color="amber">
+						{resultsPdf.freshness_status_label || "PDF GDA desactualizado"}
+					</Badge>
 				)}
 			</div>
 

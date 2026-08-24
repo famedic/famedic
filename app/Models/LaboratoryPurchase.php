@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Support\Laboratory\GdaResultsPdfStatus;
 use Illuminate\Support\Facades\Storage;
 use Propaganistas\LaravelPhone\Casts\RawPhoneNumberCast;
 
@@ -478,6 +479,33 @@ class LaboratoryPurchase extends Model
     public function hasResults(): bool
     {
         return $this->resultNotifications()->whereNotNull('results_pdf_base64')->exists();
+    }
+
+    public function isGdaManagedResults(): bool
+    {
+        return GdaResultsPdfStatus::isGdaManagedPath($this->results);
+    }
+
+    public function isManualResults(): bool
+    {
+        return GdaResultsPdfStatus::isManualPath($this->results);
+    }
+
+    /**
+     * Hay una notificación de resultados posterior al último acceso real del paciente.
+     * Un PDF GDA en storage no apaga el indicador. Un PDF manual no muestra "resultado nuevo".
+     */
+    public function hasUnseenResultsForPatient(): bool
+    {
+        if ($this->isManualResults()) {
+            return false;
+        }
+
+        return LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(
+            $this->id,
+            $this->gda_order_id,
+            $this->gda_consecutivo
+        );
     }
 
     // Método para obtener el último PDF de resultados
