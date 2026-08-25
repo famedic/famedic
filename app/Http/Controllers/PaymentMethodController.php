@@ -49,6 +49,7 @@ class PaymentMethodController extends Controller
         $balanceCents = $couponService->getUserBalance($request->user()->id);
 
         $tokens = EfevooToken::where('customer_id', $customer->id)
+            ->currentEnvironment()
             ->active()
             ->excludeMockInProduction()
             ->orderByDesc('created_at')
@@ -1079,6 +1080,12 @@ class PaymentMethodController extends Controller
         );
 
         if ($attempt->status === $status->value) {
+            if (in_array($status->value, PaymentAuthenticationAttemptStatus::terminalValues(), true)) {
+                $this->recoveryContexts()->syncFromAttempt($attempt->fresh());
+
+                return;
+            }
+
             $this->recorder()->record($attempt, $eventType, [
                 'source' => 'polling',
                 'provider_status' => $session->status,

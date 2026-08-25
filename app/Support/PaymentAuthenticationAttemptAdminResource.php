@@ -315,6 +315,7 @@ class PaymentAuthenticationAttemptAdminResource
             PaymentAuthenticationAttemptEventType::TokenizationRequestFailed->value => 'TokenCard falló',
             PaymentAuthenticationAttemptEventType::TokenizationRequestTimeout->value => 'Timeout TokenCard',
             PaymentAuthenticationAttemptEventType::TokenizationConfirmationPending->value => 'Tokenización en confirmación',
+            PaymentAuthenticationAttemptEventType::ExistingTokenReused->value => 'Token existente reutilizado',
             PaymentAuthenticationAttemptEventType::DuplicateExternalCallBlocked->value => 'Llamada externa duplicada bloqueada',
             PaymentAuthenticationAttemptEventType::PaymentOperationCorrelationDetected->value => 'Correlación de operación detectada',
             PaymentAuthenticationAttemptEventType::PossibleDuplicateVerificationOperation->value => 'Posible operación de verificación duplicada',

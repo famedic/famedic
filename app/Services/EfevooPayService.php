@@ -392,11 +392,7 @@ class EfevooPayService implements EfevooPayGateway
             ];
         }
 
-        $existing = EfevooToken::where('customer_id', $customerId)
-            ->where('card_last_four', $lastFour)
-            ->where('card_expiration', $expiration)
-            ->where('is_active', true)
-            ->first();
+        $existing = $this->findReusableToken($cardData, $customerId);
 
         if ($existing) {
             Log::info('[Efevoo] Tarjeta ya existente, reutilizando', [
@@ -415,6 +411,7 @@ class EfevooPayService implements EfevooPayGateway
                 'success' => true,
                 'token_id' => $existing->id,
                 'reused' => true,
+                'external_tokenization_attempted' => false,
             ];
         }
 
@@ -452,12 +449,37 @@ class EfevooPayService implements EfevooPayGateway
         $tokenizeFailure = $this->interpretTokenizeResponse($response);
 
         if (!$tokenizeFailure['success']) {
-            return $tokenizeFailure;
+            return array_merge($tokenizeFailure, [
+                'external_tokenization_attempted' => true,
+            ]);
+        }
+
+        $tokenUsuario = $response['data']['token_usuario'];
+        $existingTokenized = EfevooToken::query()
+            ->where('customer_id', $customerId)
+            ->currentEnvironment()
+            ->where('card_token', $tokenUsuario)
+            ->active()
+            ->excludeMockInProduction()
+            ->first();
+
+        if ($existingTokenized) {
+            $existingTokenized->update([
+                'alias' => $cardData['alias'] ?? $existingTokenized->alias,
+                'card_holder' => $cardData['card_holder'] ?? $existingTokenized->card_holder,
+            ]);
+
+            return [
+                'success' => true,
+                'token_id' => $existingTokenized->id,
+                'reused' => true,
+                'external_tokenization_attempted' => true,
+            ];
         }
 
         $token = EfevooToken::create([
             'customer_id' => $customerId,
-            'card_token' => $response['data']['token_usuario'],
+            'card_token' => $tokenUsuario,
             'client_token' => $response['data']['token'] ?? null,
             'card_last_four' => $lastFour,
             'card_expiration' => $expiration,
@@ -469,7 +491,41 @@ class EfevooPayService implements EfevooPayGateway
         return [
             'success' => true,
             'token_id' => $token->id,
+            'external_tokenization_attempted' => true,
         ];
+    }
+
+    private function findReusableToken(array $cardData, int $customerId): ?EfevooToken
+    {
+        $secureIdentity = $this->secureCardIdentity($cardData);
+
+        if ($secureIdentity === null) {
+            return null;
+        }
+
+        return EfevooToken::query()
+            ->where('customer_id', $customerId)
+            ->currentEnvironment()
+            ->where("metadata->{$secureIdentity['key']}", $secureIdentity['value'])
+            ->active()
+            ->excludeMockInProduction()
+            ->first();
+    }
+
+    /**
+     * @return array{key: string, value: string}|null
+     */
+    private function secureCardIdentity(array $cardData): ?array
+    {
+        foreach (['gateway_card_id', 'card_fingerprint', 'provider_card_id'] as $key) {
+            $value = $cardData[$key] ?? null;
+
+            if (is_string($value) && trim($value) !== '') {
+                return ['key' => $key, 'value' => trim($value)];
+            }
+        }
+
+        return null;
     }
 
     /**

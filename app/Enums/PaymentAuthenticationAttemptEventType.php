@@ -73,6 +73,7 @@ enum PaymentAuthenticationAttemptEventType: string
     case TokenizationRequestFailed = 'tokenization_request_failed';
     case TokenizationRequestTimeout = 'tokenization_request_timeout';
     case TokenizationConfirmationPending = 'tokenization_confirmation_pending';
+    case ExistingTokenReused = 'existing_token_reused';
     case DuplicateExternalCallBlocked = 'duplicate_external_call_blocked';
     case PaymentOperationCorrelationDetected = 'payment_operation_correlation_detected';
     case PossibleDuplicateVerificationOperation = 'possible_duplicate_verification_operation';

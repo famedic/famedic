@@ -390,6 +390,7 @@ class Customer extends Model
     public function paymentMethods()
     {
         return $this->efevooTokens()
+            ->currentEnvironment()
             ->active()
             ->excludeMockInProduction()
             ->get()
@@ -424,6 +425,7 @@ class Customer extends Model
     public function getEfevooPaymentMethods()
     {
         return $this->efevooTokens()
+            ->currentEnvironment()
             ->active()
             ->excludeMockInProduction()
             ->get()

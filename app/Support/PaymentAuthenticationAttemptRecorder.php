@@ -50,6 +50,8 @@ class PaymentAuthenticationAttemptRecorder
         'call_number',
         'processor_transaction_id',
         'attempt_id',
+        'reused_token_id',
+        'external_tokenization_attempted',
     ];
 
     public const MONETARY_METADATA_ALLOWLIST = [
@@ -66,6 +68,8 @@ class PaymentAuthenticationAttemptRecorder
         'detected_by',
         'reason',
         'stage',
+        'reused_token_id',
+        'external_tokenization_attempted',
     ];
 
     private const EXTERNAL_COUNTERS = [

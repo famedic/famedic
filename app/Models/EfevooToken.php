@@ -80,6 +80,11 @@ class EfevooToken extends Model
         return $query->where('environment', 'production');
     }
 
+    public function scopeCurrentEnvironment($query)
+    {
+        return $query->where('environment', config('efevoopay.environment', 'test'));
+    }
+
     public function isMock(): bool
     {
         return MockEfevooPaymentSupport::isMockToken($this);

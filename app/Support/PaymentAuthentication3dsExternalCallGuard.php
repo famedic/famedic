@@ -156,23 +156,46 @@ class PaymentAuthentication3dsExternalCallGuard
         $started = microtime(true);
 
         try {
-            $this->tracer->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationRequestStarted, PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE, [
-                'session_id' => $session->id,
-                'provider_order_id' => $session->order_id,
-                'amount' => PaymentAuthenticationEfevooPayAmounts::tokenizationVerificationAmount(),
-                'currency' => PaymentAuthenticationEfevooPayAmounts::currency(),
-                'call_number' => 1,
+            app(PaymentAuthenticationAttemptRecorder::class)->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationRequestStarted, [
+                'source' => 'backend',
+                'dedupe_key' => 'tokenization_request_started:intent:'.$session->id,
+                'metadata' => [
+                    'session_id' => $session->id,
+                    'operation' => PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE,
+                    'provider_order_id' => $session->order_id,
+                    'amount' => PaymentAuthenticationEfevooPayAmounts::tokenizationVerificationAmount(),
+                    'currency' => PaymentAuthenticationEfevooPayAmounts::currency(),
+                    'call_number' => 1,
+                ],
             ]);
 
             $result = $callback();
             $durationMs = (int) round((microtime(true) - $started) * 1000);
+            $externalAttempted = (bool) ($result['external_tokenization_attempted'] ?? ! ($result['reused'] ?? false));
 
-            if ($result['success'] ?? false) {
-                $this->tracer->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationRequestSucceeded, PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE, [
-                    'session_id' => $session->id,
-                    'provider_order_id' => $session->order_id,
+            if (($result['success'] ?? false) && ($result['reused'] ?? false) && ! $externalAttempted) {
+                app(PaymentAuthenticationAttemptRecorder::class)->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::ExistingTokenReused, [
+                    'source' => 'backend',
+                    'dedupe_key' => 'existing_token_reused:'.$session->id.':'.($result['token_id'] ?? 'unknown'),
+                    'metadata' => [
+                        'session_id' => $session->id,
+                        'reused_token_id' => $result['token_id'] ?? null,
+                        'external_tokenization_attempted' => false,
+                    ],
+                ]);
+            } elseif (($result['success'] ?? false) && $externalAttempted) {
+                app(PaymentAuthenticationAttemptRecorder::class)->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationRequestSucceeded, [
+                    'source' => 'backend',
+                    'external_operation' => PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE,
+                    'dedupe_key' => 'tokenization_request_succeeded:'.PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE.':1',
                     'duration_ms' => $durationMs,
-                    'processor_transaction_id' => $result['transaction_id'] ?? null,
+                    'metadata' => [
+                        'session_id' => $session->id,
+                        'operation' => PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE,
+                        'provider_order_id' => $session->order_id,
+                        'processor_transaction_id' => $result['transaction_id'] ?? null,
+                        'external_tokenization_attempted' => true,
+                    ],
                 ]);
             } elseif (($result['confirmation_pending'] ?? false) === true) {
                 $this->tracer->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationConfirmationPending, PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE, [
@@ -183,10 +206,17 @@ class PaymentAuthentication3dsExternalCallGuard
                 ]);
                 $this->markTokenizationConfirmationPending($attempt, $session);
             } else {
-                $this->tracer->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationRequestFailed, PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE, [
-                    'session_id' => $session->id,
-                    'provider_order_id' => $session->order_id,
+                app(PaymentAuthenticationAttemptRecorder::class)->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationRequestFailed, [
+                    'source' => 'backend',
+                    'external_operation' => $externalAttempted ? PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE : null,
+                    'dedupe_key' => 'tokenization_request_failed:'.($externalAttempted ? 'external' : 'local').':'.$session->id,
                     'duration_ms' => $durationMs,
+                    'metadata' => [
+                        'session_id' => $session->id,
+                        'operation' => PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE,
+                        'provider_order_id' => $session->order_id,
+                        'external_tokenization_attempted' => $externalAttempted,
+                    ],
                 ]);
             }
 
