@@ -63,13 +63,13 @@ class PaymentAuthentication3dsExternalCallGuard
             $result = $callback();
             $durationMs = (int) round((microtime(true) - $started) * 1000);
 
-            $eventType = ($result['phase'] ?? '') === 'pending'
-                ? PaymentAuthenticationAttemptEventType::ProviderStatusRequestSucceeded
-                : PaymentAuthenticationAttemptEventType::ProviderStatusRequestSucceeded;
+            $phase = (string) ($result['phase'] ?? 'unknown');
+            $errorType = $result['error_type'] ?? null;
+            $eventType = PaymentAuthenticationAttemptEventType::ProviderStatusRequestSucceeded;
 
-            if (in_array($result['phase'] ?? '', ['error'], true) && ($result['error_type'] ?? null) === 'network') {
+            if ($phase === 'error' && in_array($errorType, ['network', 'timeout'], true)) {
                 $eventType = PaymentAuthenticationAttemptEventType::ProviderStatusRequestTimeout;
-            } elseif (in_array($result['phase'] ?? '', ['declined', 'cancelled', 'expired', 'error'], true)) {
+            } elseif ($phase === 'error') {
                 $eventType = PaymentAuthenticationAttemptEventType::ProviderStatusRequestFailed;
             }
 

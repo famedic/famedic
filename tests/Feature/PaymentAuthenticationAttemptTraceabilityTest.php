@@ -9,6 +9,7 @@ use App\Models\PaymentAuthenticationAttemptEvent;
 use App\Models\User;
 use App\Support\EfevooPay3dsResultClassifier;
 use App\Support\PaymentAuthenticationAttemptRecorder;
+use App\Support\PaymentAuthentication3dsExternalCallGuard;
 use Illuminate\Support\Str;
 
 beforeEach(function () {
@@ -243,6 +244,34 @@ it('classifies expiration and explicit cancellation without calling it user canc
         ->and($cancelled['failure_origin'])->toBe(EfevooPay3dsResultClassifier::ORIGIN_UNKNOWN)
         ->and($cancelled['failure_certainty'])->toBe(EfevooPay3dsResultClassifier::CERTAINTY_UNKNOWN)
         ->and($cancelled['result_category'])->not->toBe(EfevooPay3dsResultClassifier::CATEGORY_CANCELLED_BY_PROVIDER);
+});
+
+it('records business declined getstatus as successful provider request', function () {
+    $user = authAttemptTraceabilityUser();
+    $attempt = traceabilityAttempt($user, [
+        'status' => PaymentAuthenticationAttemptStatus::Pending->value,
+    ]);
+    $session = Efevoo3dsSession::create([
+        'customer_id' => $user->customer->id,
+        'payment_authentication_attempt_id' => $attempt->id,
+        'order_id' => 'ORDER-DECLINED-STATUS',
+        'card_last_four' => '4242',
+        'amount' => 1.5,
+        'status' => 'pending',
+    ]);
+
+    $result = app(PaymentAuthentication3dsExternalCallGuard::class)->withGetStatusLock(
+        $session,
+        $attempt,
+        fn () => ['phase' => 'declined', 'success' => false, 'message' => 'authentication declined']
+    );
+
+    $events = $attempt->fresh()->events()->pluck('event_type')->all();
+
+    expect($result['result']['phase'])->toBe('declined')
+        ->and($events)->toContain(PaymentAuthenticationAttemptEventType::ProviderStatusRequestSucceeded->value)
+        ->and($events)->not->toContain(PaymentAuthenticationAttemptEventType::ProviderStatusRequestFailed->value)
+        ->and($attempt->fresh()->status_poll_call_count)->toBe(1);
 });
 
 it('expires stale active attempts before blocking a new uuid', function () {

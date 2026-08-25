@@ -6,6 +6,7 @@ use App\Models\Efevoo3dsSession;
 use App\Models\PaymentAuthenticationAttemptEvent;
 use App\Support\EfevooPay3dsResultClassifier;
 use App\Support\PaymentAuthenticationAttemptRecorder;
+use App\Services\PaymentAuthenticationAttempts\PaymentAuthenticationEfevooPayOperationAnalyzer;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -213,4 +214,55 @@ it('shows the retry chain only through retry_of_attempt_id', function () {
             ->where('attempt.chain_recovered', true)
             ->where('attempt.chain_final_status', PaymentAuthenticationAttemptStatus::Completed->value)
             ->has('attempt.retry_chain', 2));
+});
+
+it('admin operations handles declined getstatus without token card call', function () {
+    $customer = threeDsAdminCustomer();
+    $attempt = threeDsAdminAttempt($customer, [
+        'status' => PaymentAuthenticationAttemptStatus::Declined->value,
+        'provider_link_call_count' => 1,
+        'status_poll_call_count' => 1,
+        'tokenization_call_count' => 0,
+        'provider_order_id' => 'ORDER-DECLINED-1234',
+    ]);
+    $session = Efevoo3dsSession::create([
+        'customer_id' => $customer->customer->id,
+        'payment_authentication_attempt_id' => $attempt->id,
+        'order_id' => 'ORDER-DECLINED-1234',
+        'card_last_four' => '4242',
+        'amount' => 1.5,
+        'status' => 'declined',
+    ]);
+    $attempt->update(['efevoo_3ds_session_id' => $session->id]);
+
+    $operations = app(PaymentAuthenticationEfevooPayOperationAnalyzer::class)->analyze($attempt->fresh(), $session);
+
+    expect($operations['get_status']['last_result'])->toBe('declined')
+        ->and($operations['token_card']['call_count'])->toBe(0)
+        ->and($operations['token_card']['amount'])->toBeNull()
+        ->and($operations['token_card']['currency'])->toBeNull()
+        ->and($operations['token_card']['result'])->toBe('not_called')
+        ->and($operations['disclaimer'])->toBe('Una operación registrada no demuestra por sí misma un cargo confirmado.');
+});
+
+it('admin operations marks technical tokenization failure only when token card was called', function () {
+    $customer = threeDsAdminCustomer();
+    $attempt = threeDsAdminAttempt($customer, [
+        'status' => PaymentAuthenticationAttemptStatus::TechnicalError->value,
+        'provider_link_call_count' => 1,
+        'status_poll_call_count' => 1,
+        'tokenization_call_count' => 0,
+    ]);
+    $session = Efevoo3dsSession::create([
+        'customer_id' => $customer->customer->id,
+        'payment_authentication_attempt_id' => $attempt->id,
+        'order_id' => 'ORDER-TECH-1234',
+        'card_last_four' => '4242',
+        'amount' => 1.5,
+        'status' => 'tokenization_failed',
+    ]);
+
+    $operations = app(PaymentAuthenticationEfevooPayOperationAnalyzer::class)->analyze($attempt->fresh(), $session);
+
+    expect($operations['token_card']['result'])->toBe('not_called');
 });

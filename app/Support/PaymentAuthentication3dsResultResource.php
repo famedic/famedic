@@ -191,7 +191,7 @@ class PaymentAuthentication3dsResultResource
                 'technical_error' => ($recovery['prioritize_different_card'] ?? false)
                     ? 'Si el problema continúa, intenta con otra tarjeta.'
                     : 'Si el problema continúa, vuelve a intentarlo o usa otra tarjeta.',
-                'unknown', 'provider_confirmation_pending' => 'Te avisaremos en cuanto tengamos una respuesta definitiva.',
+                'unknown', 'provider_confirmation_pending' => 'Actualiza el estado para consultar la respuesta definitiva.',
                 default => null,
             },
         ];
@@ -227,7 +227,7 @@ class PaymentAuthentication3dsResultResource
             : 'No pudimos completar la verificación de tu tarjeta.';
 
         return match ($type) {
-            PaymentAuthenticationRecoveryContextType::PaymentMethodSettings => 'No pudimos verificar ni guardar tu tarjeta.',
+            PaymentAuthenticationRecoveryContextType::PaymentMethodSettings => 'No hay una compra pendiente asociada a esta verificación. Puedes intentar nuevamente o utilizar otra tarjeta.',
             PaymentAuthenticationRecoveryContextType::LaboratoryCheckout => $hasSavedCart
                 ? 'Tu carrito sigue guardado y no se completó el pago.'
                 : 'No se completó el pago. Puedes regresar al catálogo o al checkout para continuar.',

@@ -61,8 +61,8 @@ class PaymentAuthenticationEfevooPayOperationAnalyzer
             ],
             'token_card' => [
                 'call_count' => $tokenCalls,
-                'amount' => $tokenAmount,
-                'currency' => PaymentAuthenticationEfevooPayAmounts::currency(),
+                'amount' => $tokenCalls > 0 ? $tokenAmount : null,
+                'currency' => $tokenCalls > 0 ? PaymentAuthenticationEfevooPayAmounts::currency() : null,
                 'transaction_id_masked' => $this->tracer->maskIdentifier($tokenTransactionId),
                 'result' => $this->operationResultLabel($tokenCalls, $attempt->status, 'token'),
                 'confirmation_pending' => $attempt->status === PaymentAuthenticationAttemptStatus::TokenizationConfirmationPending->value,
@@ -92,7 +92,7 @@ class PaymentAuthenticationEfevooPayOperationAnalyzer
         });
 
         if (! $needsEventScan) {
-            return $attempts->mapWithKeys(fn (PaymentAuthenticationAttempt $attempt) => [
+            return $attempts->mapWithKeys(fn(PaymentAuthenticationAttempt $attempt) => [
                 $attempt->id => false,
             ])->all();
         }
@@ -252,7 +252,7 @@ class PaymentAuthenticationEfevooPayOperationAnalyzer
                 return 'confirmation_pending';
             }
 
-            if ($status === PaymentAuthenticationAttemptStatus::TechnicalError->value && $tokenCalls > 0) {
+            if ($status === PaymentAuthenticationAttemptStatus::TechnicalError->value) {
                 return 'failed';
             }
 

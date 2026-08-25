@@ -114,16 +114,32 @@ function experienceResult(Efevoo3dsSession $session, User $user): array
     );
 }
 
-test('configuracion no menciona compra en resultado', function () {
+test('configuracion aclara que no hay compra pendiente', function () {
     $user = experienceUser();
     $context = experienceContext($user->customer, PaymentAuthenticationRecoveryContextType::PaymentMethodSettings);
     $attempt = experienceAttempt($user->customer, $context, PaymentAuthenticationAttemptStatus::Declined);
     $session = experienceSession($user->customer, $attempt);
     $result = experienceResult($session, $user);
 
-    expect($result['copy']['message'])->toBe('No pudimos verificar ni guardar tu tarjeta.')
+    expect($result['copy']['message'])->toBe('No hay una compra pendiente asociada a esta verificación. Puedes intentar nuevamente o utilizar otra tarjeta.')
         ->and($result['copy']['message'])->not->toContain('carrito')
-        ->and($result['copy']['message'])->not->toContain('compra');
+        ->and($result['copy']['message'])->toContain('compra pendiente');
+});
+
+test('declined con contexto aun in progress habilita recuperacion sin maximo falso', function () {
+    $user = experienceUser();
+    $context = experienceContext($user->customer, PaymentAuthenticationRecoveryContextType::PaymentMethodSettings, [
+        'status' => PaymentAuthenticationRecoveryContextStatus::AuthenticationInProgress->value,
+    ]);
+    $attempt = experienceAttempt($user->customer, $context, PaymentAuthenticationAttemptStatus::Declined);
+    $session = experienceSession($user->customer, $attempt, 'declined');
+    $result = experienceResult($session, $user);
+
+    expect($result['presentation'])->toBe('declined')
+        ->and($result['recovery']['actions']['retry'])->toBeTrue()
+        ->and($result['recovery']['actions']['different_card'])->toBeTrue()
+        ->and($result['recovery']['block_reason'])->toBeNull()
+        ->and($result['recovery']['attempts_remaining'])->toBe(2);
 });
 
 test('laboratorio menciona carrito guardado solo si existe', function () {
@@ -203,7 +219,47 @@ test('technical error expone cooldown', function () {
     $result = experienceResult($session, $user);
 
     expect($result['cooldown_remaining_seconds'])->toBeGreaterThan(0)
-        ->and($result['recovery']['actions']['retry'])->toBeFalse();
+        ->and($result['recovery']['actions']['retry'])->toBeFalse()
+        ->and($result['recovery']['block_reason'])->toBe('cooldown_active')
+        ->and($result['recovery']['attempts_remaining'])->toBeGreaterThan(0);
+});
+
+test('limite maximo solo aparece cuando no quedan intentos', function () {
+    $user = experienceUser();
+    $context = experienceContext($user->customer, PaymentAuthenticationRecoveryContextType::PaymentMethodSettings);
+
+    foreach ([1, 2] as $number) {
+        experienceAttempt($user->customer, $context, PaymentAuthenticationAttemptStatus::Declined, [
+            'attempt_number' => $number,
+            'started_at' => now()->subMinutes(10 - $number),
+            'finished_at' => now()->subMinutes(10 - $number),
+        ]);
+    }
+
+    $latest = experienceAttempt($user->customer, $context, PaymentAuthenticationAttemptStatus::Declined, [
+        'attempt_number' => 3,
+    ]);
+    $session = experienceSession($user->customer, $latest);
+    $result = experienceResult($session, $user);
+
+    expect($result['recovery']['actions']['retry'])->toBeFalse()
+        ->and($result['recovery']['block_reason'])->toBe('recovery_limit_reached')
+        ->and($result['recovery']['attempts_remaining'])->toBe(0)
+        ->and($result['recovery']['maximum_attempts'])->toBe(3);
+});
+
+test('confirmacion pendiente no promete notificacion movil', function () {
+    $user = experienceUser();
+    $context = experienceContext($user->customer, PaymentAuthenticationRecoveryContextType::PaymentMethodSettings, [
+        'status' => PaymentAuthenticationRecoveryContextStatus::AuthenticationInProgress->value,
+    ]);
+    $attempt = experienceAttempt($user->customer, $context, PaymentAuthenticationAttemptStatus::ProviderConfirmationPending, ['finished_at' => null]);
+    $session = experienceSession($user->customer, $attempt, 'pending');
+    $result = experienceResult($session, $user);
+
+    expect($result['copy']['hint'])->toBe('Actualiza el estado para consultar la respuesta definitiva.')
+        ->and(strtolower($result['copy']['hint']))->not->toContain('avisaremos')
+        ->and(strtolower($result['copy']['hint']))->not->toContain('notific');
 });
 
 test('unknown y provider confirmation pending bloquean acciones', function (PaymentAuthenticationAttemptStatus $status) {

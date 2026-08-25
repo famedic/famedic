@@ -74,6 +74,10 @@ export default function ThreeDSResult({
 
     const prioritizeDifferentCard = recovery?.prioritize_different_card ?? false;
     const cooldownLabel = formatCooldown(liveResult.cooldown_remaining_seconds ?? 0);
+    const attemptsRemaining = Number(recovery?.attempts_remaining ?? liveResult.attempts_remaining ?? 0);
+    const maximumAttempts = Number(recovery?.maximum_attempts ?? liveResult.maximum_attempts ?? 0);
+    const reachedRecoveryLimit =
+        recovery?.block_reason === "recovery_limit_reached" && attemptsRemaining <= 0;
 
     useEffect(() => {
         if (isSuccess) {
@@ -403,9 +407,15 @@ export default function ThreeDSResult({
                             </p>
                         )}
 
-                        {recovery?.block_reason === "recovery_limit_reached" && (
+                        {recovery?.block_reason === "cooldown_active" && cooldownLabel && (
                             <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
-                                Alcanzaste el máximo de intentos permitidos. Comunícate con soporte o regresa más tarde.
+                                Este intento está en enfriamiento temporal. No es un bloqueo por máximo de intentos.
+                            </p>
+                        )}
+
+                        {reachedRecoveryLimit && (
+                            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
+                                Alcanzaste el máximo de {maximumAttempts || "los"} intentos permitidos. Comunícate con soporte o regresa más tarde.
                             </p>
                         )}
 

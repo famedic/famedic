@@ -34,6 +34,41 @@ function kindClasses(kind) {
 	}[kind] || "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900";
 }
 
+function operationResultLabel(result, operation = "default") {
+	if (!result) return "—";
+
+	const labels = {
+		not_called: "No ejecutado",
+		called_once: "Ejecutado una vez",
+		multiple_calls: "Múltiples ejecuciones",
+		succeeded: "Exitoso",
+		confirmation_pending: "Confirmación pendiente",
+		failed: "Fallo técnico",
+		attempted: "Intentado",
+		completed: "Consulta completada - completada",
+		declined: "Consulta completada - autenticación rechazada",
+		cancelled: "Consulta completada - cancelada",
+		expired: "Consulta completada - expirada",
+		pending: "Consulta completada - pendiente",
+		provider_confirmation_pending: "Confirmación pendiente del proveedor",
+		tokenization_confirmation_pending: "TokenCard en confirmación",
+	};
+
+	if (operation === "get_status" && labels[result]) {
+		return labels[result];
+	}
+
+	return labels[result] || result;
+}
+
+function operationAmount(operation) {
+	if (!operation || Number(operation.call_count ?? 0) === 0) {
+		return "No ejecutado";
+	}
+
+	return `$${Number(operation.amount ?? 0).toFixed(2)} ${operation.currency || ""}`.trim();
+}
+
 export default function PaymentAuthenticationAttemptPage({ attempt }) {
 	return (
 		<AdminLayout title={`Intento 3DS ${attempt.support_reference}`}>
@@ -93,12 +128,12 @@ export default function PaymentAuthenticationAttemptPage({ attempt }) {
 									<Text>Llamadas: {attempt.efevoopay_operations.get_link?.call_count ?? 0}</Text>
 									<Text>Importe: ${Number(attempt.efevoopay_operations.get_link?.amount ?? 0).toFixed(2)} {attempt.efevoopay_operations.get_link?.currency}</Text>
 									<Text>Order ID: {attempt.efevoopay_operations.get_link?.order_id_masked || "—"}</Text>
-									<Text>Resultado: {attempt.efevoopay_operations.get_link?.result || "—"}</Text>
+									<Text>Resultado: {operationResultLabel(attempt.efevoopay_operations.get_link?.result)}</Text>
 								</div>
 								<div className="space-y-1">
 									<Text><Strong>GetStatus</Strong></Text>
 									<Text>Llamadas: {attempt.efevoopay_operations.get_status?.call_count ?? 0}</Text>
-									<Text>Último resultado: {attempt.efevoopay_operations.get_status?.last_result || "—"}</Text>
+									<Text>Ultimo resultado: {operationResultLabel(attempt.efevoopay_operations.get_status?.last_result, "get_status")}</Text>
 									{attempt.efevoopay_operations.get_status?.excessive && (
 										<Badge color="amber">Excesivo</Badge>
 									)}
@@ -106,9 +141,9 @@ export default function PaymentAuthenticationAttemptPage({ attempt }) {
 								<div className="space-y-1">
 									<Text><Strong>TokenCard</Strong></Text>
 									<Text>Llamadas: {attempt.efevoopay_operations.token_card?.call_count ?? 0}</Text>
-									<Text>Importe: ${Number(attempt.efevoopay_operations.token_card?.amount ?? 0).toFixed(2)} {attempt.efevoopay_operations.token_card?.currency}</Text>
+									<Text>Importe: {operationAmount(attempt.efevoopay_operations.token_card)}</Text>
 									<Text>Transaction ID: {attempt.efevoopay_operations.token_card?.transaction_id_masked || "—"}</Text>
-									<Text>Resultado: {attempt.efevoopay_operations.token_card?.result || "—"}</Text>
+									<Text>Resultado: {operationResultLabel(attempt.efevoopay_operations.token_card?.result)}</Text>
 									{attempt.efevoopay_operations.token_card?.confirmation_pending && (
 										<Badge color="orange">En confirmación</Badge>
 									)}
