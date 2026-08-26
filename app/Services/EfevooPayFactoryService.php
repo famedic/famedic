@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\EfevooPayGateway;
-use App\Services\EfevooPay\MockEfevooPayGateway;
+use App\Support\EfevooPayGatewayMode;
 use Illuminate\Support\Facades\Log;
 
 class EfevooPayFactoryService
@@ -14,11 +14,11 @@ class EfevooPayFactoryService
 
     public function createService(): EfevooPayGateway
     {
-        if (! app()->environment('production')) {
-            Log::info('Usando MockEfevooPayGateway (APP_ENV != production)', [
-                'app_env' => app()->environment(),
-            ]);
-        }
+        Log::info('Resolviendo gateway EfevooPay', [
+            'app_env' => app()->environment(),
+            'gateway_mode' => EfevooPayGatewayMode::current(),
+            'uses_mock' => EfevooPayGatewayMode::usesMock(),
+        ]);
 
         return $this->gateway;
     }

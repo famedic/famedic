@@ -14,7 +14,9 @@ use App\Models\PaymentAuthenticationAttempt;
 use App\Services\CouponService;
 use App\Support\AppEnvironmentLabel;
 use App\Support\EfevooPay3dsResultClassifier;
+use App\Support\EfevooPayGatewayMode;
 use App\Support\EfevooPayLogSanitizer;
+use App\Support\EfevooPayLocalRealTestMode;
 use App\Support\MockEfevooPaymentSupport;
 use App\Support\PaymentAuthentication3dsCompletionService;
 use App\Support\PaymentAuthentication3dsResultResource;
@@ -29,6 +31,7 @@ use App\Support\PaymentAuthenticationRecoveryPolicy;
 use App\Support\PaymentAuthenticationRecoveryStartException;
 use App\Support\PaymentAuthenticationSensitiveCardDataStore;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -50,6 +53,7 @@ class PaymentMethodController extends Controller
 
         $tokens = EfevooToken::where('customer_id', $customer->id)
             ->currentEnvironment()
+            ->compatibleWithCurrentGateway()
             ->active()
             ->excludeMockInProduction()
             ->orderByDesc('created_at')
@@ -92,6 +96,7 @@ class PaymentMethodController extends Controller
             'recoveryForm' => $preparedRecovery ? [
                 'recovery_action' => $preparedRecovery['recovery_action'] ?? null,
                 'recovery_intent' => $preparedRecovery['recovery_intent'] ?? null,
+                'recovery_submission_identity' => $preparedRecovery['recovery_submission_identity'] ?? null,
                 'context_message' => $this->recoveryFormContextMessage($resolution['context'], $preparedRecovery),
             ] : null,
             'isRecoveryForm' => $preparedRecovery !== null,
@@ -142,6 +147,11 @@ class PaymentMethodController extends Controller
             ((int) $year === (int) $currentYear && (int) $month < (int) $currentMonth)
         ) {
             return back()->withErrors(['exp_year' => 'La tarjeta esta vencida']);
+        }
+
+        $localRealTestError = $this->localRealTestCardVerificationError($request);
+        if ($localRealTestError !== null) {
+            return back()->withErrors(['error' => $localRealTestError]);
         }
 
         $cardData = [
@@ -220,9 +230,15 @@ class PaymentMethodController extends Controller
             'attempt_uuid' => $validated['attempt_uuid'],
         ]);
 
+        $attemptUuid = $validated['attempt_uuid'];
+
+        if ($preparedRecovery && filled($preparedRecovery['assigned_attempt_uuid'] ?? null)) {
+            $attemptUuid = (string) $preparedRecovery['assigned_attempt_uuid'];
+        }
+
         $attemptResolution = $this->resolveAuthenticationAttempt(
             $customer,
-            $validated['attempt_uuid'],
+            $attemptUuid,
             $retryOfAttemptId,
             $recoveryContext
         );
@@ -232,7 +248,10 @@ class PaymentMethodController extends Controller
         }
 
         if ($preparedRecovery && ($attemptResolution['attempt'] ?? null)) {
-            $this->recoveryNavigator()->clearPreparedRecovery($customer);
+            $this->recoveryNavigator()->rememberAssignedAttemptUuid(
+                $customer,
+                $attemptResolution['attempt']->attempt_uuid
+            );
         }
 
         /** @var PaymentAuthenticationAttempt $attempt */
@@ -242,22 +261,10 @@ class PaymentMethodController extends Controller
             $session = $attempt->efevoo3dsSession;
 
             if ($session && (int) $session->customer_id === (int) $customer->id) {
-                $this->recorder()->record($attempt, PaymentAuthenticationAttemptEventType::AttemptReused, [
-                    'source' => 'backend',
-                    'dedupe_key' => 'attempt_reused:redirect:'.$attempt->duplicate_request_count,
-                    'metadata' => ['session_id' => $session->id],
-                ]);
-
                 return redirect()->route('payment-methods.3ds-redirect', [
                     'sessionId' => $session->id,
                 ]);
             }
-
-            $this->recorder()->record($attempt, PaymentAuthenticationAttemptEventType::AttemptReused, [
-                'source' => 'backend',
-                'dedupe_key' => 'attempt_reused:pending:'.$attempt->duplicate_request_count,
-                'metadata' => ['response_received' => false],
-            ]);
 
             return back()->with('info', 'Estamos confirmando el estado de tu verificacion. Referencia: '.$attempt->support_reference);
         }
@@ -455,15 +462,8 @@ class PaymentMethodController extends Controller
             ->where('customer_id', $customer->id)
             ->firstOrFail();
 
-        $this->syncAuthenticationAttemptFromSession($session);
-
         $attempt = $session->paymentAuthenticationAttempt;
         $recoveryContext = $attempt?->recoveryContext;
-
-        if ($attempt && $recoveryContext) {
-            $this->recoveryContexts()->syncFromAttempt($attempt->fresh());
-            $recoveryContext = $recoveryContext->fresh();
-        }
 
         $result = app(PaymentAuthentication3dsResultResource::class)->make(
             $session,
@@ -724,34 +724,71 @@ class PaymentMethodController extends Controller
             ->where('customer_id', $customer->id)
             ->firstOrFail();
 
-        $attempt = $session->paymentAuthenticationAttempt;
+        $attempt = $session->paymentAuthenticationAttempt?->fresh();
+        $session->refresh();
+
+        if (Cache::has(LocalThreeDSHarnessController::harnessSessionKey((int) $sessionId))) {
+            return response()->json([
+                'final' => false,
+                'status' => 'pending',
+                'message' => 'Harness local: challenge en curso sin consulta al proveedor.',
+                'server_now' => now()->toISOString(),
+                'expires_at' => $attempt?->expires_at?->toISOString(),
+                'started_at' => $attempt?->started_at?->toISOString(),
+                'support_reference' => $attempt?->support_reference,
+            ]);
+        }
 
         if ($session->status === 'mock_pending') {
             $this->recordLegacySessionIfNeeded($session);
         }
 
-        $willPollExternally = $attempt
-            && ! in_array($session->status, ['completed', 'declined', 'tokenization_failed', 'cancelled', 'error', 'failed'], true)
-            && ! in_array($attempt->status, [
-                PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value,
-                PaymentAuthenticationAttemptStatus::TokenizationConfirmationPending->value,
-            ], true);
+        $attemptForPollEvents = $attempt;
+        $sessionTerminal = in_array($session->status, [
+            'completed', 'declined', 'tokenization_failed', 'cancelled', 'error', 'failed',
+        ], true);
+        $attemptTerminal = $attempt
+            && in_array($attempt->status, PaymentAuthenticationAttemptStatus::terminalValues(), true);
+        $attemptInFlight = $attempt && in_array($attempt->status, [
+            PaymentAuthenticationAttemptStatus::Authenticated->value,
+            PaymentAuthenticationAttemptStatus::Tokenizing->value,
+            PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value,
+            PaymentAuthenticationAttemptStatus::TokenizationConfirmationPending->value,
+        ], true);
 
-        if ($willPollExternally) {
+        if ($attempt && ! $sessionTerminal && ! $attemptTerminal && ! $attemptInFlight) {
             $this->recordStatusPollStarted($attempt);
         }
 
         $pollResult = $this->completionService()->poll($customer, $session, $attempt);
 
         $session->refresh();
+        $attempt = $attempt?->fresh();
         $success = ($pollResult['status'] ?? '') === 'completed';
-        $this->recordStatusPollResult($attempt, $session, $success, $pollResult);
 
-        if (! in_array($pollResult['status'] ?? '', [
+        if ($attemptForPollEvents && ! $sessionTerminal && ! $attemptTerminal && ! $attemptInFlight
+            && ($pollResult['status'] ?? null) !== 'processing') {
+            $this->recordStatusPollResult($attemptForPollEvents, $session, $success, $pollResult);
+        }
+
+        if ($session->status === 'tokenization_failed' && $attempt) {
+            $this->syncAuthenticationAttemptFromSession($session);
+            $attempt = $attempt->fresh();
+        }
+
+        $pollStatus = (string) ($pollResult['status'] ?? $session->status);
+        $shouldSyncAttempt = ! in_array($pollStatus, [
             PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value,
             PaymentAuthenticationAttemptStatus::TokenizationConfirmationPending->value,
             PaymentAuthenticationAttemptStatus::TechnicalError->value,
-        ], true) && ! in_array($session->status, ['pending', 'mock_pending'], true)) {
+            'processing',
+        ], true)
+            && ! $sessionTerminal
+            && ! $attemptTerminal
+            && ! $attemptInFlight
+            && ! in_array($session->status, ['pending', 'mock_pending'], true);
+
+        if ($shouldSyncAttempt) {
             $this->syncAuthenticationAttemptFromSession($session);
         }
 
@@ -765,6 +802,10 @@ class PaymentMethodController extends Controller
             'message' => $message,
             'error_detail' => $session->error_message,
             'error_type' => $pollResult['error_type'] ?? null,
+            'server_now' => now()->toISOString(),
+            'expires_at' => $attempt?->expires_at?->toISOString(),
+            'started_at' => $attempt?->started_at?->toISOString(),
+            'support_reference' => $attempt?->support_reference,
         ]);
     }
 
@@ -772,7 +813,7 @@ class PaymentMethodController extends Controller
     {
         return match ($status) {
             'completed' => 'Tarjeta verificada y guardada correctamente.',
-            'declined' => 'La verificacion fue rechazada por tu banco. Puede deberse a que cancelaste el proceso o el banco no autorizo la operacion.',
+            'declined' => 'El proveedor reportó que no se completó la autenticación.',
             'tokenization_failed' => 'La tarjeta fue autenticada, pero no pudo guardarse. Revisa el motivo mas abajo o contacta a soporte.',
             'authenticated' => 'Verificacion exitosa. Guardando tarjeta...',
             'pending' => 'Esperando que completes la verificacion en la ventana de tu banco.',
@@ -829,18 +870,34 @@ class PaymentMethodController extends Controller
                     ];
                 }
 
-                $this->recorder()->record($existing->fresh(), PaymentAuthenticationAttemptEventType::AttemptReused, [
-                    'source' => 'backend',
-                    'result_category' => EfevooPay3dsResultClassifier::CATEGORY_DUPLICATE_REQUEST,
-                    'failure_origin' => EfevooPay3dsResultClassifier::ORIGIN_FAMEDIC,
-                    'failure_certainty' => EfevooPay3dsResultClassifier::CERTAINTY_CONFIRMED,
-                    'dedupe_key' => 'attempt_reused:'.$existing->duplicate_request_count,
-                ]);
+                if ($this->shouldReuseExistingAttempt($existing, $retryOfAttemptId)) {
+                    $this->recorder()->record($existing->fresh(), PaymentAuthenticationAttemptEventType::AttemptReused, [
+                        'source' => 'backend',
+                        'result_category' => EfevooPay3dsResultClassifier::CATEGORY_DUPLICATE_REQUEST,
+                        'failure_origin' => EfevooPay3dsResultClassifier::ORIGIN_FAMEDIC,
+                        'failure_certainty' => EfevooPay3dsResultClassifier::CERTAINTY_CONFIRMED,
+                        'dedupe_key' => 'attempt_reused:'.$existing->id,
+                        'metadata' => [
+                            'duplicate_request_count' => $existing->duplicate_request_count,
+                            'retry_of_attempt_id' => $retryOfAttemptId,
+                        ],
+                    ]);
 
-                return [
-                    'attempt' => $existing->fresh(['efevoo3dsSession']),
-                    'should_call_provider' => false,
-                ];
+                    return [
+                        'attempt' => $existing->fresh(['efevoo3dsSession']),
+                        'should_call_provider' => false,
+                    ];
+                }
+
+                if ($retryOfAttemptId) {
+                    $attemptUuid = (string) Str::uuid();
+                    $existing = null;
+                } else {
+                    return [
+                        'attempt' => $existing->fresh(['efevoo3dsSession']),
+                        'should_call_provider' => false,
+                    ];
+                }
             }
 
             Customer::whereKey($customer->id)->lockForUpdate()->firstOrFail();
@@ -963,6 +1020,27 @@ class PaymentMethodController extends Controller
         });
     }
 
+    private function shouldReuseExistingAttempt(
+        PaymentAuthenticationAttempt $existing,
+        mixed $retryOfAttemptId
+    ): bool {
+        if (in_array($existing->status, PaymentAuthenticationAttemptStatus::activeValues(), true)) {
+            return true;
+        }
+
+        if ($retryOfAttemptId !== null) {
+            if ((int) $existing->id === (int) $retryOfAttemptId) {
+                return false;
+            }
+
+            if (in_array($existing->status, PaymentAuthenticationAttemptStatus::terminalValues(), true)) {
+                return false;
+            }
+        }
+
+        return in_array($existing->status, PaymentAuthenticationAttemptStatus::terminalValues(), true);
+    }
+
     private function authenticationAttemptErrorResponse(Request $request, array $resolution)
     {
         $attempt = $resolution['attempt'] ?? null;
@@ -1049,6 +1127,45 @@ class PaymentMethodController extends Controller
             return;
         }
 
+        if (in_array($attempt->status, PaymentAuthenticationAttemptStatus::terminalValues(), true)) {
+            $currentStatus = PaymentAuthenticationAttemptStatus::tryFrom($attempt->status);
+            $targetStatus = $forcedStatus ?? match ($session->status) {
+                'completed' => PaymentAuthenticationAttemptStatus::Completed,
+                'declined' => PaymentAuthenticationAttemptStatus::Declined,
+                'cancelled' => PaymentAuthenticationAttemptStatus::Cancelled,
+                'tokenization_failed' => PaymentAuthenticationAttemptStatus::TechnicalError,
+                'error', 'failed' => PaymentAuthenticationAttemptStatus::TechnicalError,
+                'authenticated' => PaymentAuthenticationAttemptStatus::Authenticated,
+                'pending', 'mock_pending' => PaymentAuthenticationAttemptStatus::Pending,
+                default => PaymentAuthenticationAttemptStatus::ChallengeRequired,
+            };
+
+            if ($currentStatus
+                && $currentStatus !== $targetStatus
+                && ! $currentStatus->canTransitionTo($targetStatus)) {
+                if ($session->status === 'tokenization_failed'
+                    && $attempt->failure_category !== EfevooPay3dsResultClassifier::CATEGORY_TOKENIZATION_FAILED) {
+                    $classification = EfevooPay3dsResultClassifier::tokenization([
+                        'success' => false,
+                        'message' => $session->error_message,
+                        'provider_code' => $attempt->provider_code,
+                        'provider_message' => $attempt->provider_message ?? $session->error_message,
+                        'error_code' => $attempt->provider_code,
+                    ]);
+                    $attempt->forceFill([
+                        'failure_category' => $classification['result_category'],
+                        'failure_origin' => $classification['failure_origin'],
+                        'failure_certainty' => $classification['failure_certainty'],
+                        'provider_message' => $classification['provider_message'] ?? $attempt->provider_message,
+                    ])->save();
+                }
+
+                $this->recoveryContexts()->syncFromAttempt($attempt->fresh());
+
+                return;
+            }
+        }
+
         if (in_array($attempt->status, [
             PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value,
             PaymentAuthenticationAttemptStatus::TokenizationConfirmationPending->value,
@@ -1062,11 +1179,26 @@ class PaymentMethodController extends Controller
             'completed' => PaymentAuthenticationAttemptStatus::Completed,
             'declined' => PaymentAuthenticationAttemptStatus::Declined,
             'cancelled' => PaymentAuthenticationAttemptStatus::Cancelled,
-            'tokenization_failed', 'error', 'failed' => PaymentAuthenticationAttemptStatus::TechnicalError,
+            'tokenization_failed' => PaymentAuthenticationAttemptStatus::TechnicalError,
+            'error', 'failed' => PaymentAuthenticationAttemptStatus::TechnicalError,
             'authenticated' => PaymentAuthenticationAttemptStatus::Authenticated,
             'pending', 'mock_pending' => PaymentAuthenticationAttemptStatus::Pending,
             default => PaymentAuthenticationAttemptStatus::ChallengeRequired,
         };
+
+        $classification = $session->status === 'tokenization_failed'
+            ? EfevooPay3dsResultClassifier::tokenization([
+                'success' => false,
+                'message' => $session->error_message,
+                'provider_code' => $attempt->provider_code,
+                'provider_message' => $attempt->provider_message ?? $session->error_message,
+                'error_code' => $attempt->provider_code,
+            ])
+            : EfevooPay3dsResultClassifier::providerStatus(
+                $session->status,
+                null,
+                $session->error_message
+            );
 
         $eventType = match ($status) {
             PaymentAuthenticationAttemptStatus::Completed => PaymentAuthenticationAttemptEventType::AttemptCompleted,
@@ -1075,44 +1207,34 @@ class PaymentMethodController extends Controller
             PaymentAuthenticationAttemptStatus::Expired => PaymentAuthenticationAttemptEventType::AuthenticationExpired,
             PaymentAuthenticationAttemptStatus::Authenticated => PaymentAuthenticationAttemptEventType::AuthenticationSucceeded,
             PaymentAuthenticationAttemptStatus::Tokenizing => PaymentAuthenticationAttemptEventType::TokenizationStarted,
-            PaymentAuthenticationAttemptStatus::TechnicalError => PaymentAuthenticationAttemptEventType::TechnicalError,
+            PaymentAuthenticationAttemptStatus::TechnicalError => $session->status === 'tokenization_failed'
+                ? PaymentAuthenticationAttemptEventType::TokenizationFailed
+                : PaymentAuthenticationAttemptEventType::TechnicalError,
             default => PaymentAuthenticationAttemptEventType::ProviderStatusReceived,
         };
 
-        $classification = EfevooPay3dsResultClassifier::providerStatus(
-            $session->status,
-            null,
-            $session->error_message
-        );
-
         if ($attempt->status === $status->value) {
-            if (in_array($status->value, PaymentAuthenticationAttemptStatus::terminalValues(), true)) {
-                if ($status === PaymentAuthenticationAttemptStatus::Completed
-                    && $attempt->failure_category !== EfevooPay3dsResultClassifier::CATEGORY_SUCCESS) {
-                    $attempt->forceFill([
-                        'failure_category' => EfevooPay3dsResultClassifier::CATEGORY_SUCCESS,
-                        'failure_origin' => EfevooPay3dsResultClassifier::ORIGIN_EFEVOOPAY,
-                        'failure_certainty' => EfevooPay3dsResultClassifier::CERTAINTY_CONFIRMED,
-                    ])->save();
-                }
-
-                $this->recoveryContexts()->syncFromAttempt($attempt->fresh());
-
-                return;
+            if ($session->status === 'tokenization_failed'
+                && $attempt->failure_category !== EfevooPay3dsResultClassifier::CATEGORY_TOKENIZATION_FAILED) {
+                $attempt->forceFill([
+                    'failure_category' => $classification['result_category'],
+                    'failure_origin' => $classification['failure_origin'],
+                    'failure_certainty' => $classification['failure_certainty'],
+                    'provider_message' => $classification['provider_message'] ?? $attempt->provider_message,
+                ])->save();
             }
 
-            $this->recorder()->record($attempt, $eventType, [
-                'source' => 'polling',
-                'provider_status' => $session->status,
-                'provider_message' => $session->error_message,
-                'result_category' => $classification['result_category'],
-                'failure_origin' => $classification['failure_origin'],
-                'failure_certainty' => $classification['failure_certainty'],
-                'dedupe_key' => $eventType->value.':same_status:'.$session->status.':'.$session->status_checked_at?->timestamp,
-                'metadata' => ['session_id' => $session->id],
-            ]);
-
             $this->recoveryContexts()->syncFromAttempt($attempt->fresh());
+
+            if (in_array($status->value, PaymentAuthenticationAttemptStatus::terminalValues(), true)
+                && $status === PaymentAuthenticationAttemptStatus::Completed
+                && $attempt->failure_category !== EfevooPay3dsResultClassifier::CATEGORY_SUCCESS) {
+                $attempt->forceFill([
+                    'failure_category' => EfevooPay3dsResultClassifier::CATEGORY_SUCCESS,
+                    'failure_origin' => EfevooPay3dsResultClassifier::ORIGIN_EFEVOOPAY,
+                    'failure_certainty' => EfevooPay3dsResultClassifier::CERTAINTY_CONFIRMED,
+                ])->save();
+            }
 
             return;
         }
@@ -1156,7 +1278,7 @@ class PaymentMethodController extends Controller
 
         $this->recorder()->record($attempt, PaymentAuthenticationAttemptEventType::StatusPollStarted, [
             'source' => 'polling',
-            'dedupe_key' => 'status_poll_started:internal:'.($attempt->events()->where('event_type', PaymentAuthenticationAttemptEventType::StatusPollStarted->value)->count() + 1),
+            'dedupe_key' => 'status_poll_started:attempt:'.$attempt->id,
             'metadata' => [
                 'stage' => 'internal_poll',
             ],
@@ -1197,7 +1319,7 @@ class PaymentMethodController extends Controller
             'result_category' => $classification['result_category'],
             'failure_origin' => $classification['failure_origin'],
             'failure_certainty' => $classification['failure_certainty'],
-            'dedupe_key' => $eventType->value.':'.$attempt->status_poll_call_count.':'.$session->status,
+            'dedupe_key' => $eventType->value.':poll_cycle:'.$attempt->id.':'.$session->status,
             'metadata' => [
                 'session_id' => $session->id,
                 'poll_number' => $attempt->fresh()->status_poll_call_count,
@@ -1214,52 +1336,12 @@ class PaymentMethodController extends Controller
                 'result_category' => $classification['result_category'],
                 'failure_origin' => $classification['failure_origin'],
                 'failure_certainty' => $classification['failure_certainty'],
-                'dedupe_key' => 'provider_status_received:'.$attempt->status_poll_call_count.':'.$session->status,
+                'dedupe_key' => 'provider_status_received:'.$attempt->id.':'.$session->status,
                 'metadata' => [
                     'session_id' => $session->id,
                     'poll_number' => $attempt->fresh()->status_poll_call_count,
                     'response_received' => true,
                 ],
-            ]);
-        }
-
-        if (in_array($session->status, ['authenticated', 'approved', 'completed'], true)) {
-            $this->recorder()->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::AuthenticationSucceeded, [
-                'source' => 'efevoopay',
-                'provider_status' => $session->status,
-                'provider_code' => $classification['provider_code'],
-                'provider_message' => $classification['provider_message'],
-                'dedupe_key' => 'authentication_succeeded:'.$session->id.':'.$session->status,
-                'metadata' => ['session_id' => $session->id],
-            ]);
-        }
-
-        if ($session->status === 'completed') {
-            $this->recorder()->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationStarted, [
-                'source' => 'backend',
-                'dedupe_key' => 'tokenization_started:'.$session->id,
-                'metadata' => ['session_id' => $session->id, 'stage' => 'post_poll'],
-            ]);
-            $this->recorder()->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationSucceeded, [
-                'source' => 'efevoopay',
-                'dedupe_key' => 'tokenization_succeeded:'.$session->id,
-                'metadata' => ['session_id' => $session->id],
-            ]);
-        }
-
-        if ($session->status === 'tokenization_failed') {
-            $classification = EfevooPay3dsResultClassifier::tokenization([
-                'success' => false,
-                'message' => $session->error_message,
-            ]);
-            $this->recorder()->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationFailed, [
-                'source' => 'efevoopay',
-                'result_category' => $classification['result_category'],
-                'failure_origin' => $classification['failure_origin'],
-                'failure_certainty' => $classification['failure_certainty'],
-                'provider_message' => $classification['provider_message'],
-                'dedupe_key' => 'tokenization_failed:'.$session->id,
-                'metadata' => ['session_id' => $session->id],
             ]);
         }
     }
@@ -1328,5 +1410,27 @@ class PaymentMethodController extends Controller
         return back()
             ->withErrors(['error' => $exception->getMessage()])
             ->setStatusCode($exception->status);
+    }
+
+    private function localRealTestCardVerificationError(Request $request): ?string
+    {
+        if (! app()->environment('local') || ! EfevooPayGatewayMode::usesHttpGateway()) {
+            return null;
+        }
+
+        if (! EfevooPayLocalRealTestMode::enabled()) {
+            return 'Pruebas reales locales no habilitadas.';
+        }
+
+        if (! EfevooPayLocalRealTestMode::activeFor($request->user())) {
+            return 'Usuario no autorizado para pruebas reales locales.';
+        }
+
+        $validation = EfevooPayLocalRealTestMode::validateCardVerificationAmounts();
+        if (! $validation['allowed']) {
+            return 'Configuracion de montos de verificacion invalida para pruebas locales.';
+        }
+
+        return null;
     }
 }

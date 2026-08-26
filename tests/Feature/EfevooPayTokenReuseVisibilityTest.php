@@ -239,6 +239,7 @@ it('records TokenCard succeeded only after an external response', function () {
 });
 
 it('shows a reused visible token in payment methods', function () {
+    config(['efevoopay.gateway' => 'live', 'efevoopay.environment' => 'production']);
     $user = reuseUser();
     $token = EfevooToken::factory()->create([
         'customer_id' => $user->customer->id,
@@ -247,7 +248,10 @@ it('shows a reused visible token in payment methods', function () {
         'environment' => 'production',
         'is_active' => true,
         'expires_at' => now()->addYear(),
-        'metadata' => ['gateway_card_id' => 'gw-card-visible'],
+        'metadata' => [
+            'gateway_origin' => 'live',
+            'gateway_card_id' => 'gw-card-visible',
+        ],
     ]);
 
     $this->actingAs($user)

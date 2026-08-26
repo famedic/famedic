@@ -191,17 +191,11 @@ class PaymentAuthenticationRecoveryContextManager
             PaymentAuthenticationAttemptStatus::ProviderConfirmationPending,
             PaymentAuthenticationAttemptStatus::Authenticated,
             PaymentAuthenticationAttemptStatus::Tokenizing,
+            PaymentAuthenticationAttemptStatus::Pending,
+            PaymentAuthenticationAttemptStatus::ChallengeRequired,
+            PaymentAuthenticationAttemptStatus::Created,
+            PaymentAuthenticationAttemptStatus::Initiating,
         ], true)) {
-            $this->recorder->record($attempt, PaymentAuthenticationAttemptEventType::RecoveryBlocked, [
-                'source' => 'system',
-                'dedupe_key' => 'recovery_blocked:'.$context->id.':'.$status->value,
-                'metadata' => [
-                    'context_uuid' => $context->context_uuid,
-                    'context_type' => $this->typeValue($context),
-                    'detected_by' => 'attempt_status',
-                ],
-            ]);
-
             return;
         }
 
@@ -237,7 +231,7 @@ class PaymentAuthenticationRecoveryContextManager
         if ($attempt) {
             $this->recorder->record($attempt, PaymentAuthenticationAttemptEventType::CardVerified, [
                 'source' => 'backend',
-                'dedupe_key' => 'card_verified:'.$context->id,
+                'dedupe_key' => 'card_verified:attempt:'.$attempt->id,
                 'metadata' => [
                     'context_uuid' => $context->context_uuid,
                     'context_type' => $this->typeValue($context),
@@ -248,7 +242,7 @@ class PaymentAuthenticationRecoveryContextManager
 
             $this->recorder->record($attempt, PaymentAuthenticationAttemptEventType::SafeReturnGenerated, [
                 'source' => 'backend',
-                'dedupe_key' => 'safe_return_generated:'.$context->id,
+                'dedupe_key' => 'safe_return_generated:attempt:'.$attempt->id,
                 'metadata' => [
                     'context_uuid' => $context->context_uuid,
                     'context_type' => $this->typeValue($context),
@@ -263,11 +257,21 @@ class PaymentAuthenticationRecoveryContextManager
         PaymentAuthenticationRecoveryContext $context,
         PaymentAuthenticationAttempt $attempt
     ): void {
+        $dedupeKey = 'recovery_available:'.$context->id.':'.$attempt->id;
+
+        if ($attempt->events()->where('dedupe_key', $dedupeKey)->exists()) {
+            if ($context->fresh()->status !== PaymentAuthenticationRecoveryContextStatus::RecoveryAvailable) {
+                $this->transition($context, PaymentAuthenticationRecoveryContextStatus::RecoveryAvailable);
+            }
+
+            return;
+        }
+
         $this->transition($context, PaymentAuthenticationRecoveryContextStatus::RecoveryAvailable);
 
         $this->recorder->record($attempt, PaymentAuthenticationAttemptEventType::RecoveryAvailable, [
             'source' => 'system',
-            'dedupe_key' => 'recovery_available:'.$context->id.':'.$attempt->id,
+            'dedupe_key' => $dedupeKey,
             'metadata' => [
                 'context_uuid' => $context->context_uuid,
                 'context_type' => $this->typeValue($context),

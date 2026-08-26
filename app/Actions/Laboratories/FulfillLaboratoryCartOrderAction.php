@@ -21,6 +21,7 @@ use App\Services\Carts\CartEventRecorder;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\Orders\OrderAutomationService;
 use App\Services\PromoCodeService;
+use App\Support\LocalExternalIntegrationGate;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -59,6 +60,12 @@ class FulfillLaboratoryCartOrderAction
         ?Cart $cart = null,
         ?array $clientContext = null,
     ): LaboratoryPurchase {
+        if (! LocalExternalIntegrationGate::allows('laboratory_fulfillment')) {
+            throw new \RuntimeException(
+                'Pedidos de laboratorio bloqueados durante pruebas locales reales. Use el cobro aislado local.'
+            );
+        }
+
         $cart ??= $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
 
         if (! $cart && $customer->user_id && $laboratoryCartItems->isNotEmpty()) {

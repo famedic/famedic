@@ -28,8 +28,10 @@ use Illuminate\Support\Str;
 
 beforeEach(function () {
     config([
+        'efevoopay.gateway' => 'mock',
         'efevoopay.requires_3ds' => true,
         'efevoopay.recovery_context_ttl_minutes' => 30,
+        'efevoopay.local_real_tests.enabled' => false,
         'app.url' => 'http://localhost',
     ]);
 });

@@ -25,11 +25,13 @@ use Illuminate\Support\Str;
 
 beforeEach(function () {
     config([
+        'efevoopay.gateway' => 'mock',
         'efevoopay.requires_3ds' => true,
         'efevoopay.recovery_context_ttl_minutes' => 30,
         'efevoopay.recovery.max_attempts_per_context' => 3,
         'efevoopay.recovery.attempt_window_minutes' => 30,
         'efevoopay.recovery.technical_error_cooldown_seconds' => 60,
+        'efevoopay.local_real_tests.enabled' => false,
         'app.url' => 'http://localhost',
     ]);
 });
@@ -116,16 +118,18 @@ function experienceResult(Efevoo3dsSession $session, User $user): array
     );
 }
 
-test('configuracion aclara que no hay compra pendiente', function () {
+test('configuracion muestra fallo de autenticacion bancaria sin exigir compra pendiente', function () {
     $user = experienceUser();
     $context = experienceContext($user->customer, PaymentAuthenticationRecoveryContextType::PaymentMethodSettings);
-    $attempt = experienceAttempt($user->customer, $context, PaymentAuthenticationAttemptStatus::Declined);
+    $attempt = experienceAttempt($user->customer, $context, PaymentAuthenticationAttemptStatus::Declined, [
+        'failure_category' => EfevooPay3dsResultClassifier::CATEGORY_AUTHENTICATION_FAILED,
+    ]);
     $session = experienceSession($user->customer, $attempt);
     $result = experienceResult($session, $user);
 
-    expect($result['copy']['message'])->toBe('No hay una compra pendiente asociada a esta verificación. Puedes intentar nuevamente o utilizar otra tarjeta.')
-        ->and($result['copy']['message'])->not->toContain('carrito')
-        ->and($result['copy']['message'])->toContain('compra pendiente');
+    expect($result['copy']['message'])->toBe('El banco no aprobó o no pudo completar la verificación. Puedes usar otra tarjeta o intentar después, según el tiempo de espera.')
+        ->and($result['copy']['message'])->not->toContain('compra pendiente')
+        ->and($result['copy']['message'])->not->toContain('carrito');
 });
 
 test('declined con contexto aun in progress habilita recuperacion sin maximo falso', function () {

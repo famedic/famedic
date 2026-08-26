@@ -4,12 +4,16 @@ use App\Contracts\EfevooPayGateway;
 use App\Enums\PaymentAuthenticationAttemptEventType;
 use App\Enums\PaymentAuthenticationAttemptStatus;
 use App\Models\Efevoo3dsSession;
+use App\Models\EfevooToken;
 use App\Models\PaymentAuthenticationAttempt;
 use App\Models\PaymentAuthenticationAttemptEvent;
 use App\Models\User;
 use App\Services\PaymentAuthenticationAttempts\PaymentAuthenticationEfevooPayOperationAnalyzer;
+use App\Support\EfevooPay3dsResultClassifier;
+use App\Support\EfevooPayTokenizeContract;
 use App\Support\PaymentAuthentication3dsExternalCallGuard;
 use App\Support\PaymentAuthentication3dsProviderCallException;
+use App\Support\PaymentAuthentication3dsResultResource;
 use App\Support\PaymentAuthenticationAttemptAdminResource;
 use App\Support\PaymentAuthenticationEfevooPayAmounts;
 use Illuminate\Support\Facades\Cache;
@@ -17,10 +21,12 @@ use Illuminate\Support\Str;
 
 beforeEach(function () {
     config([
+        'efevoopay.gateway' => 'mock',
         'efevoopay.requires_3ds' => true,
         'efevoopay.sensitive_card_data.containment_enabled' => true,
         'efevoopay.three_ds_verification_amount_cents' => 150,
         'efevoopay.tokenization_verification_amount_cents' => 150,
+        'efevoopay.local_real_tests.enabled' => false,
     ]);
 });
 
@@ -138,12 +144,39 @@ function bindFlowGateway(array &$calls, ?callable $initiate = null, ?callable $p
             $this->calls['finalize_amount'] = $cardData['amount'] ?? null;
 
             if ($this->finalize) {
-                return ($this->finalize)($session, $cardData);
+                $result = ($this->finalize)($session, $cardData);
+
+                if (! ($result['success'] ?? false) && ! ($result['confirmation_pending'] ?? false)) {
+                    $session->update([
+                        'status' => 'tokenization_failed',
+                        'error_message' => $result['message'] ?? 'Tokenización fallida',
+                    ]);
+                }
+
+                return $result;
             }
 
-            $session->update(['status' => 'completed', 'completed_at' => now()]);
+            $token = EfevooToken::create([
+                'customer_id' => $session->customer_id,
+                'card_token' => 'mock_tok_flow_'.Str::random(8),
+                'card_last_four' => substr(preg_replace('/\D/', '', $cardData['card_number'] ?? '4242'), -4),
+                'card_expiration' => $cardData['expiration'] ?? '1229',
+                'card_holder' => $cardData['card_holder'] ?? 'Flow Test',
+                'environment' => config('efevoopay.environment', 'test'),
+                'is_active' => true,
+                'metadata' => [
+                    'gateway_origin' => \App\Support\EfevooPayGatewayMode::current(),
+                    'mock' => \App\Support\EfevooPayGatewayMode::usesMock(),
+                ],
+            ]);
 
-            return ['success' => true, 'transaction_id' => 'TOK-TX-1'];
+            $session->update([
+                'status' => 'completed',
+                'efevoo_token_id' => $token->id,
+                'completed_at' => now(),
+            ]);
+
+            return ['success' => true, 'token_id' => $token->id, 'transaction_id' => 'TOK-TX-1'];
         }
 
         public function healthCheck(): array
@@ -172,6 +205,15 @@ function completeFlowPoll(User $user, Efevoo3dsSession $session, array $cardData
     )->getJson(route('payment-methods.3ds-status', $session));
 }
 
+function completeFlowThrough(User $user, Efevoo3dsSession $session, array $cardData = []): void
+{
+    $response = completeFlowPoll($user, $session, $cardData)->assertOk();
+
+    if (! ($response->json('final') ?? false)) {
+        completeFlowPoll($user, $session, $cardData)->assertOk();
+    }
+}
+
 it('normal flow uses one GetLink one GetStatus and one TokenCard with configured amounts', function () {
     $calls = [];
     bindFlowGateway($calls);
@@ -180,7 +222,7 @@ it('normal flow uses one GetLink one GetStatus and one TokenCard with configured
     $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
 
     $session = Efevoo3dsSession::first();
-    completeFlowPoll($user, $session)->assertOk();
+    completeFlowThrough($user, $session);
 
     $attempt = PaymentAuthenticationAttempt::first();
 
@@ -225,7 +267,7 @@ it('blocks concurrent external GetStatus polls with cache lock', function () {
     $session = Efevoo3dsSession::first();
     $attempt = PaymentAuthenticationAttempt::first();
 
-    Cache::lock('efevoo_3ds_getstatus_'.$session->id, 30)->get();
+    Cache::lock('efevoo_3ds_poll_cycle_'.$session->id, 30)->get();
 
     completeFlowPoll($user, $session)->assertOk();
 
@@ -253,7 +295,7 @@ it('tokenizes without cvv after authentication', function () {
     bindFlowGateway($calls);
     $user = flowUser();
     $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
-    completeFlowPoll($user, Efevoo3dsSession::first())->assertOk();
+    completeFlowThrough($user, Efevoo3dsSession::first());
 
     expect($calls['finalize_has_cvv'])->toBeFalse();
 });
@@ -270,7 +312,6 @@ it('tokenization timeout leaves confirmation pending without automatic retry', f
     $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
     $session = Efevoo3dsSession::first();
 
-    completeFlowPoll($user, $session)->assertOk();
     completeFlowPoll($user, $session)->assertOk();
 
     expect($calls['finalize3DSTokenization'])->toBe(1)
@@ -317,7 +358,7 @@ it('does not tokenize on declined terminal poll', function () {
     });
     $user = flowUser();
     $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
-    completeFlowPoll($user, Efevoo3dsSession::first())->assertOk();
+    completeFlowThrough($user, Efevoo3dsSession::first());
 
     expect($calls['finalize3DSTokenization'] ?? 0)->toBe(0)
         ->and(PaymentAuthenticationAttempt::first()->tokenization_call_count)->toBe(0);
@@ -336,7 +377,7 @@ it('exception before GetStatus dispatch is not recorded as network timeout', fun
     $user = flowUser();
     $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
 
-    completeFlowPoll($user, Efevoo3dsSession::first())->assertOk();
+    completeFlowThrough($user, Efevoo3dsSession::first());
 
     $attempt = PaymentAuthenticationAttempt::first();
     $events = $attempt->events()->pluck('event_type')->all();
@@ -367,7 +408,7 @@ it('timeout after GetStatus dispatch stays confirmation pending without success 
     $user = flowUser();
     $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
 
-    completeFlowPoll($user, Efevoo3dsSession::first())->assertOk();
+    completeFlowThrough($user, Efevoo3dsSession::first());
 
     $attempt = PaymentAuthenticationAttempt::first();
     $events = $attempt->events()->pluck('event_type')->all();
@@ -409,7 +450,7 @@ it('does not store pan cvv token or payload in monetary trace events', function 
     bindFlowGateway($calls);
     $user = flowUser();
     $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
-    completeFlowPoll($user, Efevoo3dsSession::first());
+    completeFlowThrough($user, Efevoo3dsSession::first());
 
     $forbiddenKeys = [
         'cvv', 'pan', 'card_number', 'track', 'track2', 'payload', 'card_token',
@@ -569,4 +610,225 @@ it('amount helpers expose separate getlink and tokenize values from config', fun
         ->and($link['cvv'])->toBe('123')
         ->and($token['amount'])->toBe(1.5)
         ->and(array_key_exists('cvv', $token))->toBeFalse();
+});
+
+it('network GetStatus error without timed_out is not recorded as timeout', function () {
+    $calls = [];
+    bindFlowGateway($calls, poll: fn () => [
+        'phase' => 'error',
+        'success' => false,
+        'error_type' => 'network',
+        'timed_out' => false,
+        'failure_stage' => 'get_client_token',
+        'exception_category' => 'technical_error_before_dispatch',
+        'request_dispatched' => false,
+        'response_received' => false,
+        'duration_ms' => 707,
+    ]);
+    $user = flowUser();
+    $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
+
+    completeFlowPoll($user, Efevoo3dsSession::first())
+        ->assertOk()
+        ->assertJsonPath('status', PaymentAuthenticationAttemptStatus::TechnicalError->value)
+        ->assertJsonPath('final', true);
+
+    $attempt = PaymentAuthenticationAttempt::first();
+    $events = $attempt->events()->pluck('event_type')->all();
+
+    expect($events)->toContain(PaymentAuthenticationAttemptEventType::ProviderStatusRequestFailed->value)
+        ->and($events)->not->toContain(PaymentAuthenticationAttemptEventType::ProviderStatusRequestTimeout->value)
+        ->and($attempt->fresh()->status)->toBe(PaymentAuthenticationAttemptStatus::TechnicalError->value);
+});
+
+it('status endpoint keeps provider_confirmation_pending as string with clock fields', function () {
+    $calls = [];
+    bindFlowGateway($calls, poll: function () {
+        throw new PaymentAuthentication3dsProviderCallException(
+            'request_get_status',
+            'network_timeout_after_dispatch',
+            true,
+            false,
+            null,
+            30000
+        );
+    });
+    $user = flowUser();
+    $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
+
+    completeFlowPoll($user, Efevoo3dsSession::first())
+        ->assertOk()
+        ->assertJsonPath('status', 'provider_confirmation_pending')
+        ->assertJsonPath('final', true)
+        ->assertJsonStructure(['server_now', 'expires_at', 'started_at', 'support_reference']);
+});
+
+it('executes tokencard in the same poll cycle when getstatus returns approved', function () {
+    $calls = [];
+    bindFlowGateway($calls);
+    $user = flowUser();
+
+    $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
+    $session = Efevoo3dsSession::first();
+
+    completeFlowPoll($user, $session)
+        ->assertOk()
+        ->assertJsonPath('final', true)
+        ->assertJsonPath('status', 'completed');
+
+    $attempt = PaymentAuthenticationAttempt::first();
+
+    expect($calls['poll3DSAuthentication'] ?? 0)->toBe(1)
+        ->and($calls['finalize3DSTokenization'] ?? 0)->toBe(1)
+        ->and($attempt->events()->where('event_type', PaymentAuthenticationAttemptEventType::AuthenticationSucceeded->value)->count())->toBe(1)
+        ->and($attempt->events()->where('event_type', PaymentAuthenticationAttemptEventType::TokenizationStarted->value)->count())->toBe(1)
+        ->and($attempt->fresh()->status)->toBe(PaymentAuthenticationAttemptStatus::Completed->value);
+});
+
+it('classifies getstatus approved plus tokencard business failure http 200', function () {
+    $calls = [];
+    bindFlowGateway($calls, finalize: fn () => [
+        'success' => false,
+        'message' => 'No aprobada por el procesador',
+        'error_type' => 'gateway',
+        'error_code' => '00',
+        'provider_code' => '00',
+        'provider_message' => 'No aprobada por el procesador',
+        'http_status' => 200,
+        'response_received' => true,
+        'duration_ms' => 120,
+        'failure_stage' => 'tokenize_response',
+        'exception_category' => 'tokenization_business_failure',
+        'external_tokenization_attempted' => true,
+    ]);
+    $user = flowUser();
+    $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
+    $session = Efevoo3dsSession::first();
+
+    completeFlowThrough($user, $session);
+
+    $attempt = PaymentAuthenticationAttempt::first()->fresh();
+    $events = $attempt->events()->pluck('event_type')->all();
+
+    expect($calls['finalize3DSTokenization'])->toBe(1)
+        ->and($attempt->failure_category)->toBe(EfevooPay3dsResultClassifier::CATEGORY_TOKENIZATION_FAILED)
+        ->and($attempt->provider_message)->toContain('procesador')
+        ->and($events)->toContain(PaymentAuthenticationAttemptEventType::AuthenticationSucceeded->value)
+        ->and($events)->toContain(PaymentAuthenticationAttemptEventType::TokenizationRequestFailed->value)
+        ->and($events)->toContain(PaymentAuthenticationAttemptEventType::TokenizationFailed->value)
+        ->and($events)->not->toContain(PaymentAuthenticationAttemptEventType::CardVerified->value);
+
+    $failedEvent = $attempt->events()
+        ->where('event_type', PaymentAuthenticationAttemptEventType::TokenizationRequestFailed->value)
+        ->first();
+    $meta = $failedEvent->allowlistedMetadata();
+
+    expect($meta['response_received'] ?? null)->toBeTrue()
+        ->and($meta['http_status'] ?? null)->toBe(200)
+        ->and($meta['failure_stage'] ?? null)->toBe('tokenize_response')
+        ->and($meta['exception_category'] ?? null)->toBe('tokenization_business_failure')
+        ->and(array_key_exists('card_number', $meta))->toBeFalse()
+        ->and(array_intersect(array_keys($meta), EfevooPayTokenizeContract::TOKENIZE_FORBIDDEN_METADATA_KEYS))->toBe([]);
+});
+
+it('revisit after tokenization failure is read only without extra tokencard', function () {
+    $calls = [];
+    bindFlowGateway($calls, finalize: fn () => [
+        'success' => false,
+        'message' => 'Tokenización no aprobada',
+        'error_type' => 'gateway',
+        'provider_code' => '05',
+        'provider_message' => 'Tokenización no aprobada',
+        'http_status' => 200,
+        'response_received' => true,
+        'failure_stage' => 'tokenize_response',
+        'exception_category' => 'tokenization_business_failure',
+        'external_tokenization_attempted' => true,
+    ]);
+    $user = flowUser();
+    $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
+    $session = Efevoo3dsSession::first();
+    completeFlowThrough($user, $session);
+
+    $tokenCalls = PaymentAuthenticationAttempt::first()->tokenization_call_count;
+
+    $this->actingAs($user)->get(route('payment-methods.3ds-result', $session))->assertOk();
+    $this->actingAs($user)->postJson(route('payment-methods.3ds-result-sync', ['sessionId' => $session->id]))->assertOk();
+    $this->actingAs($user)->postJson(route('payment-methods.3ds-result-sync', ['sessionId' => $session->id]))->assertOk();
+
+    expect($calls['finalize3DSTokenization'])->toBe(1)
+        ->and(PaymentAuthenticationAttempt::first()->fresh()->tokenization_call_count)->toBe($tokenCalls);
+});
+
+it('result resource exposes tokenization_failed presentation without bank rejection copy', function () {
+    $user = flowUser();
+    $attempt = PaymentAuthenticationAttempt::factory()->create([
+        'customer_id' => $user->customer->id,
+        'status' => PaymentAuthenticationAttemptStatus::TechnicalError->value,
+        'failure_category' => EfevooPay3dsResultClassifier::CATEGORY_TOKENIZATION_FAILED,
+        'failure_origin' => EfevooPay3dsResultClassifier::ORIGIN_EFEVOOPAY,
+        'provider_message' => 'Reservado para uso privado o Bad Track Data',
+    ]);
+    $session = Efevoo3dsSession::create([
+        'customer_id' => $user->customer->id,
+        'payment_authentication_attempt_id' => $attempt->id,
+        'order_id' => '31189',
+        'card_last_four' => '2313',
+        'amount' => PaymentAuthenticationEfevooPayAmounts::threeDsVerificationAmount(),
+        'status' => 'tokenization_failed',
+        'error_message' => 'Reservado para uso privado o Bad Track Data',
+    ]);
+    $attempt->update(['efevoo_3ds_session_id' => $session->id]);
+
+    $result = app(PaymentAuthentication3dsResultResource::class)->make(
+        $session,
+        $user->customer,
+        $attempt->fresh()
+    );
+
+    expect($result['presentation'])->toBe('tokenization_failed')
+        ->and($result['copy']['title'])->toContain('no pudimos guardar la tarjeta')
+        ->and($result['copy']['message'])->toBe('La verificación con tu banco se completó, pero no pudimos guardar la tarjeta. Puedes volver a intentarlo o usar otra tarjeta.')
+        ->and($result['copy']['hint'])->toContain('No necesitas contactar al banco');
+});
+
+it('admin analyzer separates approved authentication from failed card storage', function () {
+    $user = flowUser();
+    $attempt = PaymentAuthenticationAttempt::factory()->create([
+        'customer_id' => $user->customer->id,
+        'status' => PaymentAuthenticationAttemptStatus::TechnicalError->value,
+        'failure_category' => EfevooPay3dsResultClassifier::CATEGORY_TOKENIZATION_FAILED,
+        'provider_code' => '00',
+        'provider_message' => 'Reservado para uso privado o Bad Track Data',
+        'tokenization_call_count' => 1,
+        'status_poll_call_count' => 4,
+        'provider_link_call_count' => 1,
+    ]);
+    $session = Efevoo3dsSession::create([
+        'customer_id' => $user->customer->id,
+        'payment_authentication_attempt_id' => $attempt->id,
+        'order_id' => '31189',
+        'card_last_four' => '2313',
+        'amount' => 1.5,
+        'status' => 'tokenization_failed',
+    ]);
+    $attempt->update(['efevoo_3ds_session_id' => $session->id]);
+
+    PaymentAuthenticationAttemptEvent::create([
+        'event_uuid' => (string) Str::uuid(),
+        'payment_authentication_attempt_id' => $attempt->id,
+        'event_type' => PaymentAuthenticationAttemptEventType::AuthenticationSucceeded->value,
+        'source' => 'efevoopay',
+        'dedupe_key' => 'authentication_succeeded:test',
+        'occurred_at' => now(),
+        'created_at' => now(),
+    ]);
+
+    $operations = app(PaymentAuthenticationEfevooPayOperationAnalyzer::class)->analyze($attempt->fresh(), $session);
+
+    expect($operations['authentication_3ds']['result'])->toBe('approved')
+        ->and($operations['card_storage']['result'])->toBe('failed')
+        ->and($operations['token_card']['result'])->toBe('business_failed')
+        ->and($operations['token_card']['http_business_outcome'])->toBe('http_200_business_failed')
+        ->and($operations['overall_result_label'])->toBe('Autenticación aprobada; tokenización fallida');
 });

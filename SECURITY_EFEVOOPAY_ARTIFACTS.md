@@ -134,6 +134,16 @@ See Phase 5A audit: GetStatus without CVV, tokenize with order id only, hosted f
 
 ## 3DS monetary operation alignment (Phase 5C)
 
+### TokenCard / getTokenize — capas de evidencia (Postman oficial, revisión externa 2026-08)
+
+| Capa | Contenido |
+|---|---|
+| **Contrato documentado** | `method: getTokenize`; cuerpo cifrado AES con `track2` (string) + `amount` (string); ejemplo `track2` = `PAN=YYMM` (p. ej. sufijo `=3005` ⇒ año `30`, mes `05`); GetLink/GetStatus usan `track`, `cvv`, `exp` en `MM/YY`; TokenCard **no documenta CVV**. |
+| **Comportamiento observado de la API** | Respuesta incluye campo `codigo` (tipo JSON variable: entero `0`, string `"0"`, string `"00"`); mensajes de error del procesador (p. ej. texto que contiene “Bad Track Data”); HTTP 200 con cuerpo de negocio fallido; presencia de `token_usuario` en respuestas exitosas reales. |
+| **Inferencias FAMEDIC** | Éxito TokenCard **solo** si `token_usuario` no vacío (comportamiento observado, no contrato); `provider_code_type` + `provider_code_string` preservan tipo sin coerción; `normalized_reason=invalid_track_data` ante mensajes “Bad Track Data”; validación local `PAN=YYMM` antes del cifrado; descriptores allowlisted en timeline admin (sin PAN/CVV/track2/token). |
+
+FAMEDIC **no** trata HTTP 200 ni ningún `codigo` como éxito sin `token_usuario`.
+
 Provisional contract (public EfevooPay documentation):
 
 | Operation | Required fields | FAMEDIC entry point |

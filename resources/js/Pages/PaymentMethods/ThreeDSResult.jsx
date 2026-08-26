@@ -11,18 +11,15 @@ import {
 } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { router } from "@inertiajs/react";
+import {
+    recoveryActionIsRenderable,
+    returnActionIsRenderable,
+    safeReturnLabel,
+} from "@/lib/threeDSResultRecovery";
+import { clearAttemptStorage, clearRecoveryAttemptIdentities } from "@/lib/paymentAuthAttemptIdentity";
 
-function clearAttemptStorage(storageKey, recovery = false) {
-    if (!storageKey) return;
-
-    try {
-        window.sessionStorage.removeItem(storageKey);
-        if (recovery) {
-            window.sessionStorage.removeItem(`${storageKey}:recovery`);
-        }
-    } catch {
-        // Never persist card data in storage.
-    }
+function clearResultAttemptStorage(storageKey, recovery = false) {
+    clearAttemptStorage(storageKey, { includeRecovery: recovery });
 }
 
 function formatCooldown(seconds) {
@@ -81,12 +78,13 @@ export default function ThreeDSResult({
 
     useEffect(() => {
         if (isSuccess) {
-            clearAttemptStorage(paymentAuthStorageKey, true);
+            clearResultAttemptStorage(paymentAuthStorageKey, true);
             return;
         }
 
-        if (["declined", "cancelled", "expired", "technical_error", "context_unavailable"].includes(presentation)) {
-            clearAttemptStorage(paymentAuthStorageKey);
+        if (["declined", "cancelled", "expired", "technical_error", "tokenization_failed", "context_unavailable"].includes(presentation)) {
+            clearRecoveryAttemptIdentities(paymentAuthStorageKey);
+            clearResultAttemptStorage(paymentAuthStorageKey);
         }
     }, [isSuccess, presentation, paymentAuthStorageKey]);
 
@@ -113,6 +111,7 @@ export default function ThreeDSResult({
             cancelled: "Interrumpida",
             expired: "Expirada",
             technical_error: "Error técnico",
+            tokenization_failed: "Guardado de tarjeta fallido",
             unknown: "En confirmación",
             provider_confirmation_pending: "Confirmación pendiente",
             authenticated: "Autenticada",
@@ -130,6 +129,9 @@ export default function ThreeDSResult({
             router.visit(route("payment-methods.create"));
             return;
         }
+
+        clearRecoveryAttemptIdentities(paymentAuthStorageKey);
+        clearResultAttemptStorage(paymentAuthStorageKey);
 
         setRecoveryLoading(recoveryAction);
         setStatusMessage("");
@@ -205,7 +207,7 @@ export default function ThreeDSResult({
                 setLiveResult(data.result);
 
                 if (data.result.success) {
-                    clearAttemptStorage(paymentAuthStorageKey, true);
+                    clearResultAttemptStorage(paymentAuthStorageKey, true);
                     router.visit(redirectTarget);
                 }
             }
@@ -352,21 +354,21 @@ export default function ThreeDSResult({
 
                         {showRecoveryActions && (
                             <div className="mt-6 flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
-                                {recovery?.actions?.retry && (
+                                {recoveryActionIsRenderable("retry", recovery) && (
                                     <Button
                                         className={`w-full sm:w-auto ${prioritizeDifferentCard ? "order-2 sm:order-2" : "order-1 sm:order-1"}`}
                                         onClick={() => startRecovery("retry")}
-                                        disabled={recoveryLoading !== null || (cooldownLabel && presentation === "technical_error")}
+                                        disabled={recoveryLoading !== null || (cooldownLabel && ["technical_error", "tokenization_failed"].includes(presentation))}
                                         aria-busy={recoveryLoading === "retry"}
                                     >
                                         {recoveryLoading === "retry" ? "Preparando..." : "Volver a intentar"}
                                     </Button>
                                 )}
 
-                                {recovery?.actions?.different_card && (
+                                {recoveryActionIsRenderable("different_card", recovery) && (
                                     <Button
                                         className={`w-full sm:w-auto ${prioritizeDifferentCard ? "order-1 sm:order-1" : "order-2 sm:order-2"}`}
-                                        color={prioritizeDifferentCard ? undefined : "dark/zinc"}
+                                        outline={!prioritizeDifferentCard}
                                         onClick={() => startRecovery("different_card")}
                                         disabled={recoveryLoading !== null}
                                         aria-busy={recoveryLoading === "different_card"}
@@ -375,10 +377,10 @@ export default function ThreeDSResult({
                                     </Button>
                                 )}
 
-                                {recovery?.actions?.paypal && recovery?.recovery_paypal_start_url && (
+                                {recoveryActionIsRenderable("paypal", recovery) && (
                                     <Button
                                         className={`w-full sm:w-auto ${prioritizeDifferentCard ? "order-2 sm:order-3" : "order-3 sm:order-3"}`}
-                                        color="dark/zinc"
+                                        outline
                                         onClick={startPayPalRecovery}
                                         disabled={recoveryLoading !== null}
                                         aria-busy={recoveryLoading === "paypal"}
@@ -387,7 +389,7 @@ export default function ThreeDSResult({
                                     </Button>
                                 )}
 
-                                {recovery?.return_action?.href && (
+                                {returnActionIsRenderable(recovery) && (
                                     <Button outline href={recovery.return_action.href} className="order-4 w-full sm:w-auto">
                                         {safeReturnLabel(recovery.context_type)}
                                     </Button>
@@ -473,16 +475,6 @@ export default function ThreeDSResult({
             </div>
         </SettingsLayout>
     );
-}
-
-function safeReturnLabel(contextType) {
-    return {
-        payment_method_settings: "Regresar a métodos de pago",
-        laboratory_checkout: "Regresar al checkout",
-        medical_attention_checkout: "Regresar a membresía",
-        medical_attention_modal: "Regresar a membresía",
-        online_pharmacy_checkout: "Regresar al checkout",
-    }[contextType] ?? "Regresar";
 }
 
 function buildLegacyResult({ success, recoveryContext, returnUrl, sessionId }) {

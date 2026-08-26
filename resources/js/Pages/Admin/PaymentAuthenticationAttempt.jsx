@@ -44,6 +44,7 @@ function operationResultLabel(result, operation = "default") {
 		succeeded: "Exitoso",
 		confirmation_pending: "Confirmación pendiente",
 		failed: "Fallo técnico",
+		business_failed: "HTTP 200 · negocio fallido",
 		attempted: "Intentado",
 		completed: "Consulta completada - completada",
 		declined: "Consulta completada - autenticación rechazada",
@@ -131,24 +132,35 @@ export default function PaymentAuthenticationAttemptPage({ attempt }) {
 									<Text>Resultado: {operationResultLabel(attempt.efevoopay_operations.get_link?.result)}</Text>
 								</div>
 								<div className="space-y-1">
-									<Text><Strong>GetStatus</Strong></Text>
+									<Text><Strong>GetStatus / 3DS</Strong></Text>
 									<Text>Llamadas: {attempt.efevoopay_operations.get_status?.call_count ?? 0}</Text>
+									<Text>Autenticación 3DS: {attempt.efevoopay_operations.authentication_3ds?.result === "approved" ? "Aprobada" : attempt.efevoopay_operations.authentication_3ds?.result || "—"}</Text>
 									<Text>Ultimo resultado: {operationResultLabel(attempt.efevoopay_operations.get_status?.last_result, "get_status")}</Text>
 									{attempt.efevoopay_operations.get_status?.excessive && (
 										<Badge color="amber">Excesivo</Badge>
 									)}
 								</div>
 								<div className="space-y-1">
-									<Text><Strong>TokenCard</Strong></Text>
+									<Text><Strong>TokenCard / guardado</Strong></Text>
 									<Text>Llamadas: {attempt.efevoopay_operations.token_card?.call_count ?? 0}</Text>
+									<Text>Guardado de tarjeta: {attempt.efevoopay_operations.card_storage?.result === "saved" ? "Guardada" : attempt.efevoopay_operations.card_storage?.result === "failed" ? "Fallido" : attempt.efevoopay_operations.card_storage?.result || "—"}</Text>
 									<Text>Importe: {operationAmount(attempt.efevoopay_operations.token_card)}</Text>
 									<Text>Transaction ID: {attempt.efevoopay_operations.token_card?.transaction_id_masked || "—"}</Text>
 									<Text>Resultado: {operationResultLabel(attempt.efevoopay_operations.token_card?.result)}</Text>
+									{attempt.efevoopay_operations.token_card?.http_business_outcome === "http_200_business_failed" && (
+										<Badge color="amber">HTTP 200 · negocio fallido</Badge>
+									)}
+									{attempt.efevoopay_operations.token_card?.provider_message && (
+										<Text className="text-xs text-zinc-500">Mensaje: {attempt.efevoopay_operations.token_card.provider_message}</Text>
+									)}
 									{attempt.efevoopay_operations.token_card?.confirmation_pending && (
 										<Badge color="orange">En confirmación</Badge>
 									)}
 								</div>
 							</div>
+							{attempt.efevoopay_operations.overall_result_label && (
+								<Text><Strong>Resultado global:</Strong> {attempt.efevoopay_operations.overall_result_label}</Text>
+							)}
 							{attempt.efevoopay_operations.possible_duplicate_verification_operation && (
 								<Badge color="amber">Posible operación de verificación duplicada</Badge>
 							)}

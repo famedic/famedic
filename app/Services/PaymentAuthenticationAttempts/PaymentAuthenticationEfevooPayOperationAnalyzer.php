@@ -46,6 +46,12 @@ class PaymentAuthenticationEfevooPayOperationAnalyzer
             ])->exists(),
         );
 
+        $authSucceeded = $attempt->events()
+            ->where('event_type', PaymentAuthenticationAttemptEventType::AuthenticationSucceeded->value)
+            ->exists();
+        $tokenFailed = $session?->status === 'tokenization_failed'
+            || $attempt->failure_category === \App\Support\EfevooPay3dsResultClassifier::CATEGORY_TOKENIZATION_FAILED;
+
         return [
             'get_link' => [
                 'call_count' => $linkCalls,
@@ -64,9 +70,30 @@ class PaymentAuthenticationEfevooPayOperationAnalyzer
                 'amount' => $tokenCalls > 0 ? $tokenAmount : null,
                 'currency' => $tokenCalls > 0 ? PaymentAuthenticationEfevooPayAmounts::currency() : null,
                 'transaction_id_masked' => $this->tracer->maskIdentifier($tokenTransactionId),
-                'result' => $this->operationResultLabel($tokenCalls, $attempt->status, 'token'),
+                'result' => $this->tokenCardResultLabel($tokenCalls, $attempt->status, $tokenFailed),
                 'confirmation_pending' => $attempt->status === PaymentAuthenticationAttemptStatus::TokenizationConfirmationPending->value,
+                'http_business_outcome' => $tokenFailed && $tokenCalls > 0 ? 'http_200_business_failed' : null,
+                'provider_code' => $tokenFailed ? $attempt->provider_code : null,
+                'provider_message' => $tokenFailed
+                    ? \App\Support\EfevooPayLogSanitizer::providerMessage($attempt->provider_message)
+                    : null,
             ],
+            'authentication_3ds' => [
+                'result' => $authSucceeded || in_array($session?->status, ['authenticated', 'completed', 'tokenization_failed'], true)
+                    ? 'approved'
+                    : ($statusCalls > 0 ? 'unknown' : 'not_called'),
+            ],
+            'card_storage' => [
+                'result' => match (true) {
+                    $attempt->status === PaymentAuthenticationAttemptStatus::Completed->value => 'saved',
+                    $tokenFailed => 'failed',
+                    $tokenCalls > 0 => 'attempted',
+                    default => 'not_called',
+                },
+            ],
+            'overall_result_label' => $authSucceeded && $tokenFailed
+                ? 'Autenticación aprobada; tokenización fallida'
+                : null,
             'possible_duplicate_verification_operation' => $possibleDuplicate,
             'disclaimer' => 'Una operación registrada no demuestra por sí misma un cargo confirmado.',
         ];
@@ -86,9 +113,7 @@ class PaymentAuthenticationEfevooPayOperationAnalyzer
             $linkCalls = (int) $attempt->provider_link_call_count;
             $tokenCalls = (int) $attempt->tokenization_call_count;
 
-            return $linkCalls > 1
-                || $tokenCalls > 1
-                || ($linkCalls >= 1 && $tokenCalls >= 1);
+            return $linkCalls > 1 || $tokenCalls > 1;
         });
 
         if (! $needsEventScan) {
@@ -183,20 +208,7 @@ class PaymentAuthenticationEfevooPayOperationAnalyzer
             return true;
         }
 
-        if ($hasDuplicateEvent) {
-            return true;
-        }
-
-        if ($linkCalls >= 1 && $tokenCalls >= 1 && $linkOrderId && $tokenTransactionId) {
-            $normalizedLink = preg_replace('/\D/', '', $linkOrderId) ?: $linkOrderId;
-            $normalizedToken = preg_replace('/\D/', '', $tokenTransactionId) ?: $tokenTransactionId;
-
-            if ($normalizedLink !== $normalizedToken && strlen($normalizedLink) > 0 && strlen($normalizedToken) > 0) {
-                return true;
-            }
-        }
-
-        return false;
+        return $hasDuplicateEvent;
     }
 
     private function latestProcessorTransactionId(PaymentAuthenticationAttempt $attempt): ?string
@@ -231,6 +243,27 @@ class PaymentAuthenticationEfevooPayOperationAnalyzer
             PaymentAuthenticationAttemptStatus::ChallengeRequired->value => 'pending',
             default => $attempt->status,
         };
+    }
+
+    private function tokenCardResultLabel(int $calls, string $status, bool $tokenFailed): string
+    {
+        if ($calls === 0) {
+            return 'not_called';
+        }
+
+        if ($status === PaymentAuthenticationAttemptStatus::Completed->value) {
+            return 'succeeded';
+        }
+
+        if ($status === PaymentAuthenticationAttemptStatus::TokenizationConfirmationPending->value) {
+            return 'confirmation_pending';
+        }
+
+        if ($tokenFailed || $status === PaymentAuthenticationAttemptStatus::TechnicalError->value) {
+            return 'business_failed';
+        }
+
+        return $calls > 1 ? 'multiple_calls' : 'attempted';
     }
 
     private function operationResultLabel(int $calls, string $status, string $operation): string

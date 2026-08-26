@@ -5,12 +5,13 @@ namespace App\Support;
 use App\Models\Customer;
 use App\Models\EfevooToken;
 use App\Services\EfevooPay\MockEfevooPayGateway;
+use App\Support\EfevooPayGatewayMode;
 
 class MockEfevooPaymentSupport
 {
     public static function isMockMode(): bool
     {
-        return ! app()->environment('production');
+        return EfevooPayGatewayMode::usesMock();
     }
 
     /**
@@ -18,7 +19,7 @@ class MockEfevooPaymentSupport
      */
     public static function efevooTokenEnvironment(): string
     {
-        return app()->environment('production') ? 'production' : 'test';
+        return EfevooPayGatewayMode::current() === EfevooPayGatewayMode::LIVE ? 'production' : 'test';
     }
 
     public static function isMockToken(EfevooToken $token): bool
@@ -88,6 +89,7 @@ class MockEfevooPaymentSupport
                     'is_active' => true,
                     'metadata' => [
                         'mock' => true,
+                        'gateway_origin' => EfevooPayGatewayMode::MOCK,
                         'scenario' => $definition['scenario'],
                     ],
                 ]);

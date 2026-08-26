@@ -59,6 +59,20 @@ class PaymentAuthenticationAttemptRecorder
         'attempt_id',
         'reused_token_id',
         'external_tokenization_attempted',
+        'timed_out',
+        'payload_schema_version',
+        'track2_present',
+        'track2_type',
+        'track2_length',
+        'pan_length',
+        'separator_kind',
+        'expiration_format',
+        'token_usuario_present',
+        'provider_code_string',
+        'provider_code_type',
+        'normalized_reason',
+        'local_validation_passed',
+        'local_validation_reason',
     ];
 
     public const MONETARY_METADATA_ALLOWLIST = [
@@ -81,6 +95,19 @@ class PaymentAuthenticationAttemptRecorder
         'response_received',
         'reused_token_id',
         'external_tokenization_attempted',
+        'payload_schema_version',
+        'track2_present',
+        'track2_type',
+        'track2_length',
+        'pan_length',
+        'separator_kind',
+        'expiration_format',
+        'token_usuario_present',
+        'provider_code_string',
+        'provider_code_type',
+        'normalized_reason',
+        'local_validation_passed',
+        'local_validation_reason',
     ];
 
     private const EXTERNAL_COUNTERS = [

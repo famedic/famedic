@@ -9,6 +9,7 @@ use App\Models\PaymentAuthenticationAttempt;
 use App\Models\PaymentAuthenticationRecoveryContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Str;
 
 class PaymentAuthenticationRecoveryNavigator
 {
@@ -68,9 +69,11 @@ class PaymentAuthenticationRecoveryNavigator
         ]);
         $this->cardDataStore->purgeLegacyGlobal();
 
+        $recoverySubmissionIdentity = (string) Str::uuid();
+
         $this->recorder->record($attempt, PaymentAuthenticationAttemptEventType::RecoveryStarted, [
             'source' => 'frontend',
-            'dedupe_key' => 'recovery_started:'.$attempt->id.':'.$recoveryAction.':'.now()->timestamp,
+            'dedupe_key' => 'recovery_started:'.$recoverySubmissionIdentity,
             'metadata' => [
                 'context_uuid' => $context->context_uuid,
                 'context_type' => $this->contextTypeValue($context),
@@ -78,19 +81,21 @@ class PaymentAuthenticationRecoveryNavigator
                 'attempt_number' => $attempt->attempt_number,
                 'attempts_remaining' => $evaluation['attempts_remaining'],
                 'detected_by' => 'recovery_navigation',
+                'recovery_submission_identity' => $recoverySubmissionIdentity,
             ],
         ]);
 
         if ($recoveryAction === PaymentAuthenticationRecoveryPolicy::ACTION_DIFFERENT_CARD) {
             $this->recorder->record($attempt, PaymentAuthenticationAttemptEventType::ChangedCard, [
                 'source' => 'frontend',
-                'dedupe_key' => 'changed_card:'.$attempt->id.':'.now()->timestamp,
+                'dedupe_key' => 'changed_card:'.$recoverySubmissionIdentity,
                 'metadata' => [
                     'context_uuid' => $context->context_uuid,
                     'context_type' => $this->contextTypeValue($context),
                     'recovery_action' => $recoveryIntent,
                     'attempt_number' => $attempt->attempt_number,
                     'detected_by' => 'recovery_navigation',
+                    'recovery_submission_identity' => $recoverySubmissionIdentity,
                 ],
             ]);
         }
@@ -103,6 +108,8 @@ class PaymentAuthenticationRecoveryNavigator
             'recovery_intent' => $recoveryIntent,
             'recovery_context_uuid' => $context->context_uuid,
             'source_session_id' => $session->id,
+            'recovery_submission_identity' => $recoverySubmissionIdentity,
+            'assigned_attempt_uuid' => null,
             'expires_at' => now()->addMinutes($ttlMinutes)->timestamp,
         ]);
 
@@ -112,6 +119,7 @@ class PaymentAuthenticationRecoveryNavigator
             ]),
             'recovery_action' => $recoveryAction,
             'recovery_intent' => $recoveryIntent,
+            'recovery_submission_identity' => $recoverySubmissionIdentity,
             'attempts_remaining' => $evaluation['attempts_remaining'],
         ];
     }
@@ -143,6 +151,18 @@ class PaymentAuthenticationRecoveryNavigator
     public function clearPreparedRecovery(Customer $customer): void
     {
         Session::forget($this->sessionKey($customer));
+    }
+
+    public function rememberAssignedAttemptUuid(Customer $customer, string $attemptUuid): void
+    {
+        $payload = Session::get($this->sessionKey($customer));
+
+        if (! is_array($payload)) {
+            return;
+        }
+
+        $payload['assigned_attempt_uuid'] = $attemptUuid;
+        Session::put($this->sessionKey($customer), $payload);
     }
 
     public function sessionKey(Customer $customer): string

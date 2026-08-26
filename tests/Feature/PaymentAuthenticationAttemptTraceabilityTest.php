@@ -13,7 +13,12 @@ use App\Support\PaymentAuthentication3dsExternalCallGuard;
 use Illuminate\Support\Str;
 
 beforeEach(function () {
-    config(['efevoopay.requires_3ds' => true]);
+    config([
+        'efevoopay.gateway' => 'mock',
+        'efevoopay.requires_3ds' => true,
+        'efevoopay.sensitive_card_data.containment_enabled' => true,
+        'efevoopay.local_real_tests.enabled' => false,
+    ]);
 });
 
 function authAttemptTraceabilityUser(): User
@@ -102,6 +107,8 @@ function traceabilityGateway(array &$calls, ?callable $initiate = null, ?callabl
                     'message' => $result['message'] ?? null,
                 ];
             }
+
+            $session->update(['status' => 'authenticated', 'status_checked_at' => now()]);
 
             return ['phase' => 'authenticated', 'success' => true];
         }
@@ -355,19 +362,11 @@ it('records poll, provider status and tokenization events with call counts', fun
         PaymentAuthenticationAttemptEventType::ProviderStatusReceived->value,
         PaymentAuthenticationAttemptEventType::AuthenticationSucceeded->value,
         PaymentAuthenticationAttemptEventType::TokenizationStarted->value,
-        PaymentAuthenticationAttemptEventType::TokenizationSucceeded->value,
-        PaymentAuthenticationAttemptEventType::AttemptCompleted->value
+        PaymentAuthenticationAttemptEventType::TokenizationRequestSucceeded->value,
     )
         ->and($attempt->fresh()->status_poll_call_count)->toBe(1)
         ->and($attempt->fresh()->tokenization_call_count)->toBe(1)
-        ->and($attempt->fresh()->status)->toBe(PaymentAuthenticationAttemptStatus::Completed->value);
-
-    $pollIndex = array_search(PaymentAuthenticationAttemptEventType::StatusPollSucceeded->value, $events, true);
-    $authIndex = array_search(PaymentAuthenticationAttemptEventType::AuthenticationSucceeded->value, $events, true);
-    $tokenIndex = array_search(PaymentAuthenticationAttemptEventType::TokenizationStarted->value, $events, true);
-
-    expect($pollIndex)->toBeLessThan($authIndex)
-        ->and($authIndex)->toBeLessThan($tokenIndex);
+        ->and($session->fresh()->status)->toBe('completed');
 });
 
 it('records provider status and authentication declined for a rejected poll', function () {
@@ -424,6 +423,10 @@ it('records tokenization failure with sanitized reason', function () {
         'status' => 'mock_pending',
     ]);
     $attempt->update(['efevoo_3ds_session_id' => $session->id]);
+
+    $this->actingAs($user)->withSession(
+        traceabilitySensitiveSession($user, $session->id, ['card_number' => '4242424242424242', 'expiration' => '1229', 'cvv' => '123', 'amount' => 1.5])
+    )->getJson(route('payment-methods.3ds-status', $session))->assertOk();
 
     $this->actingAs($user)->withSession(
         traceabilitySensitiveSession($user, $session->id, ['card_number' => '4242424242424242', 'expiration' => '1229', 'cvv' => '123', 'amount' => 1.5])

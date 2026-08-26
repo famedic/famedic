@@ -2,7 +2,8 @@
 
 namespace App\Models;
 
-use App\Support\MockEfevooPaymentSupport;
+use App\Support\EfevooPayGatewayMode;
+use App\Support\EfevooTokenGatewayOriginPolicy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -85,9 +86,30 @@ class EfevooToken extends Model
         return $query->where('environment', config('efevoopay.environment', 'test'));
     }
 
+    public function scopeCompatibleWithCurrentGateway(Builder $query): Builder
+    {
+        return EfevooTokenGatewayOriginPolicy::scopeCompatibleWithGateway(
+            $query,
+            EfevooPayGatewayMode::current()
+        );
+    }
+
+    public function resolvedGatewayOrigin(): string
+    {
+        return EfevooTokenGatewayOriginPolicy::resolvedOrigin($this);
+    }
+
+    public function isCompatibleWithCurrentGateway(): bool
+    {
+        return EfevooTokenGatewayOriginPolicy::isVisibleInGateway(
+            $this,
+            EfevooPayGatewayMode::current()
+        );
+    }
+
     public function isMock(): bool
     {
-        return MockEfevooPaymentSupport::isMockToken($this);
+        return $this->resolvedGatewayOrigin() === EfevooPayGatewayMode::MOCK;
     }
 
     /**

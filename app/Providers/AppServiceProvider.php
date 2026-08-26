@@ -21,6 +21,7 @@ use App\Services\DocumentInterpretation\Prompts\PromptRepositoryInterface;
 use App\Services\Tracking\Tracking;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Mail\Events\MessageSending;
@@ -104,6 +105,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->configureTrustedProxies();
+
         RateLimiter::for('tax-profile-extract', function (Request $request) {
             return Limit::perMinute(5)->by((string) ($request->user()?->id ?: $request->ip()));
         });
@@ -198,5 +201,30 @@ class AppServiceProvider extends ServiceProvider
 
         return Limit::perMinutes($decayMinutes, $maxAttempts)
             ->by((string) ($request->user()?->id ?: $request->ip()));
+    }
+
+    private function configureTrustedProxies(): void
+    {
+        $trustedProxies = config('app.trusted_proxies');
+
+        if (blank($trustedProxies)) {
+            return;
+        }
+
+        $at = $trustedProxies === '*'
+            ? '*'
+            : array_values(array_filter(array_map('trim', explode(',', (string) $trustedProxies))));
+
+        if ($at === [] && $at !== '*') {
+            return;
+        }
+
+        TrustProxies::at($at);
+        TrustProxies::withHeaders(
+            Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO
+                | Request::HEADER_X_FORWARDED_AWS_ELB
+        );
     }
 }

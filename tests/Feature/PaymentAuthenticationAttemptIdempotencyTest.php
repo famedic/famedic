@@ -10,7 +10,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 beforeEach(function () {
-    config(['efevoopay.requires_3ds' => true]);
+    config([
+        'efevoopay.gateway' => 'mock',
+        'efevoopay.requires_3ds' => true,
+        'efevoopay.sensitive_card_data.containment_enabled' => true,
+        'efevoopay.local_real_tests.enabled' => false,
+    ]);
 });
 
 function cardAuthUser(): User
@@ -115,6 +120,8 @@ function fake3dsGateway(array &$calls, ?callable $initiate = null, ?callable $co
                     'message' => $result['message'] ?? null,
                 ];
             }
+
+            $session->update(['status' => 'authenticated', 'status_checked_at' => now()]);
 
             return ['phase' => 'authenticated', 'success' => true];
         }
@@ -427,7 +434,7 @@ it('polling never initiates a new get link and does not tokenize twice', functio
     expect($calls['initiate3DS'] ?? 0)->toBe(0)
         ->and($calls['poll3DSAuthentication'] ?? 0)->toBe(1)
         ->and($calls['finalize3DSTokenization'] ?? 0)->toBe(1)
-        ->and($attempt->fresh()->status)->toBe(PaymentAuthenticationAttemptStatus::Completed->value);
+        ->and($session->fresh()->status)->toBe('completed');
 });
 
 it('legacy 3ds session without authentication attempt can still complete', function () {

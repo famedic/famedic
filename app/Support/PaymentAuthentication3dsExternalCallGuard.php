@@ -17,13 +17,65 @@ class PaymentAuthentication3dsExternalCallGuard
     ) {}
 
     /**
+     * @param  callable(Efevoo3dsSession, ?PaymentAuthenticationAttempt): array<string, mixed>  $callback
+     * @return array{blocked: bool, duplicate: bool, processing_status?: string, result?: array<string, mixed>}
+     */
+    public function withSessionPollCycleLock(
+        Efevoo3dsSession $session,
+        ?PaymentAuthenticationAttempt $attempt,
+        callable $callback
+    ): array {
+        if (! $attempt) {
+            return ['blocked' => false, 'duplicate' => false, 'result' => $callback($session, null)];
+        }
+
+        $lockSeconds = max(
+            (int) config('efevoopay.polling.get_status_lock_seconds', 45),
+            (int) config('efevoopay.polling.tokenize_lock_seconds', 90)
+        );
+        $lock = Cache::lock('efevoo_3ds_poll_cycle_'.$session->id, $lockSeconds);
+
+        if (! $lock->get()) {
+            $freshAttempt = $attempt->fresh();
+            $this->tracer->recordDuplicateBlocked(
+                $freshAttempt,
+                PaymentAuthenticationEfevooPayMonetaryTracer::OP_GET_STATUS,
+                'concurrent_poll_cycle',
+                $session->id
+            );
+
+            $freshSession = $session->fresh();
+
+            return [
+                'blocked' => true,
+                'duplicate' => true,
+                'processing_status' => $this->processingStatusForBlockedPoll($freshAttempt, $freshSession),
+            ];
+        }
+
+        try {
+            $freshSession = $session->fresh();
+            $freshAttempt = PaymentAuthenticationAttempt::query()->find($attempt->id);
+
+            return [
+                'blocked' => false,
+                'duplicate' => false,
+                'result' => $callback($freshSession, $freshAttempt),
+            ];
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
      * @param  callable(): array<string, mixed>  $callback
      * @return array{blocked: bool, duplicate: bool, result?: array<string, mixed>}
      */
     public function withGetStatusLock(
         Efevoo3dsSession $session,
         ?PaymentAuthenticationAttempt $attempt,
-        callable $callback
+        callable $callback,
+        bool $lockAlreadyHeld = false
     ): array {
         if (! $attempt) {
             return ['blocked' => false, 'duplicate' => false, 'result' => $callback()];
@@ -42,6 +94,10 @@ class PaymentAuthentication3dsExternalCallGuard
             ];
         }
 
+        if ($lockAlreadyHeld) {
+            return $this->executeGetStatusWithTracing($session, $attempt, $callback);
+        }
+
         $lockSeconds = (int) config('efevoopay.polling.get_status_lock_seconds', 45);
         $lock = Cache::lock('efevoo_3ds_getstatus_'.$session->id, $lockSeconds);
 
@@ -51,6 +107,22 @@ class PaymentAuthentication3dsExternalCallGuard
             return ['blocked' => true, 'duplicate' => true];
         }
 
+        try {
+            return $this->executeGetStatusWithTracing($session, $attempt, $callback);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @param  callable(): array<string, mixed>  $callback
+     * @return array{blocked: bool, duplicate: bool, result: array<string, mixed>}
+     */
+    private function executeGetStatusWithTracing(
+        Efevoo3dsSession $session,
+        PaymentAuthenticationAttempt $attempt,
+        callable $callback
+    ): array {
         $started = microtime(true);
 
         try {
@@ -65,19 +137,24 @@ class PaymentAuthentication3dsExternalCallGuard
 
             $phase = (string) ($result['phase'] ?? 'unknown');
             $errorType = $result['error_type'] ?? null;
-            $eventType = PaymentAuthenticationAttemptEventType::ProviderStatusRequestSucceeded;
-
-            if ($phase === 'error' && in_array($errorType, ['network', 'timeout'], true)) {
-                $eventType = PaymentAuthenticationAttemptEventType::ProviderStatusRequestTimeout;
-            } elseif ($phase === 'error') {
-                $eventType = PaymentAuthenticationAttemptEventType::ProviderStatusRequestFailed;
-            }
+            $timedOut = ($errorType === 'timeout')
+                || (($result['timed_out'] ?? false) === true);
+            $eventType = $timedOut
+                ? PaymentAuthenticationAttemptEventType::ProviderStatusRequestTimeout
+                : (($phase === 'error')
+                    ? PaymentAuthenticationAttemptEventType::ProviderStatusRequestFailed
+                    : PaymentAuthenticationAttemptEventType::ProviderStatusRequestSucceeded);
 
             $this->tracer->record($attempt->fresh(), $eventType, PaymentAuthenticationEfevooPayMonetaryTracer::OP_GET_STATUS, [
                 'session_id' => $session->id,
                 'provider_order_id' => $session->order_id,
                 'duration_ms' => $durationMs,
                 'call_number' => $attempt->fresh()->status_poll_call_count,
+                'failure_stage' => $result['failure_stage'] ?? ($phase === 'error' ? 'poll_result' : null),
+                'exception_category' => $result['exception_category'] ?? null,
+                'request_dispatched' => $result['request_dispatched'] ?? null,
+                'response_received' => $result['response_received'] ?? ($phase !== 'error'),
+                'timed_out' => $timedOut,
             ]);
 
             return ['blocked' => false, 'duplicate' => false, 'result' => $result];
@@ -102,9 +179,30 @@ class PaymentAuthentication3dsExternalCallGuard
             ]);
 
             throw $e;
-        } finally {
-            $lock->release();
         }
+    }
+
+    private function processingStatusForBlockedPoll(
+        PaymentAuthenticationAttempt $attempt,
+        Efevoo3dsSession $session
+    ): string {
+        if ($attempt->status === PaymentAuthenticationAttemptStatus::Tokenizing->value) {
+            return PaymentAuthenticationAttemptStatus::Tokenizing->value;
+        }
+
+        if ($attempt->status === PaymentAuthenticationAttemptStatus::Authenticated->value) {
+            return PaymentAuthenticationAttemptStatus::Authenticated->value;
+        }
+
+        if (in_array($session->status, ['completed', 'declined', 'tokenization_failed', 'cancelled', 'error', 'failed'], true)) {
+            return $session->status;
+        }
+
+        if (in_array($attempt->status, PaymentAuthenticationAttemptStatus::terminalValues(), true)) {
+            return $attempt->status;
+        }
+
+        return 'processing';
     }
 
     /**
@@ -196,18 +294,23 @@ class PaymentAuthentication3dsExternalCallGuard
                     ],
                 ]);
             } elseif (($result['success'] ?? false) && $externalAttempted) {
+                $descriptorKeys = EfevooPayTokenizeContract::TOKENIZE_DESCRIPTOR_KEYS;
+                $descriptor = array_intersect_key($result, array_flip($descriptorKeys));
+
                 app(PaymentAuthenticationAttemptRecorder::class)->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationRequestSucceeded, [
                     'source' => 'backend',
                     'external_operation' => PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE,
                     'dedupe_key' => 'tokenization_request_succeeded:'.PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE.':1',
                     'duration_ms' => $durationMs,
-                    'metadata' => [
+                    'metadata' => array_merge([
                         'session_id' => $session->id,
                         'operation' => PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE,
                         'provider_order_id' => $session->order_id,
                         'processor_transaction_id' => $result['transaction_id'] ?? null,
                         'external_tokenization_attempted' => true,
-                    ],
+                        'response_received' => $result['response_received'] ?? true,
+                        'http_status' => $result['http_status'] ?? null,
+                    ], $descriptor),
                 ]);
             } elseif (($result['confirmation_pending'] ?? false) === true) {
                 $this->tracer->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationConfirmationPending, PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE, [
@@ -218,17 +321,31 @@ class PaymentAuthentication3dsExternalCallGuard
                 ]);
                 $this->markTokenizationConfirmationPending($attempt, $session);
             } else {
+                $descriptorKeys = EfevooPayTokenizeContract::TOKENIZE_DESCRIPTOR_KEYS;
+                $descriptor = array_intersect_key($result, array_flip($descriptorKeys));
+
                 app(PaymentAuthenticationAttemptRecorder::class)->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::TokenizationRequestFailed, [
                     'source' => 'backend',
                     'external_operation' => $externalAttempted ? PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE : null,
                     'dedupe_key' => 'tokenization_request_failed:'.($externalAttempted ? 'external' : 'local').':'.$session->id,
                     'duration_ms' => $durationMs,
-                    'metadata' => [
+                    'http_status' => $result['http_status'] ?? null,
+                    'provider_code' => $result['provider_code'] ?? $result['error_code'] ?? null,
+                    'provider_message' => EfevooPayLogSanitizer::providerMessage(
+                        $result['admin_message'] ?? $result['provider_message'] ?? $result['message'] ?? null
+                    ),
+                    'metadata' => array_merge([
                         'session_id' => $session->id,
                         'operation' => PaymentAuthenticationEfevooPayMonetaryTracer::OP_TOKENIZE,
                         'provider_order_id' => $session->order_id,
                         'external_tokenization_attempted' => $externalAttempted,
-                    ],
+                        'response_received' => $result['response_received'] ?? null,
+                        'failure_stage' => $result['failure_stage'] ?? 'tokenize_response',
+                        'exception_category' => $result['exception_category'] ?? null,
+                        'processor_transaction_id' => $result['processor_transaction_id'] ?? null,
+                        'http_status' => $result['http_status'] ?? null,
+                        'duration_ms' => $durationMs,
+                    ], $descriptor),
                 ]);
             }
 

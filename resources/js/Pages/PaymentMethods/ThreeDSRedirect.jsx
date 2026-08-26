@@ -11,11 +11,17 @@ import {
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { router } from "@inertiajs/react";
+import { scheduleThreeDSChallengeSubmit, THREE_DS_CHALLENGE_IFRAME_NAME } from "@/lib/threeDSChallengeSubmit";
+import { observeThreeDS } from "@/lib/threeDSClientObservations";
 import {
+    elapsedSecondsFromClock,
+    formatClockSeconds,
     isThreeDSTerminalVisualState,
     pollingResponseSummary,
+    remainingSecondsFromClock,
     shouldNavigateFromThreeDSVisualState,
     shouldShowThreeDSIframe,
+    shouldStopThreeDSPolling,
     threeDSCopyForVisualState,
     threeDSVisualState,
 } from "@/lib/threeDSRedirectState";
@@ -30,31 +36,54 @@ export default function ThreeDSRedirect({
     authenticationAttempt = null,
 }) {
     const iframeRef = useRef(null);
-    const intervalRef = useRef(null);
-    const challengeSubmittedRef = useRef(false);
-    const pollingStartedRef = useRef(false);
+    const pollTimeoutRef = useRef(null);
+    const pollInFlightRef = useRef(false);
+    const pollingActiveRef = useRef(false);
     const navigationStartedRef = useRef(false);
+    const clockReceivedAtRef = useRef(Date.now());
+    const iframeMountedRef = useRef(false);
 
     const hasChallenge = Boolean(url3ds && token3ds);
     const resultUrl = route("payment-methods.3ds-result", { sessionId });
     const safeFallbackUrl = route("payment-methods.index");
     const initialStatus = authenticationAttempt?.status ?? (hasChallenge ? "pending" : null);
     const initialVisualState = threeDSVisualState(initialStatus, { hasChallenge });
+    const clockServerNow = authenticationAttempt?.server_now ?? null;
+    const clockExpiresAt = authenticationAttempt?.expires_at ?? null;
+    const clockStartedAt = authenticationAttempt?.started_at ?? null;
+    const supportReference = authenticationAttempt?.support_reference ?? sessionId;
 
     const [visualState, setVisualState] = useState(initialVisualState);
     const [message, setMessage] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
+    const [clockNow, setClockNow] = useState(() => Date.now());
+    const [locallyExpired, setLocallyExpired] = useState(false);
 
-    const showIframe = hasChallenge && shouldShowThreeDSIframe(visualState);
+    const showIframe = hasChallenge && shouldShowThreeDSIframe(visualState) && !locallyExpired;
     const copy = useMemo(
-        () => threeDSCopyForVisualState(visualState, message),
-        [visualState, message]
+        () => threeDSCopyForVisualState(locallyExpired ? "expired" : visualState, message),
+        [locallyExpired, visualState, message]
     );
+    const elapsedSeconds = elapsedSecondsFromClock({
+        startedAt: clockStartedAt,
+        serverNow: clockServerNow,
+        now: clockNow,
+        receivedAt: clockReceivedAtRef.current,
+    });
+    const remainingSeconds = remainingSecondsFromClock({
+        expiresAt: clockExpiresAt,
+        serverNow: clockServerNow,
+        now: clockNow,
+        receivedAt: clockReceivedAtRef.current,
+    });
 
     const stopPolling = useCallback(() => {
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
+        pollingActiveRef.current = false;
+
+        if (pollTimeoutRef.current) {
+            window.clearTimeout(pollTimeoutRef.current);
+            pollTimeoutRef.current = null;
+            observeThreeDS("polling_stopped");
         }
     }, []);
 
@@ -67,6 +96,8 @@ export default function ThreeDSRedirect({
         }, delay);
     }, [safeFallbackUrl]);
 
+    const previousVisualStateRef = useRef(initialVisualState);
+
     const applyStatus = useCallback((data) => {
         const summary = pollingResponseSummary(data);
         const nextVisualState = threeDSVisualState(summary.status, {
@@ -74,10 +105,15 @@ export default function ThreeDSRedirect({
             final: summary.final,
         });
 
+        if (!shouldShowThreeDSIframe(nextVisualState) && shouldShowThreeDSIframe(previousVisualStateRef.current)) {
+            observeThreeDS("challenge_ui_hidden", { reason: nextVisualState });
+        }
+
+        previousVisualStateRef.current = nextVisualState;
         setVisualState(nextVisualState);
         setMessage(summary.message);
 
-        if (summary.final || isThreeDSTerminalVisualState(nextVisualState)) {
+        if (summary.final || shouldStopThreeDSPolling(nextVisualState)) {
             stopPolling();
         }
 
@@ -87,22 +123,58 @@ export default function ThreeDSRedirect({
     }, [hasChallenge, navigateOnce, resultUrl, stopPolling]);
 
     const pollStatus = useCallback(async () => {
-        const response = await fetch(route("payment-methods.3ds-status", { sessionId }), {
-            headers: {
-                Accept: "application/json",
-                "X-Requested-With": "XMLHttpRequest",
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error("status_request_failed");
+        if (pollInFlightRef.current) {
+            return null;
         }
 
-        const data = await response.json();
-        applyStatus(data);
+        pollInFlightRef.current = true;
 
-        return data;
+        try {
+            const response = await fetch(route("payment-methods.3ds-status", { sessionId }), {
+                headers: {
+                    Accept: "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error("status_request_failed");
+            }
+
+            const data = await response.json();
+            applyStatus(data);
+
+            return data;
+        } finally {
+            pollInFlightRef.current = false;
+        }
     }, [applyStatus, sessionId]);
+
+    const scheduleNextPoll = useCallback(() => {
+        if (!pollingActiveRef.current || pollInFlightRef.current) {
+            return;
+        }
+
+        pollTimeoutRef.current = window.setTimeout(async () => {
+            if (!pollingActiveRef.current) {
+                return;
+            }
+
+            try {
+                await pollStatus();
+            } catch {
+                setMessage("No pudimos consultar el estado. Te llevaremos al resultado seguro.");
+                setVisualState("failed");
+                stopPolling();
+                navigateOnce(resultUrl, 800);
+                return;
+            }
+
+            if (pollingActiveRef.current) {
+                scheduleNextPoll();
+            }
+        }, POLLING_INTERVAL);
+    }, [navigateOnce, pollStatus, resultUrl, stopPolling]);
 
     const refreshStatus = useCallback(async () => {
         setRefreshing(true);
@@ -117,64 +189,117 @@ export default function ThreeDSRedirect({
     }, [pollStatus]);
 
     useEffect(() => {
-        if (!showIframe) return;
-        if (!iframeRef.current) return;
-        if (challengeSubmittedRef.current) return;
+        const timer = window.setInterval(() => {
+            setClockNow(Date.now());
+        }, 1000);
 
-        challengeSubmittedRef.current = true;
-
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = url3ds;
-        form.target = "threeDSFrame";
-
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = "creq";
-        input.value = token3ds;
-
-        form.appendChild(input);
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form);
-    }, [showIframe, token3ds, url3ds]);
+        return () => window.clearInterval(timer);
+    }, []);
 
     useEffect(() => {
-        if (pollingStartedRef.current) return undefined;
-        if (shouldNavigateFromThreeDSVisualState(visualState)) {
-            navigateOnce(resultUrl, visualState === "completed" ? 300 : 0);
+        if (locallyExpired) {
             return undefined;
         }
 
-        pollingStartedRef.current = true;
+        if (remainingSeconds !== 0) {
+            return undefined;
+        }
 
-        const delay = window.setTimeout(() => {
-            pollStatus().catch(() => {
+        if (["confirming", "tokenizing", "completed", "failed", "confirmation_pending"].includes(visualState)) {
+            return undefined;
+        }
+
+        setLocallyExpired(true);
+        stopPolling();
+        observeThreeDS("challenge_ui_hidden", { reason: "expired" });
+        setVisualState((current) => (isThreeDSTerminalVisualState(current) ? current : "expired"));
+        setMessage("El tiempo de esta verificacion termino. No se confirmo un resultado del banco.");
+
+        return undefined;
+    }, [locallyExpired, remainingSeconds, stopPolling, visualState]);
+
+    useEffect(() => {
+        if (!showIframe) {
+            return undefined;
+        }
+
+        const cancel = scheduleThreeDSChallengeSubmit(
+            {
+                url: url3ds,
+                token: token3ds,
+                iframeName: THREE_DS_CHALLENGE_IFRAME_NAME,
+                sessionId,
+            },
+            (result) => {
+                observeThreeDS("challenge_submit_attempted", {
+                    submitted: Boolean(result.submitted),
+                    iframe_present: Boolean(result.iframe_present),
+                    form_target_matches: Boolean(result.form_target_matches),
+                    reason: result.reason || "submit",
+                });
+            }
+        );
+
+        return cancel;
+    }, [showIframe, sessionId, token3ds, url3ds]);
+
+    useEffect(() => {
+        const currentShowIframe = hasChallenge && shouldShowThreeDSIframe(visualState);
+
+        if (iframeMountedRef.current && !currentShowIframe) {
+            observeThreeDS("challenge_ui_hidden", { reason: visualState });
+        }
+
+        iframeMountedRef.current = currentShowIframe;
+    }, [hasChallenge, visualState]);
+
+    useEffect(() => {
+        const effectiveState = locallyExpired ? "expired" : visualState;
+
+        if (shouldNavigateFromThreeDSVisualState(effectiveState)) {
+            navigateOnce(resultUrl, effectiveState === "completed" ? 300 : 0);
+            return undefined;
+        }
+
+        if (isThreeDSTerminalVisualState(effectiveState) || shouldStopThreeDSPolling(effectiveState)) {
+            stopPolling();
+            return undefined;
+        }
+
+        observeThreeDS("polling_started");
+        pollingActiveRef.current = true;
+
+        pollTimeoutRef.current = window.setTimeout(async () => {
+            if (!pollingActiveRef.current) {
+                return;
+            }
+
+            try {
+                await pollStatus();
+            } catch {
                 setMessage("No pudimos consultar el estado. Te llevaremos al resultado seguro.");
                 setVisualState("failed");
                 stopPolling();
                 navigateOnce(resultUrl, 800);
-            });
+                return;
+            }
 
-            intervalRef.current = window.setInterval(() => {
-                pollStatus().catch(() => {
-                    setMessage("No pudimos consultar el estado. Te llevaremos al resultado seguro.");
-                    setVisualState("failed");
-                    stopPolling();
-                    navigateOnce(resultUrl, 800);
-                });
-            }, POLLING_INTERVAL);
+            scheduleNextPoll();
         }, POLLING_DELAY);
 
         return () => {
-            window.clearTimeout(delay);
             stopPolling();
         };
-    }, [navigateOnce, pollStatus, resultUrl, stopPolling, visualState]);
+    }, [locallyExpired, navigateOnce, pollStatus, resultUrl, scheduleNextPoll, stopPolling, visualState]);
+
+    const effectiveVisualState = locallyExpired ? "expired" : visualState;
 
     return (
         <SettingsLayout title="Verificacion de seguridad">
-            <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-1 pt-4 sm:px-0 sm:pt-6">
+            <div
+                id="three-ds-redirect-root"
+                className="mx-auto flex w-full max-w-5xl scroll-mt-28 flex-col gap-8 px-1 pt-10 sm:px-0 sm:pt-8 lg:pt-6"
+            >
                 <div className="flex items-start gap-4">
                     <Button
                         href={route("payment-methods.index")}
@@ -184,7 +309,7 @@ export default function ThreeDSRedirect({
                         <ArrowLeftIcon />
                     </Button>
                     <div className="min-w-0">
-                        <GradientHeading noDivider>
+                        <GradientHeading noDivider className="!text-3xl/[2.4rem] sm:!text-4xl/[3rem] lg:!text-5xl/[3.8rem]">
                             Verificacion segura 3D Secure
                         </GradientHeading>
                         <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
@@ -195,22 +320,25 @@ export default function ThreeDSRedirect({
 
                 <div className={showIframe ? "grid gap-8 lg:grid-cols-[minmax(0,0.85fr)_minmax(420px,1.15fr)]" : "flex justify-center"}>
                     <StatusCard
-                        visualState={visualState}
+                        visualState={effectiveVisualState}
                         copy={copy}
-                        sessionId={sessionId}
-                        showReference={!showIframe}
+                        supportReference={supportReference}
+                        showReference
                         refreshing={refreshing}
+                        elapsed={elapsedSeconds}
+                        remaining={remainingSeconds}
                         onRefresh={refreshStatus}
                         onSafeResult={() => navigateOnce(resultUrl)}
                     />
 
-                    {showIframe && (
-                        <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm dark:border-zinc-700">
+                    {hasChallenge && (
+                        <div className={showIframe ? "overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm dark:border-zinc-700" : "hidden"}>
                             <iframe
-                                name="threeDSFrame"
+                                name={THREE_DS_CHALLENGE_IFRAME_NAME}
                                 ref={iframeRef}
                                 className="h-[620px] w-full bg-white"
                                 title="3D Secure Challenge"
+                                onLoad={() => observeThreeDS("iframe_load_observed")}
                             />
                         </div>
                     )}
@@ -223,9 +351,11 @@ export default function ThreeDSRedirect({
 function StatusCard({
     visualState,
     copy,
-    sessionId,
+    supportReference,
     showReference,
     refreshing,
+    elapsed,
+    remaining,
     onRefresh,
     onSafeResult,
 }) {
@@ -234,6 +364,9 @@ function StatusCard({
     const isFailed = visualState === "failed";
     const isChallenge = visualState === "challenge";
     const isConfirmationPending = visualState === "confirmation_pending";
+    const isExpired = visualState === "expired";
+    const showSpinner = isProcessing;
+    const confirmationStopped = isConfirmationPending || isExpired;
 
     return (
         <section
@@ -242,19 +375,21 @@ function StatusCard({
         >
             <div className="flex flex-col items-center">
                 <div className="relative flex size-20 items-center justify-center">
-                    {isProcessing && (
+                    {showSpinner && (
                         <div className="absolute inset-0 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
                     )}
 
                     {isCompleted ? (
                         <CheckCircleIcon className="size-16 text-green-600" aria-hidden="true" />
-                    ) : isFailed ? (
+                    ) : isFailed || isExpired ? (
                         <ExclamationTriangleIcon className="size-16 text-amber-600" aria-hidden="true" />
                     ) : isChallenge ? (
                         <ShieldCheckIcon className="size-12 text-blue-600" aria-hidden="true" />
+                    ) : confirmationStopped ? (
+                        <ExclamationTriangleIcon className="size-16 text-amber-600" aria-hidden="true" />
                     ) : (
                         <ArrowPathIcon
-                            className={`size-10 text-blue-600 ${isProcessing ? "" : "animate-spin"}`}
+                            className={`size-10 text-blue-600 ${showSpinner ? "animate-spin" : ""}`}
                             aria-hidden="true"
                         />
                     )}
@@ -268,10 +403,24 @@ function StatusCard({
                     {copy.message}
                 </p>
 
+                <p className="mt-4 text-sm font-medium text-zinc-800 dark:text-zinc-100" aria-live="off">
+                    Transcurrido {formatClockSeconds(elapsed)} · restante {formatClockSeconds(remaining)}
+                </p>
+
                 {visualState === "tokenizing" && (
-                    <p className="mt-2 text-sm font-medium text-blue-700 dark:text-blue-300">
-                        Guardando tu tarjeta...
-                    </p>
+                    <>
+                        <p className="mt-2 text-sm font-medium text-green-700 dark:text-green-300">
+                            Verificación aprobada
+                        </p>
+                        <p className="mt-2 text-sm font-medium text-blue-700 dark:text-blue-300">
+                            Estamos guardando tu tarjeta…
+                        </p>
+                        {showReference && supportReference && (
+                            <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                                Referencia de soporte: {supportReference}
+                            </p>
+                        )}
+                    </>
                 )}
 
                 {isCompleted && (
@@ -281,19 +430,24 @@ function StatusCard({
                 )}
 
                 {isConfirmationPending && (
-                    <Button
-                        outline
-                        className="mt-6 w-full sm:w-auto"
-                        onClick={onRefresh}
-                        disabled={refreshing}
-                        aria-busy={refreshing}
-                    >
-                        <ArrowPathIcon className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
-                        {refreshing ? "Actualizando..." : "Actualizar estado"}
-                    </Button>
+                    <div className="mt-6 flex w-full flex-col items-center gap-3 sm:flex-row sm:justify-center">
+                        <Button
+                            outline
+                            className="w-full sm:w-auto"
+                            onClick={onRefresh}
+                            disabled={refreshing}
+                            aria-busy={refreshing}
+                        >
+                            <ArrowPathIcon className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+                            {refreshing ? "Actualizando..." : "Actualizar estado"}
+                        </Button>
+                        <Button className="w-full sm:w-auto" onClick={onSafeResult}>
+                            Ver resultado seguro
+                        </Button>
+                    </div>
                 )}
 
-                {isFailed && (
+                {(isFailed || isExpired) && (
                     <Button className="mt-6 w-full sm:w-auto" onClick={onSafeResult}>
                         Ver resultado
                     </Button>
@@ -302,13 +456,17 @@ function StatusCard({
                 <div className="mt-6 rounded-lg bg-blue-50 px-5 py-4 text-sm text-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
                     <div className="flex items-center justify-center gap-2">
                         <LockClosedIcon className="size-4" aria-hidden="true" />
-                        <span>No cierres esta ventana durante la verificacion.</span>
+                        <span>
+                            {confirmationStopped
+                                ? "La confirmacion automatica se detuvo. No se hara otro intento solo."
+                                : "No cierres esta ventana durante la verificacion."}
+                        </span>
                     </div>
                 </div>
 
                 {showReference && (
                     <p className="mt-6 text-xs text-zinc-500 dark:text-zinc-400">
-                        Referencia de sesion: {sessionId}
+                        Referencia: {supportReference}
                     </p>
                 )}
             </div>

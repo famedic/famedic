@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'paypal/webhook',
             'apigda/*',
+            '__local/3ds-fake-acs',
         ]);
 
         $middleware->web(append: [
@@ -41,6 +42,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
             'bypass.password.confirm' => \App\Http\Middleware\BypassPasswordConfirm::class,
             'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
+            'efevoo.mock-gateway' => \App\Http\Middleware\EnsureEfevooMockGateway::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

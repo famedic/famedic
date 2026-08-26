@@ -5,6 +5,7 @@ namespace App\Services\EfevooPay;
 use App\Contracts\EfevooPayGateway;
 use App\Models\Efevoo3dsSession;
 use App\Models\EfevooToken;
+use App\Support\EfevooPayGatewayMode;
 use App\Support\MockEfevooPayGatewayCallRecorder;
 use App\Support\MockEfevooPaymentSupport;
 use Illuminate\Support\Facades\Log;
@@ -151,6 +152,7 @@ class MockEfevooPayGateway implements EfevooPayGateway
             'is_active' => true,
             'metadata' => [
                 'mock' => true,
+                'gateway_origin' => EfevooPayGatewayMode::MOCK,
                 'scenario' => $scenario,
                 'app_env' => app()->environment(),
             ],

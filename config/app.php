@@ -55,6 +55,12 @@ return [
     'url' => env('APP_URL', 'http://localhost'),
 
     /*
+    | Proxy inmediato (p. ej. puerta de enlace Docker) para túneles HTTPS locales.
+    | No usar en producción salvo configuración explícita del despliegue.
+    */
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------

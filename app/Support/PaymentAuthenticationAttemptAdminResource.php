@@ -251,6 +251,10 @@ class PaymentAuthenticationAttemptAdminResource
             return 'Éxito confirmado';
         }
 
+        if ($attempt->failure_category === EfevooPay3dsResultClassifier::CATEGORY_TOKENIZATION_FAILED) {
+            return 'Autenticación aprobada; tokenización fallida';
+        }
+
         return $attempt->failure_category ?: '—';
     }
 

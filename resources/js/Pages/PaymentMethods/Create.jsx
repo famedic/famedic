@@ -12,52 +12,7 @@ import { useEffect, useState } from "react";
 import SimpleField from "@/Components/Form/SimpleField";
 import SimpleInput from "@/Components/Form/SimpleInput";
 import EnvironmentBadge from "@/Components/EnvironmentBadge";
-
-function createAttemptUuid() {
-    if (window.crypto?.randomUUID) {
-        return window.crypto.randomUUID();
-    }
-
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
-        const random = Math.floor(Math.random() * 16);
-        const value = char === "x" ? random : (random & 0x3) | 0x8;
-
-        return value.toString(16);
-    });
-}
-
-function loadAttemptUuid(storageKey, isRecoveryForm = false) {
-    if (!storageKey) return createAttemptUuid();
-
-    try {
-        const recoveryKey = `${storageKey}:recovery`;
-
-        if (isRecoveryForm) {
-            const existingRecovery = window.sessionStorage.getItem(recoveryKey);
-
-            if (existingRecovery) {
-                return existingRecovery;
-            }
-
-            window.sessionStorage.removeItem(storageKey);
-            const next = createAttemptUuid();
-            window.sessionStorage.setItem(recoveryKey, next);
-
-            return next;
-        }
-
-        const existing = window.sessionStorage.getItem(storageKey);
-
-        if (existing) return existing;
-
-        const next = createAttemptUuid();
-        window.sessionStorage.setItem(storageKey, next);
-
-        return next;
-    } catch {
-        return createAttemptUuid();
-    }
-}
+import { loadAttemptUuid } from "@/lib/paymentAuthAttemptIdentity";
 
 function clearSensitiveFormState(setData) {
     setData({
@@ -80,7 +35,12 @@ export default function Create({
     isRecoveryForm = false,
     paymentAuthStorageKey = null,
 }) {
-    const [attemptUuid] = useState(() => loadAttemptUuid(paymentAuthStorageKey, isRecoveryForm));
+    const [attemptUuid] = useState(() =>
+        loadAttemptUuid(paymentAuthStorageKey, {
+            isRecoveryForm,
+            recoverySubmissionIdentity: recoveryForm?.recovery_submission_identity ?? null,
+        })
+    );
     const safeReturnHref =
         recoveryContext?.return_action?.href || returnUrl || route("payment-methods.index");
 
@@ -191,7 +151,7 @@ export default function Create({
 
     return (
         <SettingsLayout title={heading}>
-            <div className="flex items-center gap-3 mb-6">
+            <div className="mb-6 flex scroll-mt-28 items-center gap-3 pt-6 sm:pt-2">
                 <Button href={safeReturnHref} outline className="size-9 p-0">
                     <ArrowLeftIcon className="size-4" />
                 </Button>
@@ -232,11 +192,17 @@ export default function Create({
             )}
 
             {efevooConfig?.requires_3ds && (
-                <div className="mb-6 rounded-lg bg-blue-50 p-4 text-sm text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                    <div className="flex items-center gap-2">
-                        <ShieldCheckIcon className="size-4" />
-                        <span>Tu banco puede solicitar verificación adicional (3D Secure)</span>
+                <div className="mb-6 space-y-3">
+                    <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                        <div className="flex items-center gap-2">
+                            <ShieldCheckIcon className="size-4" />
+                            <span>Tu banco puede solicitar verificación adicional (3D Secure)</span>
+                        </div>
                     </div>
+                    <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                        EfevooPay puede generar dos verificaciones temporales de $1.50 MXN (GetLink y TokenCard),
+                        hasta $3.00 MXN en total. Si permanecen reflejadas, comunícate con soporte.
+                    </p>
                 </div>
             )}
 
@@ -372,7 +338,7 @@ export default function Create({
                             onChange={(e) => setData("terms_accepted", e.target.checked)}
                             required
                         />
-                        <span className="text-sm text-white/80 dark:text-white/70">
+                        <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
                             Acepto los{" "}
                             <Link href={route("terms-of-service")} target="_blank" className="text-blue-600 underline">
                                 términos y condiciones

@@ -243,17 +243,29 @@ class EfevooPay3dsResultClassifier
             );
         }
 
+        $adminMessage = is_string($result['admin_message'] ?? null) ? $result['admin_message'] : null;
+        $providerMessage = $adminMessage
+            ?? ($result['provider_message'] ?? $result['message'] ?? null);
+        $hasProviderEvidence = filled($result['error_code'] ?? null)
+            || filled($result['provider_code'] ?? null)
+            || filled($result['provider_code_string'] ?? null)
+            || filled($providerMessage);
+        $failureOrigin = ($result['normalized_reason'] ?? null) === 'invalid_track_data'
+            || $hasProviderEvidence
+            ? self::ORIGIN_EFEVOOPAY
+            : self::ORIGIN_UNKNOWN;
+
         return self::classification(
             PaymentAuthenticationAttemptStatus::TechnicalError,
             self::CATEGORY_TOKENIZATION_FAILED,
-            self::ORIGIN_EFEVOOPAY,
-            self::ORIGIN_EFEVOOPAY,
-            self::CERTAINTY_CONFIRMED,
+            $failureOrigin,
+            $failureOrigin,
+            $hasProviderEvidence ? self::CERTAINTY_CONFIRMED : self::CERTAINTY_UNKNOWN,
             true,
             true,
             false,
             $result,
-            $result['message'] ?? null
+            $providerMessage
         );
     }
 

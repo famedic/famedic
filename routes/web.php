@@ -75,6 +75,10 @@ if (app()->environment('local')) {
     )->name('debug.laboratory-purchase-pdf');
 }
 
+if (app()->environment(['local', 'testing'])) {
+    require __DIR__.'/local-3ds.php';
+}
+
 require __DIR__ . '/odessa.php';
 require __DIR__ . '/admin.php';
 require __DIR__ . '/settings.php';

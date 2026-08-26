@@ -11,6 +11,7 @@ use App\Models\PaymentAttempt;
 use App\Models\Transaction;
 use App\Services\Carts\CartEventRecorder;
 use App\Services\Payments\PaymentAutomationService;
+use App\Support\EfevooPayLocalRealTestMode;
 use App\Support\EfevooPayLogSanitizer;
 use App\Support\EfevooPayPersistenceNormalizer;
 use App\Support\MockEfevooPaymentSupport;
@@ -57,6 +58,7 @@ class ChargeEfevooPaymentMethodAction
 
                 $token = $customer->efevooTokens()
                     ->active()
+                    ->compatibleWithCurrentGateway()
                     ->where('id', $tokenId)
                     ->first();
 
@@ -66,7 +68,13 @@ class ChargeEfevooPaymentMethodAction
                     );
                 }
 
-                if (! MockEfevooPaymentSupport::isMockMode() && MockEfevooPaymentSupport::isMockToken($token)) {
+                if (! $token->isCompatibleWithCurrentGateway()) {
+                    throw new EfevooPaymentException(
+                        'El método de pago seleccionado no está disponible en el ambiente actual.'
+                    );
+                }
+
+                if (! MockEfevooPaymentSupport::isMockMode() && $token->isMock()) {
                     throw new EfevooPaymentException(
                         'No se puede pagar con una tarjeta de prueba en ambiente productivo.'
                     );
@@ -85,6 +93,8 @@ class ChargeEfevooPaymentMethodAction
                         'El token de tarjeta no está disponible. La tarjeta necesita ser tokenizada nuevamente.'
                     );
                 }
+
+                $this->assertLocalRealTestPaymentAllowed($customer, $amountCents, $cart, $clientContext);
 
                 $reference = 'LAB-'.$customer->id.'-'.time().'-'.rand(1000, 9999);
 
@@ -286,14 +296,16 @@ class ChargeEfevooPaymentMethodAction
                 );
             }
         } finally {
-            $this->dispatchPaymentAutomation($attempt);
+            $this->dispatchPaymentAutomation($attempt, $clientContext);
         }
     }
 
     /**
      * Single integration point: route finalized PaymentAttempt to PaymentAutomationService.
+     *
+     * @param  array<string, mixed>|null  $clientContext
      */
-    private function dispatchPaymentAutomation(?PaymentAttempt $attempt): void
+    private function dispatchPaymentAutomation(?PaymentAttempt $attempt, ?array $clientContext = null): void
     {
         if (! $attempt) {
             return;
@@ -306,6 +318,10 @@ class ChargeEfevooPaymentMethodAction
         }
 
         if (! $attempt->isFinalized()) {
+            return;
+        }
+
+        if (($clientContext['local_isolated_test'] ?? false) === true) {
             return;
         }
 
@@ -508,5 +524,40 @@ class ChargeEfevooPaymentMethodAction
         }
 
         return array_merge($metadata, ['client' => $clientContext]);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    private function assertLocalRealTestPaymentAllowed(
+        Customer $customer,
+        int $amountCents,
+        ?Cart $cart,
+        ?array $clientContext,
+    ): void {
+        if (! app()->environment('local') || ! \App\Support\EfevooPayGatewayMode::usesHttpGateway()) {
+            return;
+        }
+
+        if (! EfevooPayLocalRealTestMode::enabled()) {
+            throw new EfevooPaymentException('Pruebas reales locales no habilitadas.');
+        }
+
+        $user = $customer->user;
+        if (! $user || ! EfevooPayLocalRealTestMode::userIsAllowed($user)) {
+            throw new EfevooPaymentException('Usuario no autorizado para pruebas reales locales.');
+        }
+
+        $expectedTotalCents = null;
+        if (($clientContext['local_isolated_test'] ?? false) === true) {
+            $expectedTotalCents = (int) config('efevoopay.local_real_tests.payment_fixture_cents', 1000);
+        } elseif ($cart !== null) {
+            $expectedTotalCents = (int) round(((float) $cart->total) * 100);
+        }
+
+        $validation = EfevooPayLocalRealTestMode::validatePaymentAmountCents($amountCents, $expectedTotalCents);
+        if (! $validation['allowed']) {
+            throw new EfevooPaymentException('Monto de pago no permitido en pruebas locales reales.');
+        }
     }
 }

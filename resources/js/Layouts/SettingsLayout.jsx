@@ -54,7 +54,7 @@ export default function SettingsLayout({ title, children }) {
 						className="top-0 w-auto sm:w-min lg:sticky lg:top-[6.5rem]"
 					/>
 
-					<main className="min-w-0 max-w-full flex-auto space-y-6 overflow-x-clip lg:space-y-8">
+					<main className="min-w-0 max-w-full flex-auto space-y-6 overflow-x-auto overflow-y-visible lg:space-y-8">
 						{children}
 					</main>
 				</div>

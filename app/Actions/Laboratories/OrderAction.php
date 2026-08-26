@@ -21,6 +21,7 @@ use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\PromoCodeService;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Notifications\FewDaysLeftToRequestInvoice;
+use App\Support\EfevooPayLocalRealTestMode;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -76,6 +77,12 @@ class OrderAction
         ?string $promoValidationToken = null,
         ?array $clientContext = null,
     ): LaboratoryPurchase {
+
+        if (EfevooPayLocalRealTestMode::blocksExternalIntegrations()) {
+            throw new \RuntimeException(
+                'Checkout de laboratorio bloqueado durante pruebas locales reales. Use POST /__local/efevoo/isolated-token-charge.'
+            );
+        }
 
         $this->laboratoryCartItems = $customer->laboratoryCartItems()
             ->ofBrand($laboratoryBrand)

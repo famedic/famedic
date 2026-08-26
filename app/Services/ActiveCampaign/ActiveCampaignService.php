@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\ActiveCampaign\Concerns\HandlesBeneficiaryEvents;
 use App\Services\ActiveCampaign\Concerns\HandlesCouponCreditEvents;
 use App\Services\ActiveCampaign\Concerns\HandlesPromoEvents;
+use App\Support\LocalExternalIntegrationGate;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
@@ -40,6 +41,10 @@ class ActiveCampaignService
 
     protected function client()
     {
+        if (! LocalExternalIntegrationGate::allows('activecampaign')) {
+            throw new \RuntimeException('ActiveCampaign bloqueado en pruebas locales reales.');
+        }
+
         return Http::withHeaders([
             'Api-Token' => $this->apiKey,
             'Accept' => 'application/json',

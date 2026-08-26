@@ -32,7 +32,14 @@ class PaymentAuthentication3dsResultResource
         $recoveryContext ??= $attempt?->recoveryContext;
 
         $attemptStatus = PaymentAuthenticationAttemptStatus::tryFrom((string) ($attempt?->status ?? ''));
-        $presentation = $this->presentationState($attemptStatus, $recoveryContext, $session->status);
+        $presentation = $this->presentationState($attemptStatus, $recoveryContext, $session->status, $attempt);
+        $presentation = $this->applyLocalPersistencePresentationGuard(
+            $presentation,
+            $session,
+            $customer,
+            $attemptStatus,
+            $attempt
+        );
         $recovery = $this->recoveryPayload($customer, $attempt, $recoveryContext, $presentation);
         $copy = $this->copy($presentation, $recoveryContext, $customer, $recovery, $attemptStatus, $attempt);
         $verification = $this->verificationCharge($session, $attempt);
@@ -72,7 +79,32 @@ class PaymentAuthentication3dsResultResource
             'active_attempt' => $this->activeAttemptPayload($customer),
             'completed' => $presentation === 'completed',
             'success' => $presentation === 'completed',
+            'local_payment_method_confirmed' => $presentation === 'completed',
         ];
+    }
+
+    private function applyLocalPersistencePresentationGuard(
+        string $presentation,
+        Efevoo3dsSession $session,
+        Customer $customer,
+        ?PaymentAuthenticationAttemptStatus $attemptStatus,
+        ?PaymentAuthenticationAttempt $attempt
+    ): string {
+        if ($presentation !== 'completed') {
+            return $presentation;
+        }
+
+        $persistence = app(PaymentAuthenticationLocalPaymentMethodPersistence::class);
+
+        if ($persistence->sessionHasListableToken($session, $customer)) {
+            return $presentation;
+        }
+
+        if ($attemptStatus === PaymentAuthenticationAttemptStatus::ProviderConfirmationPending) {
+            return 'provider_confirmation_pending';
+        }
+
+        return 'provider_confirmation_pending';
     }
 
     /**
@@ -119,7 +151,8 @@ class PaymentAuthentication3dsResultResource
             : ['allowed' => false, 'block_reason' => 'status_blocks_recovery', 'checkout_ready' => false];
 
         $supportsPaypal = (bool) ($paypalEvaluation['allowed'] ?? false)
-            && (bool) config('services.paypal.client_id');
+            && (bool) config('services.paypal.client_id')
+            && ($contextResource['context_type'] ?? null) !== PaymentAuthenticationRecoveryContextType::PaymentMethodSettings->value;
 
         return array_merge($contextResource, [
             'attempts_remaining' => $evaluation['attempts_remaining'] ?? $this->policy->attemptsRemaining($recoveryContext),
@@ -172,6 +205,7 @@ class PaymentAuthentication3dsResultResource
             'declined' => 'No pudimos completar la verificación',
             'cancelled' => 'La verificación no se completó',
             'expired' => 'La verificación expiró',
+            'tokenization_failed' => 'Verificamos tu identidad, pero no pudimos guardar la tarjeta',
             'technical_error' => 'Tuvimos un problema al verificar tu tarjeta',
             'unknown', 'provider_confirmation_pending' => 'Estamos confirmando tu verificación',
             'authenticated', 'tokenizing' => 'Estamos guardando tu tarjeta',
@@ -187,6 +221,7 @@ class PaymentAuthentication3dsResultResource
             'hint' => match ($presentation) {
                 'cancelled' => 'Es posible que hayas cancelado el proceso o que se haya interrumpido antes de finalizar.',
                 'expired' => 'Debes iniciar una nueva verificación; no reutilizaremos la sesión anterior.',
+                'tokenization_failed' => 'No necesitas contactar al banco por la verificación; puedes intentar nuevamente o usar otra tarjeta. Un nuevo intento completo puede generar nuevas verificaciones temporales.',
                 'technical_error' => ($recovery['prioritize_different_card'] ?? false)
                     ? 'Si el problema continúa, intenta con otra tarjeta.'
                     : 'Si el problema continúa, vuelve a intentarlo o usa otra tarjeta.',
@@ -219,48 +254,90 @@ class PaymentAuthentication3dsResultResource
             };
         }
 
+        if ($presentation === 'tokenization_failed') {
+            return 'La verificación con tu banco se completó, pero no pudimos guardar la tarjeta. Puedes volver a intentarlo o usar otra tarjeta.';
+        }
+
         $issuerConfirmed = $attempt?->failure_origin === EfevooPay3dsResultClassifier::ORIGIN_ISSUER
             && $attempt?->failure_certainty === EfevooPay3dsResultClassifier::CERTAINTY_CONFIRMED;
 
+        $authenticationFailedMessage = $issuerConfirmed
+            ? 'Tu banco no autorizó la verificación. Puedes usar otra tarjeta o intentar después, según el tiempo de espera.'
+            : 'El banco no aprobó o no pudo completar la verificación. Puedes usar otra tarjeta o intentar después, según el tiempo de espera.';
+
+        if ($presentation === 'declined' && $attempt?->failure_category === EfevooPay3dsResultClassifier::CATEGORY_AUTHENTICATION_FAILED) {
+            if ($type === PaymentAuthenticationRecoveryContextType::PaymentMethodSettings) {
+                return $authenticationFailedMessage;
+            }
+        }
+
         $declinedDetail = $issuerConfirmed
             ? 'Tu banco no autorizó la verificación.'
-            : 'No pudimos completar la verificación de tu tarjeta.';
+            : 'El proveedor reportó que no se completó la autenticación.';
 
         return match ($type) {
-            PaymentAuthenticationRecoveryContextType::PaymentMethodSettings => 'No hay una compra pendiente asociada a esta verificación. Puedes intentar nuevamente o utilizar otra tarjeta.',
+            PaymentAuthenticationRecoveryContextType::PaymentMethodSettings => $authenticationFailedMessage,
             PaymentAuthenticationRecoveryContextType::LaboratoryCheckout => $hasSavedCart
                 ? 'Tu carrito sigue guardado y no se completó el pago.'
-                : 'No se completó el pago. Puedes regresar al catálogo o al checkout para continuar.',
+                : 'No hay una compra pendiente asociada a esta verificación. Puedes regresar al catálogo o al checkout para continuar.',
             PaymentAuthenticationRecoveryContextType::MedicalAttentionCheckout,
             PaymentAuthenticationRecoveryContextType::MedicalAttentionModal => 'No se completó la verificación de tu método de pago.',
             PaymentAuthenticationRecoveryContextType::OnlinePharmacyCheckout => $hasSavedCart
                 ? 'Tu carrito sigue guardado y no se completó el pago.'
-                : 'No se completó el pago. Puedes regresar al catálogo o al checkout para continuar.',
+                : 'No hay una compra pendiente asociada a esta verificación. Puedes regresar al catálogo o al checkout para continuar.',
             default => $presentation === 'declined' ? $declinedDetail : 'No se completó la verificación de tu tarjeta.',
         };
     }
 
     /**
-     * @return array{amount: string|null, currency: string|null, message: string}
+     * @return array{amount: string|null, currency: string|null, message: string, operations: array<string, mixed>}
      */
     private function verificationCharge(Efevoo3dsSession $session, ?PaymentAuthenticationAttempt $attempt): array
     {
-        $configuredAmount = number_format(config('efevoopay.test_amounts.default') / 100, 2, '.', '');
-        $sessionAmount = is_numeric($session->amount) ? number_format((float) $session->amount, 2, '.', '') : null;
-        $amount = $sessionAmount ?: $configuredAmount;
+        $linkAmount = PaymentAuthenticationEfevooPayAmounts::threeDsVerificationAmount();
+        $tokenAmount = PaymentAuthenticationEfevooPayAmounts::tokenizationVerificationAmount();
+        $currency = PaymentAuthenticationEfevooPayAmounts::currency();
+        $tokenCalls = (int) ($attempt?->tokenization_call_count ?? 0);
+        $linkCalls = (int) ($attempt?->provider_link_call_count ?? 0);
 
-        if ($amount && $this->amountIsTrusted($amount)) {
-            return [
-                'amount' => $amount,
-                'currency' => 'MXN',
-                'message' => "Puede aparecer una verificación temporal de {$amount} MXN. Si permanece reflejada, comunícate con soporte.",
-            ];
+        $formattedLink = number_format($linkAmount, 2, '.', '');
+        $formattedToken = number_format($tokenAmount, 2, '.', '');
+        $formattedTotal = number_format($linkAmount + $tokenAmount, 2, '.', '');
+
+        if ($tokenCalls > 0 || $attempt?->status === PaymentAuthenticationAttemptStatus::Completed->value) {
+            $message = "EfevooPay puede generar dos verificaciones temporales de {$formattedLink} {$currency} "
+                ."(GetLink y TokenCard), hasta {$formattedTotal} {$currency} en total. "
+                .'Si permanecen reflejadas, comunícate con soporte.';
+        } elseif ($linkCalls > 0) {
+            $message = "Puede aparecer una verificación temporal de {$formattedLink} {$currency} (GetLink). "
+                .'Si permanece reflejada, comunícate con soporte.';
+        } else {
+            $message = 'EfevooPay puede generar una o dos verificaciones temporales de seguridad '
+                ."(GetLink y, si aplica, TokenCard de {$formattedToken} {$currency}), "
+                ."hasta {$formattedTotal} {$currency} en total. "
+                .'Si permanecen reflejadas, comunícate con soporte.';
         }
 
         return [
-            'amount' => null,
-            'currency' => null,
-            'message' => 'Puede aparecer una verificación temporal de seguridad. Si permanece reflejada, comunícate con soporte.',
+            'amount' => $tokenCalls > 0 ? $formattedTotal : $formattedLink,
+            'currency' => $currency,
+            'message' => $message,
+            'operations' => [
+                'get_link' => [
+                    'label' => 'GetLink',
+                    'amount' => $formattedLink,
+                    'called' => $linkCalls > 0,
+                ],
+                'get_status' => [
+                    'label' => 'GetStatus',
+                    'called' => (int) ($attempt?->status_poll_call_count ?? 0) > 0,
+                ],
+                'token_card' => [
+                    'label' => 'TokenCard',
+                    'amount' => $tokenCalls > 0 ? $formattedToken : null,
+                    'called' => $tokenCalls > 0,
+                ],
+            ],
         ];
     }
 
@@ -285,7 +362,8 @@ class PaymentAuthentication3dsResultResource
     private function presentationState(
         ?PaymentAuthenticationAttemptStatus $attemptStatus,
         ?PaymentAuthenticationRecoveryContext $recoveryContext,
-        string $sessionStatus
+        string $sessionStatus,
+        ?PaymentAuthenticationAttempt $attempt = null
     ): string {
         if ($recoveryContext) {
             if ($recoveryContext->isExpired() || $recoveryContext->status === PaymentAuthenticationRecoveryContextStatus::Expired) {
@@ -301,6 +379,11 @@ class PaymentAuthentication3dsResultResource
         }
 
         if ($attemptStatus) {
+            if ($attemptStatus === PaymentAuthenticationAttemptStatus::TechnicalError
+                && $attempt?->failure_category === EfevooPay3dsResultClassifier::CATEGORY_TOKENIZATION_FAILED) {
+                return 'tokenization_failed';
+            }
+
             return match ($attemptStatus) {
                 PaymentAuthenticationAttemptStatus::Declined => 'declined',
                 PaymentAuthenticationAttemptStatus::Cancelled => 'cancelled',

@@ -6,18 +6,19 @@ use App\Contracts\EfevooPayGateway;
 use App\Services\EfevooPay\MockEfevooPayGateway;
 use App\Services\EfevooPayFactoryService;
 use App\Services\EfevooPayService;
+use App\Support\EfevooPayGatewayMode;
 use Illuminate\Support\ServiceProvider;
 
 class EfevooPayServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->singleton(EfevooPayGateway::class, function ($app) {
-            if ($app->environment('production')) {
-                return new EfevooPayService;
+        $this->app->singleton(EfevooPayGateway::class, function () {
+            if (EfevooPayGatewayMode::usesMock()) {
+                return new MockEfevooPayGateway;
             }
 
-            return new MockEfevooPayGateway;
+            return new EfevooPayService;
         });
 
         // En no-producción resuelve al mock para evitar cargos reales en cualquier flujo legacy.

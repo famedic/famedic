@@ -4,6 +4,10 @@ return [
     // Ambiente productivo
     'environment' => env('EFEVOO_ENVIRONMENT', 'production'),
 
+    // Selector explícito del gateway: mock | test | live.
+    // Vacío = auto (mock fuera de production, live en production).
+    'gateway' => env('EFEVOO_GATEWAY'),
+
     // Configuración PRODUCTIVA (basada en script exitoso)
     'api_url' => env('EFEVOO_API_URL', 'https://intgapi.efevoopay.com/v1/apiservice'),
     'api_user' => env('EFEVOO_API_USER'),
@@ -75,6 +79,19 @@ return [
 
     // Configuración del simulador (desactivar en producción)
     'force_simulation' => env('EFEVOOPAY_FORCE_SIMULATION', false),
+
+    /*
+    | Pruebas locales reales controladas (desactivado por defecto).
+    | Solo aplica con APP_ENV=local y gateway test/live. No altera producción.
+    */
+    'local_real_tests' => [
+        'enabled' => filter_var(env('EFEVOO_LOCAL_REAL_TESTS', false), FILTER_VALIDATE_BOOLEAN),
+        'allowed_user_email' => env('EFEVOO_LOCAL_REAL_TEST_USER_EMAIL'),
+        'allowed_user_id' => (int) env('EFEVOO_LOCAL_REAL_TEST_USER_ID', 0),
+        'max_card_verification_total_cents' => (int) env('EFEVOO_LOCAL_REAL_TEST_MAX_VERIFICATION_CENTS', 300),
+        'max_payment_amount_cents' => (int) env('EFEVOO_LOCAL_REAL_TEST_MAX_PAYMENT_CENTS', 1000),
+        'payment_fixture_cents' => (int) env('EFEVOO_LOCAL_REAL_TEST_PAYMENT_FIXTURE_CENTS', 1000),
+    ],
 
     // Configuración de operaciones
     'operations' => [

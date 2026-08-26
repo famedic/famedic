@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Actions\MedicalAttention\SyncSubscriptionToMurguiaAction;
 use App\Models\MedicalAttentionSubscription;
+use App\Support\LocalExternalIntegrationGate;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -27,6 +28,14 @@ class SyncSubscriptionToMurguiaJob implements ShouldQueue
 
     public function handle(SyncSubscriptionToMurguiaAction $syncAction): void
     {
+        if (! LocalExternalIntegrationGate::allows('murguia')) {
+            Log::info('Murguia sync skipped — local real test isolation', [
+                'subscription_id' => $this->subscription->id,
+            ]);
+
+            return;
+        }
+
         $syncAction($this->subscription, $this->status, $this->startDate, $this->endDate);
     }
 

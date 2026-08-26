@@ -5,6 +5,7 @@ namespace App\Actions\Laboratories;
 use App\Models\Address;
 use App\Models\Contact;
 use App\Models\Customer;
+use App\Support\LocalExternalIntegrationGate;
 use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -35,13 +36,17 @@ class CreateGDAQuotationAction
         $nonProductionEnvs = ['local', 'staging', 'testing'];
         $currentEnv = strtolower((string) config('app.env'));
         if (in_array($currentEnv, $nonProductionEnvs, true)) {
-            Log::warning('CreateGDAQuotationAction: Entorno no productivo, retornando ID simulado', [
-                'app_env' => config('app.env'),
-                'normalized_env' => $currentEnv,
-                'generated_id' => uniqid(),
-            ]);
+            if (LocalExternalIntegrationGate::allows('gda')) {
+                Log::warning('CreateGDAQuotationAction: Entorno no productivo, retornando ID simulado', [
+                    'app_env' => config('app.env'),
+                    'normalized_env' => $currentEnv,
+                    'generated_id' => uniqid(),
+                ]);
 
-            return ['id' => uniqid()];
+                return ['id' => uniqid()];
+            }
+
+            throw new Exception('Cotizacion GDA bloqueada durante pruebas locales reales.');
         }
 
         $url = config('services.gda.url') . 'infogda-fullV3/service-request';

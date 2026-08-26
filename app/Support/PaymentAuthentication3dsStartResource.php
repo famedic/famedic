@@ -26,6 +26,9 @@ class PaymentAuthentication3dsStartResource
                 ? route('payment-methods.3ds-status', ['sessionId' => $session->id])
                 : null,
             'expires_at' => $attempt->expires_at?->toISOString(),
+            'started_at' => $attempt->started_at?->toISOString(),
+            'server_now' => now()->toISOString(),
+            'support_reference' => $attempt->support_reference,
         ];
 
         if ($includeChallenge && $session) {

@@ -258,6 +258,10 @@ it('purges before tokenization and tokenize payload excludes cvv', function () {
         '3ds_card_data_'.$session->id => containmentStorePayload($user, $session->id),
     ])->getJson(route('payment-methods.3ds-status', $session))->assertOk();
 
+    $this->actingAs($user)->withSession([
+        '3ds_card_data_'.$session->id => containmentStorePayload($user, $session->id),
+    ])->getJson(route('payment-methods.3ds-status', $session))->assertOk();
+
     expect(Session::has('3ds_card_data_'.$session->id))->toBeFalse()
         ->and($calls['finalize3DSTokenization'] ?? 0)->toBe(1);
 });
