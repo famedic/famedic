@@ -303,20 +303,43 @@ class PaymentAuthentication3dsCompletionService
             'exception_class' => $e::class,
         ]);
 
+        $providerException = $e instanceof PaymentAuthentication3dsProviderCallException ? $e : null;
+        $exceptionCategory = $providerException?->exceptionCategory() ?? 'provider_confirmation_pending';
+        $failureStage = $providerException?->failureStage() ?? 'unknown';
+        $attemptStatus = $exceptionCategory === 'technical_error_before_dispatch'
+            ? PaymentAuthenticationAttemptStatus::TechnicalError
+            : PaymentAuthenticationAttemptStatus::ProviderConfirmationPending;
+
         if ($attempt) {
+            $eventType = $attemptStatus === PaymentAuthenticationAttemptStatus::TechnicalError
+                ? PaymentAuthenticationAttemptEventType::TechnicalError
+                : PaymentAuthenticationAttemptEventType::ProviderConfirmationPending;
             $classification = [
-                'result_category' => EfevooPay3dsResultClassifier::CATEGORY_PROVIDER_TIMEOUT,
-                'failure_origin' => EfevooPay3dsResultClassifier::ORIGIN_NETWORK,
-                'failure_certainty' => EfevooPay3dsResultClassifier::CERTAINTY_UNKNOWN,
+                'result_category' => match ($exceptionCategory) {
+                    'technical_error_before_dispatch' => EfevooPay3dsResultClassifier::CATEGORY_CONFIGURATION_ERROR,
+                    'invalid_response' => EfevooPay3dsResultClassifier::CATEGORY_PROVIDER_ERROR,
+                    default => EfevooPay3dsResultClassifier::CATEGORY_PROVIDER_TIMEOUT,
+                },
+                'failure_origin' => $exceptionCategory === 'technical_error_before_dispatch'
+                    ? EfevooPay3dsResultClassifier::ORIGIN_FAMEDIC
+                    : EfevooPay3dsResultClassifier::ORIGIN_NETWORK,
+                'failure_certainty' => $exceptionCategory === 'technical_error_before_dispatch'
+                    ? EfevooPay3dsResultClassifier::CERTAINTY_CONFIRMED
+                    : EfevooPay3dsResultClassifier::CERTAINTY_UNKNOWN,
                 'provider_message' => config('efevoopay.sensitive_card_data.messages.confirmation_pending'),
             ];
 
-            $this->recorder->transition($attempt->fresh(), PaymentAuthenticationAttemptStatus::ProviderConfirmationPending, PaymentAuthenticationAttemptEventType::ProviderConfirmationPending, array_merge($classification, [
+            $this->recorder->transition($attempt->fresh(), $attemptStatus, $eventType, array_merge($classification, [
                 'source' => 'backend',
-                'dedupe_key' => 'provider_confirmation_pending:poll:'.$session->id,
+                'dedupe_key' => $eventType->value.':poll:'.$session->id,
                 'metadata' => [
                     'session_id' => $session->id,
-                    'exception_class' => $e::class,
+                    'failure_stage' => $failureStage,
+                    'exception_category' => $exceptionCategory,
+                    'request_dispatched' => $providerException?->requestDispatched() ?? false,
+                    'response_received' => $providerException?->responseReceived() ?? false,
+                    'http_status' => $providerException?->httpStatus(),
+                    'duration_ms' => $providerException?->durationMs(),
                     'detected_by' => 'famedic',
                 ],
             ]));
@@ -324,9 +347,12 @@ class PaymentAuthentication3dsCompletionService
 
         return [
             'final' => true,
-            'status' => 'provider_confirmation_pending',
+            'status' => $attemptStatus === PaymentAuthenticationAttemptStatus::TechnicalError
+                ? PaymentAuthenticationAttemptStatus::TechnicalError->value
+                : PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value,
             'message' => config('efevoopay.sensitive_card_data.messages.confirmation_pending'),
             'error_type' => 'system',
+            'exception_category' => $exceptionCategory,
         ];
     }
 

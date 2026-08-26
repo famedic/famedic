@@ -1,10 +1,13 @@
 <?php
 
+use App\Enums\LaboratoryBrand;
 use App\Enums\PaymentAuthenticationAttemptEventType;
 use App\Enums\PaymentAuthenticationAttemptStatus;
 use App\Enums\PaymentAuthenticationRecoveryContextStatus;
 use App\Enums\PaymentAuthenticationRecoveryContextType;
 use App\Models\Efevoo3dsSession;
+use App\Models\LaboratoryCartItem;
+use App\Models\LaboratoryTest;
 use App\Models\PaymentAuthenticationAttempt;
 use App\Models\PaymentAuthenticationAttemptEvent;
 use App\Models\PaymentAuthenticationRecoveryContext;
@@ -37,20 +40,26 @@ function makeRecoveryContext(
         'context_type' => $type,
         'status' => $status,
         'return_route_name' => $type->returnRouteName(),
-        'context_data' => ['step' => 'payment'],
+        'context_data' => $type === PaymentAuthenticationRecoveryContextType::LaboratoryCheckout
+            ? ['step' => 'payment', 'laboratory_brand' => LaboratoryBrand::OLAB->value]
+            : ['step' => 'payment'],
         'started_at' => now(),
         'expires_at' => now()->addMinutes(30),
     ]);
 }
 
-function makeDeclinedRecoveryAttempt(User $user, PaymentAuthenticationRecoveryContext $context): array
-{
+function makeDeclinedRecoveryAttempt(
+    User $user,
+    PaymentAuthenticationRecoveryContext $context,
+    PaymentAuthenticationAttemptStatus $status = PaymentAuthenticationAttemptStatus::Declined,
+    string $sessionStatus = 'declined',
+): array {
     $session = Efevoo3dsSession::create([
         'customer_id' => $user->customer->id,
         'order_id' => 'ORDER-'.Str::upper(Str::random(8)),
         'card_last_four' => '4242',
         'amount' => 1.5,
-        'status' => 'declined',
+        'status' => $sessionStatus,
     ]);
 
     $attempt = PaymentAuthenticationAttempt::create([
@@ -60,12 +69,17 @@ function makeDeclinedRecoveryAttempt(User $user, PaymentAuthenticationRecoveryCo
         'recovery_context_id' => $context->id,
         'operation_type' => PaymentAuthenticationAttempt::OPERATION_CARD_VERIFICATION_3DS,
         'provider' => PaymentAuthenticationAttempt::PROVIDER_EFEVOOPAY,
-        'status' => PaymentAuthenticationAttemptStatus::Declined->value,
+        'status' => $status->value,
         'merchant_reference' => 'EFV3DS-'.Str::upper(Str::random(8)),
         'attempt_number' => 1,
         'support_reference' => 'SUP-'.Str::upper(Str::random(6)),
         'started_at' => now()->subMinute(),
-        'finished_at' => now(),
+        'finished_at' => in_array($status, [
+            PaymentAuthenticationAttemptStatus::Declined,
+            PaymentAuthenticationAttemptStatus::Cancelled,
+            PaymentAuthenticationAttemptStatus::Expired,
+            PaymentAuthenticationAttemptStatus::TechnicalError,
+        ], true) ? now() : null,
         'expires_at' => now()->addMinutes(5),
     ]);
 
@@ -256,4 +270,123 @@ it('3ds result exposes supports_paypal for eligible checkout recovery', function
         ->assertInertia(fn ($page) => $page
             ->where('result.recovery.supports_paypal', true)
             ->where('result.recovery.actions.paypal', true));
+});
+
+it('settings ambiguous confirmation pending does not expose paypal', function () {
+    $user = recoveryPayPalUser();
+    $context = makeRecoveryContext(
+        $user,
+        PaymentAuthenticationRecoveryContextType::PaymentMethodSettings,
+        PaymentAuthenticationRecoveryContextStatus::AuthenticationInProgress
+    );
+    [$session] = makeDeclinedRecoveryAttempt(
+        $user,
+        $context,
+        PaymentAuthenticationAttemptStatus::ProviderConfirmationPending,
+        'pending'
+    );
+
+    $this->actingAs($user)
+        ->get(route('payment-methods.3ds-result', ['sessionId' => $session->id]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('result.recovery.actions.paypal', false)
+            ->where('result.recovery.actions.refresh_status', false));
+});
+
+it('laboratory ambiguous confirmation pending exposes paypal without changing auth result', function () {
+    $user = recoveryPayPalUser();
+    $test = LaboratoryTest::factory()->create(['brand' => LaboratoryBrand::OLAB->value]);
+    LaboratoryCartItem::factory()->create([
+        'customer_id' => $user->customer->id,
+        'laboratory_test_id' => $test->id,
+    ]);
+    $context = makeRecoveryContext(
+        $user,
+        PaymentAuthenticationRecoveryContextType::LaboratoryCheckout,
+        PaymentAuthenticationRecoveryContextStatus::AuthenticationInProgress
+    );
+    [$session, $attempt] = makeDeclinedRecoveryAttempt(
+        $user,
+        $context,
+        PaymentAuthenticationAttemptStatus::ProviderConfirmationPending,
+        'pending'
+    );
+
+    $this->actingAs($user)
+        ->get(route('payment-methods.3ds-result', ['sessionId' => $session->id]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('result.recovery.actions.paypal', true)
+            ->where('result.recovery.actions.retry', false)
+            ->where('result.recovery.actions.different_card', false));
+
+    $this->actingAs($user)
+        ->postJson(route('payment-methods.recovery.paypal.start'), [
+            'session_id' => $session->id,
+            'recovery_context_uuid' => $context->context_uuid,
+        ])
+        ->assertOk();
+
+    expect($attempt->fresh()->status)->toBe(PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value)
+        ->and(PaymentAuthenticationAttemptEvent::query()
+            ->where('event_type', PaymentAuthenticationAttemptEventType::ChangedToPaypal->value)
+            ->count())->toBe(1);
+});
+
+it('membership ambiguous confirmation pending exposes paypal', function () {
+    $user = recoveryPayPalUser();
+    $context = makeRecoveryContext(
+        $user,
+        PaymentAuthenticationRecoveryContextType::MedicalAttentionCheckout,
+        PaymentAuthenticationRecoveryContextStatus::AuthenticationInProgress
+    );
+    [$session] = makeDeclinedRecoveryAttempt(
+        $user,
+        $context,
+        PaymentAuthenticationAttemptStatus::ProviderConfirmationPending,
+        'pending'
+    );
+
+    $this->actingAs($user)
+        ->get(route('payment-methods.3ds-result', ['sessionId' => $session->id]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('result.recovery.actions.paypal', true));
+});
+
+it('ambiguous paypal is blocked when capture already exists', function () {
+    $user = recoveryPayPalUser();
+    $context = makeRecoveryContext(
+        $user,
+        PaymentAuthenticationRecoveryContextType::MedicalAttentionCheckout,
+        PaymentAuthenticationRecoveryContextStatus::AuthenticationInProgress
+    );
+    [$session] = makeDeclinedRecoveryAttempt(
+        $user,
+        $context,
+        PaymentAuthenticationAttemptStatus::ProviderConfirmationPending,
+        'pending'
+    );
+
+    Transaction::create([
+        'transaction_amount_cents' => 30000,
+        'payment_method' => 'paypal',
+        'payment_provider' => 'paypal',
+        'gateway' => 'paypal',
+        'reference_id' => 'PP-CAPTURED-BLOCK',
+        'provider_order_id' => 'PP-CAPTURED-BLOCK',
+        'payment_status' => 'captured',
+        'details' => [
+            'customer_id' => $user->customer->id,
+            'recovery_context_uuid' => $context->context_uuid,
+        ],
+    ]);
+
+    $this->actingAs($user)
+        ->postJson(route('payment-methods.recovery.paypal.start'), [
+            'session_id' => $session->id,
+            'recovery_context_uuid' => $context->context_uuid,
+        ])
+        ->assertStatus(409);
 });

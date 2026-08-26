@@ -16,11 +16,10 @@ use App\Support\AppEnvironmentLabel;
 use App\Support\EfevooPay3dsResultClassifier;
 use App\Support\EfevooPayLogSanitizer;
 use App\Support\MockEfevooPaymentSupport;
+use App\Support\PaymentAuthentication3dsCompletionService;
 use App\Support\PaymentAuthentication3dsResultResource;
 use App\Support\PaymentAuthentication3dsStartResource;
 use App\Support\PaymentAuthenticationAttemptRecorder;
-use App\Support\PaymentAuthentication3dsCompletionService;
-use App\Support\PaymentAuthenticationSensitiveCardDataStore;
 use App\Support\PaymentAuthenticationRecoveryContextException;
 use App\Support\PaymentAuthenticationRecoveryContextManager;
 use App\Support\PaymentAuthenticationRecoveryNavigator;
@@ -28,6 +27,7 @@ use App\Support\PaymentAuthenticationRecoveryPaymentCoordinator;
 use App\Support\PaymentAuthenticationRecoveryPayPalNavigator;
 use App\Support\PaymentAuthenticationRecoveryPolicy;
 use App\Support\PaymentAuthenticationRecoveryStartException;
+use App\Support\PaymentAuthenticationSensitiveCardDataStore;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -739,10 +739,6 @@ class PaymentMethodController extends Controller
 
         if ($willPollExternally) {
             $this->recordStatusPollStarted($attempt);
-
-            if ($attempt->status !== PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value) {
-                $this->syncAuthenticationAttemptFromSession($session, PaymentAuthenticationAttemptStatus::Pending);
-            }
         }
 
         $pollResult = $this->completionService()->poll($customer, $session, $attempt);
@@ -754,7 +750,8 @@ class PaymentMethodController extends Controller
         if (! in_array($pollResult['status'] ?? '', [
             PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value,
             PaymentAuthenticationAttemptStatus::TokenizationConfirmationPending->value,
-        ], true)) {
+            PaymentAuthenticationAttemptStatus::TechnicalError->value,
+        ], true) && ! in_array($session->status, ['pending', 'mock_pending'], true)) {
             $this->syncAuthenticationAttemptFromSession($session);
         }
 
@@ -1052,6 +1049,15 @@ class PaymentMethodController extends Controller
             return;
         }
 
+        if (in_array($attempt->status, [
+            PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value,
+            PaymentAuthenticationAttemptStatus::TokenizationConfirmationPending->value,
+        ], true) && in_array($session->status, ['pending', 'mock_pending'], true)) {
+            $this->recoveryContexts()->syncFromAttempt($attempt->fresh());
+
+            return;
+        }
+
         $status = $forcedStatus ?? match ($session->status) {
             'completed' => PaymentAuthenticationAttemptStatus::Completed,
             'declined' => PaymentAuthenticationAttemptStatus::Declined,
@@ -1081,6 +1087,15 @@ class PaymentMethodController extends Controller
 
         if ($attempt->status === $status->value) {
             if (in_array($status->value, PaymentAuthenticationAttemptStatus::terminalValues(), true)) {
+                if ($status === PaymentAuthenticationAttemptStatus::Completed
+                    && $attempt->failure_category !== EfevooPay3dsResultClassifier::CATEGORY_SUCCESS) {
+                    $attempt->forceFill([
+                        'failure_category' => EfevooPay3dsResultClassifier::CATEGORY_SUCCESS,
+                        'failure_origin' => EfevooPay3dsResultClassifier::ORIGIN_EFEVOOPAY,
+                        'failure_certainty' => EfevooPay3dsResultClassifier::CERTAINTY_CONFIRMED,
+                    ])->save();
+                }
+
                 $this->recoveryContexts()->syncFromAttempt($attempt->fresh());
 
                 return;
@@ -1159,21 +1174,24 @@ class PaymentMethodController extends Controller
         }
 
         $errorType = $result['error_type'] ?? null;
+        $ambiguous = ($result['status'] ?? null) === PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value
+            || ($result['exception_category'] ?? null) === 'provider_confirmation_pending';
         $receivedProviderStatus = filled($session->status) && $session->status !== 'mock_pending';
         $pollFailed = in_array($errorType, ['network', 'timeout'], true)
+            || $ambiguous
             || (! $success && ! $receivedProviderStatus);
         $eventType = $pollFailed
             ? PaymentAuthenticationAttemptEventType::StatusPollFailed
             : PaymentAuthenticationAttemptEventType::StatusPollSucceeded;
         $classification = EfevooPay3dsResultClassifier::providerStatus(
-            $session->status,
+            $ambiguous ? null : $session->status,
             data_get($result, 'raw.data.status.code'),
             $session->error_message ?? ($result['message'] ?? null)
         );
 
         $this->recorder()->record($attempt->fresh(), $eventType, [
             'source' => 'polling',
-            'provider_status' => $session->status,
+            'provider_status' => $ambiguous ? null : $session->status,
             'provider_code' => $classification['provider_code'],
             'provider_message' => $classification['provider_message'],
             'result_category' => $classification['result_category'],
@@ -1187,7 +1205,7 @@ class PaymentMethodController extends Controller
             ],
         ]);
 
-        if ($receivedProviderStatus) {
+        if ($receivedProviderStatus && ! $ambiguous) {
             $this->recorder()->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::ProviderStatusReceived, [
                 'source' => 'efevoopay',
                 'provider_status' => $session->status,

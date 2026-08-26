@@ -38,6 +38,8 @@ class EfevooPay3dsResultClassifier
 
     public const CATEGORY_UNKNOWN = 'unknown';
 
+    public const CATEGORY_SUCCESS = 'success';
+
     public const ORIGIN_USER = 'user';
 
     public const ORIGIN_ISSUER = 'issuer';
@@ -133,6 +135,18 @@ class EfevooPay3dsResultClassifier
                 self::ORIGIN_EFEVOOPAY,
                 self::CERTAINTY_CONFIRMED,
                 false,
+                false,
+                false,
+                ['status' => $status, 'code' => $providerCode],
+                $message
+            ),
+            'completed' => self::classification(
+                PaymentAuthenticationAttemptStatus::Completed,
+                self::CATEGORY_SUCCESS,
+                self::ORIGIN_EFEVOOPAY,
+                self::ORIGIN_EFEVOOPAY,
+                self::CERTAINTY_CONFIRMED,
+                true,
                 false,
                 false,
                 ['status' => $status, 'code' => $providerCode],

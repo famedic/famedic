@@ -16,8 +16,10 @@ use App\Models\PaymentAuthenticationAttempt;
 use App\Models\PaymentAuthenticationAttemptEvent;
 use App\Models\PaymentAuthenticationRecoveryContext;
 use App\Models\User;
+use App\Support\EfevooPay3dsResultClassifier;
 use App\Support\PaymentAuthentication3dsResultResource;
 use App\Support\PaymentAuthenticationAttemptAdminResource;
+use App\Support\PaymentAuthenticationRecoveryContextReconciler;
 use App\Support\PaymentAuthenticationRecoveryPolicy;
 use Illuminate\Support\Str;
 
@@ -257,12 +259,12 @@ test('confirmacion pendiente no promete notificacion movil', function () {
     $session = experienceSession($user->customer, $attempt, 'pending');
     $result = experienceResult($session, $user);
 
-    expect($result['copy']['hint'])->toBe('Actualiza el estado para consultar la respuesta definitiva.')
+    expect($result['copy']['hint'])->toBe('No pudimos confirmar automáticamente el resultado. No se realizará otro intento sin tu autorización.')
         ->and(strtolower($result['copy']['hint']))->not->toContain('avisaremos')
         ->and(strtolower($result['copy']['hint']))->not->toContain('notific');
 });
 
-test('unknown y provider confirmation pending bloquean acciones', function (PaymentAuthenticationAttemptStatus $status) {
+test('unknown y provider confirmation pending bloquean acciones', function (PaymentAuthenticationAttemptStatus $status, bool $refreshStatus) {
     $user = experienceUser();
     $context = experienceContext($user->customer, PaymentAuthenticationRecoveryContextType::PaymentMethodSettings, [
         'status' => PaymentAuthenticationRecoveryContextStatus::AuthenticationInProgress->value,
@@ -273,10 +275,10 @@ test('unknown y provider confirmation pending bloquean acciones', function (Paym
 
     expect($result['recovery']['actions']['retry'])->toBeFalse()
         ->and($result['recovery']['actions']['different_card'])->toBeFalse()
-        ->and($result['recovery']['actions']['refresh_status'])->toBeTrue();
+        ->and($result['recovery']['actions']['refresh_status'])->toBe($refreshStatus);
 })->with([
-    PaymentAuthenticationAttemptStatus::Unknown,
-    PaymentAuthenticationAttemptStatus::ProviderConfirmationPending,
+    [PaymentAuthenticationAttemptStatus::Unknown, true],
+    [PaymentAuthenticationAttemptStatus::ProviderConfirmationPending, false],
 ]);
 
 test('authenticated y tokenizing bloquean acciones', function (PaymentAuthenticationAttemptStatus $status) {
@@ -305,6 +307,56 @@ test('completed usa retorno seguro', function () {
     expect($result['success'])->toBeTrue()
         ->and($result['recovery']['actions']['retry'] ?? null)->toBeFalse()
         ->and($result['recovery']['return_action']['route_name'])->toBe('payment-methods.index');
+});
+
+test('completed sincroniza contexto card verified y resultado success', function () {
+    $user = experienceUser();
+    $context = experienceContext($user->customer, PaymentAuthenticationRecoveryContextType::PaymentMethodSettings, [
+        'status' => PaymentAuthenticationRecoveryContextStatus::RecoveryAvailable->value,
+    ]);
+    $attempt = experienceAttempt($user->customer, $context, PaymentAuthenticationAttemptStatus::Completed, [
+        'failure_category' => EfevooPay3dsResultClassifier::CATEGORY_UNKNOWN,
+        'failure_origin' => EfevooPay3dsResultClassifier::ORIGIN_UNKNOWN,
+        'failure_certainty' => EfevooPay3dsResultClassifier::CERTAINTY_UNKNOWN,
+    ]);
+    $session = experienceSession($user->customer, $attempt, 'completed');
+
+    $this->actingAs($user)
+        ->get(route('payment-methods.3ds-result', ['sessionId' => $session->id]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('result.result_category', EfevooPay3dsResultClassifier::CATEGORY_SUCCESS)
+            ->where('result.recovery.status', PaymentAuthenticationRecoveryContextStatus::CardVerified->value)
+            ->where('result.recovery.return_action.route_name', 'payment-methods.index'));
+
+    expect($context->fresh()->status)->toBe(PaymentAuthenticationRecoveryContextStatus::CardVerified)
+        ->and($context->fresh()->card_verified_at)->not->toBeNull()
+        ->and(PaymentAuthenticationAttemptEvent::query()
+            ->where('event_type', PaymentAuthenticationAttemptEventType::CardVerified->value)
+            ->count())->toBe(1)
+        ->and(PaymentAuthenticationAttemptEvent::query()
+            ->where('event_type', PaymentAuthenticationAttemptEventType::SafeReturnGenerated->value)
+            ->count())->toBe(1);
+});
+
+test('reparador card verified drift es dry run e idempotente', function () {
+    $user = experienceUser();
+    $context = experienceContext($user->customer, PaymentAuthenticationRecoveryContextType::PaymentMethodSettings, [
+        'status' => PaymentAuthenticationRecoveryContextStatus::RecoveryAvailable->value,
+        'card_verified_at' => now()->subMinute(),
+    ]);
+
+    $dryRun = app(PaymentAuthenticationRecoveryContextReconciler::class)->repairCardVerifiedDrift();
+    expect($dryRun['matched'])->toBe(1)
+        ->and($dryRun['repaired'])->toBe(0)
+        ->and($context->fresh()->status)->toBe(PaymentAuthenticationRecoveryContextStatus::RecoveryAvailable);
+
+    $applied = app(PaymentAuthenticationRecoveryContextReconciler::class)->repairCardVerifiedDrift(false);
+    $again = app(PaymentAuthenticationRecoveryContextReconciler::class)->repairCardVerifiedDrift(false);
+
+    expect($applied['repaired'])->toBe(1)
+        ->and($again['matched'])->toBe(0)
+        ->and($context->fresh()->status)->toBe(PaymentAuthenticationRecoveryContextStatus::CardVerified);
 });
 
 test('recovery start registra eventos y prepara formulario', function () {

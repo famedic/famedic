@@ -83,11 +83,22 @@ class PaymentAuthentication3dsExternalCallGuard
             return ['blocked' => false, 'duplicate' => false, 'result' => $result];
         } catch (\Throwable $e) {
             $durationMs = (int) round((microtime(true) - $started) * 1000);
-            $this->tracer->record($attempt->fresh(), PaymentAuthenticationAttemptEventType::ProviderStatusRequestTimeout, PaymentAuthenticationEfevooPayMonetaryTracer::OP_GET_STATUS, [
+            $providerException = $e instanceof PaymentAuthentication3dsProviderCallException ? $e : null;
+            $exceptionCategory = $providerException?->exceptionCategory() ?? 'technical_error_before_dispatch';
+            $eventType = $exceptionCategory === 'network_timeout_after_dispatch'
+                ? PaymentAuthenticationAttemptEventType::ProviderStatusRequestTimeout
+                : PaymentAuthenticationAttemptEventType::ProviderStatusRequestFailed;
+
+            $this->tracer->record($attempt->fresh(), $eventType, PaymentAuthenticationEfevooPayMonetaryTracer::OP_GET_STATUS, [
                 'session_id' => $session->id,
                 'provider_order_id' => $session->order_id,
-                'duration_ms' => $durationMs,
+                'duration_ms' => $providerException?->durationMs() ?? $durationMs,
+                'http_status' => $providerException?->httpStatus(),
                 'stage' => 'exception',
+                'failure_stage' => $providerException?->failureStage() ?? 'callback',
+                'exception_category' => $exceptionCategory,
+                'request_dispatched' => $providerException?->requestDispatched() ?? false,
+                'response_received' => $providerException?->responseReceived() ?? false,
             ]);
 
             throw $e;
@@ -136,6 +147,7 @@ class PaymentAuthentication3dsExternalCallGuard
 
             if (! in_array($locked->status, [
                 PaymentAuthenticationAttemptStatus::Authenticated->value,
+                PaymentAuthenticationAttemptStatus::ChallengeRequired->value,
                 PaymentAuthenticationAttemptStatus::Pending->value,
                 PaymentAuthenticationAttemptStatus::Tokenizing->value,
             ], true)) {

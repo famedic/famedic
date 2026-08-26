@@ -9,6 +9,7 @@ use App\Models\PaymentAuthenticationAttemptEvent;
 use App\Models\User;
 use App\Services\PaymentAuthenticationAttempts\PaymentAuthenticationEfevooPayOperationAnalyzer;
 use App\Support\PaymentAuthentication3dsExternalCallGuard;
+use App\Support\PaymentAuthentication3dsProviderCallException;
 use App\Support\PaymentAuthenticationAttemptAdminResource;
 use App\Support\PaymentAuthenticationEfevooPayAmounts;
 use Illuminate\Support\Facades\Cache;
@@ -322,6 +323,63 @@ it('does not tokenize on declined terminal poll', function () {
         ->and(PaymentAuthenticationAttempt::first()->tokenization_call_count)->toBe(0);
 });
 
+it('exception before GetStatus dispatch is not recorded as network timeout', function () {
+    $calls = [];
+    bindFlowGateway($calls, poll: function () {
+        throw new PaymentAuthentication3dsProviderCallException(
+            'encrypt_payload',
+            'technical_error_before_dispatch',
+            false,
+            false
+        );
+    });
+    $user = flowUser();
+    $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
+
+    completeFlowPoll($user, Efevoo3dsSession::first())->assertOk();
+
+    $attempt = PaymentAuthenticationAttempt::first();
+    $events = $attempt->events()->pluck('event_type')->all();
+    $failed = $attempt->events()
+        ->where('event_type', PaymentAuthenticationAttemptEventType::ProviderStatusRequestFailed->value)
+        ->first();
+
+    expect($events)->toContain(PaymentAuthenticationAttemptEventType::ProviderStatusRequestFailed->value)
+        ->and($events)->not->toContain(PaymentAuthenticationAttemptEventType::ProviderStatusRequestTimeout->value)
+        ->and($failed->allowlistedMetadata()['failure_stage'] ?? null)->toBe('encrypt_payload')
+        ->and($failed->allowlistedMetadata()['exception_category'] ?? null)->toBe('technical_error_before_dispatch')
+        ->and($failed->allowlistedMetadata()['request_dispatched'] ?? null)->toBeFalse()
+        ->and($attempt->fresh()->status)->toBe(PaymentAuthenticationAttemptStatus::TechnicalError->value);
+});
+
+it('timeout after GetStatus dispatch stays confirmation pending without success events', function () {
+    $calls = [];
+    bindFlowGateway($calls, poll: function () {
+        throw new PaymentAuthentication3dsProviderCallException(
+            'request_get_status',
+            'network_timeout_after_dispatch',
+            true,
+            false,
+            null,
+            30000
+        );
+    });
+    $user = flowUser();
+    $this->actingAs($user)->post(route('payment-methods.store'), flowPayload())->assertRedirect();
+
+    completeFlowPoll($user, Efevoo3dsSession::first())->assertOk();
+
+    $attempt = PaymentAuthenticationAttempt::first();
+    $events = $attempt->events()->pluck('event_type')->all();
+
+    expect($attempt->fresh()->status)->toBe(PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value)
+        ->and($events)->toContain(PaymentAuthenticationAttemptEventType::ProviderStatusRequestTimeout->value)
+        ->and($events)->toContain(PaymentAuthenticationAttemptEventType::StatusPollFailed->value)
+        ->and($events)->not->toContain(PaymentAuthenticationAttemptEventType::StatusPollSucceeded->value)
+        ->and($events)->not->toContain(PaymentAuthenticationAttemptEventType::ProviderStatusReceived->value)
+        ->and($events)->toContain(PaymentAuthenticationAttemptEventType::SensitiveCardDataPurged->value);
+});
+
 it('skips GetStatus and TokenCard when sensitive card data ttl expired', function () {
     $calls = [];
     bindFlowGateway($calls);
@@ -387,7 +445,7 @@ it('analyzer flags possible duplicate verification conservatively not confirmed 
     $analysis = app(PaymentAuthenticationEfevooPayOperationAnalyzer::class)->analyze($attempt);
 
     expect($analysis['possible_duplicate_verification_operation'])->toBeTrue()
-        ->and($analysis['disclaimer'])->toContain('no prueban');
+        ->and($analysis['disclaimer'])->toContain('no demuestra');
 });
 
 it('export row excludes sensitive card fields', function () {

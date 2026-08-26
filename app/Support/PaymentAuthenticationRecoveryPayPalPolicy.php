@@ -62,6 +62,10 @@ class PaymentAuthenticationRecoveryPayPalPolicy
             return $this->blocked('purchase_already_completed');
         }
 
+        if ($this->hasCapturedPayPalRecovery($customer, $context)) {
+            return $this->blocked('paypal_capture_already_completed');
+        }
+
         try {
             $this->guard->assertResources($customer, $context);
         } catch (PaymentAuthenticationRecoveryContextException) {
@@ -75,7 +79,6 @@ class PaymentAuthenticationRecoveryPayPalPolicy
 
             if (in_array($attempt->status, [
                 PaymentAuthenticationAttemptStatus::Unknown->value,
-                PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value,
                 PaymentAuthenticationAttemptStatus::Authenticated->value,
                 PaymentAuthenticationAttemptStatus::Tokenizing->value,
                 PaymentAuthenticationAttemptStatus::Completed->value,
@@ -85,7 +88,6 @@ class PaymentAuthenticationRecoveryPayPalPolicy
 
             if ($presentation && in_array($presentation, [
                 'unknown',
-                'provider_confirmation_pending',
                 'authenticated',
                 'tokenizing',
                 'completed',
@@ -100,7 +102,8 @@ class PaymentAuthenticationRecoveryPayPalPolicy
             return $this->blocked('active_attempt_exists');
         }
 
-        if ($context->status === PaymentAuthenticationRecoveryContextStatus::AuthenticationInProgress) {
+        if ($context->status === PaymentAuthenticationRecoveryContextStatus::AuthenticationInProgress
+            && $attempt?->status !== PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value) {
             return $this->blocked('authentication_in_progress');
         }
 
@@ -122,11 +125,14 @@ class PaymentAuthenticationRecoveryPayPalPolicy
             return $this->blocked('payment_in_progress_without_transaction');
         }
 
-        if ($context->status !== PaymentAuthenticationRecoveryContextStatus::RecoveryAvailable) {
+        $ambiguousCardAttempt = $attempt?->status === PaymentAuthenticationAttemptStatus::ProviderConfirmationPending->value;
+
+        if ($context->status !== PaymentAuthenticationRecoveryContextStatus::RecoveryAvailable
+            && ! ($context->status === PaymentAuthenticationRecoveryContextStatus::AuthenticationInProgress && $ambiguousCardAttempt)) {
             return $this->blocked('context_status_not_available');
         }
 
-        if ($attempt && ! $attempt->isRecoverableTerminal()) {
+        if ($attempt && ! $attempt->isRecoverableTerminal() && ! $ambiguousCardAttempt) {
             return $this->blocked('attempt_not_recoverable');
         }
 
@@ -135,6 +141,19 @@ class PaymentAuthenticationRecoveryPayPalPolicy
             'block_reason' => null,
             'checkout_ready' => true,
         ];
+    }
+
+    private function hasCapturedPayPalRecovery(Customer $customer, PaymentAuthenticationRecoveryContext $context): bool
+    {
+        return Transaction::query()
+            ->where('payment_method', 'paypal')
+            ->whereIn('payment_status', ['captured', 'paid', 'completed'])
+            ->where(function ($query) use ($context) {
+                $query->whereKey($context->recovered_transaction_id)
+                    ->orWhere('details->recovery_context_uuid', $context->context_uuid);
+            })
+            ->where('details->customer_id', $customer->id)
+            ->exists();
     }
 
     public function pendingRecoveryTransaction(PaymentAuthenticationRecoveryContext $context): ?Transaction

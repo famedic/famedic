@@ -110,7 +110,7 @@ export function threeDSCopyForVisualState(visualState, message = null) {
         },
         confirmation_pending: {
             title: "Estamos confirmando el resultado de tu verificacion.",
-            message: "Puedes actualizar el estado de forma segura.",
+            message: "No pudimos confirmar automaticamente el resultado. No se realizara otro intento sin tu autorizacion.",
         },
     };
 

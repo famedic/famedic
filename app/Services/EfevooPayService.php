@@ -6,6 +6,7 @@ use App\Contracts\EfevooPayGateway;
 use App\Models\Efevoo3dsSession;
 use App\Models\EfevooToken;
 use App\Support\EfevooPayLogSanitizer;
+use App\Support\PaymentAuthentication3dsProviderCallException;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -60,7 +61,7 @@ class EfevooPayService implements EfevooPayGateway
             throw new \InvalidArgumentException('Expiración MMYY inválida');
         }
 
-        return substr($expirationMmyy, 0, 2) . '/' . substr($expirationMmyy, 2, 2);
+        return substr($expirationMmyy, 0, 2).'/'.substr($expirationMmyy, 2, 2);
     }
 
     /**
@@ -81,7 +82,7 @@ class EfevooPayService implements EfevooPayGateway
         $mm = substr($expirationMmyy, 0, 2);
         $yy = substr($expirationMmyy, 2, 2);
 
-        return $panDigits . '=' . $yy . $mm;
+        return $panDigits.'='.$yy.$mm;
     }
 
     /**
@@ -96,7 +97,7 @@ class EfevooPayService implements EfevooPayGateway
         $browserTz = (string) abs($tzMinutes);
 
         $acceptHeader = request()->header('Accept');
-        if (!$acceptHeader || str_contains($acceptHeader, 'application/json')) {
+        if (! $acceptHeader || str_contains($acceptHeader, 'application/json')) {
             $acceptHeader = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8';
         }
 
@@ -159,7 +160,7 @@ class EfevooPayService implements EfevooPayGateway
         return [
             'track2' => $data['card_token'],
             'amount' => number_format((float) $data['amount'], 2, '.', ''),
-            'referencia' => $data['reference'] ?? 'REF-' . time(),
+            'referencia' => $data['reference'] ?? 'REF-'.time(),
         ];
     }
 
@@ -195,7 +196,7 @@ class EfevooPayService implements EfevooPayGateway
 
         $s = (string) $codigo;
 
-        return strlen($s) === 1 ? '0' . $s : $s;
+        return strlen($s) === 1 ? '0'.$s : $s;
     }
 
     /* ==========================================================
@@ -228,7 +229,7 @@ class EfevooPayService implements EfevooPayGateway
             if (
                 $response['success']
                 && ($response['data']['codigo'] ?? null) === '100'
-                && !empty($response['data']['token'])
+                && ! empty($response['data']['token'])
             ) {
                 return [
                     'success' => true,
@@ -270,7 +271,7 @@ class EfevooPayService implements EfevooPayGateway
 
             $tokenResult = $this->getClientToken('3ds');
 
-            if (!$tokenResult['success']) {
+            if (! $tokenResult['success']) {
                 Log::warning('[Efevoo] Token failed 3DS', ['error_type' => $tokenResult['error_type'] ?? null]);
 
                 return $tokenResult;
@@ -304,7 +305,7 @@ class EfevooPayService implements EfevooPayGateway
 
             $response = $this->request($payload, logRawBody: false);
 
-            if (!$response['success']) {
+            if (! $response['success']) {
                 return array_merge($response, [
                     'error_type' => self::ERROR_NETWORK,
                 ]);
@@ -329,7 +330,7 @@ class EfevooPayService implements EfevooPayGateway
 
             $data = $response['data']['payload'] ?? null;
 
-            if (!$data || empty($data['order_id'])) {
+            if (! $data || empty($data['order_id'])) {
                 return [
                     'success' => false,
                     'message' => 'Respuesta inválida de 3DS',
@@ -417,7 +418,7 @@ class EfevooPayService implements EfevooPayGateway
 
         $tokenResult = $this->getClientToken('tokenize');
 
-        if (!$tokenResult['success']) {
+        if (! $tokenResult['success']) {
             return $tokenResult;
         }
 
@@ -448,7 +449,7 @@ class EfevooPayService implements EfevooPayGateway
 
         $tokenizeFailure = $this->interpretTokenizeResponse($response);
 
-        if (!$tokenizeFailure['success']) {
+        if (! $tokenizeFailure['success']) {
             return array_merge($tokenizeFailure, [
                 'external_tokenization_attempted' => true,
             ]);
@@ -533,7 +534,7 @@ class EfevooPayService implements EfevooPayGateway
      */
     protected function interpretTokenizeResponse(array $response): array
     {
-        if (!$response['success']) {
+        if (! $response['success']) {
             return [
                 'success' => false,
                 'message' => 'Error de red al tokenizar',
@@ -544,7 +545,7 @@ class EfevooPayService implements EfevooPayGateway
 
         $data = $response['data'] ?? [];
 
-        if (!empty($data['token_usuario'])) {
+        if (! empty($data['token_usuario'])) {
             return ['success' => true];
         }
 
@@ -586,7 +587,7 @@ class EfevooPayService implements EfevooPayGateway
     public function chargeCard(array $data): array
     {
         Log::info('[Efevoo] chargeCard', [
-            'has_token' => !empty($data['card_token']),
+            'has_token' => ! empty($data['card_token']),
         ]);
 
         if (empty($data['card_token'])) {
@@ -601,7 +602,7 @@ class EfevooPayService implements EfevooPayGateway
 
         $tokenResult = $this->getClientToken('payment');
 
-        if (!$tokenResult['success']) {
+        if (! $tokenResult['success']) {
             return $tokenResult;
         }
 
@@ -617,7 +618,7 @@ class EfevooPayService implements EfevooPayGateway
 
         $response = $this->request($payload, logRawBody: false);
 
-        if (!$response['success']) {
+        if (! $response['success']) {
             return [
                 'success' => false,
                 'message' => 'Error de red al procesar el pago',
@@ -659,7 +660,7 @@ class EfevooPayService implements EfevooPayGateway
 
         $tokenResult = $this->getClientToken('refund');
 
-        if (!$tokenResult['success']) {
+        if (! $tokenResult['success']) {
             return $tokenResult;
         }
 
@@ -681,28 +682,28 @@ class EfevooPayService implements EfevooPayGateway
     public function searchTransactions(array $filters = []): array
     {
         Log::info('[Efevoo] searchTransactions', [
-            'has_transaction_id' => !empty($filters['transaction_id']),
-            'has_start_date' => !empty($filters['start_date']),
-            'has_end_date' => !empty($filters['end_date']),
+            'has_transaction_id' => ! empty($filters['transaction_id']),
+            'has_start_date' => ! empty($filters['start_date']),
+            'has_end_date' => ! empty($filters['end_date']),
         ]);
 
         $tokenResult = $this->getClientToken('search');
 
-        if (!$tokenResult['success']) {
+        if (! $tokenResult['success']) {
             return $tokenResult;
         }
 
         $payload = ['token' => $tokenResult['token']];
 
-        if (!empty($filters['transaction_id'])) {
+        if (! empty($filters['transaction_id'])) {
             $payload['id'] = (int) $filters['transaction_id'];
         }
 
-        if (!empty($filters['start_date'])) {
+        if (! empty($filters['start_date'])) {
             $payload['range1'] = $filters['start_date'];
         }
 
-        if (!empty($filters['end_date'])) {
+        if (! empty($filters['end_date'])) {
             $payload['range2'] = $filters['end_date'];
         }
 
@@ -765,8 +766,8 @@ class EfevooPayService implements EfevooPayGateway
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
                 'Accept: application/json',
-                'X-API-USER: ' . $this->config['api_user'],
-                'X-API-KEY: ' . $this->config['api_key'],
+                'X-API-USER: '.$this->config['api_user'],
+                'X-API-KEY: '.$this->config['api_key'],
                 'Origin: https://efevoopay.com',
                 'Referer: https://efevoopay.com/',
                 'User-Agent: Mozilla/5.0',
@@ -843,7 +844,7 @@ class EfevooPayService implements EfevooPayGateway
 
         for ($i = 0; $i < strlen($secret); $i++) {
             $ch = $secret[$i];
-            if (!isset($base32Lookup[$ch])) {
+            if (! isset($base32Lookup[$ch])) {
                 continue;
             }
 
@@ -857,15 +858,15 @@ class EfevooPayService implements EfevooPayGateway
         }
 
         $secretKey = $result;
-        $timestampBytes = pack('N*', 0) . pack('N*', $timestamp);
+        $timestampBytes = pack('N*', 0).pack('N*', $timestamp);
         $hash = hash_hmac('sha1', $timestampBytes, $secretKey, true);
-        $offset = ord($hash[19]) & 0xf;
+        $offset = ord($hash[19]) & 0xF;
 
         $code = (
-            ((ord($hash[$offset]) & 0x7f) << 24) |
-            ((ord($hash[$offset + 1]) & 0xff) << 16) |
-            ((ord($hash[$offset + 2]) & 0xff) << 8) |
-            (ord($hash[$offset + 3]) & 0xff)
+            ((ord($hash[$offset]) & 0x7F) << 24) |
+            ((ord($hash[$offset + 1]) & 0xFF) << 16) |
+            ((ord($hash[$offset + 2]) & 0xFF) << 8) |
+            (ord($hash[$offset + 3]) & 0xFF)
         ) % 1000000;
 
         return str_pad($code, 6, '0', STR_PAD_LEFT);
@@ -1065,7 +1066,7 @@ class EfevooPayService implements EfevooPayGateway
             'order_id' => $session->order_id,
         ]);
 
-        $lockKey = 'efevoo_3ds_tokenize_' . $session->id;
+        $lockKey = 'efevoo_3ds_tokenize_'.$session->id;
 
         try {
             return Cache::lock($lockKey, 90)->block(20, function () use ($session, $cardData, $ctx) {
@@ -1152,6 +1153,7 @@ class EfevooPayService implements EfevooPayGateway
 
     public function payments3DSGetStatus(array $cardData, string $orderId): array
     {
+        $started = microtime(true);
         $cardData = $this->normalizeCardDataInput($cardData);
 
         Log::info('[Efevoo] payments3DSGetStatus', [
@@ -1159,9 +1161,21 @@ class EfevooPayService implements EfevooPayGateway
             'card_last4' => $this->logSafeCardContext($cardData)['card_last4'],
         ]);
 
-        $tokenResult = $this->getClientToken('3ds');
+        try {
+            $tokenResult = $this->getClientToken('3ds');
+        } catch (\Throwable $e) {
+            throw new PaymentAuthentication3dsProviderCallException(
+                'get_client_token',
+                'technical_error_before_dispatch',
+                false,
+                false,
+                null,
+                (int) round((microtime(true) - $started) * 1000),
+                $e
+            );
+        }
 
-        if (!$tokenResult['success']) {
+        if (! $tokenResult['success']) {
             return $tokenResult;
         }
 
@@ -1173,13 +1187,37 @@ class EfevooPayService implements EfevooPayGateway
             ];
         }
 
-        $bodyToEncrypt = $this->buildGetStatusPayload($cardData, $orderId);
+        try {
+            $bodyToEncrypt = $this->buildGetStatusPayload($cardData, $orderId);
+        } catch (\Throwable $e) {
+            throw new PaymentAuthentication3dsProviderCallException(
+                'build_payload',
+                'technical_error_before_dispatch',
+                false,
+                false,
+                null,
+                (int) round((microtime(true) - $started) * 1000),
+                $e
+            );
+        }
 
         if ($this->shouldLogVerbose()) {
             Log::debug('[Efevoo] GetStatus payload keys', ['keys' => array_keys($bodyToEncrypt)]);
         }
 
-        $encrypt = $this->encrypt($bodyToEncrypt);
+        try {
+            $encrypt = $this->encrypt($bodyToEncrypt);
+        } catch (\Throwable $e) {
+            throw new PaymentAuthentication3dsProviderCallException(
+                'encrypt_payload',
+                'technical_error_before_dispatch',
+                false,
+                false,
+                null,
+                (int) round((microtime(true) - $started) * 1000),
+                $e
+            );
+        }
 
         $payload = [
             'payload' => [
@@ -1189,6 +1227,31 @@ class EfevooPayService implements EfevooPayGateway
             'method' => 'payments3DS_GetStatus',
         ];
 
-        return $this->request($payload, logRawBody: false);
+        try {
+            $result = $this->request($payload, logRawBody: false);
+        } catch (\Throwable $e) {
+            throw new PaymentAuthentication3dsProviderCallException(
+                'request_get_status',
+                'network_timeout_after_dispatch',
+                true,
+                false,
+                null,
+                (int) round((microtime(true) - $started) * 1000),
+                $e
+            );
+        }
+
+        if (! is_array($result['data'] ?? null) && ($result['success'] ?? false)) {
+            throw new PaymentAuthentication3dsProviderCallException(
+                'decode_response',
+                'invalid_response',
+                true,
+                true,
+                isset($result['status']) ? (int) $result['status'] : null,
+                (int) round((microtime(true) - $started) * 1000)
+            );
+        }
+
+        return $result;
     }
 }

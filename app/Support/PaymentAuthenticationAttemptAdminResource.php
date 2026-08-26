@@ -27,6 +27,7 @@ class PaymentAuthenticationAttemptAdminResource
             'email' => $attempt->customer?->user?->email,
             'status' => $attempt->status,
             'result_category' => $attempt->failure_category,
+            'result_label' => self::resultLabel($attempt),
             'failure_origin' => $attempt->failure_origin,
             'failure_certainty' => $attempt->failure_certainty,
             'origin_label' => self::originLabel($attempt->failure_origin, $attempt->failure_certainty),
@@ -241,6 +242,16 @@ class PaymentAuthenticationAttemptAdminResource
             PaymentAuthenticationAttemptStatus::TokenizationConfirmationPending->value => 'Tokenización en confirmación',
             default => $attempt->status,
         };
+    }
+
+    public static function resultLabel(PaymentAuthenticationAttempt $attempt): string
+    {
+        if ($attempt->status === PaymentAuthenticationAttemptStatus::Completed->value
+            && $attempt->failure_category === EfevooPay3dsResultClassifier::CATEGORY_SUCCESS) {
+            return 'Éxito confirmado';
+        }
+
+        return $attempt->failure_category ?: '—';
     }
 
     public static function eventLabel(string $eventType): string

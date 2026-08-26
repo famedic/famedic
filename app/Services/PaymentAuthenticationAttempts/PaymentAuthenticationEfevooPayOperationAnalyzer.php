@@ -68,7 +68,7 @@ class PaymentAuthenticationEfevooPayOperationAnalyzer
                 'confirmation_pending' => $attempt->status === PaymentAuthenticationAttemptStatus::TokenizationConfirmationPending->value,
             ],
             'possible_duplicate_verification_operation' => $possibleDuplicate,
-            'disclaimer' => 'Dos llamadas u operaciones no prueban por sí mismas dos cargos al paciente.',
+            'disclaimer' => 'Una operación registrada no demuestra por sí misma un cargo confirmado.',
         ];
     }
 
@@ -92,7 +92,7 @@ class PaymentAuthenticationEfevooPayOperationAnalyzer
         });
 
         if (! $needsEventScan) {
-            return $attempts->mapWithKeys(fn(PaymentAuthenticationAttempt $attempt) => [
+            return $attempts->mapWithKeys(fn (PaymentAuthenticationAttempt $attempt) => [
                 $attempt->id => false,
             ])->all();
         }

@@ -80,10 +80,13 @@ enum PaymentAuthenticationAttemptStatus: string
             self::ChallengeRequired->value => [
                 self::Pending->value,
                 self::Authenticated->value,
+                self::Tokenizing->value,
+                self::Completed->value,
                 self::Declined->value,
                 self::Cancelled->value,
                 self::Expired->value,
                 self::TechnicalError->value,
+                self::ProviderConfirmationPending->value,
             ],
             self::Pending->value => [
                 self::Authenticated->value,

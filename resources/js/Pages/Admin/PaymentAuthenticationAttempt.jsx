@@ -100,7 +100,7 @@ export default function PaymentAuthenticationAttemptPage({ attempt }) {
 								{attempt.badge?.label}
 							</Badge>
 						</Text>
-						<Text><Strong>Resultado:</Strong> {attempt.result_category || "—"}</Text>
+						<Text><Strong>Resultado:</Strong> {attempt.result_label || attempt.result_category || "—"}</Text>
 						<Text><Strong>Origen:</Strong> {attempt.origin_label}</Text>
 						<Text><Strong>Certeza:</Strong> {attempt.failure_certainty || "—"}</Text>
 						<Text><Strong>Intento:</Strong> #{attempt.attempt_number}</Text>
@@ -170,7 +170,7 @@ export default function PaymentAuthenticationAttemptPage({ attempt }) {
 							<Text><Strong>Estado:</Strong> {attempt.recovery_detail.context_status}</Text>
 							<Text><Strong>Inicio:</Strong> {attempt.recovery_detail.started_at_local || "—"}</Text>
 							<Text><Strong>Expira:</Strong> {attempt.recovery_detail.expires_at_local || "—"}</Text>
-							<Text><Strong>Intentos en contexto:</Strong> {attempt.recovery_detail.chain_attempt_count}</Text>
+							<Text><Strong>Intentos asociados al contexto:</Strong> {attempt.recovery_detail.chain_attempt_count}</Text>
 							<Text><Strong>Root attempt:</Strong> {attempt.recovery_detail.root_support_reference || "—"}</Text>
 							<Text><Strong>Intención:</Strong> {attempt.recovery_detail.selected_intention || "—"}</Text>
 							<Text><Strong>Transacción pendiente:</Strong> {attempt.recovery_detail.recovery_transaction_id || "—"}</Text>
@@ -205,6 +205,7 @@ export default function PaymentAuthenticationAttemptPage({ attempt }) {
 						Solo se relacionan intentos del mismo cliente mediante{" "}
 						<Code>retry_of_attempt_id</Code>.
 					</Text>
+					<Text><Strong>Número en cadena de reintentos:</Strong> #{attempt.attempt_number}</Text>
 					{attempt.previous_attempt ? (
 						<Text>
 							<Strong>Anterior:</Strong>{" "}

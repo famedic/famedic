@@ -101,7 +101,6 @@ class PaymentAuthentication3dsResultResource
 
         $blockedPresentations = [
             'unknown',
-            'provider_confirmation_pending',
             'authenticated',
             'tokenizing',
             'completed',
@@ -130,10 +129,10 @@ class PaymentAuthentication3dsResultResource
             'supports_paypal_future' => (bool) ($contextResource['supports_paypal'] ?? false),
             'supports_paypal' => $supportsPaypal,
             'actions' => [
-                'retry' => ! $actionsBlocked && ($contextResource['supports_retry'] ?? false),
-                'different_card' => ! $actionsBlocked && ($contextResource['supports_another_card'] ?? false),
+                'retry' => $presentation !== 'provider_confirmation_pending' && ! $actionsBlocked && ($contextResource['supports_retry'] ?? false),
+                'different_card' => $presentation !== 'provider_confirmation_pending' && ! $actionsBlocked && ($contextResource['supports_another_card'] ?? false),
                 'paypal' => $supportsPaypal,
-                'refresh_status' => in_array($presentation, ['unknown', 'provider_confirmation_pending', 'authenticated', 'tokenizing'], true),
+                'refresh_status' => in_array($presentation, ['unknown', 'authenticated', 'tokenizing'], true),
                 'safe_return' => true,
             ],
             'block_reason' => $blockReason,
@@ -191,7 +190,8 @@ class PaymentAuthentication3dsResultResource
                 'technical_error' => ($recovery['prioritize_different_card'] ?? false)
                     ? 'Si el problema continúa, intenta con otra tarjeta.'
                     : 'Si el problema continúa, vuelve a intentarlo o usa otra tarjeta.',
-                'unknown', 'provider_confirmation_pending' => 'Actualiza el estado para consultar la respuesta definitiva.',
+                'unknown' => 'Actualiza el estado para consultar la respuesta definitiva.',
+                'provider_confirmation_pending' => 'No pudimos confirmar automáticamente el resultado. No se realizará otro intento sin tu autorización.',
                 default => null,
             },
         ];

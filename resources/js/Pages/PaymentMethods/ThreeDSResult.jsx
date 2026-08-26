@@ -66,11 +66,11 @@ export default function ThreeDSResult({
 
     const showRecoveryActions =
         !isSuccess &&
-        !["unknown", "provider_confirmation_pending", "authenticated", "tokenizing", "context_unavailable"].includes(presentation);
+        !["unknown", "authenticated", "tokenizing", "context_unavailable"].includes(presentation);
 
     const showRefresh =
         recovery?.actions?.refresh_status ||
-        ["unknown", "provider_confirmation_pending", "authenticated", "tokenizing"].includes(presentation);
+        ["unknown", "authenticated", "tokenizing"].includes(presentation);
 
     const prioritizeDifferentCard = recovery?.prioritize_different_card ?? false;
     const cooldownLabel = formatCooldown(liveResult.cooldown_remaining_seconds ?? 0);
