@@ -8,6 +8,7 @@ use App\Http\Requests\Laboratories\LaboratoryCartItems\DestroyLaboratoryCartItem
 use App\Http\Requests\Laboratories\LaboratoryCartItems\StoreLaboratoryCartItemRequest;
 use App\Models\LaboratoryCartItem;
 use App\Services\Tracking\AddToCart;
+use App\Support\ClientContext;
 
 class LaboratoryCartItemController extends Controller
 {
@@ -17,7 +18,8 @@ class LaboratoryCartItemController extends Controller
     ) {
         $laboratoryCartItem = $action(
             customer: auth()->user()->customer,
-            laboratoryTestId: $request->laboratory_test
+            laboratoryTestId: $request->laboratory_test,
+            clientContext: ClientContext::fromRequest($request),
         );
 
         AddToCart::track(
@@ -39,7 +41,7 @@ class LaboratoryCartItemController extends Controller
         LaboratoryCartItem $laboratoryCartItem,
         DeleteItemFromCartAction $action
     ) {
-        $action($laboratoryCartItem);
+        $action($laboratoryCartItem, ClientContext::fromRequest($request));
 
         return redirect()
             ->back()

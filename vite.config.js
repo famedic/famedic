@@ -7,6 +7,8 @@ function devServerCorsOrigins(appUrl) {
     const base = (appUrl || 'http://localhost:8080').replace(/\/$/, '');
     const origins = new Set([
         base,
+        'http://localhost:8080',
+        'http://127.0.0.1:8080',
         'http://localhost:5173',
         'http://127.0.0.1:5173',
     ]);
@@ -30,13 +32,14 @@ function devServerCorsOrigins(appUrl) {
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     const appUrl = env.APP_URL;
+    const devServerOrigin = env.VITE_DEV_SERVER_ORIGIN || 'http://localhost:5173';
 
     return {
         server: {
             host: '0.0.0.0',
             port: 5173,
             strictPort: true,
-            origin: 'http://localhost:5173',
+            origin: devServerOrigin,
             hmr: {
                 host: 'localhost',
                 port: 5173,

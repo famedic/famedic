@@ -1,0 +1,472 @@
+
+   FAIL  Tests\Feature\CartPreCheckoutTraceabilityTest
+  ⨯ it records cart_item_added when a laboratory cart item is created
+  ⨯ it records cart_item_removed when a laboratory cart item is deleted
+  ⨯ it records distinct cart_item_added events when the same study is added again after removal
+  ⨯ it records cart_emptied and preserves the monitoring cart when the last laboratory item is removed
+  ⨯ it records pharmacy quantity changes with transition-based idempotency keys
+  ⨯ it keeps cart item events idempotent when recording twice for the same operational item
+  ⨯ it sanitizes sensitive metadata from cart item events
+  ⨯ it returns drawer session context from pre-checkout cart item events without checkout
+  ⨯ it records pharmacy cart_item_removed and cart_emptied when deleting the last product
+
+   FAIL  Tests\Feature\AdminCartTraceabilityTest
+  ⨯ it records idempotent cart events and removes sensitive metadata
+  ⨯ it captures mobile client context on checkout cart events and preserves functional metadata
+  ⨯ it captures desktop client context on checkout cart events
+  ⨯ it keeps recordOnce idempotent when client metadata changes
+  ⨯ it does not invent client context for async events without request context
+  ⨯ it uses explicit purchase and appointment links before historical fallback
+  ⨯ it filters payment status by explicit attempts before legacy fallback
+
+   FAIL  Tests\Feature\ReconcileMultibrandCartsCommandTest
+  ⨯ it dry run reports active multibrand carts and does not modify data
+  ⨯ it apply splits an active multibrand cart and is idempotent on a second cart run
+  ⨯ it keeps original id for explicit brand relation and for highest amount fallback
+  ⨯ it skips conflicting explicit relations without modifying data
+  ⨯ it ignores completed and pharmacy multibrand carts for apply scope
+  ⨯ it rolls back only the failing cart and continues with the next cart
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\CartPreCheckoutTraceabilityTest > i…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:01:49, 2026-08-27 15:01:49))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\CartPreCheckoutTraceabilityTest > i…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:01:57, 2026-08-27 15:01:57))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\CartPreCheckoutTraceabilityTest > i…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:02:09, 2026-08-27 15:02:09))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\CartPreCheckoutTraceabilityTest > i…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:02:17, 2026-08-27 15:02:17))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\CartPreCheckoutTraceabilityTest > i…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:02:25, 2026-08-27 15:02:25))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\CartPreCheckoutTraceabilityTest > i…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:02:34, 2026-08-27 15:02:34))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\CartPreCheckoutTraceabilityTest > i…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:02:42, 2026-08-27 15:02:42))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\CartPreCheckoutTraceabilityTest > i…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:02:50, 2026-08-27 15:02:50))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\CartPreCheckoutTraceabilityTest > i…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:02:58, 2026-08-27 15:02:58))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\AdminCartTraceabilityTest > it reco…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:03:07, 2026-08-27 15:03:07))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\AdminCartTraceabilityTest > it capt…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:03:18, 2026-08-27 15:03:18))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\AdminCartTraceabilityTest > it capt…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:03:27, 2026-08-27 15:03:27))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\AdminCartTraceabilityTest > it keep…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:03:35, 2026-08-27 15:03:35))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\AdminCartTraceabilityTest > it does…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:03:43, 2026-08-27 15:03:43))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\AdminCartTraceabilityTest > it uses…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:03:51, 2026-08-27 15:03:51))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\AdminCartTraceabilityTest > it filt…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:03:59, 2026-08-27 15:03:59))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ReconcileMultibrandCartsCommandTest…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:04:07, 2026-08-27 15:04:07))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ReconcileMultibrandCartsCommandTest…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:04:15, 2026-08-27 15:04:15))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ReconcileMultibrandCartsCommandTest…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:04:28, 2026-08-27 15:04:28))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ReconcileMultibrandCartsCommandTest…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:04:37, 2026-08-27 15:04:37))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ReconcileMultibrandCartsCommandTest…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:04:46, 2026-08-27 15:04:46))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ReconcileMultibrandCartsCommandTest…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_jun_23`.`laboratory_tests`, CONSTRAINT `laboratory_tests_laboratory_test_category_id_foreign` FOREIGN KEY (`laboratory_test_category_id`) REFERENCES `laboratory_test_categories` (`id`) (Connection: mysql, SQL: insert into `laboratory_tests` (`name`, `feature_list`, `public_price_cents`, `famedic_price_cents`, `laboratory_test_category_id`, `brand`, `gda_id`, `created_at`, `updated_at`) values (CHECKUP MUJER MAYOR DE 40, ["BIOMETR\u00cdA HEM\u00c1TICA COMPLETA","RX MAMOGRAF\u00cdA BILATERAL","EXAMEN GENERAL DE ORINA","GLUCOSA EN SANGRE","COLESTEROL TOTAL","TRIGLIC\u00c9RIDOS","PAPANICOLAOU (CITOLOG\u00cd VAGINAL)"], 158400, 94900, 12, swisslab, 128689, 2026-08-27 15:05:00, 2026-08-27 15:05:00))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+5 vendor frames [22m
+  6   database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:325
+      [2m+37 vendor frames [22m
+  44  tests/TestCase.php:11
+
+
+  Tests:    22 failed (0 assertions)
+  Duration: 199.27s
+

@@ -159,6 +159,18 @@ return [
             env('ACTIVECAMPAIGN_TAG_ABANDONED_CARTS_ENABLED', true),
             FILTER_VALIDATE_BOOLEAN
         ),
+        'cart_outbox_enabled' => filter_var(
+            env('ACTIVECAMPAIGN_CART_OUTBOX_ENABLED', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
+        'cart_tag_remove_enabled' => filter_var(
+            env('ACTIVECAMPAIGN_CART_TAG_REMOVE_ENABLED', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
+        'cart_site_events_enabled' => filter_var(
+            env('ACTIVECAMPAIGN_CART_SITE_EVENTS_ENABLED', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
         'tag_pharmacy_purchase_completed' => (int) env('ACTIVE_CAMPAIGN_TAG_PHARMACY_PURCHASE_COMPLETED', 17),
         'tag_laboratory_purchase_completed' => (int) env('ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_COMPLETED', 18),
         // Tags específicos laboratorio
@@ -198,6 +210,17 @@ return [
             ],
             'authorization' => [
                 'pending' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_AUTHORIZATION_PENDING', 'FM-Autorizacion-Pendiente'),
+            ],
+            'cart' => [
+                'abandoned' => (int) env('ACTIVE_CAMPAIGN_TAG_CART_ABANDONED', 20),
+                'added' => (int) env('ACTIVE_CAMPAIGN_TAG_CART_ADDED', 19),
+            ],
+        ],
+        'site_events' => [
+            'cart' => [
+                'abandoned' => env('ACTIVECAMPAIGN_SITE_EVENT_CART_ABANDONED', 'famedic_cart_abandoned'),
+                'resumed' => env('ACTIVECAMPAIGN_SITE_EVENT_CART_RESUMED', 'famedic_cart_resumed'),
+                'recovered' => env('ACTIVECAMPAIGN_SITE_EVENT_CART_RECOVERED', 'famedic_cart_recovered'),
             ],
         ],
         'fields' => [

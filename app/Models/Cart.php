@@ -19,6 +19,11 @@ class Cart extends Model
 {
     public const ABANDONED_AFTER_MINUTES = 30;
 
+    public static function abandonedAfterMinutes(): int
+    {
+        return (int) config('carts.abandoned_after_minutes', self::ABANDONED_AFTER_MINUTES);
+    }
+
     protected $guarded = [];
 
     protected function casts(): array
@@ -62,7 +67,7 @@ class Cart extends Model
     }
 
     /**
-     * Activo en carrito, abandonado (sin actividad), o comprado.
+     * Activo en carrito, abandonado (sin actividad), vacío (histórico) o comprado.
      */
     public function displayStatus(): string
     {
@@ -70,7 +75,11 @@ class Cart extends Model
             return 'completed';
         }
 
-        if ($this->updated_at->lt(now()->subMinutes(self::ABANDONED_AFTER_MINUTES))) {
+        if ($this->isEmptyActiveMonitoringCart()) {
+            return 'empty';
+        }
+
+        if ($this->updated_at->lt(now()->subMinutes(self::abandonedAfterMinutes()))) {
             return 'abandoned';
         }
 
@@ -82,8 +91,38 @@ class Cart extends Model
         return match ($this->displayStatus()) {
             'completed' => 'Comprado',
             'abandoned' => 'Abandonado',
+            'empty' => 'Vacío (histórico)',
             default => 'Activo',
         };
+    }
+
+    public function isEmptyActiveMonitoringCart(): bool
+    {
+        if ($this->status !== MonitoringCartStatus::Active) {
+            return false;
+        }
+
+        if ($this->relationLoaded('items')) {
+            return $this->items->isEmpty();
+        }
+
+        if ($this->relationLoaded('items_count')) {
+            return (int) $this->items_count === 0;
+        }
+
+        return ! $this->items()->exists();
+    }
+
+    /**
+     * Carritos visibles en listados operativos, KPIs y dashboards.
+     * Excluye activos vaciados intencionalmente para conservar trazabilidad.
+     */
+    public function scopeOperationalMonitoring(Builder $query): void
+    {
+        $query->where(function (Builder $inner) {
+            $inner->where('status', MonitoringCartStatus::Completed->value)
+                ->orWhereHas('items');
+        });
     }
 
     /**
@@ -141,7 +180,7 @@ class Cart extends Model
             return null;
         }
 
-        return $this->updated_at->copy()->addMinutes(self::ABANDONED_AFTER_MINUTES);
+        return $this->updated_at->copy()->addMinutes(self::abandonedAfterMinutes());
     }
 
     public function appointmentExportStatus(): string
@@ -193,10 +232,15 @@ class Cart extends Model
             $query->where('status', MonitoringCartStatus::Completed->value);
         } elseif ($status === 'abandoned') {
             $query->where('status', MonitoringCartStatus::Active->value)
-                ->where('updated_at', '<', now()->subMinutes(self::ABANDONED_AFTER_MINUTES));
+                ->whereHas('items')
+                ->where('updated_at', '<', now()->subMinutes(self::abandonedAfterMinutes()));
         } elseif ($status === 'active') {
             $query->where('status', MonitoringCartStatus::Active->value)
-                ->where('updated_at', '>=', now()->subMinutes(self::ABANDONED_AFTER_MINUTES));
+                ->whereHas('items')
+                ->where('updated_at', '>=', now()->subMinutes(self::abandonedAfterMinutes()));
+        } elseif ($status === 'empty') {
+            $query->where('status', MonitoringCartStatus::Active->value)
+                ->whereDoesntHave('items');
         }
     }
 
@@ -280,7 +324,7 @@ class Cart extends Model
         if ($stage === 'no_progress') {
             $query->where('type', MonitoringCartType::Lab)
                 ->where('status', MonitoringCartStatus::Active)
-                ->where('updated_at', '<', now()->subMinutes(self::ABANDONED_AFTER_MINUTES))
+                ->where('updated_at', '<', now()->subMinutes(self::abandonedAfterMinutes()))
                 ->whereNotExists($this->checkoutDraftExistsSubquery(
                     fn (QueryBuilder $draft) => $draft->whereNotNull('lcd.contact_id'),
                 ));

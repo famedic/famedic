@@ -650,6 +650,8 @@ class CartsDashboardRepository
     {
         $query = DB::table('carts');
 
+        $this->applyOperationalMonitoringScope($query);
+
         if ($filter->type) {
             $query->where('carts.type', $filter->type);
         }
@@ -664,7 +666,7 @@ class CartsDashboardRepository
 
     private function eloquentBaseCartsQuery(CartsDashboardFilter $filter): EloquentBuilder
     {
-        $query = Cart::query()->from('carts');
+        $query = Cart::query()->from('carts')->operationalMonitoring();
 
         if ($filter->type) {
             $query->where('carts.type', $filter->type);
@@ -1085,5 +1087,17 @@ class CartsDashboardRepository
         $enum = LaboratoryBrand::tryFrom($brand);
 
         return $enum?->label() ?? 'Sin identificar';
+    }
+
+    private function applyOperationalMonitoringScope(Builder $query): void
+    {
+        $query->where(function (Builder $inner) {
+            $inner->where('carts.status', MonitoringCartStatus::Completed->value)
+                ->orWhereExists(function (Builder $sub) {
+                    $sub->selectRaw('1')
+                        ->from('cart_items')
+                        ->whereColumn('cart_items.cart_id', 'carts.id');
+                });
+        });
     }
 }

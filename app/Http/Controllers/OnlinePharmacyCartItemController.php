@@ -10,6 +10,7 @@ use App\Http\Requests\OnlinePharmacy\OnlinePharmacyCartItems\StoreOnlinePharmacy
 use App\Http\Requests\OnlinePharmacy\OnlinePharmacyCartItems\UpdateOnlinePharmacyCartItemRequest;
 use App\Models\OnlinePharmacyCartItem;
 use App\Services\Tracking\AddToCart;
+use App\Support\ClientContext;
 
 class OnlinePharmacyCartItemController extends Controller
 {
@@ -17,7 +18,11 @@ class OnlinePharmacyCartItemController extends Controller
         StoreOnlinePharmacyCartItemRequest $request,
         AddItemToCartAction $action
     ) {
-        $onlinePharmacyCartItem = $action(customer: auth()->user()->customer, vitauProductId: $request->vitau_product);
+        $onlinePharmacyCartItem = $action(
+            customer: auth()->user()->customer,
+            vitauProductId: $request->vitau_product,
+            clientContext: ClientContext::fromRequest($request),
+        );
 
         AddToCart::track(
             productId: (string)$onlinePharmacyCartItem->vitau_product_id,
@@ -38,7 +43,8 @@ class OnlinePharmacyCartItemController extends Controller
     ) {
         $action(
             onlinePharmacyCartItem: $onlinePharmacyCartItem,
-            quantity: $request->quantity
+            quantity: $request->quantity,
+            clientContext: ClientContext::fromRequest($request),
         );
 
         AddToCart::track(
@@ -59,7 +65,7 @@ class OnlinePharmacyCartItemController extends Controller
         OnlinePharmacyCartItem $onlinePharmacyCartItem,
         DeleteItemFromCartAction $action
     ) {
-        $action(onlinePharmacyCartItem: $onlinePharmacyCartItem);
+        $action($onlinePharmacyCartItem, ClientContext::fromRequest($request));
 
         return redirect()
             ->back()

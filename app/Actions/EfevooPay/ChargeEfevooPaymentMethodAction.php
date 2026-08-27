@@ -8,6 +8,7 @@ use App\Models\Transaction;
 use App\Models\PaymentAttempt;
 use App\Contracts\EfevooPayGateway;
 use App\Enums\CartEventType;
+use App\Services\Carts\CartAbandonmentService;
 use App\Services\Carts\CartEventRecorder;
 use App\Support\MockEfevooPaymentSupport;
 use App\Services\Payments\PaymentAutomationService;
@@ -471,6 +472,8 @@ class ChargeEfevooPaymentMethodAction
         if (! $cart) {
             return;
         }
+
+        app(CartAbandonmentService::class)->maybeRecordResumed($cart, $clientContext);
 
         $this->cartEventRecorder->recordOnce(
             $cart,

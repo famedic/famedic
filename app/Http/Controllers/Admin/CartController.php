@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
@@ -92,6 +93,7 @@ class CartController extends Controller
                 'user.customer.laboratoryPurchases.transactions',
             ])
             ->withCount('items')
+            ->operationalMonitoring()
             ->adminMonitoringFilter($filters, $start, $end)
             ->orderByDesc('updated_at');
 
@@ -111,8 +113,10 @@ class CartController extends Controller
             ->all();
         $statusMetricFilters = collect($filters)->except(['display_status'])->all();
         $metricsBase = Cart::query()
+            ->operationalMonitoring()
             ->adminMonitoringFilter($statusMetricFilters, $start, $end);
         $trayMetricsBase = Cart::query()
+            ->operationalMonitoring()
             ->adminMonitoringFilter($trayFilters, $start, $end);
 
         $staleBefore = now()->subMinutes(Cart::ABANDONED_AFTER_MINUTES);
@@ -121,10 +125,12 @@ class CartController extends Controller
             'total' => (clone $trayMetricsBase)->count(),
             'active' => (clone $metricsBase)
                 ->where('status', MonitoringCartStatus::Active)
+                ->whereHas('items')
                 ->where('updated_at', '>=', $staleBefore)
                 ->count(),
             'abandoned' => (clone $metricsBase)
                 ->where('status', MonitoringCartStatus::Active)
+                ->whereHas('items')
                 ->where('updated_at', '<', $staleBefore)
                 ->count(),
             'completed' => (clone $metricsBase)->where('status', MonitoringCartStatus::Completed)->count(),
@@ -1151,18 +1157,26 @@ class CartController extends Controller
                 ->limit(20)
                 ->get()
                 ->map(function (ActiveCampaignDispatch $dispatch) {
+                    $payload = is_array($dispatch->payload) ? $dispatch->payload : [];
                     $occurredAt = $dispatch->synced_at ?? $dispatch->updated_at ?? $dispatch->created_at;
+                    $operation = (string) ($payload['operation'] ?? '');
+                    $episode = $payload['episode'] ?? null;
 
                     return [
                         'id' => $dispatch->id,
                         'event' => $dispatch->event_type,
-                        'label' => $this->activeCampaignEventLabel($dispatch->event_type),
+                        'label' => $this->activeCampaignDispatchLabel($dispatch->event_type, $operation, $payload),
+                        'detail' => $this->activeCampaignDispatchDetail($dispatch, $payload, $episode),
                         'status' => $dispatch->status,
+                        'attempts' => (int) $dispatch->attempts,
                         'occurred_at' => $occurredAt?->toIso8601String(),
                         'occurred_at_human' => $occurredAt?->timezone('America/Monterrey')->format('d/m/Y H:i'),
                         'message' => $this->safeActiveCampaignMessage($dispatch->last_error),
-                        'source' => 'dispatch',
+                        'source' => $operation === 'site_event' ? 'site_event' : 'dispatch',
                         'confidence' => 'explicit',
+                        'operation' => $operation !== '' ? $operation : null,
+                        'episode' => $episode,
+                        'event_name' => $payload['event_name'] ?? null,
                     ];
                 })
                 ->values();
@@ -1204,7 +1218,7 @@ class CartController extends Controller
 
                 return $occurredAt.'-'.str_pad((string) $event->id, 20, '0', STR_PAD_LEFT);
             })
-            ->map(function (CartEvent $event) {
+            ->map(function (CartEvent $event) use ($cart) {
                 $metadata = is_array($event->metadata) ? $event->metadata : [];
                 $client = $this->safeCartEventClientContext($metadata['client'] ?? null);
                 $eventValue = $event->event?->value ?? (string) $event->event;
@@ -1212,7 +1226,8 @@ class CartController extends Controller
                 $row = [
                     'id' => $event->id,
                     'event' => $eventValue,
-                    'label' => $this->cartEventLabel($eventValue),
+                    'label' => $this->cartEventLabel($eventValue, $cart->type, $metadata),
+                    'detail' => $this->cartEventDetail($eventValue, $metadata),
                     'occurred_at' => $event->occurred_at?->toIso8601String(),
                     'occurred_at_human' => $event->occurred_at?->timezone('America/Monterrey')->format('d/m/Y H:i'),
                     'occurred_at_human_with_seconds' => $event->occurred_at?->timezone('America/Monterrey')->format('d/m/Y H:i:s'),
@@ -1446,10 +1461,81 @@ class CartController extends Controller
         };
     }
 
-    private function cartEventLabel(string $event): string
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function activeCampaignDispatchLabel(string $eventType, string $operation, array $payload): string
     {
-        return match ($event) {
+        if ($operation === 'site_event') {
+            $eventName = (string) ($payload['event_name'] ?? $eventType);
+            $episode = isset($payload['episode']) ? ' — episodio #'.$payload['episode'] : '';
+
+            return $eventName.$episode;
+        }
+
+        if ($operation === 'tag_add' && $eventType === 'cart_abandoned') {
+            $episode = isset($payload['episode']) ? ' — episodio #'.$payload['episode'] : '';
+
+            return 'Tag agregado — Carrito abandonado'.$episode;
+        }
+
+        if ($operation === 'tag_remove') {
+            $episode = isset($payload['episode']) ? ' — episodio #'.$payload['episode'] : '';
+            $context = $eventType === 'cart_recovered' ? ' (recuperado)' : '';
+
+            return 'Tag removido — Carrito abandonado'.$episode.$context;
+        }
+
+        return $this->activeCampaignEventLabel($eventType);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function activeCampaignDispatchDetail(ActiveCampaignDispatch $dispatch, array $payload, mixed $episode): ?string
+    {
+        if ($dispatch->status === ActiveCampaignDispatch::STATUS_SYNCED) {
+            return 'Sent ✓';
+        }
+
+        if ($dispatch->status === ActiveCampaignDispatch::STATUS_PENDING) {
+            return 'Pending';
+        }
+
+        if ($dispatch->status === ActiveCampaignDispatch::STATUS_PROCESSING) {
+            return 'Processing';
+        }
+
+        if ($dispatch->status === ActiveCampaignDispatch::STATUS_FAILED) {
+            $attempts = max(1, (int) $dispatch->attempts);
+
+            return 'FAILED — attempt '.$attempts;
+        }
+
+        if ($dispatch->status === ActiveCampaignDispatch::STATUS_SKIPPED) {
+            return 'Skipped — '.($payload['skip_reason'] ?? 'not_eligible');
+        }
+
+        if ($episode !== null) {
+            return 'Episodio #'.$episode;
+        }
+
+        return null;
+    }
+
+    private function cartEventLabel(string $event, MonitoringCartType $cartType, array $metadata = []): string
+    {
+        $isPharmacy = $cartType === MonitoringCartType::Pharmacy;
+
+        $label = match ($event) {
             'cart_created' => 'Carrito creado',
+            'cart_item_added' => $isPharmacy ? 'Producto agregado' : 'Estudio agregado',
+            'cart_item_removed' => $isPharmacy ? 'Producto eliminado' : 'Estudio eliminado',
+            'cart_item_quantity_changed' => 'Cantidad modificada',
+            'cart_emptied' => 'Carrito vacío',
+            'cart_abandoned' => 'Carrito abandonado',
+            'cart_resumed' => 'Carrito retomado',
+            'cart_recovered' => 'Carrito recuperado',
             'checkout_started' => 'Checkout iniciado',
             'patient_selected' => 'Paciente seleccionado',
             'address_selected' => 'Direccion seleccionada',
@@ -1463,6 +1549,35 @@ class CartController extends Controller
             'cart_completed' => 'Carrito completado',
             default => str($event)->replace(['_', '-'], ' ')->title()->toString(),
         };
+
+        if ($event === 'cart_abandoned' && isset($metadata['episode'])) {
+            return $label.' — episodio #'.$metadata['episode'];
+        }
+
+        if ($event === 'cart_resumed' && isset($metadata['episode'])) {
+            return $label.' — episodio #'.$metadata['episode'];
+        }
+
+        return $label;
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function cartEventDetail(string $event, array $metadata): ?string
+    {
+        return match ($event) {
+            'cart_abandoned' => isset($metadata['minutes_inactive'])
+                ? 'Sin actividad ≥ '.(int) $metadata['minutes_inactive'].' min'
+                : null,
+            'cart_resumed' => isset($metadata['abandoned_duration_minutes'])
+                ? (int) $metadata['abandoned_duration_minutes'].' min'
+                : null,
+            'cart_recovered' => isset($metadata['purchase_id'])
+                ? 'Compra #'.$metadata['purchase_id']
+                : (isset($metadata['episodes_count']) ? 'Tras '.$metadata['episodes_count'].' episodio(s)' : null),
+            default => null,
+        };
     }
 
     /**
@@ -1472,7 +1587,27 @@ class CartController extends Controller
     private function safeCartEventMetadata(array $metadata): array
     {
         return collect($metadata)
-            ->only(['brand', 'brand_label', 'step', 'status', 'reason', 'appointment_id', 'purchase_id'])
+            ->only([
+                'brand',
+                'brand_label',
+                'step',
+                'status',
+                'reason',
+                'appointment_id',
+                'purchase_id',
+                'product_id',
+                'product_name',
+                'quantity',
+                'previous_quantity',
+                'cart_total',
+                'operational_item_id',
+                'episode',
+                'minutes_inactive',
+                'abandoned_duration_minutes',
+                'episodes_count',
+                'last_episode',
+                'purchase_id',
+            ])
             ->filter(fn ($value) => $value !== null && $value !== '')
             ->all();
     }
@@ -1697,11 +1832,33 @@ class CartController extends Controller
             ],
         ]);
 
-        if ($cart->displayStatus() === 'abandoned' && $cart->abandonedAt()) {
+        $cart->events()
+            ->whereIn('event', [
+                CartEventType::CartAbandoned->value,
+                CartEventType::CartResumed->value,
+                CartEventType::CartRecovered->value,
+            ])
+            ->orderBy('occurred_at')
+            ->orderBy('id')
+            ->get()
+            ->each(function ($event) use ($cart, $events) {
+                $metadata = is_array($event->metadata) ? $event->metadata : [];
+                $eventValue = $event->event?->value ?? (string) $event->event;
+
+                $events->push([
+                    'id' => 'cart-event-'.$event->id,
+                    'label' => $this->cartEventLabel($eventValue, $cart->type, $metadata),
+                    'detail' => $this->cartEventDetail($eventValue, $metadata),
+                    'at' => $event->occurred_at?->timezone('America/Monterrey')->format('d/m/Y H:i'),
+                    'sort' => $event->occurred_at?->timestamp ?? 0,
+                ]);
+            });
+
+        if ($cart->displayStatus() === 'abandoned' && $cart->abandonedAt() && ! $this->cartHasPersistedAbandonmentEvent($cart)) {
             $events->push([
                 'id' => 'abandoned',
                 'label' => 'Marcado como abandonado',
-                'detail' => 'Sin actividad ≥ '.$cart::ABANDONED_AFTER_MINUTES.' min',
+                'detail' => 'Sin actividad ≥ '.$cart::abandonedAfterMinutes().' min',
                 'at' => $cart->abandonedAt()->timezone('America/Monterrey')->format('d/m/Y H:i'),
                 'sort' => $cart->abandonedAt()->timestamp,
             ]);
@@ -1767,6 +1924,13 @@ class CartController extends Controller
                 'at' => $event['at'],
             ])
             ->all();
+    }
+
+    private function cartHasPersistedAbandonmentEvent(Cart $cart): bool
+    {
+        return $cart->events()
+            ->where('event', CartEventType::CartAbandoned->value)
+            ->exists();
     }
 
     private function timelineSortKey(?string $humanDate): int

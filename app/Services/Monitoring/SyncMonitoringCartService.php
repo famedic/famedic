@@ -12,6 +12,7 @@ use App\Models\Customer;
 use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Models\OnlinePharmacyCartItem;
+use App\Services\Carts\CartAbandonmentService;
 use App\Services\Carts\CartEventRecorder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,7 @@ class SyncMonitoringCartService
         private FetchProductAction $fetchProductAction,
         private CartEventRecorder $cartEventRecorder,
         private MultibrandCartReconciler $multibrandCartReconciler,
+        private CartAbandonmentService $cartAbandonmentService,
     ) {}
 
     /**
@@ -37,8 +39,16 @@ class SyncMonitoringCartService
 
         $items = $customer->laboratoryCartItems()->with('laboratoryTest')->get();
 
+        if ($items->isNotEmpty()) {
+            $this->cartAbandonmentService->maybeRecordResumedForCustomer(
+                $customer,
+                MonitoringCartType::Lab,
+                $clientContext,
+            );
+        }
+
         if ($items->isEmpty()) {
-            $this->deleteActiveCartIfEmpty($userId, MonitoringCartType::Lab);
+            $this->emptyActiveMonitoringCarts($userId, MonitoringCartType::Lab);
             $customer = Customer::query()->where('user_id', $userId)->first();
             if ($customer) {
                 LaboratoryCheckoutDraft::query()->where('customer_id', $customer->id)->delete();
@@ -79,8 +89,16 @@ class SyncMonitoringCartService
 
         $items = $customer->onlinePharmacyCartItems()->get();
 
+        if ($items->isNotEmpty()) {
+            $this->cartAbandonmentService->maybeRecordResumedForCustomer(
+                $customer,
+                MonitoringCartType::Pharmacy,
+                $clientContext,
+            );
+        }
+
         if ($items->isEmpty()) {
-            $this->deleteActiveCartIfEmpty($userId, MonitoringCartType::Pharmacy);
+            $this->emptyActiveMonitoringCarts($userId, MonitoringCartType::Pharmacy);
 
             return;
         }
@@ -148,6 +166,12 @@ class SyncMonitoringCartService
                 $this->withClientContext([], $clientContext),
                 source: 'monitoring_cart_sync',
             );
+
+            $this->cartAbandonmentService->recordRecoveredIfEligible(
+                $cart->refresh(),
+                $cart->laboratoryPurchases()->latest('id')->value('id'),
+                $clientContext,
+            );
         }
 
         return $cart;
@@ -172,6 +196,8 @@ class SyncMonitoringCartService
                 'status' => MonitoringCartStatus::Completed,
                 'completed_at' => now(),
             ]);
+
+            $this->cartAbandonmentService->recordRecoveredIfEligible($cart->refresh());
         }
     }
 
@@ -297,7 +323,7 @@ class SyncMonitoringCartService
 
     private function activeLaboratoryCartForBrand(int $userId, LaboratoryBrand $brand): ?Cart
     {
-        return Cart::query()
+        $withItems = Cart::query()
             ->with('items')
             ->where('user_id', $userId)
             ->where('type', MonitoringCartType::Lab)
@@ -308,6 +334,25 @@ class SyncMonitoringCartService
 
                 return $brands->count() === 1 && $brands->contains($brand->value);
             });
+
+        if ($withItems) {
+            return $withItems;
+        }
+
+        return Cart::query()
+            ->where('user_id', $userId)
+            ->where('type', MonitoringCartType::Lab)
+            ->where('status', MonitoringCartStatus::Active)
+            ->whereDoesntHave('items')
+            ->whereHas('events', function ($query) use ($brand) {
+                $query->whereIn('event', [
+                    CartEventType::CartItemAdded->value,
+                    CartEventType::CartItemRemoved->value,
+                    CartEventType::CartEmptied->value,
+                ])->where('metadata->brand', $brand->value);
+            })
+            ->orderByDesc('updated_at')
+            ->first();
     }
 
     /**
@@ -363,17 +408,26 @@ class SyncMonitoringCartService
                 $brands = collect($cart->labBrands())->pluck('value')->filter()->values();
 
                 if ($brands->isNotEmpty() && $brands->intersect($current)->isEmpty()) {
-                    $cart->delete();
+                    $this->emptyMonitoringCart($cart);
                 }
             });
     }
 
-    private function deleteActiveCartIfEmpty(int $userId, MonitoringCartType $type): void
+    private function emptyMonitoringCart(Cart $cart): void
+    {
+        $cart->items()->delete();
+        $cart->update([
+            'total' => 0,
+            'status' => MonitoringCartStatus::Active,
+        ]);
+    }
+
+    private function emptyActiveMonitoringCarts(int $userId, MonitoringCartType $type): void
     {
         Cart::query()
             ->where('user_id', $userId)
             ->where('type', $type)
             ->where('status', MonitoringCartStatus::Active)
-            ->delete();
+            ->each(fn (Cart $cart) => $this->emptyMonitoringCart($cart));
     }
 }

@@ -20,6 +20,7 @@ docker compose logs -f node       Solo Vite/npm
 docker compose exec app bash      Shell en PHP-FPM (si bash no existe, usa sh)
 docker compose exec app sh        Alternativa más livianaaa
 
+#Levantar tunnel cloudflared tunnel --url http://localhost:8080
 docker compose exec mysql bash    Shell dentro del servidor MySQL
 docker compose exec node sh       Shell donde corre npm/vite
 

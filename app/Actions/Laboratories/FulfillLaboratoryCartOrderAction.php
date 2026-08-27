@@ -17,6 +17,7 @@ use App\Notifications\FewDaysLeftToRequestInvoice;
 use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Services\CouponApplicationService;
+use App\Services\Carts\CartAbandonmentService;
 use App\Services\Carts\CartEventRecorder;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\Orders\OrderAutomationService;
@@ -38,6 +39,7 @@ class FulfillLaboratoryCartOrderAction
         private SyncLaboratoryCheckoutDraftAction $syncLaboratoryCheckoutDraftAction,
         private OrderAutomationService $orderAutomationService,
         private CartEventRecorder $cartEventRecorder,
+        private CartAbandonmentService $cartAbandonmentService,
     ) {}
 
     /**
@@ -85,6 +87,8 @@ class FulfillLaboratoryCartOrderAction
             );
 
             if ($cart) {
+                $this->cartAbandonmentService->maybeRecordResumed($cart, $clientContext);
+
                 $this->cartEventRecorder->recordOnce(
                     $cart,
                     CartEventType::PurchaseCreated,

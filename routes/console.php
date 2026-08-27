@@ -8,6 +8,16 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote')->hourly();
 
+Schedule::command('carts:detect-abandonment')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(4);
+
+if (config('services.activecampaign.cart_outbox_enabled', false)) {
+    Schedule::command('activecampaign:sync-cart-outbox')
+        ->everyFiveMinutes()
+        ->withoutOverlapping(4);
+}
+
 if (config('services.activecampaign.tag_abandoned_carts_enabled', true)) {
     Schedule::command('activecampaign:tag-abandoned-carts')
         ->everyFifteenMinutes()

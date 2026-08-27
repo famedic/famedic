@@ -9,12 +9,14 @@ use App\Enums\MonitoringCartType;
 use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\LaboratoryCheckoutDraft;
+use App\Services\Carts\CartAbandonmentService;
 use App\Services\Carts\CartEventRecorder;
 
 class SyncLaboratoryCheckoutDraftAction
 {
     public function __construct(
         private CartEventRecorder $cartEventRecorder,
+        private CartAbandonmentService $cartAbandonmentService,
     ) {}
 
     /**
@@ -76,6 +78,11 @@ class SyncLaboratoryCheckoutDraftAction
             ],
             $attributes,
         );
+
+        $cart = $this->activeLaboratoryCart($customer, $laboratoryBrand);
+        if ($cart) {
+            $this->cartAbandonmentService->maybeRecordResumed($cart, $clientContext);
+        }
 
         $this->touchMonitoringCart($customer);
         $this->recordCheckoutEvents($customer, $laboratoryBrand, $payload, $clientContext);

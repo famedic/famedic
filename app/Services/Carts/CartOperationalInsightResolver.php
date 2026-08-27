@@ -17,6 +17,10 @@ class CartOperationalInsightResolver
             return $this->none();
         }
 
+        if ($cart->isEmptyActiveMonitoringCart()) {
+            return $this->none();
+        }
+
         $paymentReason = $this->paymentReason($paymentInsight);
         if ($paymentReason !== null) {
             return $paymentReason;

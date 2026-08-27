@@ -56,6 +56,7 @@ trait BuildsCartExportQuery
                 'user.customer.laboratoryPurchases.transactions',
             ])
             ->withCount('items')
+            ->operationalMonitoring()
             ->adminMonitoringFilter($this->filters, $this->startDate(), $this->endDate())
             ->orderByDesc('updated_at')
             ->orderByDesc('id');

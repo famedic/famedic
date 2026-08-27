@@ -66,7 +66,8 @@ class UserController extends Controller
             ->withCount([
                 'referrals',
                 'monitoringCarts as active_carts_count' => function ($q) {
-                    $q->where('status', '!=', MonitoringCartStatus::Completed);
+                    $q->where('status', '!=', MonitoringCartStatus::Completed)
+                        ->whereHas('items');
                 },
             ])
             ->paginate(25)
