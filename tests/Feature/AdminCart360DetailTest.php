@@ -189,6 +189,7 @@ it('shows a pending appointment in the drawer', function () {
 
     LaboratoryAppointment::factory()->create([
         'customer_id' => $customerUser->customer->id,
+        'cart_id' => $cart->id,
         'brand' => LaboratoryBrand::OLAB->value,
         'created_at' => now()->subMinutes(40),
         'confirmed_at' => null,
@@ -219,6 +220,7 @@ it('shows a confirmed appointment without payment', function () {
     ]);
     LaboratoryAppointment::factory()->confirmed(now()->addDay(), now()->subMinutes(30))->create([
         'customer_id' => $customerUser->customer->id,
+        'cart_id' => $cart->id,
         'brand' => LaboratoryBrand::OLAB->value,
         'laboratory_store_id' => $store->id,
         'laboratory_purchase_id' => null,
@@ -240,6 +242,7 @@ it('shows callback and phone intent details', function () {
 
     LaboratoryAppointment::factory()->create([
         'customer_id' => $customerUser->customer->id,
+        'cart_id' => $cart->id,
         'brand' => LaboratoryBrand::OLAB->value,
         'phone_call_intent_at' => now()->subMinutes(10),
         'callback_availability_starts_at' => now()->addHours(2),
@@ -263,6 +266,7 @@ it('shows a correlated declined payment', function () {
 
     $attempt = new PaymentAttempt([
         'customer_id' => $customerUser->customer->id,
+        'cart_id' => $cart->id,
         'amount_cents' => 100000,
         'gateway' => 'efevoopay',
         'reference' => 'LAB-test',
@@ -291,6 +295,7 @@ it('shows a correlated technical payment error', function () {
 
     $attempt = new PaymentAttempt([
         'customer_id' => $customerUser->customer->id,
+        'cart_id' => $cart->id,
         'amount_cents' => 100000,
         'gateway' => 'efevoopay',
         'status' => PaymentAttempt::STATUS_ERROR,
@@ -335,7 +340,7 @@ it('keeps ambiguous payment attempts neutral', function () {
     $this->getJson(route('admin.carts.show', $firstCart))
         ->assertOk()
         ->assertJsonPath('data.payment.status_label', 'Información de pago no determinada')
-        ->assertJsonPath('data.checkout.journey.4.detail', 'Información no determinada');
+        ->assertJsonPath('data.checkout.journey.4.detail', 'No iniciado');
 
     expect($secondCart->exists)->toBeTrue();
 });
@@ -897,6 +902,119 @@ it('returns empty web activity contract for carts without local Site Tracking ev
         ->assertJsonPath('data.web_activity.has_data', false)
         ->assertJsonPath('data.web_activity.count', 0)
         ->assertJsonCount(0, 'data.web_activity.items');
+});
+
+it('does not contaminate journey general for a pre-checkout cart when customer has completed carts', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+
+    $cartA = cart360LabCart($customerUser, [
+        'status' => MonitoringCartStatus::Completed->value,
+        'completed_at' => now()->subDays(2),
+        'created_at' => now()->subDays(3),
+        'updated_at' => now()->subDays(2),
+    ]);
+    cart360PurchaseWithTransaction($cartA, 'paypal');
+    cart360PaymentAttempt($cartA, PaymentAttempt::STATUS_APPROVED);
+
+    $cartB = cart360LabCart($customerUser, [
+        'created_at' => now()->subMinutes(30),
+        'updated_at' => now()->subMinutes(5),
+    ]);
+    CartEvent::query()->create([
+        'cart_id' => $cartB->id,
+        'event' => 'cart_item_added',
+        'metadata' => ['product_id' => '1'],
+        'occurred_at' => now()->subMinutes(25),
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cartB))
+        ->assertOk()
+        ->assertJsonPath('data.journey.0.state', 'completed')
+        ->assertJsonPath('data.journey.1.state', 'pending')
+        ->assertJsonPath('data.journey.1.detail', 'No registrado')
+        ->assertJsonPath('data.journey.2.state', 'pending')
+        ->assertJsonPath('data.journey.2.detail', 'No registrada')
+        ->assertJsonPath('data.journey.3.detail', 'No seleccionada')
+        ->assertJsonPath('data.journey.4.state', 'pending')
+        ->assertJsonPath('data.journey.4.detail', 'No iniciado')
+        ->assertJsonPath('data.journey.5.state', 'pending')
+        ->assertJsonPath('data.journey.5.detail', 'Sin compra')
+        ->assertJsonPath('data.cart.related_purchase', null)
+        ->assertJsonPath('data.appointment', null)
+        ->assertJsonPath('data.final_payment', null);
+
+    expect($cartA->exists)->toBeTrue();
+});
+
+it('does not use historical purchase payment or appointment fallbacks in journey general', function () {
+    $admin = cart360AdminUserWithCartDetailPermission();
+    $customerUser = User::factory()->withRegularCustomer()->create();
+    $customer = $customerUser->customer;
+
+    LaboratoryPurchase::query()->create([
+        'customer_id' => $customer->id,
+        'brand' => LaboratoryBrand::OLAB->value,
+        'gda_order_id' => 'gda-historical-no-cart',
+        'name' => 'Paciente',
+        'paternal_lastname' => 'Historico',
+        'maternal_lastname' => 'Compra',
+        'phone' => '8111111111',
+        'phone_country' => 'MX',
+        'birth_date' => '1990-01-01',
+        'gender' => null,
+        'street' => 'Calle Historica',
+        'number' => '99',
+        'neighborhood' => 'Centro',
+        'state' => 'Nuevo Leon',
+        'city' => 'Monterrey',
+        'zipcode' => '64000',
+        'total_cents' => 100000,
+        'created_at' => now()->subMonths(3),
+    ]);
+
+    $historicalAttempt = new PaymentAttempt([
+        'customer_id' => $customer->id,
+        'amount_cents' => 100000,
+        'gateway' => 'efevoopay',
+        'status' => PaymentAttempt::STATUS_APPROVED,
+        'processed_at' => now()->subMonths(3),
+    ]);
+    $historicalAttempt->created_at = now()->subMonths(3);
+    $historicalAttempt->updated_at = now()->subMonths(3);
+    $historicalAttempt->save();
+
+    LaboratoryAppointment::factory()->confirmed(now()->subMonths(3), now()->subMonths(3))->create([
+        'customer_id' => $customer->id,
+        'brand' => LaboratoryBrand::OLAB->value,
+        'laboratory_purchase_id' => null,
+        'patient_gender' => null,
+    ]);
+
+    $cartB = cart360LabCart($customerUser, [
+        'created_at' => now()->subMinutes(20),
+        'updated_at' => now()->subMinutes(3),
+    ]);
+    CartEvent::query()->create([
+        'cart_id' => $cartB->id,
+        'event' => 'cart_item_added',
+        'metadata' => ['product_id' => '1'],
+        'occurred_at' => now()->subMinutes(18),
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->getJson(route('admin.carts.show', $cartB))
+        ->assertOk()
+        ->assertJsonPath('data.journey.1.detail', 'No registrado')
+        ->assertJsonPath('data.journey.2.detail', 'No registrada')
+        ->assertJsonPath('data.journey.3.detail', 'No seleccionada')
+        ->assertJsonPath('data.journey.4.detail', 'No iniciado')
+        ->assertJsonPath('data.journey.5.detail', 'Sin compra')
+        ->assertJsonPath('data.appointment', null)
+        ->assertJsonPath('data.history.previous_purchases_count', 1);
 });
 
 it('keeps web activity drawer UI conditional and sanitized', function () {

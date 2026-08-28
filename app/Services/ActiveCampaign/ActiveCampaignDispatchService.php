@@ -13,6 +13,11 @@ class ActiveCampaignDispatchService
         'cart_abandoned',
         'cart_resumed',
         'cart_recovered',
+        'appointment_pending_5m',
+        'appointment_confirmed',
+        'call_requested',
+        'call_attempted',
+        'cart_completed',
     ];
 
     /** @var list<string> */
@@ -74,9 +79,23 @@ class ActiveCampaignDispatchService
             && (bool) config('services.activecampaign.cart_tag_remove_enabled', false);
     }
 
+    public function isCartAppointmentSignalsEnabled(): bool
+    {
+        return $this->isCartOutboxEnabled()
+            && (bool) config('services.activecampaign.cart_appointment_signals_enabled', false);
+    }
+
+    public function isCartCallSignalsEnabled(): bool
+    {
+        return $this->isCartOutboxEnabled()
+            && (bool) config('services.activecampaign.cart_call_signals_enabled', false);
+    }
+
     public function isCartSiteEvent(string $eventType): bool
     {
-        return str_starts_with($eventType, 'famedic_cart_');
+        return str_starts_with($eventType, 'famedic_cart_')
+            || str_starts_with($eventType, 'famedic_appointment_')
+            || str_starts_with($eventType, 'famedic_call_');
     }
 
     public function isCartEvent(string $eventType): bool

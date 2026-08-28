@@ -16,7 +16,10 @@ enum CartEventType: string
     case PatientSelected = 'patient_selected';
     case AddressSelected = 'address_selected';
     case AppointmentRequested = 'appointment_requested';
+    case AppointmentPending5m = 'appointment_pending_5m';
     case AppointmentConfirmed = 'appointment_confirmed';
+    case CallRequested = 'call_requested';
+    case CallAttempted = 'call_attempted';
     case PaymentStarted = 'payment_started';
     case PaymentDeclined = 'payment_declined';
     case PaymentError = 'payment_error';

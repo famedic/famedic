@@ -12,6 +12,7 @@ use App\Models\Customer;
 use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Models\OnlinePharmacyCartItem;
+use App\Services\ActiveCampaign\ActiveCampaignOutboundDispatcher;
 use App\Services\Carts\CartAbandonmentService;
 use App\Services\Carts\CartEventRecorder;
 use Illuminate\Support\Collection;
@@ -25,6 +26,7 @@ class SyncMonitoringCartService
         private CartEventRecorder $cartEventRecorder,
         private MultibrandCartReconciler $multibrandCartReconciler,
         private CartAbandonmentService $cartAbandonmentService,
+        private ActiveCampaignOutboundDispatcher $activeCampaignOutboundDispatcher,
     ) {}
 
     /**
@@ -159,13 +161,17 @@ class SyncMonitoringCartService
                 'completed_at' => now(),
             ]);
 
-            $this->cartEventRecorder->recordOnce(
+            $completedEvent = $this->cartEventRecorder->recordOnce(
                 $cart->refresh(),
                 CartEventType::CartCompleted,
                 "cart:{$cart->id}:completed",
                 $this->withClientContext([], $clientContext),
                 source: 'monitoring_cart_sync',
             );
+
+            if ($completedEvent !== null) {
+                $this->activeCampaignOutboundDispatcher->enqueueFromCartEvent($cart->refresh(), $completedEvent);
+            }
 
             $this->cartAbandonmentService->recordRecoveredIfEligible(
                 $cart->refresh(),

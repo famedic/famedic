@@ -19,6 +19,10 @@ class CartActiveCampaignSiteEventPayloadBuilder
             ActiveCampaignSiteEvent::CartAbandoned => $this->buildAbandoned($cart, $metadata),
             ActiveCampaignSiteEvent::CartResumed => $this->buildResumed($cart, $metadata),
             ActiveCampaignSiteEvent::CartRecovered => $this->buildRecovered($cart, $metadata),
+            ActiveCampaignSiteEvent::AppointmentPending5m => $this->buildAppointmentPending5m($metadata),
+            ActiveCampaignSiteEvent::AppointmentConfirmed => $this->buildAppointmentConfirmed($metadata),
+            ActiveCampaignSiteEvent::CallRequested => $this->buildCallRequested($metadata),
+            ActiveCampaignSiteEvent::CallAttempted => $this->buildCallAttempted($metadata),
         };
     }
 
@@ -85,5 +89,69 @@ class CartActiveCampaignSiteEventPayloadBuilder
         }
 
         return array_filter($payload, static fn ($value) => $value !== null);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function buildAppointmentPending5m(array $metadata): array
+    {
+        return array_filter([
+            'cart_id' => isset($metadata['cart_id']) ? (int) $metadata['cart_id'] : null,
+            'appointment_id' => isset($metadata['appointment_id']) ? (int) $metadata['appointment_id'] : null,
+            'brand' => $metadata['brand'] ?? null,
+            'requested_at' => $metadata['requested_at'] ?? null,
+            'minutes_pending' => isset($metadata['minutes_pending'])
+                ? (int) $metadata['minutes_pending']
+                : null,
+        ], static fn ($value) => $value !== null);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function buildAppointmentConfirmed(array $metadata): array
+    {
+        $appointmentId = $metadata['appointment_id'] ?? $metadata['laboratory_appointment_id'] ?? null;
+
+        return array_filter([
+            'cart_id' => isset($metadata['cart_id']) ? (int) $metadata['cart_id'] : null,
+            'appointment_id' => $appointmentId !== null ? (int) $appointmentId : null,
+            'brand' => $metadata['brand'] ?? null,
+            'confirmed_at' => $metadata['confirmed_at'] ?? null,
+        ], static fn ($value) => $value !== null);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function buildCallRequested(array $metadata): array
+    {
+        return array_filter([
+            'cart_id' => isset($metadata['cart_id']) ? (int) $metadata['cart_id'] : null,
+            'appointment_id' => isset($metadata['appointment_id']) ? (int) $metadata['appointment_id'] : null,
+            'brand' => $metadata['brand'] ?? null,
+            'occurred_at' => $metadata['occurred_at'] ?? null,
+            'has_callback_availability' => isset($metadata['has_callback_availability'])
+                ? (bool) $metadata['has_callback_availability']
+                : null,
+        ], static fn ($value) => $value !== null);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function buildCallAttempted(array $metadata): array
+    {
+        return array_filter([
+            'cart_id' => isset($metadata['cart_id']) ? (int) $metadata['cart_id'] : null,
+            'appointment_id' => isset($metadata['appointment_id']) ? (int) $metadata['appointment_id'] : null,
+            'brand' => $metadata['brand'] ?? null,
+            'occurred_at' => $metadata['occurred_at'] ?? null,
+        ], static fn ($value) => $value !== null);
     }
 }

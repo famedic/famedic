@@ -4,6 +4,7 @@ namespace App\Actions\Laboratories;
 
 use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
+use App\Jobs\Carts\CheckAppointmentPendingJob;
 use App\Models\Customer;
 use App\Services\Carts\CartEventRecorder;
 use App\Services\Monitoring\SyncMonitoringCartService;
@@ -51,11 +52,18 @@ class CreateLaboratoryAppointmentAction
                 "laboratory_appointment:{$laboratoryAppointment->id}:requested",
                 $this->withClientContext([
                     'laboratory_appointment_id' => $laboratoryAppointment->id,
+                    'appointment_id' => $laboratoryAppointment->id,
                     'brand' => $laboratoryBrand->value,
                 ], $clientContext),
                 $laboratoryAppointment->created_at,
                 'laboratory_checkout',
             );
+
+            if ($laboratoryAppointment->confirmed_at === null) {
+                CheckAppointmentPendingJob::dispatch((int) $laboratoryAppointment->id)
+                    ->afterCommit()
+                    ->delay(now()->addMinutes(max(1, (int) config('carts.appointment_pending_after_minutes', 5))));
+            }
         }
 
         return $laboratoryAppointment;

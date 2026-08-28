@@ -171,6 +171,14 @@ return [
             env('ACTIVECAMPAIGN_CART_SITE_EVENTS_ENABLED', false),
             FILTER_VALIDATE_BOOLEAN
         ),
+        'cart_appointment_signals_enabled' => filter_var(
+            env('ACTIVECAMPAIGN_APPOINTMENT_SIGNALS_ENABLED', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
+        'cart_call_signals_enabled' => filter_var(
+            env('ACTIVECAMPAIGN_CALL_SIGNALS_ENABLED', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
         'tag_pharmacy_purchase_completed' => (int) env('ACTIVE_CAMPAIGN_TAG_PHARMACY_PURCHASE_COMPLETED', 17),
         'tag_laboratory_purchase_completed' => (int) env('ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_COMPLETED', 18),
         // Tags específicos laboratorio
@@ -214,6 +222,11 @@ return [
             'cart' => [
                 'abandoned' => (int) env('ACTIVE_CAMPAIGN_TAG_CART_ABANDONED', 20),
                 'added' => (int) env('ACTIVE_CAMPAIGN_TAG_CART_ADDED', 19),
+                'appointment_pending' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_CART_APPOINTMENT_PENDING', 'Cita pendiente'),
+            ],
+            'call' => [
+                'requested' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_CALL_REQUESTED', 'Solicito llamada'),
+                'attempted' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_CALL_ATTEMPTED', 'Intento llamar'),
             ],
         ],
         'site_events' => [
@@ -221,6 +234,14 @@ return [
                 'abandoned' => env('ACTIVECAMPAIGN_SITE_EVENT_CART_ABANDONED', 'famedic_cart_abandoned'),
                 'resumed' => env('ACTIVECAMPAIGN_SITE_EVENT_CART_RESUMED', 'famedic_cart_resumed'),
                 'recovered' => env('ACTIVECAMPAIGN_SITE_EVENT_CART_RECOVERED', 'famedic_cart_recovered'),
+            ],
+            'appointment' => [
+                'pending_5m' => env('ACTIVECAMPAIGN_SITE_EVENT_APPOINTMENT_PENDING_5M', 'famedic_appointment_pending_5m'),
+                'confirmed' => env('ACTIVECAMPAIGN_SITE_EVENT_APPOINTMENT_CONFIRMED', 'famedic_appointment_confirmed'),
+            ],
+            'call' => [
+                'requested' => env('ACTIVECAMPAIGN_SITE_EVENT_CALL_REQUESTED', 'famedic_call_requested'),
+                'attempted' => env('ACTIVECAMPAIGN_SITE_EVENT_CALL_ATTEMPTED', 'famedic_call_attempted'),
             ],
         ],
         'fields' => [

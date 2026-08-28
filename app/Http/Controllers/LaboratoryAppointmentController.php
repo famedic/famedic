@@ -8,6 +8,7 @@ use App\Enums\LaboratoryBrand;
 use App\Http\Requests\LaboratoryAppointments\RecordLaboratoryAppointmentPhoneIntentRequest;
 use App\Http\Requests\LaboratoryAppointments\UpdateLaboratoryAppointmentCallbackAvailabilityRequest;
 use App\Models\LaboratoryAppointment;
+use App\Services\Carts\CartAppointmentContactSignalService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Support\ClientContext;
 use Illuminate\Http\Request;
@@ -19,6 +20,7 @@ class LaboratoryAppointmentController extends Controller
 {
     public function __construct(
         private SyncMonitoringCartService $syncMonitoringCartService,
+        private CartAppointmentContactSignalService $cartAppointmentContactSignalService,
     ) {
     }
 
@@ -63,12 +65,33 @@ class LaboratoryAppointmentController extends Controller
         LaboratoryBrand $laboratoryBrand,
         LaboratoryAppointment $laboratoryAppointment
     ) {
-        DB::transaction(function () use ($laboratoryAppointment): void {
+        $recentInteraction = $laboratoryAppointment->interactions()
+            ->where('type', LaboratoryAppointmentInteractionType::PatientPhoneIntent->value)
+            ->where('created_at', '>=', now()->subSeconds(30))
+            ->exists();
+
+        if ($recentInteraction) {
+            $this->syncMonitoringCartService->touchLaboratoryCartActivity($laboratoryAppointment->customer);
+
+            return back();
+        }
+
+        $interactionId = null;
+
+        DB::transaction(function () use ($laboratoryAppointment, &$interactionId): void {
             $laboratoryAppointment->update(['phone_call_intent_at' => now()]);
-            $laboratoryAppointment->interactions()->create([
+            $interaction = $laboratoryAppointment->interactions()->create([
                 'type' => LaboratoryAppointmentInteractionType::PatientPhoneIntent,
             ]);
+            $interactionId = $interaction->id;
         });
+
+        if ($interactionId !== null) {
+            $this->cartAppointmentContactSignalService->recordCallAttempted(
+                $laboratoryAppointment->fresh(['cart']),
+                $interactionId,
+            );
+        }
 
         $this->syncMonitoringCartService->touchLaboratoryCartActivity($laboratoryAppointment->customer);
 
@@ -81,6 +104,10 @@ class LaboratoryAppointmentController extends Controller
         LaboratoryAppointment $laboratoryAppointment
     ) {
         $data = $request->parsedCallbackAvailability();
+
+        if (! $this->callbackAvailabilityChanged($laboratoryAppointment, $data)) {
+            return back()->flashMessage('Guardamos tu disponibilidad y comentarios.');
+        }
 
         Log::info('laboratory.callback_availability.request_validated', [
             'appointment_id' => $laboratoryAppointment->id,
@@ -116,6 +143,15 @@ class LaboratoryAppointmentController extends Controller
             $interactionId = $interaction->id;
         });
 
+        if ($interactionId !== null) {
+            $this->cartAppointmentContactSignalService->recordCallRequested(
+                $laboratoryAppointment->fresh(['cart']),
+                $interactionId,
+                ($data['callback_availability_starts_at'] ?? null) !== null
+                    || ($data['callback_availability_ends_at'] ?? null) !== null,
+            );
+        }
+
         $fresh = $laboratoryAppointment->fresh();
 
         Log::info('laboratory.callback_availability.persisted', [
@@ -133,5 +169,28 @@ class LaboratoryAppointmentController extends Controller
         $this->syncMonitoringCartService->touchLaboratoryCartActivity($laboratoryAppointment->customer);
 
         return back()->flashMessage('Guardamos tu disponibilidad y comentarios.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function callbackAvailabilityChanged(LaboratoryAppointment $appointment, array $data): bool
+    {
+        return ! $this->sameInstant($appointment->callback_availability_starts_at, $data['callback_availability_starts_at'] ?? null)
+            || ! $this->sameInstant($appointment->callback_availability_ends_at, $data['callback_availability_ends_at'] ?? null)
+            || (string) ($appointment->patient_callback_comment ?? '') !== (string) ($data['patient_callback_comment'] ?? '');
+    }
+
+    private function sameInstant(mixed $left, mixed $right): bool
+    {
+        if ($left === null && $right === null) {
+            return true;
+        }
+
+        if ($left === null || $right === null) {
+            return false;
+        }
+
+        return $left->eq($right);
     }
 }

@@ -12,6 +12,10 @@ Schedule::command('carts:detect-abandonment')
     ->everyFiveMinutes()
     ->withoutOverlapping(4);
 
+Schedule::command('carts:detect-appointment-pending')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(4);
+
 if (config('services.activecampaign.cart_outbox_enabled', false)) {
     Schedule::command('activecampaign:sync-cart-outbox')
         ->everyFiveMinutes()

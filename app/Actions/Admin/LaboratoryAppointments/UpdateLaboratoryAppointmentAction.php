@@ -2,20 +2,14 @@
 
 namespace App\Actions\Admin\LaboratoryAppointments;
 
-use App\Enums\CartEventType;
 use App\Enums\Gender;
 use App\Models\LaboratoryAppointment;
-use App\Services\Carts\CartEventRecorder;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Propaganistas\LaravelPhone\PhoneNumber;
 
 class UpdateLaboratoryAppointmentAction
 {
-    public function __construct(
-        private CartEventRecorder $cartEventRecorder,
-    ) {}
-
     /**
      * Fecha/hora de cita en zona de negocio (Monterrey).
      *
@@ -60,9 +54,8 @@ class UpdateLaboratoryAppointmentAction
             'final_datetime_local' => $finalDateTime->format('Y-m-d H:i:s'),
         ]);
 
-        $laboratoryAppointment->update([
+        $attributes = [
             'appointment_date' => $finalDateTime,
-            'confirmed_at' => now(),
             'patient_name' => $patient_name,
             'patient_paternal_lastname' => $patient_paternal_lastname,
             'patient_maternal_lastname' => $patient_maternal_lastname,
@@ -72,24 +65,14 @@ class UpdateLaboratoryAppointmentAction
             'patient_phone_country' => $patient_phone_country,
             'laboratory_store_id' => $laboratory_store,
             'notes' => $notes,
-        ]);
+        ];
 
-        $laboratoryAppointment = $laboratoryAppointment->refresh();
-
-        if ($laboratoryAppointment->cart) {
-            $this->cartEventRecorder->recordOnce(
-                $laboratoryAppointment->cart,
-                CartEventType::AppointmentConfirmed,
-                "laboratory_appointment:{$laboratoryAppointment->id}:confirmed",
-                [
-                    'laboratory_appointment_id' => $laboratoryAppointment->id,
-                    'brand' => $laboratoryAppointment->brand?->value,
-                ],
-                $laboratoryAppointment->confirmed_at,
-                'admin_laboratory_appointments',
-            );
+        if ($laboratoryAppointment->confirmed_at === null) {
+            $attributes['confirmed_at'] = now();
         }
 
-        return $laboratoryAppointment;
+        $laboratoryAppointment->update($attributes);
+
+        return $laboratoryAppointment->refresh();
     }
 }

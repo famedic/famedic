@@ -588,19 +588,18 @@ class CartController extends Controller
     {
         $paymentInsight = app(CartPaymentAttemptCorrelator::class)
             ->forCarts(collect([$cart]))[(int) $cart->id] ?? null;
-        $purchase = $cart->type === MonitoringCartType::Lab ? $cart->relatedLaboratoryPurchase() : null;
-        $appointment = $cart->type === MonitoringCartType::Lab
-            ? $cart->laboratoryAppointmentsForDisplay()->first()
-            : null;
+        $explicitPurchase = $cart->explicitLaboratoryPurchase();
+        $relatedPurchase = $cart->relatedLaboratoryPurchase();
+        $appointment = $cart->explicitLaboratoryAppointments()->first();
         $checkoutEntries = $cart->type === MonitoringCartType::Lab
             ? $this->serializeCheckoutSummaryForRow($cart)
             : [];
-        $finalPayment = $this->serialize360FinalPayment($purchase);
-        $journey = $this->serialize360Journey($cart, $checkoutEntries, $appointment, $purchase, $paymentInsight, $finalPayment);
+        $finalPayment = $this->serialize360FinalPayment($explicitPurchase);
+        $journey = $this->serialize360Journey($cart, $checkoutEntries, $appointment, $explicitPurchase, $paymentInsight, $finalPayment);
         $events = $this->serialize360Events($cart);
 
         return [
-            'cart' => $this->serialize360Cart($cart, $purchase),
+            'cart' => $this->serialize360Cart($cart, $explicitPurchase),
             'customer' => $this->serialize360Customer($cart),
             'operational_insight' => app(CartOperationalInsightResolver::class)->resolve($cart, $paymentInsight),
             'checkout' => [
@@ -614,14 +613,14 @@ class CartController extends Controller
             'final_payment' => $finalPayment,
             'payment_history' => $this->serialize360PaymentHistory($cart, $paymentInsight, $finalPayment),
             'appointment' => $appointment ? $this->serialize360Appointment($appointment) : null,
-            'appointment_journey' => $this->serialize360AppointmentJourney($cart, $appointment, $purchase, $finalPayment),
+            'appointment_journey' => $this->serialize360AppointmentJourney($cart, $appointment, $explicitPurchase, $finalPayment),
             'contact' => $appointment ? $this->serialize360Contact($appointment) : null,
             'activecampaign' => $this->serialize360ActiveCampaign($cart),
             'client_context' => $this->serialize360ClientContext($events, $cart),
             'web_activity' => $this->serialize360WebActivity($cart),
             'events' => $events,
             'history' => $this->serialize360History($cart),
-            'links' => $this->serialize360Links($cart, $request, $purchase, $appointment),
+            'links' => $this->serialize360Links($cart, $request, $relatedPurchase, $appointment),
         ];
     }
 
@@ -691,13 +690,16 @@ class CartController extends Controller
     ): array {
         $hasItems = $cart->items->isNotEmpty();
         $hasPatient = collect($checkoutEntries)->contains(fn (array $entry) => filled($entry['patient_name'] ?? null))
+            || $this->cartHasTraceabilityEvent($cart, 'patient_selected')
             || $purchase !== null;
         $hasAddress = collect($checkoutEntries)->contains(fn (array $entry) => filled($entry['address_short'] ?? null))
+            || $this->cartHasTraceabilityEvent($cart, 'address_selected')
             || $purchase !== null;
         $requiresAppointment = $this->cartRequiresAppointment($cart);
+        $journeyPaymentInsight = $this->journeyEligiblePaymentInsight($paymentInsight);
         $paymentStatus = $finalPayment !== null
             ? ['state' => 'completed', 'detail' => $finalPayment['method_label']]
-            : $this->paymentJourneyStatus($paymentInsight);
+            : $this->paymentJourneyStatus($journeyPaymentInsight);
         $isCompleted = $cart->status === MonitoringCartStatus::Completed && $purchase !== null;
 
         return [
@@ -1117,6 +1119,34 @@ class CartController extends Controller
     }
 
     /**
+     * @param  array<string, mixed>|null  $paymentInsight
+     * @return array<string, mixed>|null
+     */
+    private function journeyEligiblePaymentInsight(?array $paymentInsight): ?array
+    {
+        if ($paymentInsight === null) {
+            return null;
+        }
+
+        if (($paymentInsight['confidence'] ?? null) !== 'explicit') {
+            return null;
+        }
+
+        return $paymentInsight;
+    }
+
+    private function cartHasTraceabilityEvent(Cart $cart, string $eventType): bool
+    {
+        if ($cart->relationLoaded('events')) {
+            return $cart->events->contains(
+                fn (CartEvent $event) => ($event->event?->value ?? (string) $event->event) === $eventType,
+            );
+        }
+
+        return $cart->events()->where('event', $eventType)->exists();
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     private function serialize360AppointmentJourney(
@@ -1479,14 +1509,36 @@ class CartController extends Controller
             return 'Tag agregado — Carrito abandonado'.$episode;
         }
 
+        if ($operation === 'tag_add') {
+            return 'Tag agregado — '.$this->activeCampaignTagLabel((string) ($payload['tag_key'] ?? ''));
+        }
+
         if ($operation === 'tag_remove') {
             $episode = isset($payload['episode']) ? ' — episodio #'.$payload['episode'] : '';
             $context = $eventType === 'cart_recovered' ? ' (recuperado)' : '';
+            $tagLabel = $this->activeCampaignTagLabel((string) ($payload['tag_key'] ?? ''));
 
-            return 'Tag removido — Carrito abandonado'.$episode.$context;
+            if ($tagLabel === 'Carrito abandonado') {
+                return 'Tag removido — Carrito abandonado'.$episode.$context;
+            }
+
+            return 'Tag removido — '.$tagLabel.$context;
         }
 
         return $this->activeCampaignEventLabel($eventType);
+    }
+
+    private function activeCampaignTagLabel(string $tagKey): string
+    {
+        return match ($tagKey) {
+            'cart.abandoned' => 'Carrito abandonado',
+            'cart.appointment_pending' => 'Cita pendiente',
+            'call.requested' => 'Solicito llamada',
+            'call.attempted' => 'Intento llamar',
+            default => $tagKey !== ''
+                ? str($tagKey)->replace(['.', '_'], ' ')->title()->toString()
+                : 'Tag',
+        };
     }
 
     /**
@@ -1540,7 +1592,10 @@ class CartController extends Controller
             'patient_selected' => 'Paciente seleccionado',
             'address_selected' => 'Direccion seleccionada',
             'appointment_requested' => 'Cita solicitada',
+            'appointment_pending_5m' => 'Cita pendiente por 5 min',
             'appointment_confirmed' => 'Cita confirmada',
+            'call_requested' => 'Usuario solicitó llamada',
+            'call_attempted' => 'Usuario intentó llamar',
             'payment_started' => 'Pago iniciado',
             'payment_declined' => 'Pago rechazado',
             'payment_error' => 'Error tecnico',
@@ -1576,6 +1631,15 @@ class CartController extends Controller
             'cart_recovered' => isset($metadata['purchase_id'])
                 ? 'Compra #'.$metadata['purchase_id']
                 : (isset($metadata['episodes_count']) ? 'Tras '.$metadata['episodes_count'].' episodio(s)' : null),
+            'appointment_requested' => isset($metadata['appointment_id'])
+                ? 'Cita #'.(int) $metadata['appointment_id']
+                : null,
+            'appointment_pending_5m' => isset($metadata['minutes_pending'])
+                ? (int) $metadata['minutes_pending'].' min sin confirmar'
+                : null,
+            'call_requested' => ! empty($metadata['has_callback_availability'])
+                ? 'Con ventana de disponibilidad'
+                : null,
             default => null,
         };
     }
@@ -1594,6 +1658,9 @@ class CartController extends Controller
                 'status',
                 'reason',
                 'appointment_id',
+                'minutes_pending',
+                'has_callback_availability',
+                'interaction_id',
                 'purchase_id',
                 'product_id',
                 'product_name',

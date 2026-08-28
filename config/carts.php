@@ -15,4 +15,16 @@ return [
 
     'abandoned_after_minutes' => (int) env('CARTS_ABANDONED_AFTER_MINUTES', 30),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Cita pendiente sin confirmar (monitoring / ActiveCampaign)
+    |--------------------------------------------------------------------------
+    |
+    | Minutos desde laboratory_appointments.created_at con confirmed_at NULL
+    | para registrar appointment_pending_5m en cart_events.
+    |
+    */
+
+    'appointment_pending_after_minutes' => (int) env('CARTS_APPOINTMENT_PENDING_AFTER_MINUTES', 5),
+
 ];

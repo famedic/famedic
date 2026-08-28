@@ -35,6 +35,16 @@ class ActiveCampaignOutboundDispatcher
         return $this->dispatchService->isCartTagRemoveEnabled();
     }
 
+    public function isCartAppointmentSignalsEnabled(): bool
+    {
+        return $this->dispatchService->isCartAppointmentSignalsEnabled();
+    }
+
+    public function isCartCallSignalsEnabled(): bool
+    {
+        return $this->dispatchService->isCartCallSignalsEnabled();
+    }
+
     public function idempotencyKeyForCartAbandonedTag(int $cartId, int $episode): string
     {
         return "cart:{$cartId}:abandoned:episode:{$episode}:tag:add";
@@ -65,6 +75,46 @@ class ActiveCampaignOutboundDispatcher
         return "cart:{$cartId}:recovered:site_event";
     }
 
+    public function idempotencyKeyForAppointmentPendingTag(int $appointmentId): string
+    {
+        return "appointment:{$appointmentId}:pending_5m:tag:add";
+    }
+
+    public function idempotencyKeyForAppointmentPendingSiteEvent(int $appointmentId): string
+    {
+        return "appointment:{$appointmentId}:pending_5m:site_event";
+    }
+
+    public function idempotencyKeyForAppointmentPendingTagRemove(int $appointmentId): string
+    {
+        return "appointment:{$appointmentId}:pending_5m:tag:remove";
+    }
+
+    public function idempotencyKeyForAppointmentConfirmedSiteEvent(int $appointmentId): string
+    {
+        return "appointment:{$appointmentId}:confirmed:site_event";
+    }
+
+    public function idempotencyKeyForCallRequestedTag(int $interactionId): string
+    {
+        return "appointment_interaction:{$interactionId}:call_requested:tag:add";
+    }
+
+    public function idempotencyKeyForCallRequestedSiteEvent(int $interactionId): string
+    {
+        return "appointment_interaction:{$interactionId}:call_requested:site_event";
+    }
+
+    public function idempotencyKeyForCallAttemptedTag(int $interactionId): string
+    {
+        return "appointment_interaction:{$interactionId}:call_attempted:tag:add";
+    }
+
+    public function idempotencyKeyForCallAttemptedSiteEvent(int $interactionId): string
+    {
+        return "appointment_interaction:{$interactionId}:call_attempted:site_event";
+    }
+
     /**
      * Punto de entrada único desde cart_events.
      *
@@ -80,6 +130,11 @@ class ActiveCampaignOutboundDispatcher
             CartEventType::CartAbandoned->value => $this->enqueueAbandonedOutbox($cart, $cartEvent),
             CartEventType::CartResumed->value => $this->enqueueResumedOutbox($cart, $cartEvent),
             CartEventType::CartRecovered->value => $this->enqueueRecoveredOutbox($cart, $cartEvent),
+            CartEventType::AppointmentPending5m->value => $this->enqueueAppointmentPendingOutbox($cart, $cartEvent),
+            CartEventType::AppointmentConfirmed->value => $this->enqueueAppointmentConfirmedOutbox($cart, $cartEvent),
+            CartEventType::CallRequested->value => $this->enqueueCallRequestedOutbox($cart, $cartEvent),
+            CartEventType::CallAttempted->value => $this->enqueueCallAttemptedOutbox($cart, $cartEvent),
+            CartEventType::CartCompleted->value => $this->enqueueCartCompletedOutbox($cart, $cartEvent),
             default => [],
         };
     }
@@ -142,6 +197,309 @@ class ActiveCampaignOutboundDispatcher
         if ($siteDispatch instanceof ActiveCampaignDispatch) {
             $dispatches[] = $siteDispatch;
         }
+
+        foreach ($this->enqueueAppointmentPendingTagRemovesForCart(
+            $cart,
+            CartEventType::CartRecovered->value,
+        ) as $removeDispatch) {
+            $dispatches[] = $removeDispatch;
+        }
+
+        return $dispatches;
+    }
+
+    /**
+     * @return list<ActiveCampaignDispatch>
+     */
+    public function enqueueAppointmentPendingOutbox(Cart $cart, CartEvent $cartEvent): array
+    {
+        $dispatches = [];
+
+        $tagDispatch = $this->enqueueAppointmentPendingTagFromCartEvent($cart, $cartEvent);
+        if ($tagDispatch instanceof ActiveCampaignDispatch) {
+            $dispatches[] = $tagDispatch;
+        }
+
+        $siteDispatch = $this->enqueueAppointmentPendingSiteEventFromCartEvent($cart, $cartEvent);
+        if ($siteDispatch instanceof ActiveCampaignDispatch) {
+            $dispatches[] = $siteDispatch;
+        }
+
+        return $dispatches;
+    }
+
+    /**
+     * @return list<ActiveCampaignDispatch>
+     */
+    public function enqueueAppointmentConfirmedOutbox(Cart $cart, CartEvent $cartEvent): array
+    {
+        $dispatches = [];
+        $appointmentId = $this->resolveAppointmentIdFromCartEvent($cartEvent);
+
+        if ($appointmentId === null) {
+            return $dispatches;
+        }
+
+        $removeDispatch = $this->enqueueAppointmentPendingTagRemove($cart, $cartEvent, $appointmentId);
+        if ($removeDispatch instanceof ActiveCampaignDispatch) {
+            $dispatches[] = $removeDispatch;
+        }
+
+        $siteDispatch = $this->enqueueAppointmentConfirmedSiteEventFromCartEvent($cart, $cartEvent, $appointmentId);
+        if ($siteDispatch instanceof ActiveCampaignDispatch) {
+            $dispatches[] = $siteDispatch;
+        }
+
+        return $dispatches;
+    }
+
+    /**
+     * @return list<ActiveCampaignDispatch>
+     */
+    public function enqueueCallRequestedOutbox(Cart $cart, CartEvent $cartEvent): array
+    {
+        $dispatches = [];
+        $interactionId = $this->resolveInteractionIdFromCartEvent($cartEvent);
+
+        if ($interactionId === null) {
+            return $dispatches;
+        }
+
+        $tagDispatch = $this->enqueueCallRequestedTagFromCartEvent($cart, $cartEvent, $interactionId);
+        if ($tagDispatch instanceof ActiveCampaignDispatch) {
+            $dispatches[] = $tagDispatch;
+        }
+
+        $siteDispatch = $this->enqueueCallRequestedSiteEventFromCartEvent($cart, $cartEvent, $interactionId);
+        if ($siteDispatch instanceof ActiveCampaignDispatch) {
+            $dispatches[] = $siteDispatch;
+        }
+
+        return $dispatches;
+    }
+
+    /**
+     * @return list<ActiveCampaignDispatch>
+     */
+    public function enqueueCallAttemptedOutbox(Cart $cart, CartEvent $cartEvent): array
+    {
+        $dispatches = [];
+        $interactionId = $this->resolveInteractionIdFromCartEvent($cartEvent);
+
+        if ($interactionId === null) {
+            return $dispatches;
+        }
+
+        $tagDispatch = $this->enqueueCallAttemptedTagFromCartEvent($cart, $cartEvent, $interactionId);
+        if ($tagDispatch instanceof ActiveCampaignDispatch) {
+            $dispatches[] = $tagDispatch;
+        }
+
+        $siteDispatch = $this->enqueueCallAttemptedSiteEventFromCartEvent($cart, $cartEvent, $interactionId);
+        if ($siteDispatch instanceof ActiveCampaignDispatch) {
+            $dispatches[] = $siteDispatch;
+        }
+
+        return $dispatches;
+    }
+
+    /**
+     * @return list<ActiveCampaignDispatch>
+     */
+    public function enqueueCartCompletedOutbox(Cart $cart, CartEvent $cartEvent): array
+    {
+        return $this->enqueueAppointmentPendingTagRemovesForCart(
+            $cart,
+            CartEventType::CartCompleted->value,
+        );
+    }
+
+    public function enqueueAppointmentPendingTagFromCartEvent(Cart $cart, CartEvent $cartEvent): ?ActiveCampaignDispatch
+    {
+        if (! $this->isCartAppointmentSignalsEnabled()) {
+            return null;
+        }
+
+        $appointmentId = $this->resolveAppointmentIdFromCartEvent($cartEvent);
+        if ($appointmentId === null) {
+            return null;
+        }
+
+        return $this->dispatchTagAdd(
+            cart: $cart,
+            tagKey: 'cart.appointment_pending',
+            eventType: CartEventType::AppointmentPending5m->value,
+            idempotencyKey: $this->idempotencyKeyForAppointmentPendingTag($appointmentId),
+            payloadExtras: $this->appointmentSignalPayloadExtras($cartEvent),
+        );
+    }
+
+    public function enqueueAppointmentPendingSiteEventFromCartEvent(Cart $cart, CartEvent $cartEvent): ?ActiveCampaignDispatch
+    {
+        if (! $this->isCartAppointmentSignalsEnabled() || ! $this->isCartSiteEventsEnabled()) {
+            return null;
+        }
+
+        $appointmentId = $this->resolveAppointmentIdFromCartEvent($cartEvent);
+        if ($appointmentId === null) {
+            return null;
+        }
+
+        return $this->dispatchSiteEvent(
+            cart: $cart,
+            siteEvent: ActiveCampaignSiteEvent::AppointmentPending5m,
+            cartEvent: $cartEvent,
+            sourceEventType: CartEventType::AppointmentPending5m->value,
+            idempotencyKey: $this->idempotencyKeyForAppointmentPendingSiteEvent($appointmentId),
+            payloadExtras: $this->appointmentSignalPayloadExtras($cartEvent),
+        );
+    }
+
+    public function enqueueAppointmentPendingTagRemove(
+        Cart $cart,
+        CartEvent $cartEvent,
+        int $appointmentId,
+    ): ?ActiveCampaignDispatch {
+        if (! $this->isCartAppointmentSignalsEnabled() || ! $this->isCartTagRemoveEnabled()) {
+            return null;
+        }
+
+        return $this->dispatchTagRemove(
+            cart: $cart,
+            tagKey: 'cart.appointment_pending',
+            eventType: CartEventType::AppointmentConfirmed->value,
+            idempotencyKey: $this->idempotencyKeyForAppointmentPendingTagRemove($appointmentId),
+            payloadExtras: $this->appointmentSignalPayloadExtras($cartEvent, $appointmentId),
+        );
+    }
+
+    public function enqueueAppointmentConfirmedSiteEventFromCartEvent(
+        Cart $cart,
+        CartEvent $cartEvent,
+        int $appointmentId,
+    ): ?ActiveCampaignDispatch {
+        if (! $this->isCartAppointmentSignalsEnabled() || ! $this->isCartSiteEventsEnabled()) {
+            return null;
+        }
+
+        return $this->dispatchSiteEvent(
+            cart: $cart,
+            siteEvent: ActiveCampaignSiteEvent::AppointmentConfirmed,
+            cartEvent: $cartEvent,
+            sourceEventType: CartEventType::AppointmentConfirmed->value,
+            idempotencyKey: $this->idempotencyKeyForAppointmentConfirmedSiteEvent($appointmentId),
+            payloadExtras: $this->appointmentSignalPayloadExtras($cartEvent, $appointmentId),
+        );
+    }
+
+    public function enqueueCallRequestedTagFromCartEvent(
+        Cart $cart,
+        CartEvent $cartEvent,
+        int $interactionId,
+    ): ?ActiveCampaignDispatch {
+        if (! $this->isCartCallSignalsEnabled()) {
+            return null;
+        }
+
+        return $this->dispatchTagAdd(
+            cart: $cart,
+            tagKey: 'call.requested',
+            eventType: CartEventType::CallRequested->value,
+            idempotencyKey: $this->idempotencyKeyForCallRequestedTag($interactionId),
+            payloadExtras: $this->callSignalPayloadExtras($cartEvent, $interactionId),
+        );
+    }
+
+    public function enqueueCallRequestedSiteEventFromCartEvent(
+        Cart $cart,
+        CartEvent $cartEvent,
+        int $interactionId,
+    ): ?ActiveCampaignDispatch {
+        if (! $this->isCartCallSignalsEnabled() || ! $this->isCartSiteEventsEnabled()) {
+            return null;
+        }
+
+        return $this->dispatchSiteEvent(
+            cart: $cart,
+            siteEvent: ActiveCampaignSiteEvent::CallRequested,
+            cartEvent: $cartEvent,
+            sourceEventType: CartEventType::CallRequested->value,
+            idempotencyKey: $this->idempotencyKeyForCallRequestedSiteEvent($interactionId),
+            payloadExtras: $this->callSignalPayloadExtras($cartEvent, $interactionId),
+        );
+    }
+
+    public function enqueueCallAttemptedTagFromCartEvent(
+        Cart $cart,
+        CartEvent $cartEvent,
+        int $interactionId,
+    ): ?ActiveCampaignDispatch {
+        if (! $this->isCartCallSignalsEnabled()) {
+            return null;
+        }
+
+        return $this->dispatchTagAdd(
+            cart: $cart,
+            tagKey: 'call.attempted',
+            eventType: CartEventType::CallAttempted->value,
+            idempotencyKey: $this->idempotencyKeyForCallAttemptedTag($interactionId),
+            payloadExtras: $this->callSignalPayloadExtras($cartEvent, $interactionId),
+        );
+    }
+
+    public function enqueueCallAttemptedSiteEventFromCartEvent(
+        Cart $cart,
+        CartEvent $cartEvent,
+        int $interactionId,
+    ): ?ActiveCampaignDispatch {
+        if (! $this->isCartCallSignalsEnabled() || ! $this->isCartSiteEventsEnabled()) {
+            return null;
+        }
+
+        return $this->dispatchSiteEvent(
+            cart: $cart,
+            siteEvent: ActiveCampaignSiteEvent::CallAttempted,
+            cartEvent: $cartEvent,
+            sourceEventType: CartEventType::CallAttempted->value,
+            idempotencyKey: $this->idempotencyKeyForCallAttemptedSiteEvent($interactionId),
+            payloadExtras: $this->callSignalPayloadExtras($cartEvent, $interactionId),
+        );
+    }
+
+    /**
+     * @return list<ActiveCampaignDispatch>
+     */
+    private function enqueueAppointmentPendingTagRemovesForCart(Cart $cart, string $sourceEventType): array
+    {
+        if (! $this->isCartAppointmentSignalsEnabled() || ! $this->isCartTagRemoveEnabled()) {
+            return [];
+        }
+
+        $dispatches = [];
+
+        CartEvent::query()
+            ->where('cart_id', $cart->id)
+            ->where('event', CartEventType::AppointmentPending5m->value)
+            ->orderBy('id')
+            ->get()
+            ->each(function (CartEvent $pendingEvent) use ($cart, $sourceEventType, &$dispatches) {
+                $appointmentId = $this->resolveAppointmentIdFromCartEvent($pendingEvent);
+                if ($appointmentId === null) {
+                    return;
+                }
+
+                $dispatch = $this->dispatchTagRemove(
+                    cart: $cart,
+                    tagKey: 'cart.appointment_pending',
+                    eventType: $sourceEventType,
+                    idempotencyKey: $this->idempotencyKeyForAppointmentPendingTagRemove($appointmentId),
+                    payloadExtras: $this->appointmentSignalPayloadExtras($pendingEvent, $appointmentId),
+                );
+
+                if ($dispatch instanceof ActiveCampaignDispatch) {
+                    $dispatches[] = $dispatch;
+                }
+            });
 
         return $dispatches;
     }
@@ -480,6 +838,56 @@ class ActiveCampaignOutboundDispatcher
         $this->dispatchJobIfPending($dispatch);
 
         return $dispatch;
+    }
+
+    private function resolveAppointmentIdFromCartEvent(CartEvent $cartEvent): ?int
+    {
+        $metadata = is_array($cartEvent->metadata) ? $cartEvent->metadata : [];
+        $appointmentId = $metadata['appointment_id'] ?? $metadata['laboratory_appointment_id'] ?? null;
+
+        return is_numeric($appointmentId) ? (int) $appointmentId : null;
+    }
+
+    private function resolveInteractionIdFromCartEvent(CartEvent $cartEvent): ?int
+    {
+        $metadata = is_array($cartEvent->metadata) ? $cartEvent->metadata : [];
+        $interactionId = $metadata['interaction_id'] ?? null;
+
+        return is_numeric($interactionId) ? (int) $interactionId : null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function appointmentSignalPayloadExtras(CartEvent $cartEvent, ?int $appointmentId = null): array
+    {
+        $metadata = is_array($cartEvent->metadata) ? $cartEvent->metadata : [];
+        $appointmentId ??= $this->resolveAppointmentIdFromCartEvent($cartEvent);
+
+        return array_merge(
+            $this->baseCartEventPayloadExtras($cartEvent, $metadata, null),
+            array_filter([
+                'appointment_id' => $appointmentId,
+                'brand' => $metadata['brand'] ?? null,
+            ], static fn ($value) => $value !== null),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function callSignalPayloadExtras(CartEvent $cartEvent, int $interactionId): array
+    {
+        $metadata = is_array($cartEvent->metadata) ? $cartEvent->metadata : [];
+
+        return array_merge(
+            $this->baseCartEventPayloadExtras($cartEvent, $metadata, null),
+            array_filter([
+                'appointment_id' => $this->resolveAppointmentIdFromCartEvent($cartEvent),
+                'interaction_id' => $interactionId,
+                'brand' => $metadata['brand'] ?? null,
+            ], static fn ($value) => $value !== null),
+        );
     }
 
     /**

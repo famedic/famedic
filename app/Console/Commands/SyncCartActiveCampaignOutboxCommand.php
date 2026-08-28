@@ -18,6 +18,11 @@ class SyncCartActiveCampaignOutboxCommand extends Command
         CartEventType::CartAbandoned->value,
         CartEventType::CartResumed->value,
         CartEventType::CartRecovered->value,
+        CartEventType::AppointmentPending5m->value,
+        CartEventType::AppointmentConfirmed->value,
+        CartEventType::CallRequested->value,
+        CartEventType::CallAttempted->value,
+        CartEventType::CartCompleted->value,
     ];
 
     public function __construct(

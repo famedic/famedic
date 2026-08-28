@@ -569,9 +569,7 @@ class Cart extends Model
             return null;
         }
 
-        $explicit = $this->relationLoaded('laboratoryPurchases')
-            ? $this->laboratoryPurchases->sortByDesc('created_at')->first()
-            : $this->laboratoryPurchases()->latest()->first();
+        $explicit = $this->explicitLaboratoryPurchase();
 
         if ($explicit) {
             return $explicit;
@@ -593,6 +591,38 @@ class Cart extends Model
             )
             ->latest()
             ->first();
+    }
+
+    /**
+     * Compra ligada explícitamente a este carrito (cart_id). Sin fallback histórico del customer.
+     */
+    public function explicitLaboratoryPurchase(): ?LaboratoryPurchase
+    {
+        if ($this->type !== MonitoringCartType::Lab) {
+            return null;
+        }
+
+        return $this->relationLoaded('laboratoryPurchases')
+            ? $this->laboratoryPurchases->sortByDesc('created_at')->first()
+            : $this->laboratoryPurchases()->latest()->first();
+    }
+
+    /**
+     * Citas ligadas explícitamente a este carrito (cart_id). Sin fallback histórico del customer.
+     *
+     * @return \Illuminate\Support\Collection<int, LaboratoryAppointment>
+     */
+    public function explicitLaboratoryAppointments(): Collection
+    {
+        if ($this->type !== MonitoringCartType::Lab) {
+            return collect();
+        }
+
+        $appointments = $this->relationLoaded('laboratoryAppointments')
+            ? $this->laboratoryAppointments
+            : $this->laboratoryAppointments()->get();
+
+        return $appointments->sortByDesc('updated_at')->values();
     }
 
     /**

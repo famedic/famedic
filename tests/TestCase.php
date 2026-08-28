@@ -17,6 +17,18 @@ abstract class TestCase extends BaseTestCase
 
         $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
+        $testDbPath = dirname(__DIR__).'/database/test_db.sqlite';
+        $app->instance('env', 'testing');
+        config([
+            'app.env' => 'testing',
+            'database.default' => 'sqlite',
+            'database.connections.sqlite.database' => $testDbPath,
+            'services.activecampaign.cart_site_events_enabled' => false,
+            'services.activecampaign.cart_tag_remove_enabled' => false,
+            'scout.driver' => 'collection',
+            'scout.queue' => false,
+        ]);
+
         return $app;
     }
 
