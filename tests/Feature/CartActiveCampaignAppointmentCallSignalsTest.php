@@ -261,7 +261,7 @@ it('does not contaminate journey with appointment pending from another cart', fu
 
     $this->getJson(route('admin.carts.show', $cartB))
         ->assertOk()
-        ->assertJsonPath('data.journey.3.detail', 'No seleccionada')
+        ->assertJsonPath('data.journey.3.detail', 'No iniciada')
         ->assertJsonPath('data.appointment', null);
 });
 

@@ -699,7 +699,7 @@ class CartController extends Controller
         $journeyPaymentInsight = $this->journeyEligiblePaymentInsight($paymentInsight);
         $paymentStatus = $finalPayment !== null
             ? ['state' => 'completed', 'detail' => $finalPayment['method_label']]
-            : $this->paymentJourneyStatus($journeyPaymentInsight);
+            : $this->paymentJourneyStatus($journeyPaymentInsight, $cart, $checkoutEntries);
         $isCompleted = $cart->status === MonitoringCartStatus::Completed && $purchase !== null;
 
         return [
@@ -724,8 +724,8 @@ class CartController extends Controller
             [
                 'key' => 'appointment',
                 'label' => 'Cita',
-                'state' => $this->appointmentJourneyState($requiresAppointment, $appointment),
-                'detail' => $this->appointmentJourneyDetail($requiresAppointment, $appointment),
+                'state' => $this->appointmentJourneyState($requiresAppointment, $appointment, $cart),
+                'detail' => $this->appointmentJourneyDetail($requiresAppointment, $appointment, $cart),
             ],
             [
                 'key' => 'payment',
@@ -1066,56 +1066,111 @@ class CartController extends Controller
             ->exists();
     }
 
-    private function appointmentJourneyState(bool $requiresAppointment, ?LaboratoryAppointment $appointment): string
+    private function appointmentJourneyState(bool $requiresAppointment, ?LaboratoryAppointment $appointment, Cart $cart): string
     {
         if (! $requiresAppointment) {
             return 'pending';
         }
 
-        if (! $appointment) {
-            return 'pending';
+        if ($appointment?->confirmed_at !== null) {
+            return 'completed';
         }
 
-        return $appointment->confirmed_at === null ? 'current' : 'completed';
+        if ($appointment !== null || $this->cartHasTraceabilityEvent($cart, 'appointment_requested')) {
+            return 'current';
+        }
+
+        return 'pending';
     }
 
-    private function appointmentJourneyDetail(bool $requiresAppointment, ?LaboratoryAppointment $appointment): string
+    private function appointmentJourneyDetail(bool $requiresAppointment, ?LaboratoryAppointment $appointment, Cart $cart): string
     {
         if (! $requiresAppointment) {
             return 'No aplica';
         }
 
-        if (! $appointment) {
-            return 'No seleccionada';
+        if ($appointment !== null) {
+            if ($appointment->confirmed_at === null) {
+                return 'Esperando confirmación';
+            }
+
+            return $appointment->laboratory_purchase_id === null ? 'Confirmada sin pago' : 'Confirmada';
         }
 
-        if ($appointment->confirmed_at === null) {
-            return 'Pendiente';
+        if ($this->cartHasTraceabilityEvent($cart, 'appointment_requested')) {
+            return 'Solicitud recibida';
         }
 
-        return $appointment->laboratory_purchase_id === null ? 'Confirmada sin pago' : 'Confirmada';
+        return 'No iniciada';
     }
 
     /**
+     * @param  list<array<string, mixed>>  $checkoutEntries
      * @return array{state: string, detail: string}
      */
-    private function paymentJourneyStatus(?array $paymentInsight): array
+    private function paymentJourneyStatus(?array $paymentInsight, Cart $cart, array $checkoutEntries): array
     {
-        if ($paymentInsight === null) {
-            return ['state' => 'pending', 'detail' => 'No iniciado'];
+        if ($paymentInsight !== null) {
+            if (($paymentInsight['confidence'] ?? null) === 'ambiguous') {
+                return ['state' => 'pending', 'detail' => 'Información no determinada'];
+            }
+
+            return match ($paymentInsight['status'] ?? null) {
+                PaymentAttempt::STATUS_APPROVED => ['state' => 'completed', 'detail' => 'Aprobado'],
+                PaymentAttempt::STATUS_DECLINED => ['state' => 'failed', 'detail' => 'Rechazado'],
+                PaymentAttempt::STATUS_ERROR => ['state' => 'failed', 'detail' => 'Error técnico'],
+                PaymentAttempt::STATUS_PENDING, PaymentAttempt::STATUS_PROCESSING => ['state' => 'current', 'detail' => 'Pendiente'],
+                default => ['state' => 'pending', 'detail' => 'No iniciado'],
+            };
         }
 
-        if (($paymentInsight['confidence'] ?? null) === 'ambiguous') {
-            return ['state' => 'pending', 'detail' => 'Información no determinada'];
+        $selectedMethodLabel = $this->journeySelectedPaymentMethodLabel($cart, $checkoutEntries);
+        if ($selectedMethodLabel !== null) {
+            return ['state' => 'current', 'detail' => 'Método seleccionado: '.$selectedMethodLabel];
         }
 
-        return match ($paymentInsight['status'] ?? null) {
-            PaymentAttempt::STATUS_APPROVED => ['state' => 'completed', 'detail' => 'Aprobado'],
-            PaymentAttempt::STATUS_DECLINED => ['state' => 'failed', 'detail' => 'Rechazado'],
-            PaymentAttempt::STATUS_ERROR => ['state' => 'failed', 'detail' => 'Error técnico'],
-            PaymentAttempt::STATUS_PENDING, PaymentAttempt::STATUS_PROCESSING => ['state' => 'current', 'detail' => 'Pendiente'],
-            default => ['state' => 'pending', 'detail' => 'No iniciado'],
-        };
+        return ['state' => 'pending', 'detail' => 'No iniciado'];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $checkoutEntries
+     */
+    private function journeySelectedPaymentMethodLabel(Cart $cart, array $checkoutEntries): ?string
+    {
+        $eventLabel = $this->latestCartEventPaymentMethodLabel($cart);
+        if ($eventLabel !== null) {
+            return $eventLabel;
+        }
+
+        foreach ($checkoutEntries as $entry) {
+            $label = $entry['payment_method_label'] ?? null;
+            if (filled($label)) {
+                return (string) $label;
+            }
+        }
+
+        return null;
+    }
+
+    private function latestCartEventPaymentMethodLabel(Cart $cart): ?string
+    {
+        $events = $cart->relationLoaded('events')
+            ? $cart->events
+            : $cart->events()->orderByDesc('occurred_at')->orderByDesc('id')->get();
+
+        $event = $events
+            ->filter(fn (CartEvent $row) => ($row->event?->value ?? (string) $row->event) === 'payment_method_selected')
+            ->sortByDesc(fn (CartEvent $row) => ($row->occurred_at?->format('U.u') ?? '0').'-'.$row->id)
+            ->first();
+
+        if ($event === null) {
+            return null;
+        }
+
+        $metadata = is_array($event->metadata) ? $event->metadata : [];
+        $gateway = (string) ($metadata['gateway'] ?? $metadata['payment_method_type'] ?? '');
+
+        return $this->paymentMethodDisplayLabel($gateway !== '' ? $gateway : null);
     }
 
     /**
@@ -1591,6 +1646,7 @@ class CartController extends Controller
             'checkout_started' => 'Checkout iniciado',
             'patient_selected' => 'Paciente seleccionado',
             'address_selected' => 'Direccion seleccionada',
+            'payment_method_selected' => 'Método de pago seleccionado',
             'appointment_requested' => 'Cita solicitada',
             'appointment_pending_5m' => 'Cita pendiente por 5 min',
             'appointment_confirmed' => 'Cita confirmada',
@@ -1634,6 +1690,9 @@ class CartController extends Controller
             'appointment_requested' => isset($metadata['appointment_id'])
                 ? 'Cita #'.(int) $metadata['appointment_id']
                 : null,
+            'payment_method_selected' => isset($metadata['gateway'])
+                ? $this->paymentMethodDisplayLabel((string) $metadata['gateway'])
+                : null,
             'appointment_pending_5m' => isset($metadata['minutes_pending'])
                 ? (int) $metadata['minutes_pending'].' min sin confirmar'
                 : null,
@@ -1674,6 +1733,8 @@ class CartController extends Controller
                 'episodes_count',
                 'last_episode',
                 'purchase_id',
+                'payment_method_type',
+                'gateway',
             ])
             ->filter(fn ($value) => $value !== null && $value !== '')
             ->all();

@@ -158,6 +158,50 @@ class SyncLaboratoryCheckoutDraftAction
                 source: 'laboratory_checkout',
             );
         }
+
+        if ($payload['step'] === 'payment' && filled($payload['payment_method'] ?? null)) {
+            $paymentMetadata = $this->paymentMethodEventMetadata(
+                (string) $payload['payment_method'],
+                $laboratoryBrand,
+            );
+
+            $this->cartEventRecorder->recordOnce(
+                $cart,
+                CartEventType::PaymentMethodSelected,
+                "cart:{$cart->id}:payment_method:{$payload['payment_method']}",
+                $this->withClientContext($paymentMetadata, $clientContext),
+                source: 'laboratory_checkout',
+            );
+        }
+    }
+
+    /**
+     * @return array{payment_method_type: string, gateway: string, brand: string}
+     */
+    private function paymentMethodEventMetadata(string $paymentMethod, LaboratoryBrand $laboratoryBrand): array
+    {
+        return match ($paymentMethod) {
+            'odessa' => [
+                'payment_method_type' => 'odessa',
+                'gateway' => 'odessa',
+                'brand' => $laboratoryBrand->value,
+            ],
+            'paypal' => [
+                'payment_method_type' => 'paypal',
+                'gateway' => 'paypal',
+                'brand' => $laboratoryBrand->value,
+            ],
+            'coupon_balance' => [
+                'payment_method_type' => 'coupon_balance',
+                'gateway' => 'coupon_balance',
+                'brand' => $laboratoryBrand->value,
+            ],
+            default => [
+                'payment_method_type' => ctype_digit($paymentMethod) ? 'efevoo_token' : $paymentMethod,
+                'gateway' => 'efevoopay',
+                'brand' => $laboratoryBrand->value,
+            ],
+        };
     }
 
     /**

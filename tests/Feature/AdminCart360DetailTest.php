@@ -200,7 +200,7 @@ it('shows a pending appointment in the drawer', function () {
     $this->getJson(route('admin.carts.show', $cart))
         ->assertOk()
         ->assertJsonPath('data.appointment.status_label', 'Pendiente')
-        ->assertJsonPath('data.checkout.journey.3.detail', 'Pendiente');
+        ->assertJsonPath('data.checkout.journey.3.detail', 'Esperando confirmación');
 });
 
 it('shows a confirmed appointment without payment', function () {
@@ -937,7 +937,7 @@ it('does not contaminate journey general for a pre-checkout cart when customer h
         ->assertJsonPath('data.journey.1.detail', 'No registrado')
         ->assertJsonPath('data.journey.2.state', 'pending')
         ->assertJsonPath('data.journey.2.detail', 'No registrada')
-        ->assertJsonPath('data.journey.3.detail', 'No seleccionada')
+        ->assertJsonPath('data.journey.3.detail', 'No iniciada')
         ->assertJsonPath('data.journey.4.state', 'pending')
         ->assertJsonPath('data.journey.4.detail', 'No iniciado')
         ->assertJsonPath('data.journey.5.state', 'pending')
@@ -1010,7 +1010,7 @@ it('does not use historical purchase payment or appointment fallbacks in journey
         ->assertOk()
         ->assertJsonPath('data.journey.1.detail', 'No registrado')
         ->assertJsonPath('data.journey.2.detail', 'No registrada')
-        ->assertJsonPath('data.journey.3.detail', 'No seleccionada')
+        ->assertJsonPath('data.journey.3.detail', 'No iniciada')
         ->assertJsonPath('data.journey.4.detail', 'No iniciado')
         ->assertJsonPath('data.journey.5.detail', 'Sin compra')
         ->assertJsonPath('data.appointment', null)
