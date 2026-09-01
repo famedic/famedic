@@ -27,6 +27,7 @@ import ConfirmationStep from "@/Components/Checkout/ConfirmationStep";
 import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
 import LaboratoryAppointmentStep from "@/Components/Checkout/LaboratoryAppointmentStep";
 import LaboratoryPayPalButton from "@/Components/Checkout/LaboratoryPayPalButton";
+import { usePayPalFundingEligibility } from "@/Hooks/usePayPalFundingEligibility";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import Card from "@/Components/Card";
 import { Button } from "@/Components/Catalyst/button";
@@ -52,7 +53,16 @@ const BASE_WIZARD_STEPS = [
     { id: "payment", number: 3, label: "Método de Pago" },
 ];
 
-function buildWizardSteps(requiresAppointment) {
+function buildWizardSteps(requiresAppointment, usesAppointmentFirstFlow = false) {
+    if (usesAppointmentFirstFlow) {
+        return [
+            { id: "patient", number: 1, label: "Paciente" },
+            { id: "address", number: 2, label: "Dirección" },
+            { id: "appointment", number: 3, label: "Cita" },
+            { id: "payment", number: 4, label: "Pago" },
+        ];
+    }
+
     if (requiresAppointment) {
         return [
             ...BASE_WIZARD_STEPS,
@@ -75,9 +85,47 @@ function resolveActiveStepId(
     requiresAppointment,
     laboratoryAppointment,
     savedCheckout = null,
+    usesAppointmentFirstFlow = false,
 ) {
     const params = new URLSearchParams(window.location.search);
     let stepId = params.get("step");
+
+    if (usesAppointmentFirstFlow) {
+        if (stepId === "confirmation") {
+            stepId = laboratoryAppointment?.confirmed_at ? "payment" : "appointment";
+        }
+
+        if (
+            (stepId === "payment" || stepId === "confirmation") &&
+            (!laboratoryAppointment?.confirmed_at || laboratoryAppointment?.is_payable === false)
+        ) {
+            stepId = "appointment";
+        }
+
+        if (!stepId && savedCheckout?.checkout_step) {
+            stepId = savedCheckout.checkout_step;
+            if (stepId === "confirmation") {
+                stepId = laboratoryAppointment?.confirmed_at ? "payment" : "appointment";
+            }
+            if (
+                (stepId === "payment" || stepId === "confirmation") &&
+                (!laboratoryAppointment?.confirmed_at ||
+                    laboratoryAppointment?.is_payable === false)
+            ) {
+                stepId = "appointment";
+            }
+        }
+
+        if (
+            !stepId &&
+            laboratoryAppointment?.confirmed_at &&
+            laboratoryAppointment?.is_payable !== false
+        ) {
+            return "payment";
+        }
+
+        return stepId;
+    }
 
     if (stepId) {
         if (
@@ -116,11 +164,13 @@ function resolveInitialStepIndex(
     laboratoryAppointment,
     brand,
     savedCheckout = null,
+    usesAppointmentFirstFlow = false,
 ) {
     const stepId = resolveActiveStepId(
         requiresAppointment,
         laboratoryAppointment,
         savedCheckout,
+        usesAppointmentFirstFlow,
     );
 
     if (stepId) {
@@ -189,6 +239,8 @@ function resolveInitialCheckoutData(savedCheckout = null) {
 
 export default function LaboratoryCheckout({
     requiresAppointment = false,
+    usesAppointmentFirstFlow = false,
+    checkoutStepNotice = null,
     laboratoryAppointment,
     pendingLaboratoryAppointment: pendingLaboratoryAppointmentProp = null,
     callbackPreferenceSavedAtFormatted,
@@ -263,9 +315,23 @@ export default function LaboratoryCheckout({
             defaultMockPaymentMethodId &&
             !data.payment_method
         ) {
+            if (usesAppointmentFirstFlow) {
+                const step = new URLSearchParams(window.location.search).get("step");
+                if (step !== "payment") {
+                    return;
+                }
+            }
+
             setData("payment_method", String(defaultMockPaymentMethodId));
         }
-    }, [paymentUsesMock, defaultMockPaymentMethodId, data.payment_method, setData]);
+    }, [
+        paymentUsesMock,
+        defaultMockPaymentMethodId,
+        data.payment_method,
+        setData,
+        usesAppointmentFirstFlow,
+        url,
+    ]);
 
     transform((data) => ({
         ...data,
@@ -364,8 +430,8 @@ export default function LaboratoryCheckout({
     const needsAppointment = requiresAppointment || cartRequiresAppointment;
 
     const wizardSteps = useMemo(
-        () => buildWizardSteps(needsAppointment),
-        [needsAppointment],
+        () => buildWizardSteps(needsAppointment, usesAppointmentFirstFlow),
+        [needsAppointment, usesAppointmentFirstFlow],
     );
 
     const [pendingLaboratoryAppointment, setPendingLaboratoryAppointment] =
@@ -606,6 +672,10 @@ export default function LaboratoryCheckout({
         !contactStepIsComplete ||
         (needsAppointment && !laboratoryAppointment?.confirmed_at);
 
+    const paypalFundingEligibility = usePayPalFundingEligibility(
+        hasPayPal && paypalClientId ? paypalClientId : null,
+    );
+
     const [currentStepIndex, setCurrentStepIndex] = useState(() => {
         const cartNeeds = (laboratoryCarts?.[laboratoryBrand.value] ?? []).some(
             (item) => item.laboratory_test?.requires_appointment,
@@ -613,11 +683,12 @@ export default function LaboratoryCheckout({
         const needs = requiresAppointment || cartNeeds;
 
         return resolveInitialStepIndex(
-            buildWizardSteps(needs),
+            buildWizardSteps(needs, usesAppointmentFirstFlow),
             needs,
             laboratoryAppointment,
             laboratoryBrand.value,
             savedCheckout,
+            usesAppointmentFirstFlow,
         );
     });
     const [syncingAppointment, setSyncingAppointment] = useState(false);
@@ -626,9 +697,12 @@ export default function LaboratoryCheckout({
     const stepContentRef = useRef(null);
     const skipStepScrollRef = useRef(true);
     const appointmentAutoSyncRef = useRef(false);
+    const appointmentPollingInFlightRef = useRef(false);
     const scrollToSummaryAfterApplyRef = useRef(false);
 
     const currentStep = wizardSteps[currentStepIndex];
+    const isUnifiedPaymentStep =
+        usesAppointmentFirstFlow && currentStep.id === "payment";
 
     const persistWizardState = (stepId) => {
         const filteredData = Object.fromEntries(
@@ -660,6 +734,7 @@ export default function LaboratoryCheckout({
             needsAppointment,
             laboratoryAppointment,
             savedCheckout,
+            usesAppointmentFirstFlow,
         );
 
         if (!stepId) {
@@ -675,6 +750,7 @@ export default function LaboratoryCheckout({
         laboratoryAppointment,
         savedCheckout,
         wizardSteps,
+        usesAppointmentFirstFlow,
     ]);
 
     const persistWizardFormDataToUrl = useCallback(() => {
@@ -775,7 +851,9 @@ export default function LaboratoryCheckout({
                     contact_id: Number(data.contact),
                     contact: data.contact,
                     address: data.address,
-                    payment_method: data.payment_method,
+                    ...(usesAppointmentFirstFlow
+                        ? {}
+                        : { payment_method: data.payment_method }),
                 },
                 {
                     preserveScroll: true,
@@ -801,11 +879,20 @@ export default function LaboratoryCheckout({
             data.payment_method,
             laboratoryBrand.value,
             setError,
+            usesAppointmentFirstFlow,
         ],
     );
 
     const syncCheckoutDraft = useCallback(() => {
             if (!["patient", "address", "payment"].includes(currentStep.id)) {
+                return;
+            }
+
+            if (
+                usesAppointmentFirstFlow &&
+                currentStep.id === "payment" &&
+                !laboratoryAppointment?.confirmed_at
+            ) {
                 return;
             }
 
@@ -862,6 +949,8 @@ export default function LaboratoryCheckout({
             laboratoryBrand.value,
             setError,
             syncStepFromLocation,
+            usesAppointmentFirstFlow,
+            laboratoryAppointment?.confirmed_at,
         ],
     );
 
@@ -910,12 +999,21 @@ export default function LaboratoryCheckout({
         }
 
         const intervalId = setInterval(() => {
+            if (appointmentPollingInFlightRef.current) {
+                return;
+            }
+
+            appointmentPollingInFlightRef.current = true;
             router.reload({
                 only: [
                     "laboratoryAppointment",
                     "pendingLaboratoryAppointment",
                     "callbackPreferenceSavedAtFormatted",
+                    "checkoutStepNotice",
                 ],
+                onFinish: () => {
+                    appointmentPollingInFlightRef.current = false;
+                },
             });
         }, 10000);
 
@@ -931,6 +1029,26 @@ export default function LaboratoryCheckout({
     ]);
 
     useEffect(() => {
+        if (usesAppointmentFirstFlow) {
+            if (
+                laboratoryAppointment?.confirmed_at &&
+                laboratoryAppointment?.is_payable !== false &&
+                currentStep.id === "appointment"
+            ) {
+                goToStep("payment");
+            }
+
+            if (
+                currentStep.id === "payment" &&
+                (!laboratoryAppointment?.confirmed_at ||
+                    laboratoryAppointment?.is_payable === false)
+            ) {
+                goToStep("appointment");
+            }
+
+            return;
+        }
+
         if (
             needsAppointment &&
             wizardLaboratoryAppointment?.confirmed_at &&
@@ -939,9 +1057,11 @@ export default function LaboratoryCheckout({
             goToStep("confirmation");
         }
     }, [
-        wizardLaboratoryAppointment?.confirmed_at,
+        laboratoryAppointment?.confirmed_at,
+        laboratoryAppointment?.is_payable,
         needsAppointment,
         currentStep.id,
+        usesAppointmentFirstFlow,
     ]);
 
     useEffect(() => {
@@ -1023,7 +1143,7 @@ export default function LaboratoryCheckout({
     );
 
     const confirmationLegalText =
-        currentStep.id === "confirmation" ? (
+        currentStep.id === "confirmation" || isUnifiedPaymentStep ? (
             <Text className="text-sm text-zinc-600 dark:text-slate-400">
                 Al confirmar tu compra, aceptas los{" "}
                 <a
@@ -1045,30 +1165,40 @@ export default function LaboratoryCheckout({
             </Text>
         ) : null;
 
+    const usesPayPalAtCheckout =
+        hasPayPal &&
+        paypalClientId &&
+        data.payment_method === "paypal";
+
+    const showPayPalCheckoutPanel =
+        usesPayPalAtCheckout &&
+        (currentStep.id === "confirmation" || isUnifiedPaymentStep);
+
+    const laboratoryPayPalCheckoutPanel = showPayPalCheckoutPanel ? (
+        <LaboratoryPayPalButton
+            paypalClientId={paypalClientId}
+            fundingEligibility={paypalFundingEligibility}
+            laboratoryBrand={laboratoryBrand.value}
+            patientId={data.contact}
+            addressId={data.address}
+            totalCents={total}
+            couponId={data.coupon_id}
+            promoValidationToken={data.promo_validation_token}
+            disabled={onlinePaymentDisabled}
+        />
+    ) : null;
+
     const confirmationPaymentActions =
-        currentStep.id === "confirmation" ? (
+        currentStep.id === "confirmation" || isUnifiedPaymentStep ? (
             <>
-                <div
-                    className={clsx(
-                        "w-full",
-                        onlinePaymentDisabled &&
-                            "pointer-events-none opacity-50",
-                    )}
-                >
-                    {hasPayPal &&
-                    paypalClientId &&
-                    data.payment_method === "paypal" ? (
-                        <LaboratoryPayPalButton
-                            paypalClientId={paypalClientId}
-                            laboratoryBrand={laboratoryBrand.value}
-                            patientId={data.contact}
-                            addressId={data.address}
-                            totalCents={total}
-                            couponId={data.coupon_id}
-                            promoValidationToken={data.promo_validation_token}
-                            disabled={onlinePaymentDisabled}
-                        />
-                    ) : (
+                {!usesPayPalAtCheckout && (
+                    <div
+                        className={clsx(
+                            "w-full",
+                            onlinePaymentDisabled &&
+                                "pointer-events-none opacity-50",
+                        )}
+                    >
                         <Button
                             disabled={
                                 onlinePaymentDisabled || checkoutProcessing
@@ -1083,14 +1213,14 @@ export default function LaboratoryCheckout({
                                 <ArrowPathIcon className="ml-2 size-5 animate-spin" />
                             )}
                         </Button>
-                    )}
-                </div>
+                    </div>
+                )}
                 {confirmationLegalText}
             </>
         ) : null;
 
     const wizardFooterActions =
-        currentStep.id !== "confirmation" ? (
+        currentStep.id !== "confirmation" && !isUnifiedPaymentStep ? (
             <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 {currentStepIndex > 0 ? (
                     <Button type="button" plain onClick={handlePrevStep}>
@@ -1152,6 +1282,88 @@ export default function LaboratoryCheckout({
                     />
                 );
             case "payment":
+                if (usesAppointmentFirstFlow) {
+                    const paymentMethodContent =
+                        amountAfterCoupon === 0 &&
+                        (data.coupon_id || hasPromoApplied) ? (
+                            <CheckoutWizardStep
+                                title="Método de pago"
+                                description={`Tu ${
+                                    hasPromoApplied
+                                        ? "código promocional"
+                                        : selectedCoupon
+                                          ? couponCreditTypeLabel(
+                                                selectedCoupon,
+                                            ).toLowerCase()
+                                          : "crédito"
+                                } cubre el total de la compra.`}
+                            >
+                                <div className="flex items-center gap-3 rounded-lg bg-emerald-50 p-4 dark:bg-emerald-950/30">
+                                    <CheckCircleIcon className="size-6 fill-green-600 dark:fill-famedic-lime" />
+                                    <div>
+                                        <Text className="font-medium">
+                                            Pago con{" "}
+                                            {selectedCoupon
+                                                ? couponCreditTypeLabel(
+                                                      selectedCoupon,
+                                                  ).toLowerCase()
+                                                : "crédito"}
+                                        </Text>
+                                        <Text className="text-sm text-zinc-600 dark:text-slate-400">
+                                            No necesitas seleccionar otro método
+                                            de pago.
+                                        </Text>
+                                    </div>
+                                </div>
+                            </CheckoutWizardStep>
+                        ) : (
+                            <PaymentMethodStep
+                                variant="wizard"
+                                data={data}
+                                setData={setData}
+                                errors={errors}
+                                error={errors.payment_method}
+                                clearErrors={clearErrors}
+                                paymentMethods={paymentMethods}
+                                hasOdessaPay={hasOdessaPay}
+                                hasPayPal={hasPayPal}
+                                paypalFundingEligibility={
+                                    paypalFundingEligibility
+                                }
+                                addCardReturnUrl={addCardReturnUrl}
+                                paymentUsesMock={paymentUsesMock}
+                                disabled={
+                                    amountAfterCoupon === 0 &&
+                                    (!!data.coupon_id || hasPromoApplied)
+                                }
+                            />
+                        );
+
+                    return (
+                        <div className="space-y-6">
+                            <CheckoutWizardStep
+                                title="Pago"
+                                description="Tu cita ya está confirmada. Revisa la información y selecciona cómo deseas realizar el pago."
+                            />
+                            <ConfirmationStep
+                                data={data}
+                                contacts={contacts}
+                                addresses={addresses}
+                                paymentMethods={paymentMethods}
+                                hasOdessaPay={hasOdessaPay}
+                                hasPayPal={hasPayPal}
+                                selectedCoupon={selectedCoupon}
+                                laboratoryAppointment={laboratoryAppointment}
+                                onEditStep={goToStep}
+                                includePaymentSection={false}
+                                embedded
+                            />
+                            {paymentMethodContent}
+                            {laboratoryPayPalCheckoutPanel}
+                        </div>
+                    );
+                }
+
                 if (amountAfterCoupon === 0 && (data.coupon_id || hasPromoApplied)) {
                     const creditLabel = hasPromoApplied
                         ? "código promocional"
@@ -1192,6 +1404,7 @@ export default function LaboratoryCheckout({
                         paymentMethods={paymentMethods}
                         hasOdessaPay={hasOdessaPay}
                         hasPayPal={hasPayPal}
+                        paypalFundingEligibility={paypalFundingEligibility}
                         addCardReturnUrl={addCardReturnUrl}
                         paymentUsesMock={paymentUsesMock}
                         disabled={
@@ -1214,7 +1427,7 @@ export default function LaboratoryCheckout({
                             <Text className="text-sm text-zinc-600 dark:text-slate-400">
                                 {waitingForSync
                                     ? "Registrando tu solicitud de cita…"
-                                    : "No pudimos cargar la cita. Usa Volver e intenta de nuevo desde el método de pago."}
+                                    : "No pudimos cargar la cita. Usa Volver e intenta de nuevo."}
                             </Text>
                         </CheckoutWizardStep>
                     );
@@ -1225,21 +1438,35 @@ export default function LaboratoryCheckout({
                         callbackPreferenceSavedAtFormatted={
                             callbackPreferenceSavedAtFormatted
                         }
+                        appointmentFirstFlow={usesAppointmentFirstFlow}
+                        appointmentConfirmed={Boolean(
+                            laboratoryAppointment?.confirmed_at &&
+                                laboratoryAppointment?.is_payable !== false,
+                        )}
+                        appointmentUnavailable={Boolean(
+                            usesAppointmentFirstFlow &&
+                                !laboratoryAppointment &&
+                                !pendingLaboratoryAppointment &&
+                                checkoutStepNotice,
+                        )}
                     />
                 );
             case "confirmation":
                 return (
-                    <ConfirmationStep
-                        data={data}
-                        contacts={contacts}
-                        addresses={addresses}
-                        paymentMethods={paymentMethods}
-                        hasOdessaPay={hasOdessaPay}
-                        hasPayPal={hasPayPal}
-                        selectedCoupon={selectedCoupon}
-                        laboratoryAppointment={laboratoryAppointment}
-                        onEditStep={goToStep}
-                    />
+                    <div className="space-y-6">
+                        <ConfirmationStep
+                            data={data}
+                            contacts={contacts}
+                            addresses={addresses}
+                            paymentMethods={paymentMethods}
+                            hasOdessaPay={hasOdessaPay}
+                            hasPayPal={hasPayPal}
+                            selectedCoupon={selectedCoupon}
+                            laboratoryAppointment={laboratoryAppointment}
+                            onEditStep={goToStep}
+                        />
+                        {laboratoryPayPalCheckoutPanel}
+                    </div>
                 );
             default:
                 return null;
@@ -1325,11 +1552,20 @@ export default function LaboratoryCheckout({
                 }
                 footerActions={wizardFooterActions}
                 summaryActions={confirmationPaymentActions}
-                couponSection={couponSection}
+                couponSection={
+                    usesAppointmentFirstFlow && currentStep.id !== "payment"
+                        ? null
+                        : couponSection
+                }
                 hideDefaultSubmit
                 stepContentRef={stepContentRef}
                 floatingWizardFooter={floatingWizardFooter}
             >
+                {checkoutStepNotice && (
+                    <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
+                        {checkoutStepNotice}
+                    </div>
+                )}
                 {renderStepContent()}
             </CheckoutLayout>
 

@@ -45,12 +45,12 @@ export default function Footer({ className, links }) {
 						</Text>
 					</NavbarItem>
 					<div className="space-y-2">
-						<span className="font-poppins block text-white">
+						<Text className="font-poppins">
 							Salud y tecnología a bajo costo.
-						</span>
-						<span className="font-poppins block text-white">
+						</Text>
+						<Text className="font-poppins">
 							Servicios con cobertura en todo México.
-						</span>
+						</Text>
 						<div className="mt-2 flex justify-start items-center gap-4">
 							{/* Bandera de México - Versión más grande */}
 							<svg 

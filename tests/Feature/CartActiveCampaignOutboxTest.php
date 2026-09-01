@@ -67,12 +67,27 @@ function outboxCart(User $user, int $inactiveMinutes = 45): Cart
     return $cart->fresh(['items', 'user.customer']);
 }
 
+function outboxSeedInactiveUserActivity(Cart $cart, int $inactiveMinutes = 45): Cart
+{
+    CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => CartEventType::PatientSelected->value,
+        'metadata' => [],
+        'occurred_at' => now()->subMinutes($inactiveMinutes),
+        'source' => 'test_setup',
+    ]);
+
+    $cart->update(['updated_at' => now()->subMinutes($inactiveMinutes)]);
+
+    return $cart->fresh(['items', 'user.customer']);
+}
+
 function outboxAbandonedEvent(Cart $cart, int $episode = 1): CartEvent
 {
     $service = app(CartAbandonmentService::class);
-    $cart->update(['updated_at' => now()->subMinutes(45)]);
+    $cart = outboxSeedInactiveUserActivity($cart);
 
-    $event = $service->recordAbandoned($cart->fresh());
+    $event = $service->recordAbandoned($cart);
 
     expect($event)->not->toBeNull()
         ->and($event->metadata['episode'])->toBe($episode);
@@ -130,12 +145,19 @@ it('creates a different dispatch for cart_abandoned episode 2', function () {
 
     CartEvent::query()->create([
         'cart_id' => $cart->id,
-        'event' => CartEventType::CartResumed,
+        'event' => CartEventType::CartResumed->value,
         'metadata' => ['episode' => 1],
-        'occurred_at' => now()->subMinutes(20),
+        'occurred_at' => now()->subMinutes(50),
         'idempotency_key' => 'cart:'.$cart->id.':resumed:episode:1',
     ]);
 
+    CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => CartEventType::PatientSelected->value,
+        'metadata' => [],
+        'occurred_at' => now()->subMinutes(45),
+        'source' => 'test_setup',
+    ]);
     $cart->update(['updated_at' => now()->subMinutes(45)]);
 
     $second = app(CartAbandonmentService::class)->recordAbandoned($cart->fresh());
@@ -274,4 +296,53 @@ it('does not call trackEvent during outbound cart abandoned processing', functio
     (new DispatchActiveCampaignOutboundJob($dispatch->id))->handle(app(\App\Services\ActiveCampaign\ActiveCampaignService::class));
 
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'trackcmp.net'));
+});
+
+it('does not enqueue activecampaign dispatches for payment_method_selected checkout events', function () {
+    Queue::fake();
+    $user = outboxUser(['email' => 'payment-method@example.com']);
+    $cart = outboxCart($user);
+    $contact = \App\Models\Contact::factory()->create(['customer_id' => $user->customer->id]);
+    $address = \App\Models\Address::factory()->create(['customer_id' => $user->customer->id]);
+
+    \App\Models\LaboratoryAppointment::query()->create([
+        'customer_id' => $user->customer->id,
+        'brand' => LaboratoryBrand::OLAB,
+        'cart_id' => $cart->id,
+        'laboratory_store_id' => \App\Models\LaboratoryStore::factory()->create([
+            'brand' => LaboratoryBrand::OLAB->value,
+            'name' => 'Sucursal Test',
+            'address' => 'Calle Test 123',
+            'state' => 'NL',
+            'weekly_hours' => '9-18',
+            'saturday_hours' => '9-14',
+            'sunday_hours' => 'Cerrado',
+            'google_maps_url' => 'https://maps.example.com',
+        ])->id,
+        'patient_name' => 'Ana',
+        'patient_paternal_lastname' => 'Lopez',
+        'patient_maternal_lastname' => 'Perez',
+        'patient_birth_date' => '1990-01-01',
+        'patient_gender' => \App\Enums\Gender::FEMALE,
+        'patient_phone' => '8111111111',
+        'patient_phone_country' => 'MX',
+        'appointment_date' => now()->addDay(),
+        'confirmed_at' => now(),
+    ]);
+
+    ActiveCampaignDispatch::query()->delete();
+
+    app(\App\Actions\Laboratories\SyncLaboratoryCheckoutDraftAction::class)(
+        $user->customer,
+        LaboratoryBrand::OLAB,
+        [
+            'step' => 'payment',
+            'contact_id' => $contact->id,
+            'address_id' => $address->id,
+            'payment_method' => 'paypal',
+        ],
+    );
+
+    expect(CartEvent::query()->where('event', CartEventType::PaymentMethodSelected->value)->count())->toBe(1)
+        ->and(ActiveCampaignDispatch::query()->where('event_type', 'like', '%payment%')->count())->toBe(0);
 });

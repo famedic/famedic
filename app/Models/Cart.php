@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
+use App\Services\Carts\CartUserActivityResolver;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -67,6 +68,18 @@ class Cart extends Model
     }
 
     /**
+     * Última actividad real del usuario (cart_events), no carts.updated_at.
+     */
+    public function lastUserActivityAt(): Carbon
+    {
+        if (! Schema::hasTable('cart_events')) {
+            return $this->updated_at?->copy() ?? $this->created_at?->copy() ?? now();
+        }
+
+        return app(CartUserActivityResolver::class)->lastUserActivityAt($this);
+    }
+
+    /**
      * Activo en carrito, abandonado (sin actividad), vacío (histórico) o comprado.
      */
     public function displayStatus(): string
@@ -79,7 +92,11 @@ class Cart extends Model
             return 'empty';
         }
 
-        if ($this->updated_at->lt(now()->subMinutes(self::abandonedAfterMinutes()))) {
+        if ($this->hasAppointmentPendingConfirmation()) {
+            return 'active';
+        }
+
+        if ($this->lastUserActivityAt()->lt(now()->subMinutes(self::abandonedAfterMinutes()))) {
             return 'abandoned';
         }
 
@@ -126,15 +143,16 @@ class Cart extends Model
     }
 
     /**
-     * Minutos desde la última actividad (updated_at). Null si ya está comprado.
+     * Minutos desde la última actividad real del usuario. Null si ya está comprado.
      */
     public function inactiveForMinutes(): ?int
     {
-        if ($this->status === MonitoringCartStatus::Completed || ! $this->updated_at) {
+        if ($this->status === MonitoringCartStatus::Completed) {
             return null;
         }
 
-        $seconds = max(0, now()->getTimestamp() - $this->updated_at->getTimestamp());
+        $lastActivity = $this->lastUserActivityAt();
+        $seconds = max(0, now()->getTimestamp() - $lastActivity->getTimestamp());
 
         return (int) floor($seconds / 60);
     }
@@ -176,11 +194,11 @@ class Cart extends Model
      */
     public function abandonedAt(): ?Carbon
     {
-        if ($this->displayStatus() !== 'abandoned' || ! $this->updated_at) {
+        if ($this->displayStatus() !== 'abandoned') {
             return null;
         }
 
-        return $this->updated_at->copy()->addMinutes(self::abandonedAfterMinutes());
+        return $this->lastUserActivityAt()->copy()->addMinutes(self::abandonedAfterMinutes());
     }
 
     public function appointmentExportStatus(): string
@@ -228,16 +246,20 @@ class Cart extends Model
 
     public function scopeDisplayStatusFilter($query, string $status): void
     {
+        $activitySql = CartUserActivityResolver::lastActivityAtSql();
+        $staleThreshold = now()->subMinutes(self::abandonedAfterMinutes());
+
         if ($status === 'completed') {
             $query->where('status', MonitoringCartStatus::Completed->value);
         } elseif ($status === 'abandoned') {
             $query->where('status', MonitoringCartStatus::Active->value)
                 ->whereHas('items')
-                ->where('updated_at', '<', now()->subMinutes(self::abandonedAfterMinutes()));
+                ->whereRaw("{$activitySql} < ?", [$staleThreshold])
+                ->where(fn (Builder $q) => $q->whereNot(fn (Builder $inner) => $inner->appointmentPendingConfirmation()));
         } elseif ($status === 'active') {
             $query->where('status', MonitoringCartStatus::Active->value)
                 ->whereHas('items')
-                ->where('updated_at', '>=', now()->subMinutes(self::abandonedAfterMinutes()));
+                ->whereRaw("{$activitySql} >= ?", [$staleThreshold]);
         } elseif ($status === 'empty') {
             $query->where('status', MonitoringCartStatus::Active->value)
                 ->whereDoesntHave('items');
@@ -322,9 +344,11 @@ class Cart extends Model
     public function scopeCheckoutStageFilter(Builder $query, string $stage): void
     {
         if ($stage === 'no_progress') {
+            $activitySql = CartUserActivityResolver::lastActivityAtSql();
+
             $query->where('type', MonitoringCartType::Lab)
                 ->where('status', MonitoringCartStatus::Active)
-                ->where('updated_at', '<', now()->subMinutes(self::abandonedAfterMinutes()))
+                ->whereRaw("{$activitySql} < ?", [now()->subMinutes(self::abandonedAfterMinutes())])
                 ->whereNotExists($this->checkoutDraftExistsSubquery(
                     fn (QueryBuilder $draft) => $draft->whereNotNull('lcd.contact_id'),
                 ));
@@ -439,14 +463,16 @@ class Cart extends Model
 
     public function scopeInactivityRangeFilter(Builder $query, string $range): void
     {
+        $activitySql = CartUserActivityResolver::lastActivityAtSql();
+
         $query->where('status', '!=', MonitoringCartStatus::Completed->value);
 
         match ($range) {
-            'lt_1h' => $query->where('updated_at', '>=', now()->subHour()),
-            '1_3h' => $query->whereBetween('updated_at', [now()->subHours(3), now()->subHour()]),
-            '3_24h' => $query->whereBetween('updated_at', [now()->subDay(), now()->subHours(3)]),
-            '1_3d' => $query->whereBetween('updated_at', [now()->subDays(3), now()->subDay()]),
-            'gt_3d' => $query->where('updated_at', '<', now()->subDays(3)),
+            'lt_1h' => $query->whereRaw("{$activitySql} >= ?", [now()->subHour()]),
+            '1_3h' => $query->whereRaw("{$activitySql} BETWEEN ? AND ?", [now()->subHours(3), now()->subHour()]),
+            '3_24h' => $query->whereRaw("{$activitySql} BETWEEN ? AND ?", [now()->subDay(), now()->subHours(3)]),
+            '1_3d' => $query->whereRaw("{$activitySql} BETWEEN ? AND ?", [now()->subDays(3), now()->subDay()]),
+            'gt_3d' => $query->whereRaw("{$activitySql} < ?", [now()->subDays(3)]),
             default => null,
         };
     }

@@ -10,16 +10,23 @@
 Hola <b>{{ $nombre_usuario }}</b> 👋,
 </p>
 
+@if (! empty($appointment_first_flow))
 <p style="margin:0 0 12px;color:#3d4852;font-size:16px;line-height:1.5;">
-Tu cita en <b>{{ $laboratorio_marca }}</b> ya quedó <b>registrada</b> ✅
+Tu cita en <b>{{ $laboratorio_marca }}</b> ya fue <b>confirmada</b> ✅
 </p>
 
 <p style="margin:0 0 20px;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px 14px;font-size:15px;line-height:1.5;">
-    🎉 ¡Tu cita ya está lista!
-    <br><br>
-    Para asegurar tu lugar en la sucursal seleccionada, realiza ahora el pago de tus estudios.
-    Al finalizar, tu cita quedará confirmada y podrás obtener tu <b>orden de laboratorio</b> junto con los folios necesarios para tu atención.
+    Tu cita ya fue confirmada. Guardamos la información que registraste y ahora puedes continuar con el último paso para seleccionar tu método de pago y completar la compra.
 </p>
+@else
+<p style="margin:0 0 12px;color:#3d4852;font-size:16px;line-height:1.5;">
+Tu cita en <b>{{ $laboratorio_marca }}</b> fue <b>confirmada</b> ✅
+</p>
+
+<p style="margin:0 0 20px;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px 14px;font-size:15px;line-height:1.5;">
+    Tu cita fue confirmada. Completa el pago para finalizar tu compra.
+</p>
+@endif
 
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 
@@ -38,12 +45,14 @@ Tu cita en <b>{{ $laboratorio_marca }}</b> ya quedó <b>registrada</b> ✅
 </p>
 <p style="margin:0 0 20px;color:#3d4852;font-size:16px;line-height:1.5;">{{ $address }}</p>
 
+@if (empty($appointment_first_flow))
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 
 <p style="margin:0 0 8px;color:#3d4852;font-size:16px;line-height:1.5;">
 <strong>💳 MÉTODO DE PAGO</strong>
 </p>
 <p style="margin:0 0 20px;color:#3d4852;font-size:16px;line-height:1.5;"><b>{{ $payment_method }}</b></p>
+@endif
 
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 
@@ -63,12 +72,20 @@ Tu cita en <b>{{ $laboratorio_marca }}</b> ya quedó <b>registrada</b> ✅
 @endif
 
 <x-mail::button :url="$checkout_url" color="primary">
+@if (! empty($appointment_first_flow))
+Continuar con el pago
+@else
 Pagar ahora
+@endif
 </x-mail::button>
 
 <p style="margin:16px 0 0;color:#718096;font-size:13px;line-height:1.5;">
+@if (! empty($appointment_first_flow))
+    Al hacer clic en <b>Continuar con el pago</b>, accederás al checkout con tu información precargada para seleccionar tu método de pago y completar la compra.
+@else
     Al hacer clic en <b>Pagar ahora</b>,
-    accederás directamente al checkout con tu información precargada para finalizar el pago y confirmar tu cita.
+    accederás al checkout con tu información precargada para completar el pago y finalizar tu compra.
+@endif
 </p>
 
 <p style="margin:24px 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">Con gusto te acompañamos,</p>

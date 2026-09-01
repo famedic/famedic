@@ -83,6 +83,14 @@ function siteEventAdmin(): User
 
 function siteEventAbandoned(Cart $cart, int $episode = 1): CartEvent
 {
+    CartEvent::query()->create([
+        'cart_id' => $cart->id,
+        'event' => CartEventType::PatientSelected->value,
+        'metadata' => [],
+        'occurred_at' => now()->subMinutes(45),
+        'source' => 'test_setup',
+    ]);
+
     $cart->update(['updated_at' => now()->subMinutes(45)]);
     $event = app(CartAbandonmentService::class)->recordAbandoned($cart->fresh());
 
@@ -133,9 +141,9 @@ it('creates a second site event dispatch for cart_abandoned episode 2', function
 
     CartEvent::query()->create([
         'cart_id' => $cart->id,
-        'event' => CartEventType::CartResumed,
+        'event' => CartEventType::CartResumed->value,
         'metadata' => ['episode' => 1],
-        'occurred_at' => now()->subMinutes(20),
+        'occurred_at' => now()->subMinutes(50),
         'idempotency_key' => 'cart:'.$cart->id.':resumed:episode:1',
     ]);
 

@@ -3,12 +3,15 @@
 namespace App\Services\Carts;
 
 use App\Enums\CartEventType;
+use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
 use App\Models\Cart;
 use App\Models\CartEvent;
 use App\Models\Customer;
 use App\Services\ActiveCampaign\ActiveCampaignOutboundDispatcher;
+use App\Services\Laboratory\LaboratoryAppointmentCheckoutResolver;
+use App\Services\Laboratory\LaboratoryCheckoutFlowEligibility;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
@@ -17,6 +20,7 @@ class CartAbandonmentService
     public function __construct(
         private CartEventRecorder $cartEventRecorder,
         private ActiveCampaignOutboundDispatcher $activeCampaignOutboundDispatcher,
+        private LaboratoryCheckoutFlowEligibility $checkoutFlowEligibility,
     ) {}
 
     public function abandonedAfterMinutes(): int
@@ -84,26 +88,36 @@ class CartAbandonmentService
             return null;
         }
 
-        if (! $this->wasInactiveBeyondThreshold($cart->updated_at)) {
+        $context = $this->laboratoryAbandonmentContext($cart);
+
+        if ($context['exclude']) {
+            return null;
+        }
+
+        $lastActivityAt = $context['reference_at']->copy();
+
+        if (! $this->wasInactiveBeyondThreshold($lastActivityAt)) {
             return null;
         }
 
         $episode = $this->nextEpisodeNumber($cart);
-        $lastActivityAt = $cart->updated_at->copy();
         $abandonedAt = $lastActivityAt->copy()->addMinutes($this->abandonedAfterMinutes());
         $minutesInactive = max($this->abandonedAfterMinutes(), (int) floor($lastActivityAt->diffInMinutes(now())));
+
+        $metadata = [
+            'episode' => $episode,
+            'last_activity_at' => $lastActivityAt->toIso8601String(),
+            'abandoned_at' => $abandonedAt->toIso8601String(),
+            'minutes_inactive' => $minutesInactive,
+            'brand' => $this->resolvePrimaryBrand($cart),
+            ...$context['metadata'],
+        ];
 
         $event = $this->cartEventRecorder->recordOnce(
             $cart,
             CartEventType::CartAbandoned,
             "cart:{$cart->id}:abandoned:episode:{$episode}",
-            [
-                'episode' => $episode,
-                'last_activity_at' => $lastActivityAt->toIso8601String(),
-                'abandoned_at' => $abandonedAt->toIso8601String(),
-                'minutes_inactive' => $minutesInactive,
-                'brand' => $this->resolvePrimaryBrand($cart),
-            ],
+            $metadata,
             $abandonedAt,
             'cart_abandonment_detector',
         );
@@ -130,7 +144,7 @@ class CartAbandonmentService
             return null;
         }
 
-        if (! $this->wasInactiveBeyondThreshold($cart->updated_at)) {
+        if (! $this->wasInactiveBeyondThreshold(app(CartUserActivityResolver::class)->lastUserActivityAt($cart))) {
             return null;
         }
 
@@ -243,16 +257,97 @@ class CartAbandonmentService
      */
     public function cartsEligibleForAbandonmentDetection(): Collection
     {
-        $staleBefore = now()->subMinutes($this->abandonedAfterMinutes());
-
         return Cart::query()
             ->operationalMonitoring()
             ->where('status', MonitoringCartStatus::Active)
-            ->where('updated_at', '<=', $staleBefore)
-            ->with('items')
+            ->with(['items', 'user.customer'])
             ->get()
             ->filter(fn (Cart $cart) => $this->isEligibleForAbandonmentDetection($cart))
+            ->reject(fn (Cart $cart) => $this->laboratoryAbandonmentContext($cart)['exclude'])
             ->values();
+    }
+
+    public function abandonmentReferenceAt(Cart $cart): CarbonInterface
+    {
+        return $this->laboratoryAbandonmentContext($cart)['reference_at']->copy();
+    }
+
+    /**
+     * @return array{
+     *     exclude: bool,
+     *     reference_at: CarbonInterface,
+     *     metadata: array<string, mixed>,
+     * }
+     */
+    private function laboratoryAbandonmentContext(Cart $cart): array
+    {
+        $userActivityResolver = app(CartUserActivityResolver::class);
+        $referenceAt = $userActivityResolver->lastUserActivityAt($cart);
+
+        if ($cart->type !== MonitoringCartType::Lab) {
+            return [
+                'exclude' => false,
+                'reference_at' => $referenceAt,
+                'metadata' => [],
+            ];
+        }
+
+        $brandValue = $this->resolvePrimaryBrand($cart);
+        if ($brandValue === null) {
+            return [
+                'exclude' => false,
+                'reference_at' => $referenceAt,
+                'metadata' => [],
+            ];
+        }
+
+        $customer = $cart->user?->customer;
+        if ($customer === null) {
+            return [
+                'exclude' => false,
+                'reference_at' => $referenceAt,
+                'metadata' => [],
+            ];
+        }
+
+        $brand = LaboratoryBrand::from($brandValue);
+
+        if ($this->appointmentCheckoutResolver()->isAwaitingConcierge($customer, $brand)) {
+            return [
+                'exclude' => true,
+                'reference_at' => $referenceAt,
+                'metadata' => [],
+            ];
+        }
+
+        $confirmedUnpaid = $this->appointmentCheckoutResolver()->confirmedUnpaidAppointment($customer, $brand);
+        $metadata = [];
+
+        if ($confirmedUnpaid?->confirmed_at !== null) {
+            $confirmedAt = $confirmedUnpaid->confirmed_at->copy();
+            if ($confirmedAt->gt($referenceAt)) {
+                $referenceAt = $confirmedAt;
+            }
+
+            $usesAppointmentFirst = $this->checkoutFlowEligibility->usesAppointmentFirstFlow($customer, $brand);
+            $metadata = [
+                'checkout_stage' => $usesAppointmentFirst ? 'payment' : 'confirmation',
+                'flow' => $usesAppointmentFirst ? 'appointment_first' : 'standard',
+                'appointment_id' => $confirmedUnpaid->id,
+                'appointment_confirmed_at' => $confirmedUnpaid->confirmed_at->toIso8601String(),
+            ];
+        }
+
+        return [
+            'exclude' => false,
+            'reference_at' => $referenceAt,
+            'metadata' => $metadata,
+        ];
+    }
+
+    private function appointmentCheckoutResolver(): LaboratoryAppointmentCheckoutResolver
+    {
+        return app(LaboratoryAppointmentCheckoutResolver::class);
     }
 
     private function lastAbandonedEvent(Cart $cart): ?CartEvent

@@ -520,6 +520,11 @@ function SituationCell({ cart }) {
 					{primarySignal.detail ? ` · ${primarySignal.detail}` : ""}
 				</Text>
 			) : null}
+			{cart.checkout_flow?.short_label ? (
+				<Text className="text-[11px] text-zinc-400 dark:text-zinc-500">
+					{cart.checkout_flow.short_label}
+				</Text>
+			) : null}
 		</div>
 	);
 }

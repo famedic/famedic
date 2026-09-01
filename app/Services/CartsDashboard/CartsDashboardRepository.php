@@ -2,11 +2,14 @@
 
 namespace App\Services\CartsDashboard;
 
+use App\Enums\CartCheckoutFlowType;
+use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
 use App\Models\Cart;
 use App\Models\PaymentAttempt;
+use App\Services\Carts\CartUserActivityResolver;
 use App\Support\CartsDashboard\CartsDashboardFilter;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -63,10 +66,11 @@ class CartsDashboardRepository
             'payment_declined' => $this->paymentStatusCount($filter, PaymentAttempt::STATUS_DECLINED),
             'payment_error' => $this->paymentStatusCount($filter, PaymentAttempt::STATUS_ERROR),
             'payment_pending' => $this->paymentStatusCount($filter, PaymentAttempt::STATUS_PENDING),
+            'payment_available' => $this->appointmentConfirmedPendingPaymentCount($filter),
+            'appointment_pending_active' => $this->appointmentPendingCount($filter),
+            'appointment_confirmed_without_payment' => $this->appointmentConfirmedPendingPaymentCount($filter),
             'appointments_to_handle' => $this->appointmentPendingCount($filter)
                 + $this->appointmentConfirmedPendingPaymentCount($filter),
-            'appointment_pending' => $this->appointmentPendingCount($filter),
-            'appointment_confirmed_without_payment' => $this->appointmentConfirmedPendingPaymentCount($filter),
             'contact_requested' => $this->callbackRequestedCount($filter) + $this->phoneIntentCount($filter),
             'callback_requested' => $this->callbackRequestedCount($filter),
             'phone_call_intent' => $this->phoneIntentCount($filter),
@@ -159,6 +163,129 @@ class CartsDashboardRepository
                 'label' => 'Compra',
                 'count' => (int) $this->completedCartsQuery($filter, $filter->start, $filter->end)->count('carts.id'),
             ],
+        ];
+    }
+
+    /**
+     * Embudos por flujo de checkout (cita primero vs estándar).
+     *
+     * @return array<string, mixed>
+     */
+    public function checkoutFunnelByFlow(CartsDashboardFilter $filter): array
+    {
+        return [
+            'distribution' => $this->checkoutFlowDistribution($filter),
+            'appointment_first' => $this->flowCheckoutFunnel($filter, CartCheckoutFlowType::AppointmentFirst),
+            'standard' => $this->flowCheckoutFunnel($filter, CartCheckoutFlowType::Standard),
+            'milestone_notes' => [
+                'appointment_first' => 'Estudios → Paciente → Dirección → Cita → Pago → Compra',
+                'standard' => 'Estudios → Paciente → Dirección → Pago → Cita → Compra',
+                'abandonment' => 'Cita pendiente de concierge no se cuenta como abandono.',
+            ],
+        ];
+    }
+
+    /**
+     * @return list<array{key: string, label: string, count: int}>
+     */
+    private function checkoutFlowDistribution(CartsDashboardFilter $filter): array
+    {
+        $base = $this->baseCartsQuery($filter)
+            ->whereBetween('carts.created_at', [$filter->start, $filter->end])
+            ->where('carts.type', MonitoringCartType::Lab->value);
+
+        $appointmentFirst = (int) (clone $base)
+            ->whereExists($this->storedCheckoutFlowExistsSubquery(CartCheckoutFlowType::AppointmentFirst->value))
+            ->count('carts.id');
+        $standard = (int) (clone $base)
+            ->whereExists($this->storedCheckoutFlowExistsSubquery(CartCheckoutFlowType::Standard->value))
+            ->count('carts.id');
+        $total = (int) (clone $base)->count('carts.id');
+
+        return [
+            ['key' => 'appointment_first', 'label' => 'Cita primero', 'count' => $appointmentFirst],
+            ['key' => 'standard', 'label' => 'Estándar', 'count' => $standard],
+            ['key' => 'unknown', 'label' => 'Sin flujo persistido', 'count' => max(0, $total - $appointmentFirst - $standard)],
+        ];
+    }
+
+    /**
+     * @return list<array{key: string, label: string, count: int}>
+     */
+    private function flowCheckoutFunnel(CartsDashboardFilter $filter, CartCheckoutFlowType $flow): array
+    {
+        $milestones = $this->flowMilestoneCounts($filter, $flow);
+
+        $orderedKeys = $flow === CartCheckoutFlowType::AppointmentFirst
+            ? ['cart', 'checkout_started', 'patient', 'address', 'appointment', 'payment_attempted', 'completed']
+            : ['cart', 'checkout_started', 'patient', 'address', 'payment_attempted', 'appointment', 'completed'];
+
+        $labels = [
+            'cart' => 'Carrito',
+            'checkout_started' => 'Checkout iniciado',
+            'patient' => 'Paciente',
+            'address' => 'Dirección',
+            'appointment' => 'Cita',
+            'payment_attempted' => 'Pago intentado',
+            'completed' => 'Compra',
+        ];
+
+        return collect($orderedKeys)
+            ->map(fn (string $key) => [
+                'key' => $key,
+                'label' => $labels[$key],
+                'count' => (int) ($milestones[$key] ?? 0),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function flowMilestoneCounts(CartsDashboardFilter $filter, CartCheckoutFlowType $flow): array
+    {
+        $scoped = fn () => $this->baseCartsQuery($filter)
+            ->whereBetween('carts.created_at', [$filter->start, $filter->end])
+            ->where('carts.type', MonitoringCartType::Lab->value)
+            ->whereExists($this->storedCheckoutFlowExistsSubquery($flow->value));
+
+        return [
+            'cart' => (int) $scoped()->count('carts.id'),
+            'checkout_started' => (int) $scoped()
+                ->where(function (Builder $query) {
+                    $query->whereExists($this->checkoutDraftExistsSubquery())
+                        ->orWhereExists($this->appointmentExistsSubquery())
+                        ->orWhereExists($this->paymentStatusExistsSubquery([
+                            PaymentAttempt::STATUS_PENDING,
+                            PaymentAttempt::STATUS_PROCESSING,
+                            PaymentAttempt::STATUS_APPROVED,
+                            PaymentAttempt::STATUS_DECLINED,
+                            PaymentAttempt::STATUS_ERROR,
+                        ]));
+                })
+                ->count('carts.id'),
+            'patient' => (int) $scoped()
+                ->whereExists($this->checkoutDraftFieldExistsSubquery('contact_id'))
+                ->count('carts.id'),
+            'address' => (int) $scoped()
+                ->whereExists($this->checkoutDraftFieldExistsSubquery('address_id'))
+                ->count('carts.id'),
+            'appointment' => (int) $scoped()
+                ->whereExists($this->appointmentExistsSubquery())
+                ->count('carts.id'),
+            'payment_attempted' => (int) $scoped()
+                ->whereExists($this->paymentStatusExistsSubquery([
+                    PaymentAttempt::STATUS_PENDING,
+                    PaymentAttempt::STATUS_PROCESSING,
+                    PaymentAttempt::STATUS_APPROVED,
+                    PaymentAttempt::STATUS_DECLINED,
+                    PaymentAttempt::STATUS_ERROR,
+                ]))
+                ->count('carts.id'),
+            'completed' => (int) $scoped()
+                ->where('carts.status', MonitoringCartStatus::Completed->value)
+                ->count('carts.id'),
         ];
     }
 
@@ -324,8 +451,11 @@ class CartsDashboardRepository
                 ->whereBetween('carts.created_at', [$filter->start, $filter->end]);
             $abandoned = $this->customerSegmentQuery($filter, $segment)
                 ->where('carts.status', MonitoringCartStatus::Active->value)
-                ->where('carts.updated_at', '<', $this->staleBefore())
-                ->whereBetween('carts.updated_at', [$filter->start, $filter->end]);
+                ->whereRaw($this->lastUserActivityAtSql().' < ?', [$this->staleBefore()])
+                ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$filter->start, $filter->end])
+                ->whereNotExists($this->appointmentExistsSubquery(function (Builder $appointment) {
+                    $appointment->whereNull('la.confirmed_at');
+                }));
             $completed = $this->customerSegmentQuery($filter, $segment)
                 ->where('carts.status', MonitoringCartStatus::Completed->value)
                 ->where(function (Builder $query) use ($filter) {
@@ -381,7 +511,7 @@ class CartsDashboardRepository
     private function operationalCount(CartsDashboardFilter $filter, string $bucket): int
     {
         return (int) $this->eloquentBaseCartsQuery($filter)
-            ->whereBetween('carts.updated_at', [$filter->start, $filter->end])
+            ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$filter->start, $filter->end])
             ->operationalBucket($bucket)
             ->count('carts.id');
     }
@@ -389,7 +519,7 @@ class CartsDashboardRepository
     private function paymentStatusCount(CartsDashboardFilter $filter, string $status): int
     {
         return (int) $this->eloquentBaseCartsQuery($filter)
-            ->whereBetween('carts.updated_at', [$filter->start, $filter->end])
+            ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$filter->start, $filter->end])
             ->relatedPaymentAttemptStatus($status)
             ->count('carts.id');
     }
@@ -397,7 +527,7 @@ class CartsDashboardRepository
     private function appointmentPendingCount(CartsDashboardFilter $filter): int
     {
         return (int) $this->eloquentBaseCartsQuery($filter)
-            ->whereBetween('carts.updated_at', [$filter->start, $filter->end])
+            ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$filter->start, $filter->end])
             ->appointmentPendingConfirmation()
             ->count('carts.id');
     }
@@ -405,7 +535,7 @@ class CartsDashboardRepository
     private function appointmentConfirmedPendingPaymentCount(CartsDashboardFilter $filter): int
     {
         return (int) $this->eloquentBaseCartsQuery($filter)
-            ->whereBetween('carts.updated_at', [$filter->start, $filter->end])
+            ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$filter->start, $filter->end])
             ->appointmentConfirmedPendingPayment()
             ->count('carts.id');
     }
@@ -414,7 +544,7 @@ class CartsDashboardRepository
     {
         return (int) $this->baseCartsQuery($filter)
             ->where('carts.status', '!=', MonitoringCartStatus::Completed->value)
-            ->whereBetween('carts.updated_at', [$start ?? $filter->start, $end ?? $filter->end])
+            ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$start ?? $filter->start, $end ?? $filter->end])
             ->whereExists($this->callbackExistsSubquery())
             ->count('carts.id');
     }
@@ -423,7 +553,7 @@ class CartsDashboardRepository
     {
         return (int) $this->baseCartsQuery($filter)
             ->where('carts.status', '!=', MonitoringCartStatus::Completed->value)
-            ->whereBetween('carts.updated_at', [$start ?? $filter->start, $end ?? $filter->end])
+            ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$start ?? $filter->start, $end ?? $filter->end])
             ->whereExists($this->phoneIntentExistsSubquery())
             ->count('carts.id');
     }
@@ -432,7 +562,7 @@ class CartsDashboardRepository
     {
         return (int) $this->baseCartsQuery($filter)
             ->where('carts.type', MonitoringCartType::Lab->value)
-            ->whereBetween('carts.updated_at', [$filter->start, $filter->end])
+            ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$filter->start, $filter->end])
             ->whereNotExists($this->appointmentExistsSubquery())
             ->count('carts.id');
     }
@@ -441,7 +571,7 @@ class CartsDashboardRepository
     {
         return (int) $this->baseCartsQuery($filter)
             ->where('carts.type', MonitoringCartType::Lab->value)
-            ->whereBetween('carts.updated_at', [$filter->start, $filter->end])
+            ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$filter->start, $filter->end])
             ->whereExists($this->appointmentExistsSubquery(function (Builder $appointment) {
                 $appointment->whereNotNull('la.confirmed_at')
                     ->whereNotNull('la.laboratory_purchase_id');
@@ -521,7 +651,7 @@ class CartsDashboardRepository
      */
     private function dailyAbandonedTotals(CartsDashboardFilter $filter): array
     {
-        return $this->dailyTotals($this->abandonedCartsQuery($filter, $filter->start, $filter->end), 'carts.updated_at');
+        return $this->dailyTotals($this->abandonedCartsQuery($filter, $filter->start, $filter->end), $this->lastUserActivityAtSql());
     }
 
     /**
@@ -530,10 +660,10 @@ class CartsDashboardRepository
     private function dailyPaymentStatusCounts(CartsDashboardFilter $filter, string $status): array
     {
         $driver = DB::connection()->getDriverName();
-        $dateExpr = $this->localDateExpression('carts.updated_at', $driver);
+        $dateExpr = $this->localDateExpression($this->lastUserActivityAtSql(), $driver);
 
         return $this->eloquentBaseCartsQuery($filter)
-            ->whereBetween('carts.updated_at', [$filter->start, $filter->end])
+            ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$filter->start, $filter->end])
             ->relatedPaymentAttemptStatus($status)
             ->selectRaw("{$dateExpr} as day_key, COUNT(DISTINCT carts.id) as aggregate")
             ->groupBy('day_key')
@@ -548,11 +678,11 @@ class CartsDashboardRepository
     private function dailyContactCounts(CartsDashboardFilter $filter, \Closure $signalSubquery): array
     {
         $driver = DB::connection()->getDriverName();
-        $dateExpr = $this->localDateExpression('carts.updated_at', $driver);
+        $dateExpr = $this->localDateExpression($this->lastUserActivityAtSql(), $driver);
 
         return $this->baseCartsQuery($filter)
             ->where('carts.status', '!=', MonitoringCartStatus::Completed->value)
-            ->whereBetween('carts.updated_at', [$filter->start, $filter->end])
+            ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$filter->start, $filter->end])
             ->whereExists($signalSubquery)
             ->selectRaw("{$dateExpr} as day_key, COUNT(DISTINCT carts.id) as aggregate")
             ->groupBy('day_key')
@@ -588,8 +718,11 @@ class CartsDashboardRepository
             ->whereBetween('carts.created_at', [$filter->start, $filter->end]);
         $abandoned = $this->brandScopedQuery($filter, $brand, $unknown)
             ->where('carts.status', MonitoringCartStatus::Active->value)
-            ->where('carts.updated_at', '<', $this->staleBefore())
-            ->whereBetween('carts.updated_at', [$filter->start, $filter->end]);
+            ->whereRaw($this->lastUserActivityAtSql().' < ?', [$this->staleBefore()])
+            ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$filter->start, $filter->end])
+            ->whereNotExists($this->appointmentExistsSubquery(function (Builder $appointment) {
+                $appointment->whereNull('la.confirmed_at');
+            }));
         $completed = $this->brandScopedQuery($filter, $brand, $unknown)
             ->where('carts.status', MonitoringCartStatus::Completed->value)
             ->where(function (Builder $query) use ($filter) {
@@ -692,8 +825,11 @@ class CartsDashboardRepository
     {
         return $this->baseCartsQuery($filter)
             ->where('carts.status', MonitoringCartStatus::Active->value)
-            ->where('carts.updated_at', '<', $this->staleBefore())
-            ->whereBetween('carts.updated_at', [$start, $end]);
+            ->whereRaw($this->lastUserActivityAtSql().' < ?', [$this->staleBefore()])
+            ->whereRaw($this->lastUserActivityAtSql().' BETWEEN ? AND ?', [$start, $end])
+            ->whereNotExists($this->appointmentExistsSubquery(function (Builder $appointment) {
+                $appointment->whereNull('la.confirmed_at');
+            }));
     }
 
     private function completedCartsQuery(CartsDashboardFilter $filter, Carbon $start, Carbon $end): Builder
@@ -1051,6 +1187,34 @@ class CartsDashboardRepository
     private function staleBefore(): Carbon
     {
         return now()->subMinutes(Cart::ABANDONED_AFTER_MINUTES);
+    }
+
+    private function lastUserActivityAtSql(): string
+    {
+        return CartUserActivityResolver::lastActivityAtSql('carts');
+    }
+
+    private function storedCheckoutFlowExistsSubquery(string $flow): \Closure
+    {
+        return function (Builder $sub) use ($flow) {
+            $sub->select(DB::raw(1))
+                ->from('cart_events as cef')
+                ->whereColumn('cef.cart_id', 'carts.id')
+                ->where('cef.event', CartEventType::CheckoutFlowDetermined->value)
+                ->where('cef.metadata->checkout_flow', $flow);
+        };
+    }
+
+    private function checkoutDraftFieldExistsSubquery(string $field): \Closure
+    {
+        return function (Builder $sub) use ($field) {
+            $sub->select(DB::raw(1))
+                ->from('users as draft_users')
+                ->join('customers as draft_customers', 'draft_customers.user_id', '=', 'draft_users.id')
+                ->join('laboratory_checkout_drafts as drafts', 'drafts.customer_id', '=', 'draft_customers.id')
+                ->whereColumn('draft_users.id', 'carts.user_id')
+                ->whereNotNull("drafts.{$field}");
+        };
     }
 
     private function paymentAttemptsHaveCartId(): bool

@@ -126,3 +126,15 @@ it('returns 200 for workspace activecampaign page', function () {
         ->get(route('admin.workspace.activecampaign'))
         ->assertOk();
 });
+
+it('keeps appointment-first cart event type names stable for phase five', function () {
+    expect(\App\Enums\CartEventType::AppointmentRequested->value)->toBe('appointment_requested')
+        ->and(\App\Enums\CartEventType::AppointmentPending5m->value)->toBe('appointment_pending_5m')
+        ->and(\App\Enums\CartEventType::AppointmentConfirmed->value)->toBe('appointment_confirmed')
+        ->and(\App\Enums\CartEventType::PaymentMethodSelected->value)->toBe('payment_method_selected')
+        ->and(\App\Enums\CartEventType::CartAbandoned->value)->toBe('cart_abandoned')
+        ->and(\App\Enums\CartEventType::CartResumed->value)->toBe('cart_resumed')
+        ->and(\App\Enums\CartEventType::CartRecovered->value)->toBe('cart_recovered')
+        ->and(\App\Enums\CartEventType::CheckoutStarted->value)->toBe('checkout_started')
+        ->and(\App\Enums\CartEventType::CheckoutVisited->value)->toBe('checkout_visited');
+});

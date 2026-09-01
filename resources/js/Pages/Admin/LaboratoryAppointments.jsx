@@ -521,6 +521,9 @@ function LaboratoryAppointmentsList({
 						<TableRow>
 							<TableHeader>Cliente</TableHeader>
 							<TableHeader>Cita</TableHeader>
+							<TableHeader>Flujo / carrito</TableHeader>
+							<TableHeader>Pago</TableHeader>
+							<TableHeader>Última actividad</TableHeader>
 							<TableHeader>Intentó llamar</TableHeader>
 							<TableHeader>Pref. llamada</TableHeader>
 							<TableHeader>Laboratorio</TableHeader>
@@ -608,6 +611,46 @@ function LaboratoryAppointmentsList({
 													</span>
 												</Text>
 											</Badge>
+										)}
+									</TableCell>
+
+									<TableCell>
+										{laboratoryAppointment.admin_checkout_flow?.label ? (
+											<Badge color="zinc">
+												{laboratoryAppointment.admin_checkout_flow.label}
+											</Badge>
+										) : (
+											<Text className="text-sm text-zinc-400">—</Text>
+										)}
+										{laboratoryAppointment.cart_id ? (
+											<Text className="mt-1 text-xs text-zinc-500">
+												Carrito #{laboratoryAppointment.cart_id}
+											</Text>
+										) : null}
+									</TableCell>
+
+									<TableCell>
+										<Badge
+											color={
+												laboratoryAppointment.admin_payment_blocked
+													? "amber"
+													: "emerald"
+											}
+										>
+											{laboratoryAppointment.admin_payment_status_label ||
+												"—"}
+										</Badge>
+									</TableCell>
+
+									<TableCell>
+										{laboratoryAppointment.admin_last_user_activity_human ? (
+											<Text className="text-sm">
+												{
+													laboratoryAppointment.admin_last_user_activity_human
+												}
+											</Text>
+										) : (
+											<Text className="text-sm text-zinc-400">—</Text>
 										)}
 									</TableCell>
 

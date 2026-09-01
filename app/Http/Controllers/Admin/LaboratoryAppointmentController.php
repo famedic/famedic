@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Actions\Admin\LaboratoryAppointments\BuildLaboratoryAppointmentCheckoutProgressAction;
 use App\Actions\Admin\LaboratoryAppointments\BuildLaboratoryAppointmentDashboardDataAction;
+use App\Actions\Admin\LaboratoryAppointments\EnrichLaboratoryAppointmentIndexRowAction;
 use App\Actions\Admin\LaboratoryAppointments\UpdateLaboratoryAppointmentAction;
 use App\Actions\Laboratories\PrepareLaboratoryCheckoutPaymentLinkAction;
 use App\Enums\Gender;
@@ -20,6 +21,7 @@ use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryStore;
 use App\Notifications\LaboratoryAppointmentConfirmedPendingPayment;
 use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
+use App\Services\Laboratory\LaboratoryCheckoutFlowEligibility;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -30,7 +32,8 @@ class LaboratoryAppointmentController extends Controller
 {
     public function index(
         IndexLaboratoryAppointmentRequest $request,
-        BuildLaboratoryAppointmentDashboardDataAction $buildLaboratoryAppointmentDashboardDataAction
+        BuildLaboratoryAppointmentDashboardDataAction $buildLaboratoryAppointmentDashboardDataAction,
+        EnrichLaboratoryAppointmentIndexRowAction $enrichIndexRow,
     ) {
         $view = $request->get('view', 'list');
 
@@ -83,8 +86,23 @@ class LaboratoryAppointmentController extends Controller
                 ['path' => $request->url(), 'query' => $request->query()]
             );
         } else {
-            $laboratoryAppointments = LaboratoryAppointment::with(['customer.user', 'laboratoryStore', 'laboratoryPurchase.transactions'])
-                ->filter($queryFilters)->latest()->paginate()->withQueryString();
+            $laboratoryAppointments = LaboratoryAppointment::with([
+                'customer.user',
+                'laboratoryStore',
+                'laboratoryPurchase.transactions',
+                'cart.events',
+                'cart.items',
+            ])
+                ->filter($queryFilters)
+                ->latest()
+                ->paginate()
+                ->withQueryString()
+                ->through(function (LaboratoryAppointment $appointment) use ($enrichIndexRow) {
+                    return array_merge(
+                        $appointment->toArray(),
+                        $enrichIndexRow($appointment),
+                    );
+                });
         }
 
         return Inertia::render('Admin/LaboratoryAppointments', [
@@ -151,6 +169,7 @@ class LaboratoryAppointmentController extends Controller
             ?->isoFormat('dddd D [de] MMMM [de] YYYY, h:mm a');
 
         $checkoutProgress = $buildCheckoutProgress($laboratoryAppointment);
+        $prepareCheckoutPaymentLink = app(PrepareLaboratoryCheckoutPaymentLinkAction::class);
 
         return Inertia::render('Admin/LaboratoryAppointment', [
             'laboratoryAppointment' => $laboratoryAppointment,
@@ -162,6 +181,11 @@ class LaboratoryAppointmentController extends Controller
             'hasPaidLaboratoryPurchase' => $laboratoryAppointment->hasPaidLaboratoryPurchase(),
             'callbackPreferenceSavedAtFormatted' => $callbackPreferenceSavedAtFormatted,
             'checkoutProgress' => $checkoutProgress,
+            'canSendPendingPaymentEmail' => $prepareCheckoutPaymentLink->canSendPendingPaymentEmail($laboratoryAppointment),
+            'pendingPaymentEmailBlockReason' => $prepareCheckoutPaymentLink->canSendPendingPaymentEmail($laboratoryAppointment)
+                ? null
+                : ($checkoutProgress['payment_blocked_reason'] ?? 'La cita no está disponible para completar el checkout.'),
+            'resumeCheckoutStep' => $checkoutProgress['resume_step'] ?? 'confirmation',
         ]);
     }
 
@@ -192,6 +216,8 @@ class LaboratoryAppointmentController extends Controller
             'full_request' => $request->all(),
         ]);
 
+        $wasConfirmedBeforeUpdate = $laboratoryAppointment->confirmed_at !== null;
+
         $action(
             appointment_date: $request->appointment_date,
             appointment_time: $request->appointment_time,
@@ -210,11 +236,13 @@ class LaboratoryAppointmentController extends Controller
         $laboratoryAppointment->refresh();
         $flashMessage = 'Cita actualizada exitosamente.';
 
-        if (! $laboratoryAppointment->hasPaidLaboratoryPurchase()) {
+        $newlyConfirmed = ! $wasConfirmedBeforeUpdate && $laboratoryAppointment->confirmed_at !== null;
+
+        if ($newlyConfirmed && $prepareCheckoutPaymentLink->canSendPendingPaymentEmail($laboratoryAppointment)) {
             if ($this->sendPaymentSummaryEmail($laboratoryAppointment, $prepareCheckoutPaymentLink)) {
-                $flashMessage = 'Cita actualizada y se envió un correo al cliente para completar el pago.';
+                $flashMessage = 'Cita confirmada y se envió un correo al cliente para continuar con el pago.';
             }
-        } elseif ($request->boolean('send_notification_email')) {
+        } elseif ($laboratoryAppointment->hasPaidLaboratoryPurchase() && $request->boolean('send_notification_email')) {
             if ($this->sendAppointmentInstructionsEmail($laboratoryAppointment)) {
                 $flashMessage = 'Cita actualizada y se envió el correo de confirmación al cliente.';
             }
@@ -232,6 +260,11 @@ class LaboratoryAppointmentController extends Controller
         if ($laboratoryAppointment->hasPaidLaboratoryPurchase()) {
             return redirect()->back()
                 ->flashMessage('Esta cita ya tiene un pago registrado; no aplica el resumen de pago.');
+        }
+
+        if (! $prepareCheckoutPaymentLink->canSendPendingPaymentEmail($laboratoryAppointment)) {
+            return redirect()->back()
+                ->flashMessage('No se puede enviar el correo de pago: la cita no está disponible para completar el checkout.');
         }
 
         if (! $this->sendPaymentSummaryEmail($laboratoryAppointment, $prepareCheckoutPaymentLink)) {
@@ -276,11 +309,20 @@ class LaboratoryAppointmentController extends Controller
         }
 
         $checkoutUrl = $prepareCheckoutPaymentLink($laboratoryAppointment);
+        if ($checkoutUrl === null) {
+            return false;
+        }
+
+        $appointmentFirstFlow = app(LaboratoryCheckoutFlowEligibility::class)->usesAppointmentFirstFlow(
+            $laboratoryAppointment->customer,
+            $laboratoryAppointment->brand,
+        );
 
         $user->notify(
             new LaboratoryAppointmentConfirmedPendingPayment(
                 $laboratoryAppointment,
                 $checkoutUrl,
+                $appointmentFirstFlow,
             )
         );
 

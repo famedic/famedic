@@ -13,6 +13,13 @@ use App\Enums\LaboratoryAppointmentInteractionType;
 use App\Enums\LaboratoryBrand;
 use App\Http\Requests\LaboratoryCheckout\SyncLaboratoryAppointmentRequest;
 use App\Services\CouponService;
+use App\Services\Carts\CartAbandonmentService;
+use App\Services\Carts\CartUserActivityResolver;
+use App\Services\Laboratory\LaboratoryAppointmentCheckoutResolver;
+use App\Services\Laboratory\LaboratoryAppointmentPaymentValidity;
+use App\Services\Laboratory\LaboratoryCheckoutFlowEligibility;
+use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
+use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Support\AppEnvironmentLabel;
 use App\Support\ClientContext;
 use App\Support\MockEfevooPaymentSupport;
@@ -24,14 +31,35 @@ use Inertia\Inertia;
 
 class LaboratoryCheckoutController extends Controller
 {
-    public function __invoke(Request $request, LaboratoryBrand $laboratoryBrand, CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction, CouponService $couponService)
+    public function __invoke(
+        Request $request,
+        LaboratoryBrand $laboratoryBrand,
+        CalculateTotalsAndDiscountAction $calculateTotalsAndDiscountAction,
+        CouponService $couponService,
+        LaboratoryCheckoutFlowEligibility $laboratoryCheckoutFlowEligibility,
+        LaboratoryCheckoutStepGuard $laboratoryCheckoutStepGuard,
+        LaboratoryAppointmentCheckoutResolver $laboratoryAppointmentCheckoutResolver,
+        CartAbandonmentService $cartAbandonmentService,
+        SyncMonitoringCartService $syncMonitoringCartService,
+        CartUserActivityResolver $cartUserActivityResolver,
+    )
     {
         Log::info('Laboratory checkout: request started', [
             'user_id' => $request->user()?->id,
             'brand' => $laboratoryBrand->value,
         ]);
 
-        $laboratoryCartItems = $request->user()->customer
+        $customer = $request->user()->customer;
+
+        if (! $request->header('X-Inertia-Partial-Data')) {
+            $activeCart = $syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
+            if ($activeCart !== null) {
+                $cartAbandonmentService->maybeRecordResumed($activeCart, ClientContext::fromRequest($request));
+                $cartUserActivityResolver->recordCheckoutVisit($activeCart, $laboratoryBrand->value);
+            }
+        }
+
+        $laboratoryCartItems = $customer
             ->laboratoryCartItems()
             ->ofBrand($laboratoryBrand)
             ->with('laboratoryTest')
@@ -105,10 +133,12 @@ class LaboratoryCheckoutController extends Controller
         $callbackPreferenceSavedAtFormatted = null;
 
         if ($requiresAppointment) {
-            $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand);
+            $laboratoryAppointment = $laboratoryAppointmentCheckoutResolver
+                ->payableConfirmedAppointment($customer, $laboratoryBrand);
 
             if (! $laboratoryAppointment) {
-                $pendingLaboratoryAppointment = $customer->getPendingLaboratoryAppointment($laboratoryBrand);
+                $pendingLaboratoryAppointment = $laboratoryAppointmentCheckoutResolver
+                    ->pendingAppointment($customer, $laboratoryBrand);
                 $callbackPreferenceSavedAtFormatted = $this->formatCallbackPreferenceSavedAt(
                     $pendingLaboratoryAppointment
                 );
@@ -140,12 +170,21 @@ class LaboratoryCheckoutController extends Controller
             }
         }
 
+        $savedCheckoutForSteps = is_array($savedCheckout) ? $savedCheckout : [];
+        if ($request->filled('contact')) {
+            $savedCheckoutForSteps['contact_id'] = (string) $request->query('contact');
+        }
+        if ($request->filled('address')) {
+            $savedCheckoutForSteps['address_id'] = (string) $request->query('address');
+        }
+
         if ($requiresAppointment && ! $laboratoryAppointment && ! $pendingLaboratoryAppointment) {
             $pendingLaboratoryAppointment = $this->ensurePendingLaboratoryAppointment(
                 $customer,
                 $laboratoryBrand,
                 $savedCheckout,
                 $request,
+                $laboratoryCheckoutFlowEligibility->usesAppointmentFirstFlow($customer, $laboratoryBrand),
             );
 
             if ($pendingLaboratoryAppointment) {
@@ -155,6 +194,60 @@ class LaboratoryCheckoutController extends Controller
             }
         }
 
+        $usesAppointmentFirstFlow = $laboratoryCheckoutFlowEligibility->usesAppointmentFirstFlow(
+            $customer,
+            $laboratoryBrand,
+        );
+
+        $stepResolution = $laboratoryCheckoutStepGuard->resolveAccessibleStep(
+            $customer,
+            $laboratoryBrand,
+            $request->query('step'),
+            $savedCheckoutForSteps['checkout_step'] ?? (is_array($savedCheckout) ? ($savedCheckout['checkout_step'] ?? null) : null),
+            $laboratoryAppointment !== null,
+            $savedCheckoutForSteps !== [] ? $savedCheckoutForSteps : $savedCheckout,
+        );
+
+        if ($stepResolution->shouldRedirect($request->query('step'), is_array($savedCheckout) ? ($savedCheckout['checkout_step'] ?? null) : null)) {
+            if ($stepResolution->updateDraft && Schema::hasTable('laboratory_checkout_drafts')) {
+                LaboratoryCheckoutDraft::query()->updateOrCreate(
+                    [
+                        'customer_id' => $customer->id,
+                        'laboratory_brand' => $laboratoryBrand,
+                    ],
+                    [
+                        'checkout_step' => $stepResolution->step,
+                    ],
+                );
+            }
+
+            if (is_array($savedCheckout)) {
+                $savedCheckout['checkout_step'] = $stepResolution->step;
+            }
+
+            $redirectQuery = array_filter([
+                'step' => $stepResolution->step,
+                'contact' => $request->query('contact') ?? ($savedCheckout['contact_id'] ?? null),
+                'address' => $request->query('address') ?? ($savedCheckout['address_id'] ?? null),
+            ], fn ($value) => $value !== null && $value !== '');
+
+            return redirect()
+                ->route('laboratory.checkout', [
+                    'laboratory_brand' => $laboratoryBrand,
+                    ...$redirectQuery,
+                ])
+                ->with(
+                    'checkout_step_notice',
+                    $stepResolution->message
+                        ?? $this->checkoutStepNoticeForBlockedPayment(
+                            $request->query('step'),
+                            $laboratoryCheckoutStepGuard,
+                            $customer,
+                            $laboratoryBrand,
+                        ),
+                );
+        }
+
         Log::info('Laboratory checkout: building inertia response', ['user_id' => $userId]);
 
         try {
@@ -162,6 +255,8 @@ class LaboratoryCheckoutController extends Controller
             'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryBrand),
             'savedCheckout' => $savedCheckout,
             'requiresAppointment' => $requiresAppointment,
+            'usesAppointmentFirstFlow' => $usesAppointmentFirstFlow,
+            'checkoutStepNotice' => session('checkout_step_notice'),
             'laboratoryAppointment' => $this->appointmentForCheckout($laboratoryAppointment),
             'pendingLaboratoryAppointment' => $this->appointmentForCheckout($pendingLaboratoryAppointment),
             'callbackPreferenceSavedAtFormatted' => $callbackPreferenceSavedAtFormatted,
@@ -239,8 +334,28 @@ class LaboratoryCheckoutController extends Controller
         SyncLaboratoryCheckoutDraftRequest $request,
         LaboratoryBrand $laboratoryBrand,
         SyncLaboratoryCheckoutDraftAction $action,
+        LaboratoryCheckoutStepGuard $laboratoryCheckoutStepGuard,
     ) {
         $validated = $request->validated();
+        $customer = $request->user()->customer;
+
+        if (! $laboratoryCheckoutStepGuard->canSyncDraftStep($customer, $laboratoryBrand, $validated['step'])) {
+            $query = array_filter([
+                'step' => LaboratoryCheckoutStepGuard::STEP_APPOINTMENT,
+                'contact' => $validated['contact_id'] ?? $request->query('contact'),
+                'address' => $validated['address_id'] ?? $request->query('address'),
+            ], fn ($value) => $value !== null && $value !== '');
+
+            return redirect()
+                ->route('laboratory.checkout', [
+                    'laboratory_brand' => $laboratoryBrand,
+                    ...$query,
+                ])
+                ->with(
+                    'checkout_step_notice',
+                    $laboratoryCheckoutStepGuard->paymentBlockedBeforeAppointmentMessage(),
+                );
+        }
 
         $draft = $action(
             $request->user()->customer,
@@ -278,6 +393,7 @@ class LaboratoryCheckoutController extends Controller
         SyncLaboratoryAppointmentRequest $request,
         LaboratoryBrand $laboratoryBrand,
         SyncLaboratoryAppointmentFromContactAction $action,
+        LaboratoryCheckoutStepGuard $laboratoryCheckoutStepGuard,
     ) {
         $customer = $request->user()->customer;
 
@@ -288,24 +404,30 @@ class LaboratoryCheckoutController extends Controller
         $contact = $customer->contacts()->findOrFail($request->validated('contact_id'));
         $action($customer, $laboratoryBrand, $contact);
 
+        $appointmentFirst = $laboratoryCheckoutStepGuard->usesAppointmentFirstFlow($customer, $laboratoryBrand);
+
+        $draftAttributes = [
+            'contact_id' => $contact->id,
+            'address_id' => $request->filled('address') ? (int) $request->input('address') : null,
+            'checkout_step' => LaboratoryCheckoutStepGuard::STEP_APPOINTMENT,
+        ];
+
+        if (! $appointmentFirst) {
+            $draftAttributes['payment_method'] = $request->input('payment_method');
+        }
+
         LaboratoryCheckoutDraft::query()->updateOrCreate(
             [
                 'customer_id' => $customer->id,
                 'laboratory_brand' => $laboratoryBrand,
             ],
-            [
-                'contact_id' => $contact->id,
-                'address_id' => $request->filled('address') ? (int) $request->input('address') : null,
-                'payment_method' => $request->input('payment_method'),
-                'checkout_step' => 'appointment',
-            ],
+            $draftAttributes,
         );
 
         $query = array_filter([
-            'step' => 'appointment',
+            'step' => LaboratoryCheckoutStepGuard::STEP_APPOINTMENT,
             'contact' => $request->validated('contact_id'),
             'address' => $request->input('address'),
-            'payment_method' => $request->input('payment_method'),
         ], fn ($value) => $value !== null && $value !== '');
 
         return redirect()->route('laboratory.checkout', [
@@ -341,7 +463,22 @@ class LaboratoryCheckoutController extends Controller
                 'name' => $appointment->laboratoryStore->name,
                 'address' => $appointment->laboratoryStore->address,
             ] : null,
+            'is_payable' => app(LaboratoryAppointmentPaymentValidity::class)
+                ->isValidForPayment($appointment),
         ];
+    }
+
+    private function checkoutStepNoticeForBlockedPayment(
+        ?string $requestedStep,
+        LaboratoryCheckoutStepGuard $laboratoryCheckoutStepGuard,
+        Customer $customer,
+        LaboratoryBrand $laboratoryBrand,
+    ): ?string {
+        if (! in_array($requestedStep, ['payment', 'confirmation'], true)) {
+            return null;
+        }
+
+        return $laboratoryCheckoutStepGuard->resolvePaymentBlockMessage($customer, $laboratoryBrand);
     }
 
     private function formatCallbackPreferenceSavedAt($appointment): ?string
@@ -369,17 +506,23 @@ class LaboratoryCheckoutController extends Controller
         LaboratoryBrand $laboratoryBrand,
         ?array $savedCheckout,
         Request $request,
+        bool $usesAppointmentFirstFlow = false,
+        ?LaboratoryAppointmentCheckoutResolver $laboratoryAppointmentCheckoutResolver = null,
     ): ?\App\Models\LaboratoryAppointment {
+        $laboratoryAppointmentCheckoutResolver ??= app(LaboratoryAppointmentCheckoutResolver::class);
         $step = $request->query('step') ?? ($savedCheckout['checkout_step'] ?? null);
 
-        $shouldEnsure = in_array($step, ['appointment', 'confirmation'], true)
-            || in_array($savedCheckout['checkout_step'] ?? null, ['appointment', 'confirmation'], true);
+        $shouldEnsure = $usesAppointmentFirstFlow
+            ? in_array($step, ['appointment', 'payment', 'confirmation'], true)
+                || in_array($savedCheckout['checkout_step'] ?? null, ['appointment', 'payment', 'confirmation'], true)
+            : in_array($step, ['appointment', 'confirmation'], true)
+                || in_array($savedCheckout['checkout_step'] ?? null, ['appointment', 'confirmation'], true);
 
         if (! $shouldEnsure) {
             return null;
         }
 
-        if ($customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand)) {
+        if ($laboratoryAppointmentCheckoutResolver->payableConfirmedAppointment($customer, $laboratoryBrand)) {
             return null;
         }
 

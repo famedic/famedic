@@ -789,6 +789,19 @@ export default function CartDetailDrawer({
 													{customer.segment_label}
 												</Badge>
 											) : null}
+											{cart?.checkout_flow?.label ? (
+												<Badge
+													color={
+														cart.checkout_flow
+															.confidence ===
+														"unknown"
+															? "zinc"
+															: "sky"
+													}
+												>
+													{cart.checkout_flow.label}
+												</Badge>
+											) : null}
 										</div>
 										<div className="grid grid-cols-2 gap-x-3 gap-y-2">
 											<Field
@@ -807,7 +820,10 @@ export default function CartDetailDrawer({
 											/>
 											<Field
 												label="Ultima actividad"
-												value={cart?.updated_at_human}
+												value={
+													cart?.last_user_activity_human ||
+													cart?.updated_at_human
+												}
 											/>
 										</div>
 									</div>

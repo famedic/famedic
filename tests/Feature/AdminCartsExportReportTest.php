@@ -19,6 +19,7 @@ use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
 use App\Models\PaymentAttempt;
 use App\Models\User;
+use App\Support\Exports\MonterreyExcelSerial;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Queue;
 use Spatie\Permission\Models\Permission;
@@ -88,9 +89,7 @@ function cartsExportAssoc(array $row): array
 
 function cartsExportExcelDate(Carbon $date): float
 {
-    $local = $date->copy()->setTimezone('America/Monterrey');
-
-    return \PhpOffice\PhpSpreadsheet\Shared\Date::dateTimeToExcel(new DateTimeImmutable($local->format('Y-m-d H:i:s')));
+    return MonterreyExcelSerial::fromOperationalWallClock($date);
 }
 
 it('exports one cart row per brand and individual rows in estudios sheet', function () {
@@ -314,6 +313,15 @@ it('exports unidentified device context when cart events have no client metadata
         ->and($row['Navegador'])->toBe('No identificado')
         ->and($row['Cambio de dispositivo'])->toBe('No')
         ->and($row['Dispositivos detectados'])->toBe('Sin informacion');
+});
+
+it('export row column count matches headings', function () {
+    $user = cartsExportUser();
+    cartsExportCart($user, LaboratoryBrand::OLAB);
+    $headings = (new CartsSheet)->headings();
+    $row = cartsExportRows()[0];
+
+    expect(count($headings))->toBe(count($row));
 });
 
 it('exports confirmed appointment timestamps separately from scheduled appointment timestamps', function () {

@@ -562,6 +562,9 @@ function AppointmentStatusPanel({
 export default function LaboratoryAppointmentStep({
 	laboratoryAppointment,
 	callbackPreferenceSavedAtFormatted,
+	appointmentFirstFlow = false,
+	appointmentConfirmed = false,
+	appointmentUnavailable = false,
 }) {
 	const { auth, famedicConcierge } = usePage().props;
 	const [tabIndex, setTabIndex] = useState(0);
@@ -837,11 +840,51 @@ export default function LaboratoryAppointmentStep({
 
 	const goToReceiveCallTab = () => setTabIndex(TAB_RECEIVE_CALL);
 
+	const appointmentFirstIntro = appointmentFirstFlow
+		? "Primero gestionaremos tu cita. El pago se realizará al final, una vez que nuestro equipo confirme la disponibilidad."
+		: null;
+
+	const appointmentFirstWaitingMessage = appointmentFirstFlow
+		? "Estamos confirmando tu cita. No realizaremos ningún cargo durante esta espera y guardaremos la información que ya registraste."
+		: null;
+
+	const appointmentFirstConfirmedMessage = appointmentFirstFlow && appointmentConfirmed
+		? "Tu cita fue confirmada. Ya puedes seleccionar tu método de pago y completar la compra."
+		: null;
+
+	const appointmentFirstUnavailableMessage = appointmentFirstFlow && appointmentUnavailable
+		? "Tu cita ya no está disponible para completar el pago. Puedes actualizar tu disponibilidad o solicitar que te llamemos para gestionar una nueva cita."
+		: null;
+
+	const defaultFooterMessage = appointmentFirstFlow
+		? null
+		: "Cuando el equipo de atención confirme tu cita, avanzaremos automáticamente al resumen para pagar.";
+
 	return (
 		<CheckoutWizardStep
 			title="Agenda tu cita con ayuda de nuestro equipo"
-			description="Elige cómo quieres que confirmemos fecha, horario y sucursal."
+			description={
+				appointmentFirstIntro ??
+				"Elige cómo quieres que confirmemos fecha, horario y sucursal."
+			}
 		>
+			{appointmentFirstUnavailableMessage && (
+				<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+					{appointmentFirstUnavailableMessage}
+				</div>
+			)}
+
+			{appointmentFirstConfirmedMessage && (
+				<div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+					{appointmentFirstConfirmedMessage}
+				</div>
+			)}
+
+			{appointmentFirstWaitingMessage && !appointmentConfirmed && (
+				<div className="mb-4 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100">
+					{appointmentFirstWaitingMessage}
+				</div>
+			)}
 			<TabGroup selectedIndex={tabIndex} onChange={setTabIndex}>
 				<TabList className="grid grid-cols-3 gap-2 rounded-xl bg-zinc-100 p-1.5 dark:bg-zinc-800/80">
 					<Tab className="rounded-lg outline-none transition-colors">
@@ -933,10 +976,11 @@ export default function LaboratoryAppointmentStep({
 				</TabPanels>
 			</TabGroup>
 
-			<Text className="mt-5 text-center text-sm text-zinc-600 dark:text-slate-400">
-				Cuando el equipo de atención confirme tu cita, avanzaremos
-				automáticamente al resumen para pagar.
-			</Text>
+			{defaultFooterMessage && (
+				<Text className="mt-5 text-center text-sm text-zinc-600 dark:text-slate-400">
+					{defaultFooterMessage}
+				</Text>
+			)}
 		</CheckoutWizardStep>
 	);
 }

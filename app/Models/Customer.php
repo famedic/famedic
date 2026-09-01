@@ -307,20 +307,14 @@ class Customer extends Model
 
     public function getRecentlyConfirmedUncompletedLaboratoryAppointment(LaboratoryBrand $laboratoryBrand): ?LaboratoryAppointment
     {
-        return $this->laboratoryAppointments()
-            ->recentlyConfirmed()
-            ->uncompleted()
-            ->ofBrand($laboratoryBrand)
-            ->with('laboratoryStore')
-            ->first();
+        return app(\App\Services\Laboratory\LaboratoryAppointmentCheckoutResolver::class)
+            ->payableConfirmedAppointment($this, $laboratoryBrand);
     }
 
     public function getPendingLaboratoryAppointment(LaboratoryBrand $laboratoryBrand): ?LaboratoryAppointment
     {
-        return $this->laboratoryAppointments()
-            ->unconfirmed()
-            ->ofBrand($laboratoryBrand)
-            ->first();
+        return app(\App\Services\Laboratory\LaboratoryAppointmentCheckoutResolver::class)
+            ->pendingAppointment($this, $laboratoryBrand);
     }
 
     // En app/Models/Customer.php
