@@ -199,4 +199,105 @@ return [
 
     /** Menú admin: muestra "Créditos a favor" pero sin permitir navegación. */
     'admin_coupons_navigation_disabled' => env('ADMIN_COUPONS_NAVIGATION_DISABLED', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Portal de usuario — Soporte y contacto público
+    |--------------------------------------------------------------------------
+    */
+    'support' => [
+        'customer_service' => [
+            'title' => 'Atención a clientes',
+            'contact_name' => 'Lydia',
+            'whatsapp_display' => env('FAMEDIC_SUPPORT_LYDIA_DISPLAY', '+52 1 81 2860 1893'),
+            'whatsapp_e164' => env('FAMEDIC_SUPPORT_LYDIA_WHATSAPP_E164', '528128601893'),
+            'whatsapp_default_message' => 'Hola, necesito ayuda con mi cuenta o una compra en Famedic.',
+        ],
+        'alternative_channel' => [
+            'title' => 'Canal alternativo de atención',
+            'badge' => 'Segundo canal',
+            'description' => 'Otra opción para comunicarte con Famedic y recibir orientación.',
+            'button_label' => 'Abrir WhatsApp alternativo',
+            'whatsapp_display' => env('FAMEDIC_SUPPORT_ALTERNATIVE_WHATSAPP_DISPLAY', '+52 1 33 4960 5998'),
+            'whatsapp_e164' => env('FAMEDIC_SUPPORT_ALTERNATIVE_WHATSAPP_E164', '523349605998'),
+            'whatsapp_default_message' => 'Hola, quiero recibir información y ayuda sobre los servicios de Famedic.',
+        ],
+        'email' => [
+            'address' => env('FAMEDIC_SUPPORT_EMAIL', 'contacto@famedic.com.mx'),
+            'subject' => 'Solicitud de soporte Famedic',
+        ],
+        'hours' => [
+            'timezone' => env('FAMEDIC_SUPPORT_TIMEZONE', 'America/Monterrey'),
+            'timezone_label' => 'Horario de Monterrey',
+            'schedule_by_day' => [
+                0 => null,
+                1 => ['openMinutes' => (8 * 60) + 30, 'closeMinutes' => 18 * 60],
+                2 => ['openMinutes' => (8 * 60) + 30, 'closeMinutes' => 18 * 60],
+                3 => ['openMinutes' => (8 * 60) + 30, 'closeMinutes' => 18 * 60],
+                4 => ['openMinutes' => (8 * 60) + 30, 'closeMinutes' => 18 * 60],
+                5 => ['openMinutes' => (8 * 60) + 30, 'closeMinutes' => 18 * 60],
+                6 => null,
+            ],
+            'available_message' => 'Nuestro equipo está disponible. La respuesta estimada es inmediata.',
+            'after_hours_message' => 'Puedes enviarnos tu mensaje y nuestro equipo te responderá durante el siguiente horario hábil.',
+        ],
+        'appointment_confirmation' => [
+            'text' => 'Nuestro equipo Concierge te contactará por teléfono para confirmar la fecha, el horario y la sucursal de tu cita.',
+            'companion_text' => 'Concierge Famedic te acompaña durante la coordinación de tu cita y te ayuda a confirmar los detalles necesarios antes de continuar con el proceso.',
+        ],
+    ],
+
+    /**
+     * Concierge Famedic — citas de laboratorio (checkout y portal de soporte).
+     * Fuente compartida con getConciergeAvailability en frontend.
+     */
+    'concierge' => [
+        'phone_display' => env('FAMEDIC_CONCIERGE_PHONE_DISPLAY', '(55) 6651 5232'),
+        'phone_tel' => env('FAMEDIC_CONCIERGE_PHONE_TEL', '5566515232'),
+        'timezone' => env('FAMEDIC_CONCIERGE_TIMEZONE', 'America/Mexico_City'),
+        'schedule_lines' => [],
+        'schedule_by_day' => [
+            0 => ['openMinutes' => 8 * 60, 'closeMinutes' => 14 * 60],
+            1 => ['openMinutes' => 7 * 60, 'closeMinutes' => 20 * 60],
+            2 => ['openMinutes' => 7 * 60, 'closeMinutes' => 20 * 60],
+            3 => ['openMinutes' => 7 * 60, 'closeMinutes' => 20 * 60],
+            4 => ['openMinutes' => 7 * 60, 'closeMinutes' => 20 * 60],
+            5 => ['openMinutes' => 7 * 60, 'closeMinutes' => 20 * 60],
+            6 => ['openMinutes' => 8 * 60, 'closeMinutes' => 15 * 60],
+        ],
+        'availability' => [
+            'online_label' => 'Concierge en línea',
+            'online_message' => 'Nuestro equipo está disponible ahora para ayudarte a agendar tu cita.',
+            'offline_label' => 'Concierge fuera de horario',
+            'offline_message' => 'Nuestro equipo podrá ayudarte en el siguiente horario disponible.',
+        ],
+        'checkout_offline_messages' => [
+            'Ahora no estamos disponibles por teléfono.',
+            'Puedes dejar tu solicitud y te llamaremos en el siguiente horario disponible.',
+        ],
+        'after_hours_message' => 'Puedes continuar con tu solicitud y nuestro equipo Concierge se comunicará contigo por teléfono durante el siguiente horario de atención.',
+        'available_message' => 'Nuestro equipo está disponible. La respuesta estimada es inmediata.',
+        'description' => 'Concierge Famedic coordina y confirma por teléfono la fecha, el horario y la sucursal de tu cita de laboratorio.',
+    ],
+
+    'social' => [
+        'intro' => 'Conoce nuestras novedades, servicios y recomendaciones de salud.',
+        'profiles' => [
+            [
+                'network' => 'Instagram',
+                'url' => 'https://www.instagram.com/famedicmx/',
+                'icon' => 'instagram',
+            ],
+            [
+                'network' => 'Facebook',
+                'url' => 'https://www.facebook.com/famedicmx/',
+                'icon' => 'facebook',
+            ],
+            [
+                'network' => 'LinkedIn',
+                'url' => 'https://mx.linkedin.com/company/famedicmx',
+                'icon' => 'linkedin',
+            ],
+        ],
+    ],
 ];

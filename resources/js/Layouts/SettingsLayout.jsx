@@ -14,6 +14,7 @@ import {
 	IdentificationIcon,
 	CommandLineIcon,
 	UsersIcon,
+	LifebuoyIcon,
 } from "@heroicons/react/20/solid";
 import { BuildingLibraryIcon } from "@heroicons/react/16/solid";
 
@@ -29,6 +30,7 @@ const iconMap = {
 	CommandLineIcon: CommandLineIcon,
 	UsersIcon: UsersIcon,
 	BuildingLibraryIcon: BuildingLibraryIcon,
+	LifebuoyIcon: LifebuoyIcon,
 };
 
 export default function SettingsLayout({ title, children }) {

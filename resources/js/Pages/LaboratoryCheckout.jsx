@@ -1352,6 +1352,12 @@ function LaboratoryAppointmentInfo({
     errors,
     variant = "accordion",
 }) {
+    const { famedicConcierge } = usePage().props;
+    const conciergeTel = famedicConcierge?.phoneTel
+        ? `tel:${famedicConcierge.phoneTel}`
+        : "tel:5566515232";
+    const conciergePhoneDisplay =
+        famedicConcierge?.phoneDisplay ?? "55 6651 5232";
     const isWizard = variant === "wizard";
 
     const patientContent = (
@@ -1413,8 +1419,8 @@ function LaboratoryAppointmentInfo({
                 </div>
                 <Text className="text-sm text-zinc-600 dark:text-slate-400">
                     Si necesitas modificar tu cita, contáctanos al{" "}
-                    <a href="tel:5566515232" className="underline">
-                        55 6651 5232
+                    <a href={conciergeTel} className="underline">
+                        {conciergePhoneDisplay}
                     </a>
                 </Text>
             </div>
@@ -1496,13 +1502,13 @@ function LaboratoryAppointmentInfo({
                 <Text>
                     Si necesitas hacer modificaciones a tu cita o información de
                     paciente, favor de contactarnos al{" "}
-                    <a href="tel:5566515232" target="_blank">
+                    <a href={conciergeTel} target="_blank">
                         <Button
                             plain
                             className="text-zinc-950 underline decoration-zinc-950/50 data-[hover]:decoration-zinc-950 dark:text-white dark:decoration-white/50 dark:data-[hover]:decoration-white"
                         >
                             <PhoneIcon />
-                            55 6651 5232
+                            {conciergePhoneDisplay}
                         </Button>
                     </a>
                 </Text>

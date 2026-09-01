@@ -19,6 +19,7 @@ import {
 	IdentificationIcon,
 	BookOpenIcon,
 	BuildingLibraryIcon,
+	LifebuoyIcon,
 } from "@heroicons/react/16/solid";
 import { usePage } from "@inertiajs/react";
 
@@ -67,6 +68,7 @@ export default function UserNavigationDropdown({
 		UsersIcon: UsersIcon,
 		IdentificationIcon: IdentificationIcon,
 		BuildingLibraryIcon: BuildingLibraryIcon,
+		LifebuoyIcon: LifebuoyIcon,
 	};
 
 	return (

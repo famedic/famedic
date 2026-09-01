@@ -250,6 +250,8 @@ function CallNowPanel({
 	scheduleText,
 	userPhone,
 	telHref,
+	phoneDisplay,
+	checkoutOfflineMessages,
 	onCallClick,
 	onRequestCall,
 }) {
@@ -280,7 +282,7 @@ function CallNowPanel({
 						<a href={telHref} onClick={onCallClick} className="inline-block">
 							<Button type="button">
 								<PhoneIcon aria-hidden="true" />
-								Llamar al (55) 6651 5232
+								Llamar al {phoneDisplay}
 							</Button>
 						</a>
 					</div>
@@ -307,11 +309,9 @@ function CallNowPanel({
 			) : (
 				<>
 					<div className="mt-4 space-y-1 text-sm text-zinc-600 dark:text-zinc-300">
-						<p>Ahora no estamos disponibles por teléfono.</p>
-						<p>
-							Puedes dejar tu solicitud y te llamaremos en el siguiente
-							horario disponible.
-						</p>
+						{(checkoutOfflineMessages ?? []).map((line) => (
+							<p key={line}>{line}</p>
+						))}
 					</div>
 					{nextAvailableText && (
 						<Text className="mt-4 text-sm font-medium text-zinc-800 dark:text-zinc-100">
@@ -563,7 +563,7 @@ export default function LaboratoryAppointmentStep({
 	laboratoryAppointment,
 	callbackPreferenceSavedAtFormatted,
 }) {
-	const { auth } = usePage().props;
+	const { auth, famedicConcierge } = usePage().props;
 	const [tabIndex, setTabIndex] = useState(0);
 	const [minNowTick, setMinNowTick] = useState(() => minStartDatetimeLocal());
 	const [availabilityTick, setAvailabilityTick] = useState(() => Date.now());
@@ -599,8 +599,8 @@ export default function LaboratoryAppointmentStep({
 	}, []);
 
 	const conciergeAvailability = useMemo(
-		() => getConciergeAvailability(new Date(availabilityTick)),
-		[availabilityTick],
+		() => getConciergeAvailability(new Date(availabilityTick), famedicConcierge),
+		[availabilityTick, famedicConcierge],
 	);
 
 	const receiveCallCopy = useMemo(
@@ -725,7 +725,10 @@ export default function LaboratoryAppointmentStep({
 		callbackPreferenceSavedAtFormatted,
 	]);
 
-	const telHref = "tel:5566515232";
+	const telHref = famedicConcierge?.phoneTel
+		? `tel:${famedicConcierge.phoneTel}`
+		: "tel:5566515232";
+	const phoneDisplay = famedicConcierge?.phoneDisplay ?? "(55) 6651 5232";
 
 	const onCallClick = (e) => {
 		e.preventDefault();
@@ -878,6 +881,10 @@ export default function LaboratoryAppointmentStep({
 							scheduleText={conciergeAvailability.scheduleText}
 							userPhone={auth?.user?.phone}
 							telHref={telHref}
+							phoneDisplay={phoneDisplay}
+							checkoutOfflineMessages={
+								conciergeAvailability.checkoutOfflineMessages
+							}
 							onCallClick={onCallClick}
 							onRequestCall={goToReceiveCallTab}
 						/>
