@@ -3,12 +3,12 @@ import { Button } from "@/Components/Catalyst/button";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Text, Strong, Anchor } from "@/Components/Catalyst/text";
 import {
-  ArrowPathIcon,
-  PhoneIcon,
-  BuildingStorefrontIcon,
-  CreditCardIcon,
-  InformationCircleIcon as InformationCircleIconSolid,
-  LockClosedIcon,
+	ArrowPathIcon,
+	PhoneIcon,
+	BuildingStorefrontIcon,
+	CreditCardIcon,
+	InformationCircleIcon as InformationCircleIconSolid,
+	LockClosedIcon,
 } from "@heroicons/react/16/solid";
 import { Subheading } from "@/Components/Catalyst/heading";
 import FocusedLayout from "@/Layouts/FocusedLayout";
@@ -23,569 +23,621 @@ import { PhotoIcon } from "@heroicons/react/24/solid";
 import { CheckIcon } from "@heroicons/react/24/outline";
 
 const emptyItemsContent = (
-  <div className="text-center py-10">
-    <Text className="text-zinc-500">Tu carrito está vacío.</Text>
-  </div>
+	<div className="py-10 text-center">
+		<Text className="text-zinc-500">Tu carrito está vacío.</Text>
+	</div>
 );
 
 export function scrollToCheckoutSummaryTotals() {
-  const prefersReducedMotion = window.matchMedia(
-    "(prefers-reduced-motion: reduce)",
-  ).matches;
+	const prefersReducedMotion = window.matchMedia(
+		"(prefers-reduced-motion: reduce)",
+	).matches;
 
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      const el = document.getElementById("checkout-summary-totals");
-      if (!el) return;
+	requestAnimationFrame(() => {
+		requestAnimationFrame(() => {
+			const el = document.getElementById("checkout-summary-totals");
+			if (!el) return;
 
-      el.scrollIntoView({
-        behavior: prefersReducedMotion ? "auto" : "smooth",
-        block: "nearest",
-      });
+			el.scrollIntoView({
+				behavior: prefersReducedMotion ? "auto" : "smooth",
+				block: "nearest",
+			});
 
-      el.classList.add("checkout-summary-totals-highlight");
-      window.setTimeout(
-        () => el.classList.remove("checkout-summary-totals-highlight"),
-        1600,
-      );
-    });
-  });
+			el.classList.add("checkout-summary-totals-highlight");
+			window.setTimeout(
+				() => el.classList.remove("checkout-summary-totals-highlight"),
+				1600,
+			);
+		});
+	});
 }
 
 export default function CheckoutLayout({
-  title,
-  summaryDetails = [],
-  items = [],
-  children,
-  header,
-  paymentDisabled = false,
-  onlinePaymentDisabled = false,
-  branchPaymentDisabled = false,
-  paymentProcessing = false,
-  submit,
-  showBranchPayment = false,
-  data = {},
-  /** Si se pasa, sustituye el botón "Pagar ahora" (p. ej. PayPal). */
-  alternateOnlinePayment = null,
-  /** Modo wizard multi-paso */
-  stepper = null,
-  footerActions = null,
-  couponSection = null,
-  hideDefaultSubmit = false,
-  /** Ancla para scroll al cambiar de paso del wizard */
-  stepContentRef = null,
-  /** Footer Continuar/Volver pegado al fondo en pasos con listas largas */
-  floatingWizardFooter = false,
-  /** Acciones debajo de los totales del resumen (p. ej. confirmar pago) */
-  summaryActions = null,
+	title,
+	summaryDetails = [],
+	items = [],
+	children,
+	header,
+	paymentDisabled = false,
+	onlinePaymentDisabled = false,
+	branchPaymentDisabled = false,
+	paymentProcessing = false,
+	submit,
+	showBranchPayment = false,
+	data = {},
+	/** Si se pasa, sustituye el botón "Pagar ahora" (p. ej. PayPal). */
+	alternateOnlinePayment = null,
+	/** Modo wizard multi-paso */
+	stepper = null,
+	footerActions = null,
+	couponSection = null,
+	hideDefaultSubmit = false,
+	/** Ancla para scroll al cambiar de paso del wizard */
+	stepContentRef = null,
+	/** Footer Continuar/Volver pegado al fondo en pasos con listas largas */
+	floatingWizardFooter = false,
+	/** Oculta solo la ayuda flotante verde de WhatsApp del checkout. */
+	hideWhatsAppHelp = false,
+	/** Acciones debajo de los totales del resumen (p. ej. confirmar pago) */
+	summaryActions = null,
 }) {
-  const [isOnlineProcessing, setIsOnlineProcessing] = useState(false);
-  const [isBranchProcessing, setIsBranchProcessing] = useState(false);
-  const onlineDisabled = onlinePaymentDisabled !== undefined ? onlinePaymentDisabled : paymentDisabled;
-  const branchDisabled = branchPaymentDisabled !== undefined ? branchPaymentDisabled : paymentDisabled;
+	const [isOnlineProcessing, setIsOnlineProcessing] = useState(false);
+	const [isBranchProcessing, setIsBranchProcessing] = useState(false);
+	const onlineDisabled =
+		onlinePaymentDisabled !== undefined
+			? onlinePaymentDisabled
+			: paymentDisabled;
+	const branchDisabled =
+		branchPaymentDisabled !== undefined
+			? branchPaymentDisabled
+			: paymentDisabled;
 
-  const paymentButtonText = useMemo(() => {
-    return "Pagar ahora " + (summaryDetails[summaryDetails.length - 1]?.value || "$0");
-  }, [summaryDetails]);
+	const paymentButtonText = useMemo(() => {
+		return (
+			"Pagar ahora " +
+			(summaryDetails[summaryDetails.length - 1]?.value || "$0")
+		);
+	}, [summaryDetails]);
 
-  const paymentBranchButtonText = useMemo(() => {
-    return "Pagar en sucursal " + (summaryDetails[summaryDetails.length - 1]?.value || "$0");
-  }, [summaryDetails]);
+	const paymentBranchButtonText = useMemo(() => {
+		return (
+			"Pagar en sucursal " +
+			(summaryDetails[summaryDetails.length - 1]?.value || "$0")
+		);
+	}, [summaryDetails]);
 
-  return (
-    <FocusedLayout title={title} hideHelpBubble={true}>
-      {header}
+	return (
+		<FocusedLayout title={title} hideHelpBubble={true}>
+			{header}
 
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const isBranch = e.nativeEvent.submitter?.name === "branch_payment";
+			<form
+				onSubmit={async (e) => {
+					e.preventDefault();
+					const isBranch =
+						e.nativeEvent.submitter?.name === "branch_payment";
 
-          if (isBranch ? isBranchProcessing : isOnlineProcessing) return;
+					if (isBranch ? isBranchProcessing : isOnlineProcessing)
+						return;
 
-          if (isBranch) setIsBranchProcessing(true);
-          else setIsOnlineProcessing(true);
+					if (isBranch) setIsBranchProcessing(true);
+					else setIsOnlineProcessing(true);
 
-          try {
-            await submit(e, isBranch);
-          } finally {
-            setIsOnlineProcessing(false);
-            setIsBranchProcessing(false);
-          }
-        }}
-        className="mx-auto mt-8 grid grid-cols-1 gap-8 lg:max-w-none lg:grid-cols-5"
-      >
-        <div className="flex w-full flex-col gap-6 lg:col-span-3">
-          <div
-            ref={stepContentRef}
-            id="checkout-wizard-step"
-            className={clsx(
-              "scroll-mt-20 space-y-6",
-              floatingWizardFooter && "pb-28",
-            )}
-          >
-            {stepper}
-            {children}
-          </div>
+					try {
+						await submit(e, isBranch);
+					} finally {
+						setIsOnlineProcessing(false);
+						setIsBranchProcessing(false);
+					}
+				}}
+				className="mx-auto mt-8 grid grid-cols-1 gap-8 lg:max-w-none lg:grid-cols-5"
+			>
+				<div className="flex w-full flex-col gap-6 lg:col-span-3">
+					<div
+						ref={stepContentRef}
+						id="checkout-wizard-step"
+						className={clsx(
+							"scroll-mt-20 space-y-6",
+							floatingWizardFooter && "pb-28",
+						)}
+					>
+						{stepper}
+						{children}
+					</div>
 
-          {summaryActions && (
-            <div className="lg:hidden">
-              <CheckoutSummaryCard>
-                <CheckoutTotalsPanel
-                  summaryDetails={summaryDetails}
-                  couponSection={couponSection}
-                  summaryActions={summaryActions}
-                />
-              </CheckoutSummaryCard>
-            </div>
-          )}
+					{summaryActions && (
+						<div className="lg:hidden">
+							<CheckoutSummaryCard>
+								<CheckoutTotalsPanel
+									summaryDetails={summaryDetails}
+									couponSection={couponSection}
+									summaryActions={summaryActions}
+								/>
+							</CheckoutSummaryCard>
+						</div>
+					)}
 
-          {floatingWizardFooter && (
-            <div className="h-20 shrink-0" aria-hidden="true" />
-          )}
+					{floatingWizardFooter && (
+						<div className="h-20 shrink-0" aria-hidden="true" />
+					)}
 
-          {footerActions &&
-            (floatingWizardFooter ? (
-              <CheckoutWizardFloatingFooter>
-                {footerActions}
-              </CheckoutWizardFloatingFooter>
-            ) : (
-              footerActions
-            ))}
+					{footerActions &&
+						(floatingWizardFooter ? (
+							<CheckoutWizardFloatingFooter>
+								{footerActions}
+							</CheckoutWizardFloatingFooter>
+						) : (
+							footerActions
+						))}
 
-          {!hideDefaultSubmit && (
-            <>
-          {/* PAGO ONLINE */}
-          {alternateOnlinePayment ? (
-            <div
-              className={clsx(
-                (onlineDisabled || isOnlineProcessing || paymentProcessing) && "opacity-50 pointer-events-none"
-              )}
-            >
-              {alternateOnlinePayment}
-            </div>
-          ) : (
-          <Button
-            disabled={onlineDisabled || isOnlineProcessing || paymentProcessing}
-            type="submit"
-            name="online_payment"
-            className={clsx(
-              "w-full !py-3",
-              (onlineDisabled || isOnlineProcessing || paymentProcessing) && "opacity-50"
-            )}
-          >
-            <CreditCardIcon className="w-5 h-5 mr-2" />
-            {paymentButtonText}
-            {(isOnlineProcessing || paymentProcessing) && <ArrowPathIcon className="animate-spin ml-2 w-5 h-5" />}
-          </Button>
-          )}
-          
-          {showBranchPayment && !data?.payment_method && (
-            <Text className="mt-2 text-sm text-zinc-600 dark:text-slate-400 text-center">
-              <InformationCircleIconSolid className="inline w-4 h-4 mr-1" />
-              Agrega una tarjeta para pagar en línea
-            </Text>
-          )}
+					{!hideDefaultSubmit && (
+						<>
+							{/* PAGO ONLINE */}
+							{alternateOnlinePayment ? (
+								<div
+									className={clsx(
+										(onlineDisabled ||
+											isOnlineProcessing ||
+											paymentProcessing) &&
+											"pointer-events-none opacity-50",
+									)}
+								>
+									{alternateOnlinePayment}
+								</div>
+							) : (
+								<Button
+									disabled={
+										onlineDisabled ||
+										isOnlineProcessing ||
+										paymentProcessing
+									}
+									type="submit"
+									name="online_payment"
+									className={clsx(
+										"w-full !py-3",
+										(onlineDisabled ||
+											isOnlineProcessing ||
+											paymentProcessing) &&
+											"opacity-50",
+									)}
+								>
+									<CreditCardIcon className="mr-2 h-5 w-5" />
+									{paymentButtonText}
+									{(isOnlineProcessing ||
+										paymentProcessing) && (
+										<ArrowPathIcon className="ml-2 h-5 w-5 animate-spin" />
+									)}
+								</Button>
+							)}
 
-          {/* PAGO EN SUCURSAL */}
-          {false && showBranchPayment && (
-            <Button
-              disabled={branchDisabled || isBranchProcessing || paymentProcessing}
-              type="submit"
-              name="branch_payment"
-              className={clsx(
-                "w-full !py-3",
-                (branchDisabled || isBranchProcessing || paymentProcessing) && "opacity-50"
-              )}
-            >
-              <BuildingStorefrontIcon className="w-5 h-5 mr-2" />
-              {paymentBranchButtonText}
-              {(isBranchProcessing || paymentProcessing) && <ArrowPathIcon className="animate-spin ml-2 w-5 h-5" />}
-            </Button>
-          )}
-          
-          <Text className="mb-8 text-sm text-zinc-600 dark:text-slate-400">
-            Al hacer clic en el botón "{paymentButtonText}",
-            aceptas todos los{" "}
-            <Anchor href="/terminos-y-condiciones" target="_blank" className="underline">
-              Términos y condiciones
-            </Anchor>{" "}
-            y la{" "}
-            <Anchor href="/politica-de-privacidad" target="_blank" className="underline">
-              Política de privacidad
-            </Anchor>
-            .
-          </Text>
-            </>
-          )}
-        </div>
+							{showBranchPayment && !data?.payment_method && (
+								<Text className="mt-2 text-center text-sm text-zinc-600 dark:text-slate-400">
+									<InformationCircleIconSolid className="mr-1 inline h-4 w-4" />
+									Agrega una tarjeta para pagar en línea
+								</Text>
+							)}
 
-        <CheckoutSummary
-          summaryDetails={summaryDetails}
-          items={items}
-          couponSection={couponSection}
-          summaryActions={summaryActions}
-        />
-      </form>
+							{/* PAGO EN SUCURSAL */}
+							{false && showBranchPayment && (
+								<Button
+									disabled={
+										branchDisabled ||
+										isBranchProcessing ||
+										paymentProcessing
+									}
+									type="submit"
+									name="branch_payment"
+									className={clsx(
+										"w-full !py-3",
+										(branchDisabled ||
+											isBranchProcessing ||
+											paymentProcessing) &&
+											"opacity-50",
+									)}
+								>
+									<BuildingStorefrontIcon className="mr-2 h-5 w-5" />
+									{paymentBranchButtonText}
+									{(isBranchProcessing ||
+										paymentProcessing) && (
+										<ArrowPathIcon className="ml-2 h-5 w-5 animate-spin" />
+									)}
+								</Button>
+							)}
 
-      <Footer />
-      <CheckoutWhatsAppHelp reserveFooterSpace={floatingWizardFooter} />
-    </FocusedLayout>
-  );
+							<Text className="mb-8 text-sm text-zinc-600 dark:text-slate-400">
+								Al hacer clic en el botón "{paymentButtonText}",
+								aceptas todos los{" "}
+								<Anchor
+									href="/terminos-y-condiciones"
+									target="_blank"
+									className="underline"
+								>
+									Términos y condiciones
+								</Anchor>{" "}
+								y la{" "}
+								<Anchor
+									href="/politica-de-privacidad"
+									target="_blank"
+									className="underline"
+								>
+									Política de privacidad
+								</Anchor>
+								.
+							</Text>
+						</>
+					)}
+				</div>
+
+				<CheckoutSummary
+					summaryDetails={summaryDetails}
+					items={items}
+					couponSection={couponSection}
+					summaryActions={summaryActions}
+				/>
+			</form>
+
+			<Footer />
+			<CheckoutWhatsAppHelp
+				reserveFooterSpace={floatingWizardFooter}
+				hidden={hideWhatsAppHelp}
+			/>
+		</FocusedLayout>
+	);
 }
 
 function CheckoutSummary({
-    summaryDetails,
-    items,
-    couponSection = null,
-    summaryActions = null,
+	summaryDetails,
+	items,
+	couponSection = null,
+	summaryActions = null,
 }) {
-    const splitMobileCheckout = Boolean(summaryActions);
+	const splitMobileCheckout = Boolean(summaryActions);
 
-    const orderItems = <CheckoutOrderItems items={items} />;
+	const orderItems = <CheckoutOrderItems items={items} />;
 
-    const totalsPanel = (
-        <CheckoutTotalsPanel
-            summaryDetails={summaryDetails}
-            couponSection={couponSection}
-            summaryActions={summaryActions}
-        />
-    );
+	const totalsPanel = (
+		<CheckoutTotalsPanel
+			summaryDetails={summaryDetails}
+			couponSection={couponSection}
+			summaryActions={summaryActions}
+		/>
+	);
 
-    if (splitMobileCheckout) {
-        return (
-            <>
-                <div className="order-first mx-auto w-full lg:hidden">
-                    <CheckoutSummaryCard>{orderItems}</CheckoutSummaryCard>
-                </div>
+	if (splitMobileCheckout) {
+		return (
+			<>
+				<div className="order-first mx-auto w-full lg:hidden">
+					<CheckoutSummaryCard>{orderItems}</CheckoutSummaryCard>
+				</div>
 
-                <div className="order-last mx-auto hidden w-full lg:col-span-2 lg:block">
-                    <CheckoutSummaryCard sticky>
-                        {orderItems}
-                        {totalsPanel}
-                    </CheckoutSummaryCard>
-                </div>
-            </>
-        );
-    }
+				<div className="order-last mx-auto hidden w-full lg:col-span-2 lg:block">
+					<CheckoutSummaryCard sticky>
+						{orderItems}
+						{totalsPanel}
+					</CheckoutSummaryCard>
+				</div>
+			</>
+		);
+	}
 
-    return (
-        <div className="order-first mx-auto w-full lg:order-last lg:col-span-2">
-            <CheckoutSummaryCard sticky>
-                {orderItems}
-                {totalsPanel}
-            </CheckoutSummaryCard>
-        </div>
-    );
+	return (
+		<div className="order-first mx-auto w-full lg:order-last lg:col-span-2">
+			<CheckoutSummaryCard sticky>
+				{orderItems}
+				{totalsPanel}
+			</CheckoutSummaryCard>
+		</div>
+	);
 }
 
 function CheckoutSummaryCard({ children, sticky = false }) {
-    return (
-        <section
-            className={clsx(
-                "space-y-6 overflow-hidden rounded-lg bg-white px-4 py-6 shadow sm:p-6 lg:p-8 dark:bg-slate-900",
-                sticky && "sticky top-8",
-            )}
-        >
-            {children}
-        </section>
-    );
+	return (
+		<section
+			className={clsx(
+				"space-y-6 overflow-hidden rounded-lg bg-white px-4 py-6 shadow sm:p-6 lg:p-8 dark:bg-slate-900",
+				sticky && "sticky top-8",
+			)}
+		>
+			{children}
+		</section>
+	);
 }
 
 function CheckoutOrderItems({ items }) {
-    return (
-        <>
-            <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-slate-400">
-                <LockClosedIcon className="size-4" />
-                <Text>Pago 100% seguro</Text>
-            </div>
+	return (
+		<>
+			<div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-slate-400">
+				<LockClosedIcon className="size-4" />
+				<Text>Pago 100% seguro</Text>
+			</div>
 
-            <Subheading>Resumen del pedido</Subheading>
+			<Subheading>Resumen del pedido</Subheading>
 
-            <div className="flow-root max-h-64 overflow-x-hidden overflow-y-auto lg:max-h-80">
-                <ul role="list" className="[&>*:last-child]:hidden">
-                    {items.length > 0 ? (
-                        items.map((item, index) => (
-                            <CartItem
-                                key={index}
-                                imgSrc={item.imgSrc}
-                                showDefaultImage={item.showDefaultImage}
-                                heading={item.heading}
-                                description={item.description}
-                                indications={item.indications}
-                                features={item.features || []}
-                                price={item.price}
-                                discountedPrice={item.discountedPrice}
-                                discountPercentage={item.discountPercentage}
-                                infoMessage={item.infoMessage}
-                                quantity={item.quantity}
-                                destroyCartItem={item.onDestroy}
-                            />
-                        ))
-                    ) : (
-                        <li className="py-6 sm:py-10">
-                            {emptyItemsContent}
-                        </li>
-                    )}
-                </ul>
-            </div>
-        </>
-    );
+			<div className="flow-root max-h-64 overflow-y-auto overflow-x-hidden lg:max-h-80">
+				<ul role="list" className="[&>*:last-child]:hidden">
+					{items.length > 0 ? (
+						items.map((item, index) => (
+							<CartItem
+								key={index}
+								imgSrc={item.imgSrc}
+								showDefaultImage={item.showDefaultImage}
+								heading={item.heading}
+								description={item.description}
+								indications={item.indications}
+								features={item.features || []}
+								price={item.price}
+								discountedPrice={item.discountedPrice}
+								discountPercentage={item.discountPercentage}
+								infoMessage={item.infoMessage}
+								quantity={item.quantity}
+								destroyCartItem={item.onDestroy}
+							/>
+						))
+					) : (
+						<li className="py-6 sm:py-10">{emptyItemsContent}</li>
+					)}
+				</ul>
+			</div>
+		</>
+	);
 }
 
 function CheckoutTotalsPanel({
-    summaryDetails,
-    couponSection = null,
-    summaryActions = null,
+	summaryDetails,
+	couponSection = null,
+	summaryActions = null,
 }) {
-    return (
-        <>
-            {couponSection}
+	return (
+		<>
+			{couponSection}
 
-            <div
-                id="checkout-summary-totals"
-                className="scroll-mt-24 rounded-lg transition-[box-shadow] duration-300"
-            >
-                <Subheading>Resumen</Subheading>
+			<div
+				id="checkout-summary-totals"
+				className="scroll-mt-24 rounded-lg transition-[box-shadow] duration-300"
+			>
+				<Subheading>Resumen</Subheading>
 
-                <dl className="[&>:first-child]:pt-0 [&>:last-child]:pb-0">
-                    {summaryDetails.map((cartDetail, index) => (
-                        <CartDetail
-                            key={cartDetail.label}
-                            {...cartDetail}
-                            totalRow={index === summaryDetails.length - 1}
-                        />
-                    ))}
-                </dl>
+				<dl className="[&>:first-child]:pt-0 [&>:last-child]:pb-0">
+					{summaryDetails.map((cartDetail, index) => (
+						<CartDetail
+							key={cartDetail.label}
+							{...cartDetail}
+							totalRow={index === summaryDetails.length - 1}
+						/>
+					))}
+				</dl>
 
-                {summaryActions && (
-                    <div
-                        id="checkout-summary-payment"
-                        className="mt-4 space-y-3 border-t border-zinc-200 pt-4 dark:border-slate-700"
-                    >
-                        {summaryActions}
-                    </div>
-                )}
-            </div>
-        </>
-    );
+				{summaryActions && (
+					<div
+						id="checkout-summary-payment"
+						className="mt-4 space-y-3 border-t border-zinc-200 pt-4 dark:border-slate-700"
+					>
+						{summaryActions}
+					</div>
+				)}
+			</div>
+		</>
+	);
 }
 
 function CartDetail({ label, value, totalRow = false }) {
-    return (
-        <>
-            <div className="flex min-w-0 items-center justify-between gap-2 py-6">
-                <dt className="min-w-0 shrink">
-                    {totalRow ? (
-                        <Subheading
-                            className={totalRow ? "dark:!text-famedic-light" : ""}
-                        >
-                            {label}
-                        </Subheading>
-                    ) : (
-                        <Text>{label}</Text>
-                    )}
-                </dt>
-                <dd className="min-w-0 shrink-0">
-                    <Text className="max-w-48 break-words text-right">
-                        {totalRow ? (
-                            <Strong
-                                className={totalRow ? "dark:!text-famedic-light" : ""}
-                            >
-                                {value}
-                            </Strong>
-                        ) : (
-                            value
-                        )}
-                    </Text>
-                </dd>
-            </div>
-            {!totalRow && <Divider />}
-        </>
-    );
+	return (
+		<>
+			<div className="flex min-w-0 items-center justify-between gap-2 py-6">
+				<dt className="min-w-0 shrink">
+					{totalRow ? (
+						<Subheading
+							className={
+								totalRow ? "dark:!text-famedic-light" : ""
+							}
+						>
+							{label}
+						</Subheading>
+					) : (
+						<Text>{label}</Text>
+					)}
+				</dt>
+				<dd className="min-w-0 shrink-0">
+					<Text className="max-w-48 break-words text-right">
+						{totalRow ? (
+							<Strong
+								className={
+									totalRow ? "dark:!text-famedic-light" : ""
+								}
+							>
+								{value}
+							</Strong>
+						) : (
+							value
+						)}
+					</Text>
+				</dd>
+			</div>
+			{!totalRow && <Divider />}
+		</>
+	);
 }
 
 function CartItem({
-    heading,
-    description,
-    indications,
-    features = [],
-    price,
-    infoMessage,
-    imgSrc = null,
-    showDefaultImage = true,
-    discountedPrice = null,
-    discountPercentage = null,
-    quantity,
-    destroyCartItem,
+	heading,
+	description,
+	indications,
+	features = [],
+	price,
+	infoMessage,
+	imgSrc = null,
+	showDefaultImage = true,
+	discountedPrice = null,
+	discountPercentage = null,
+	quantity,
+	destroyCartItem,
 }) {
-    return (
-        <>
-            <li className="flex min-w-0 pb-6">
-                {(showDefaultImage || imgSrc) && (
-                    <div className="flex-shrink-0">
-                        {imgSrc ? (
-                            <img
-                                src={imgSrc}
-                                className="size-20 rounded-md object-cover object-center sm:size-24"
-                                alt={heading}
-                            />
-                        ) : (
-                            <div className="flex size-20 items-center justify-center sm:size-24">
-                                <PhotoIcon className="h-full fill-zinc-200 dark:fill-slate-700" />
-                            </div>
-                        )}
-                    </div>
-                )}
-                <div
-                    className={`min-w-0 w-full ${imgSrc || showDefaultImage ? "ml-4 sm:ml-6" : ""}`}
-                >
-                    <div className="relative flex min-w-0 sm:gap-x-6">
-                        <div className="min-w-0 w-full">
-                            <div className="pr-9">
-                                <Subheading className="mb-3 break-words">
-                                    {quantity && (
-                                        <Badge color="slate">{quantity}</Badge>
-                                    )}{" "}
-                                    {heading}
-                                </Subheading>
+	return (
+		<>
+			<li className="flex min-w-0 pb-6">
+				{(showDefaultImage || imgSrc) && (
+					<div className="flex-shrink-0">
+						{imgSrc ? (
+							<img
+								src={imgSrc}
+								className="size-20 rounded-md object-cover object-center sm:size-24"
+								alt={heading}
+							/>
+						) : (
+							<div className="flex size-20 items-center justify-center sm:size-24">
+								<PhotoIcon className="h-full fill-zinc-200 dark:fill-slate-700" />
+							</div>
+						)}
+					</div>
+				)}
+				<div
+					className={`w-full min-w-0 ${imgSrc || showDefaultImage ? "ml-4 sm:ml-6" : ""}`}
+				>
+					<div className="relative flex min-w-0 sm:gap-x-6">
+						<div className="w-full min-w-0">
+							<div className="pr-9">
+								<Subheading className="mb-3 break-words">
+									{quantity && (
+										<Badge color="slate">{quantity}</Badge>
+									)}{" "}
+									{heading}
+								</Subheading>
 
-                                {infoMessage && (
-                                    <Badge color="sky" className="mb-3">
-                                        <InformationCircleIcon
-                                            aria-hidden="true"
-                                            className="size-5 text-famedic-light"
-                                        />
-                                        {infoMessage}
-                                    </Badge>
-                                )}
+								{infoMessage && (
+									<Badge color="sky" className="mb-3">
+										<InformationCircleIcon
+											aria-hidden="true"
+											className="size-5 text-famedic-light"
+										/>
+										{infoMessage}
+									</Badge>
+								)}
 
-                                {description && (
-                                    <Text className="break-words">
-                                        <span className="text-xs">
-                                            {description}
-                                        </span>
-                                    </Text>
-                                )}
+								{description && (
+									<Text className="break-words">
+										<span className="text-xs">
+											{description}
+										</span>
+									</Text>
+								)}
 
-                                {indications && (
-                                    <Text className="break-words">
-                                        <span className="text-xs">
-                                            {indications}
-                                        </span>
-                                    </Text>
-                                )}
+								{indications && (
+									<Text className="break-words">
+										<span className="text-xs">
+											{indications}
+										</span>
+									</Text>
+								)}
 
-                                {/* Features list */}
-                                {features.length > 0 && (
-                                    <ul className="mt-2 space-y-1">
-                                        {features.map((feature, idx) => (
-                                            <li
-                                                key={idx}
-                                                className="flex gap-2 text-sm text-zinc-700 dark:text-slate-200"
-                                            >
-                                                <CheckIcon className="mt-1 size-4 flex-shrink-0 text-famedic-light" />
-                                                <Text>
-                                                    <span className="text-xs">
-                                                        {feature}
-                                                    </span>
-                                                </Text>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                            {discountedPrice && discountPercentage > 0 && (
-                                <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                                    {discountPercentage && (
-                                        <Badge color="famedic-lime">
-                                            {discountPercentage}%
-                                        </Badge>
-                                    )}
-                                    <span className="text-sm text-zinc-500 line-through dark:text-slate-400">
-                                        {discountedPrice}
-                                    </span>
-                                </div>
-                            )}
+								{/* Features list */}
+								{features.length > 0 && (
+									<ul className="mt-2 space-y-1">
+										{features.map((feature, idx) => (
+											<li
+												key={idx}
+												className="flex gap-2 text-sm text-zinc-700 dark:text-slate-200"
+											>
+												<CheckIcon className="mt-1 size-4 flex-shrink-0 text-famedic-light" />
+												<Text>
+													<span className="text-xs">
+														{feature}
+													</span>
+												</Text>
+											</li>
+										))}
+									</ul>
+								)}
+							</div>
+							{discountedPrice && discountPercentage > 0 && (
+								<div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+									{discountPercentage && (
+										<Badge color="famedic-lime">
+											{discountPercentage}%
+										</Badge>
+									)}
+									<span className="text-sm text-zinc-500 line-through dark:text-slate-400">
+										{discountedPrice}
+									</span>
+								</div>
+							)}
 
-                            <Text className="mt-4 break-words text-right">
-                                <Strong>
-                                    <span className="text-famedic-dark dark:text-white">
-                                        {price}
-                                    </span>
-                                </Strong>
-                            </Text>
-                        </div>
-                        <div className="absolute right-0 top-0">
-                            <button
-                                type="button"
-                                onClick={destroyCartItem}
-                                className="-m-2 inline-flex p-2 text-gray-400 hover:text-red-500"
-                            >
-                                <XMarkIcon
-                                    aria-hidden="true"
-                                    className="h-6 w-6"
-                                />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </li>
-            <Divider className="mb-6" />
-        </>
-    );
+							<Text className="mt-4 break-words text-right">
+								<Strong>
+									<span className="text-famedic-dark dark:text-white">
+										{price}
+									</span>
+								</Strong>
+							</Text>
+						</div>
+						<div className="absolute right-0 top-0">
+							<button
+								type="button"
+								onClick={destroyCartItem}
+								className="-m-2 inline-flex p-2 text-gray-400 hover:text-red-500"
+							>
+								<XMarkIcon
+									aria-hidden="true"
+									className="h-6 w-6"
+								/>
+							</button>
+						</div>
+					</div>
+				</div>
+			</li>
+			<Divider className="mb-6" />
+		</>
+	);
 }
 
 function Footer() {
-    return (
-        <>
-            <Divider className="mb-4 mt-20" />
-            <div className="flex flex-col flex-wrap items-center justify-center gap-1 sm:flex-row">
-                <PhoneIcon className="hidden size-6 shrink-0 fill-zinc-950 sm:block dark:fill-white" />
+	return (
+		<>
+			<Divider className="mb-4 mt-20" />
+			<div className="flex flex-col flex-wrap items-center justify-center gap-1 sm:flex-row">
+				<PhoneIcon className="hidden size-6 shrink-0 fill-zinc-950 sm:block dark:fill-white" />
 
-                <Text>¿Necesitas ayuda? Puedes contactarnos al </Text>
-                <div className="flex items-center gap-1">
-                    <PhoneIcon className="size-6 shrink-0 fill-zinc-950 sm:hidden dark:fill-white" />
+				<Text>¿Necesitas ayuda? Puedes contactarnos al </Text>
+				<div className="flex items-center gap-1">
+					<PhoneIcon className="size-6 shrink-0 fill-zinc-950 sm:hidden dark:fill-white" />
 
-                    <Anchor href="tel:8128601893">81 2860 1893</Anchor>
-                </div>
-            </div>
-            <Divider className="mb-4 mt-4" />
-            <div className="space-y-4">
-                <FAQs
-                    faqs={[
-                        {
-                            question:
-                                "¿Qué datos personales necesitamos para procesar tu compra?",
-                            answer: "Recopilamos tus datos de identificación, como nombre y correo electrónico, y tus datos de contacto para completar tu compra de manera segura y eficiente.",
-                        },
-                        {
-                            question:
-                                "¿Qué hacemos con tu información de pago?",
-                            answer: "Utilizamos tus datos de pago exclusivamente para procesar tu compra a través de proveedores confiables, como instituciones bancarias, garantizando seguridad en cada transacción.",
-                        },
-                        {
-                            question:
-                                "¿Se comparte tu información personal con terceros?",
-                            answer: "Sí, pero solo con proveedores confiables, como bancos o servicios logísticos, para garantizar que recibas tu pedido de manera correcta y segura. No compartimos tus datos con terceros no autorizados.",
-                        },
-                        {
-                            question:
-                                "¿Cómo protegemos tu información durante el proceso de compra?",
-                            answer: "Utilizamos medidas de seguridad avanzadas para proteger tus datos personales y de pago contra cualquier uso no autorizado.",
-                        },
-                        {
-                            question:
-                                "¿Puedes limitar el uso de tus datos para fines adicionales?",
-                            answer: "Claro, puedes optar por no recibir notificaciones promocionales o de marketing, pero aún tendrás acceso a nuestros servicios y productos.",
-                        },
-                    ]}
-                />
-                <Divider />
-                <div className="pb-8">
-                    <FooterCopyrights />
-                </div>
-            </div>
-        </>
-    );
+					<Anchor href="tel:8128601893">81 2860 1893</Anchor>
+				</div>
+			</div>
+			<Divider className="mb-4 mt-4" />
+			<div className="space-y-4">
+				<FAQs
+					faqs={[
+						{
+							question:
+								"¿Qué datos personales necesitamos para procesar tu compra?",
+							answer: "Recopilamos tus datos de identificación, como nombre y correo electrónico, y tus datos de contacto para completar tu compra de manera segura y eficiente.",
+						},
+						{
+							question:
+								"¿Qué hacemos con tu información de pago?",
+							answer: "Utilizamos tus datos de pago exclusivamente para procesar tu compra a través de proveedores confiables, como instituciones bancarias, garantizando seguridad en cada transacción.",
+						},
+						{
+							question:
+								"¿Se comparte tu información personal con terceros?",
+							answer: "Sí, pero solo con proveedores confiables, como bancos o servicios logísticos, para garantizar que recibas tu pedido de manera correcta y segura. No compartimos tus datos con terceros no autorizados.",
+						},
+						{
+							question:
+								"¿Cómo protegemos tu información durante el proceso de compra?",
+							answer: "Utilizamos medidas de seguridad avanzadas para proteger tus datos personales y de pago contra cualquier uso no autorizado.",
+						},
+						{
+							question:
+								"¿Puedes limitar el uso de tus datos para fines adicionales?",
+							answer: "Claro, puedes optar por no recibir notificaciones promocionales o de marketing, pero aún tendrás acceso a nuestros servicios y productos.",
+						},
+					]}
+				/>
+				<Divider />
+				<div className="pb-8">
+					<FooterCopyrights />
+				</div>
+			</div>
+		</>
+	);
 }

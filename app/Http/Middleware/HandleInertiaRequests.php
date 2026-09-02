@@ -6,6 +6,7 @@ use App\Enums\LaboratoryBrand;
 use App\Services\NotificationService;
 use App\Services\Tracking\Tracking;
 use App\Support\AppEnvironmentLabel;
+use App\Support\FamedicPublicContactConfig;
 use App\Support\MockEfevooPaymentSupport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -84,6 +85,7 @@ class HandleInertiaRequests extends Middleware
                 ],*/
             ],
             'userNavigation' => $request->user() ? $this->getUserNavigation((bool) $request->user()->administrator, (bool) $request->user()?->customer?->medical_attention_subscription_is_active) : [],
+            'famedicConcierge' => fn () => FamedicPublicContactConfig::conciergeForFrontend(),
             'flashMessage' => session('flashMessage'),
             'appEnv' => app()->environment(),
             'appEnvLabel' => AppEnvironmentLabel::current(),
@@ -224,6 +226,12 @@ class HandleInertiaRequests extends Middleware
                 'current' => Route::currentRouteName() === 'contacts.index' ||
                     Route::currentRouteName() === 'contacts.create' ||
                     Route::currentRouteName() === 'contacts.edit',
+            ],
+            [
+                'label' => 'Soporte',
+                'url' => route('user.support'),
+                'icon' => 'LifebuoyIcon',
+                'current' => Route::currentRouteName() === 'user.support',
             ],
         ];
 

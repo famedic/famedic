@@ -20,22 +20,30 @@ const navigation = {
 };
 
 export default function Footer({ className, links }) {
+	const hideHelpBand = route().current("user.support");
+
 	return (
-		<footer className={clsx("pb-6", className)}>
-			<div>
-				<Divider className="mb-8 mt-8" />
-				<div className="flex flex-col flex-wrap items-center justify-center gap-1 sm:flex-row lg:mt-6">
-					<PhoneIcon className="hidden size-6 shrink-0 fill-zinc-950 sm:block dark:fill-white" />
-
-					<Text>¿Necesitas ayuda? Puedes contactarnos al </Text>
-					<div className="flex items-center gap-1">
-						<PhoneIcon className="size-6 shrink-0 fill-zinc-950 sm:hidden dark:fill-white" />
-
-						<Anchor href="tel:8128601893">81 2860 1893</Anchor>
-					</div>
+		<footer className={clsx("pb-5", className)}>
+			{!hideHelpBand && (
+				<div className="mb-6 mt-6 rounded-2xl border border-emerald-100/80 bg-emerald-50/50 px-4 py-3.5 sm:px-5 dark:border-emerald-900/40 dark:bg-emerald-950/15">
+					<p className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-sm text-zinc-700 dark:text-zinc-300">
+						<PhoneIcon
+							className="size-5 shrink-0 text-teal-700 dark:text-teal-400"
+							aria-hidden="true"
+						/>
+						<span>¿Necesitas ayuda? Puedes contactarnos al</span>
+						<Anchor
+							href="tel:8128601893"
+							className="font-semibold text-teal-700 no-underline hover:underline dark:text-teal-300"
+						>
+							81 2860 1893
+						</Anchor>
+					</p>
 				</div>
-				<Divider className="mb-8 mt-8" />
-			</div>
+			)}
+
+			<Divider className="mb-6" />
+
 			<div className="xl:grid xl:grid-cols-3 xl:gap-8">
 				<div className="space-y-2">
 					<NavbarItem className="inline-block" href="/">
@@ -44,59 +52,53 @@ export default function Footer({ className, links }) {
 							<Strong className="!font-poppins">Famedic</Strong>
 						</Text>
 					</NavbarItem>
-					<div className="space-y-2">
-						<span className="font-poppins block text-white">
+					<div className="space-y-1.5">
+						<Text className="font-poppins text-sm">
 							Salud y tecnología a bajo costo.
-						</span>
-						<span className="font-poppins block text-white">
+						</Text>
+						<Text className="font-poppins text-sm">
 							Servicios con cobertura en todo México.
-						</span>
-						<div className="mt-2 flex justify-start items-center gap-4">
-							{/* Bandera de México - Versión más grande */}
-							<svg 
-								className="size-8" 
-								viewBox="0 0 60 36" 
-								fill="none" 
+						</Text>
+						<div className="mt-2 flex items-center gap-4">
+							<svg
+								className="size-7"
+								viewBox="0 0 60 36"
+								fill="none"
 								xmlns="http://www.w3.org/2000/svg"
+								aria-hidden="true"
 							>
-								{/* Franja verde */}
-								<rect width="20" height="36" fill="#006341"/>
-								
-								{/* Franja blanca */}
-								<rect x="20" width="20" height="36" fill="white"/>
-								
-								{/* Franja roja */}
-								<rect x="40" width="20" height="36" fill="#C8102E"/>
-								
-								{/* Escudo nacional simplificado */}
+								<rect width="20" height="36" fill="#006341" />
+								<rect x="20" width="20" height="36" fill="white" />
+								<rect x="40" width="20" height="36" fill="#C8102E" />
 								<g transform="translate(30, 18)">
-									<circle r="7" fill="#8C9157" stroke="#006341" strokeWidth="0.5"/>
-									<circle r="4.5" fill="#006341"/>
-									<circle r="2.5" fill="white"/>
-									<path d="M0,-6 L0.5,-4.5 L-0.5,-4.5 Z" fill="#8C9157"/>
-									<path d="M0,6 L0.5,4.5 L-0.5,4.5 Z" fill="#8C9157"/>
-									<path d="M-6,0 L-4.5,0.5 L-4.5,-0.5 Z" fill="#8C9157"/>
-									<path d="M6,0 L4.5,0.5 L4.5,-0.5 Z" fill="#8C9157"/>
+									<circle
+										r="7"
+										fill="#8C9157"
+										stroke="#006341"
+										strokeWidth="0.5"
+									/>
+									<circle r="4.5" fill="#006341" />
+									<circle r="2.5" fill="white" />
 								</g>
 							</svg>
 						</div>
-					</div>					
+					</div>
 				</div>
-				<div className="mt-12 grid gap-12 sm:grid-cols-2 lg:col-span-2 xl:mt-0">
+				<div className="mt-8 grid gap-8 sm:grid-cols-2 lg:col-span-2 xl:mt-0">
 					{links}
 					<div>
-						<Subheading>Legal</Subheading>
+						<Subheading className="!text-sm">Legal</Subheading>
 
-						<ul role="list" className="mt-6 space-y-4">
+						<ul role="list" className="mt-4 space-y-2.5">
 							{navigation.legal.map((item) => (
 								<li key={item.name}>
-									<Text>
+									<Text className="text-sm">
 										<TextLink
 											className="group flex items-center no-underline hover:underline"
 											href={item.href}
 										>
 											{item.name}
-											<ArrowRightIcon className="ml-1 size-5 opacity-0 transition-all duration-300 group-hover:opacity-100" />
+											<ArrowRightIcon className="ml-1 size-4 opacity-0 transition-all duration-300 group-hover:opacity-100" />
 										</TextLink>
 									</Text>
 								</li>
@@ -105,8 +107,8 @@ export default function Footer({ className, links }) {
 					</div>
 				</div>
 			</div>
-			<div className="mt-12 space-y-3">
-				<div className="flex gap-4">
+			<div className="mt-8 space-y-2.5">
+				<div className="flex gap-3">
 					<CreditCardBrand brand="visa" />
 					<CreditCardBrand brand="mastercard" />
 					<CreditCardBrand brand="amex" />

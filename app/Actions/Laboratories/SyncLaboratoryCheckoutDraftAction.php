@@ -10,13 +10,18 @@ use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Services\Carts\CartAbandonmentService;
+use App\Services\Carts\CartCheckoutFlowResolver;
 use App\Services\Carts\CartEventRecorder;
+use App\Services\Carts\CartUserActivityResolver;
+use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
 
 class SyncLaboratoryCheckoutDraftAction
 {
     public function __construct(
         private CartEventRecorder $cartEventRecorder,
         private CartAbandonmentService $cartAbandonmentService,
+        private LaboratoryCheckoutStepGuard $checkoutStepGuard,
+        private CartCheckoutFlowResolver $checkoutFlowResolver,
     ) {}
 
     /**
@@ -36,14 +41,14 @@ class SyncLaboratoryCheckoutDraftAction
         array $payload,
         ?array $clientContext = null,
     ): LaboratoryCheckoutDraft {
-        $requiresAppointment = $customer->getHasLaboratoryCartItemRequiringAppointment($laboratoryBrand);
+        $nextStep = $this->checkoutStepGuard->nextDraftStepAfterSync(
+            $customer,
+            $laboratoryBrand,
+            $payload['step'],
+        );
 
-        $nextStep = match ($payload['step']) {
-            'patient' => 'address',
-            'address' => 'payment',
-            'payment' => $requiresAppointment ? 'appointment' : 'confirmation',
-            default => 'patient',
-        };
+        $canPersistPayment = $payload['step'] === 'payment'
+            && $this->checkoutStepGuard->canSyncDraftStep($customer, $laboratoryBrand, 'payment');
 
         $attributes = [
             'checkout_step' => $nextStep,
@@ -57,7 +62,7 @@ class SyncLaboratoryCheckoutDraftAction
             $attributes['address_id'] = $payload['address_id'];
         }
 
-        if ($payload['step'] === 'payment') {
+        if ($canPersistPayment) {
             $attributes['payment_method'] = $payload['payment_method'] ?? null;
             $attributes['coupon_id'] = $payload['coupon_id'] ?? null;
             if (array_key_exists('promo_validation_token', $payload)) {
@@ -82,10 +87,10 @@ class SyncLaboratoryCheckoutDraftAction
         $cart = $this->activeLaboratoryCart($customer, $laboratoryBrand);
         if ($cart) {
             $this->cartAbandonmentService->maybeRecordResumed($cart, $clientContext);
+            app(CartUserActivityResolver::class)->recordCheckoutVisit($cart, $laboratoryBrand->value);
         }
 
-        $this->touchMonitoringCart($customer);
-        $this->recordCheckoutEvents($customer, $laboratoryBrand, $payload, $clientContext);
+        $this->recordCheckoutEvents($customer, $laboratoryBrand, $payload, $canPersistPayment, $clientContext);
 
         return $draft->fresh(['contact', 'address', 'coupon']);
     }
@@ -118,8 +123,13 @@ class SyncLaboratoryCheckoutDraftAction
      * @param  array<string, mixed>  $payload
      * @param  array<string, mixed>|null  $clientContext
      */
-    private function recordCheckoutEvents(Customer $customer, LaboratoryBrand $laboratoryBrand, array $payload, ?array $clientContext = null): void
-    {
+    private function recordCheckoutEvents(
+        Customer $customer,
+        LaboratoryBrand $laboratoryBrand,
+        array $payload,
+        bool $canPersistPayment,
+        ?array $clientContext = null,
+    ): void {
         $cart = $this->activeLaboratoryCart($customer, $laboratoryBrand);
         if (! $cart) {
             return;
@@ -132,6 +142,8 @@ class SyncLaboratoryCheckoutDraftAction
             $this->withClientContext(['brand' => $laboratoryBrand->value], $clientContext),
             source: 'laboratory_checkout',
         );
+
+        $this->checkoutFlowResolver->recordDeterminedFlow($cart, $customer, $laboratoryBrand);
 
         if (array_key_exists('contact_id', $payload) && $payload['contact_id'] !== null) {
             $this->cartEventRecorder->recordOnce(
@@ -159,7 +171,11 @@ class SyncLaboratoryCheckoutDraftAction
             );
         }
 
-        if ($payload['step'] === 'payment' && filled($payload['payment_method'] ?? null)) {
+        if (
+            $canPersistPayment
+            && $payload['step'] === 'payment'
+            && filled($payload['payment_method'] ?? null)
+        ) {
             $paymentMetadata = $this->paymentMethodEventMetadata(
                 (string) $payload['payment_method'],
                 $laboratoryBrand,

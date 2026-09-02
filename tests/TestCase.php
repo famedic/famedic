@@ -17,7 +17,7 @@ abstract class TestCase extends BaseTestCase
 
         $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
-        $testDbPath = dirname(__DIR__).'/database/test_db.sqlite';
+        $testDbPath = getenv('TEST_ISOLATED_SQLITE') ?: dirname(__DIR__).'/database/test_db.sqlite';
         $app->instance('env', 'testing');
         config([
             'app.env' => 'testing',

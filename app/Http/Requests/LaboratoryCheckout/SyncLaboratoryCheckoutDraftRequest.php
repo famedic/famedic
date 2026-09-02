@@ -3,6 +3,7 @@
 namespace App\Http\Requests\LaboratoryCheckout;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
 use Illuminate\Validation\Rule;
 
 class SyncLaboratoryCheckoutDraftRequest extends FormRequest
@@ -52,7 +53,20 @@ class SyncLaboratoryCheckoutDraftRequest extends FormRequest
                 Rule::exists('addresses', 'id')->where('customer_id', $customerId),
             ],
             'payment_method' => [
-                Rule::requiredIf(fn () => $this->input('step') === 'payment'),
+                Rule::requiredIf(function () {
+                    if ($this->input('step') !== 'payment') {
+                        return false;
+                    }
+
+                    $brand = $this->route('laboratory_brand');
+                    $customer = $this->user()->customer;
+
+                    return app(LaboratoryCheckoutStepGuard::class)->canSyncDraftStep(
+                        $customer,
+                        $brand,
+                        'payment',
+                    );
+                }),
                 'nullable',
                 'string',
                 'max:64',

@@ -19,6 +19,7 @@ use App\Models\OnlinePharmacyPurchase;
 use App\Models\PaymentAttempt;
 use App\Models\Transaction;
 use App\Services\ActiveCampaign\ActiveCampaignWebActivitySyncService;
+use App\Services\Carts\CartAdminStageInterpreter;
 use App\Services\Carts\CartOperationalInsightResolver;
 use App\Services\Carts\CartPaymentAttemptCorrelator;
 use Carbon\Carbon;
@@ -222,7 +223,8 @@ class CartController extends Controller
         ?array $paymentInsight = null,
         ?CartOperationalInsightResolver $operationalResolver = null,
     ): array {
-        $display = $cart->displayStatus();
+        $stageInterpreter = app(CartAdminStageInterpreter::class);
+        $adminContext = $stageInterpreter->context($cart);
         $operationalResolver ??= app(CartOperationalInsightResolver::class);
         $operationalInsight = $operationalResolver->resolve($cart, $paymentInsight);
 
@@ -238,25 +240,34 @@ class CartController extends Controller
             'type_label' => $cart->type === MonitoringCartType::Pharmacy ? 'Farmacia' : 'Laboratorio',
             'lab_brands' => $cart->labBrands(),
             'cart_summary' => $this->serializeCartSummary($cart),
+            'checkout_flow' => [
+                'value' => $adminContext['flow']->value,
+                'label' => $adminContext['flow_label'],
+                'short_label' => $adminContext['flow_short_label'],
+                'confidence' => $adminContext['flow_confidence'],
+            ],
             'appointment_pending_confirmation' => $cart->hasAppointmentPendingConfirmation(),
             'appointment_confirmed_pending_payment' => $cart->hasAppointmentConfirmedPendingPayment(),
             'items_count' => $cart->items_count ?? $cart->items->count(),
             'total' => (string) $cart->total,
             'total_formatted' => formattedPrice((float) $cart->total),
-            'display_status' => $display,
-            'display_status_label' => $cart->displayStatusLabel(),
-            'updated_at' => $cart->updated_at?->toIso8601String(),
-            'updated_at_human' => $cart->updated_at?->format('d/m/Y H:i'),
-            'inactive_for_minutes' => $cart->inactiveForMinutes(),
-            'inactive_for_label' => $cart->inactiveForLabel(),
-            'abandoned_at_human' => $cart->abandonedAt()?->timezone('America/Monterrey')->format('d/m/Y H:i'),
+            'display_status' => $adminContext['display_status'],
+            'display_status_label' => $adminContext['display_status_label'],
+            'updated_at' => $adminContext['last_user_activity_at']->toIso8601String(),
+            'updated_at_human' => $adminContext['last_user_activity_human'],
+            'inactive_for_minutes' => $adminContext['inactive_for_minutes'],
+            'inactive_for_label' => $adminContext['inactive_for_label'],
+            'abandoned_at_human' => $adminContext['display_status'] === 'abandoned'
+                ? $adminContext['last_user_activity_at']->copy()->addMinutes(Cart::ABANDONED_AFTER_MINUTES)->timezone('America/Monterrey')->format('d/m/Y H:i')
+                : null,
             'abandoned_threshold_minutes' => Cart::ABANDONED_AFTER_MINUTES,
+            'open_abandonment_episode' => $adminContext['open_abandonment_episode'],
             'checkout_summary' => $cart->type === MonitoringCartType::Lab
                 ? $this->serializeCheckoutSummaryForRow($cart)
                 : null,
             'payment_insight' => $paymentInsight,
             'operational_insight' => $operationalInsight,
-            'current_stage' => $this->serializeCurrentStageForRow($cart, $paymentInsight),
+            'current_stage' => $stageInterpreter->currentStage($cart, $paymentInsight),
             'operational_signals' => $this->serializeOperationalSignalsForRow($cart, $paymentInsight),
         ];
     }
@@ -595,18 +606,34 @@ class CartController extends Controller
             ? $this->serializeCheckoutSummaryForRow($cart)
             : [];
         $finalPayment = $this->serialize360FinalPayment($explicitPurchase);
-        $journey = $this->serialize360Journey($cart, $checkoutEntries, $appointment, $explicitPurchase, $paymentInsight, $finalPayment);
+        $stageInterpreter = app(CartAdminStageInterpreter::class);
+        $adminContext = $stageInterpreter->context($cart);
+        $journey = $stageInterpreter->journey(
+            $cart,
+            $checkoutEntries,
+            $appointment,
+            $explicitPurchase,
+            $paymentInsight,
+            $finalPayment,
+        );
         $events = $this->serialize360Events($cart);
 
         return [
-            'cart' => $this->serialize360Cart($cart, $explicitPurchase),
+            'cart' => $this->serialize360Cart($cart, $explicitPurchase, $adminContext),
             'customer' => $this->serialize360Customer($cart),
             'operational_insight' => app(CartOperationalInsightResolver::class)->resolve($cart, $paymentInsight),
             'checkout' => [
-                'stage' => $this->serializeCurrentStageForRow($cart, $paymentInsight),
+                'stage' => $stageInterpreter->currentStage($cart, $paymentInsight),
                 'signals' => $this->serializeOperationalSignalsForRow($cart, $paymentInsight),
                 'journey' => $journey,
                 'entries' => $checkoutEntries,
+                'flow' => [
+                    'value' => $adminContext['flow']->value,
+                    'label' => $adminContext['flow_label'],
+                    'short_label' => $adminContext['flow_short_label'],
+                    'confidence' => $adminContext['flow_confidence'],
+                ],
+                'journey_step_total' => $adminContext['journey_step_total'],
             ],
             'journey' => $journey,
             'payment' => $this->serialize360Payment($paymentInsight),
@@ -627,8 +654,10 @@ class CartController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function serialize360Cart(Cart $cart, ?LaboratoryPurchase $purchase): array
+    private function serialize360Cart(Cart $cart, ?LaboratoryPurchase $purchase, ?array $adminContext = null): array
     {
+        $adminContext ??= app(CartAdminStageInterpreter::class)->context($cart);
+
         return [
             'id' => $cart->id,
             'type' => $cart->type->value,
@@ -637,12 +666,20 @@ class CartController extends Controller
             'items_count' => $cart->items->count(),
             'items_label' => $this->serializeCartSummary($cart)['items_label'],
             'total_formatted' => formattedPrice((float) $cart->total),
-            'display_status' => $cart->displayStatus(),
-            'display_status_label' => $cart->displayStatusLabel(),
-            'status_summary' => $cart->displayStatus() === 'abandoned' && $cart->inactiveForLabel()
-                ? 'Abandonado hace '.$cart->inactiveForLabel()
-                : $cart->displayStatusLabel(),
-            'updated_at_human' => $cart->updated_at?->format('d/m/Y H:i'),
+            'display_status' => $adminContext['display_status'],
+            'display_status_label' => $adminContext['display_status_label'],
+            'status_summary' => $adminContext['display_status'] === 'abandoned' && $adminContext['inactive_for_label']
+                ? 'Abandonado hace '.$adminContext['inactive_for_label']
+                : $adminContext['display_status_label'],
+            'last_user_activity_human' => $adminContext['last_user_activity_human'],
+            'open_abandonment_episode' => $adminContext['open_abandonment_episode'],
+            'checkout_flow' => [
+                'value' => $adminContext['flow']->value,
+                'label' => $adminContext['flow_label'],
+                'short_label' => $adminContext['flow_short_label'],
+                'confidence' => $adminContext['flow_confidence'],
+            ],
+            'updated_at_human' => $adminContext['last_user_activity_human'],
             'created_at_human' => $cart->created_at?->format('d/m/Y H:i'),
             'completed_at_human' => $cart->completed_at?->format('d/m/Y H:i'),
             'related_purchase' => $purchase ? [
@@ -1644,6 +1681,8 @@ class CartController extends Controller
             'cart_resumed' => 'Carrito retomado',
             'cart_recovered' => 'Carrito recuperado',
             'checkout_started' => 'Checkout iniciado',
+            'checkout_visited' => 'Visita al checkout',
+            'checkout_flow_determined' => 'Flujo de checkout determinado',
             'patient_selected' => 'Paciente seleccionado',
             'address_selected' => 'Direccion seleccionada',
             'payment_method_selected' => 'Método de pago seleccionado',

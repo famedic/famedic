@@ -118,6 +118,7 @@ function phase4Admin(): User
 }
 
 it('does not record appointment_pending_5m when appointment is confirmed before threshold', function () {
+    Queue::fake();
     $cart = phase4Cart(phase4User(['email' => 'confirmed@example.com']));
     $appointment = phase4PendingAppointment($cart, 2);
     $appointment->update(['confirmed_at' => now()]);
@@ -555,4 +556,19 @@ it('does not duplicate call_attempted on rapid phone intent retry', function () 
 
     expect(CartEvent::query()->where('event', CartEventType::CallAttempted->value)->count())->toBe(1)
         ->and($appointment->interactions()->count())->toBe(1);
+});
+
+it('does not duplicate appointment_confirmed outbox when confirmation signal runs twice', function () {
+    Queue::fake();
+    $user = phase4User(['email' => 'confirm-idempotent@example.com']);
+    $cart = phase4Cart($user);
+    $appointment = phase4PendingAppointment($cart, 1);
+    $appointment->update(['confirmed_at' => now(), 'appointment_date' => now()->addDay()]);
+
+    $service = app(\App\Services\Carts\LaboratoryAppointmentConfirmationSignalService::class);
+    $service->handleNewlyConfirmed($appointment->fresh());
+    $service->handleNewlyConfirmed($appointment->fresh());
+
+    expect(CartEvent::query()->where('event', CartEventType::AppointmentConfirmed->value)->count())->toBe(1)
+        ->and(ActiveCampaignDispatch::query()->where('event_type', ActiveCampaignSiteEvent::AppointmentConfirmed->resolvedName())->count())->toBe(1);
 });

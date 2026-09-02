@@ -14,6 +14,7 @@ use App\Exceptions\PayPalPaymentException;
 use App\Models\Address;
 use App\Models\Contact;
 use App\Services\CouponApplicationService;
+use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
 use App\Services\PayPalService;
 use App\Support\ClientContext;
 use Illuminate\Http\JsonResponse;
@@ -68,6 +69,13 @@ class PayPalController extends Controller
             if ($couponId !== null && $promoValidationToken !== null) {
                 throw ValidationException::withMessages([
                     'promo_validation_token' => 'No puedes combinar un crédito asignado con un código promocional.',
+                ]);
+            }
+
+            if (! app(LaboratoryCheckoutStepGuard::class)->canInitiatePayment($customer, $brand)) {
+                throw ValidationException::withMessages([
+                    'patient_id' => app(LaboratoryCheckoutStepGuard::class)
+                        ->resolvePaymentBlockMessage($customer, $brand),
                 ]);
             }
 

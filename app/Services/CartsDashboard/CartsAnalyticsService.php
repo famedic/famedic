@@ -42,11 +42,14 @@ class CartsAnalyticsService
                 ],
                 'funnel' => [
                     'stages' => $this->repository->checkoutFunnel($filter),
+                    'by_flow' => $this->repository->checkoutFunnelByFlow($filter),
                     'abandonment_by_stage' => $this->repository->abandonmentByStage($filter),
                     'confidence' => [
                         'Carrito y compra se calculan desde carts.',
                         'Checkout iniciado usa drafts, citas o pago correlacionado; si el draft ya no existe, no se inventa la etapa.',
                         'Pago intentado usa solo PaymentAttempt Efevoo correlacionado de forma conservadora.',
+                        'Los embudos por flujo usan checkout_flow persistido en cart_events.',
+                        'Abandono usa ultima actividad real (cart_events), no carts.updated_at.',
                     ],
                 ],
                 'payments' => $this->repository->paymentAnalytics($filter),
@@ -64,10 +67,11 @@ class CartsAnalyticsService
                         'end_date' => $filter->previousEnd->timezone(config('app.timezone', 'America/Monterrey'))->toDateString(),
                     ],
                     'definitions' => [
-                        'abandoned' => 'Abandono: sin actividad por mas de '.Cart::ABANDONED_AFTER_MINUTES.' min.',
+                        'abandoned' => 'Abandono: sin actividad real del usuario por mas de '.Cart::ABANDONED_AFTER_MINUTES.' min. Cita pendiente de concierge no cuenta como abandono.',
                         'conversion' => 'Conversion = comprados / (comprados + abandonados).',
                         'cart_amounts' => 'Montos calculados con carts.total; no son ingreso contable.',
                         'payments' => 'Pagos Efevoo correlacionados por cliente, monto y ventana; se excluyen ambiguos.',
+                        'checkout_flow' => 'Flujo persistido al iniciar checkout; embudos separados para cita primero vs estandar.',
                     ],
                     'abandoned_threshold_minutes' => Cart::ABANDONED_AFTER_MINUTES,
                 ],
@@ -110,6 +114,9 @@ class CartsAnalyticsService
             $this->plainKpi('payment_incidents', 'Pagos con incidencia', $operational['payment_incidents'], 'number', 'orange', 'operational_bucket=payment'),
             $this->plainKpi('payment_declined', 'Pago rechazado', $operational['payment_declined'], 'number', 'red', 'payment_status=declined'),
             $this->plainKpi('payment_error', 'Error tecnico', $operational['payment_error'], 'number', 'red', 'payment_status=error'),
+            $this->plainKpi('payment_pending', 'Pago pendiente', $operational['payment_pending'], 'number', 'orange', 'payment_status=pending'),
+            $this->plainKpi('payment_available', 'Pago disponible', $operational['payment_available'], 'number', 'green', 'operational_filter=appointment_confirmed_pending_payment'),
+            $this->plainKpi('appointment_pending_active', 'Cita pendiente (activa)', $operational['appointment_pending_active'], 'number', 'purple', 'operational_filter=appointment_pending'),
             $this->plainKpi('appointments_to_handle', 'Citas por atender', $operational['appointments_to_handle'], 'number', 'purple', 'operational_bucket=appointment'),
             $this->plainKpi('contact_requested', 'Solicitaron contacto', $operational['contact_requested'], 'number', 'blue', 'operational_bucket=contact'),
         ];

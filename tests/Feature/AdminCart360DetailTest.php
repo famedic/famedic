@@ -200,7 +200,7 @@ it('shows a pending appointment in the drawer', function () {
     $this->getJson(route('admin.carts.show', $cart))
         ->assertOk()
         ->assertJsonPath('data.appointment.status_label', 'Pendiente')
-        ->assertJsonPath('data.checkout.journey.3.detail', 'Esperando confirmación');
+        ->assertJsonPath('data.checkout.journey.4.detail', 'Esperando confirmación del concierge');
 });
 
 it('shows a confirmed appointment without payment', function () {
@@ -285,7 +285,7 @@ it('shows a correlated declined payment', function () {
         ->assertOk()
         ->assertJsonPath('data.payment.status_label', 'Pago rechazado')
         ->assertJsonPath('data.payment.last_attempt.processor_code', '87')
-        ->assertJsonPath('data.checkout.journey.4.detail', 'Rechazado');
+        ->assertJsonPath('data.checkout.journey.3.detail', 'Rechazado');
 });
 
 it('shows a correlated technical payment error', function () {
@@ -312,7 +312,7 @@ it('shows a correlated technical payment error', function () {
         ->assertOk()
         ->assertJsonPath('data.payment.status_label', 'Error técnico')
         ->assertJsonPath('data.payment.last_attempt.processor_message', 'Tiempo de espera agotado')
-        ->assertJsonPath('data.checkout.journey.4.detail', 'Error técnico');
+        ->assertJsonPath('data.checkout.journey.3.detail', 'Error técnico');
 });
 
 it('keeps ambiguous payment attempts neutral', function () {
@@ -340,7 +340,7 @@ it('keeps ambiguous payment attempts neutral', function () {
     $this->getJson(route('admin.carts.show', $firstCart))
         ->assertOk()
         ->assertJsonPath('data.payment.status_label', 'Información de pago no determinada')
-        ->assertJsonPath('data.checkout.journey.4.detail', 'No iniciado');
+        ->assertJsonPath('data.checkout.journey.3.detail', 'No iniciado');
 
     expect($secondCart->exists)->toBeTrue();
 });
@@ -375,8 +375,8 @@ it('uses final transaction as payment journey source over previous attempts', fu
         ->assertOk()
         ->assertJsonPath('data.final_payment.method', $method)
         ->assertJsonPath('data.final_payment.method_label', $label)
-        ->assertJsonPath('data.journey.4.state', 'completed')
-        ->assertJsonPath('data.journey.4.detail', $label)
+        ->assertJsonPath('data.journey.3.state', 'completed')
+        ->assertJsonPath('data.journey.3.detail', $label)
         ->assertJsonPath('data.journey.5.state', 'completed')
         ->assertJsonPath('data.payment_history.0.type', 'payment_attempt')
         ->assertJsonPath('data.payment_history.1.type', 'final_payment')
@@ -404,7 +404,7 @@ it('supports final purchase payment without payment attempts', function () {
         ->assertOk()
         ->assertJsonCount(1, 'data.payment_history')
         ->assertJsonPath('data.payment_history.0.type', 'final_payment')
-        ->assertJsonPath('data.journey.4.detail', 'Tarjeta / Stripe');
+        ->assertJsonPath('data.journey.3.detail', 'Tarjeta / Stripe');
 });
 
 it('returns appointment journey for pending and confirmed appointments without payment', function () {
@@ -937,9 +937,9 @@ it('does not contaminate journey general for a pre-checkout cart when customer h
         ->assertJsonPath('data.journey.1.detail', 'No registrado')
         ->assertJsonPath('data.journey.2.state', 'pending')
         ->assertJsonPath('data.journey.2.detail', 'No registrada')
-        ->assertJsonPath('data.journey.3.detail', 'No iniciada')
+        ->assertJsonPath('data.journey.3.detail', 'No iniciado')
         ->assertJsonPath('data.journey.4.state', 'pending')
-        ->assertJsonPath('data.journey.4.detail', 'No iniciado')
+        ->assertJsonPath('data.journey.4.detail', 'No iniciada')
         ->assertJsonPath('data.journey.5.state', 'pending')
         ->assertJsonPath('data.journey.5.detail', 'Sin compra')
         ->assertJsonPath('data.cart.related_purchase', null)
@@ -1010,8 +1010,8 @@ it('does not use historical purchase payment or appointment fallbacks in journey
         ->assertOk()
         ->assertJsonPath('data.journey.1.detail', 'No registrado')
         ->assertJsonPath('data.journey.2.detail', 'No registrada')
-        ->assertJsonPath('data.journey.3.detail', 'No iniciada')
-        ->assertJsonPath('data.journey.4.detail', 'No iniciado')
+        ->assertJsonPath('data.journey.3.detail', 'No iniciado')
+        ->assertJsonPath('data.journey.4.detail', 'No iniciada')
         ->assertJsonPath('data.journey.5.detail', 'Sin compra')
         ->assertJsonPath('data.appointment', null)
         ->assertJsonPath('data.history.previous_purchases_count', 1);

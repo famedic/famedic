@@ -13,6 +13,8 @@ enum CartEventType: string
     case CartResumed = 'cart_resumed';
     case CartRecovered = 'cart_recovered';
     case CheckoutStarted = 'checkout_started';
+    case CheckoutVisited = 'checkout_visited';
+    case CheckoutFlowDetermined = 'checkout_flow_determined';
     case PatientSelected = 'patient_selected';
     case AddressSelected = 'address_selected';
     case PaymentMethodSelected = 'payment_method_selected';

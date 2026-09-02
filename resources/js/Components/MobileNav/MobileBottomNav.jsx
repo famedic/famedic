@@ -68,8 +68,8 @@ export default function MobileBottomNav({ userNavigation = [] }) {
 		const extras = [
 			{
 				label: "Ayuda",
-				url: "tel:8128601893",
-				icon: "PhoneIcon",
+				url: route("user.support"),
+				icon: "LifebuoyIcon",
 			},
 			{
 				label: "Configuración",

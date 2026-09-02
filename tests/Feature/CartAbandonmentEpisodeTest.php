@@ -11,6 +11,7 @@ use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryTest;
 use App\Models\User;
 use App\Services\Carts\CartAbandonmentService;
+use App\Services\Carts\CartUserActivityResolver;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Support\ClientContext;
 use Illuminate\Support\Facades\Artisan;
@@ -19,6 +20,18 @@ use Spatie\Permission\Models\Permission;
 function abandonmentUser(): User
 {
     return User::factory()->withRegularCustomer()->create();
+}
+
+function abandonmentAgeCartInactivity(Cart $cart, int $inactiveMinutes): void
+{
+    $inactiveAt = now()->subMinutes($inactiveMinutes);
+    $cart->update(['updated_at' => $inactiveAt]);
+
+    if (\Illuminate\Support\Facades\Schema::hasTable('cart_events')) {
+        $cart->events()
+            ->whereIn('event', CartUserActivityResolver::userActivityEventValues())
+            ->update(['occurred_at' => $inactiveAt]);
+    }
 }
 
 function abandonmentCartWithItem(User $user, int $inactiveMinutes = 35, ?LaboratoryBrand $brand = null): Cart
@@ -38,7 +51,7 @@ function abandonmentCartWithItem(User $user, int $inactiveMinutes = 35, ?Laborat
         ->where('type', MonitoringCartType::Lab)
         ->firstOrFail();
 
-    $cart->update(['updated_at' => now()->subMinutes($inactiveMinutes)]);
+    abandonmentAgeCartInactivity($cart, $inactiveMinutes);
 
     return $cart->fresh(['items']);
 }
@@ -126,7 +139,7 @@ it('records cart_abandoned episode 2 after a resumed cycle', function () {
     $test = LaboratoryTest::factory()->create(['brand' => LaboratoryBrand::OLAB->value]);
     app(AddItemToCartAction::class)($user->customer, $test->id, ClientContext::fromUserAgent('Mozilla/5.0 Chrome/120.0.0.0'));
 
-    $cart->fresh()->update(['updated_at' => now()->subMinutes(45)]);
+    abandonmentAgeCartInactivity($cart->fresh(), inactiveMinutes: 45);
 
     Artisan::call('carts:detect-abandonment');
 

@@ -9,6 +9,7 @@ use App\Models\Cart;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Models\PaymentAttempt;
+use App\Services\Carts\CartAdminStageInterpreter;
 use App\Services\Carts\CartOperationalInsightResolver;
 use App\Services\Carts\CartPaymentAttemptCorrelator;
 use Carbon\Carbon;
@@ -20,7 +21,7 @@ use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
-use PhpOffice\PhpSpreadsheet\Shared\Date;
+use App\Support\Exports\MonterreyExcelSerial;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
 class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting, WithEvents, WithHeadings, WithStyles, WithTitle
@@ -111,6 +112,16 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
             'Fecha ultimo intento',
             'Tipo correlacion pago',
             'Fecha registro',
+            'Tipo de flujo',
+            'Etapa real',
+            'Estado de cita export',
+            'Cita payable',
+            'Motivo bloqueo pago',
+            'Estado de pago export',
+            'Metodo seleccionado export',
+            'Episodio abandono abierto',
+            'Ultima actividad real',
+            'Cart ID correlacionado',
         ];
     }
 
@@ -152,6 +163,13 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
         $payment = $this->paymentSummary($paymentInsight);
         $operational = $operationalResolver->resolve($cart, $paymentInsight);
         $clientContext = $this->clientContext($cart);
+        $stageInterpreter = app(CartAdminStageInterpreter::class);
+        $adminContext = $stageInterpreter->context($cart);
+        $explicitAppointment = $cart->type === MonitoringCartType::Lab
+            ? ($cart->explicitLaboratoryAppointments()->first() ?? $appointment)
+            : null;
+        $payableState = $stageInterpreter->appointmentPayableState($explicitAppointment, (int) $cart->id);
+        $currentStage = $stageInterpreter->currentStage($cart, $paymentInsight);
 
         return [
             $cart->id,
@@ -166,8 +184,8 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
             (float) $cart->total,
             $this->excelDate($cart->created_at),
             $this->excelDate($cart->updated_at),
-            $cart->inactiveForLabel(),
-            $cart->displayStatusLabel(),
+            $adminContext['inactive_for_label'],
+            $adminContext['display_status_label'],
             $checkout['stage'],
             $checkout['progress'],
             $checkout['has_patient'],
@@ -187,19 +205,19 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
             $appointment ? 'Si' : 'No',
             $this->appointmentStatus($cart, $appointment),
             $appointment?->id,
-            $this->excelDate($appointment?->created_at),
-            $this->excelTime($appointment?->created_at),
-            $this->excelDate($appointment?->appointment_date),
-            $this->excelTime($appointment?->appointment_date),
-            $this->excelDate($appointment?->confirmed_at),
-            $this->excelTime($appointment?->confirmed_at),
+            $this->excelOperationalDate($appointment?->created_at),
+            $this->excelOperationalTime($appointment?->created_at),
+            $this->excelOperationalDate($appointment?->appointment_date),
+            $this->excelOperationalTime($appointment?->appointment_date),
+            $this->excelOperationalDate($appointment?->confirmed_at),
+            $this->excelOperationalTime($appointment?->confirmed_at),
             $appointment?->laboratoryStore?->name,
             $appointment?->confirmed_at === null ? $this->appointmentWaitingLabel($appointment) : null,
             $appointment?->phone_call_intent_at ? 'Si' : 'No',
-            $this->excelDate($appointment?->phone_call_intent_at),
+            $this->excelOperationalDate($appointment?->phone_call_intent_at),
             $appointment?->has_left_callback_info ? 'Si' : 'No',
-            $this->excelDate($appointment?->callback_availability_starts_at),
-            $this->excelDate($appointment?->callback_availability_ends_at),
+            $this->excelOperationalDate($appointment?->callback_availability_starts_at),
+            $this->excelOperationalDate($appointment?->callback_availability_ends_at),
             $this->shortText($appointment?->patient_callback_comment, 180),
             $payment['has_attempt'],
             $payment['gateway'],
@@ -210,6 +228,18 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
             $payment['last_attempt_at'],
             $payment['correlation_type'],
             $this->excelDate($cart->user?->created_at),
+            $stageInterpreter->exportFlowLabel($cart),
+            $currentStage['label'],
+            $this->appointmentStatus($cart, $explicitAppointment),
+            $payableState['payable'] ? 'Si' : 'No',
+            $payableState['reason'],
+            $payment['status'] ?? null,
+            $currentStage['key'] === 'payment_method_selected'
+                ? ($currentStage['detail'] ?? null)
+                : null,
+            $adminContext['open_abandonment_episode'] !== null ? 'Si' : 'No',
+            $this->excelDate($adminContext['last_user_activity_at']),
+            $cart->id,
         ];
     }
 
@@ -608,15 +638,19 @@ class CartsSheet implements FromGenerator, ShouldAutoSize, WithColumnFormatting,
         return $this->excelSerial($date);
     }
 
+    private function excelOperationalDate($date): ?float
+    {
+        return MonterreyExcelSerial::fromOperationalWallClock($date);
+    }
+
+    private function excelOperationalTime($date): ?float
+    {
+        return MonterreyExcelSerial::fromOperationalWallClock($date);
+    }
+
     private function excelSerial($date): ?float
     {
-        if (! $date) {
-            return null;
-        }
-
-        $local = Carbon::parse($date)->setTimezone('America/Monterrey');
-
-        return Date::dateTimeToExcel(new \DateTimeImmutable($local->format('Y-m-d H:i:s')));
+        return MonterreyExcelSerial::from($date);
     }
 
     protected function freezePaneCell(): string

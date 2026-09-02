@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Laboratories\OrderAction;
 use App\Enums\LaboratoryBrand;
+use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\CouponApplicationException;
 use App\Exceptions\PromoCodeException;
 use App\Exceptions\OdessaInsufficientFundsException;
@@ -14,6 +15,7 @@ use App\Models\Address;
 use App\Models\Contact;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
+use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
 use App\Services\Tracking\Purchase;
 use App\Support\ClientContext;
 use Illuminate\Http\Request;
@@ -22,8 +24,24 @@ use Inertia\Inertia;
 
 class LaboratoryPurchaseController extends Controller
 {
-    public function store(StoreLaboratoryPurchaseRequest $request, LaboratoryBrand $laboratoryBrand, OrderAction $orderAction)
+    public function store(StoreLaboratoryPurchaseRequest $request, LaboratoryBrand $laboratoryBrand, OrderAction $orderAction, LaboratoryCheckoutStepGuard $laboratoryCheckoutStepGuard)
     {
+        $customer = $request->user()->customer;
+
+        if (! $laboratoryCheckoutStepGuard->canInitiatePayment($customer, $laboratoryBrand)) {
+            return redirect()
+                ->route('laboratory.checkout', [
+                    'laboratory_brand' => $laboratoryBrand,
+                    'step' => LaboratoryCheckoutStepGuard::STEP_APPOINTMENT,
+                    'contact' => $request->input('contact'),
+                    'address' => $request->input('address'),
+                ])
+                ->with(
+                    'checkout_step_notice',
+                    $laboratoryCheckoutStepGuard->resolvePaymentBlockMessage($customer, $laboratoryBrand),
+                );
+        }
+
         try {
             $laboratoryPurchase = $orderAction(
                 customer: $request->user()->customer,
@@ -38,6 +56,18 @@ class LaboratoryPurchaseController extends Controller
                     : null,
                 clientContext: ClientContext::fromRequest($request),
             );
+        } catch (MissingLaboratoryAppointmentException $e) {
+            return redirect()
+                ->route('laboratory.checkout', [
+                    'laboratory_brand' => $laboratoryBrand,
+                    'step' => LaboratoryCheckoutStepGuard::STEP_APPOINTMENT,
+                    'contact' => $request->input('contact'),
+                    'address' => $request->input('address'),
+                ])
+                ->with(
+                    'checkout_step_notice',
+                    $laboratoryCheckoutStepGuard->resolvePaymentBlockMessage($customer, $laboratoryBrand),
+                );
         } catch (EfevooPaymentException $e) {
             return redirect()->back()
                 ->withErrors(['payment_method' => $e->getMessage()]);

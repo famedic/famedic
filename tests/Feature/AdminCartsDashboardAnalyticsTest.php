@@ -222,7 +222,7 @@ it('counts appointments, contact signals, laboratories, customer profile and top
     expect(collect($dashboard['appointments']['status_breakdown'])->firstWhere('key', 'pending')['count'])->toBe(2)
         ->and(collect($dashboard['appointments']['status_breakdown'])->firstWhere('key', 'confirmed_without_payment')['count'])->toBe(1)
         ->and(collect($dashboard['contact']['summary'])->firstWhere('key', 'callback_requested')['count'])->toBe(1)
-        ->and(collect($dashboard['laboratories'])->firstWhere('brand', LaboratoryBrand::OLAB->value)['abandoned_count'])->toBeGreaterThanOrEqual(2)
+        ->and(collect($dashboard['laboratories'])->firstWhere('brand', LaboratoryBrand::OLAB->value)['abandoned_count'])->toBe(0)
         ->and(collect($dashboard['laboratories'])->firstWhere('brand', LaboratoryBrand::SWISSLAB->value)['abandoned_count'])->toBeGreaterThanOrEqual(2)
         ->and(collect($dashboard['customer_profile']['segments'])->firstWhere('key', 'recurring')['abandoned_count'])->toBe(1)
         ->and($dashboard['top_studies']['abandoned'][0]['carts'])->toBeGreaterThanOrEqual(1)
