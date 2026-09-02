@@ -254,6 +254,9 @@ return [
     'concierge' => [
         'phone_display' => env('FAMEDIC_CONCIERGE_PHONE_DISPLAY', '(55) 6651 5232'),
         'phone_tel' => env('FAMEDIC_CONCIERGE_PHONE_TEL', '5566515232'),
+        'appointments_whatsapp_display' => env('LABORATORY_APPOINTMENTS_WHATSAPP_DISPLAY', '(55) 4057 2139'),
+        'appointments_whatsapp_e164' => env('LABORATORY_APPOINTMENTS_WHATSAPP', '525540572139'),
+        'appointments_whatsapp_default_message' => 'Hola, quiero confirmar mi cita de laboratorio. ¿Me pueden ayudar a elegir fecha, horario y sucursal?',
         'timezone' => env('FAMEDIC_CONCIERGE_TIMEZONE', 'America/Mexico_City'),
         'schedule_lines' => [],
         'schedule_by_day' => [

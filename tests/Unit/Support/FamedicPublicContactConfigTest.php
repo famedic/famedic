@@ -28,8 +28,14 @@ test('tel url strips non digits', function () {
 
 test('concierge frontend config mirrors checkout source', function () {
     $concierge = FamedicPublicContactConfig::conciergeForFrontend();
+    $appointmentMessage = 'Hola, quiero confirmar mi cita de laboratorio. ¿Me pueden ayudar a elegir fecha, horario y sucursal?';
 
     expect($concierge['phoneTel'])->toBe('5566515232')
         ->and($concierge['phoneDisplay'])->toBe('(55) 6651 5232')
+        ->and($concierge['appointmentWhatsApp']['display'])->toBe('(55) 4057 2139')
+        ->and($concierge['appointmentWhatsApp']['e164'])->toBe('525540572139')
+        ->and($concierge['appointmentWhatsApp']['url'])->toBe(
+            'https://wa.me/525540572139?text='.rawurlencode($appointmentMessage)
+        )
         ->and($concierge['scheduleLines'][0])->toBe('Lunes a viernes: 7:00 AM a 8:00 PM');
 });

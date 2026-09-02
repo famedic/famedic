@@ -13,10 +13,20 @@ class FamedicPublicContactConfig
     {
         $config = config('famedic.concierge', []);
         $scheduleByDay = $config['schedule_by_day'] ?? [];
+        $appointmentsWhatsAppE164 = (string) ($config['appointments_whatsapp_e164'] ?? '');
+        $appointmentsWhatsAppMessage = (string) ($config['appointments_whatsapp_default_message'] ?? '');
 
         return [
             'phoneDisplay' => (string) ($config['phone_display'] ?? ''),
             'phoneTel' => (string) ($config['phone_tel'] ?? ''),
+            'appointmentWhatsApp' => self::channelOrNull([
+                'display' => (string) ($config['appointments_whatsapp_display'] ?? ''),
+                'e164' => preg_replace('/\D+/', '', $appointmentsWhatsAppE164) ?? '',
+                'url' => self::whatsappUrl(
+                    $appointmentsWhatsAppE164,
+                    $appointmentsWhatsAppMessage,
+                ),
+            ], $appointmentsWhatsAppE164 !== ''),
             'timezone' => (string) ($config['timezone'] ?? 'America/Mexico_City'),
             'scheduleLines' => ServiceHoursEvaluator::buildConciergeDisplayLines($scheduleByDay),
             'scheduleByDay' => $scheduleByDay,

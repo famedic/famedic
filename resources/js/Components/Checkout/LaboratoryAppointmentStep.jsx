@@ -1,5 +1,6 @@
 import { Subheading } from "@/Components/Catalyst/heading";
 import { Button } from "@/Components/Catalyst/button";
+import { WhatsAppIcon } from "@/Components/Checkout/CheckoutWhatsAppHelp";
 import {
 	BoltIcon,
 	CheckIcon,
@@ -7,7 +8,6 @@ import {
 	CreditCardIcon,
 	LockClosedIcon,
 	PhoneIcon,
-	PhoneArrowDownLeftIcon,
 } from "@heroicons/react/20/solid";
 import { Field, Label, ErrorMessage } from "@/Components/Catalyst/fieldset";
 import { Textarea } from "@/Components/Catalyst/textarea";
@@ -125,10 +125,10 @@ function getAppointmentVisualState({
 	}
 
 	return {
-		title: "Solo falta confirmar tu cita",
+		title: "Confirma tu cita por WhatsApp",
 		description:
-			"Habla con nuestro equipo para elegir fecha, horario y sucursal. El pago se habilitará después de confirmar.",
-		indicator: "Llamada pendiente",
+			"Escríbenos para elegir fecha, horario y sucursal. El pago se habilitará después de confirmar.",
+		indicator: "Contacto pendiente",
 	};
 }
 
@@ -232,10 +232,10 @@ const APPOINTMENT_PROGRESS_STEPS = [
 	},
 	{
 		id: "phone",
-		label: "Llamada",
+		label: "Contacto",
 		defaultCaption: "Siguiente paso",
-		savedCaption: "Solicitud registrada",
-		icon: PhoneIcon,
+		savedCaption: "Llamada solicitada",
+		icon: WhatsAppIcon,
 	},
 	{
 		id: "payment",
@@ -292,7 +292,7 @@ function AppointmentProgressSteps({
 								isCompleted &&
 									"bg-famedic-dark text-white dark:bg-famedic-lime dark:text-famedic-darker",
 								isCurrent &&
-									"bg-violet-100 text-violet-800 ring-4 ring-violet-50 dark:bg-violet-300 dark:text-violet-950 dark:ring-violet-950/50",
+									"bg-emerald-100 text-emerald-800 ring-4 ring-emerald-50 dark:bg-emerald-300 dark:text-emerald-950 dark:ring-emerald-950/50",
 								appointmentUnavailable &&
 									index === 1 &&
 									"bg-amber-100 text-amber-800 ring-4 ring-amber-50 dark:bg-amber-300 dark:text-amber-950 dark:ring-amber-950/40",
@@ -307,7 +307,7 @@ function AppointmentProgressSteps({
 								className={clsx(
 									"block text-sm font-semibold",
 									isCurrent
-										? "text-violet-900 dark:text-violet-100"
+										? "text-emerald-900 dark:text-emerald-100"
 										: "text-zinc-900 dark:text-zinc-100",
 									isFuture &&
 										"text-zinc-700 dark:text-zinc-300",
@@ -319,7 +319,7 @@ function AppointmentProgressSteps({
 								className={clsx(
 									"block text-xs",
 									isCurrent
-										? "text-violet-700 dark:text-violet-200"
+										? "text-emerald-700 dark:text-emerald-200"
 										: "text-zinc-500 dark:text-zinc-400",
 								)}
 							>
@@ -339,89 +339,69 @@ function AppointmentContactActions({
 	isAvailable,
 	telHref,
 	phoneDisplay,
+	whatsAppUrl,
+	whatsAppDisplay,
 	onCallClick,
 	onRequestCall,
 	isFormOpen,
 }) {
-	const callButtonClasses =
-		"inline-flex min-h-[76px] w-full items-center justify-center gap-3 rounded-xl border border-famedic-dark bg-famedic-dark px-5 py-3 text-center font-semibold text-white shadow-sm transition-colors hover:bg-famedic-darker focus:outline-none focus:ring-2 focus:ring-famedic-dark focus:ring-offset-2 dark:border-famedic-lime dark:bg-famedic-lime dark:text-famedic-darker dark:focus:ring-famedic-lime dark:focus:ring-offset-zinc-900";
+	const whatsappButtonClasses =
+		"inline-flex min-h-[78px] w-full items-center justify-center gap-3 rounded-xl border border-[#1ea952] bg-[#25D366] px-5 py-3 text-center font-semibold text-white shadow-sm transition-colors hover:bg-[#20bd5a] focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 dark:border-[#25D366] dark:focus:ring-offset-zinc-900";
 	const callLinkClasses =
-		"inline-flex min-h-[76px] w-full items-center justify-center gap-3 rounded-xl border border-famedic-dark bg-white px-5 py-3 text-center text-sm font-semibold text-famedic-dark transition-colors hover:bg-famedic-dark/[0.03] focus:outline-none focus:ring-2 focus:ring-famedic-dark focus:ring-offset-2 dark:border-famedic-lime dark:bg-zinc-900 dark:text-famedic-lime dark:hover:bg-famedic-lime/10 dark:focus:ring-famedic-lime dark:focus:ring-offset-zinc-900";
+		"inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl border border-famedic-dark bg-white px-4 py-3 text-center text-sm font-semibold text-famedic-dark transition-colors hover:bg-famedic-dark/[0.03] focus:outline-none focus:ring-2 focus:ring-famedic-dark focus:ring-offset-2 dark:border-famedic-lime dark:bg-zinc-900 dark:text-famedic-lime dark:hover:bg-famedic-lime/10 dark:focus:ring-famedic-lime dark:focus:ring-offset-zinc-900";
 
 	return (
 		<div>
 			<p className="text-base font-semibold text-zinc-950 dark:text-white">
-				¿Cómo prefieres confirmar?
+				Elige cómo contactarnos
 			</p>
-			<div className="mt-3 grid gap-3 sm:grid-cols-2">
-				{isAvailable ? (
-					<>
-						<a
-							href={telHref}
-							onClick={onCallClick}
-							className={clsx(callButtonClasses, "sm:order-1")}
-						>
-							<PhoneIcon className="size-5" aria-hidden="true" />
-							<span>
-								<span className="block text-sm">
-									Llamar ahora
-								</span>
-								<span className="mt-0.5 block text-xs font-medium text-white/80 dark:text-famedic-darker/70">
-									{phoneDisplay}
-								</span>
-							</span>
-						</a>
-						<Button
-							type="button"
-							outline
-							className="min-h-[76px] w-full border-famedic-dark text-famedic-dark sm:order-2 dark:border-famedic-lime dark:text-famedic-lime"
-							onClick={onRequestCall}
-							aria-expanded={isFormOpen}
-							aria-controls="appointment-callback-form"
-						>
-							<PhoneArrowDownLeftIcon
-								className="size-5"
-								aria-hidden="true"
-							/>
-							<span>Solicitar que me llamen</span>
-						</Button>
-					</>
-				) : (
-					<>
-						<Button
-							type="button"
-							color="famedic-dark"
-							className="min-h-[76px] w-full sm:order-1"
-							onClick={onRequestCall}
-							aria-expanded={isFormOpen}
-							aria-controls="appointment-callback-form"
-						>
-							<PhoneArrowDownLeftIcon
-								className="size-5"
-								aria-hidden="true"
-							/>
-							Solicitar que me llamen
-						</Button>
-						<a
-							href={telHref}
-							onClick={onCallClick}
-							className={clsx(callLinkClasses, "sm:order-2")}
-						>
-							<PhoneIcon className="size-5" aria-hidden="true" />
-							Ver teléfono de atención
-						</a>
-					</>
-				)}
+			<div className="mt-3 space-y-3">
+				<a
+					href={whatsAppUrl}
+					target="_blank"
+					rel="noopener noreferrer"
+					className={whatsappButtonClasses}
+					aria-label="Abrir WhatsApp oficial de citas en una nueva pestaña o aplicación"
+				>
+					<WhatsAppIcon className="size-6 shrink-0" />
+					<span className="min-w-0">
+						<span className="block text-sm">
+							Continuar por WhatsApp
+						</span>
+						<span className="mt-0.5 block text-xs font-medium text-white/85">
+							WhatsApp oficial de citas · {whatsAppDisplay}
+						</span>
+					</span>
+				</a>
+				<p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
+					{isAvailable
+						? "Es la forma más rápida de confirmar con nuestro equipo."
+						: "Puedes escribirnos ahora y te responderemos en el siguiente horario de atención."}
+				</p>
+				<a
+					href={telHref}
+					onClick={onCallClick}
+					className={callLinkClasses}
+				>
+					<PhoneIcon className="size-5" aria-hidden="true" />
+					Llamar al {phoneDisplay}
+				</a>
+				<p className="text-center text-sm text-zinc-600 dark:text-zinc-400">
+					¿Prefieres que te llamemos?{" "}
+					<button
+						type="button"
+						className="font-semibold text-famedic-dark underline decoration-famedic-dark/30 underline-offset-2 hover:text-famedic-darker focus:outline-none focus:ring-2 focus:ring-famedic-dark focus:ring-offset-2 dark:text-famedic-lime dark:focus:ring-famedic-lime dark:focus:ring-offset-zinc-900"
+						onClick={onRequestCall}
+						aria-expanded={isFormOpen}
+						aria-controls="appointment-callback-form"
+					>
+						Solicitar llamada
+					</button>
+				</p>
 			</div>
-			<p className="mt-3 text-center text-xs text-zinc-500 dark:text-zinc-400">
-				{isAvailable
-					? "Un asesor confirmará contigo todos los detalles."
-					: "Nuestro equipo te contactará en el siguiente horario de atención."}
-			</p>
 		</div>
 	);
 }
-
 function ReceiveCallPanel({
 	copy,
 	receiveCallMode,
@@ -883,6 +863,9 @@ export default function LaboratoryAppointmentStep({
 		? `tel:${famedicConcierge.phoneTel}`
 		: "tel:5566515232";
 	const phoneDisplay = famedicConcierge?.phoneDisplay ?? "(55) 6651 5232";
+	const appointmentWhatsApp = famedicConcierge?.appointmentWhatsApp ?? {};
+	const whatsAppUrl = appointmentWhatsApp.url;
+	const whatsAppDisplay = appointmentWhatsApp.display;
 
 	const onCallClick = (e) => {
 		e.preventDefault();
@@ -1067,6 +1050,8 @@ export default function LaboratoryAppointmentStep({
 					isAvailable={conciergeAvailability.isAvailable}
 					telHref={telHref}
 					phoneDisplay={phoneDisplay}
+					whatsAppUrl={whatsAppUrl}
+					whatsAppDisplay={whatsAppDisplay}
 					onCallClick={onCallClick}
 					onRequestCall={openReceiveCallForm}
 					isFormOpen={openPanel === "form"}
