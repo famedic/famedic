@@ -71,11 +71,19 @@ const LIST_FILTER_KEYS = [
 	"callback_info",
 ];
 
+const PENDING_FILTER_KEYS = [
+	"search",
+	"brand",
+	"pending_sort",
+	"priority_filter",
+];
+
 export default function LaboratoryAppointments({
 	laboratoryAppointments,
 	filters,
 	dashboard,
 	brands,
+	pendingCount = 0,
 }) {
 	const view = filters.view || "list";
 
@@ -89,6 +97,8 @@ export default function LaboratoryAppointments({
 		view,
 		start_date: filters.start_date || "",
 		end_date: filters.end_date || "",
+		pending_sort: filters.pending_sort || "priority",
+		priority_filter: filters.priority_filter || "",
 	});
 
 	useEffect(() => {
@@ -102,6 +112,8 @@ export default function LaboratoryAppointments({
 			view: filters.view || "list",
 			start_date: filters.start_date || "",
 			end_date: filters.end_date || "",
+			pending_sort: filters.pending_sort || "priority",
+			priority_filter: filters.priority_filter || "",
 		});
 	}, [
 		filters.search,
@@ -113,6 +125,8 @@ export default function LaboratoryAppointments({
 		filters.view,
 		filters.start_date,
 		filters.end_date,
+		filters.pending_sort,
+		filters.priority_filter,
 	]);
 
 	const [showFilters, setShowFilters] = useState(false);
@@ -120,7 +134,17 @@ export default function LaboratoryAppointments({
 	const updateResults = (e) => {
 		e.preventDefault();
 		if (!processing && showUpdateButton) {
-			get(route("admin.laboratory-appointments.index"), {
+			const query = Object.fromEntries(
+				Object.entries(data).filter(
+					([key, value]) =>
+						value !== "" &&
+						value !== null &&
+						value !== undefined &&
+						key !== "page",
+				),
+			);
+
+			get(route("admin.laboratory-appointments.index", query), {
 				replace: true,
 				preserveState: true,
 			});
@@ -132,6 +156,12 @@ export default function LaboratoryAppointments({
 			return (
 				(data.start_date || "") !== (filters.start_date || "") ||
 				(data.end_date || "") !== (filters.end_date || "")
+			);
+		}
+
+		if (view === "pending") {
+			return PENDING_FILTER_KEYS.some(
+				(key) => (data[key] || "") !== (filters[key] || ""),
 			);
 		}
 
@@ -152,14 +182,14 @@ export default function LaboratoryAppointments({
 			);
 		}
 
-		if (filters.completed === "false") {
+		if (view === "list" && filters.completed === "false") {
 			badges.push(
 				<Badge color="slate" key="completed-false">
 					<ClockIcon className="size-4" />
 					solicitadas
 				</Badge>,
 			);
-		} else if (filters.completed === "true") {
+		} else if (view === "list" && filters.completed === "true") {
 			badges.push(
 				<StatusBadge isActive={true} activeText="confirmadas" />,
 			);
@@ -184,7 +214,7 @@ export default function LaboratoryAppointments({
 		}
 
 		const dateRangeLabel = dateRangePresetLabel(filters.date_range);
-		if (dateRangeLabel) {
+		if (view === "list" && dateRangeLabel) {
 			badges.push(
 				<Badge color="sky" key={`range-${filters.date_range}`}>
 					<CalendarDaysIcon className="size-4" />
@@ -205,14 +235,53 @@ export default function LaboratoryAppointments({
 			);
 		}
 
-		if (filters.phone_call_intent === "true") {
+		if (view === "pending" && filters.pending_sort === "oldest") {
+			badges.push(
+				<Badge color="slate" key="pending-sort-oldest">
+					<ClockIcon className="size-4" />
+					Más antiguas primero
+				</Badge>,
+			);
+		} else if (view === "pending" && filters.pending_sort === "newest") {
+			badges.push(
+				<Badge color="slate" key="pending-sort-newest">
+					<ClockIcon className="size-4" />
+					Más recientes primero
+				</Badge>,
+			);
+		}
+
+		if (view === "pending" && filters.priority_filter === "recent") {
+			badges.push(
+				<Badge color="emerald" key="priority-filter-recent">
+					Actividad reciente
+				</Badge>,
+			);
+		} else if (view === "pending" && filters.priority_filter === "active_cart") {
+			badges.push(
+				<Badge color="sky" key="priority-filter-active-cart">
+					Con carrito activo
+				</Badge>,
+			);
+		} else if (
+			view === "pending" &&
+			filters.priority_filter === "without_recent_activity"
+		) {
+			badges.push(
+				<Badge color="zinc" key="priority-filter-without-activity">
+					Sin actividad reciente
+				</Badge>,
+			);
+		}
+
+		if (view === "list" && filters.phone_call_intent === "true") {
 			badges.push(
 				<Badge color="emerald" key="phone-intent-true">
 					<PhoneIcon className="size-4" />
 					Intentó llamar
 				</Badge>,
 			);
-		} else if (filters.phone_call_intent === "false") {
+		} else if (view === "list" && filters.phone_call_intent === "false") {
 			badges.push(
 				<Badge color="slate" key="phone-intent-false">
 					<PhoneIcon className="size-4" />
@@ -221,14 +290,14 @@ export default function LaboratoryAppointments({
 			);
 		}
 
-		if (filters.callback_info === "true") {
+		if (view === "list" && filters.callback_info === "true") {
 			badges.push(
 				<Badge color="emerald" key="callback-info-true">
 					<ChatBubbleLeftRightIcon className="size-4" />
 					Dejó info de llamada
 				</Badge>,
 			);
-		} else if (filters.callback_info === "false") {
+		} else if (view === "list" && filters.callback_info === "false") {
 			badges.push(
 				<Badge color="slate" key="callback-info-false">
 					<ChatBubbleLeftRightIcon className="size-4" />
@@ -245,6 +314,20 @@ export default function LaboratoryAppointments({
 			return ["start_date", "end_date"].filter((key) => filters[key]).length;
 		}
 
+		if (view === "pending") {
+			return PENDING_FILTER_KEYS.filter((key) => {
+				if (!filters[key]) {
+					return false;
+				}
+
+				if (key === "pending_sort" && filters.pending_sort === "priority") {
+					return false;
+				}
+
+				return true;
+			}).length;
+		}
+
 		return LIST_FILTER_KEYS.filter((key) => filters[key]).length;
 	}, [filters, view]);
 
@@ -258,6 +341,14 @@ export default function LaboratoryAppointments({
 		view: "list",
 	});
 
+	const pendingTabHref = route("admin.laboratory-appointments.index", {
+		search: data.search || undefined,
+		brand: data.brand || undefined,
+		pending_sort: data.pending_sort || "priority",
+		priority_filter: data.priority_filter || undefined,
+		view: "pending",
+	});
+
 	const dashboardTabHref = route("admin.laboratory-appointments.index", {
 		view: "dashboard",
 		start_date: data.start_date || undefined,
@@ -269,18 +360,30 @@ export default function LaboratoryAppointments({
 			<div className="space-y-8">
 				<div className="flex flex-wrap items-center justify-between gap-4">
 					<Heading>Citas de laboratorio</Heading>
-					<div className="flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-600">
+					<div className="flex max-w-full overflow-x-auto rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-600">
 						<Button
 							href={listTabHref}
 							outline={view !== "list"}
-							className="rounded-md !border-0"
+							className="shrink-0 rounded-md !border-0"
 						>
-							Lista
+							Citas
+						</Button>
+						<Button
+							href={pendingTabHref}
+							outline={view !== "pending"}
+							className="shrink-0 rounded-md !border-0"
+						>
+							Pendientes por atender
+							{pendingCount > 0 && (
+								<Badge color="rose" className="ml-1.5">
+									{pendingCount}
+								</Badge>
+							)}
 						</Button>
 						<Button
 							href={dashboardTabHref}
 							outline={view !== "dashboard"}
-							className="rounded-md !border-0"
+							className="shrink-0 rounded-md !border-0"
 						>
 							<PresentationChartLineIcon className="size-5" />
 							Dashboard
@@ -296,7 +399,7 @@ export default function LaboratoryAppointments({
 							placeholder="Buscar por nombre, apellidos, correo o teléfono del paciente/usuario..."
 						/>
 						<div className="flex items-center justify-end gap-2">
-							{view === "list" && (
+							{(view === "list" || view === "pending") && (
 								<Button
 									outline
 									className="w-full"
@@ -311,6 +414,10 @@ export default function LaboratoryAppointments({
 
 					{showFilters && view === "list" && (
 						<Filters data={data} setData={setData} brands={brands} />
+					)}
+
+					{showFilters && view === "pending" && (
+						<PendingFilters data={data} setData={setData} brands={brands} />
 					)}
 
 					{view === "dashboard" && (
@@ -372,6 +479,14 @@ export default function LaboratoryAppointments({
 
 				{view === "list" && (
 					<LaboratoryAppointmentsList
+						laboratoryAppointments={laboratoryAppointments}
+						filters={filters}
+						filterBadges={filterBadges}
+					/>
+				)}
+
+				{view === "pending" && (
+					<LaboratoryAppointmentsPendingList
 						laboratoryAppointments={laboratoryAppointments}
 						filters={filters}
 						filterBadges={filterBadges}
@@ -691,6 +806,236 @@ function LaboratoryAppointmentsList({
 								</TableRow>
 							),
 						)}
+					</TableBody>
+				</Table>
+			</PaginatedTable>
+		</>
+	);
+}
+
+function PendingFilters({ data, setData, brands }) {
+	return (
+		<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+			<ListboxFilter
+				label="Marca de laboratorio"
+				value={data.brand}
+				onChange={(value) => setData("brand", value)}
+			>
+				<ListboxOption value="" className="group">
+					<ArchiveBoxIcon />
+					<ListboxLabel>Todas</ListboxLabel>
+				</ListboxOption>
+				{(brands || []).map((brand) => (
+					<ListboxOption
+						key={brand.value}
+						value={brand.value}
+						className="group"
+					>
+						<BuildingStorefrontIcon />
+						<ListboxLabel>{brand.label}</ListboxLabel>
+					</ListboxOption>
+				))}
+			</ListboxFilter>
+
+			<ListboxFilter
+				label="Orden"
+				value={data.pending_sort || "priority"}
+				onChange={(value) => setData("pending_sort", value)}
+			>
+				<ListboxOption value="priority" className="group">
+					<ClockIcon />
+					<ListboxLabel>Prioridad operativa</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="oldest" className="group">
+					<ClockIcon />
+					<ListboxLabel>Más antiguas primero</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="newest" className="group">
+					<ClockIcon />
+					<ListboxLabel>Más recientes primero</ListboxLabel>
+				</ListboxOption>
+			</ListboxFilter>
+
+			<ListboxFilter
+				label="Prioridad de actividad"
+				value={data.priority_filter || ""}
+				onChange={(value) => setData("priority_filter", value)}
+			>
+				<ListboxOption value="" className="group">
+					<ArchiveBoxIcon />
+					<ListboxLabel>Todas</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="recent" className="group">
+					<ClockIcon />
+					<ListboxLabel>Actividad reciente</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="active_cart" className="group">
+					<ClockIcon />
+					<ListboxLabel>Con carrito activo</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="without_recent_activity" className="group">
+					<ClockIcon />
+					<ListboxLabel>Sin actividad reciente</ListboxLabel>
+				</ListboxOption>
+			</ListboxFilter>
+		</div>
+	);
+}
+
+function LaboratoryAppointmentsPendingList({
+	laboratoryAppointments,
+	filters,
+	filterBadges,
+}) {
+	if (laboratoryAppointments.data.length === 0) {
+		return (
+			<EmptyListCard
+				heading="No hay citas pendientes por atender."
+				message="Las nuevas solicitudes aparecerán aquí mientras esperan confirmación."
+			/>
+		);
+	}
+
+	return (
+		<>
+			<SearchResultsWithFilters
+				paginatedData={laboratoryAppointments}
+				filterBadges={filterBadges}
+			/>
+
+			<PaginatedTable paginatedData={laboratoryAppointments}>
+				<Table className="[--gutter:theme(spacing.6)]">
+					<TableHead>
+						<TableRow>
+							<TableHeader>Antigüedad</TableHeader>
+							<TableHeader>Actividad del carrito</TableHeader>
+							<TableHeader>Marca</TableHeader>
+							<TableHeader>Paciente</TableHeader>
+							<TableHeader>Contacto</TableHeader>
+							<TableHeader>Solicitud</TableHeader>
+							<TableHeader>Carrito</TableHeader>
+							<TableHeader className="text-right">
+								Acción
+							</TableHeader>
+						</TableRow>
+					</TableHead>
+					<TableBody>
+						{laboratoryAppointments.data.map((laboratoryAppointment) => (
+							<TableRow
+								key={laboratoryAppointment.id}
+								dusk={`pendingLaboratoryAppointment-${laboratoryAppointment.id}`}
+							>
+								<TableCell>
+									<Badge
+										color={
+											laboratoryAppointment
+												.concierge_operational_age
+												?.color || "slate"
+										}
+									>
+										{
+											laboratoryAppointment
+												.concierge_operational_age
+												?.label || "—"
+										}
+									</Badge>
+								</TableCell>
+
+								<TableCell>
+									<Badge
+										color={
+											laboratoryAppointment
+												.concierge_cart_activity_signal
+												?.color || "zinc"
+										}
+									>
+										{
+											laboratoryAppointment
+												.concierge_cart_activity_signal
+												?.label || "Sin actividad reciente"
+										}
+									</Badge>
+								</TableCell>
+
+								<TableCell>
+									<LaboratoryBrandCard
+										className="w-32 p-3"
+										src={
+											"/images/gda/GDA-" +
+											laboratoryAppointment.brand.toUpperCase() +
+											".png"
+										}
+									/>
+								</TableCell>
+
+								<TableCell>
+									<Text>
+										<Strong>
+											{laboratoryAppointment.patient_full_name ||
+												laboratoryAppointment.customer
+													?.user?.full_name ||
+												"—"}
+										</Strong>
+									</Text>
+								</TableCell>
+
+								<TableCell>
+									{laboratoryAppointment.patient_full_phone && (
+										<Text className="text-sm">
+											{laboratoryAppointment.patient_full_phone}
+										</Text>
+									)}
+									{laboratoryAppointment.customer?.user?.email && (
+										<Text className="text-sm text-zinc-500">
+											{laboratoryAppointment.customer.user.email}
+										</Text>
+									)}
+									{!laboratoryAppointment.patient_full_phone &&
+										!laboratoryAppointment.customer?.user
+											?.email && (
+											<Text className="text-sm text-zinc-400">
+												—
+											</Text>
+										)}
+								</TableCell>
+
+								<TableCell>
+									<Text className="text-sm">
+										{
+											laboratoryAppointment.formatted_request_saved_at ||
+												laboratoryAppointment.formatted_created_at
+										}
+									</Text>
+								</TableCell>
+
+								<TableCell>
+									{laboratoryAppointment.admin_cart_status_label ? (
+										<Badge color="zinc">
+											{
+												laboratoryAppointment.admin_cart_status_label
+											}
+										</Badge>
+									) : (
+										<Text className="text-sm text-zinc-400">
+											—
+										</Text>
+									)}
+								</TableCell>
+
+								<TableCell className="text-right">
+									<Button
+										href={route(
+											"admin.laboratory-appointments.show",
+											laboratoryAppointment.id,
+										)}
+										outline
+										className="whitespace-nowrap"
+									>
+										Gestionar
+									</Button>
+								</TableCell>
+							</TableRow>
+						))}
 					</TableBody>
 				</Table>
 			</PaginatedTable>

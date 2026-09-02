@@ -54,20 +54,34 @@ class CartUserActivityResolver
      */
     public static function lastActivityAtSql(string $cartAlias = 'carts'): string
     {
+        return self::lastUserActivityAtSql($cartAlias, allowUpdatedAtFallback: true);
+    }
+
+    /**
+     * @param  bool  $allowUpdatedAtFallback  Si es false y existe cart_events, solo eventos reales del usuario.
+     */
+    public static function lastUserActivityAtSql(string $cartAlias = 'carts', bool $allowUpdatedAtFallback = true): string
+    {
         if (! \Illuminate\Support\Facades\Schema::hasTable('cart_events')) {
-            return "{$cartAlias}.updated_at";
+            return $allowUpdatedAtFallback ? "{$cartAlias}.updated_at" : 'NULL';
         }
 
         $events = collect(self::userActivityEventValues())
             ->map(fn (string $event) => "'".str_replace("'", "''", $event)."'")
             ->join(', ');
 
-        return "COALESCE((
+        $eventsOnly = "(
             SELECT MAX(cart_events.occurred_at)
             FROM cart_events
             WHERE cart_events.cart_id = {$cartAlias}.id
                 AND cart_events.event IN ({$events})
-        ), {$cartAlias}.updated_at)";
+        )";
+
+        if ($allowUpdatedAtFallback) {
+            return "COALESCE({$eventsOnly}, {$cartAlias}.updated_at)";
+        }
+
+        return $eventsOnly;
     }
 
     public function lastUserActivityAt(Cart $cart): CarbonInterface

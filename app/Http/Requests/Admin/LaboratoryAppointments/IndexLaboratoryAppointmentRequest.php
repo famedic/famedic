@@ -17,7 +17,9 @@ class IndexLaboratoryAppointmentRequest extends FormRequest
         return [
             'search' => ['nullable', 'string', 'max:255'],
             'completed' => ['nullable', 'in:,true,false'],
-            'view' => ['nullable', 'in:list,dashboard'],
+            'view' => ['nullable', 'in:list,dashboard,pending'],
+            'pending_sort' => ['nullable', 'in:priority,oldest,newest'],
+            'priority_filter' => ['nullable', 'in:recent,active_cart,without_recent_activity'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'date_range' => ['nullable', 'in:,today,last_7_days,last_15_days,last_30_days,last_60_days,last_6_months'],

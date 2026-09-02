@@ -214,6 +214,13 @@ class LaboratoryAppointment extends Model
         $query->whereNull('confirmed_at');
     }
 
+    public function scopeAwaitingConcierge(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('confirmed_at')
+            ->whereNull('laboratory_purchase_id');
+    }
+
     public function scopeOfBrand(Builder $query, LaboratoryBrand $brand): void
     {
         $query->where('brand', $brand->value);
