@@ -133,6 +133,7 @@ test('social profiles are exposed on support page', function () {
 
 test('famedic concierge config is shared globally for checkout reuse', function () {
     $user = supportPortalUser();
+    $appointmentMessage = 'Hola, quiero confirmar mi cita de laboratorio. ¿Me pueden ayudar a elegir fecha, horario y sucursal?';
 
     $this->actingAs($user)
         ->get(route('user.support'))
@@ -140,7 +141,28 @@ test('famedic concierge config is shared globally for checkout reuse', function 
         ->assertInertia(fn ($page) => $page
             ->has('famedicConcierge')
             ->where('famedicConcierge.phoneDisplay', '(55) 6651 5232')
+            ->where('famedicConcierge.phoneTel', '5566515232')
+            ->where('famedicConcierge.appointmentWhatsApp.display', '(55) 4057 2139')
+            ->where('famedicConcierge.appointmentWhatsApp.e164', '525540572139')
+            ->where('famedicConcierge.appointmentWhatsApp.url', FamedicPublicContactConfig::whatsappUrl(
+                '525540572139',
+                $appointmentMessage,
+            ))
             ->where('famedicConcierge.scheduleLines.0', 'Lunes a viernes: 7:00 AM a 8:00 PM'));
+});
+
+test('support page contact props do not expose sensitive user or cart data', function () {
+    $user = supportPortalUser();
+
+    $this->actingAs($user)
+        ->get(route('user.support'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->missing('customerService.patient')
+            ->missing('concierge.cart')
+            ->where('customerService', fn ($channel) => collect($channel)->keys()->every(
+                fn ($key) => ! in_array($key, ['password', 'token', 'ssn', 'medicalRecord'], true)
+            )));
 });
 
 test('disabled alternative channel is omitted from support page props', function () {

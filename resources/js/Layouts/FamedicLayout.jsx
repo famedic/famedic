@@ -16,6 +16,7 @@ export default function FamedicLayout({
 	banner = null,
 	hasShoppingCartBanner = false,
 	reserveMobileBottomNavSpace = false,
+	hideHelpBubble = false,
 }) {
 	useTrackingEvents();
 
@@ -47,6 +48,7 @@ export default function FamedicLayout({
 				</div>
 			</StackedLayout>
 			<HelpBubble
+				hidden={hideHelpBubble}
 				reserveMobileBottomNavSpace={reserveMobileBottomNavSpace}
 				className={hasShoppingCartBanner ? "max-sm:mb-10" : ""}
 			/>

@@ -48,9 +48,24 @@ import BalanceCreditCard from "@/Components/Coupons/BalanceCreditCard";
 import PromoCodeField from "@/Components/Checkout/PromoCodeField";
 
 const BASE_WIZARD_STEPS = [
-	{ id: "patient", number: 1, label: "Paciente" },
-	{ id: "address", number: 2, label: "Dirección" },
-	{ id: "payment", number: 3, label: "Método de Pago" },
+	{
+		id: "patient",
+		number: 1,
+		label: "Selecciona paciente",
+		ariaLabel: "Selecciona paciente",
+	},
+	{
+		id: "address",
+		number: 2,
+		label: "Selecciona dirección",
+		ariaLabel: "Selecciona dirección",
+	},
+	{
+		id: "payment",
+		number: 3,
+		label: "Elige cómo pagar",
+		ariaLabel: "Elige cómo pagar",
+	},
 ];
 
 function buildWizardSteps(
@@ -59,24 +74,59 @@ function buildWizardSteps(
 ) {
 	if (usesAppointmentFirstFlow) {
 		return [
-			{ id: "patient", number: 1, label: "Paciente" },
-			{ id: "address", number: 2, label: "Dirección" },
-			{ id: "appointment", number: 3, label: "Cita" },
-			{ id: "payment", number: 4, label: "Pago" },
+			{
+				id: "patient",
+				number: 1,
+				label: "Selecciona paciente",
+				ariaLabel: "Selecciona paciente",
+			},
+			{
+				id: "address",
+				number: 2,
+				label: "Selecciona dirección",
+				ariaLabel: "Selecciona dirección",
+			},
+			{
+				id: "appointment",
+				number: 3,
+				label: "Confirma tu cita",
+				ariaLabel: "Confirma tu cita",
+			},
+			{
+				id: "payment",
+				number: 4,
+				label: "Revisa y paga",
+				ariaLabel: "Revisa y paga",
+			},
 		];
 	}
 
 	if (requiresAppointment) {
 		return [
 			...BASE_WIZARD_STEPS,
-			{ id: "appointment", number: 4, label: "Cita" },
-			{ id: "confirmation", number: 5, label: "Confirmación" },
+			{
+				id: "appointment",
+				number: 4,
+				label: "Confirma tu cita",
+				ariaLabel: "Confirma tu cita",
+			},
+			{
+				id: "confirmation",
+				number: 5,
+				label: "Revisa y confirma",
+				ariaLabel: "Revisa y confirma",
+			},
 		];
 	}
 
 	return [
 		...BASE_WIZARD_STEPS,
-		{ id: "confirmation", number: 4, label: "Confirmación" },
+		{
+			id: "confirmation",
+			number: 4,
+			label: "Revisa y confirma",
+			ariaLabel: "Revisa y confirma",
+		},
 	];
 }
 

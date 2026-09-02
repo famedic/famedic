@@ -1,33 +1,24 @@
 import SettingsLayout from "@/Layouts/SettingsLayout";
 import Card from "@/Components/Card";
-import { GradientHeading, Subheading } from "@/Components/Catalyst/heading";
+import { Heading, Subheading } from "@/Components/Catalyst/heading";
 import { Text, Strong, Anchor } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
 import { Badge } from "@/Components/Catalyst/badge";
-import { Divider } from "@/Components/Catalyst/divider";
-import ServiceAvailabilityStatus from "@/Components/Support/ServiceAvailabilityStatus";
+import CompactAvailabilityBadge from "@/Components/Support/CompactAvailabilityBadge";
+import CompactHoursList from "@/Components/Support/CompactHoursList";
+import AppointmentConfirmationSteps from "@/Components/Support/AppointmentConfirmationSteps";
+import { WhatsAppIcon } from "@/Components/Checkout/CheckoutWhatsAppHelp";
 import useServiceHoursAvailability from "@/Hooks/useServiceHoursAvailability";
+import { usePage } from "@inertiajs/react";
 import {
 	EnvelopeIcon,
 	PhoneIcon,
+	ChatBubbleLeftRightIcon,
+	ClockIcon,
+	CalendarDaysIcon,
+	CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 import clsx from "clsx";
-
-function WhatsAppIcon({ className }) {
-	return (
-		<svg
-			className={className}
-			viewBox="0 0 256 259"
-			xmlns="http://www.w3.org/2000/svg"
-			aria-hidden="true"
-		>
-			<path
-				d="m67.663 221.823 4.185 2.093c17.44 10.463 36.971 15.346 56.503 15.346 61.385 0 111.609-50.224 111.609-111.609 0-29.297-11.859-57.897-32.785-78.824-20.927-20.927-48.83-32.785-78.824-32.785-61.385 0-111.61 50.224-110.912 112.307 0 20.926 6.278 41.156 16.741 58.594l2.79 4.186-11.16 41.156 41.853-10.464Z"
-				fill="currentColor"
-			/>
-		</svg>
-	);
-}
 
 function SocialIcon({ icon, className }) {
 	if (icon === "instagram") {
@@ -56,49 +47,221 @@ function SocialIcon({ icon, className }) {
 		<svg className={className} viewBox="0 0 24 24" aria-hidden="true">
 			<path
 				fill="currentColor"
-				d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0-1.68-1.68c-.93 0-1.68.75-1.68 1.68 0 .93.75 1.68 1.68 1.68 0 .93.75 1.68 1.68 1.68.93 0 1.68-.75 1.68-1.68a1.68 1.68 0 0 0-1.68-1.68Z"
+				d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5-3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0-1.68-1.68c-.93 0-1.68.75-1.68 1.68 0 .93.75 1.68 1.68 1.68 0 .93.75 1.68 1.68 1.68.93 0 1.68-.75 1.68-1.68a1.68 1.68 0 0 0-1.68-1.68Z"
 			/>
 		</svg>
 	);
 }
 
-function HoursList({ lines, timezoneLabel }) {
-	if (!lines?.length) {
-		return null;
-	}
+function ContactChannelCard({
+	icon,
+	iconClassName,
+	title,
+	badge,
+	description,
+	contactLine,
+	actionHref,
+	actionLabel,
+	actionOutline = true,
+	actionIcon,
+	ariaLabel,
+}) {
+	const ActionIcon = actionIcon ?? WhatsAppIcon;
 
 	return (
-		<div className="space-y-1">
-			{timezoneLabel && (
-				<Text className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-					{timezoneLabel}
-				</Text>
-			)}
-			<ul className="space-y-0.5">
-				{lines.map((line) => (
-					<li
-						key={line}
-						className="text-sm text-zinc-600 dark:text-zinc-300"
+		<Card className="flex h-full flex-col rounded-2xl p-5 shadow-sm ring-zinc-950/5">
+			<div className="flex flex-col gap-4">
+				<span
+					className={clsx(
+						"flex size-11 items-center justify-center rounded-xl",
+						iconClassName,
+					)}
+				>
+					{icon}
+				</span>
+
+				<div className="space-y-1.5">
+					<div className="flex flex-wrap items-center gap-2">
+						<Strong className="text-sm font-semibold text-zinc-900 dark:text-white">
+							{title}
+						</Strong>
+						{badge && (
+							<Badge
+								color="zinc"
+								className="px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+							>
+								{badge}
+							</Badge>
+						)}
+					</div>
+					{description && (
+						<Text className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+							{description}
+						</Text>
+					)}
+					{contactLine && (
+						<Text className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+							{contactLine}
+						</Text>
+					)}
+				</div>
+			</div>
+
+			{actionHref && actionLabel && (
+				<div className="mt-auto pt-5">
+					<Button
+						href={actionHref}
+						target={actionHref.startsWith("http") ? "_blank" : undefined}
+						rel={
+							actionHref.startsWith("http")
+								? "noopener noreferrer"
+								: undefined
+						}
+						outline={actionOutline}
+						className="w-full justify-center"
+						aria-label={ariaLabel}
 					>
-						{line}
-					</li>
-				))}
-			</ul>
-		</div>
+						<ActionIcon className="size-5" aria-hidden="true" />
+						{actionLabel}
+					</Button>
+				</div>
+			)}
+		</Card>
 	);
 }
 
-function ExternalLinkButton({ href, children, className, ...props }) {
+function AppointmentWhatsAppCard({
+	appointmentWhatsApp,
+	conciergeTelUrl,
+	conciergePhoneDisplay,
+	isConciergeAvailable,
+}) {
+	const whatsAppUrl = appointmentWhatsApp?.url;
+	const whatsAppDisplay = appointmentWhatsApp?.display;
+
 	return (
-		<Button
-			href={href}
-			target="_blank"
-			rel="noopener noreferrer"
-			className={clsx("w-full sm:w-auto", className)}
-			{...props}
-		>
-			{children}
-		</Button>
+		<Card className="overflow-hidden rounded-2xl border border-teal-100/90 bg-gradient-to-br from-emerald-50/40 via-white to-white shadow-sm ring-teal-100/60 dark:border-teal-900/40 dark:from-teal-950/20 dark:via-slate-900 dark:to-slate-900 dark:ring-teal-900/30">
+			<div className="flex flex-col gap-6 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between lg:gap-8 lg:p-7">
+				<div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-start">
+					<span className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-teal-100/80 dark:bg-slate-800 dark:ring-teal-900/50">
+						<WhatsAppIcon className="size-9 text-[#25D366]" />
+					</span>
+
+					<div className="min-w-0 space-y-2">
+						<p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-800 dark:text-teal-300">
+							Citas de laboratorio
+						</p>
+						<Strong className="block text-xl font-semibold text-zinc-900 sm:text-2xl dark:text-white">
+							Confirma tu cita por WhatsApp
+						</Strong>
+						<Text className="max-w-xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+							Nuestro equipo te ayuda a elegir fecha, horario y sucursal.
+						</Text>
+
+						{whatsAppDisplay && (
+							<p className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-white">
+								<PhoneIcon
+									className="size-4 shrink-0 text-teal-700 dark:text-teal-400"
+									aria-hidden="true"
+								/>
+								{whatsAppDisplay}
+							</p>
+						)}
+
+						<Text className="text-xs text-zinc-500 dark:text-zinc-400">
+							Canal oficial de citas
+						</Text>
+
+						<p
+							className={clsx(
+								"inline-flex items-center gap-1.5 text-sm font-medium",
+								isConciergeAvailable
+									? "text-emerald-700 dark:text-emerald-300"
+									: "text-zinc-600 dark:text-zinc-400",
+							)}
+							role="status"
+						>
+							{isConciergeAvailable ? (
+								<>
+									<CheckCircleIcon
+										className="size-4 shrink-0"
+										aria-hidden="true"
+									/>
+									Disponible ahora
+								</>
+							) : (
+								"Puedes escribirnos ahora y te responderemos en el siguiente horario de atención."
+							)}
+						</p>
+					</div>
+				</div>
+
+				<div className="flex w-full shrink-0 flex-col gap-2.5 lg:w-56">
+					{whatsAppUrl && (
+						<Button
+							href={whatsAppUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="w-full justify-center !bg-[#25D366] !text-white hover:!bg-[#20bd5a]"
+							aria-label="Abrir WhatsApp de citas de laboratorio"
+						>
+							<WhatsAppIcon className="size-5" aria-hidden="true" />
+							Abrir WhatsApp
+						</Button>
+					)}
+					{conciergeTelUrl && conciergePhoneDisplay && (
+						<Button
+							href={conciergeTelUrl}
+							outline
+							className="w-full justify-center"
+							aria-label={`Llamar al ${conciergePhoneDisplay}`}
+						>
+							<PhoneIcon className="size-5" aria-hidden="true" />
+							Llamar al {conciergePhoneDisplay}
+						</Button>
+					)}
+				</div>
+			</div>
+		</Card>
+	);
+}
+
+function HoursCard({ title, icon: Icon, isAvailable, lines, compactGeneral = false }) {
+	return (
+		<Card className="flex h-full flex-col space-y-4 rounded-2xl p-5 shadow-sm sm:p-6">
+			<div className="flex items-start justify-between gap-3">
+				<div className="flex items-center gap-2.5">
+					<span className="flex size-9 items-center justify-center rounded-lg bg-sky-50 text-sky-800 ring-1 ring-sky-100 dark:bg-sky-950/40 dark:text-sky-200 dark:ring-sky-900/50">
+						<Icon className="size-5" aria-hidden="true" />
+					</span>
+					<Strong className="text-sm font-semibold text-zinc-900 dark:text-white">
+						{title}
+					</Strong>
+				</div>
+				<CompactAvailabilityBadge isAvailable={isAvailable} />
+			</div>
+			<CompactHoursList lines={lines} compactGeneral={compactGeneral} />
+		</Card>
+	);
+}
+
+function SupportHelpBar() {
+	return (
+		<div className="rounded-2xl border border-emerald-100/80 bg-emerald-50/60 px-4 py-3.5 sm:px-5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+			<p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-zinc-700 dark:text-zinc-300">
+				<PhoneIcon
+					className="size-5 shrink-0 text-teal-700 dark:text-teal-400"
+					aria-hidden="true"
+				/>
+				<span>¿Necesitas ayuda? Puedes contactarnos al</span>
+				<Anchor
+					href="tel:8128601893"
+					className="font-semibold text-teal-700 no-underline hover:underline dark:text-teal-300"
+				>
+					81 2860 1893
+				</Anchor>
+			</p>
+		</div>
 	);
 }
 
@@ -108,181 +271,214 @@ export default function Support({
 	email,
 	supportHours,
 	concierge,
-	appointmentConfirmation,
 	social,
 }) {
+	const { famedicConcierge } = usePage().props;
+	const appointmentWhatsApp = famedicConcierge?.appointmentWhatsApp;
+
 	const supportAvailability = useServiceHoursAvailability(supportHours);
 	const conciergeAvailability = useServiceHoursAvailability({
-		timezone: concierge?.timezone,
-		scheduleByDay: concierge?.scheduleByDay,
+		timezone: concierge?.timezone ?? famedicConcierge?.timezone,
+		scheduleByDay:
+			concierge?.scheduleByDay ?? famedicConcierge?.scheduleByDay,
 	});
 
+	const conciergeTelUrl = concierge?.telUrl;
+	const conciergePhoneDisplay =
+		concierge?.phoneDisplay ?? famedicConcierge?.phoneDisplay;
+	const conciergeScheduleLines =
+		concierge?.scheduleLines ?? famedicConcierge?.scheduleLines ?? [];
+
 	return (
-		<SettingsLayout title="Soporte">
-			<div className="space-y-8">
-				<header className="space-y-3">
-					<GradientHeading noDivider>Soporte</GradientHeading>
-					<Text className="max-w-2xl text-base text-zinc-700 dark:text-zinc-300">
-						Estamos para ayudarte.
-					</Text>
+		<SettingsLayout title="Soporte" hideHelpBubble>
+			<div className="space-y-6 lg:space-y-8">
+				<header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+					<div className="max-w-2xl space-y-2">
+						<Heading
+							level={1}
+							className="!text-3xl !font-semibold !text-zinc-900 sm:!text-4xl dark:!text-white"
+						>
+							Soporte
+						</Heading>
+						<Text className="text-sm leading-relaxed text-zinc-600 sm:text-base dark:text-zinc-400">
+							Estamos aquí para ayudarte.
+							<span className="mt-1 block">
+								Elige el canal que mejor se adapte a ti.
+							</span>
+						</Text>
+					</div>
+
+					<p
+						className={clsx(
+							"inline-flex items-center gap-2 self-start rounded-full px-3 py-1.5 text-xs font-medium ring-1 sm:text-sm",
+							conciergeAvailability.isAvailable
+								? "bg-emerald-50 text-emerald-800 ring-emerald-200/80 dark:bg-emerald-950/30 dark:text-emerald-200 dark:ring-emerald-800/40"
+								: "bg-zinc-100 text-zinc-600 ring-zinc-200/80 dark:bg-zinc-800/60 dark:text-zinc-400 dark:ring-zinc-700/50",
+						)}
+						role="status"
+					>
+						{conciergeAvailability.isAvailable ? (
+							<>
+								<span
+									className="size-2 rounded-full bg-emerald-500 motion-safe:animate-pulse"
+									aria-hidden="true"
+								/>
+								Equipo de citas disponible ahora
+							</>
+						) : (
+							"Equipo de citas fuera de horario"
+						)}
+					</p>
 				</header>
 
-				<section aria-labelledby="support-channels-heading" className="space-y-4">
-					<Subheading id="support-channels-heading">
-						Canales de Soporte
+				{appointmentWhatsApp && (
+					<AppointmentWhatsAppCard
+						appointmentWhatsApp={appointmentWhatsApp}
+						conciergeTelUrl={conciergeTelUrl}
+						conciergePhoneDisplay={conciergePhoneDisplay}
+						isConciergeAvailable={conciergeAvailability.isAvailable}
+					/>
+				)}
+
+				<section aria-labelledby="other-channels-heading" className="space-y-4">
+					<Subheading
+						id="other-channels-heading"
+						className="!text-base !font-semibold !text-zinc-900 dark:!text-white"
+					>
+						Otros canales de soporte
 					</Subheading>
 
-					{customerService && (
-						<Card className="space-y-4 p-5 sm:p-6">
-							<div>
-								<Strong className="text-lg">{customerService.title}</Strong>
-								<Text className="mt-1">
-									Atención directa con{" "}
-									<Strong>{customerService.contactName}</Strong> por WhatsApp.
-								</Text>
-							</div>
-							<Text className="text-sm">{customerService.whatsappDisplay}</Text>
-							{customerService.whatsappUrl && (
-								<ExternalLinkButton
-									href={customerService.whatsappUrl}
-									color="emerald"
-									className="!bg-[#25D366] hover:!bg-[#20bd5a]"
-								>
-									<WhatsAppIcon className="size-5" />
-									Contactar por WhatsApp
-								</ExternalLinkButton>
-							)}
-						</Card>
-					)}
+					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+						{customerService && (
+							<ContactChannelCard
+								icon={
+									<ChatBubbleLeftRightIcon
+										className="size-5"
+										aria-hidden="true"
+									/>
+								}
+								iconClassName="bg-sky-50 text-sky-800 ring-1 ring-sky-100 dark:bg-sky-950/40 dark:text-sky-200 dark:ring-sky-900/50"
+								title={customerService.title}
+								description="Atención directa por WhatsApp."
+								contactLine={customerService.whatsappDisplay}
+								actionHref={customerService.whatsappUrl}
+								actionLabel="Contactar por WhatsApp"
+								ariaLabel="Contactar atención a clientes por WhatsApp"
+							/>
+						)}
 
-					{alternativeChannel && (
-						<Card className="space-y-4 p-5 sm:p-6">
-							<div className="flex flex-wrap items-start gap-2">
-								<Strong className="text-lg">{alternativeChannel.title}</Strong>
-								<Badge color="sky">{alternativeChannel.badge}</Badge>
-							</div>
-							<Text className="text-sm">{alternativeChannel.description}</Text>
-							<Text className="text-sm">{alternativeChannel.whatsappDisplay}</Text>
-							{alternativeChannel.whatsappUrl && (
-								<ExternalLinkButton
-									href={alternativeChannel.whatsappUrl}
-									outline
-									className="border-[#25D366] text-[#128C7E] hover:bg-emerald-50 dark:border-emerald-600 dark:text-emerald-300"
-								>
-									<WhatsAppIcon className="size-5" />
-									{alternativeChannel.buttonLabel}
-								</ExternalLinkButton>
-							)}
-						</Card>
-					)}
+						{alternativeChannel && (
+							<ContactChannelCard
+								icon={
+									<WhatsAppIcon
+										className="size-5 text-[#25D366]"
+										aria-hidden="true"
+									/>
+								}
+								iconClassName="bg-zinc-50 text-zinc-700 ring-1 ring-zinc-200/80 dark:bg-zinc-800/60 dark:text-zinc-300 dark:ring-zinc-700/50"
+								title="Canal alternativo"
+								badge={alternativeChannel.badge}
+								description={alternativeChannel.description}
+								contactLine={alternativeChannel.whatsappDisplay}
+								actionHref={alternativeChannel.whatsappUrl}
+								actionLabel={alternativeChannel.buttonLabel}
+								ariaLabel="Abrir canal alternativo de WhatsApp"
+							/>
+						)}
 
-					{email && (
-						<Card className="space-y-4 p-5 sm:p-6">
-							<Strong className="text-lg">Correo electrónico</Strong>
-							<Text className="text-sm">{email.address}</Text>
-							{email.mailtoUrl && (
-								<Button href={email.mailtoUrl} outline className="w-full sm:w-auto">
+						{email && (
+							<ContactChannelCard
+								icon={
 									<EnvelopeIcon className="size-5" aria-hidden="true" />
-									Enviar correo
-								</Button>
-							)}
-						</Card>
-					)}
+								}
+								iconClassName="bg-violet-50 text-violet-800 ring-1 ring-violet-100 dark:bg-violet-950/30 dark:text-violet-200 dark:ring-violet-900/40"
+								title="Correo electrónico"
+								description="Escríbenos y te responderemos."
+								contactLine={email.address}
+								actionHref={email.mailtoUrl}
+								actionLabel="Enviar correo"
+								actionIcon={EnvelopeIcon}
+								ariaLabel={`Enviar correo a ${email.address}`}
+							/>
+						)}
+					</div>
 				</section>
 
-				{supportHours?.lines?.length > 0 && (
-					<section aria-labelledby="support-hours-heading" className="space-y-4">
-						<Subheading id="support-hours-heading">
-							Horario de atención
+				{(supportHours?.lines?.length > 0 ||
+					conciergeScheduleLines.length > 0) && (
+					<section
+						aria-labelledby="support-hours-heading"
+						className="space-y-4"
+					>
+						<Subheading
+							id="support-hours-heading"
+							className="!text-base !font-semibold !text-zinc-900 dark:!text-white"
+						>
+							Horarios y disponibilidad
 						</Subheading>
-						<Card className="space-y-4 p-5 sm:p-6">
-							<ServiceAvailabilityStatus
-								isAvailable={supportAvailability.isAvailable}
-								availableMessage={supportHours.availableMessage}
-								afterHoursMessage={supportHours.afterHoursMessage}
-							/>
-							<HoursList
-								lines={supportHours.lines}
-								timezoneLabel={supportHours.timezoneLabel}
-							/>
-						</Card>
+
+						<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+							{supportHours?.lines?.length > 0 && (
+								<HoursCard
+									title="Atención general"
+									icon={ClockIcon}
+									isAvailable={supportAvailability.isAvailable}
+									lines={supportHours.lines}
+									compactGeneral
+								/>
+							)}
+
+							{conciergeScheduleLines.length > 0 && (
+								<HoursCard
+									title="Concierge de citas"
+									icon={CalendarDaysIcon}
+									isAvailable={conciergeAvailability.isAvailable}
+									lines={conciergeScheduleLines}
+								/>
+							)}
+
+							<AppointmentConfirmationSteps className="md:col-span-2 xl:col-span-1" />
+						</div>
 					</section>
 				)}
-
-				<Divider soft />
-
-				<section aria-labelledby="concierge-heading" className="space-y-4">
-					<Subheading id="concierge-heading">Concierge Famedic</Subheading>
-					<Card className="space-y-4 p-5 sm:p-6">
-						<ServiceAvailabilityStatus
-							isAvailable={conciergeAvailability.isAvailable}
-							availableMessage={concierge?.availableMessage}
-							afterHoursMessage={concierge?.afterHoursMessage}
-						/>
-
-						{concierge?.description && (
-							<Text>{concierge.description}</Text>
-						)}
-						{appointmentConfirmation?.companionText && (
-							<Text>{appointmentConfirmation.companionText}</Text>
-						)}
-
-						<div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
-							<Strong>Cómo se confirman las citas</Strong>
-							{appointmentConfirmation?.text && (
-								<Text className="text-sm">{appointmentConfirmation.text}</Text>
-							)}
-							{concierge?.telUrl && concierge?.phoneDisplay && (
-								<Button href={concierge.telUrl} className="w-full sm:w-auto">
-									<PhoneIcon className="size-5" aria-hidden="true" />
-									Llamar a Concierge ({concierge.phoneDisplay})
-								</Button>
-							)}
-						</div>
-
-						{concierge?.scheduleLines?.length > 0 && (
-							<div className="space-y-2">
-								<Strong>Horario de Concierge</Strong>
-								<HoursList lines={concierge.scheduleLines} />
-							</div>
-						)}
-					</Card>
-				</section>
 
 				{social?.profiles?.length > 0 && (
-					<section aria-labelledby="social-heading" className="space-y-4">
-						<Subheading id="social-heading">
-							Síguenos en redes sociales
+					<section aria-labelledby="social-heading" className="space-y-3">
+						<Subheading
+							id="social-heading"
+							className="!text-base !font-semibold !text-zinc-900 dark:!text-white"
+						>
+							También puedes encontrarnos en
 						</Subheading>
-						<Card className="space-y-4 p-5 sm:p-6">
-							{social.intro && <Text>{social.intro}</Text>}
-							<ul className="grid gap-3 sm:grid-cols-3">
-								{social.profiles.map((profile) => (
-									<li key={profile.network}>
-										<Anchor
-											href={profile.url}
-											target="_blank"
-											rel="noopener noreferrer"
-											className={clsx(
-												"flex min-h-11 items-center gap-3 rounded-lg border border-zinc-200 px-4 py-3",
-												"text-zinc-900 no-underline transition",
-												"hover:border-famedic-light hover:bg-zinc-50",
-												"focus:outline-none focus-visible:ring-2 focus-visible:ring-famedic-dark focus-visible:ring-offset-2",
-												"dark:border-slate-700 dark:text-white dark:hover:bg-slate-800",
-											)}
-										>
-											<SocialIcon
-												icon={profile.icon}
-												className="size-5 shrink-0 text-famedic-dark dark:text-famedic-lime"
-											/>
-											<span className="font-medium">{profile.network}</span>
-										</Anchor>
-									</li>
-								))}
-							</ul>
-						</Card>
+						<ul className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+							{social.profiles.map((profile) => (
+								<li key={profile.network}>
+									<Anchor
+										href={profile.url}
+										target="_blank"
+										rel="noopener noreferrer"
+										className={clsx(
+											"inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full",
+											"border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700",
+											"transition hover:border-zinc-300 hover:bg-zinc-50",
+											"focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2",
+											"sm:w-auto dark:border-zinc-700 dark:bg-slate-900 dark:text-zinc-300 dark:hover:bg-slate-800",
+										)}
+										aria-label={`Visitar ${profile.network} de Famedic`}
+									>
+										<SocialIcon
+											icon={profile.icon}
+											className="size-4 shrink-0"
+										/>
+										{profile.network}
+									</Anchor>
+								</li>
+							))}
+						</ul>
 					</section>
 				)}
+
+				<SupportHelpBar />
 			</div>
 		</SettingsLayout>
 	);

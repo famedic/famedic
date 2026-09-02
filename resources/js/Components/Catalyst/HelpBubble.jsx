@@ -13,7 +13,15 @@ import {
 import { Button } from "@/Components/Catalyst/button";
 import clsx from "clsx";
 
-export default function HelpBubble({ className = "", reserveMobileBottomNavSpace = false }) {
+export default function HelpBubble({
+	className = "",
+	reserveMobileBottomNavSpace = false,
+	hidden = false,
+}) {
+	if (hidden) {
+		return null;
+	}
+
 	return (
 		<div
 			className={clsx(

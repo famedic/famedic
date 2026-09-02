@@ -16,8 +16,8 @@ export default function VerticalNavbar({ className, links, enableMobileBottomNav
 		<>
 			{/* Sidebar normal en desktop */}
 			<Sidebar className={`${cardClasses(className)} hidden lg:block`}>
-				<SidebarBody>
-					<SidebarSection>
+				<SidebarBody className="py-3">
+					<SidebarSection className="gap-1">
 						{links.map(({ label, url, current, IconComponent }) => {
 							return (
 								<SidebarItem current={current} key={label} href={url}>

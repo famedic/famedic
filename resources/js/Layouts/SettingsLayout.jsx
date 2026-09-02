@@ -33,7 +33,11 @@ const iconMap = {
 	LifebuoyIcon: LifebuoyIcon,
 };
 
-export default function SettingsLayout({ title, children }) {
+export default function SettingsLayout({
+	title,
+	children,
+	hideHelpBubble = false,
+}) {
 	const { userNavigation } = usePage().props;
 
 	const navigationMap = userNavigation.map((link) => ({
@@ -48,6 +52,7 @@ export default function SettingsLayout({ title, children }) {
 				navbar={<NavBar />}
 				sidebar={<SideBar />}
 				reserveMobileBottomNavSpace
+				hideHelpBubble={hideHelpBubble}
 			>
 				<div className="flex min-w-0 max-w-full flex-col gap-x-8 gap-y-6 lg:flex-row lg:gap-x-10">
 					<VerticalNavbar
