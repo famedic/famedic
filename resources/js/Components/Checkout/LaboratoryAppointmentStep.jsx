@@ -2,13 +2,12 @@ import { Subheading } from "@/Components/Catalyst/heading";
 import { Button } from "@/Components/Catalyst/button";
 import { WhatsAppIcon } from "@/Components/Checkout/CheckoutWhatsAppHelp";
 import {
-	BoltIcon,
 	CheckIcon,
-	ChevronDownIcon,
-	CreditCardIcon,
+	InformationCircleIcon,
 	LockClosedIcon,
 	PhoneIcon,
 } from "@heroicons/react/20/solid";
+import Card from "@/Components/Card";
 import { Field, Label, ErrorMessage } from "@/Components/Catalyst/fieldset";
 import { Textarea } from "@/Components/Catalyst/textarea";
 import { Input } from "@/Components/Catalyst/input";
@@ -16,7 +15,6 @@ import { Select } from "@/Components/Catalyst/select";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { router, useForm, usePage } from "@inertiajs/react";
 import clsx from "clsx";
-import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
 import getConciergeAvailability from "@/Utils/getConciergeAvailability";
 
 function toDatetimeLocal(value) {
@@ -117,64 +115,19 @@ function getAppointmentVisualState({
 
 	if (hasSavedAvailability) {
 		return {
-			title: "Solicitud de llamada registrada",
+			title: "Crea tu cita para continuar",
 			description:
-				"Nuestro equipo te llamará en el horario indicado para confirmar y agendar tu cita.",
+				"Tu solicitud de cita ya fue precargada. Para agendarla necesitamos definir con nuestro equipo de concierge la sucursal, el paciente, la fecha y la hora.",
 			indicator: "Esperando llamada",
 		};
 	}
 
 	return {
-		title: "Confirma tu cita por WhatsApp",
+		title: "Crea tu cita para continuar",
 		description:
-			"Escríbenos para elegir fecha, horario y sucursal. El pago se habilitará después de confirmar.",
+			"Tu solicitud de cita ya fue precargada. Para agendarla necesitamos definir con nuestro equipo de concierge la sucursal, el paciente, la fecha y la hora.",
 		indicator: "Contacto pendiente",
 	};
-}
-
-function AppointmentAvailabilityBadge({ isAvailable }) {
-	const label = isAvailable
-		? "Equipo disponible ahora"
-		: "Equipo fuera de horario";
-
-	return (
-		<div
-			className={clsx(
-				"inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold",
-				isAvailable
-					? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-100 dark:ring-emerald-800/70"
-					: "bg-zinc-100 text-zinc-800 ring-1 ring-zinc-200 dark:bg-zinc-800/70 dark:text-zinc-100 dark:ring-zinc-700",
-			)}
-			role="status"
-			aria-label={label}
-		>
-			<span
-				className={clsx(
-					"size-2.5 shrink-0 rounded-full",
-					isAvailable ? "bg-green-500" : "bg-amber-400",
-				)}
-				aria-hidden="true"
-			/>
-			<span>{label}</span>
-		</div>
-	);
-}
-
-function AppointmentHeaderRow({ isAvailable }) {
-	return (
-		<div className="flex flex-wrap items-center justify-between gap-3">
-			<AppointmentAvailabilityBadge isAvailable={isAvailable} />
-			{isAvailable && (
-				<p className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-					<BoltIcon
-						className="size-4 text-amber-500"
-						aria-hidden="true"
-					/>
-					Atención inmediata
-				</p>
-			)}
-		</div>
-	);
 }
 
 function AppointmentStatusSummary({
@@ -189,13 +142,57 @@ function AppointmentStatusSummary({
 	});
 
 	return (
-		<div>
-			<h3 className="text-xl font-semibold tracking-normal text-zinc-950 sm:text-2xl dark:text-white">
+		<div className="text-center">
+			<h3 className="text-2xl font-semibold tracking-normal text-famedic-dark sm:text-[1.7rem] dark:text-white">
 				{visualState.title}
 			</h3>
-			<p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+			{!appointmentConfirmed && !appointmentUnavailable && (
+				<div className="mt-4">
+					<span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-100 dark:ring-emerald-800/70">
+						Solicitud precargada
+					</span>
+				</div>
+			)}
+			<p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
 				{visualState.description}
 			</p>
+		</div>
+	);
+}
+
+function AppointmentPaymentSafetyNotice() {
+	return (
+		<div className="flex items-start gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3.5 text-sm text-indigo-900 dark:border-indigo-900/70 dark:bg-indigo-950/20 dark:text-indigo-100">
+			<InformationCircleIcon
+				className="mt-0.5 size-5 shrink-0 text-indigo-600 dark:text-indigo-300"
+				aria-hidden="true"
+			/>
+			<p className="leading-6">
+				No se efectuará ningún cargo hasta que tu cita sea confirmada y
+				tú lo autorices.
+			</p>
+		</div>
+	);
+}
+
+function AppointmentPaymentAuthorizationNote() {
+	return (
+		<div className="border-t border-zinc-200 pt-5 dark:border-zinc-700">
+			<div className="flex items-start gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-famedic-dark ring-1 ring-zinc-200 dark:bg-zinc-800 dark:text-famedic-lime dark:ring-zinc-700">
+					<LockClosedIcon className="size-4" aria-hidden="true" />
+				</span>
+				<div className="space-y-1">
+					<p className="font-semibold text-zinc-900 dark:text-zinc-100">
+						El pago se habilitará más adelante, solo con tu
+						autorización.
+					</p>
+					<p>
+						Con la cita confirmada podrás autorizar el pago o
+						cancelar la operación.
+					</p>
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -223,120 +220,7 @@ function OptionCard({ selected, label, onClick }) {
 	);
 }
 
-const APPOINTMENT_PROGRESS_STEPS = [
-	{
-		id: "request",
-		label: "Solicitud",
-		defaultCaption: "Registrada",
-		icon: CheckIcon,
-	},
-	{
-		id: "phone",
-		label: "Contacto",
-		defaultCaption: "Siguiente paso",
-		savedCaption: "Llamada solicitada",
-		icon: WhatsAppIcon,
-	},
-	{
-		id: "payment",
-		label: "Pago",
-		defaultCaption: "Al confirmar",
-		confirmedCaption: "Disponible",
-		icon: CreditCardIcon,
-	},
-];
-
-function AppointmentProgressSteps({
-	hasRequestSaved,
-	hasSavedAvailability,
-	appointmentConfirmed,
-	appointmentUnavailable,
-}) {
-	const payable = appointmentConfirmed && !appointmentUnavailable;
-	const activeIndex = payable ? 2 : appointmentUnavailable ? -1 : 1;
-
-	return (
-		<ol
-			className="grid gap-3 rounded-xl border border-violet-100 bg-violet-50/40 p-4 sm:grid-cols-3 sm:gap-0 dark:border-violet-900/70 dark:bg-violet-950/10"
-			aria-label="Progreso de tu cita"
-		>
-			{APPOINTMENT_PROGRESS_STEPS.map((step, index) => {
-				const Icon = step.icon;
-				const isCompleted =
-					!appointmentUnavailable && index < activeIndex;
-				const isCurrent =
-					!appointmentUnavailable && index === activeIndex;
-				const isFuture = !isCompleted && !isCurrent;
-				const caption =
-					step.id === "phone" && hasSavedAvailability && !payable
-						? step.savedCaption
-						: step.id === "payment" && payable
-							? step.confirmedCaption
-							: step.defaultCaption;
-
-				return (
-					<li
-						key={step.id}
-						className="relative flex items-center gap-3 sm:flex-col sm:items-center sm:gap-2 sm:text-center"
-						aria-current={isCurrent ? "step" : undefined}
-					>
-						{index > 0 && (
-							<span
-								className="absolute -left-3 top-5 hidden h-px w-6 bg-violet-200 sm:block dark:bg-violet-800"
-								aria-hidden="true"
-							/>
-						)}
-						<span
-							className={clsx(
-								"relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full",
-								isCompleted &&
-									"bg-famedic-dark text-white dark:bg-famedic-lime dark:text-famedic-darker",
-								isCurrent &&
-									"bg-emerald-100 text-emerald-800 ring-4 ring-emerald-50 dark:bg-emerald-300 dark:text-emerald-950 dark:ring-emerald-950/50",
-								appointmentUnavailable &&
-									index === 1 &&
-									"bg-amber-100 text-amber-800 ring-4 ring-amber-50 dark:bg-amber-300 dark:text-amber-950 dark:ring-amber-950/40",
-								isFuture &&
-									"bg-zinc-100 text-zinc-500 ring-1 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:ring-zinc-700",
-							)}
-						>
-							<Icon className="size-5" aria-hidden="true" />
-						</span>
-						<span>
-							<span
-								className={clsx(
-									"block text-sm font-semibold",
-									isCurrent
-										? "text-emerald-900 dark:text-emerald-100"
-										: "text-zinc-900 dark:text-zinc-100",
-									isFuture &&
-										"text-zinc-700 dark:text-zinc-300",
-								)}
-							>
-								{step.label}
-							</span>
-							<span
-								className={clsx(
-									"block text-xs",
-									isCurrent
-										? "text-emerald-700 dark:text-emerald-200"
-										: "text-zinc-500 dark:text-zinc-400",
-								)}
-							>
-								{appointmentUnavailable && index === 1
-									? "Requiere atención"
-									: caption}
-							</span>
-						</span>
-					</li>
-				);
-			})}
-		</ol>
-	);
-}
-
 function AppointmentContactActions({
-	isAvailable,
 	telHref,
 	phoneDisplay,
 	whatsAppUrl,
@@ -346,16 +230,13 @@ function AppointmentContactActions({
 	isFormOpen,
 }) {
 	const whatsappButtonClasses =
-		"inline-flex min-h-[78px] w-full items-center justify-center gap-3 rounded-xl border border-[#1ea952] bg-[#25D366] px-5 py-3 text-center font-semibold text-white shadow-sm transition-colors hover:bg-[#20bd5a] focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 dark:border-[#25D366] dark:focus:ring-offset-zinc-900";
+		"inline-flex min-h-[76px] w-full items-center justify-center gap-3 rounded-xl border border-[#1ea952] bg-[#25D366] px-5 py-3 text-center font-semibold text-white shadow-sm transition-colors hover:bg-[#20bd5a] focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 dark:border-[#25D366] dark:focus:ring-offset-zinc-900";
 	const callLinkClasses =
-		"inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl border border-famedic-dark bg-white px-4 py-3 text-center text-sm font-semibold text-famedic-dark transition-colors hover:bg-famedic-dark/[0.03] focus:outline-none focus:ring-2 focus:ring-famedic-dark focus:ring-offset-2 dark:border-famedic-lime dark:bg-zinc-900 dark:text-famedic-lime dark:hover:bg-famedic-lime/10 dark:focus:ring-famedic-lime dark:focus:ring-offset-zinc-900";
+		"inline-flex min-h-[54px] w-full items-center justify-center gap-2 rounded-xl border border-famedic-dark bg-white px-4 py-3 text-center text-sm font-semibold text-famedic-dark transition-colors hover:bg-famedic-dark/[0.03] focus:outline-none focus:ring-2 focus:ring-famedic-dark focus:ring-offset-2 dark:border-famedic-lime dark:bg-zinc-900 dark:text-famedic-lime dark:hover:bg-famedic-lime/10 dark:focus:ring-famedic-lime dark:focus:ring-offset-zinc-900";
 
 	return (
 		<div>
-			<p className="text-base font-semibold text-zinc-950 dark:text-white">
-				Elige cómo contactarnos
-			</p>
-			<div className="mt-3 space-y-3">
+			<div className="space-y-3">
 				<a
 					href={whatsAppUrl}
 					target="_blank"
@@ -366,38 +247,31 @@ function AppointmentContactActions({
 					<WhatsAppIcon className="size-6 shrink-0" />
 					<span className="min-w-0">
 						<span className="block text-sm">
-							Continuar por WhatsApp
+							Crear cita por WhatsApp
 						</span>
 						<span className="mt-0.5 block text-xs font-medium text-white/85">
 							WhatsApp oficial de citas · {whatsAppDisplay}
 						</span>
 					</span>
 				</a>
-				<p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
-					{isAvailable
-						? "Es la forma más rápida de confirmar con nuestro equipo."
-						: "Puedes escribirnos ahora y te responderemos en el siguiente horario de atención."}
-				</p>
 				<a
 					href={telHref}
 					onClick={onCallClick}
 					className={callLinkClasses}
 				>
 					<PhoneIcon className="size-5" aria-hidden="true" />
-					Llamar al {phoneDisplay}
+					Llamar ahora al {phoneDisplay}
 				</a>
-				<p className="text-center text-sm text-zinc-600 dark:text-zinc-400">
-					¿Prefieres que te llamemos?{" "}
-					<button
-						type="button"
-						className="font-semibold text-famedic-dark underline decoration-famedic-dark/30 underline-offset-2 hover:text-famedic-darker focus:outline-none focus:ring-2 focus:ring-famedic-dark focus:ring-offset-2 dark:text-famedic-lime dark:focus:ring-famedic-lime dark:focus:ring-offset-zinc-900"
-						onClick={onRequestCall}
-						aria-expanded={isFormOpen}
-						aria-controls="appointment-callback-form"
-					>
-						Solicitar llamada
-					</button>
-				</p>
+				<button
+					type="button"
+					className="mx-auto flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-center text-sm font-semibold text-famedic-dark transition-colors hover:bg-famedic-dark/[0.04] focus:outline-none focus:ring-2 focus:ring-famedic-dark focus:ring-offset-2 sm:w-auto dark:text-famedic-lime dark:hover:bg-famedic-lime/10 dark:focus:ring-famedic-lime dark:focus:ring-offset-zinc-900"
+					onClick={onRequestCall}
+					aria-expanded={isFormOpen}
+					aria-controls="appointment-callback-form"
+				>
+					<PhoneIcon className="size-4" aria-hidden="true" />
+					Prefiero que me llamen
+				</button>
 			</div>
 		</div>
 	);
@@ -532,160 +406,6 @@ function ReceiveCallPanel({
 					)}
 				</div>
 			</div>
-		</div>
-	);
-}
-
-function AppointmentCallbackSummary({
-	hasSavedAvailability,
-	formattedCallbackAvailabilityRange,
-	patientCallbackComment,
-	onModify,
-}) {
-	if (!hasSavedAvailability) {
-		return null;
-	}
-
-	const detail =
-		formattedCallbackAvailabilityRange || patientCallbackComment?.trim();
-
-	return (
-		<div className="flex flex-col gap-2 rounded-lg border border-zinc-200 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-zinc-700">
-			<div>
-				<p className="font-semibold text-zinc-900 dark:text-zinc-100">
-					Solicitud de llamada registrada
-				</p>
-				{detail && (
-					<p className="mt-0.5 text-zinc-600 dark:text-zinc-400">
-						{detail}
-					</p>
-				)}
-			</div>
-			<button
-				type="button"
-				className="self-start text-sm font-semibold text-famedic-dark underline decoration-famedic-dark/30 underline-offset-2 hover:text-famedic-darker dark:text-famedic-lime"
-				onClick={onModify}
-			>
-				Modificar horario
-			</button>
-		</div>
-	);
-}
-
-function AppointmentDetailsDisclosure({
-	isOpen,
-	onToggle,
-	hasRequestSaved,
-	requestSavedAtFormatted,
-	patientFullName,
-	hasSavedAvailability,
-	callbackPreferenceSavedAtFormatted,
-	formattedCallbackAvailabilityRange,
-	patientCallbackComment,
-	appointmentConfirmed,
-	appointmentUnavailable,
-	onUpdateAvailability,
-}) {
-	const detailsId = "appointment-request-details";
-	const visualState = getAppointmentVisualState({
-		hasSavedAvailability,
-		appointmentConfirmed,
-		appointmentUnavailable,
-	});
-
-	return (
-		<div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
-			<button
-				type="button"
-				className="flex w-full items-center justify-between gap-3 rounded-lg py-2 text-left text-sm font-semibold text-famedic-dark hover:text-famedic-darker focus:outline-none focus:ring-2 focus:ring-famedic-dark focus:ring-offset-2 dark:text-famedic-lime dark:focus:ring-famedic-lime dark:focus:ring-offset-zinc-900"
-				onClick={onToggle}
-				aria-expanded={isOpen}
-				aria-controls={detailsId}
-			>
-				<span>Ver detalles de mi solicitud</span>
-				<ChevronDownIcon
-					className={clsx(
-						"size-5 shrink-0 transition-transform",
-						isOpen && "rotate-180",
-					)}
-					aria-hidden="true"
-				/>
-			</button>
-
-			{isOpen && (
-				<div id={detailsId} className="mt-4 space-y-4">
-					<AppointmentProgressSteps
-						hasRequestSaved={hasRequestSaved}
-						hasSavedAvailability={hasSavedAvailability}
-						appointmentConfirmed={appointmentConfirmed}
-						appointmentUnavailable={appointmentUnavailable}
-					/>
-
-					<dl className="grid gap-3 rounded-lg border border-zinc-200 px-4 py-3 text-sm sm:grid-cols-2 dark:border-zinc-700">
-						<div>
-							<dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
-								Estado actual
-							</dt>
-							<dd className="mt-1 font-medium text-zinc-900 dark:text-zinc-100">
-								{visualState.indicator}
-							</dd>
-						</div>
-						<div>
-							<dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
-								Fecha de solicitud
-							</dt>
-							<dd className="mt-1 text-zinc-900 dark:text-zinc-100">
-								{requestSavedAtFormatted ?? "Pendiente"}
-							</dd>
-						</div>
-						<div>
-							<dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
-								Paciente
-							</dt>
-							<dd className="mt-1 break-words text-zinc-900 dark:text-zinc-100">
-								{patientFullName ?? "Sin nombre registrado"}
-							</dd>
-						</div>
-						<div>
-							<dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
-								Horario de llamada
-							</dt>
-							<dd className="mt-1 text-zinc-900 dark:text-zinc-100">
-								{formattedCallbackAvailabilityRange ??
-									"No has indicado un horario preferido"}
-							</dd>
-						</div>
-						{patientCallbackComment?.trim() && (
-							<div className="sm:col-span-2">
-								<dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
-									Comentarios
-								</dt>
-								<dd className="mt-1 break-words text-zinc-900 dark:text-zinc-100">
-									{patientCallbackComment.trim()}
-								</dd>
-							</div>
-						)}
-						<div>
-							<dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
-								Última actualización
-							</dt>
-							<dd className="mt-1 text-zinc-900 dark:text-zinc-100">
-								{callbackPreferenceSavedAtFormatted ??
-									requestSavedAtFormatted ??
-									"Pendiente"}
-							</dd>
-						</div>
-					</dl>
-
-					<button
-						type="button"
-						className="text-sm font-semibold text-famedic-dark underline decoration-famedic-dark/30 underline-offset-2 hover:text-famedic-darker dark:text-famedic-lime"
-						onClick={onUpdateAvailability}
-					>
-						Modificar horario
-					</button>
-				</div>
-			)}
 		</div>
 	);
 }
@@ -971,10 +691,6 @@ export default function LaboratoryAppointmentStep({
 		laboratoryAppointment.has_left_callback_info ||
 			hasSavedCallbackPreference,
 	);
-	const requestSavedAtFormatted =
-		laboratoryAppointment.formatted_request_saved_at ?? null;
-	const hasRequestSaved = Boolean(requestSavedAtFormatted);
-
 	const openReceiveCallForm = () => {
 		setOpenPanel("form");
 
@@ -995,38 +711,14 @@ export default function LaboratoryAppointmentStep({
 
 	const closePanels = () => setOpenPanel(null);
 
-	const toggleDetails = () => {
-		setOpenPanel((current) => (current === "details" ? null : "details"));
-	};
-
 	const appointmentFirstUnavailableMessage =
 		appointmentFirstFlow && appointmentUnavailable
 			? "Tu cita ya no está disponible para completar el pago. Puedes actualizar tu disponibilidad o solicitar que te llamemos para gestionar una nueva cita."
 			: null;
 
 	return (
-		<CheckoutWizardStep title="Cita" description={null}>
-			<div className="space-y-5">
-				<AppointmentHeaderRow
-					isAvailable={conciergeAvailability.isAvailable}
-				/>
-
-				{!conciergeAvailability.isAvailable && (
-					<div className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
-						<p>
-							Solicita una llamada y nuestro equipo te contactará
-							en el siguiente horario de atención para confirmar
-							tu cita.
-						</p>
-						{conciergeAvailability.nextAvailableText && (
-							<p className="font-medium text-zinc-800 dark:text-zinc-100">
-								Próximo horario:{" "}
-								{conciergeAvailability.nextAvailableText}
-							</p>
-						)}
-					</div>
-				)}
-
+		<Card className="bg-white p-6 sm:p-8 dark:bg-slate-900">
+			<div className="space-y-6">
 				{appointmentFirstUnavailableMessage && (
 					<p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">
 						{appointmentFirstUnavailableMessage}
@@ -1039,15 +731,11 @@ export default function LaboratoryAppointmentStep({
 					appointmentUnavailable={appointmentUnavailable}
 				/>
 
-				<AppointmentProgressSteps
-					hasRequestSaved={hasRequestSaved}
-					hasSavedAvailability={hasSavedAvailability}
-					appointmentConfirmed={appointmentConfirmed}
-					appointmentUnavailable={appointmentUnavailable}
-				/>
+				{!appointmentConfirmed && !appointmentUnavailable && (
+					<AppointmentPaymentSafetyNotice />
+				)}
 
 				<AppointmentContactActions
-					isAvailable={conciergeAvailability.isAvailable}
 					telHref={telHref}
 					phoneDisplay={phoneDisplay}
 					whatsAppUrl={whatsAppUrl}
@@ -1055,17 +743,6 @@ export default function LaboratoryAppointmentStep({
 					onCallClick={onCallClick}
 					onRequestCall={openReceiveCallForm}
 					isFormOpen={openPanel === "form"}
-				/>
-
-				<AppointmentCallbackSummary
-					hasSavedAvailability={hasSavedAvailability}
-					formattedCallbackAvailabilityRange={
-						laboratoryAppointment.formatted_callback_availability_range
-					}
-					patientCallbackComment={
-						laboratoryAppointment.patient_callback_comment
-					}
-					onModify={openReceiveCallForm}
 				/>
 
 				{openPanel === "form" && (
@@ -1091,38 +768,23 @@ export default function LaboratoryAppointmentStep({
 					/>
 				)}
 
-				<AppointmentDetailsDisclosure
-					isOpen={openPanel === "details"}
-					onToggle={toggleDetails}
-					hasRequestSaved={hasRequestSaved}
-					requestSavedAtFormatted={requestSavedAtFormatted}
-					patientFullName={laboratoryAppointment.patient_full_name}
-					hasSavedAvailability={hasSavedAvailability}
-					callbackPreferenceSavedAtFormatted={
-						callbackPreferenceSavedAtFormatted
-					}
-					formattedCallbackAvailabilityRange={
-						laboratoryAppointment.formatted_callback_availability_range
-					}
-					patientCallbackComment={
-						laboratoryAppointment.patient_callback_comment
-					}
-					appointmentConfirmed={appointmentConfirmed}
-					appointmentUnavailable={appointmentUnavailable}
-					onUpdateAvailability={openReceiveCallForm}
-				/>
+				{!appointmentConfirmed && !appointmentUnavailable && (
+					<AppointmentPaymentAuthorizationNote />
+				)}
 			</div>
 
-			<p className="mt-4 flex items-center justify-center gap-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
-				<LockClosedIcon
-					className="size-4 shrink-0"
-					aria-hidden="true"
-				/>
-				<span>
-					Tus datos están guardados. No realizaremos ningún cargo
-					todavía.
-				</span>
-			</p>
-		</CheckoutWizardStep>
+			{appointmentConfirmed || appointmentUnavailable ? (
+				<p className="mt-4 flex items-center justify-center gap-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
+					<LockClosedIcon
+						className="size-4 shrink-0"
+						aria-hidden="true"
+					/>
+					<span>
+						Tus datos están guardados. No realizaremos ningún cargo
+						todavía.
+					</span>
+				</p>
+			) : null}
+		</Card>
 	);
 }
