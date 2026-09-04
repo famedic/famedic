@@ -58,17 +58,53 @@ const DEFAULT_BRANDS = [
 	},
 ];
 
+const STATE_LABELS = {
+	"nuevo leon": "Nuevo León",
+	"nuevo león": "Nuevo León",
+	"ciudad de mexico": "Ciudad de México",
+	"ciudad de méxico": "Ciudad de México",
+	"estado de mexico": "Estado de México",
+	"estado de méxico": "Estado de México",
+};
+
+function normalizeStateName(stateName = "") {
+	const trimmedState = String(stateName).trim();
+	const stateKey = trimmedState
+		.toLocaleLowerCase("es-MX")
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "");
+
+	return STATE_LABELS[stateKey] ?? trimmedState;
+}
+
+function uniqueNormalizedStates(states = []) {
+	return [
+		...new Map(
+			states
+				.map((stateName) => normalizeStateName(stateName))
+				.filter(Boolean)
+				.map((stateName) => [stateName, stateName]),
+		).values(),
+	];
+}
+
 export default function LaboratoryBrandSelection({ brands = [], states = [] }) {
 	const { url } = usePage();
 	const searchParams = new URLSearchParams(url.split("?")[1] ?? "");
-	const [state, setState] = useState(() => searchParams.get("state") || "");
+	const [state, setState] = useState(() =>
+		normalizeStateName(searchParams.get("state") || ""),
+	);
 	const category = searchParams.get("category") || "";
 
 	const brandItems = brands.length > 0 ? brands : DEFAULT_BRANDS;
+	const stateOptions = useMemo(
+		() => uniqueNormalizedStates(states),
+		[states],
+	);
 
 	const stateBrandCount = useMemo(() => {
 		return brandItems.reduce((acc, brand) => {
-			(brand.states ?? []).forEach((stateName) => {
+			uniqueNormalizedStates(brand.states).forEach((stateName) => {
 				acc[stateName] = (acc[stateName] || 0) + 1;
 			});
 
@@ -82,7 +118,7 @@ export default function LaboratoryBrandSelection({ brands = [], states = [] }) {
 		}
 
 		return brandItems.filter((brand) =>
-			(brand.states ?? []).includes(state),
+			uniqueNormalizedStates(brand.states).includes(state),
 		);
 	}, [brandItems, state]);
 
@@ -118,9 +154,9 @@ export default function LaboratoryBrandSelection({ brands = [], states = [] }) {
 					</Text>
 				</div>
 
-				<div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white/85 p-4 shadow-sm sm:flex-row sm:items-end sm:justify-between dark:border-slate-800 dark:bg-slate-900/70">
-					<Field className="w-full sm:max-w-sm">
-						<Label>Filtrar por estado</Label>
+				<div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white/85 px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-slate-800 dark:bg-slate-900/70">
+					<Field className="flex w-full flex-col gap-2 sm:max-w-md sm:flex-row sm:items-center">
+						<Label className="shrink-0">Estado</Label>
 						<Listbox
 							placeholder="Estado"
 							value={state}
@@ -129,7 +165,7 @@ export default function LaboratoryBrandSelection({ brands = [], states = [] }) {
 							<ListboxOption value="">
 								<ListboxLabel>Todos los estados</ListboxLabel>
 							</ListboxOption>
-							{states.map((stateName) => (
+							{stateOptions.map((stateName) => (
 								<ListboxOption
 									key={stateName}
 									value={stateName}
@@ -190,10 +226,13 @@ function LaboratoryBrand({
 	category = "",
 }) {
 	const brandValue = brand ?? value;
-	const visibleStates = states.slice(0, 2);
-	const remainingStates = Math.max(states.length - visibleStates.length, 0);
-	const storesLabel =
-		active_store_count === 1 ? "sucursal activa" : "sucursales activas";
+	const normalizedStates = uniqueNormalizedStates(states);
+	const visibleStates = normalizedStates.slice(0, 2);
+	const remainingStates = Math.max(
+		normalizedStates.length - visibleStates.length,
+		0,
+	);
+	const storesLabel = active_store_count === 1 ? "sucursal" : "sucursales";
 	const stateSeparator = " \u00b7 ";
 
 	return (
@@ -206,30 +245,22 @@ function LaboratoryBrand({
 				"group flex min-h-full flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-famedic-lime/70 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-famedic-lime focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-800 dark:bg-slate-900/85 dark:hover:border-famedic-lime/70 dark:focus-visible:ring-offset-slate-950",
 			)}
 		>
-			<div className="flex items-start gap-4">
-				<div className="flex h-20 w-28 shrink-0 items-center justify-center rounded-lg border border-slate-100 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-950/60">
-					<img
-						alt={name}
-						src={`/images/gda/${imageSrc}`}
-						className="max-h-14 w-full object-contain"
-					/>
-				</div>
-
-				<div className="min-w-0 flex-1">
-					<h2 className="truncate text-lg font-semibold text-slate-950 dark:text-white">
-						{name}
-					</h2>
-					<p className="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">
-						{active_store_count} {storesLabel}
-					</p>
-				</div>
+			<div className="flex h-24 items-center justify-center rounded-lg border border-slate-100 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-950/60">
+				<img
+					alt={name}
+					src={`/images/gda/${imageSrc}`}
+					className="max-h-20 w-full object-contain"
+				/>
 			</div>
 
-			<div className="mt-4 flex flex-1 flex-col justify-between gap-4">
-				<p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
-					<span className="font-medium text-slate-800 dark:text-slate-100">
-						Disponible en:
-					</span>{" "}
+			<div className="mt-4 flex flex-1 flex-col gap-2">
+				<h2 className="truncate text-lg font-semibold text-slate-950 dark:text-white">
+					{name}
+				</h2>
+				<p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+					{active_store_count} {storesLabel}
+				</p>
+				<p className="min-h-12 text-sm leading-6 text-slate-600 dark:text-slate-300">
 					{visibleStates.length > 0
 						? visibleStates.join(stateSeparator)
 						: "Sin cobertura activa"}
@@ -238,7 +269,7 @@ function LaboratoryBrand({
 						: ""}
 				</p>
 
-				<span className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-famedic-lime px-4 py-2.5 text-sm font-semibold text-slate-950 transition group-hover:bg-famedic-lime/90 sm:w-auto sm:self-start">
+				<span className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-famedic-lime px-4 py-2.5 text-sm font-semibold text-slate-950 transition group-hover:bg-famedic-lime/90">
 					Ver sucursales
 					<ArrowRightIcon className="size-4" />
 				</span>
