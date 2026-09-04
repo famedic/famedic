@@ -25,6 +25,10 @@ return [
             ['manage' => 'Administrar catálogo de laboratorio'],
             ['manage.edit' => 'Editar catálogo de laboratorio'],
         ],
+        'laboratory-stores' => [
+            ['manage' => 'Administrar sucursales de laboratorio'],
+            ['manage.edit' => 'Editar sucursales de laboratorio'],
+        ],
         'online-pharmacy-purchases' => [
             ['manage' => 'Administrar ordenes de farmacia en línea'],
             ['manage.invoices' => 'Subir y actualizar facturas'],

@@ -7,6 +7,7 @@ import {
 	ListboxOption,
 } from "@/Components/Catalyst/listbox";
 import { Text } from "@/Components/Catalyst/text";
+import { laboratoryBrandSelectionActions } from "@/lib/laboratoryBrandSelectionActions";
 import {
 	ArrowRightIcon,
 	BuildingStorefrontIcon,
@@ -234,15 +235,17 @@ function LaboratoryBrand({
 	);
 	const storesLabel = active_store_count === 1 ? "sucursal" : "sucursales";
 	const stateSeparator = " \u00b7 ";
+	const actions = laboratoryBrandSelectionActions(
+		route,
+		brandValue,
+		category,
+		name,
+	);
 
 	return (
-		<Link
-			href={route("laboratory-tests", {
-				laboratory_brand: brandValue,
-				...(category ? { category } : {}),
-			})}
+		<article
 			className={clsx(
-				"group flex min-h-full flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-famedic-lime/70 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-famedic-lime focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-800 dark:bg-slate-900/85 dark:hover:border-famedic-lime/70 dark:focus-visible:ring-offset-slate-950",
+				"group flex min-h-full flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-famedic-lime/70 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/85 dark:hover:border-famedic-lime/70",
 			)}
 		>
 			<div className="flex h-24 items-center justify-center rounded-lg border border-slate-100 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-950/60">
@@ -269,11 +272,25 @@ function LaboratoryBrand({
 						: ""}
 				</p>
 
-				<span className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-famedic-lime px-4 py-2.5 text-sm font-semibold text-slate-950 transition group-hover:bg-famedic-lime/90">
-					Ver sucursales
-					<ArrowRightIcon className="size-4" />
-				</span>
+				<div className="mt-auto grid gap-2">
+					<Link
+						href={actions.studies.href}
+						aria-label={actions.studies.ariaLabel}
+						className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-famedic-lime px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-famedic-lime/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-famedic-lime focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-950"
+					>
+						{actions.studies.label}
+						<ArrowRightIcon className="size-4" />
+					</Link>
+
+					<Link
+						href={actions.stores.href}
+						aria-label={actions.stores.ariaLabel}
+						className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-famedic-lime/70 hover:text-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-famedic-lime focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-200 dark:hover:border-famedic-lime/70 dark:hover:text-white dark:focus-visible:ring-offset-slate-950"
+					>
+						{actions.stores.label}
+					</Link>
+				</div>
 			</div>
-		</Link>
+		</article>
 	);
 }

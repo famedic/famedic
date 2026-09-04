@@ -66,6 +66,11 @@ class EnsureUserHasAdminAccount
                             Route::currentRouteName() === 'admin.laboratory-tests.create' ||
                             Route::currentRouteName() === 'admin.laboratory-tests.edit',
                     ] : null,
+                    $this->adminHasPermission($administrator, 'laboratory-stores.manage') ? [
+                        'label' => 'Sucursales',
+                        'url' => route('admin.laboratory-stores.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-stores.'),
+                    ] : null,
                     $request->user()->administrator->laboratoryConcierge ? [
                         'label' => 'Citas',
                         'url' => route('admin.laboratory-appointments.index'),

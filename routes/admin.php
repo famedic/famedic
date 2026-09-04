@@ -38,6 +38,7 @@ use App\Http\Controllers\Admin\LaboratoryPurchases\ResultsController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\UnresolvedDevAssistanceRequestController as LaboratoryUnresolvedDevAssistanceRequestController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\VendorPaymentsController as LaboratoryVendorPaymentsController;
 use App\Http\Controllers\Admin\LaboratoryResultController;
+use App\Http\Controllers\Admin\LaboratoryStoreController as AdminLaboratoryStoreController;
 use App\Http\Controllers\Admin\LaboratoryTestController;
 use App\Http\Controllers\Admin\LogsGeneralController;
 use App\Http\Controllers\Admin\MedicalAttentionSubscriptionController;
@@ -46,8 +47,8 @@ use App\Http\Controllers\Admin\MurguiaDashboardController;
 use App\Http\Controllers\Admin\MurguiaMonitorController;
 use App\Http\Controllers\Admin\MurguiaReconciliationController;
 use App\Http\Controllers\Admin\MurguiaReportController;
-use App\Http\Controllers\Admin\OdessaReconciliationController;
 use App\Http\Controllers\Admin\OdessaPreEnrollmentController;
+use App\Http\Controllers\Admin\OdessaReconciliationController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\DevAssistanceRequestController as OnlinePharmacyDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\InvoiceController as OnlinePharmacyPurchasesInvoiceController;
@@ -147,6 +148,17 @@ Route::prefix('admin')->middleware([
         Route::resource('roles', RoleController::class)->except('show');
         Route::resource('laboratory-tests', LaboratoryTestController::class)->except(['destroy']);
         Route::post('laboratory-tests/export', ExportLaboratoryTestsController::class)->name('laboratory-tests.export');
+        Route::post('laboratory-stores/{laboratory_store}/restore', [AdminLaboratoryStoreController::class, 'restore'])
+            ->name('laboratory-stores.restore');
+        Route::patch('laboratory-stores/{laboratory_store}/hours', [AdminLaboratoryStoreController::class, 'updateHours'])
+            ->name('laboratory-stores.hours.update');
+        Route::patch('laboratory-stores/{laboratory_store}/capabilities', [AdminLaboratoryStoreController::class, 'updateCapabilities'])
+            ->name('laboratory-stores.capabilities.update');
+        Route::patch('laboratory-stores/{laboratory_store}/services', [AdminLaboratoryStoreController::class, 'updateServices'])
+            ->name('laboratory-stores.services.update');
+        Route::resource('laboratory-stores', AdminLaboratoryStoreController::class)
+            ->only(['index', 'show', 'update', 'destroy'])
+            ->withTrashed(['show', 'update', 'destroy']);
         Route::get('laboratory-appointments/metrics', LaboratoryAppointmentMetricsController::class)->name('laboratory-appointments.metrics');
         Route::post('laboratory-appointments/{laboratory_appointment}/interactions', [LaboratoryAppointmentController::class, 'storeInteraction'])
             ->name('laboratory-appointments.interactions.store');
