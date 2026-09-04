@@ -109,9 +109,9 @@ it('persists only audit rows during dry-run', function () {
         ->and($totals['optical_rows'])->toBe(2)
         ->and(LaboratoryStoreImportRun::query()->count())->toBe(1)
         ->and(LaboratoryStoreImportRow::query()->count())->toBe(7)
-        ->and(LaboratoryStoreImportRow::query()->where('classification', LaboratoryStoreImportRow::CLASSIFICATION_MATCHED)->count())->toBe(3)
+        ->and(LaboratoryStoreImportRow::query()->where('classification', LaboratoryStoreImportRow::CLASSIFICATION_MATCHED)->count())->toBe(5)
         ->and(LaboratoryStoreImportRow::query()->where('classification', LaboratoryStoreImportRow::CLASSIFICATION_AMBIGUOUS)->count())->toBe(1)
-        ->and(LaboratoryStoreImportRow::query()->where('classification', LaboratoryStoreImportRow::CLASSIFICATION_NEW)->count())->toBe(3);
+        ->and(LaboratoryStoreImportRow::query()->where('classification', LaboratoryStoreImportRow::CLASSIFICATION_NEW)->count())->toBe(1);
 });
 
 it('keeps store classification separate from invalid field validation', function () {
@@ -533,7 +533,7 @@ it('blocks apply when a matched DB row changed after dry-run', function () {
         ->assertFailed();
 });
 
-it('blocks apply outside the explicit OLAB brand scope', function () {
+it('blocks apply when the confirmation token does not match the requested brand', function () {
     config(['laboratory-stores.gda_import.apply_enabled' => true]);
     [$path, $hash, $run] = gdaResolvedApplyRun($this);
 
@@ -545,7 +545,7 @@ it('blocks apply outside the explicit OLAB brand scope', function () {
         '--confirm-hash' => $hash,
         '--confirm-apply' => 'OLAB',
     ])
-        ->expectsOutputToContain('--apply requires --brand=olab')
+        ->expectsOutputToContain('--confirm-apply must be SWISSLAB for --brand=swisslab')
         ->assertFailed();
 });
 
@@ -740,6 +740,7 @@ it('generates rollback SQL preview from an applied fixture run', function () {
     $this->artisan('laboratory:stores-gda-import', [
         'path' => $path,
         '--run-id' => (string) $run->id,
+        '--brand' => 'olab',
         '--export-rollback' => $export,
     ])->assertSuccessful();
 

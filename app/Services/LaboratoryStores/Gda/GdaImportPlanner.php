@@ -19,6 +19,7 @@ class GdaImportPlanner
         private readonly GdaScheduleParser $scheduleParser,
         private readonly GdaCapabilityParser $capabilityParser,
         private readonly GdaStoreMatcher $matcher,
+        private readonly GdaFieldConflictDetector $fieldConflictDetector,
     ) {}
 
     public function plan(string $path, ?string $brandFilter = null, bool $persistAudit = true): GdaImportPlan
@@ -27,6 +28,7 @@ class GdaImportPlanner
         $parsed = $this->reader->read($path);
         $fileHash = hash_file('sha256', $path);
         $plannedRows = [];
+        $directoryStoresByBrand = [];
         $directoryTotal = 0;
         $clinicalTotal = 0;
         $opticalTotal = 0;
@@ -39,7 +41,16 @@ class GdaImportPlanner
             }
 
             $directoryTotal++;
-            $plannedRows[] = $this->planStoreRow($row, $brand, $fileHash);
+            $plannedRow = $this->planStoreRow($row, $brand, $fileHash);
+            $plannedRows[] = $plannedRow;
+
+            foreach ($this->lookupNames($plannedRow->sourceName, $plannedRow->plannedPayload['name'] ?? null) as $lookup) {
+                $directoryStoresByBrand[$brand][$lookup] = [
+                    'source_name' => $plannedRow->sourceName,
+                    'classification' => $plannedRow->classification,
+                    'matched_store_id' => $plannedRow->matchedStoreId,
+                ];
+            }
         }
 
         foreach ($parsed->clinicalHistoryServices as $row) {
@@ -50,7 +61,7 @@ class GdaImportPlanner
             }
 
             $clinicalTotal++;
-            $plannedRows[] = $this->planServiceRow($row, $brand);
+            $plannedRows[] = $this->planServiceRow($row, $brand, $fileHash, $directoryStoresByBrand[$brand] ?? []);
         }
 
         foreach ($parsed->opticalServices as $row) {
@@ -61,7 +72,7 @@ class GdaImportPlanner
             }
 
             $opticalTotal++;
-            $plannedRows[] = $this->planServiceRow($row, $brand);
+            $plannedRows[] = $this->planServiceRow($row, $brand, $fileHash, $directoryStoresByBrand[$brand] ?? []);
         }
 
         $totals = $this->totals($plannedRows, $directoryTotal, $clinicalTotal, $opticalTotal);
@@ -108,6 +119,16 @@ class GdaImportPlanner
             [$match, $manualErrors, $manualWarnings] = $this->applyManualResolution($manualResolution, $match, $planned);
         }
 
+        $fieldConflicts = $this->fieldConflictDetector->detect(
+            $planned,
+            $match['matched_store_id'] === null ? null : LaboratoryStore::query()->withTrashed()->find($match['matched_store_id']),
+        );
+
+        if ($fieldConflicts !== []) {
+            $planned['field_conflicts'] = $fieldConflicts;
+            $planned['skipped_fields'] = array_keys($fieldConflicts);
+        }
+
         $invalidFields = $this->invalidFields([
             'postal_code' => $postal,
             'phone' => $phone,
@@ -127,6 +148,7 @@ class GdaImportPlanner
             $schedule['warnings'],
             $capabilities['warnings'],
             $manualWarnings,
+            array_map(fn ($field) => "{$field} skipped because source data conflicts with row geography", array_keys($fieldConflicts)),
             array_map(fn ($field) => "{$field} requires manual review", $manualReviewFields),
         );
         $errors = array_merge(
@@ -171,7 +193,7 @@ class GdaImportPlanner
         );
     }
 
-    private function planServiceRow(GdaSpecialServiceRow $row, ?string $brand): GdaImportPlannedRow
+    private function planServiceRow(GdaSpecialServiceRow $row, ?string $brand, string $fileHash, array $directoryStores): GdaImportPlannedRow
     {
         $planned = [
             'service_type' => $row->serviceType,
@@ -182,6 +204,35 @@ class GdaImportPlanner
         ];
 
         $match = $this->matcher->match($row, $brand, $row->storeName, $planned);
+        $autoMatch = $match;
+        $manualResolution = $this->manualResolution($brand, $row->storeName, $this->normalizer->normalize($row->storeName), $fileHash);
+        $manualErrors = [];
+        $manualWarnings = [];
+
+        if ($manualResolution !== null) {
+            [$match, $manualErrors, $manualWarnings] = $this->applyManualResolution($manualResolution, $match, $planned);
+        } elseif (in_array($match['classification'], [LaboratoryStoreImportRow::CLASSIFICATION_NEW, LaboratoryStoreImportRow::CLASSIFICATION_AMBIGUOUS], true)) {
+            $linkedDirectory = $this->linkedDirectoryStore($row, $planned, $directoryStores);
+
+            if ($linkedDirectory !== null) {
+                $planned['linked_directory_source_name'] = $linkedDirectory['source_name'];
+                $match = [
+                    'matched_store_id' => $linkedDirectory['matched_store_id'],
+                    'classification' => LaboratoryStoreImportRow::CLASSIFICATION_MATCHED,
+                    'confidence' => 100,
+                    'action' => LaboratoryStoreImportRow::ACTION_UPDATE_CANDIDATE,
+                    'diff' => [
+                        'planned' => $planned,
+                        'linked_directory' => $linkedDirectory,
+                    ],
+                    'errors' => [],
+                    'evidence' => [
+                        'strength' => 'STRONG',
+                        'reason' => 'auxiliary service linked to a directory row in the same run',
+                    ],
+                ];
+            }
+        }
 
         return new GdaImportPlannedRow(
             $row,
@@ -192,21 +243,52 @@ class GdaImportPlanner
             $match['classification'],
             $match['confidence'],
             $match['action'] === LaboratoryStoreImportRow::ACTION_CREATE ? LaboratoryStoreImportRow::ACTION_MANUAL_REVIEW : $match['action'],
-            LaboratoryStoreImportRow::RESOLUTION_SOURCE_AUTO,
-            null,
-            null,
-            $match['classification'],
-            $match['action'],
-            $match['matched_store_id'],
-            LaboratoryStoreImportRow::VALIDATION_VALID,
+            $manualResolution === null ? LaboratoryStoreImportRow::RESOLUTION_SOURCE_AUTO : (
+                $manualErrors === [] ? LaboratoryStoreImportRow::RESOLUTION_SOURCE_MANUAL : LaboratoryStoreImportRow::RESOLUTION_SOURCE_INVALID
+            ),
+            $manualResolution?->decision,
+            $manualResolution?->id,
+            $autoMatch['classification'],
+            $autoMatch['action'],
+            $autoMatch['matched_store_id'],
+            $manualErrors === [] ? LaboratoryStoreImportRow::VALIDATION_VALID : LaboratoryStoreImportRow::VALIDATION_INVALID_FIELDS,
             [],
-            [],
+            $manualWarnings,
             $match['evidence'],
             $match['diff'],
-            $match['errors'],
+            array_merge($match['errors'], $manualErrors, $manualWarnings),
             $row->rawPayload,
             $planned,
         );
+    }
+
+    private function linkedDirectoryStore(GdaSpecialServiceRow $row, array $planned, array $directoryStores): ?array
+    {
+        foreach ($this->lookupNames($row->storeName, $planned['name'] ?? null) as $lookup) {
+            if (isset($directoryStores[$lookup])) {
+                return $directoryStores[$lookup];
+            }
+        }
+
+        return null;
+    }
+
+    private function lookupNames(?string ...$names): array
+    {
+        $lookups = [];
+
+        foreach ($names as $name) {
+            $normalized = $this->normalizer->normalize($name);
+
+            if ($normalized === '') {
+                continue;
+            }
+
+            $lookups[] = $normalized;
+            $lookups[] = trim(preg_replace('/^(flc|fln|queretaro)\s+/', '', $normalized) ?? $normalized);
+        }
+
+        return array_values(array_unique(array_filter($lookups)));
     }
 
     private function totals(array $rows, int $directoryTotal, int $clinicalTotal, int $opticalTotal): array

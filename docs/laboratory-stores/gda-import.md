@@ -62,10 +62,10 @@ Future apply command shape:
 php artisan laboratory:stores-gda-import \
   storage/app/imports/DIRECTORIO.xlsx \
   --apply \
-  --brand=olab \
+  --brand=swisslab \
   --run-id=123 \
   --confirm-hash=<sha256> \
-  --confirm-apply=OLAB
+  --confirm-apply=SWISSLAB
 ```
 
 Apply is disabled unless config enables it:
@@ -79,9 +79,11 @@ Default is `false` in `config/laboratory-stores.php`. Do not change real `.env` 
 Preconditions:
 
 - feature flag enabled
-- explicit `--brand=olab`
-- explicit `--confirm-apply=OLAB`
+- explicit `--brand` in the supported enum allowlist: `olab`, `swisslab`, `jenner`, `liacsa`, `azteca`
+- explicit `--confirm-apply=<BRAND>` matching the requested brand in uppercase, for example `--brand=swisslab --confirm-apply=SWISSLAB`
 - completed dry-run `--run-id`
+- dry-run `brand_filter` must equal requested apply brand
+- every non-null planned row brand in the run must equal requested apply brand
 - current Excel SHA-256 equals run hash and `--confirm-hash`
 - no `MANUAL_REVIEW`
 - no `INVALID_RESOLUTION`
@@ -138,6 +140,16 @@ Update whitelist:
 
 Invalid fields do not overwrite good existing values. Invalid or manual-review coordinates are kept null on new stores and are skipped on updates.
 
+Field conflict protection is separate from identity resolution. A row can still be a valid `MATCH_EXISTING` while individual source fields are considered unsafe for update. When a geography conflict is detected, only the conflicting fields are omitted from the update; safe fields such as phone, coordinates, hours, capabilities, and services can still apply. The planned payload records:
+
+- `field_conflicts.<field>.source_value`
+- `field_conflicts.<field>.existing_value`
+- `field_conflicts.<field>.reason`
+- `field_conflicts.<field>.action = SKIPPED_CONFLICT`
+- `skipped_fields`
+
+Apply also writes `after_snapshot.field_safety.skipped_conflicts` with the existing values observed at apply time.
+
 ## Address Strategy
 
 `address` remains the compatibility field used by existing UI, checkout, emails, PDFs, and admin surfaces. The importer generates it deterministically from the source address parts and updates it only through the whitelisted planned payload. Structured fields are stored alongside it for future UI/reporting improvements.
@@ -180,8 +192,8 @@ Stores absent from the source are not soft-deleted, deactivated, or marked missi
 php artisan laboratory:stores-gda-import \
   storage/app/imports/DIRECTORIO.xlsx \
   --dry-run \
-  --brand=olab \
-  --export-sql=imports/olab-preview.sql
+  --brand=swisslab \
+  --export-sql=imports/swisslab-preview.sql
 ```
 
 The preview file is not executed. It starts with `START TRANSACTION;`, includes source hash and brand comments, emits readable `INSERT`/`UPDATE` statements plus comments for sync operations, and ends with `ROLLBACK;` by design.
@@ -192,8 +204,9 @@ Example:
 START TRANSACTION;
 -- Generated preview only. Do not execute as an apply script.
 -- Source SHA256: <sha256>
--- Brand: olab
-UPDATE laboratory_stores SET name = 'ANZURES', updated_at = NOW() WHERE id = 40 AND brand = 'olab';
+-- Brand: swisslab
+UPDATE laboratory_stores SET name = 'MONTERREY', updated_at = NOW() WHERE id = 10 AND brand = 'swisslab';
+-- SKIPPED_CONFLICT postal_code: postal_code 01080 is outside the expected range for Nuevo Leon
 -- Preview ends with ROLLBACK by design.
 ROLLBACK;
 ```
@@ -204,10 +217,11 @@ ROLLBACK;
 php artisan laboratory:stores-gda-import \
   storage/app/imports/DIRECTORIO.xlsx \
   --run-id=123 \
+  --brand=olab \
   --export-rollback=imports/olab-rollback.sql
 ```
 
-Rollback preview is generated from apply audit snapshots. Created stores are removed only when no appointments reference them. Updated stores produce restoration SQL from `before_snapshot`, with comments for restoring children from JSON snapshots. The generated file also ends with `ROLLBACK;`.
+Rollback preview is generated from apply audit snapshots for the requested brand scope. Created stores are removed only when no appointments reference them. Updated stores produce restoration SQL from `before_snapshot`, with comments for restoring children from JSON snapshots. The generated file also ends with `ROLLBACK;`.
 
 Example:
 
@@ -227,11 +241,11 @@ The command can export a logical JSON backup for a brand before an approved appl
 
 ```bash
 php artisan laboratory:stores-gda-import storage/app/imports/gda.xlsx \
-  --brand=olab \
-  --export-backup=imports/backups/olab-before-<timestamp>.json
+  --brand=swisslab \
+  --export-backup=imports/backups/swisslab-before-<timestamp>.json
 ```
 
-Backup content includes OLAB stores, hours, capabilities, capability pivot identity, and services. SQL rollback preview is generated separately so operations can review manual MySQL scripts.
+Backup content includes the scoped brand stores, hours, capabilities, capability pivot identity, and services. SQL rollback preview is generated separately so operations can review manual MySQL scripts.
 
 ## Production
 

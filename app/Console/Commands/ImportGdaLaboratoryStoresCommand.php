@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\LaboratoryBrand;
 use App\Services\LaboratoryStores\Gda\GdaImportPlanner;
 use App\Services\LaboratoryStores\Gda\GdaLaboratoryStoreImportApplier;
 use Illuminate\Console\Command;
@@ -16,10 +17,10 @@ class ImportGdaLaboratoryStoresCommand extends Command
         {--apply : Future apply mode; blocked unless feature flag and confirmations are present}
         {--run-id= : Completed dry-run audit run ID to apply or export}
         {--confirm-hash= : SHA-256 hash that must match the reviewed Excel file}
-        {--confirm-apply= : Explicit non-interactive confirmation, currently OLAB}
+        {--confirm-apply= : Explicit non-interactive confirmation matching the requested brand in uppercase}
         {--export-backup= : Write a logical JSON backup for the scoped brand without applying}
         {--export-sql= : Write a rollback-ended SQL preview file without executing it}
-        {--export-rollback= : Write a rollback preview file for an applied fixture run}';
+        {--export-rollback= : Write a brand-scoped rollback preview file for an applied fixture run}';
 
     protected $description = 'Plan the GDA laboratory store import as a dry-run audit';
 
@@ -99,8 +100,16 @@ class ImportGdaLaboratoryStoresCommand extends Command
         $confirmHash = $this->optionString('confirm-hash') ?? '';
         $confirmApply = $this->optionString('confirm-apply');
 
-        if ($brand !== 'olab' || $confirmApply !== 'OLAB' || $runId === null || ! ctype_digit($runId)) {
-            $this->error('--apply requires --brand=olab, --run-id, --confirm-hash and --confirm-apply=OLAB.');
+        if (! $this->supportedBrand($brand) || $runId === null || ! ctype_digit($runId)) {
+            $this->error('--apply requires --brand to be one of: '.$this->supportedBrandsForDisplay().', plus --run-id, --confirm-hash and --confirm-apply=<BRAND>.');
+
+            return self::FAILURE;
+        }
+
+        $expectedConfirmation = strtoupper((string) $brand);
+
+        if ($confirmApply !== $expectedConfirmation) {
+            $this->error("--confirm-apply must be {$expectedConfirmation} for --brand={$brand}.");
 
             return self::FAILURE;
         }
@@ -122,16 +131,17 @@ class ImportGdaLaboratoryStoresCommand extends Command
     private function exportRollback(GdaLaboratoryStoreImportApplier $applier): int
     {
         $runId = $this->optionString('run-id');
+        $brand = $this->optionString('brand');
         $exportPath = $this->optionString('export-rollback');
 
-        if ($runId === null || ! ctype_digit($runId) || $exportPath === null) {
-            $this->error('--export-rollback requires --run-id.');
+        if ($runId === null || ! ctype_digit($runId) || ! $this->supportedBrand($brand) || $exportPath === null) {
+            $this->error('--export-rollback requires --run-id and --brand to be one of: '.$this->supportedBrandsForDisplay().'.');
 
             return self::FAILURE;
         }
 
         try {
-            $applier->exportRollbackSql((int) $runId, $exportPath);
+            $applier->exportRollbackSql((int) $runId, $brand, $exportPath);
         } catch (\Throwable $e) {
             $this->error($e->getMessage());
 
@@ -148,8 +158,8 @@ class ImportGdaLaboratoryStoresCommand extends Command
         $brand = $this->optionString('brand');
         $exportPath = $this->optionString('export-backup');
 
-        if ($brand !== 'olab' || $exportPath === null) {
-            $this->error('--export-backup requires --brand=olab.');
+        if (! $this->supportedBrand($brand) || $exportPath === null) {
+            $this->error('--export-backup requires --brand to be one of: '.$this->supportedBrandsForDisplay().'.');
 
             return self::FAILURE;
         }
@@ -174,8 +184,11 @@ class ImportGdaLaboratoryStoresCommand extends Command
         $this->newLine();
 
         $this->line('DIRECTORIO');
+        $brand = $this->optionString('brand');
+        $brandLabel = $brand === null ? 'All brands' : strtoupper($brand);
+
         $this->table(['Metric', 'Total'], [
-            ['OLAB rows', $plan->totals['directory_rows']],
+            ["{$brandLabel} rows", $plan->totals['directory_rows']],
             ['MATCHED', $plan->totals['directory']['matched']],
             ['NEW', $plan->totals['directory']['new']],
             ['AMBIGUOUS', $plan->totals['directory']['ambiguous']],
@@ -188,7 +201,7 @@ class ImportGdaLaboratoryStoresCommand extends Command
 
         $this->line('HISTORIA CLINICA');
         $this->table(['Metric', 'Total'], [
-            ['Rows OLAB', $plan->totals['clinical_history_rows']],
+            ["Rows {$brandLabel}", $plan->totals['clinical_history_rows']],
             ['MATCHED', $plan->totals['clinical_history']['matched']],
             ['AMBIGUOUS', $plan->totals['clinical_history']['ambiguous']],
             ['UNMATCHED', $plan->totals['clinical_history']['unmatched']],
@@ -196,7 +209,7 @@ class ImportGdaLaboratoryStoresCommand extends Command
 
         $this->line('OPTICAS');
         $this->table(['Metric', 'Total'], [
-            ['Rows OLAB', $plan->totals['optical_rows']],
+            ["Rows {$brandLabel}", $plan->totals['optical_rows']],
             ['MATCHED', $plan->totals['optical']['matched']],
             ['AMBIGUOUS', $plan->totals['optical']['ambiguous']],
             ['UNMATCHED', $plan->totals['optical']['unmatched']],
@@ -254,5 +267,16 @@ class ImportGdaLaboratoryStoresCommand extends Command
         $value = $this->option($key);
 
         return is_string($value) ? $value : null;
+    }
+
+    private function supportedBrand(?string $brand): bool
+    {
+        return $brand !== null
+            && in_array($brand, array_map(fn (LaboratoryBrand $brand) => $brand->value, LaboratoryBrand::cases()), true);
+    }
+
+    private function supportedBrandsForDisplay(): string
+    {
+        return implode(', ', array_map(fn (LaboratoryBrand $brand) => $brand->value, LaboratoryBrand::cases()));
     }
 }

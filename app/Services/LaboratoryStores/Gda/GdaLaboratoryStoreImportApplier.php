@@ -2,6 +2,7 @@
 
 namespace App\Services\LaboratoryStores\Gda;
 
+use App\Enums\LaboratoryBrand;
 use App\Models\LaboratoryCapability;
 use App\Models\LaboratoryStore;
 use App\Models\LaboratoryStoreImportRow;
@@ -102,6 +103,9 @@ class GdaLaboratoryStoreImportApplier
                 }
                 $assignments[] = 'updated_at = NOW()';
                 $lines[] = 'UPDATE laboratory_stores SET '.implode(', ', $assignments).' WHERE id = '.$row->matched_store_id.' AND brand = '.$this->sql($row->brand).';';
+                foreach ($this->skippedFieldConflicts($planned) as $field => $conflict) {
+                    $lines[] = '-- SKIPPED_CONFLICT '.$field.': '.$conflict['reason'];
+                }
                 $lines[] = '-- Sync hours, capabilities and auxiliary services idempotently for store '.$row->matched_store_id.'.';
             }
 
@@ -116,18 +120,28 @@ class GdaLaboratoryStoreImportApplier
         return $exportPath;
     }
 
-    public function exportRollbackSql(int $runId, string $exportPath): string
+    public function exportRollbackSql(int $runId, string $brand, string $exportPath): string
     {
         $run = LaboratoryStoreImportRun::query()->with('rows')->findOrFail($runId);
+
+        if (! in_array($brand, array_map(fn (LaboratoryBrand $brand) => $brand->value, LaboratoryBrand::cases()), true)) {
+            throw new RuntimeException('UNSUPPORTED_BRAND');
+        }
+
+        if ($run->brand_filter !== $brand) {
+            throw new RuntimeException('WRONG_BRAND');
+        }
+
         $lines = [
             'START TRANSACTION;',
             '-- Generated rollback preview only. Review before executing manually.',
             '-- Run ID: '.$run->id,
+            '-- Brand: '.$brand,
             '-- Source SHA256: '.$run->file_hash,
             '',
         ];
 
-        foreach ($run->rows()->whereNotNull('apply_status')->orderByDesc('id')->get() as $row) {
+        foreach ($run->rows()->where('brand', $brand)->whereNotNull('apply_status')->orderByDesc('id')->get() as $row) {
             $lines[] = '-- '.$row->excel_sheet.' row '.$row->excel_row.' '.$row->source_name;
 
             if ($row->apply_status === LaboratoryStoreImportRow::APPLY_STATUS_CREATED && $row->applied_store_id !== null) {
@@ -178,8 +192,8 @@ class GdaLaboratoryStoreImportApplier
 
     private function validatedRun(int $runId, string $path, string $brand, string $confirmHash): LaboratoryStoreImportRun
     {
-        if ($brand !== 'olab') {
-            throw new RuntimeException('BRAND_SCOPE_REQUIRED: apply is currently limited to --brand=olab.');
+        if (! in_array($brand, array_map(fn (LaboratoryBrand $brand) => $brand->value, LaboratoryBrand::cases()), true)) {
+            throw new RuntimeException('UNSUPPORTED_BRAND');
         }
 
         if (! is_file($path)) {
@@ -202,6 +216,16 @@ class GdaLaboratoryStoreImportApplier
             throw new RuntimeException('WRONG_BRAND');
         }
 
+        $runBrands = $run->rows()
+            ->whereNotNull('brand')
+            ->distinct()
+            ->pluck('brand')
+            ->all();
+
+        if ($runBrands !== [$brand]) {
+            throw new RuntimeException('WRONG_BRAND_ROWS');
+        }
+
         if (! hash_equals($run->file_hash, $actualHash)) {
             throw new RuntimeException('SOURCE_FILE_CHANGED');
         }
@@ -215,6 +239,20 @@ class GdaLaboratoryStoreImportApplier
 
         if ($rows->isEmpty()) {
             throw new RuntimeException('EMPTY_IMPORT_PLAN');
+        }
+
+        $duplicateMatchedStores = $rows
+            ->reject(fn (LaboratoryStoreImportRow $row) => $row->rowIsAuxiliaryService())
+            ->filter(fn (LaboratoryStoreImportRow $row) => $row->matched_store_id !== null && $row->action !== LaboratoryStoreImportRow::ACTION_SKIP)
+            ->groupBy('matched_store_id')
+            ->filter(fn ($rows) => $rows->count() > 1);
+
+        if ($duplicateMatchedStores->isNotEmpty()) {
+            $details = $duplicateMatchedStores
+                ->map(fn ($rows, $storeId) => 'store '.$storeId.' <= '.$rows->pluck('source_name')->implode(', '))
+                ->implode('; ');
+
+            throw new RuntimeException('DUPLICATE_MATCHED_STORE: '.$details);
         }
 
         $blocked = $rows->filter(function (LaboratoryStoreImportRow $row) {
@@ -316,6 +354,9 @@ class GdaLaboratoryStoreImportApplier
 
         $childrenChanged = $this->syncStoreChildren($store, $planned, $row, $capabilities);
         $after = $this->snapshot($store->refresh()->load(['hours', 'capabilities', 'services']));
+        $after['field_safety'] = [
+            'skipped_conflicts' => $this->skippedFieldConflicts($planned, $before['store'] ?? []),
+        ];
         $status = $changed || $childrenChanged
             ? LaboratoryStoreImportRow::APPLY_STATUS_UPDATED
             : LaboratoryStoreImportRow::APPLY_STATUS_UNCHANGED;
@@ -407,7 +448,7 @@ class GdaLaboratoryStoreImportApplier
             }
 
             $lookups[] = $normalized;
-            $lookups[] = trim(preg_replace('/^(flc|queretaro)\s+/', '', $normalized) ?? $normalized);
+            $lookups[] = trim(preg_replace('/^(flc|fln|queretaro)\s+/', '', $normalized) ?? $normalized);
         }
 
         return array_values(array_unique(array_filter($lookups)));
@@ -434,11 +475,32 @@ class GdaLaboratoryStoreImportApplier
     {
         $attributes = $this->storeAttributes($planned, $row);
 
-        foreach ($row->invalid_fields ?? [] as $field) {
+        foreach (array_unique([...(array) ($row->invalid_fields ?? []), ...$this->skippedFields($planned)]) as $field) {
             unset($attributes[$field]);
         }
 
         return $attributes;
+    }
+
+    private function skippedFields(array $planned): array
+    {
+        return array_values(array_unique($planned['skipped_fields'] ?? array_keys($planned['field_conflicts'] ?? [])));
+    }
+
+    private function skippedFieldConflicts(array $planned, array $existing = []): array
+    {
+        $conflicts = [];
+
+        foreach ($planned['field_conflicts'] ?? [] as $field => $conflict) {
+            $conflicts[$field] = [
+                'source_value' => $conflict['source_value'] ?? ($planned[$field] ?? null),
+                'existing_value' => $existing[$field] ?? ($conflict['existing_value'] ?? null),
+                'reason' => $conflict['reason'] ?? 'source data conflicts with row geography',
+                'action' => 'SKIPPED_CONFLICT',
+            ];
+        }
+
+        return $conflicts;
     }
 
     private function storeAttributes(array $planned, LaboratoryStoreImportRow $row): array
