@@ -25,7 +25,12 @@ import TaxProfileStatusBadge from "@/Components/Admin/LaboratoryBilling/TaxProfi
 import BillingLoadingBlock from "@/Components/Admin/LaboratoryBilling/BillingLoadingBlock";
 import { billingMutedTextClass, billingSecondaryTextClass } from "@/Components/Admin/LaboratoryBilling/billingUi";
 
-export default function TaxProfiles({ taxProfiles, filters = {}, metrics = {} }) {
+export default function TaxProfiles({
+	taxProfiles,
+	filters = {},
+	metrics = {},
+	canManageAutomaticReports = false,
+}) {
 	const [rangeProcessing, setRangeProcessing] = useState(false);
 	const onProcessingChange = useCallback(
 		(value) => setRangeProcessing(value),
@@ -78,7 +83,11 @@ export default function TaxProfiles({ taxProfiles, filters = {}, metrics = {} })
 					</Text>
 				</div>
 
-				<BillingNav active="tax-profiles" query={filters} />
+				<BillingNav
+					active="tax-profiles"
+					query={filters}
+					canManageAutomaticReports={canManageAutomaticReports}
+				/>
 
 				<section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 					<BillingMetricCard label="Total" value={metrics.total ?? 0} />

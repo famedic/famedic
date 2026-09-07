@@ -85,7 +85,7 @@ class LaboratoryBillingMetricsService
     public function compliance(LaboratoryBillingDateRange $range): array
     {
         // Cohorte: solicitudes creadas en el rango.
-        // Completadas: esas mismas solicitudes con completed_at (aunque sea fuera del rango).
+        // Completadas: esas mismas solicitudes con PDF y XML cargados.
         $received = $this->requestsInRange($range)->count();
         $completedQuery = $this->requestsInRange($range);
         $this->resolver->scopeComplete($completedQuery);
@@ -99,7 +99,7 @@ class LaboratoryBillingMetricsService
             'not_completed' => $notCompleted,
             'percent' => $percent,
             'target_percent' => null,
-            'definition' => 'Cohorte por fecha de solicitud. Completada = PDF+XML con completed_at asignado (aunque la finalización sea fuera del rango).',
+            'definition' => 'Cohorte por fecha de solicitud. Completada = PDF+XML; completed_at solo identifica la fecha de finalización cuando existe.',
         ];
     }
 

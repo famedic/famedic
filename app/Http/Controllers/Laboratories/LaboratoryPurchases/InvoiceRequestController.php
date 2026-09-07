@@ -131,7 +131,7 @@ class InvoiceRequestController extends Controller
 
         // 6. REDIRECCIONAR CON MENSAJE DE ÉXITO PERSONALIZADO
         // ----------------------------------------------------
-        $message = 'Se ha solicitado la factura y estará disponible después de 72 horas hábiles. ';
+        $message = 'Se ha solicitado la factura y estará disponible después de 3 días hábiles. ';
         $message .= "Uso de CFDI: {$cfdiUse} - {$cfdiUseName}";
 
         if ($isTestEnvironment) {

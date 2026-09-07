@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin\LaboratoryBilling;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LaboratoryBilling\IndexLaboratoryBillingRequestsRequest;
 use App\Services\LaboratoryBilling\LaboratoryBillingDateRange;
+use App\Services\LaboratoryBilling\LaboratoryBillingAccess;
 use App\Services\LaboratoryBilling\LaboratoryBillingRequestsQuery;
 use App\Services\LaboratoryBilling\LaboratoryBillingStatusResolver;
 use Inertia\Inertia;
@@ -16,6 +17,7 @@ class RequestsController extends Controller
         IndexLaboratoryBillingRequestsRequest $request,
         LaboratoryBillingRequestsQuery $query,
         LaboratoryBillingStatusResolver $resolver,
+        LaboratoryBillingAccess $access,
     ): Response {
         $range = LaboratoryBillingDateRange::fromInput($request->input('from'), $request->input('to'));
         $filters = collect($request->only([
@@ -38,6 +40,7 @@ class RequestsController extends Controller
             'statusCounts' => $query->statusCounts($filters, $range),
             'brandOptions' => $query->brandOptions(),
             'thresholdDays' => $resolver->thresholdDays(),
+            'canManageAutomaticReports' => $access->allowsReports($request->user()),
         ]);
     }
 }

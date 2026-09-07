@@ -15,14 +15,31 @@ class LaboratoryBillingStatusResolver
 {
     public function thresholdDays(): int
     {
-        return max(1, (int) config('famedic.laboratory_billing.invoice_delay_threshold_days', 3));
+        return $this->thresholdBusinessDays();
+    }
+
+    public function thresholdBusinessDays(): int
+    {
+        return max(1, (int) config('famedic.laboratory_billing.invoice_delay_threshold_business_days', 3));
     }
 
     public function thresholdDate(?CarbonInterface $now = null): Carbon
     {
         $now = Carbon::parse($now ?? now())->timezone('America/Monterrey');
 
-        return $now->copy()->subDays($this->thresholdDays())->startOfDay()->utc();
+        return $this->subtractBusinessDays($now, $this->thresholdBusinessDays())->utc();
+    }
+
+    public function dueAt(?CarbonInterface $requestedAt): ?Carbon
+    {
+        if (! $requestedAt) {
+            return null;
+        }
+
+        return $this->addBusinessDays(
+            Carbon::parse($requestedAt)->timezone('America/Monterrey'),
+            $this->thresholdBusinessDays()
+        );
     }
 
     public function hasPdf(?Invoice $invoice): bool
@@ -65,10 +82,6 @@ class LaboratoryBillingStatusResolver
             return false;
         }
 
-        if ($invoice->completed_at) {
-            return true;
-        }
-
         return $this->documentStatus($invoice) === LaboratoryBillingDocumentStatus::Complete;
     }
 
@@ -99,15 +112,17 @@ class LaboratoryBillingStatusResolver
             return null;
         }
 
-        $elapsed = $this->daysElapsed($requestedAt, $now);
-
-        if ($elapsed === null) {
+        $dueAt = $this->dueAt($requestedAt);
+        if (! $dueAt) {
             return null;
         }
 
-        $overdue = $elapsed - $this->thresholdDays();
+        $now = Carbon::parse($now ?? now())->timezone('America/Monterrey');
+        if ($now->lte($dueAt)) {
+            return 0;
+        }
 
-        return $overdue > 0 ? $overdue : 0;
+        return max(1, $this->businessDaysAfterDue($dueAt, $now));
     }
 
     public function isOverdue(?CarbonInterface $requestedAt, ?Invoice $invoice, ?CarbonInterface $now = null): bool
@@ -117,6 +132,14 @@ class LaboratoryBillingStatusResolver
         }
 
         return ($this->daysOverdue($requestedAt, $invoice, $now) ?? 0) > 0;
+    }
+
+    public function missingFiles(?Invoice $invoice): array
+    {
+        return [
+            'pdf' => ! $this->hasPdf($invoice),
+            'xml' => ! $this->hasXml($invoice),
+        ];
     }
 
     /**
@@ -175,7 +198,11 @@ class LaboratoryBillingStatusResolver
             [LaboratoryPurchase::class],
             function (Builder $purchaseQuery) {
                 $purchaseQuery->withTrashed()->whereHas('invoice', function (Builder $invoiceQuery) {
-                    $invoiceQuery->whereNotNull('completed_at');
+                    $invoiceQuery
+                        ->whereNotNull('invoice')
+                        ->where('invoice', '!=', '')
+                        ->whereNotNull('invoice_xml')
+                        ->where('invoice_xml', '!=', '');
                 });
             }
         );
@@ -191,7 +218,13 @@ class LaboratoryBillingStatusResolver
             [LaboratoryPurchase::class],
             function (Builder $purchaseQuery) {
                 $purchaseQuery->withTrashed()->whereHas('invoice', function (Builder $invoiceQuery) {
-                    $invoiceQuery->whereNull('completed_at');
+                    $invoiceQuery->where(function (Builder $documents) {
+                        $documents
+                            ->whereNull('invoice')
+                            ->orWhere('invoice', '')
+                            ->orWhereNull('invoice_xml')
+                            ->orWhere('invoice_xml', '');
+                    });
                 });
             }
         );
@@ -221,7 +254,11 @@ class LaboratoryBillingStatusResolver
             [LaboratoryPurchase::class],
             function (Builder $purchaseQuery) {
                 $purchaseQuery->withTrashed()->whereHas('invoice', function (Builder $invoiceQuery) {
-                    $invoiceQuery->whereNotNull('completed_at');
+                    $invoiceQuery
+                        ->whereNotNull('invoice')
+                        ->where('invoice', '!=', '')
+                        ->whereNotNull('invoice_xml')
+                        ->where('invoice_xml', '!=', '');
                 });
             }
         );
@@ -277,11 +314,58 @@ class LaboratoryBillingStatusResolver
             'document_status_color' => $documentStatus->color(),
             'days_elapsed' => $this->daysElapsed($request?->created_at, $now),
             'days_overdue' => $this->daysOverdue($request?->created_at, $invoice, $now),
+            'due_at' => $this->dueAt($request?->created_at)?->toIso8601String(),
+            'formatted_due_at' => $this->dueAt($request?->created_at)?->isoFormat('D MMM Y h:mm a'),
             'response_time_hours' => $this->responseTimeHours($request, $invoice),
             'response_time_days' => $this->responseTimeDays($request, $invoice),
             'has_pdf' => $this->hasPdf($invoice),
             'has_xml' => $this->hasXml($invoice),
             'is_overdue' => $this->isOverdue($request?->created_at, $invoice, $now),
         ];
+    }
+
+    private function addBusinessDays(Carbon $date, int $days): Carbon
+    {
+        $cursor = $date->copy();
+        $remaining = $days;
+
+        while ($remaining > 0) {
+            $cursor->addDay();
+            if (! $cursor->isWeekend()) {
+                $remaining--;
+            }
+        }
+
+        return $cursor;
+    }
+
+    private function subtractBusinessDays(Carbon $date, int $days): Carbon
+    {
+        $cursor = $date->copy();
+        $remaining = $days;
+
+        while ($remaining > 0) {
+            $cursor->subDay();
+            if (! $cursor->isWeekend()) {
+                $remaining--;
+            }
+        }
+
+        return $cursor;
+    }
+
+    private function businessDaysAfterDue(Carbon $dueAt, Carbon $now): int
+    {
+        $cursor = $dueAt->copy();
+        $days = 0;
+
+        while ($cursor->lt($now)) {
+            if (! $cursor->isWeekend()) {
+                $days++;
+            }
+            $cursor->addDay();
+        }
+
+        return $days;
     }
 }

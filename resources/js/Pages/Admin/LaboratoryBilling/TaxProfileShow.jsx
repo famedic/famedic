@@ -35,7 +35,11 @@ const TABS = [
 	{ key: "history", label: "Historial" },
 ];
 
-export default function TaxProfileShow({ taxProfile, filters = {} }) {
+export default function TaxProfileShow({
+	taxProfile,
+	filters = {},
+	canManageAutomaticReports = false,
+}) {
 	const [tab, setTab] = useState("info");
 
 	return (
@@ -65,7 +69,11 @@ export default function TaxProfileShow({ taxProfile, filters = {} }) {
 					</Button>
 				</div>
 
-				<BillingNav active="tax-profiles" query={filters} />
+				<BillingNav
+					active="tax-profiles"
+					query={filters}
+					canManageAutomaticReports={canManageAutomaticReports}
+				/>
 
 				<nav className="flex flex-wrap gap-2" aria-label="Detalle del perfil">
 					{TABS.map((item) => (

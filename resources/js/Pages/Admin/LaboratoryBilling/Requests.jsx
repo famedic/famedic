@@ -42,6 +42,7 @@ export default function Requests({
 	statusCounts = {},
 	brandOptions = [],
 	thresholdDays,
+	canManageAutomaticReports = false,
 }) {
 	const [rangeProcessing, setRangeProcessing] = useState(false);
 	const onProcessingChange = useCallback(
@@ -89,11 +90,15 @@ export default function Requests({
 				<div>
 					<Heading>Facturación · Solicitudes</Heading>
 					<Text className={`mt-1 ${billingMutedTextClass}`}>
-						Umbral de atraso: {thresholdDays} días naturales
+						Umbral de atraso: {thresholdDays} días hábiles
 					</Text>
 				</div>
 
-				<BillingNav active="requests" query={filters} />
+				<BillingNav
+					active="requests"
+					query={filters}
+					canManageAutomaticReports={canManageAutomaticReports}
+				/>
 
 				<div className="flex flex-wrap gap-2">
 					{STATUS_TABS.map((tab) => {

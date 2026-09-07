@@ -37,3 +37,11 @@ if (config('services.activecampaign.coupons_expiring_enabled', false)) {
 Schedule::command('odessa:prune-pre-enrollment-import-runs')
     ->dailyAt('02:30')
     ->withoutOverlapping(30);
+
+Schedule::command('laboratory-billing:dispatch-reports')
+    ->everyMinute()
+    ->withoutOverlapping(5);
+
+Schedule::command('laboratory-billing:prune-report-files')
+    ->dailyAt('03:10')
+    ->withoutOverlapping(30);

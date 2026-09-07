@@ -17,6 +17,7 @@ class TaxProfilesController extends Controller
     public function index(
         IndexLaboratoryBillingTaxProfilesRequest $request,
         LaboratoryBillingTaxProfilesQuery $query,
+        LaboratoryBillingAccess $access,
     ): Response {
         $range = LaboratoryBillingDateRange::fromInput($request->input('from'), $request->input('to'));
         $filters = collect($request->only([
@@ -37,6 +38,7 @@ class TaxProfilesController extends Controller
             'taxProfiles' => $query->paginate($filters, $range),
             'filters' => $filters,
             'metrics' => $query->metrics($range),
+            'canManageAutomaticReports' => $access->allowsReports($request->user()),
         ]);
     }
 
@@ -56,6 +58,7 @@ class TaxProfilesController extends Controller
                 $request->input('from'),
                 $request->input('to')
             )->toFilterArray(),
+            'canManageAutomaticReports' => $access->allowsReports($request->user()),
         ]);
     }
 }

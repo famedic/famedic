@@ -27,13 +27,26 @@ const TABS = [
 		label: "Reportes",
 		route: "admin.laboratory-billing.reports",
 	},
+	{
+		key: "automatic-reports",
+		label: "Reportes automáticos",
+		route: "admin.laboratory-billing.automatic-reports.index",
+		requiresAutomaticReportsAccess: true,
+	},
 ];
 
-export default function BillingNav({ active, query = {} }) {
+export default function BillingNav({
+	active,
+	query = {},
+	canManageAutomaticReports = false,
+}) {
 	const preserved = Object.fromEntries(
 		Object.entries(query).filter(
 			([, value]) => value !== null && value !== undefined && value !== "",
 		),
+	);
+	const tabs = TABS.filter(
+		(tab) => !tab.requiresAutomaticReportsAccess || canManageAutomaticReports,
 	);
 
 	return (
@@ -41,7 +54,7 @@ export default function BillingNav({ active, query = {} }) {
 			aria-label="Navegación de facturación"
 			className="flex flex-wrap gap-2 border-b border-zinc-200 pb-3 dark:border-zinc-600/80"
 		>
-			{TABS.map((tab) => {
+			{tabs.map((tab) => {
 				const isActive = active === tab.key;
 				return (
 					<Link

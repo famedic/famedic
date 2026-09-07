@@ -24,6 +24,7 @@ use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\DashboardController;
 use App\Http\Controllers\Admin\LaboratoryBilling\ExportController as LaboratoryBillingExportController;
 use App\Http\Controllers\Admin\LaboratoryBilling\InvoicesController;
+use App\Http\Controllers\Admin\LaboratoryBilling\AutomaticReportsController as LaboratoryBillingAutomaticReportsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\ReportsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\RequestsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\TaxProfilesController as TaxProfilesBillingController;
@@ -199,6 +200,15 @@ Route::prefix('admin')->middleware([
             Route::get('/tax-profiles', [TaxProfilesBillingController::class, 'index'])->name('tax-profiles.index');
             Route::get('/tax-profiles/{tax_profile}', [TaxProfilesBillingController::class, 'show'])->name('tax-profiles.show');
             Route::get('/reports', ReportsController::class)->name('reports');
+            Route::get('/automatic-reports', [LaboratoryBillingAutomaticReportsController::class, 'index'])->name('automatic-reports.index');
+            Route::post('/automatic-reports', [LaboratoryBillingAutomaticReportsController::class, 'store'])->name('automatic-reports.store');
+            Route::put('/automatic-reports/{schedule}', [LaboratoryBillingAutomaticReportsController::class, 'update'])->name('automatic-reports.update');
+            Route::get('/automatic-reports/{schedule}/preview', [LaboratoryBillingAutomaticReportsController::class, 'preview'])->name('automatic-reports.preview');
+            Route::post('/automatic-reports/{schedule}/run', [LaboratoryBillingAutomaticReportsController::class, 'run'])->name('automatic-reports.run');
+            Route::post('/automatic-reports/{schedule}/test', [LaboratoryBillingAutomaticReportsController::class, 'test'])->name('automatic-reports.test');
+            Route::get('/automatic-runs/{run}/download', [LaboratoryBillingAutomaticReportsController::class, 'download'])
+                ->middleware('signed')
+                ->name('automatic-runs.download');
             Route::get('/export/requests', [LaboratoryBillingExportController::class, 'requests'])->name('export.requests');
             Route::get('/export/invoices', [LaboratoryBillingExportController::class, 'invoices'])->name('export.invoices');
             Route::get('/export/tax-profiles', [LaboratoryBillingExportController::class, 'taxProfiles'])->name('export.tax-profiles');

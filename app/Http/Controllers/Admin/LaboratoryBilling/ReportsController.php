@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin\LaboratoryBilling;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LaboratoryBilling\LaboratoryBillingDateRangeRequest;
+use App\Services\LaboratoryBilling\LaboratoryBillingAccess;
 use App\Services\LaboratoryBilling\LaboratoryBillingDateRange;
 use App\Services\LaboratoryBilling\LaboratoryBillingMetricsService;
 use App\Services\LaboratoryBilling\LaboratoryBillingStatusResolver;
@@ -16,6 +17,7 @@ class ReportsController extends Controller
         LaboratoryBillingDateRangeRequest $request,
         LaboratoryBillingMetricsService $metrics,
         LaboratoryBillingStatusResolver $resolver,
+        LaboratoryBillingAccess $access,
     ): Response {
         $range = LaboratoryBillingDateRange::fromInput($request->input('from'), $request->input('to'));
         $compliance = $metrics->compliance($range);
@@ -47,6 +49,7 @@ class ReportsController extends Controller
             'topOverdue' => $metrics->topOverdue($range, 10),
             'unusedOldest' => $metrics->unusedProfilesOldest(10),
             'topPatients' => $metrics->topPatientsByRequests($range, 10),
+            'canManageAutomaticReports' => $access->allowsReports($request->user()),
         ]);
     }
 }

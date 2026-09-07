@@ -25,7 +25,11 @@ import BillingPurchaseLink from "@/Components/Admin/LaboratoryBilling/BillingPur
 import BillingLoadingBlock from "@/Components/Admin/LaboratoryBilling/BillingLoadingBlock";
 import { billingMutedTextClass, billingSecondaryTextClass } from "@/Components/Admin/LaboratoryBilling/billingUi";
 
-export default function Invoices({ invoices, filters = {} }) {
+export default function Invoices({
+	invoices,
+	filters = {},
+	canManageAutomaticReports = false,
+}) {
 	const [rangeProcessing, setRangeProcessing] = useState(false);
 	const onProcessingChange = useCallback(
 		(value) => setRangeProcessing(value),
@@ -75,7 +79,11 @@ export default function Invoices({ invoices, filters = {} }) {
 					</Text>
 				</div>
 
-				<BillingNav active="invoices" query={filters} />
+				<BillingNav
+					active="invoices"
+					query={filters}
+					canManageAutomaticReports={canManageAutomaticReports}
+				/>
 
 				<BillingDateRangeFilter
 					filters={filters}

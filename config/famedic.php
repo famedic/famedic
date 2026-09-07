@@ -15,6 +15,7 @@ return [
         'laboratory-purchases' => [
             ['manage' => 'Administrar ordenes de laboratorio'],
             ['manage.invoices' => 'Subir y actualizar facturas'],
+            ['manage.billing-reports' => 'Configurar reportes automáticos de facturación de laboratorio'],
             ['manage.results' => 'Subir y actualizar resultados'],
             ['manage.cancel' => 'Cancelar ordenes'],
             ['manage.export' => 'Descargar ordenes'],
@@ -187,11 +188,17 @@ return [
 
     /**
      * Facturación administrativa de laboratorios.
-     * Umbral de atraso en días naturales desde invoice_requests.created_at.
+     * Umbral de atraso en días hábiles desde invoice_requests.created_at.
+     * Se excluyen sábados y domingos; no se consideran festivos en esta versión.
      * Las solicitudes completas (PDF+XML) nunca se consideran atrasadas.
      */
     'laboratory_billing' => [
-        'invoice_delay_threshold_days' => (int) env('INVOICE_DELAY_THRESHOLD_DAYS', 3),
+        'invoice_delay_threshold_business_days' => (int) env('INVOICE_DELAY_THRESHOLD_BUSINESS_DAYS', env('INVOICE_DELAY_THRESHOLD_DAYS', 3)),
+        'report_max_attachment_bytes' => (int) env('LABORATORY_BILLING_REPORT_MAX_ATTACHMENT_BYTES', 8 * 1024 * 1024),
+        'report_link_ttl_hours' => (int) env('LABORATORY_BILLING_REPORT_LINK_TTL_HOURS', 72),
+        'report_file_retention_days' => (int) env('LABORATORY_BILLING_REPORT_FILE_RETENTION_DAYS', 14),
+        'report_detail_row_limit' => (int) env('LABORATORY_BILLING_REPORT_DETAIL_ROW_LIMIT', 5000),
+        'report_disk' => env('LABORATORY_BILLING_REPORT_DISK', env('FILESYSTEM_DISK', 'local')),
     ],
 
     /**
