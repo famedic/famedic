@@ -16,11 +16,13 @@ use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDataService;
 use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportPeriodResolver;
 use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportScheduleCalculator;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -61,7 +63,17 @@ class AutomaticReportsController extends Controller
             'runs' => $runs,
             'filters' => $request->only(['run_status', 'run_type', 'run_from', 'run_to', 'tab']),
             'options' => [
-                'periods' => LaboratoryBillingReportSchedule::periodOptions(),
+                'periods' => app(LaboratoryBillingReportPeriodResolver::class)->previewOptions(),
+                'manualPeriods' => [
+                    ...app(LaboratoryBillingReportPeriodResolver::class)->previewOptions(),
+                    [
+                        'value' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                        'label' => 'Rango personalizado',
+                        'group' => 'Manual',
+                        'example' => 'Selecciona fechas al ejecutar manualmente.',
+                        'full_label' => 'Periodo personalizado',
+                    ],
+                ],
                 'sections' => LaboratoryBillingReportSchedule::sectionOptions(),
                 'weekdays' => LaboratoryBillingReportSchedule::weekdayOptions(),
                 'brands' => collect(LaboratoryBrand::cases())->map(fn (LaboratoryBrand $brand) => [
@@ -88,6 +100,25 @@ class AutomaticReportsController extends Controller
                     'value' => $status->value,
                     'label' => $status->label(),
                 ])->values(),
+                'quickRanges' => collect([
+                    LaboratoryBillingReportSchedule::PERIOD_LAST_7_DAYS,
+                    LaboratoryBillingReportSchedule::PERIOD_LAST_15_DAYS,
+                    LaboratoryBillingReportSchedule::PERIOD_LAST_30_DAYS,
+                    LaboratoryBillingReportSchedule::PERIOD_LAST_60_DAYS,
+                    LaboratoryBillingReportSchedule::PERIOD_LAST_90_DAYS,
+                ])->map(function (string $periodType) {
+                    $resolver = app(LaboratoryBillingReportPeriodResolver::class);
+                    $period = $resolver->resolve($periodType, now(LaboratoryBillingReportPeriodResolver::TIMEZONE));
+
+                    return [
+                        'value' => $periodType,
+                        'label' => $resolver->labelFor($periodType),
+                        'from' => $period['start']->format('Y-m-d'),
+                        'to' => $period['end']->format('Y-m-d'),
+                        'date_label' => $resolver->dateOnlyLabel($period['start'], $period['end']),
+                        'days' => $period['start']->copy()->startOfDay()->diffInDays($period['end']->copy()->startOfDay()) + 1,
+                    ];
+                })->values(),
                 'timezone' => 'America/Monterrey',
             ],
             'config' => [
@@ -107,6 +138,24 @@ class AutomaticReportsController extends Controller
         LaboratoryBillingReportDataService $dataService,
     ): JsonResponse {
         $access->authorizeReports($request->user());
+
+        $validated = $request->validate([
+            'period_type' => ['nullable', 'string', Rule::in(collect(LaboratoryBillingReportSchedule::manualPeriodOptions())->pluck('value')->all())],
+            'custom_from' => ['nullable', 'required_if:period_type,custom_range', 'date_format:Y-m-d'],
+            'custom_to' => ['nullable', 'required_if:period_type,custom_range', 'date_format:Y-m-d', 'after_or_equal:custom_from'],
+            'test' => ['nullable', 'boolean'],
+        ]);
+        if (($validated['period_type'] ?? null) === LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE) {
+            $dayCount = $periodResolver->customDayCount($validated['custom_from'], $validated['custom_to']);
+            abort_if($dayCount > 366, 422, 'El rango personalizado no puede exceder 366 días.');
+            abort_if(
+                now(LaboratoryBillingReportPeriodResolver::TIMEZONE)->startOfDay()->lt(
+                    \Illuminate\Support\Carbon::parse($validated['custom_to'], LaboratoryBillingReportPeriodResolver::TIMEZONE)->startOfDay()
+                ),
+                422,
+                'El rango personalizado no puede incluir fechas futuras.'
+            );
+        }
 
         $periodType = (string) $request->input('period_type', $schedule->period_type);
         $period = $periodResolver->resolve(
@@ -132,7 +181,11 @@ class AutomaticReportsController extends Controller
             ],
             'period' => [
                 'label' => $period['label'],
+                'date_label' => $periodResolver->dateOnlyLabel($period['start'], $period['end']),
                 'timezone' => $period['timezone'],
+                'type' => $periodType,
+                'type_label' => $periodResolver->labelFor($periodType),
+                'is_custom' => $periodType === LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
             ],
             'generated_at' => localizedDate(now(LaboratoryBillingReportPeriodResolver::TIMEZONE))?->isoFormat('D MMM Y h:mm a'),
             'metrics' => [
@@ -201,7 +254,10 @@ class AutomaticReportsController extends Controller
         }
 
         $run = $this->createManualRun($schedule, LaboratoryBillingReportRun::TYPE_MANUAL, $request);
-        GenerateLaboratoryBillingReportJob::dispatch($run->id);
+
+        if ($run->wasRecentlyCreated) {
+            GenerateLaboratoryBillingReportJob::dispatch($run->id);
+        }
 
         return back()->flashMessage('Ejecución manual encolada correctamente.');
     }
@@ -215,7 +271,10 @@ class AutomaticReportsController extends Controller
         }
 
         $run = $this->createManualRun($schedule, LaboratoryBillingReportRun::TYPE_TEST, $request);
-        GenerateLaboratoryBillingReportJob::dispatch($run->id);
+
+        if ($run->wasRecentlyCreated) {
+            GenerateLaboratoryBillingReportJob::dispatch($run->id);
+        }
 
         return back()->flashMessage('Envío de prueba encolado correctamente.');
     }
@@ -257,20 +316,33 @@ class AutomaticReportsController extends Controller
         $filters = $schedule->filters ?? [];
         $filters['_period_type'] = $request->input('period_type', $schedule->period_type);
 
-        if ($filters['_period_type'] === 'custom_range') {
+        if ($filters['_period_type'] === LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE) {
             $filters['_custom_from'] = $request->input('custom_from');
             $filters['_custom_to'] = $request->input('custom_to');
         }
 
-        return LaboratoryBillingReportRun::query()->create([
-            'schedule_id' => $schedule->id,
-            'run_type' => $type,
-            'idempotency_key' => 'laboratory-billing-report:'.$type.':'.$schedule->id.':'.Str::uuid(),
-            'status' => LaboratoryBillingReportRun::STATUS_PENDING,
-            'intended_for_at' => now(),
-            'recipients' => $schedule->recipients,
-            'filters' => $filters,
-        ]);
+        $period = app(LaboratoryBillingReportPeriodResolver::class)->resolve(
+            $filters['_period_type'],
+            now(LaboratoryBillingReportPeriodResolver::TIMEZONE),
+            $filters['_custom_from'] ?? null,
+            $filters['_custom_to'] ?? null,
+        );
+        $idempotencyToken = $request->input('idempotency_key') ?: (string) Str::uuid();
+        $idempotencyKey = 'laboratory-billing-report:'.$type.':'.$schedule->id.':'.$idempotencyToken;
+
+        return LaboratoryBillingReportRun::query()->firstOrCreate(
+            ['idempotency_key' => $idempotencyKey],
+            [
+                'schedule_id' => $schedule->id,
+                'run_type' => $type,
+                'status' => LaboratoryBillingReportRun::STATUS_PENDING,
+                'intended_for_at' => now(),
+                'period_start' => $period['start_utc'],
+                'period_end' => $period['end_utc'],
+                'recipients' => $schedule->recipients,
+                'filters' => $filters,
+            ]
+        );
     }
 
     private function presentSchedule(LaboratoryBillingReportSchedule $schedule): array
@@ -295,13 +367,19 @@ class AutomaticReportsController extends Controller
 
     private function presentRun(LaboratoryBillingReportRun $run): array
     {
+        $periodStart = $this->runPeriodDate($run, 'period_start');
+        $periodEnd = $this->runPeriodDate($run, 'period_end');
+
         return [
             'id' => $run->id,
             'schedule_name' => $run->schedule?->name,
             'run_type' => $run->run_type,
             'status' => $run->status,
-            'period' => $run->period_start && $run->period_end
-                ? localizedDate($run->period_start)?->isoFormat('D MMM Y').' - '.localizedDate($run->period_end)?->isoFormat('D MMM Y')
+            'period' => $periodStart && $periodEnd
+                ? $periodStart->isoFormat('D MMM Y').' - '.$periodEnd->isoFormat('D MMM Y')
+                : null,
+            'period_label' => $periodStart && $periodEnd
+                ? $this->runPeriodLabel($run)
                 : null,
             'recipients' => $run->recipients ?? [],
             'metrics' => $run->metrics ?? [],
@@ -316,5 +394,23 @@ class AutomaticReportsController extends Controller
                 ? URL::temporarySignedRoute('admin.laboratory-billing.automatic-runs.download', $run->link_expires_at, ['run' => $run->id])
                 : null,
         ];
+    }
+
+    private function runPeriodLabel(LaboratoryBillingReportRun $run): string
+    {
+        $type = data_get($run->filters, '_period_type');
+        $label = $type ? app(LaboratoryBillingReportPeriodResolver::class)->labelFor((string) $type) : null;
+        $range = $this->runPeriodDate($run, 'period_start')?->isoFormat('DD/MM/Y').'–'.$this->runPeriodDate($run, 'period_end')?->isoFormat('DD/MM/Y');
+
+        return $type === LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE
+            ? 'Personalizado: '.$range
+            : trim(($label ? $label.': ' : '').$range);
+    }
+
+    private function runPeriodDate(LaboratoryBillingReportRun $run, string $column): ?Carbon
+    {
+        $raw = $run->getRawOriginal($column);
+
+        return $raw ? Carbon::parse($raw, 'UTC')->timezone(LaboratoryBillingReportPeriodResolver::TIMEZONE) : null;
     }
 }

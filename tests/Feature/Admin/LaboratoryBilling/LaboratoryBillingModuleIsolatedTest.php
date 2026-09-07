@@ -1119,6 +1119,221 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
     }
 
     #[Test]
+    public function manual_custom_range_persists_dates_filters_and_does_not_change_schedule(): void
+    {
+        Queue::fake();
+        Carbon::setTestNow(Carbon::parse('2026-09-18 10:00:00', 'America/Monterrey'));
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $nextRunAt = Carbon::parse('2026-09-21 14:00:00', 'UTC');
+        $schedule = $this->makeReportSchedule([
+            'period_type' => LaboratoryBillingReportSchedule::PERIOD_LAST_7_DAYS,
+            'filters' => ['brand' => 'olab'],
+            'next_run_at' => $nextRunAt,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-07-01',
+                'custom_to' => '2026-08-31',
+                'idempotency_key' => 'manual-custom-1',
+            ])
+            ->assertRedirect();
+
+        $run = LaboratoryBillingReportRun::query()->where('run_type', LaboratoryBillingReportRun::TYPE_MANUAL)->firstOrFail();
+
+        $this->assertSame('2026-07-01 06:00:00', $run->getRawOriginal('period_start'));
+        $this->assertSame('2026-09-01 05:59:59', $run->getRawOriginal('period_end'));
+        $this->assertSame(LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE, data_get($run->filters, '_period_type'));
+        $this->assertSame('olab', data_get($run->filters, 'brand'));
+        $this->assertSame($nextRunAt->toDateTimeString(), $schedule->fresh()->next_run_at?->toDateTimeString());
+        $this->assertSame(LaboratoryBillingReportSchedule::PERIOD_LAST_7_DAYS, $schedule->fresh()->period_type);
+        Queue::assertPushed(GenerateLaboratoryBillingReportJob::class, 1);
+    }
+
+    #[Test]
+    public function manual_custom_range_validation_rejects_invalid_future_and_too_large_ranges(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-18 10:00:00', 'America/Monterrey'));
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $schedule = $this->makeReportSchedule();
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '',
+                'custom_to' => '',
+            ])
+            ->assertSessionHasErrors(['custom_from', 'custom_to']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-08-31',
+                'custom_to' => '2026-08-01',
+            ])
+            ->assertSessionHasErrors(['custom_to']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-09-01',
+                'custom_to' => '2026-09-19',
+            ])
+            ->assertSessionHasErrors(['custom_to']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2025-09-17',
+                'custom_to' => '2026-09-18',
+            ])
+            ->assertSessionHasErrors(['custom_to']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-02-30',
+                'custom_to' => '2026-09-18',
+            ])
+            ->assertSessionHasErrors(['custom_from']);
+    }
+
+    #[Test]
+    public function custom_range_is_rejected_for_test_runs_and_schedule_configuration(): void
+    {
+        Queue::fake();
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $schedule = $this->makeReportSchedule();
+        $payload = [
+            'name' => 'No custom recurrent',
+            'is_active' => false,
+            'weekdays' => [],
+            'send_time' => '08:00',
+            'timezone' => 'America/Monterrey',
+            'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+            'recipients' => 'billing@example.test',
+            'included_sections' => ['activity'],
+            'include_excel' => true,
+        ];
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.store'), $payload)
+            ->assertSessionHasErrors(['period_type']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.test', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-08-01',
+                'custom_to' => '2026-08-02',
+            ])
+            ->assertSessionHasErrors(['period_type']);
+
+        Queue::assertNothingPushed();
+    }
+
+    #[Test]
+    public function manual_idempotency_token_prevents_duplicate_direct_clicks(): void
+    {
+        Queue::fake();
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $schedule = $this->makeReportSchedule();
+        $payload = [
+            'period_type' => LaboratoryBillingReportSchedule::PERIOD_LAST_30_DAYS,
+            'idempotency_key' => 'double-click-token',
+        ];
+
+        $this->actingAs($admin)
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), $payload)
+            ->assertRedirect();
+        $this->actingAs($admin)
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), $payload)
+            ->assertRedirect();
+
+        $this->assertSame(1, LaboratoryBillingReportRun::query()->where('run_type', LaboratoryBillingReportRun::TYPE_MANUAL)->count());
+        Queue::assertPushed(GenerateLaboratoryBillingReportJob::class, 1);
+    }
+
+    #[Test]
+    public function custom_preview_is_read_only_and_uses_selected_range(): void
+    {
+        Notification::fake();
+        Queue::fake();
+        Carbon::setTestNow(Carbon::parse('2026-09-18 10:00:00', 'America/Monterrey'));
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $schedule = $this->makeReportSchedule();
+        $runsBefore = LaboratoryBillingReportRun::query()->count();
+
+        $response = $this->actingAs($admin)
+            ->getJson(route('admin.laboratory-billing.automatic-reports.preview', [
+                'schedule' => $schedule->id,
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-07-01',
+                'custom_to' => '2026-08-31',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('period.is_custom', true)
+            ->assertJsonPath('period.type_label', 'Rango personalizado');
+
+        $this->assertStringContainsString('1 de julio de 2026', $response->json('period.date_label'));
+        $this->assertSame($runsBefore, LaboratoryBillingReportRun::query()->count());
+        Notification::assertNothingSent();
+        Queue::assertNothingPushed();
+    }
+
+    #[Test]
+    public function job_notification_excel_and_history_use_manual_run_stored_period(): void
+    {
+        Notification::fake();
+        Storage::fake('local');
+        config(['famedic.laboratory_billing.report_disk' => 'local']);
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $schedule = $this->makeReportSchedule();
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_MANUAL, [
+            'period_start' => Carbon::parse('2026-07-01 00:00:00', 'America/Monterrey')->utc(),
+            'period_end' => Carbon::parse('2026-08-31 23:59:59', 'America/Monterrey')->utc(),
+            'filters' => [
+                '_period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                '_custom_from' => '2026-07-01',
+                '_custom_to' => '2026-08-31',
+            ],
+        ]);
+
+        app(GenerateLaboratoryBillingReportJob::class, ['runId' => $run->id])->handle(
+            app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportPeriodResolver::class),
+            app(LaboratoryBillingReportDataService::class),
+            app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDeliveryService::class),
+        );
+
+        $run->refresh();
+        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load(Storage::disk('local')->path($run->file_path));
+
+        $this->assertSame('2026-07-01 06:00:00', $run->getRawOriginal('period_start'));
+        $this->assertSame('2026-09-01 05:59:59', $run->getRawOriginal('period_end'));
+        $this->assertStringContainsString('1 Jul 2026', (string) $spreadsheet->getSheetByName('Resumen')->getCell('B2')->getValue());
+        Notification::assertSentOnDemand(LaboratoryBillingAutomaticReportNotification::class);
+
+        $this->actingAs($admin)
+            ->get(route('admin.laboratory-billing.automatic-reports.index', ['tab' => 'history']))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('runs.data.0.period_label', 'Personalizado: 01/07/2026–31/08/2026'));
+    }
+
+    #[Test]
     public function paused_schedule_is_not_dispatched(): void
     {
         Queue::fake();

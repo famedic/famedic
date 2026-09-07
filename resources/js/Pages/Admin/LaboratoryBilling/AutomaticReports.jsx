@@ -120,6 +120,36 @@ function formatWeekdays(values = [], options = []) {
 	return labels.join(", ");
 }
 
+function groupedOptions(options = []) {
+	return options.reduce((groups, option) => {
+		const group = option.group || "Otros";
+		return { ...groups, [group]: [...(groups[group] || []), option] };
+	}, {});
+}
+
+function optionFor(value, options = []) {
+	return options.find((option) => option.value === value);
+}
+
+function dateInputToday() {
+	return new Date().toISOString().slice(0, 10);
+}
+
+function inclusiveDayCount(from, to) {
+	if (!from || !to) return null;
+	const start = new Date(`${from}T00:00:00`);
+	const end = new Date(`${to}T00:00:00`);
+	if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+
+	return Math.floor((end - start) / 86400000) + 1;
+}
+
+function manualToken() {
+	if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+
+	return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function statusTone(status) {
 	return {
 		pending: "bg-sky-50 text-sky-800 ring-sky-600/20",
@@ -177,7 +207,11 @@ function MetricCard({ label, value, helper, icon: Icon, tone = "slate" }) {
 
 function FieldError({ children }) {
 	if (!children) return null;
-	return <Text className="mt-1 text-sm text-red-600">{children}</Text>;
+	return (
+		<Text className="mt-1 text-sm text-red-600">
+			{Array.isArray(children) ? children[0] : children}
+		</Text>
+	);
 }
 
 function ToggleCard({ checked, label, description, onChange }) {
@@ -339,12 +373,23 @@ function FormDrawer({
 									form.setData("period_type", event.target.value)
 								}
 							>
-								{(options.periods || []).map((period) => (
-									<option key={period.value} value={period.value}>
-										{period.label}
-									</option>
-								))}
+								{Object.entries(groupedOptions(options.periods || [])).map(
+									([group, periods]) => (
+										<optgroup key={group} label={group}>
+											{periods.map((period) => (
+												<option key={period.value} value={period.value}>
+													{period.label}
+												</option>
+											))}
+										</optgroup>
+									),
+								)}
 							</Select>
+							{optionFor(form.data.period_type, options.periods || []) ? (
+								<Text className={`mt-1 text-sm ${billingSecondaryTextClass}`}>
+									{optionFor(form.data.period_type, options.periods || []).example}
+								</Text>
+							) : null}
 							<FieldError>{form.errors.period_type}</FieldError>
 						</Field>
 						<Field>
@@ -726,6 +771,203 @@ function PreviewDrawer({
 	);
 }
 
+function ManualRunDialog({
+	open,
+	schedule,
+	options,
+	state,
+	preview,
+	loading,
+	errors,
+	processing,
+	onClose,
+	onChange,
+	onQuickRange,
+	onPreview,
+	onSubmit,
+}) {
+	if (!open || !schedule) return null;
+
+	const selectedConfigured = optionFor(schedule.period_type, options.periods || []);
+	const selectedManual = optionFor(state.period_type, options.manualPeriods || []);
+	const dayCount = inclusiveDayCount(state.custom_from, state.custom_to);
+	const customEnabled = state.period_type === "custom_range";
+	const tooLong = customEnabled && dayCount !== null && dayCount > 366;
+	const inverted = customEnabled && dayCount !== null && dayCount < 1;
+	const future = customEnabled && state.custom_to > dateInputToday();
+
+	return (
+		<Dialog open={open} onClose={onClose} size="3xl">
+			<DialogTitle>Ejecutar reporte manual</DialogTitle>
+			<DialogDescription>
+				{schedule.name} conservará su programación y próxima ejecución.
+			</DialogDescription>
+
+			<DialogBody className="space-y-5">
+				<div className="grid gap-3 sm:grid-cols-2">
+					<ToggleCard
+						checked={!customEnabled}
+						label="Usar periodo configurado"
+						description={
+							selectedConfigured?.label
+								? `${selectedConfigured.label} · ${selectedConfigured.example}`
+								: "Usa el periodo recurrente guardado."
+						}
+						onChange={() =>
+							onChange({
+								period_type: schedule.period_type || "previous_day",
+								custom_from: "",
+								custom_to: "",
+							})
+						}
+					/>
+					<ToggleCard
+						checked={customEnabled}
+						label="Utilizar un rango personalizado"
+						description="Disponible solo para esta ejecución manual."
+						onChange={() =>
+							onChange({
+								period_type: "custom_range",
+								custom_from: state.custom_from,
+								custom_to: state.custom_to,
+							})
+						}
+					/>
+				</div>
+
+				{customEnabled ? (
+					<div className="space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+						<div className="flex flex-wrap gap-2">
+							{(options.quickRanges || []).map((range) => (
+								<Button
+									key={range.value}
+									type="button"
+									outline
+									onClick={() => onQuickRange(range)}
+								>
+									{range.label}
+								</Button>
+							))}
+						</div>
+						<div className="grid gap-4 sm:grid-cols-2">
+							<Field>
+								<Label htmlFor="manual-custom-from">Fecha inicial</Label>
+								<Input
+									id="manual-custom-from"
+									type="date"
+									max={dateInputToday()}
+									value={state.custom_from}
+									onChange={(event) =>
+										onChange({ custom_from: event.target.value })
+									}
+									invalid={Boolean(errors.custom_from || inverted)}
+								/>
+								<FieldError>
+									{errors.custom_from ||
+										(inverted ? "La fecha inicial no puede ser posterior." : null)}
+								</FieldError>
+							</Field>
+							<Field>
+								<Label htmlFor="manual-custom-to">Fecha final</Label>
+								<Input
+									id="manual-custom-to"
+									type="date"
+									max={dateInputToday()}
+									value={state.custom_to}
+									onChange={(event) =>
+										onChange({ custom_to: event.target.value })
+									}
+									invalid={Boolean(errors.custom_to || tooLong || future)}
+								/>
+								<FieldError>
+									{errors.custom_to ||
+										(tooLong
+											? "Máximo 366 días por ejecución."
+											: future
+												? "No se permiten fechas futuras."
+												: null)}
+								</FieldError>
+							</Field>
+						</div>
+						<div className="rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-700 ring-1 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700">
+							{state.custom_from && state.custom_to ? (
+								<>
+									Periodo personalizado: {state.custom_from}–{state.custom_to}
+									{dayCount && dayCount > 0 ? ` · ${dayCount} días` : ""}
+								</>
+							) : (
+								"Selecciona una fecha inicial y final."
+							)}
+						</div>
+					</div>
+				) : (
+					<div className="rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-700 ring-1 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700">
+						{selectedManual?.label || selectedConfigured?.label} ·{" "}
+						{selectedManual?.example || selectedConfigured?.example}
+					</div>
+				)}
+
+				<div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<div>
+							<p className="font-medium text-zinc-950 dark:text-white">
+								Vista previa de esta ejecución
+							</p>
+							<p className={`text-sm ${billingMutedTextClass}`}>
+								Se actualiza solo cuando lo solicitas.
+							</p>
+						</div>
+						<Button
+							type="button"
+							outline
+							onClick={onPreview}
+							disabled={loading || processing}
+						>
+							<EyeIcon data-slot="icon" />
+							{loading ? "Actualizando..." : "Actualizar vista previa"}
+						</Button>
+					</div>
+					{preview ? (
+						<div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+							<div>
+								<p className={billingMutedTextClass}>
+									{preview.period?.is_custom
+										? "Periodo personalizado"
+										: preview.period?.type_label}
+								</p>
+								<p className="font-medium text-zinc-900 dark:text-zinc-100">
+									{preview.period?.date_label || preview.period?.label}
+								</p>
+							</div>
+							<div>
+								<p className={billingMutedTextClass}>Métricas</p>
+								<p className="font-medium text-zinc-900 dark:text-zinc-100">
+									{preview.metrics?.received ?? 0} recibidas ·{" "}
+									{preview.metrics?.pending_backlog ?? 0} pendientes
+								</p>
+							</div>
+						</div>
+					) : null}
+					<FieldError>{errors.preview}</FieldError>
+				</div>
+			</DialogBody>
+
+			<DialogActions>
+				<Button type="button" plain onClick={onClose} disabled={processing}>
+					Cancelar
+				</Button>
+				<Button
+					type="button"
+					onClick={onSubmit}
+					disabled={processing || loading || tooLong || inverted || future}
+				>
+					{processing ? "Encolando..." : "Generar reporte"}
+				</Button>
+			</DialogActions>
+		</Dialog>
+	);
+}
+
 export default function AutomaticReports({
 	summary = {},
 	schedules,
@@ -738,8 +980,20 @@ export default function AutomaticReports({
 	const [activeTab, setActiveTab] = useState(filters.tab || "configurations");
 	const [editing, setEditing] = useState(null);
 	const [isFormOpen, setIsFormOpen] = useState(false);
-	const [manualPeriods, setManualPeriods] = useState({});
 	const [manualProcessing, setManualProcessing] = useState({});
+	const [manualDialog, setManualDialog] = useState({
+		open: false,
+		schedule: null,
+		state: {
+			period_type: "previous_day",
+			custom_from: "",
+			custom_to: "",
+			idempotency_key: "",
+		},
+		preview: null,
+		loading: false,
+		errors: {},
+	});
 	const [previewState, setPreviewState] = useState({
 		open: false,
 		schedule: null,
@@ -839,13 +1093,13 @@ export default function AutomaticReports({
 		);
 	};
 
-	const dispatchRun = (schedule, type) => {
-		const period = manualPeriods[schedule.id] || {};
+	const dispatchRun = (schedule, type, payload = null) => {
+		const period = payload || {};
 		const message =
 			type === "test"
 				? "¿Enviar prueba del reporte a los destinatarios configurados?"
 				: "¿Ejecutar ahora este reporte y enviar correo?";
-		if (!window.confirm(message)) return;
+		if (!window.confirm(message)) return false;
 
 		const key = `${schedule.id}:${type}`;
 		setManualProcessing((current) => ({ ...current, [key]: true }));
@@ -867,6 +1121,126 @@ export default function AutomaticReports({
 					}),
 			},
 		);
+
+		return true;
+	};
+
+	const openManualDialog = (schedule) => {
+		setManualDialog({
+			open: true,
+			schedule,
+			state: {
+				period_type: schedule.period_type || "previous_day",
+				custom_from: "",
+				custom_to: "",
+				idempotency_key: manualToken(),
+			},
+			preview: null,
+			loading: false,
+			errors: {},
+		});
+	};
+
+	const closeManualDialog = () => {
+		if (manualProcessing[`${manualDialog.schedule?.id}:manual`]) return;
+		setManualDialog((current) => ({ ...current, open: false }));
+	};
+
+	const updateManualState = (patch) => {
+		setManualDialog((current) => ({
+			...current,
+			state: { ...current.state, ...patch },
+			preview: null,
+			errors: {},
+		}));
+	};
+
+	const applyQuickRange = (range) => {
+		updateManualState({
+			period_type: "custom_range",
+			custom_from: range.from,
+			custom_to: range.to,
+		});
+	};
+
+	const validateManualState = () => {
+		const state = manualDialog.state;
+		const errors = {};
+
+		if (state.period_type === "custom_range") {
+			const days = inclusiveDayCount(state.custom_from, state.custom_to);
+			if (!state.custom_from) errors.custom_from = "Selecciona la fecha inicial.";
+			if (!state.custom_to) errors.custom_to = "Selecciona la fecha final.";
+			if (days !== null && days < 1) {
+				errors.custom_from = "La fecha inicial no puede ser posterior.";
+			}
+			if (state.custom_to && state.custom_to > dateInputToday()) {
+				errors.custom_to = "No se permiten fechas futuras.";
+			}
+			if (days !== null && days > 366) {
+				errors.custom_to = "Máximo 366 días por ejecución.";
+			}
+		}
+
+		setManualDialog((current) => ({ ...current, errors }));
+
+		return Object.keys(errors).length === 0;
+	};
+
+	const manualPayload = () => {
+		const state = manualDialog.state;
+		return Object.fromEntries(
+			Object.entries({
+				period_type: state.period_type,
+				custom_from:
+					state.period_type === "custom_range" ? state.custom_from : undefined,
+				custom_to:
+					state.period_type === "custom_range" ? state.custom_to : undefined,
+				idempotency_key: state.idempotency_key,
+			}).filter(([, value]) => value !== undefined && value !== ""),
+		);
+	};
+
+	const previewManualRun = async () => {
+		if (!manualDialog.schedule || manualDialog.loading || !validateManualState()) {
+			return;
+		}
+
+		setManualDialog((current) => ({ ...current, loading: true, errors: {} }));
+
+		try {
+			const response = await window.axios.get(
+				route(
+					"admin.laboratory-billing.automatic-reports.preview",
+					manualDialog.schedule.id,
+				),
+				{ params: manualPayload() },
+			);
+			setManualDialog((current) => ({
+				...current,
+				loading: false,
+				preview: response.data,
+			}));
+		} catch (error) {
+			setManualDialog((current) => ({
+				...current,
+				loading: false,
+				errors: {
+					...(error?.response?.data?.errors || {}),
+					preview:
+						error?.response?.data?.message ||
+						"No fue posible preparar la vista previa.",
+				},
+			}));
+		}
+	};
+
+	const submitManualRun = () => {
+		if (!manualDialog.schedule || !validateManualState()) return;
+
+		if (dispatchRun(manualDialog.schedule, "manual", manualPayload())) {
+			setManualDialog((current) => ({ ...current, open: false }));
+		}
 	};
 
 	const loadPreview = async (schedule, asTest = false) => {
@@ -1100,12 +1474,12 @@ export default function AutomaticReports({
 																<DropdownItem onClick={() => startEdit(schedule)}>
 																	Editar
 																</DropdownItem>
-																<DropdownItem
-																	disabled={manualProcessing[manualKey]}
-																	onClick={() => dispatchRun(schedule, "manual")}
-																>
-																	Ejecutar ahora
-																</DropdownItem>
+																	<DropdownItem
+																		disabled={manualProcessing[manualKey]}
+																		onClick={() => openManualDialog(schedule)}
+																	>
+																		Ejecutar ahora
+																	</DropdownItem>
 																<DropdownItem
 																	disabled={manualProcessing[stateKey]}
 																	onClick={() =>
@@ -1230,7 +1604,7 @@ export default function AutomaticReports({
 													<TableCell>
 														<StatusPill status={run.status} />
 													</TableCell>
-													<TableCell>{run.period || "-"}</TableCell>
+													<TableCell>{run.period_label || run.period || "-"}</TableCell>
 													<TableCell>
 														<div className="grid min-w-48 grid-cols-2 gap-2 text-xs">
 															<span>Recibidas: {run.metrics?.received ?? 0}</span>
@@ -1287,6 +1661,26 @@ export default function AutomaticReports({
 				onSubmit={submit}
 				onToggleArray={toggleArray}
 				onRemoveRecipient={removeRecipient}
+			/>
+
+			<ManualRunDialog
+				open={manualDialog.open}
+				schedule={manualDialog.schedule}
+				options={options}
+				state={manualDialog.state}
+				preview={manualDialog.preview}
+				loading={manualDialog.loading}
+				errors={manualDialog.errors}
+				processing={
+					manualDialog.schedule
+						? Boolean(manualProcessing[`${manualDialog.schedule.id}:manual`])
+						: false
+				}
+				onClose={closeManualDialog}
+				onChange={updateManualState}
+				onQuickRange={applyQuickRange}
+				onPreview={previewManualRun}
+				onSubmit={submitManualRun}
 			/>
 
 			<PreviewDrawer

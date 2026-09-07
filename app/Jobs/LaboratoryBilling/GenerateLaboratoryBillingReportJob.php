@@ -3,14 +3,17 @@
 namespace App\Jobs\LaboratoryBilling;
 
 use App\Models\LaboratoryBillingReportRun;
+use App\Models\LaboratoryBillingReportSchedule;
 use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDataService;
 use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDeliveryService;
 use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportPeriodResolver;
+use InvalidArgumentException;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -56,12 +59,28 @@ class GenerateLaboratoryBillingReportJob implements ShouldQueue
 
         try {
             $periodType = (string) data_get($run->filters, '_period_type', $run->schedule->period_type);
-            $period = $periods->resolve(
-                $periodType,
-                now(),
-                data_get($run->filters, '_custom_from'),
-                data_get($run->filters, '_custom_to'),
-            );
+
+            if ($run->run_type === LaboratoryBillingReportRun::TYPE_SCHEDULED && $periodType === LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE) {
+                throw new InvalidArgumentException('Scheduled reports cannot use a custom date range.');
+            }
+
+            $storedStart = $run->getRawOriginal('period_start');
+            $storedEnd = $run->getRawOriginal('period_end');
+            $period = $storedStart && $storedEnd
+                ? [
+                    'start' => Carbon::parse($storedStart, 'UTC')->timezone(LaboratoryBillingReportPeriodResolver::TIMEZONE),
+                    'end' => Carbon::parse($storedEnd, 'UTC')->timezone(LaboratoryBillingReportPeriodResolver::TIMEZONE),
+                    'start_utc' => Carbon::parse($storedStart, 'UTC'),
+                    'end_utc' => Carbon::parse($storedEnd, 'UTC'),
+                    'label' => Carbon::parse($storedStart, 'UTC')->timezone(LaboratoryBillingReportPeriodResolver::TIMEZONE)->isoFormat('D MMM Y h:mm a').' - '.Carbon::parse($storedEnd, 'UTC')->timezone(LaboratoryBillingReportPeriodResolver::TIMEZONE)->isoFormat('D MMM Y h:mm a'),
+                    'timezone' => LaboratoryBillingReportPeriodResolver::TIMEZONE,
+                ]
+                : $periods->resolve(
+                    $periodType,
+                    now(),
+                    data_get($run->filters, '_custom_from'),
+                    data_get($run->filters, '_custom_to'),
+                );
 
             $reportData = $data->build($period, $run->filters ?? [], now(LaboratoryBillingReportPeriodResolver::TIMEZONE));
 

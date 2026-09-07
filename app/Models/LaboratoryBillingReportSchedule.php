@@ -14,10 +14,17 @@ class LaboratoryBillingReportSchedule extends Model
 
     public const PERIOD_PREVIOUS_DAY = 'previous_day';
     public const PERIOD_LAST_7_DAYS = 'last_7_days';
+    public const PERIOD_LAST_15_DAYS = 'last_15_days';
+    public const PERIOD_LAST_30_DAYS = 'last_30_days';
+    public const PERIOD_LAST_60_DAYS = 'last_60_days';
+    public const PERIOD_LAST_90_DAYS = 'last_90_days';
     public const PERIOD_CURRENT_WEEK = 'current_week';
     public const PERIOD_PREVIOUS_WEEK = 'previous_week';
     public const PERIOD_CURRENT_MONTH = 'current_month';
     public const PERIOD_PREVIOUS_MONTH = 'previous_month';
+    public const PERIOD_LAST_2_COMPLETE_MONTHS = 'last_2_complete_months';
+    public const PERIOD_LAST_3_COMPLETE_MONTHS = 'last_3_complete_months';
+    public const PERIOD_CUSTOM_RANGE = 'custom_range';
 
     public const SECTION_ACTIVITY = 'activity';
     public const SECTION_BACKLOG = 'backlog';
@@ -65,12 +72,26 @@ class LaboratoryBillingReportSchedule extends Model
     public static function periodOptions(): array
     {
         return [
-            ['value' => self::PERIOD_PREVIOUS_DAY, 'label' => 'Día anterior'],
-            ['value' => self::PERIOD_LAST_7_DAYS, 'label' => 'Últimos 7 días'],
-            ['value' => self::PERIOD_CURRENT_WEEK, 'label' => 'Semana actual'],
-            ['value' => self::PERIOD_PREVIOUS_WEEK, 'label' => 'Semana anterior'],
-            ['value' => self::PERIOD_CURRENT_MONTH, 'label' => 'Mes actual'],
-            ['value' => self::PERIOD_PREVIOUS_MONTH, 'label' => 'Mes anterior'],
+            ['value' => self::PERIOD_PREVIOUS_DAY, 'label' => 'Día anterior', 'group' => 'Días'],
+            ['value' => self::PERIOD_LAST_7_DAYS, 'label' => 'Últimos 7 días', 'group' => 'Días'],
+            ['value' => self::PERIOD_LAST_15_DAYS, 'label' => 'Últimos 15 días', 'group' => 'Días'],
+            ['value' => self::PERIOD_LAST_30_DAYS, 'label' => 'Últimos 30 días', 'group' => 'Días'],
+            ['value' => self::PERIOD_LAST_60_DAYS, 'label' => 'Últimos 60 días', 'group' => 'Días'],
+            ['value' => self::PERIOD_LAST_90_DAYS, 'label' => 'Últimos 90 días', 'group' => 'Días'],
+            ['value' => self::PERIOD_CURRENT_WEEK, 'label' => 'Semana actual', 'group' => 'Semanas'],
+            ['value' => self::PERIOD_PREVIOUS_WEEK, 'label' => 'Semana anterior', 'group' => 'Semanas'],
+            ['value' => self::PERIOD_CURRENT_MONTH, 'label' => 'Mes actual', 'group' => 'Meses'],
+            ['value' => self::PERIOD_PREVIOUS_MONTH, 'label' => 'Mes anterior', 'group' => 'Meses'],
+            ['value' => self::PERIOD_LAST_2_COMPLETE_MONTHS, 'label' => 'Últimos 2 meses completos', 'group' => 'Meses'],
+            ['value' => self::PERIOD_LAST_3_COMPLETE_MONTHS, 'label' => 'Últimos 3 meses completos', 'group' => 'Meses'],
+        ];
+    }
+
+    public static function manualPeriodOptions(): array
+    {
+        return [
+            ...self::periodOptions(),
+            ['value' => self::PERIOD_CUSTOM_RANGE, 'label' => 'Rango personalizado', 'group' => 'Manual'],
         ];
     }
 
