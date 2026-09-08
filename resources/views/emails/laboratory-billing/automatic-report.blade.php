@@ -3,8 +3,10 @@
     $aging = $metrics['aging'] ?? [];
     $missing = $metrics['missing_files'] ?? [];
     $filters = $reportData['applied_filters'] ?? [];
+    $famedicLogoUrl = $famedicLogoUrl ?? rtrim((string) config('famedic.email_public_url'), '/').'/images/logo.png';
     $generatedAt = localizedDate($run->started_at ?? now('America/Monterrey'))?->timezone('America/Monterrey')->isoFormat('D MMM Y h:mm a');
-    $averageResponse = ($metrics['average_response_hours'] ?? null) === null ? 'Sin datos' : $metrics['average_response_hours'].' h';
+    $averageResponse = data_get($metrics, 'average_response_duration.value', 'Sin datos');
+    $averageResponseDetail = data_get($metrics, 'average_response_duration.detail');
     $oldestPending = data_get($metrics, 'oldest_pending.formatted_requested_at') ?: 'Sin solicitudes pendientes en el periodo';
     $pending = $metrics['pending_period'] ?? $metrics['pending_backlog'] ?? 0;
     $overdue = $metrics['overdue_period'] ?? $metrics['overdue_backlog'] ?? 0;
@@ -21,7 +23,7 @@
         ['label' => 'Pendientes del periodo', 'value' => $pending, 'color' => '#b45309', 'bg' => '#fffbeb'],
         ['label' => 'Atrasadas del periodo', 'value' => $overdue, 'color' => '#b91c1c', 'bg' => '#fef2f2'],
         ['label' => 'Cumplimiento', 'value' => ($metrics['compliance_percent'] ?? 0).'%', 'color' => '#334155', 'bg' => '#f8fafc'],
-        ['label' => 'Tiempo promedio', 'value' => $averageResponse, 'color' => '#334155', 'bg' => '#f8fafc'],
+        ['label' => 'Tiempo promedio de atención', 'value' => $averageResponse, 'detail' => $averageResponseDetail, 'color' => '#334155', 'bg' => '#f8fafc'],
     ];
 @endphp
 <!doctype html>
@@ -29,7 +31,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Reporte de facturación de laboratorio</title>
+    <title>Reporte de solicitudes de facturación GDA</title>
 </head>
 <body style="margin:0; padding:0; background:#f3f6fa; color:#0f172a; font-family:Arial, Helvetica, sans-serif;">
     <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">
@@ -43,12 +45,22 @@
                         <td style="padding:28px 28px 20px 28px; background:#0f172a;">
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                                 <tr>
-                                    <td style="font-size:20px; line-height:26px; font-weight:700; color:#ffffff;">Famedic</td>
+                                    <td style="font-size:18px; line-height:24px; font-weight:700; color:#ffffff;">
+                                        <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                                            <tr>
+                                                <td valign="middle" style="padding:0 10px 0 0;">
+                                                    <img src="{{ $famedicLogoUrl }}" alt="Logo Famedic" width="34" style="display:block; width:34px; max-width:34px; height:auto; border:0; outline:none; text-decoration:none;">
+                                                </td>
+                                                <td valign="middle" style="font-size:18px; line-height:24px; font-weight:700; color:#ffffff;">Famedic Plataforma</td>
+                                            </tr>
+                                        </table>
+                                    </td>
                                     <td align="right" style="font-size:13px; line-height:18px; color:#cbd5e1;">{{ $reportData['run_type_label'] ?? ucfirst((string) $run->run_type) }}</td>
                                 </tr>
                             </table>
-                            <div style="font-size:24px; line-height:31px; font-weight:700; color:#ffffff; margin-top:18px;">Reporte de facturación de laboratorio</div>
-                            <div style="font-size:14px; line-height:20px; color:#cbd5e1; margin-top:6px;">{{ $schedule->name }}</div>
+                            <div style="font-size:25px; line-height:32px; font-weight:700; color:#ffffff; margin-top:18px;">Reporte de solicitudes de facturación GDA</div>
+                            <div style="font-size:15px; line-height:21px; color:#cbd5e1; margin-top:5px;">Facturación individual de pacientes</div>
+                            <div style="font-size:13px; line-height:18px; color:#94a3b8; margin-top:10px;">{{ $schedule->name }}</div>
                             @if ($isTest)
                                 <div style="font-size:13px; line-height:18px; color:#fde68a; margin-top:10px;">Prueba de configuración y contenido.</div>
                             @endif
@@ -60,7 +72,8 @@
                                 <tr>
                                     <td style="padding:18px 18px;">
                                         <div style="font-size:13px; line-height:18px; color:#1d4ed8; font-weight:700; text-transform:uppercase;">Periodo analizado</div>
-                                        <div style="font-size:18px; line-height:25px; color:#0f172a; font-weight:700; margin-top:4px;">{{ $period['label'] ?? '' }}</div>
+                                        <div style="font-size:20px; line-height:26px; color:#0f172a; font-weight:700; margin-top:4px;">{{ $period['name'] ?? 'Periodo seleccionado' }}</div>
+                                        <div style="font-size:14px; line-height:20px; color:#334155; margin-top:3px;">{{ $period['date_label'] ?? ($period['label'] ?? '') }}</div>
                                         <div style="font-size:14px; line-height:20px; color:#334155; margin-top:6px;">Todas las métricas corresponden únicamente a este periodo.</div>
                                     </td>
                                 </tr>
@@ -79,6 +92,9 @@
                                                         <td style="padding:16px;">
                                                             <div style="font-size:13px; line-height:18px; color:#475569;">{{ $card['label'] }}</div>
                                                             <div style="font-size:26px; line-height:32px; color:{{ $card['color'] }}; font-weight:700; margin-top:6px;">{{ $card['value'] }}</div>
+                                                            @if (($card['detail'] ?? null) !== null)
+                                                                <div style="font-size:12px; line-height:17px; color:#64748b; margin-top:4px;">{{ $card['detail'] }}</div>
+                                                            @endif
                                                         </td>
                                                     </tr>
                                                 </table>

@@ -95,7 +95,14 @@ class GenerateLaboratoryBillingReportJob implements ShouldQueue
                     data_get($run->filters, '_custom_to'),
                 );
 
-            $reportData = $data->build($period, $run->filters ?? [], now(LaboratoryBillingReportPeriodResolver::TIMEZONE));
+            $reportData = $data->build(
+                $period,
+                [
+                    ...($run->filters ?? []),
+                    '_period_type' => $periodType,
+                ],
+                now(LaboratoryBillingReportPeriodResolver::TIMEZONE)
+            );
 
             Log::info('[Laboratory Billing Report] report data built', [
                 'run_id' => $run->id,

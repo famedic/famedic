@@ -609,6 +609,12 @@ function PreviewDrawer({
 		["Completadas del periodo", metrics.completed ?? 0],
 		["Pendientes del periodo", metrics.pending_period ?? metrics.pending_backlog ?? 0],
 		["Atrasadas del periodo", metrics.overdue_period ?? metrics.overdue_backlog ?? 0],
+		["Cumplimiento", `${metrics.compliance_percent ?? 0}%`],
+		[
+			"Tiempo promedio de atención",
+			metrics.average_response_duration?.value ?? "Sin datos",
+			metrics.average_response_duration?.detail,
+		],
 	];
 
 	return (
@@ -667,7 +673,14 @@ function PreviewDrawer({
 					) : (
 						<div className="mx-auto max-w-xl overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-zinc-950/10 dark:bg-zinc-900 dark:ring-white/10">
 							<div className="bg-famedic-dark px-5 py-4 text-white">
-								<p className="text-sm font-semibold tracking-wide">FAMEDIC</p>
+								<div className="flex items-center gap-2">
+									<img
+										src="/images/logo.png"
+										alt="Logo Famedic"
+										className="h-7 w-auto"
+									/>
+									<p className="text-sm font-semibold">Famedic Plataforma</p>
+								</div>
 								<p className="mt-3 text-xs text-cyan-100">Asunto</p>
 								<h3 className="text-base font-semibold">{preview?.subject}</h3>
 							</div>
@@ -679,8 +692,13 @@ function PreviewDrawer({
 								) : null}
 								<div>
 									<h3 className="text-xl font-semibold text-zinc-950 dark:text-white">
-										{preview?.copy?.headline || "Resumen de facturación"}
+										{preview?.copy?.headline ||
+											"Reporte de solicitudes de facturación GDA"}
 									</h3>
+									<p className={`mt-1 text-sm ${billingMutedTextClass}`}>
+										{preview?.copy?.subtitle ||
+											"Facturación individual de pacientes"}
+									</p>
 									<p className={`mt-2 text-sm ${billingSecondaryTextClass}`}>
 										{preview?.copy?.intro}
 									</p>
@@ -693,7 +711,10 @@ function PreviewDrawer({
 										<div>
 											<dt className={billingMutedTextClass}>Periodo</dt>
 											<dd className="font-medium text-zinc-900 dark:text-zinc-100">
-												{preview?.period?.label}
+												{preview?.period?.name}
+											</dd>
+											<dd className={billingSecondaryTextClass}>
+												{preview?.period?.date_label}
 											</dd>
 										</div>
 										<div>
@@ -717,7 +738,7 @@ function PreviewDrawer({
 									</dl>
 								</div>
 								<div className="grid gap-3 sm:grid-cols-2">
-									{metricCards.map(([label, value]) => (
+									{metricCards.map(([label, value, detail]) => (
 										<div
 											key={label}
 											className="rounded-lg bg-zinc-50 p-4 ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700"
@@ -728,6 +749,11 @@ function PreviewDrawer({
 											<p className="mt-1 text-2xl font-semibold text-zinc-950 dark:text-white">
 												{value}
 											</p>
+											{detail ? (
+												<p className={`mt-1 text-xs ${billingMutedTextClass}`}>
+													{detail}
+												</p>
+											) : null}
 										</div>
 									))}
 								</div>
@@ -745,10 +771,8 @@ function PreviewDrawer({
 											Cumplimiento
 										</p>
 										<p className={billingSecondaryTextClass}>
-											{metrics.compliance_percent ?? 0}% · Promedio{" "}
-											{metrics.average_response_hours === null
-												? "sin datos"
-												: `${metrics.average_response_hours} h`}
+											{metrics.compliance_definition ??
+												"Solicitudes completadas del periodo / solicitudes recibidas del periodo."}
 										</p>
 									</div>
 									<div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">

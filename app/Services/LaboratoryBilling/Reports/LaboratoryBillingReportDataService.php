@@ -16,6 +16,7 @@ class LaboratoryBillingReportDataService
     public function __construct(
         private LaboratoryBillingStatusResolver $resolver,
         private LaboratoryBillingPresenter $presenter,
+        private LaboratoryBillingReportFormatter $formatter,
     ) {}
 
     public function build(array $period, array $filters = [], ?Carbon $asOf = null): array
@@ -57,10 +58,18 @@ class LaboratoryBillingReportDataService
             ->filter(fn ($value) => $value !== null)
             ->avg();
 
+        $averageResponseHours = $avgResponse !== null ? round((float) $avgResponse, 2) : null;
         $oldestPending = $pendingRows->sortBy('requested_at')->first();
 
         return [
-            'period' => $period,
+            'period' => [
+                ...$period,
+                'name' => $this->formatter->periodName(data_get($filters, '_period_type')),
+                'date_label' => $this->formatter->periodDateLabel(
+                    Carbon::parse($period['start'])->timezone(LaboratoryBillingReportPeriodResolver::TIMEZONE),
+                    Carbon::parse($period['end'])->timezone(LaboratoryBillingReportPeriodResolver::TIMEZONE),
+                ),
+            ],
             'generated_at' => $asOf->toIso8601String(),
             'backlog_as_of' => $asOf->toIso8601String(),
             'applied_filters' => $this->appliedFilters($filters),
@@ -74,7 +83,8 @@ class LaboratoryBillingReportDataService
                 'pending_backlog' => $pendingCount,
                 'overdue_backlog' => $overdueCount,
                 'compliance_percent' => $receivedCount > 0 ? round(($completedCount / $receivedCount) * 100, 1) : 0.0,
-                'average_response_hours' => $avgResponse !== null ? round((float) $avgResponse, 2) : null,
+                'average_response_hours' => $averageResponseHours,
+                'average_response_duration' => $this->formatter->averageResponseDuration($averageResponseHours),
                 'compliance_definition' => 'Solicitudes completadas del periodo / solicitudes recibidas del periodo.',
                 'oldest_pending' => $oldestPending,
                 'aging' => $this->agingBuckets($pendingRows),

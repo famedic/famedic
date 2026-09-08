@@ -164,7 +164,14 @@ class AutomaticReportsController extends Controller
             $request->input('custom_from'),
             $request->input('custom_to'),
         );
-        $reportData = $dataService->build($period, $schedule->filters ?? [], now(LaboratoryBillingReportPeriodResolver::TIMEZONE));
+        $reportData = $dataService->build(
+            $period,
+            [
+                ...($schedule->filters ?? []),
+                '_period_type' => $periodType,
+            ],
+            now(LaboratoryBillingReportPeriodResolver::TIMEZONE)
+        );
         $sections = $schedule->included_sections ?? [];
         $metrics = $reportData['metrics'] ?? [];
         $isTest = $request->boolean('test');
@@ -181,7 +188,8 @@ class AutomaticReportsController extends Controller
             ],
             'period' => [
                 'label' => $period['label'],
-                'date_label' => $periodResolver->dateOnlyLabel($period['start'], $period['end']),
+                'name' => data_get($reportData, 'period.name'),
+                'date_label' => data_get($reportData, 'period.date_label'),
                 'timezone' => $period['timezone'],
                 'type' => $periodType,
                 'type_label' => $periodResolver->labelFor($periodType),
@@ -197,6 +205,7 @@ class AutomaticReportsController extends Controller
                 'overdue_backlog' => $metrics['overdue_backlog'] ?? 0,
                 'compliance_percent' => $metrics['compliance_percent'] ?? 0,
                 'average_response_hours' => $metrics['average_response_hours'] ?? null,
+                'average_response_duration' => $metrics['average_response_duration'] ?? ['value' => 'Sin datos', 'detail' => null],
                 'oldest_pending' => data_get($metrics, 'oldest_pending.billing.requested_at') ?? data_get($metrics, 'oldest_pending.formatted_requested_at'),
                 'aging' => $metrics['aging'] ?? [],
                 'missing_files' => $metrics['missing_files'] ?? [],
@@ -216,7 +225,8 @@ class AutomaticReportsController extends Controller
                 'download_url' => null,
             ],
             'copy' => [
-                'headline' => 'Resumen de facturación',
+                'headline' => 'Reporte de solicitudes de facturación GDA',
+                'subtitle' => 'Facturación individual de pacientes',
                 'intro' => 'Todas las métricas corresponden únicamente al periodo seleccionado.',
                 'closing' => 'Consulta el módulo de facturación para revisar el detalle operativo.',
             ],

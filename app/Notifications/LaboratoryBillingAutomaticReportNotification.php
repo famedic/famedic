@@ -41,6 +41,7 @@ class LaboratoryBillingAutomaticReportNotification extends Notification
                 'metrics' => $metrics,
                 'downloadUrl' => $this->downloadUrl,
                 'attachmentPath' => $this->attachmentPath,
+                'famedicLogoUrl' => $this->emailPublicAssetUrl('images/logo.png'),
                 'moduleUrl' => route('admin.laboratory-billing.automatic-reports.index'),
                 'isTest' => $isTest,
             ]);
@@ -65,5 +66,13 @@ class LaboratoryBillingAutomaticReportNotification extends Notification
         }
 
         return localizedDate($start)?->format('d/m/Y').'–'.localizedDate($end)?->format('d/m/Y');
+    }
+
+    private function emailPublicAssetUrl(string $path): string
+    {
+        $base = rtrim((string) config('famedic.email_public_url'), '/');
+        $path = ltrim($path, '/');
+
+        return $base.'/'.$path;
     }
 }

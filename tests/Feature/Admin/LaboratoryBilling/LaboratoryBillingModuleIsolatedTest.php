@@ -928,7 +928,11 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             '2026-08-10',
             '2026-09-08',
         );
-        $filters = ['brand' => 'olab', 'laboratory_store_id' => $store->id];
+        $filters = [
+            'brand' => 'olab',
+            'laboratory_store_id' => $store->id,
+            '_period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+        ];
         $report = app(LaboratoryBillingReportDataService::class)->build($period, $filters, now('America/Monterrey'));
         $periodIds = $report['rows']['received']->pluck('id');
 
@@ -951,10 +955,12 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         $this->assertFalse($periodIds->contains($otherBrand['request']->id));
         $this->assertStringContainsString('10 Aug 2026 12:00 am', $report['period']['label']);
         $this->assertStringContainsString('8 Sep 2026 11:59 pm', $report['period']['label']);
+        $this->assertSame('Rango personalizado', $report['period']['name']);
+        $this->assertSame('Del 10 de agosto de 2026 al 8 de septiembre de 2026', $report['period']['date_label']);
         $this->assertSame('America/Monterrey', $report['period']['timezone']);
 
         $schedule = $this->makeReportSchedule([
-            'filters' => $filters,
+            'filters' => ['brand' => 'olab', 'laboratory_store_id' => $store->id],
             'included_sections' => ['activity', 'backlog', 'overdue', 'completed', 'aging', 'missing_files'],
         ]);
         $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
@@ -971,6 +977,10 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         $this->assertSame($report['metrics']['completed'], $preview->json('metrics.completed'));
         $this->assertSame($report['metrics']['pending_backlog'], $preview->json('metrics.pending_backlog'));
         $this->assertSame($report['metrics']['overdue_backlog'], $preview->json('metrics.overdue_backlog'));
+        $this->assertSame('Rango personalizado', $preview->json('period.name'));
+        $this->assertSame('Del 10 de agosto de 2026 al 8 de septiembre de 2026', $preview->json('period.date_label'));
+        $this->assertSame($report['metrics']['average_response_duration'], $preview->json('metrics.average_response_duration'));
+        $this->assertStringNotContainsString('custom_range', $preview->json('period.name'));
         $this->assertSame(0, LaboratoryBillingReportRun::query()->count());
 
         $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_MANUAL, [
@@ -1036,6 +1046,15 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         ])->render();
 
         $this->assertStringContainsString('Reporte de facturación | Reporte facturación | 10/08/2026–08/09/2026', $mail->subject);
+        $this->assertStringContainsString('src="https://famedic.com.mx/images/logo.png"', $html);
+        $this->assertStringContainsString('alt="Logo Famedic"', $html);
+        $this->assertStringContainsString('Famedic Plataforma', $html);
+        $this->assertStringContainsString('Reporte de solicitudes de facturación GDA', $html);
+        $this->assertStringContainsString('Facturación individual de pacientes', $html);
+        $this->assertStringContainsString('Rango personalizado', $html);
+        $this->assertStringContainsString('Del 10 de agosto de 2026 al 8 de septiembre de 2026', $html);
+        $this->assertStringContainsString('11 días 1 hora', $html);
+        $this->assertStringNotContainsString('custom_range', $html);
         $this->assertStringContainsString('Pendientes del periodo', $html);
         $this->assertStringContainsString('reporte-facturacion-laboratorio.xlsx está adjunto', $html);
         $this->assertStringNotContainsString('Pendientes actuales: 516', $html);
