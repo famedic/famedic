@@ -24,31 +24,31 @@ class LaboratoryBillingReportDataService
         $periodStart = Carbon::parse($period['start_utc'])->utc();
         $periodEnd = Carbon::parse($period['end_utc'])->utc();
 
-        $received = $this->receivedQuery($periodStart, $periodEnd, $filters);
-        $completed = $this->completedQuery($periodStart, $periodEnd, $filters);
-        $backlog = $this->backlogQuery($asOf, $filters);
-        $overdue = $this->backlogQuery($asOf, $filters);
+        $received = $this->periodCohortQuery($periodStart, $periodEnd, $filters, $asOf);
+        $completed = $this->completedQuery($periodStart, $periodEnd, $filters, $asOf);
+        $pending = $this->pendingQuery($periodStart, $periodEnd, $filters, $asOf);
+        $overdue = $this->pendingQuery($periodStart, $periodEnd, $filters, $asOf);
         $this->resolver->scopeOverdue($overdue, $asOf);
 
         $receivedCount = (clone $received)->count();
         $completedCount = (clone $completed)->count();
-        $backlogCount = (clone $backlog)->count();
+        $pendingCount = (clone $pending)->count();
         $overdueCount = (clone $overdue)->count();
 
         $completedRows = $this->rowsFromQuery($completed);
-        $backlogRows = $this->rowsFromQuery($backlog);
+        $pendingRows = $this->rowsFromQuery($pending);
         $overdueRows = $this->rowsFromQuery($overdue);
         $receivedRows = $this->rowsFromQuery($received);
         $detailCounts = [
             'received' => $receivedCount,
             'completed' => $completedCount,
-            'backlog' => $backlogCount,
+            'backlog' => $pendingCount,
             'overdue' => $overdueCount,
         ];
         $detailExportedCounts = [
             'received' => $receivedRows->count(),
             'completed' => $completedRows->count(),
-            'backlog' => $backlogRows->count(),
+            'backlog' => $pendingRows->count(),
             'overdue' => $overdueRows->count(),
         ];
 
@@ -57,22 +57,28 @@ class LaboratoryBillingReportDataService
             ->filter(fn ($value) => $value !== null)
             ->avg();
 
-        $oldestPending = $backlogRows->sortBy('requested_at')->first();
+        $oldestPending = $pendingRows->sortBy('requested_at')->first();
 
         return [
             'period' => $period,
+            'generated_at' => $asOf->toIso8601String(),
             'backlog_as_of' => $asOf->toIso8601String(),
+            'applied_filters' => $this->appliedFilters($filters),
             'metrics' => [
-                // Actividad: recibidas usa invoice_requests.created_at; completadas usa invoices.completed_at.
+                // Fecha canónica de solicitud: invoice_requests.created_at en UTC, derivada del rango local America/Monterrey.
                 'received' => $receivedCount,
                 'completed' => $completedCount,
-                'pending_backlog' => $backlogCount,
+                'pending_period' => $pendingCount,
+                'overdue_period' => $overdueCount,
+                // Aliases legacy para configuraciones/historial existentes; ahora significan "del periodo".
+                'pending_backlog' => $pendingCount,
                 'overdue_backlog' => $overdueCount,
                 'compliance_percent' => $receivedCount > 0 ? round(($completedCount / $receivedCount) * 100, 1) : 0.0,
                 'average_response_hours' => $avgResponse !== null ? round((float) $avgResponse, 2) : null,
+                'compliance_definition' => 'Solicitudes completadas del periodo / solicitudes recibidas del periodo.',
                 'oldest_pending' => $oldestPending,
-                'aging' => $this->agingBuckets($backlogRows),
-                'missing_files' => $this->missingFileBuckets($backlogRows),
+                'aging' => $this->agingBuckets($pendingRows),
+                'missing_files' => $this->missingFileBuckets($pendingRows),
                 'detail_row_limit' => $this->detailRowLimit(),
                 'detail_counts' => $detailCounts,
                 'detail_exported_counts' => $detailExportedCounts,
@@ -84,25 +90,24 @@ class LaboratoryBillingReportDataService
             'rows' => [
                 'received' => $receivedRows->values(),
                 'completed' => $completedRows->values(),
-                'backlog' => $backlogRows->values(),
+                'backlog' => $pendingRows->values(),
+                'pending' => $pendingRows->values(),
                 'overdue' => $overdueRows->values(),
             ],
         ];
     }
 
-    public function receivedQuery(Carbon $fromUtc, Carbon $toUtc, array $filters = []): Builder
+    public function receivedQuery(Carbon $fromUtc, Carbon $toUtc, array $filters = [], ?Carbon $asOf = null): Builder
     {
-        return $this->baseQuery($filters)->whereBetween('created_at', [$fromUtc, $toUtc]);
+        return $this->periodCohortQuery($fromUtc, $toUtc, $filters, $asOf);
     }
 
-    public function completedQuery(Carbon $fromUtc, Carbon $toUtc, array $filters = []): Builder
+    public function completedQuery(Carbon $fromUtc, Carbon $toUtc, array $filters = [], ?Carbon $asOf = null): Builder
     {
-        $query = $this->baseQuery($filters)
-            ->whereHasMorph('invoiceRequestable', [LaboratoryPurchase::class], function (Builder $purchaseQuery) use ($fromUtc, $toUtc) {
-                $purchaseQuery->whereHas('invoice', function (Builder $invoiceQuery) use ($fromUtc, $toUtc) {
+        $query = $this->periodCohortQuery($fromUtc, $toUtc, $filters, $asOf)
+            ->whereHasMorph('invoiceRequestable', [LaboratoryPurchase::class], function (Builder $purchaseQuery) {
+                $purchaseQuery->whereHas('invoice', function (Builder $invoiceQuery) {
                     $invoiceQuery
-                        ->whereNotNull('completed_at')
-                        ->whereBetween('completed_at', [$fromUtc, $toUtc])
                         ->whereNotNull('invoice')
                         ->where('invoice', '!=', '')
                         ->whereNotNull('invoice_xml')
@@ -113,9 +118,33 @@ class LaboratoryBillingReportDataService
         return $query;
     }
 
+    public function pendingQuery(Carbon $fromUtc, Carbon $toUtc, array $filters = [], ?Carbon $asOf = null): Builder
+    {
+        return $this->periodCohortQuery($fromUtc, $toUtc, $filters, $asOf)
+            ->where(function (Builder $query) {
+                $query->whereHasMorph(
+                    'invoiceRequestable',
+                    [LaboratoryPurchase::class],
+                    fn (Builder $purchaseQuery) => $purchaseQuery->whereDoesntHave('invoice')
+                )->orWhereHasMorph(
+                    'invoiceRequestable',
+                    [LaboratoryPurchase::class],
+                    fn (Builder $purchaseQuery) => $purchaseQuery->whereHas('invoice', function (Builder $invoiceQuery) {
+                        $invoiceQuery->where(function (Builder $documents) {
+                            $documents
+                                ->whereNull('invoice')
+                                ->orWhere('invoice', '')
+                                ->orWhereNull('invoice_xml')
+                                ->orWhere('invoice_xml', '');
+                        });
+                    })
+                );
+            });
+    }
+
     public function backlogQuery(Carbon $asOf, array $filters = []): Builder
     {
-        return $this->baseQuery($filters)
+        return $this->baseQuery($filters, $asOf)
             ->where('created_at', '<=', $asOf->copy()->utc())
             ->where(function (Builder $query) {
                 $query->whereHasMorph(
@@ -136,7 +165,12 @@ class LaboratoryBillingReportDataService
             });
     }
 
-    private function baseQuery(array $filters): Builder
+    private function periodCohortQuery(Carbon $fromUtc, Carbon $toUtc, array $filters = [], ?Carbon $asOf = null): Builder
+    {
+        return $this->baseQuery($filters, $asOf)->whereBetween('created_at', [$fromUtc, $toUtc]);
+    }
+
+    private function baseQuery(array $filters, ?Carbon $asOf = null): Builder
     {
         $query = InvoiceRequest::query()->forActiveLaboratoryPurchases();
 
@@ -174,7 +208,7 @@ class LaboratoryBillingReportDataService
         }
 
         if (filled($filters['status'] ?? null)) {
-            $this->applyStatusFilter($query, (string) $filters['status']);
+            $this->applyStatusFilter($query, (string) $filters['status'], $asOf);
         }
 
         return $query;
@@ -262,9 +296,9 @@ class LaboratoryBillingReportDataService
         return $missing === [] ? 'Ninguno' : implode(', ', $missing);
     }
 
-    private function applyStatusFilter(Builder $query, string $status): void
+    private function applyStatusFilter(Builder $query, string $status, ?Carbon $asOf = null): void
     {
-        $now = now(LaboratoryBillingReportPeriodResolver::TIMEZONE);
+        $now = $asOf ?? now(LaboratoryBillingReportPeriodResolver::TIMEZONE);
 
         match ($status) {
             LaboratoryBillingStatus::Pending->value => $this->resolver->scopePending($query, $now),
@@ -278,5 +312,12 @@ class LaboratoryBillingReportDataService
     private function detailRowLimit(): int
     {
         return max(100, (int) config('famedic.laboratory_billing.report_detail_row_limit', 5000));
+    }
+
+    private function appliedFilters(array $filters): array
+    {
+        return collect($filters)
+            ->reject(fn ($value, string $key) => str_starts_with($key, '_') || blank($value))
+            ->all();
     }
 }

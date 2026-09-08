@@ -454,7 +454,7 @@ function FormDrawer({
 					<div>
 						<Subheading>Alcance del reporte</Subheading>
 						<Text className={`mt-1 ${billingMutedTextClass}`}>
-							Estos filtros se aplican a actividad y backlog.
+							Estos filtros se aplican a la cohorte del periodo.
 						</Text>
 					</div>
 					<div className="grid gap-4 md:grid-cols-3">
@@ -606,9 +606,9 @@ function PreviewDrawer({
 	const metrics = preview?.metrics || {};
 	const metricCards = [
 		["Solicitudes recibidas", metrics.received ?? 0],
-		["Completadas", metrics.completed ?? 0],
-		["Pendientes actuales", metrics.pending_backlog ?? 0],
-		["Atrasadas", metrics.overdue_backlog ?? 0],
+		["Completadas del periodo", metrics.completed ?? 0],
+		["Pendientes del periodo", metrics.pending_period ?? metrics.pending_backlog ?? 0],
+		["Atrasadas del periodo", metrics.overdue_period ?? metrics.overdue_backlog ?? 0],
 	];
 
 	return (
@@ -731,11 +731,11 @@ function PreviewDrawer({
 										</div>
 									))}
 								</div>
-								{(metrics.overdue_backlog ?? 0) > 0 ? (
+								{(metrics.overdue_period ?? metrics.overdue_backlog ?? 0) > 0 ? (
 									<div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
 										<p className="flex items-center gap-2 font-semibold">
 											<ExclamationTriangleIcon className="size-4" />
-											{metrics.overdue_backlog} solicitudes requieren atención
+											{metrics.overdue_period ?? metrics.overdue_backlog} solicitudes del periodo requieren atención
 										</p>
 									</div>
 								) : null}
@@ -962,7 +962,10 @@ function ManualRunDialog({
 								<p className={billingMutedTextClass}>Métricas</p>
 								<p className="font-medium text-zinc-900 dark:text-zinc-100">
 									{preview.metrics?.received ?? 0} recibidas ·{" "}
-									{preview.metrics?.pending_backlog ?? 0} pendientes
+									{preview.metrics?.pending_period ??
+										preview.metrics?.pending_backlog ??
+										0}{" "}
+									pendientes del periodo
 								</p>
 							</div>
 						</div>
@@ -1633,10 +1636,16 @@ export default function AutomaticReports({
 															<span>Recibidas: {run.metrics?.received ?? 0}</span>
 															<span>Completadas: {run.metrics?.completed ?? 0}</span>
 															<span>
-																Pendientes: {run.metrics?.pending_backlog ?? 0}
+																Pendientes periodo:{" "}
+																{run.metrics?.pending_period ??
+																	run.metrics?.pending_backlog ??
+																	0}
 															</span>
 															<span>
-																Atrasadas: {run.metrics?.overdue_backlog ?? 0}
+																Atrasadas periodo:{" "}
+																{run.metrics?.overdue_period ??
+																	run.metrics?.overdue_backlog ??
+																	0}
 															</span>
 														</div>
 													</TableCell>

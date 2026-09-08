@@ -105,7 +105,7 @@ class GenerateLaboratoryBillingReportJob implements ShouldQueue
                 'received' => data_get($reportData, 'metrics.received'),
                 'completed' => data_get($reportData, 'metrics.completed'),
                 'pending_backlog' => data_get($reportData, 'metrics.pending_backlog'),
-                'overdue' => data_get($reportData, 'metrics.overdue'),
+                'overdue_backlog' => data_get($reportData, 'metrics.overdue_backlog'),
             ]);
 
             $run->update([

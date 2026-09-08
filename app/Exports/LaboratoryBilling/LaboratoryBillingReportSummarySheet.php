@@ -24,17 +24,24 @@ class LaboratoryBillingReportSummarySheet implements FromCollection, ShouldAutoS
         $metrics = $this->reportData['metrics'] ?? [];
         $aging = $metrics['aging'] ?? [];
         $missing = $metrics['missing_files'] ?? [];
+        $filters = $this->reportData['applied_filters'] ?? [];
 
         $rows = [
+            ['Nombre del reporte', $this->reportData['schedule_name'] ?? ''],
+            ['Tipo de ejecución', $this->reportData['run_type_label'] ?? ''],
             ['Periodo', $this->reportData['period']['label'] ?? ''],
-            ['Corte de backlog', $this->reportData['backlog_as_of'] ?? ''],
-            ['Solicitudes recibidas en periodo', $metrics['received'] ?? 0],
-            ['Facturas completadas en periodo', $metrics['completed'] ?? 0],
-            ['Pendientes actuales', $metrics['pending_backlog'] ?? 0],
-            ['Solicitudes atrasadas', $metrics['overdue_backlog'] ?? 0],
+            ['Fecha y hora de generación', $this->reportData['generated_at'] ?? $this->reportData['backlog_as_of'] ?? ''],
+            ['Zona horaria', $this->reportData['period']['timezone'] ?? 'America/Monterrey'],
+            ['Filtros aplicados', $filters === [] ? 'Sin filtros adicionales' : collect($filters)->map(fn ($value, $key) => $key.': '.$value)->implode('; ')],
+            ['Nota', 'Todas las métricas y registros corresponden únicamente al periodo seleccionado.'],
+            ['Solicitudes recibidas', $metrics['received'] ?? 0],
+            ['Facturas completadas', $metrics['completed'] ?? 0],
+            ['Pendientes del periodo', $metrics['pending_period'] ?? $metrics['pending_backlog'] ?? 0],
+            ['Solicitudes atrasadas del periodo', $metrics['overdue_period'] ?? $metrics['overdue_backlog'] ?? 0],
             ['Cumplimiento', ($metrics['compliance_percent'] ?? 0).'%'],
+            ['Definición de cumplimiento', $metrics['compliance_definition'] ?? 'Solicitudes completadas del periodo / solicitudes recibidas del periodo.'],
             ['Tiempo promedio de atención (h)', $metrics['average_response_hours'] ?? ''],
-            ['Pendiente más antigua', data_get($metrics, 'oldest_pending.formatted_requested_at', '')],
+            ['Pendiente más antigua', data_get($metrics, 'oldest_pending.formatted_requested_at') ?: 'Sin solicitudes pendientes en el periodo'],
             ['Dentro del plazo', $aging['within_sla'] ?? 0],
             ['Atrasadas 1 a 3 días', $aging['overdue_1_3'] ?? 0],
             ['Atrasadas 4 a 7 días', $aging['overdue_4_7'] ?? 0],

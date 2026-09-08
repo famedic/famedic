@@ -17,6 +17,14 @@ class LaboratoryBillingReportDeliveryService
     public function deliver(LaboratoryBillingReportSchedule $schedule, LaboratoryBillingReportRun $run, array $reportData): void
     {
         $reportData['_included_sections'] = $schedule->included_sections ?? [];
+        $reportData['schedule_name'] = $schedule->name;
+        $reportData['run_type'] = $run->run_type;
+        $reportData['run_type_label'] = match ($run->run_type) {
+            LaboratoryBillingReportRun::TYPE_SCHEDULED => 'Programada',
+            LaboratoryBillingReportRun::TYPE_MANUAL => 'Manual',
+            LaboratoryBillingReportRun::TYPE_TEST => 'Prueba',
+            default => ucfirst((string) $run->run_type),
+        };
         $downloadUrl = null;
         $attachmentPath = null;
 

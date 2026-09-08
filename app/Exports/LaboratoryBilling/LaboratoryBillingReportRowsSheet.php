@@ -44,7 +44,16 @@ class LaboratoryBillingReportRowsSheet implements FromCollection, ShouldAutoSize
 
     public function collection(): Collection
     {
-        return collect($this->rows)->map(fn (array $row) => [
+        $rows = collect($this->rows);
+
+        if ($rows->isEmpty()) {
+            return collect([[
+                'Sin registros para el periodo seleccionado.',
+                ...array_fill(0, count($this->headings()) - 1, ''),
+            ]]);
+        }
+
+        return $rows->map(fn (array $row) => [
             data_get($row, 'purchase.folio', ''),
             data_get($row, 'formatted_requested_at', ''),
             data_get($row, 'billing.formatted_due_at', ''),

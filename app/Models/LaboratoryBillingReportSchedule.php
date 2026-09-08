@@ -99,8 +99,8 @@ class LaboratoryBillingReportSchedule extends Model
     {
         return [
             ['value' => self::SECTION_ACTIVITY, 'label' => 'Actividad del periodo'],
-            ['value' => self::SECTION_BACKLOG, 'label' => 'Pendientes actuales'],
-            ['value' => self::SECTION_OVERDUE, 'label' => 'Solicitudes atrasadas'],
+            ['value' => self::SECTION_BACKLOG, 'label' => 'Pendientes del periodo'],
+            ['value' => self::SECTION_OVERDUE, 'label' => 'Solicitudes atrasadas del periodo'],
             ['value' => self::SECTION_COMPLETED, 'label' => 'Completadas del periodo'],
             ['value' => self::SECTION_AGING, 'label' => 'Antigüedad de pendientes'],
             ['value' => self::SECTION_MISSING_FILES, 'label' => 'Archivos faltantes'],

@@ -792,7 +792,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
     }
 
     #[Test]
-    public function automatic_report_separates_period_activity_from_current_backlog(): void
+    public function automatic_report_limits_pending_and_overdue_to_selected_period(): void
     {
         $oldPending = $this->seedRequest([
             'requested_at' => Carbon::parse('2026-07-20 09:00:00', 'America/Monterrey'),
@@ -800,13 +800,13 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'rfc' => 'OLDP900101AAA',
         ]);
         $this->seedRequest([
-            'requested_at' => Carbon::parse('2026-07-25 09:00:00', 'America/Monterrey'),
+            'requested_at' => Carbon::parse('2026-08-05 09:00:00', 'America/Monterrey'),
             'with_complete_invoice' => true,
             'invoice_completed_at' => Carbon::parse('2026-08-05 11:00:00', 'America/Monterrey'),
             'gda_order_id' => 'DONE-IN-PERIOD',
             'rfc' => 'DONE900101AAA',
         ]);
-        $this->seedRequest([
+        $periodPending = $this->seedRequest([
             'requested_at' => Carbon::parse('2026-08-06 09:00:00', 'America/Monterrey'),
             'gda_order_id' => 'RECEIVED-IN-PERIOD',
             'rfc' => 'RECV900101AAA',
@@ -823,10 +823,225 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
 
         $report = app(LaboratoryBillingReportDataService::class)->build($period, [], now('America/Monterrey'));
 
-        $this->assertSame(1, $report['metrics']['received']);
+        $this->assertSame(2, $report['metrics']['received']);
         $this->assertSame(1, $report['metrics']['completed']);
-        $this->assertGreaterThanOrEqual(2, $report['metrics']['pending_backlog']);
-        $this->assertTrue($report['rows']['backlog']->pluck('id')->contains($oldPending['request']->id));
+        $this->assertSame(1, $report['metrics']['pending_backlog']);
+        $this->assertFalse($report['rows']['backlog']->pluck('id')->contains($oldPending['request']->id));
+        $this->assertTrue($report['rows']['backlog']->pluck('id')->contains($periodPending['request']->id));
+    }
+
+    #[Test]
+    public function automatic_report_uses_one_period_cohort_for_preview_email_excel_and_history(): void
+    {
+        Notification::fake();
+        Queue::fake();
+        Storage::fake('local');
+        config(['famedic.laboratory_billing.report_disk' => 'local']);
+        Carbon::setTestNow(Carbon::parse('2026-09-08 07:30:00', 'America/Monterrey'));
+        $utc = fn (string $date): Carbon => Carbon::parse($date, 'America/Monterrey')->utc();
+
+        $store = LaboratoryStore::query()->create([
+            'name' => 'Sucursal Periodo',
+            'brand' => 'olab',
+            'state' => 'NL',
+        ]);
+
+        $oldPending = $this->seedRequest([
+            'requested_at' => $utc('2025-03-10 09:00:00'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'MAR-2025-PENDING',
+            'rfc' => 'MAR250101AAA',
+        ]);
+        $oldOverdue = $this->seedRequest([
+            'requested_at' => $utc('2025-03-11 09:00:00'),
+            'with_pdf_only' => true,
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'MAR-2025-OVERDUE',
+            'rfc' => 'MAR250102AAA',
+        ]);
+        $insidePending = $this->seedRequest([
+            'requested_at' => $utc('2026-08-11 09:00:00'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'IN-PERIOD-PENDING',
+            'rfc' => 'INPE260101AAA',
+        ]);
+        $insideCompleted = $this->seedRequest([
+            'requested_at' => $utc('2026-08-21 09:00:00'),
+            'with_complete_invoice' => true,
+            'invoice_completed_at' => $utc('2026-09-01 10:00:00'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'IN-PERIOD-COMPLETE',
+            'rfc' => 'INCO260101AAA',
+        ]);
+        $startBoundary = $this->seedRequest([
+            'requested_at' => $utc('2026-08-10 00:00:00'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'START-BOUNDARY',
+            'rfc' => 'STAR260101AA',
+        ]);
+        $endBoundary = $this->seedRequest([
+            'requested_at' => $utc('2026-09-08 23:59:59'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'END-BOUNDARY',
+            'rfc' => 'ENDB260101AA',
+        ]);
+        $beforeStart = $this->seedRequest([
+            'requested_at' => $utc('2026-08-09 23:59:59'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'BEFORE-START',
+            'rfc' => 'BEFO260101AA',
+        ]);
+        $afterEnd = $this->seedRequest([
+            'requested_at' => $utc('2026-09-09 00:00:00'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'AFTER-END',
+            'rfc' => 'AFTE260101AA',
+        ]);
+        $otherBrand = $this->seedRequest([
+            'requested_at' => $utc('2026-08-22 09:00:00'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'swisslab',
+            'gda_order_id' => 'OTHER-BRAND',
+            'rfc' => 'OTHE260101AA',
+        ]);
+
+        $period = app(LaboratoryBillingReportPeriodResolver::class)->resolve(
+            LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+            now('America/Monterrey'),
+            '2026-08-10',
+            '2026-09-08',
+        );
+        $filters = ['brand' => 'olab', 'laboratory_store_id' => $store->id];
+        $report = app(LaboratoryBillingReportDataService::class)->build($period, $filters, now('America/Monterrey'));
+        $periodIds = $report['rows']['received']->pluck('id');
+
+        $this->assertSame(4, $report['metrics']['received']);
+        $this->assertSame(1, $report['metrics']['completed']);
+        $this->assertSame(3, $report['metrics']['pending_backlog']);
+        $this->assertSame(2, $report['metrics']['overdue_backlog']);
+        $this->assertSame(25.0, $report['metrics']['compliance_percent']);
+        $this->assertSame(265.0, $report['metrics']['average_response_hours']);
+        $this->assertEqualsCanonicalizing([
+            $insidePending['request']->id,
+            $insideCompleted['request']->id,
+            $startBoundary['request']->id,
+            $endBoundary['request']->id,
+        ], $periodIds->all());
+        $this->assertFalse($periodIds->contains($oldPending['request']->id));
+        $this->assertFalse($report['rows']['overdue']->pluck('id')->contains($oldOverdue['request']->id));
+        $this->assertFalse($periodIds->contains($beforeStart['request']->id));
+        $this->assertFalse($periodIds->contains($afterEnd['request']->id));
+        $this->assertFalse($periodIds->contains($otherBrand['request']->id));
+        $this->assertStringContainsString('10 Aug 2026 12:00 am', $report['period']['label']);
+        $this->assertStringContainsString('8 Sep 2026 11:59 pm', $report['period']['label']);
+        $this->assertSame('America/Monterrey', $report['period']['timezone']);
+
+        $schedule = $this->makeReportSchedule([
+            'filters' => $filters,
+            'included_sections' => ['activity', 'backlog', 'overdue', 'completed', 'aging', 'missing_files'],
+        ]);
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $preview = $this->actingAs($admin)
+            ->getJson(route('admin.laboratory-billing.automatic-reports.preview', [
+                'schedule' => $schedule->id,
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-08-10',
+                'custom_to' => '2026-09-08',
+            ]))
+            ->assertOk();
+
+        $this->assertSame($report['metrics']['received'], $preview->json('metrics.received'));
+        $this->assertSame($report['metrics']['completed'], $preview->json('metrics.completed'));
+        $this->assertSame($report['metrics']['pending_backlog'], $preview->json('metrics.pending_backlog'));
+        $this->assertSame($report['metrics']['overdue_backlog'], $preview->json('metrics.overdue_backlog'));
+        $this->assertSame(0, LaboratoryBillingReportRun::query()->count());
+
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_MANUAL, [
+            'period_start' => $period['start_utc'],
+            'period_end' => $period['end_utc'],
+            'filters' => [
+                ...$filters,
+                '_period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                '_custom_from' => '2026-08-10',
+                '_custom_to' => '2026-09-08',
+            ],
+        ]);
+        app(GenerateLaboratoryBillingReportJob::class, ['runId' => $run->id])->handle(
+            app(LaboratoryBillingReportPeriodResolver::class),
+            app(LaboratoryBillingReportDataService::class),
+            app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDeliveryService::class),
+        );
+
+        $run->refresh();
+        $this->assertSame($report['metrics']['received'], $run->metrics['received']);
+        $this->assertSame($report['metrics']['pending_backlog'], $run->metrics['pending_backlog']);
+        $this->assertSame('2026-08-10 06:00:00', $run->getRawOriginal('period_start'));
+        $this->assertSame('2026-09-09 05:59:59', $run->getRawOriginal('period_end'));
+
+        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load(Storage::disk('local')->path($run->file_path));
+        $activityRows = $spreadsheet->getSheetByName('Actividad del periodo')->toArray();
+        $pendingRows = $spreadsheet->getSheetByName('Pendientes del periodo')->toArray();
+        $overdueRows = $spreadsheet->getSheetByName('Atrasadas del periodo')->toArray();
+        $completedRows = $spreadsheet->getSheetByName('Completadas del periodo')->toArray();
+        $excelText = json_encode([$activityRows, $pendingRows, $overdueRows, $completedRows], JSON_THROW_ON_ERROR);
+
+        $this->assertStringContainsString('IN-PERIOD-PENDING', $excelText);
+        $this->assertStringContainsString('IN-PERIOD-COMPLETE', $excelText);
+        $this->assertStringContainsString('START-BOUNDARY', $excelText);
+        $this->assertStringContainsString('END-BOUNDARY', $excelText);
+        $this->assertStringNotContainsString('MAR-2025-PENDING', $excelText);
+        $this->assertStringNotContainsString('MAR-2025-OVERDUE', $excelText);
+        $this->assertStringNotContainsString('BEFORE-START', $excelText);
+        $this->assertStringNotContainsString('AFTER-END', $excelText);
+        $this->assertStringNotContainsString('OTHER-BRAND', $excelText);
+        $this->assertStringContainsString('Todas las métricas y registros corresponden únicamente al periodo seleccionado.', json_encode($spreadsheet->getSheetByName('Resumen')->toArray(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+
+        $mail = (new LaboratoryBillingAutomaticReportNotification($schedule, $run, [
+            ...$report,
+            '_included_sections' => $schedule->included_sections,
+            'schedule_name' => $schedule->name,
+            'run_type_label' => 'Manual',
+        ], null, Storage::disk('local')->path($run->file_path)))->toMail((object) []);
+        $html = view('emails.laboratory-billing.automatic-report', [
+            'schedule' => $schedule,
+            'run' => $run,
+            'reportData' => [
+                ...$report,
+                '_included_sections' => $schedule->included_sections,
+                'schedule_name' => $schedule->name,
+                'run_type_label' => 'Manual',
+            ],
+            'metrics' => $report['metrics'],
+            'downloadUrl' => null,
+            'attachmentPath' => Storage::disk('local')->path($run->file_path),
+            'moduleUrl' => route('admin.laboratory-billing.automatic-reports.index'),
+            'isTest' => false,
+        ])->render();
+
+        $this->assertStringContainsString('Reporte de facturación | Reporte facturación | 10/08/2026–08/09/2026', $mail->subject);
+        $this->assertStringContainsString('Pendientes del periodo', $html);
+        $this->assertStringContainsString('reporte-facturacion-laboratorio.xlsx está adjunto', $html);
+        $this->assertStringNotContainsString('Pendientes actuales: 516', $html);
+        $this->assertStringNotContainsString('MAR-2025', $html);
+        Notification::assertSentOnDemand(LaboratoryBillingAutomaticReportNotification::class);
+        Queue::assertNotPushed(GenerateLaboratoryBillingReportJob::class);
     }
 
     #[Test]
@@ -997,11 +1212,11 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         ], now('America/Monterrey'));
 
         $this->assertSame(102, $report['metrics']['received']);
-        $this->assertSame(0, $report['metrics']['completed']);
+        $this->assertSame(1, $report['metrics']['completed']);
         $this->assertSame(101, $report['metrics']['pending_backlog']);
         $this->assertTrue($report['metrics']['detail_truncated']);
-        $this->assertSame(203, $report['metrics']['detail_total_rows']);
-        $this->assertSame(200, $report['metrics']['detail_exported_rows']);
+        $this->assertSame(204, $report['metrics']['detail_total_rows']);
+        $this->assertSame(201, $report['metrics']['detail_exported_rows']);
         $this->assertSame('Sucursal Centro', data_get($report['rows']['received']->first(), 'purchase.store.name'));
 
         $this->assertFalse($report['rows']['backlog']->pluck('id')->contains($legacyComplete['request']->id));
@@ -1100,10 +1315,10 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         $this->assertNotNull($run->link_expires_at);
         $this->assertSame([
             'Resumen',
-            'Pendientes actuales',
-            'Solicitudes atrasadas',
-            'Completadas en periodo',
             'Actividad del periodo',
+            'Pendientes del periodo',
+            'Atrasadas del periodo',
+            'Completadas del periodo',
         ], $spreadsheet->getSheetNames());
         Notification::assertSentOnDemand(LaboratoryBillingAutomaticReportNotification::class);
     }
@@ -1395,7 +1610,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
 
         $this->assertSame('2026-07-01 06:00:00', $run->getRawOriginal('period_start'));
         $this->assertSame('2026-09-01 05:59:59', $run->getRawOriginal('period_end'));
-        $this->assertStringContainsString('1 Jul 2026', (string) $spreadsheet->getSheetByName('Resumen')->getCell('B2')->getValue());
+        $this->assertStringContainsString('1 Jul 2026', (string) $spreadsheet->getSheetByName('Resumen')->getCell('B4')->getValue());
         Notification::assertSentOnDemand(LaboratoryBillingAutomaticReportNotification::class);
 
         $this->actingAs($admin)

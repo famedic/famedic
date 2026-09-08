@@ -191,6 +191,8 @@ class AutomaticReportsController extends Controller
             'metrics' => [
                 'received' => $metrics['received'] ?? 0,
                 'completed' => $metrics['completed'] ?? 0,
+                'pending_period' => $metrics['pending_period'] ?? $metrics['pending_backlog'] ?? 0,
+                'overdue_period' => $metrics['overdue_period'] ?? $metrics['overdue_backlog'] ?? 0,
                 'pending_backlog' => $metrics['pending_backlog'] ?? 0,
                 'overdue_backlog' => $metrics['overdue_backlog'] ?? 0,
                 'compliance_percent' => $metrics['compliance_percent'] ?? 0,
@@ -204,7 +206,7 @@ class AutomaticReportsController extends Controller
             ],
             'included_sections' => $sections,
             'alerts' => [
-                'overdue' => $metrics['overdue_backlog'] ?? 0,
+                'overdue' => $metrics['overdue_period'] ?? $metrics['overdue_backlog'] ?? 0,
                 'detail_truncated' => (bool) ($metrics['detail_truncated'] ?? false),
             ],
             'excel' => [
@@ -215,7 +217,7 @@ class AutomaticReportsController extends Controller
             ],
             'copy' => [
                 'headline' => 'Resumen de facturación',
-                'intro' => 'Este reporte combina la actividad del periodo con los pendientes actuales.',
+                'intro' => 'Todas las métricas corresponden únicamente al periodo seleccionado.',
                 'closing' => 'Consulta el módulo de facturación para revisar el detalle operativo.',
             ],
         ]);
