@@ -1,7 +1,11 @@
 import { Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 
+import { useSupportWidgetModalVisibility } from '@/hooks/useSupportWidgetModalVisibility';
+
 export default function Modal({ open, onClose, children, size = 'md' }) {
+    useSupportWidgetModalVisibility(open);
+
     const sizeClasses = {
         sm: 'max-w-sm',
         md: 'max-w-md',
@@ -16,7 +20,7 @@ export default function Modal({ open, onClose, children, size = 'md' }) {
 
     return (
         <Transition.Root show={open} as={Fragment}>
-            <Dialog as="div" className="relative z-50" onClose={onClose}>
+            <Dialog as="div" className="relative z-[100000]" onClose={onClose}>
                 <Transition.Child
                     as={Fragment}
                     enter="ease-out duration-300"
@@ -26,10 +30,10 @@ export default function Modal({ open, onClose, children, size = 'md' }) {
                     leaveFrom="opacity-100"
                     leaveTo="opacity-0"
                 >
-                    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
+                    <div className="fixed inset-0 z-[100000] bg-gray-500 bg-opacity-75 transition-opacity" />
                 </Transition.Child>
 
-                <div className="fixed inset-0 z-10 overflow-y-auto">
+                <div className="fixed inset-0 z-[100001] overflow-y-auto">
                     <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
                         <Transition.Child
                             as={Fragment}

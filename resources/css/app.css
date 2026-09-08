@@ -2,6 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+	:root.support-widgets-hidden iframe[src*="salesiq"],
+	:root.support-widgets-hidden iframe[src*="zohopublic.com"],
+	:root.support-widgets-hidden iframe[src*="diffuser-cdn.app-us1.com"],
+	:root.support-widgets-hidden [id*="zsiq"],
+	:root.support-widgets-hidden [class*="zsiq"],
+	:root.support-widgets-hidden [data-widget-id="06a47e35-87c0-72a7-8000-831831976ef4"] {
+		display: none !important;
+		pointer-events: none !important;
+		visibility: hidden !important;
+	}
+
+	[id^="zsiq_float"],
+	[class*="zsiq_float"] {
+		display: none !important;
+		pointer-events: none !important;
+		visibility: hidden !important;
+	}
+
+	#ac-whatsapp-widget-button {
+		border: 0 !important;
+		box-shadow: none !important;
+		outline: 0 !important;
+	}
+
+	#ac-whatsapp-widget-button::before,
+	#ac-whatsapp-widget-button::after,
+	#ac-whatsapp-widget-wrapper::before,
+	#ac-whatsapp-widget-wrapper::after {
+		content: none !important;
+		display: none !important;
+	}
+
+	#ac-whatsapp-widget-wrapper {
+		background: transparent !important;
+		border: 0 !important;
+		box-shadow: none !important;
+		outline: 0 !important;
+		pointer-events: none !important;
+	}
+
+	#ac-whatsapp-widget-button,
+	#ac-whatsapp-widget-window,
+	#ac-whatsapp-widget-wrapper a,
+	#ac-whatsapp-widget-wrapper button,
+	#ac-whatsapp-widget-wrapper input,
+	#ac-whatsapp-widget-wrapper textarea {
+		pointer-events: auto !important;
+	}
+
+	:root.has-checkout-floating-footer #ac-whatsapp-widget-wrapper {
+		bottom: calc(
+			var(--checkout-floating-footer-height, 0px) + max(16px, env(safe-area-inset-bottom))
+		) !important;
+	}
+
+	@media (max-width: 1023px) {
+		:root.has-mobile-bottom-nav:not(.has-checkout-floating-footer) #ac-whatsapp-widget-wrapper {
+			bottom: calc(
+				var(--mobile-bottom-nav-height, 0px) + max(16px, env(safe-area-inset-bottom))
+			) !important;
+		}
+	}
+
+	[id*="whatsapp"][style*="position: fixed"],
+	[class*="whatsapp"][style*="position: fixed"] {
+		pointer-events: none;
+	}
+
+	[id*="whatsapp"][style*="position: fixed"] a,
+	[id*="whatsapp"][style*="position: fixed"] button,
+	[id*="whatsapp"][style*="position: fixed"] iframe,
+	[class*="whatsapp"][style*="position: fixed"] a,
+	[class*="whatsapp"][style*="position: fixed"] button,
+	[class*="whatsapp"][style*="position: fixed"] iframe {
+		pointer-events: auto;
+	}
+}
+
 @keyframes checkout-summary-pulse {
 	0%,
 	100% {

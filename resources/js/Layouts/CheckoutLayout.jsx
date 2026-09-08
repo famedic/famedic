@@ -12,7 +12,6 @@ import {
 } from "@heroicons/react/16/solid";
 import { Subheading } from "@/Components/Catalyst/heading";
 import FocusedLayout from "@/Layouts/FocusedLayout";
-import CheckoutWhatsAppHelp from "@/Components/Checkout/CheckoutWhatsAppHelp";
 import CheckoutWizardFloatingFooter from "@/Components/Checkout/CheckoutWizardFloatingFooter";
 import { Divider } from "@/Components/Catalyst/divider";
 import { XMarkIcon, InformationCircleIcon } from "@heroicons/react/20/solid";
@@ -76,8 +75,6 @@ export default function CheckoutLayout({
 	stepContentRef = null,
 	/** Footer Continuar/Volver pegado al fondo en pasos con listas largas */
 	floatingWizardFooter = false,
-	/** Oculta solo la ayuda flotante verde de WhatsApp del checkout. */
-	hideWhatsAppHelp = false,
 	/** Acciones debajo de los totales del resumen (p. ej. confirmar pago) */
 	summaryActions = null,
 }) {
@@ -276,10 +273,6 @@ export default function CheckoutLayout({
 			</form>
 
 			<Footer />
-			<CheckoutWhatsAppHelp
-				reserveFooterSpace={floatingWizardFooter}
-				hidden={hideWhatsAppHelp}
-			/>
 		</FocusedLayout>
 	);
 }

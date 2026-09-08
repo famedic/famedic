@@ -1650,7 +1650,6 @@ export default function LaboratoryCheckout({
 				hideDefaultSubmit
 				stepContentRef={stepContentRef}
 				floatingWizardFooter={floatingWizardFooter}
-				hideWhatsAppHelp={currentStep.id === "appointment"}
 			>
 				{checkoutStepNotice && (
 					<div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">

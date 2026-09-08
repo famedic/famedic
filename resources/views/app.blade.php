@@ -67,6 +67,18 @@
     @viteReactRefresh
     @vite(['resources/js/app.jsx'])
     @inertiaHead
+    @php
+        $supportWidgetsEnabled = (bool) config('famedic.support_widgets.enabled');
+        $supportWidgetsShouldRender = $supportWidgetsEnabled && ! request()->is('admin', 'admin/*');
+    @endphp
+
+    <script>
+        window.__FAMEDIC_SUPPORT_WIDGETS__ = {
+            enabled: @json($supportWidgetsEnabled),
+            shouldRender: @json($supportWidgetsShouldRender),
+            isAdminRoute: @json(request()->is('admin', 'admin/*')),
+        };
+    </script>
 
     @env('production')
     <script src="https://cdn.usefathom.com/script.js" data-spa="auto" data-site="CURLVLNC" defer></script>
@@ -140,19 +152,15 @@
 
         @endenv
 
-        @env('staging', 'testing')
+        @if($supportWidgetsShouldRender)
             @unless(request()->routeIs(
-                'laboratory.checkout',
                 'online-pharmacy.checkout',
                 'medical-attention.checkout'
             ))
-                <!-- ActiveCampaign WhatsApp Widget (omitido en checkout: ya hay ayuda propia y tapa botones fijos) -->
+                <!-- ActiveCampaign WhatsApp Widget -->
                 <script src="https://diffuser-cdn.app-us1.com/whatsapp/widget.cjs.production.min.js" data-widget-id="06a47e35-87c0-72a7-8000-831831976ef4" data-account-id="69689492"></script>
             @endunless
-        @endenv
-    @unless(app()->environment('production'))
-        <script>window.__FAMEDIC_ZOHO_SALESIQ__ = { enabled: true };</script>
-    @endunless
+        @endif
 
 </body>
 

@@ -6,6 +6,7 @@ import { createInertiaApp } from "@inertiajs/react";
 import { resolvePageComponent } from "laravel-vite-plugin/inertia-helpers";
 import { initActiveCampaignSiteTracking } from "./lib/activeCampaignSiteTracking";
 import { initZohoSalesIQTracking } from "./lib/zohoSalesIQ";
+import { initSupportWidgetVisibilityController } from "./lib/supportWidgets";
 import React from "react";
 
 const appName = import.meta.env.VITE_APP_NAME || "Laravel";
@@ -26,6 +27,7 @@ createInertiaApp({
 			);
 
 			initZohoSalesIQTracking();
+			initSupportWidgetVisibilityController();
 			initActiveCampaignSiteTracking({ initialPage: props.initialPage });
 			registerServiceWorker();
 			return;
@@ -34,6 +36,7 @@ createInertiaApp({
 		hydrateRoot(el, <App {...props} />);
 		queueMicrotask(() => {
 			initZohoSalesIQTracking();
+			initSupportWidgetVisibilityController();
 			initActiveCampaignSiteTracking({ initialPage: props.initialPage });
 		});
 		registerServiceWorker();

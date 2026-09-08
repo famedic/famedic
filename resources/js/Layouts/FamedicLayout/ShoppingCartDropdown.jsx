@@ -10,48 +10,25 @@ export default function ShoppingCartDropdown({
 
 	return (
 		<DropdownMenu {...props}>
-			<TabGroup
-				selectedIndex={selectedIndex}
-				onChange={setSelectedIndex}
-				className="col-span-full col-start-1"
-			>
-				<TabList className="flex justify-start gap-1 px-3.5 py-2.5 sm:px-3 sm:py-1.5">
-					<Tab as={Fragment}>
-						{({ selected }) => (
-							<Button outline={!selected}>Laboratorios</Button>
-						)}
-					</Tab>
-
-					{/* 
-						<Tab as={Fragment}>
-							{({ selected }) => (
-								<Button outline={!selected}>Farmacia</Button>
-							)}
-						</Tab>
-					*/}
-
-				</TabList>
+			<div className="col-span-full col-start-1 max-w-[18rem]">
+				<div className="px-3.5 py-2.5 sm:px-3 sm:py-2">
+					<p className="text-sm font-semibold text-zinc-950 dark:text-white">
+						Laboratorios
+					</p>
+					<p className="mt-0.5 text-xs text-zinc-500 dark:text-slate-400">
+						Estudios agregados a tu carrito
+					</p>
+				</div>
 
 				<DropdownDivider />
 
-				<TabPanels className="max-w-[18rem]">
-					<TabPanel>
-						<LaboratoryCartPanel
-							laboratoryCarts={laboratoryCarts}
-							laboratoryBrands={laboratoryBrands}
-							selectedLaboratoryBrand={selectedLaboratoryBrand}
-							setSelectedLaboratoryBrand={
-								setSelectedLaboratoryBrand
-							}
-						/>
-					</TabPanel>
-					<TabPanel>
-						<OnlinePharmactCartPanel
-							onlinePharmacyCart={onlinePharmacyCart}
-						/>
-					</TabPanel>
-				</TabPanels>
-			</TabGroup>
+				<LaboratoryCartPanel
+					laboratoryCarts={laboratoryCarts}
+					laboratoryBrands={laboratoryBrands}
+					selectedLaboratoryBrand={selectedLaboratoryBrand}
+					setSelectedLaboratoryBrand={setSelectedLaboratoryBrand}
+				/>
+			</div>
 		</DropdownMenu>
 	);
 }
@@ -265,8 +242,6 @@ import {
 	DropdownMenu,
 } from "@/Components/Catalyst/dropdown";
 import { Field } from "@/Components/Catalyst/fieldset";
-// Listbox removed in favor of native select due to menu closing issue
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { usePage } from "@inertiajs/react";
 import { Button } from "@/Components/Catalyst/button";
 import {
@@ -274,6 +249,4 @@ import {
 	ShoppingCartIcon,
 } from "@heroicons/react/16/solid";
 import { PhotoIcon } from "@heroicons/react/24/solid";
-import { Fragment, useState } from "react";
 import { Badge } from "@/Components/Catalyst/badge";
-import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";

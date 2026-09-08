@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@inertiajs/react";
 import {
 	HomeIcon,
@@ -58,6 +58,36 @@ function BottomNavLink({ href, label, icon: Icon, active }) {
  */
 export default function MobileBottomNav({ userNavigation = [] }) {
 	const [menuOpen, setMenuOpen] = useState(false);
+	const navRef = useRef(null);
+
+	useEffect(() => {
+		const nav = navRef.current;
+		if (!nav) return undefined;
+
+		const root = document.documentElement;
+		const syncHeight = () => {
+			root.style.setProperty(
+				"--mobile-bottom-nav-height",
+				`${nav.getBoundingClientRect().height}px`,
+			);
+		};
+		const observer =
+			typeof ResizeObserver === "undefined"
+				? null
+				: new ResizeObserver(syncHeight);
+
+		root.classList.add("has-mobile-bottom-nav");
+		syncHeight();
+		observer?.observe(nav);
+		window.addEventListener("resize", syncHeight);
+
+		return () => {
+			observer?.disconnect();
+			window.removeEventListener("resize", syncHeight);
+			root.classList.remove("has-mobile-bottom-nav");
+			root.style.removeProperty("--mobile-bottom-nav-height");
+		};
+	}, []);
 
 	const sheetItems = useMemo(() => {
 		const fromServer = userNavigation.map(({ label, url, icon }) => ({
@@ -90,6 +120,7 @@ export default function MobileBottomNav({ userNavigation = [] }) {
 			<BottomSheetMenu open={menuOpen} onClose={() => setMenuOpen(false)} items={sheetItems} />
 
 			<nav
+				ref={navRef}
 				className="fixed inset-x-0 bottom-0 z-[55] border-t border-zinc-200/90 bg-white/95 pb-[max(0.35rem,env(safe-area-inset-bottom))] shadow-[0_-4px_24px_rgba(0,0,0,0.06)] backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 lg:hidden"
 				aria-label="Navegación principal"
 			>

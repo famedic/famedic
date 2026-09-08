@@ -1,4 +1,9 @@
 import { router } from "@inertiajs/react";
+import {
+	applySupportWidgetVisibility,
+	shouldShowSupportWidgets,
+	supportWidgetsConfig,
+} from "./supportWidgets";
 
 const WIDGET_SRC =
 	"https://salesiq.zohopublic.com/widget?wc=siqa5c1962de4be78bdee6d1289a9999c2f57b865275c57f26970b8bae68fc5e5b4";
@@ -6,7 +11,10 @@ const WIDGET_SRC =
 let initialized = false;
 
 function isEnabled() {
-	return !!window.__FAMEDIC_ZOHO_SALESIQ__?.enabled;
+	return shouldShowSupportWidgets({
+		...supportWidgetsConfig(window),
+		pathname: window.location.pathname,
+	});
 }
 
 function trackZohoPageView() {
@@ -40,6 +48,7 @@ function setupZohoGlobals() {
 
 	window.$zoho.salesiq.afterReady = function () {
 		window.dispatchEvent(new Event("zoho-salesiq-ready"));
+		applySupportWidgetVisibility();
 	};
 }
 
@@ -61,5 +70,13 @@ export function initZohoSalesIQTracking() {
 
 	loadZohoWidget();
 	whenZohoReady(trackZohoPageView);
-	router.on("finish", () => whenZohoReady(trackZohoPageView));
+	router.on("finish", () => {
+		if (!isEnabled()) {
+			applySupportWidgetVisibility();
+			return;
+		}
+
+		whenZohoReady(trackZohoPageView);
+		applySupportWidgetVisibility();
+	});
 }

@@ -213,6 +213,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Widgets flotantes de atención al cliente
+    |--------------------------------------------------------------------------
+    |
+    | Controla la carga global de Zoho SalesIQ y el widget flotante de WhatsApp.
+    | En local se habilita explícitamente con VITE_SUPPORT_WIDGETS_ENABLED=true.
+    |
+    */
+    'support_widgets' => [
+        'enabled' => filter_var(
+            env('VITE_SUPPORT_WIDGETS_ENABLED', in_array(env('APP_ENV'), ['staging', 'testing'], true)),
+            FILTER_VALIDATE_BOOL
+        ),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Portal de usuario — Soporte y contacto público
     |--------------------------------------------------------------------------
     */

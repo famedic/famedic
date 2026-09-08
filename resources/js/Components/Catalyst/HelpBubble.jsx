@@ -12,13 +12,24 @@ import {
 } from "@heroicons/react/24/solid";
 import { Button } from "@/Components/Catalyst/button";
 import clsx from "clsx";
+import {
+	shouldShowSupportWidgets,
+	supportWidgetsConfig,
+} from "@/lib/supportWidgets";
 
 export default function HelpBubble({
 	className = "",
 	reserveMobileBottomNavSpace = false,
 	hidden = false,
 }) {
-	if (hidden) {
+	const officialSupportWidgetIsVisible =
+		typeof window !== "undefined" &&
+		shouldShowSupportWidgets({
+			...supportWidgetsConfig(window),
+			pathname: window.location?.pathname,
+		});
+
+	if (hidden || officialSupportWidgetIsVisible) {
 		return null;
 	}
 
