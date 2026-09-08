@@ -5,9 +5,11 @@ namespace App\Services\Otp\Monitoring;
 use App\Enums\Otp\OtpMovementFlow;
 use App\Enums\Otp\OtpMovementStage;
 use App\Enums\Otp\OtpMovementStatus;
+use App\Enums\Otp\VonageSmsDeliveryStatus;
 use App\Models\OtpChallenge;
 use App\Models\OtpDeliveryOperation;
 use App\Models\OtpMovementEvent;
+use App\Models\OtpSmsDeliveryReceipt;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -29,7 +31,7 @@ final class OtpMovementQueryService
         $query = $this->buildEventQuery($filters, $startDate, $endDate);
 
         $events = (clone $query)
-            ->with(['user.customer'])
+            ->with(['user.customer', 'deliveryOperation'])
             ->orderByDesc('occurred_at')
             ->orderByDesc('id')
             ->paginate(25)
@@ -112,6 +114,12 @@ final class OtpMovementQueryService
             });
         }
 
+        if (! empty($filters['sms_delivery_status'])) {
+            $query->whereHas('deliveryOperation', function (Builder $q) use ($filters): void {
+                $q->where('sms_delivery_status', $filters['sms_delivery_status']);
+            });
+        }
+
         return $query;
     }
 
@@ -175,6 +183,19 @@ final class OtpMovementQueryService
             'replays' => (int) (clone $base)->where(function (Builder $q): void {
                 $q->where('is_replay', true)->orWhere('is_idempotency_conflict', true);
             })->count(),
+            'sms_delivered' => (int) OtpDeliveryOperation::query()
+                ->whereBetween('created_at', [$startDate, $endDate])
+                ->where('sms_delivery_status', VonageSmsDeliveryStatus::Delivered->value)
+                ->count(),
+            'sms_not_delivered' => (int) OtpDeliveryOperation::query()
+                ->whereBetween('created_at', [$startDate, $endDate])
+                ->whereIn('sms_delivery_status', [
+                    VonageSmsDeliveryStatus::Failed->value,
+                    VonageSmsDeliveryStatus::Rejected->value,
+                    VonageSmsDeliveryStatus::Expired->value,
+                    VonageSmsDeliveryStatus::Unknown->value,
+                ])
+                ->count(),
         ];
     }
 
@@ -206,6 +227,7 @@ final class OtpMovementQueryService
         $timeline = collect($events)
             ->map(fn (OtpMovementEvent $e) => $this->formatTimelineEntry($e, false))
             ->merge($historicalEvents)
+            ->merge($this->receiptTimelineEntries($movementKey, $events))
             ->sortBy([
                 ['occurred_at', 'asc'],
                 ['id', 'asc'],
@@ -262,7 +284,103 @@ final class OtpMovementQueryService
             'technical_message' => $event->technical_message,
             'idempotency_key_fingerprint' => $event->idempotency_key_fingerprint,
             'partial_traceability' => false,
+            'sms_delivery' => $this->formatSmsDelivery($event->deliveryOperation),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function formatSmsDelivery(?OtpDeliveryOperation $operation): ?array
+    {
+        if ($operation === null || $operation->sms_delivery_status === null) {
+            return null;
+        }
+
+        $status = VonageSmsDeliveryStatus::tryFrom($operation->sms_delivery_status);
+
+        return [
+            'status' => $operation->sms_delivery_status,
+            'label' => $status?->label() ?? $operation->sms_delivery_status,
+            'color' => $status?->badgeColor() ?? 'zinc',
+            'failure_code' => $operation->sms_failure_code,
+            'failure_reason' => $operation->sms_failure_reason,
+            'updated_at' => $operation->sms_delivery_status_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @param  Collection<int, OtpMovementEvent>  $events
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function receiptTimelineEntries(string $movementKey, Collection $events): Collection
+    {
+        $operationIds = $events->pluck('otp_delivery_operation_id')->filter()->unique()->values();
+        if ($operationIds->isEmpty()) {
+            $challengePublicId = str_starts_with($movementKey, 'chal:') ? substr($movementKey, 5) : null;
+            if ($challengePublicId !== null) {
+                $operationIds = OtpDeliveryOperation::query()
+                    ->whereHas('challenge', fn (Builder $q) => $q->where('public_id', $challengePublicId))
+                    ->pluck('id');
+            }
+        }
+
+        if ($operationIds->isEmpty()) {
+            return collect();
+        }
+
+        $existingStages = $events->pluck('stage')->all();
+
+        return OtpSmsDeliveryReceipt::query()
+            ->whereIn('otp_delivery_operation_id', $operationIds)
+            ->orderBy('received_at')
+            ->get()
+            ->filter(function (OtpSmsDeliveryReceipt $receipt) use ($existingStages): bool {
+                $stage = match (VonageSmsDeliveryStatus::tryFrom($receipt->receipt_status)) {
+                    VonageSmsDeliveryStatus::Delivered => OtpMovementStage::SmsOperatorDelivered->value,
+                    VonageSmsDeliveryStatus::Accepted, VonageSmsDeliveryStatus::Submitted => OtpMovementStage::SmsOperatorAccepted->value,
+                    VonageSmsDeliveryStatus::Buffered => OtpMovementStage::SmsOperatorBuffered->value,
+                    VonageSmsDeliveryStatus::Rejected => OtpMovementStage::SmsOperatorRejected->value,
+                    VonageSmsDeliveryStatus::Failed => OtpMovementStage::SmsOperatorFailed->value,
+                    VonageSmsDeliveryStatus::Expired => OtpMovementStage::SmsOperatorExpired->value,
+                    default => OtpMovementStage::SmsOperatorUnknown->value,
+                };
+
+                return ! in_array($stage, $existingStages, true);
+            })
+            ->map(function (OtpSmsDeliveryReceipt $receipt): array {
+                $status = VonageSmsDeliveryStatus::tryFrom($receipt->receipt_status) ?? VonageSmsDeliveryStatus::Unknown;
+                $stage = match ($status) {
+                    VonageSmsDeliveryStatus::Delivered => OtpMovementStage::SmsOperatorDelivered,
+                    VonageSmsDeliveryStatus::Accepted, VonageSmsDeliveryStatus::Submitted => OtpMovementStage::SmsOperatorAccepted,
+                    VonageSmsDeliveryStatus::Buffered => OtpMovementStage::SmsOperatorBuffered,
+                    VonageSmsDeliveryStatus::Rejected => OtpMovementStage::SmsOperatorRejected,
+                    VonageSmsDeliveryStatus::Failed => OtpMovementStage::SmsOperatorFailed,
+                    VonageSmsDeliveryStatus::Expired => OtpMovementStage::SmsOperatorExpired,
+                    default => OtpMovementStage::SmsOperatorUnknown,
+                };
+
+                return [
+                    'id' => 'receipt-'.$receipt->id,
+                    'occurred_at' => $receipt->received_at?->toIso8601String(),
+                    'stage' => $stage->value,
+                    'stage_label' => $stage->label(),
+                    'status' => $status->isDelivered() ? OtpMovementStatus::Sent->value : ($status->isTerminalFailure() ? OtpMovementStatus::Failed->value : OtpMovementStatus::InProgress->value),
+                    'status_label' => $status->label(),
+                    'status_color' => $status->badgeColor(),
+                    'channel' => 'sms',
+                    'provider' => 'vonage',
+                    'provider_result_class' => $status->value,
+                    'http_status' => null,
+                    'technical_message' => $receipt->failure_reason ?? $status->label(),
+                    'is_historical' => true,
+                    'partial' => false,
+                    'meta' => [
+                        'failure_code' => $receipt->failure_code,
+                        'provider_message_id' => $receipt->provider_message_id,
+                    ],
+                ];
+            });
     }
 
     /**
@@ -613,6 +731,10 @@ final class OtpMovementQueryService
                 ->pluck('provider_alias')
                 ->values()
                 ->all(),
+            'sms_delivery_statuses' => collect(VonageSmsDeliveryStatus::cases())->map(fn (VonageSmsDeliveryStatus $s) => [
+                'value' => $s->value,
+                'label' => $s->label(),
+            ])->values()->all(),
         ];
     }
 }

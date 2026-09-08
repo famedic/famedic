@@ -38,13 +38,34 @@ final class VonageOtpDeliveryProvider implements OtpDeliveryProvider
                     [],
                     $httpClient,
                 );
-                $client->sms()->send(new SMS(
+                $sms = new SMS(
                     $request->destinationE164OrEmail,
                     $from,
                     "Tu codigo de verificacion Famedic es: {$request->plainCode}. Valido por 10 minutos.",
-                ));
+                );
 
-                return new OtpDeliveryResult(OtpDeliveryResultClass::Accepted, '2xx', $attempt, $this->elapsed($started), $this->alias());
+                if (config('vonage.sms_dlr.callback_mode', 'per_message') === 'per_message') {
+                    $callbackUrl = VonageSmsWebhookUrl::deliveryReceiptCallback();
+                    if ($callbackUrl !== null) {
+                        if (method_exists($sms, 'setDeliveryReceiptCallback')) {
+                            $sms->setDeliveryReceiptCallback($callbackUrl);
+                        } elseif (method_exists($sms, 'setCallback')) {
+                            $sms->setCallback($callbackUrl);
+                        }
+                    }
+                }
+
+                $response = $client->sms()->send($sms);
+                $messageId = VonageSmsSendResponseParser::extractMessageId($response);
+
+                return new OtpDeliveryResult(
+                    OtpDeliveryResultClass::Accepted,
+                    '2xx',
+                    $attempt,
+                    $this->elapsed($started),
+                    $this->alias(),
+                    providerMessageId: $messageId,
+                );
             } catch (\Throwable $e) {
                 $class = $this->classifier->classify($e);
                 $result = new OtpDeliveryResult($class, $this->httpClass($e), $attempt, $this->elapsed($started), $this->alias());

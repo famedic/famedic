@@ -42,6 +42,7 @@ class OtpMovementsMonitorController extends Controller
             'destination',
             'failed_only',
             'replay_only',
+            'sms_delivery_status',
         ]))->filter(fn ($value) => $value !== null && $value !== '')->all();
 
         $filters['start_date'] = $startDate->timezone($tz)->toDateString();

@@ -4,6 +4,7 @@ namespace App\Services\Otp\Delivery;
 
 use App\Contracts\Otp\OtpDeliveryProvider;
 use App\Services\Otp\OtpAbuseKeyHasher;
+use Illuminate\Support\Str;
 
 final class FakeOtpDeliveryProvider implements OtpDeliveryProvider
 {
@@ -55,8 +56,11 @@ final class FakeOtpDeliveryProvider implements OtpDeliveryProvider
             'attempt' => $request->attemptNumber,
         ];
         $class = array_shift($this->sequence) ?? OtpDeliveryResultClass::Accepted;
+        $messageId = $class === OtpDeliveryResultClass::Accepted
+            ? (string) Str::uuid()
+            : null;
 
-        return new OtpDeliveryResult($class, null, $request->attemptNumber, 0, $this->alias());
+        return new OtpDeliveryResult($class, null, $request->attemptNumber, 0, $this->alias(), providerMessageId: $messageId);
     }
 
     public function alias(): string

@@ -151,7 +151,7 @@ test('detalle muestra linea de tiempo ordenada y diagnostico', function () {
         ->assertInertia(fn ($page) => $page
             ->component('Admin/OtpMovements/Show')
             ->where('movement_key', $movementKey)
-            ->where('diagnosis.summary', 'Entrega intentada y aceptada por proveedor')
+            ->where('diagnosis.summary', 'FAMEDIC envió; Vonage aceptó el SMS')
             ->has('timeline', 2)
         );
 });

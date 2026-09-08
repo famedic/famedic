@@ -48,6 +48,7 @@ export default function OtpMovementsIndex({ events, summary, filters, options })
 		destination: filters.destination || "",
 		failed_only: filters.failed_only || "",
 		replay_only: filters.replay_only || "",
+		sms_delivery_status: filters.sms_delivery_status || "",
 	});
 
 	const [showFilters, setShowFilters] = useState(false);
@@ -90,6 +91,7 @@ export default function OtpMovementsIndex({ events, summary, filters, options })
 			destination: "",
 			failed_only: "",
 			replay_only: "",
+			sms_delivery_status: "",
 		});
 		get(route("admin.otp-movements-monitor.index"), {
 			data: {
@@ -130,10 +132,12 @@ export default function OtpMovementsIndex({ events, summary, filters, options })
 					</div>
 				</div>
 
-				<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+				<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-8">
 					<SummaryCard label="Solicitudes" value={summary.requests ?? 0} />
 					<SummaryCard label="Envíos intentados" value={summary.delivery_attempts ?? 0} />
 					<SummaryCard label="Aceptados por proveedor" value={summary.provider_accepted ?? 0} />
+					<SummaryCard label="SMS entregados" value={summary.sms_delivered ?? 0} />
+					<SummaryCard label="SMS no entregados" value={summary.sms_not_delivered ?? 0} />
 					<SummaryCard label="Verificados" value={summary.verified ?? 0} />
 					<SummaryCard label="Fallidos" value={summary.failed ?? 0} />
 					<SummaryCard label="Replays" value={summary.replays ?? 0} />
@@ -216,6 +220,21 @@ export default function OtpMovementsIndex({ events, summary, filters, options })
 									{options.channels?.map((item) => (
 										<option key={item} value={item}>
 											{item}
+										</option>
+									))}
+								</select>
+							</label>
+							<label className="space-y-1 text-sm">
+								<span>Entrega SMS</span>
+								<select
+									value={data.sms_delivery_status}
+									onChange={(e) => setData("sms_delivery_status", e.target.value)}
+									className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1 dark:border-zinc-600 dark:bg-zinc-800"
+								>
+									<option value="">Todos</option>
+									{options.sms_delivery_statuses?.map((item) => (
+										<option key={item.value} value={item.value}>
+											{item.label}
 										</option>
 									))}
 								</select>
@@ -320,6 +339,7 @@ export default function OtpMovementsIndex({ events, summary, filters, options })
 									<TableHeader>Estado</TableHeader>
 									<TableHeader>Canal</TableHeader>
 									<TableHeader>Destino</TableHeader>
+									<TableHeader>Entrega SMS</TableHeader>
 									<TableHeader>Usuario</TableHeader>
 									<TableHeader>Proveedor</TableHeader>
 									<TableHeader>Detalle</TableHeader>
@@ -353,6 +373,17 @@ export default function OtpMovementsIndex({ events, summary, filters, options })
 										</TableCell>
 										<TableCell>{row.channel || "—"}</TableCell>
 										<TableCell>{row.destination_masked || "—"}</TableCell>
+										<TableCell>
+											{row.sms_delivery ? (
+												<StatusBadge
+													status={row.sms_delivery.status}
+													label={row.sms_delivery.label}
+													color={row.sms_delivery.color}
+												/>
+											) : (
+												"—"
+											)}
+										</TableCell>
 										<TableCell className="text-sm">
 											{row.user?.name || row.user?.user_id || "—"}
 										</TableCell>

@@ -15,6 +15,13 @@ enum OtpMovementStage: string
     case DeliverySkipped = 'delivery_skipped';
     case DeliveryDuplicateSuppressed = 'delivery_duplicate_suppressed';
     case DeliveryFallback = 'delivery_fallback';
+    case SmsOperatorAccepted = 'sms_operator_accepted';
+    case SmsOperatorDelivered = 'sms_operator_delivered';
+    case SmsOperatorBuffered = 'sms_operator_buffered';
+    case SmsOperatorRejected = 'sms_operator_rejected';
+    case SmsOperatorFailed = 'sms_operator_failed';
+    case SmsOperatorExpired = 'sms_operator_expired';
+    case SmsOperatorUnknown = 'sms_operator_unknown';
     case ResendRequested = 'resend_requested';
     case VerifySucceeded = 'verify_succeeded';
     case VerifyFailed = 'verify_failed';
@@ -42,6 +49,13 @@ enum OtpMovementStage: string
             self::DeliverySkipped => 'Entrega omitida',
             self::DeliveryDuplicateSuppressed => 'Entrega duplicada suprimida',
             self::DeliveryFallback => 'Fallback de canal',
+            self::SmsOperatorAccepted => 'Vonage aceptó SMS',
+            self::SmsOperatorDelivered => 'Operador entregó SMS',
+            self::SmsOperatorBuffered => 'SMS en cola del operador',
+            self::SmsOperatorRejected => 'SMS rechazado por operador',
+            self::SmsOperatorFailed => 'Entrega SMS fallida',
+            self::SmsOperatorExpired => 'SMS expirado en red',
+            self::SmsOperatorUnknown => 'Estado SMS desconocido',
             self::ResendRequested => 'Reenvío solicitado',
             self::VerifySucceeded => 'Verificación exitosa',
             self::VerifyFailed => 'Código incorrecto',

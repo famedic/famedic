@@ -11,6 +11,7 @@ final readonly class OtpDeliveryResult
         public int $durationMs,
         public string $providerAlias,
         public ?string $message = null,
+        public ?string $providerMessageId = null,
     ) {
     }
 }

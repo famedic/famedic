@@ -5,6 +5,7 @@ namespace App\Services\Otp\Delivery;
 use App\Contracts\Otp\OtpDeliveryProvider;
 use App\Models\OtpChallenge;
 use App\Models\OtpDeliveryOperation;
+use App\Enums\Otp\VonageSmsDeliveryStatus;
 use App\Notifications\Api\V1\Auth\AkubicaSecureRegisterOtpMailNotification;
 use App\Services\Otp\OtpAbuseKeyHasher;
 use App\Services\Otp\Registration\AkubicaRegistrationPolicy;
@@ -20,6 +21,7 @@ final class AkubicaSecureOtpDeliveryOrchestrator
         private readonly OtpDeliveryProvider $provider,
         private readonly OtpAbuseKeyHasher $hasher,
         private readonly OtpDeliveryObservability $observability,
+        private readonly VonageSmsDeliveryReceiptReconciler $smsDeliveryReceiptReconciler,
     ) {
     }
 
@@ -193,7 +195,19 @@ final class AkubicaSecureOtpDeliveryOrchestrator
             'provider_alias' => $result->providerAlias,
             'result_class' => $result->resultClass->value,
             'attempt_count' => $result->attemptNumber,
+            'provider_message_id' => $result->providerMessageId,
+            'sms_delivery_status' => $result->resultClass === OtpDeliveryResultClass::Accepted
+                ? VonageSmsDeliveryStatus::Accepted->value
+                : null,
+            'sms_delivery_status_at' => $result->resultClass === OtpDeliveryResultClass::Accepted ? now() : null,
         ]);
+
+        if ($result->providerMessageId !== null && $result->providerMessageId !== '') {
+            $this->smsDeliveryReceiptReconciler->reconcilePendingForMessageId(
+                $result->providerMessageId,
+                $operation->fresh(),
+            );
+        }
 
         if ($result->resultClass === OtpDeliveryResultClass::Accepted) {
             $this->reservations->markAccepted($operationKey, $ttl);

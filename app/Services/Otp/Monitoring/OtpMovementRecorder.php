@@ -100,48 +100,55 @@ final class OtpMovementRecorder
         array $dims,
         ?OtpDeliveryOperation $operation = null,
     ): void {
-        $purpose = is_string($dims['purpose'] ?? null) ? $dims['purpose'] : null;
-        $flow = $purpose !== null ? OtpMovementFlow::fromPurpose($purpose) : null;
-        if ($flow === null) {
-            return;
+        try {
+            $purpose = is_string($dims['purpose'] ?? null) ? $dims['purpose'] : null;
+            $flow = $purpose !== null ? OtpMovementFlow::fromPurpose($purpose) : null;
+            if ($flow === null) {
+                return;
+            }
+
+            $resultClass = is_string($dims['result_class'] ?? null)
+                ? $dims['result_class']
+                : null;
+
+            [$stage, $status] = $this->mapDeliveryEvent($logEvent, $resultClass);
+
+            $challengePublicId = is_string($dims['otp_challenge_public_id'] ?? null)
+                ? $dims['otp_challenge_public_id']
+                : null;
+
+            $challengeId = null;
+            if ($challengePublicId !== null) {
+                $challengeId = OtpChallenge::query()
+                    ->where('public_id', $challengePublicId)
+                    ->value('id');
+            }
+
+            $this->record([
+                'flow' => $flow->value,
+                'operation' => 'delivery',
+                'stage' => $stage->value,
+                'status' => $status->value,
+                'channel' => is_string($dims['channel'] ?? null) ? $dims['channel'] : 'sms',
+                'correlation_id' => is_string($dims['correlation_id'] ?? null) ? $dims['correlation_id'] : null,
+                'challenge_public_id' => $challengePublicId,
+                'provider_alias' => is_string($dims['provider_alias'] ?? null) ? $dims['provider_alias'] : null,
+                'provider_result_class' => $resultClass,
+                'attempt_number' => is_numeric($dims['attempt_number'] ?? null) ? (int) $dims['attempt_number'] : 1,
+                'otp_challenge_id' => $challengeId,
+                'otp_delivery_operation_id' => $operation?->id,
+                'technical_message' => $this->deliveryTechnicalMessage($logEvent, $resultClass),
+                'meta' => [
+                    'http_status_class' => $dims['http_status_class'] ?? null,
+                    'duration_bucket' => $dims['duration_bucket'] ?? null,
+                ],
+            ]);
+        } catch (Throwable $e) {
+            Log::warning('otp_movement_delivery_observed_failed', [
+                'error' => $e->getMessage(),
+                'log_event' => $logEvent,
+            ]);
         }
-
-        $resultClass = is_string($dims['result_class'] ?? null)
-            ? $dims['result_class']
-            : null;
-
-        [$stage, $status] = $this->mapDeliveryEvent($logEvent, $resultClass);
-
-        $challengePublicId = is_string($dims['otp_challenge_public_id'] ?? null)
-            ? $dims['otp_challenge_public_id']
-            : null;
-
-        $challengeId = null;
-        if ($challengePublicId !== null) {
-            $challengeId = OtpChallenge::query()
-                ->where('public_id', $challengePublicId)
-                ->value('id');
-        }
-
-        $this->record([
-            'flow' => $flow->value,
-            'operation' => 'delivery',
-            'stage' => $stage->value,
-            'status' => $status->value,
-            'channel' => is_string($dims['channel'] ?? null) ? $dims['channel'] : 'sms',
-            'correlation_id' => is_string($dims['correlation_id'] ?? null) ? $dims['correlation_id'] : null,
-            'challenge_public_id' => $challengePublicId,
-            'provider_alias' => is_string($dims['provider_alias'] ?? null) ? $dims['provider_alias'] : null,
-            'provider_result_class' => $resultClass,
-            'attempt_number' => is_numeric($dims['attempt_number'] ?? null) ? (int) $dims['attempt_number'] : 1,
-            'otp_challenge_id' => $challengeId,
-            'otp_delivery_operation_id' => $operation?->id,
-            'technical_message' => $this->deliveryTechnicalMessage($logEvent, $resultClass),
-            'meta' => [
-                'http_status_class' => $dims['http_status_class'] ?? null,
-                'duration_bucket' => $dims['duration_bucket'] ?? null,
-            ],
-        ]);
     }
 
     public function recordIdempotencyReplay(
@@ -248,7 +255,7 @@ final class OtpMovementRecorder
             return [OtpMovementStage::DeliveryAccepted, OtpMovementStatus::Sent];
         }
 
-        if ($resultClass === OtpDeliveryResultClass::Skipped->value) {
+        if ($resultClass === OtpDeliveryResultClass::Suppressed->value) {
             return [OtpMovementStage::DeliverySkipped, OtpMovementStatus::InProgress];
         }
 

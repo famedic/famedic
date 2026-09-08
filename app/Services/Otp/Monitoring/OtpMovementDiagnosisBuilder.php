@@ -86,11 +86,43 @@ final class OtpMovementDiagnosisBuilder
             );
         }
 
-        if ($hasChallenge && $hasDeliveryAccepted) {
+        if ($hasChallenge && $hasDeliveryAccepted && ! in_array(OtpMovementStage::SmsOperatorDelivered->value, $stages, true)) {
             return $this->result(
-                'Entrega intentada y aceptada por proveedor',
-                'FAMEDIC intentó el envío y el proveedor aceptó la solicitud. Entrega final al dispositivo no confirmada.',
+                'FAMEDIC envió; Vonage aceptó el SMS',
+                'FAMEDIC intentó el envío y Vonage aceptó la solicitud. El operador aún no reportó entrega al dispositivo.',
                 'success',
+                $partialTraceability,
+            );
+        }
+
+        if (in_array(OtpMovementStage::SmsOperatorDelivered->value, $stages, true)) {
+            $verified = in_array(OtpMovementStage::VerifySucceeded->value, $stages, true);
+
+            return $this->result(
+                $verified ? 'SMS entregado y OTP verificado' : 'Operador reportó entrega del SMS',
+                $verified
+                    ? 'El operador confirmó entrega del SMS y el usuario verificó el código OTP.'
+                    : 'El operador reportó entrega al dispositivo. La verificación OTP puede seguir pendiente.',
+                'success',
+                $partialTraceability,
+            );
+        }
+
+        if (in_array(OtpMovementStage::SmsOperatorExpired->value, $stages, true)) {
+            return $this->result(
+                'SMS expirado en red del operador',
+                'Vonage/operador reportó expiración del SMS. Esto no implica que el challenge OTP haya expirado.',
+                'warning',
+                $partialTraceability,
+            );
+        }
+
+        if (in_array(OtpMovementStage::SmsOperatorFailed->value, $stages, true)
+            || in_array(OtpMovementStage::SmsOperatorRejected->value, $stages, true)) {
+            return $this->result(
+                'SMS no entregado al dispositivo',
+                'El operador o Vonage reportó fallo/rechazo en la entrega SMS.',
+                'error',
                 $partialTraceability,
             );
         }
@@ -123,9 +155,13 @@ final class OtpMovementDiagnosisBuilder
         }
 
         if (in_array(OtpMovementStage::VerifyExpired->value, $stages, true)) {
+            $smsDelivered = in_array(OtpMovementStage::SmsOperatorDelivered->value, $stages, true);
+
             return $this->result(
-                'Challenge expirado',
-                'El challenge expiró antes de completar la verificación.',
+                'Challenge OTP expirado',
+                $smsDelivered
+                    ? 'El challenge OTP expiró antes de verificación, pero el SMS sí fue entregado al dispositivo.'
+                    : 'El challenge OTP expiró antes de completar la verificación (independiente del estado SMS).',
                 'warning',
                 $partialTraceability,
             );

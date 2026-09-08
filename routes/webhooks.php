@@ -2,11 +2,16 @@
 // routes/webhooks.php
 
 use App\Http\Controllers\PayPalController;
+use App\Http\Controllers\WebHook\VonageSmsDeliveryReceiptController;
 use App\Http\Controllers\WebHook\GDAController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 
 Route::post('/paypal/webhook', [PayPalController::class, 'webhook'])->name('paypal.webhook');
+
+Route::match(['GET', 'POST'], '/webhooks/vonage/sms/delivery/{token}', VonageSmsDeliveryReceiptController::class)
+    ->middleware(\App\Http\Middleware\RedactVonageSmsDlrWebhookToken::class)
+    ->name('webhooks.vonage.sms.delivery');
 
 // ==================================================
 // RUTAS GDA - SOLO EN ESTE ARCHIVO
