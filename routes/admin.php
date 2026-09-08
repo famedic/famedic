@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\CustomerReferralController;
 use App\Http\Controllers\Admin\DocumentationController;
 use App\Http\Controllers\Admin\EfevooTokenController;
 use App\Http\Controllers\Admin\EmailSimulatorController;
+use App\Http\Controllers\Admin\FailedJobsController;
 use App\Http\Controllers\Admin\GdaNotificationSimulatorController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
@@ -254,6 +255,7 @@ Route::prefix('admin')->middleware([
         // Route::resource('laboratory-quotes', LaboratoryQuoteController::class)->only(['index', 'show']);
         Route::get('logs-general/manage', [LogsGeneralController::class, 'index'])->name('logs-general.manage');
         Route::get('logs-general/download', [LogsGeneralController::class, 'download'])->name('logs-general.download');
+        Route::get('failed-jobs', [FailedJobsController::class, 'index'])->name('failed-jobs.index');
 
         // Asistente IA de monitoreo
         Route::get('monitoring-ai', [MonitoringAiController::class, 'index'])->name('monitoring-ai.index');

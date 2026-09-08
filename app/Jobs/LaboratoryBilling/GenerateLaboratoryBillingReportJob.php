@@ -43,6 +43,11 @@ class GenerateLaboratoryBillingReportJob implements ShouldQueue
         $run = LaboratoryBillingReportRun::query()->with('schedule')->find($this->runId);
 
         if (! $run || ! $run->schedule) {
+            Log::warning('[Laboratory Billing Report] job skipped missing run or schedule', [
+                'run_id' => $this->runId,
+                'run_found' => (bool) $run,
+            ]);
+
             return;
         }
 
@@ -59,6 +64,14 @@ class GenerateLaboratoryBillingReportJob implements ShouldQueue
 
         try {
             $periodType = (string) data_get($run->filters, '_period_type', $run->schedule->period_type);
+
+            Log::info('[Laboratory Billing Report] job started', [
+                'run_id' => $run->id,
+                'schedule_id' => $run->schedule_id,
+                'run_type' => $run->run_type,
+                'period_type' => $periodType,
+                'recipients_count' => count($run->recipients ?? []),
+            ]);
 
             if ($run->run_type === LaboratoryBillingReportRun::TYPE_SCHEDULED && $periodType === LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE) {
                 throw new InvalidArgumentException('Scheduled reports cannot use a custom date range.');
@@ -84,6 +97,17 @@ class GenerateLaboratoryBillingReportJob implements ShouldQueue
 
             $reportData = $data->build($period, $run->filters ?? [], now(LaboratoryBillingReportPeriodResolver::TIMEZONE));
 
+            Log::info('[Laboratory Billing Report] report data built', [
+                'run_id' => $run->id,
+                'schedule_id' => $run->schedule_id,
+                'period_start' => $period['start_utc']->toIso8601String(),
+                'period_end' => $period['end_utc']->toIso8601String(),
+                'received' => data_get($reportData, 'metrics.received'),
+                'completed' => data_get($reportData, 'metrics.completed'),
+                'pending_backlog' => data_get($reportData, 'metrics.pending_backlog'),
+                'overdue' => data_get($reportData, 'metrics.overdue'),
+            ]);
+
             $run->update([
                 'period_start' => $period['start_utc'],
                 'period_end' => $period['end_utc'],
@@ -103,11 +127,24 @@ class GenerateLaboratoryBillingReportJob implements ShouldQueue
             $run->schedule->update([
                 'last_run_at' => now(),
             ]);
+
+            Log::info('[Laboratory Billing Report] job sent', [
+                'run_id' => $run->id,
+                'schedule_id' => $run->schedule_id,
+                'delivery_method' => $run->fresh()->delivery_method,
+                'sent_at' => optional($run->fresh()->sent_at)->toIso8601String(),
+            ]);
         } catch (Throwable $e) {
             $run->update([
                 'status' => LaboratoryBillingReportRun::STATUS_FAILED,
                 'finished_at' => now(),
                 'error_message' => $this->sanitizeError($e),
+            ]);
+
+            Log::error('[Laboratory Billing Report] job failed', [
+                'run_id' => $run->id,
+                'schedule_id' => $run->schedule_id,
+                'error' => $this->sanitizeError($e),
             ]);
 
             throw $e;

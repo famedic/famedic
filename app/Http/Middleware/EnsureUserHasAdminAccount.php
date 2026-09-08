@@ -291,6 +291,11 @@ class EnsureUserHasAdminAccount
                         'url' => route('admin.logs-general.manage'),
                         'current' => Route::currentRouteName() === 'admin.logs-general.manage',
                     ] : null,
+                    $request->user()->administrator->hasPermissionTo('logs-general.manage') ? [
+                        'label' => 'Jobs fallidos',
+                        'url' => route('admin.failed-jobs.index'),
+                        'current' => Route::currentRouteName() === 'admin.failed-jobs.index',
+                    ] : null,
                     $request->user()->administrator->hasPermissionTo('users.manage') ? [
                         'label' => 'Usuarios',
                         'url' => route('admin.users.index'),

@@ -30,11 +30,14 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
+use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -435,6 +438,59 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
     }
 
     #[Test]
+    public function failed_jobs_screen_lists_failures_for_log_admins_only(): void
+    {
+        $logAdmin = $this->makeAdmin(['logs-general.manage']);
+        $invoiceManager = $this->makeAdmin(['laboratory-purchases.manage.invoices']);
+        $unauthorized = $this->makeAdmin([]);
+
+        DB::table('failed_jobs')->insert([
+            'uuid' => 'failed-report-job-uuid',
+            'connection' => 'database',
+            'queue' => 'default',
+            'payload' => json_encode([
+                'displayName' => GenerateLaboratoryBillingReportJob::class,
+                'job' => 'Illuminate\\Queue\\CallQueuedHandler@call',
+            ]),
+            'exception' => "RuntimeException: SMTP timeout\n#0 /app/example.php(1)",
+            'failed_at' => now()->toDateTimeString(),
+        ]);
+        $failedJobId = (int) DB::table('failed_jobs')->value('id');
+
+        $this->actingAs($logAdmin)
+            ->get(route('admin.failed-jobs.index', ['failed_job' => $failedJobId]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Admin/FailedJobs')
+                ->where('stats.total', 1)
+                ->where('stats.today', 1)
+                ->where('tableExists', true)
+                ->has('failedJobs.data', 1)
+                ->where('failedJobs.data.0.job_name', GenerateLaboratoryBillingReportJob::class)
+                ->where('selectedJob.id', $failedJobId)
+                ->where('selectedJob.exception_summary', 'RuntimeException: SMTP timeout'));
+
+        $this->actingAs($invoiceManager)
+            ->get(route('admin.failed-jobs.index'))
+            ->assertForbidden();
+
+        $this->actingAs($unauthorized)
+            ->get(route('admin.failed-jobs.index'))
+            ->assertForbidden();
+    }
+
+    #[Test]
+    public function invoice_manager_does_not_see_failed_jobs_navigation(): void
+    {
+        $invoiceManager = $this->makeAdmin(['laboratory-purchases.manage.invoices']);
+
+        $this->actingAs($invoiceManager)
+            ->get(route('admin.laboratory-billing.dashboard'))
+            ->assertOk()
+            ->assertDontSee('Jobs fallidos');
+    }
+
+    #[Test]
     public function automatic_report_index_exposes_summary_cards_without_loading_full_collections(): void
     {
         $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
@@ -455,7 +511,8 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('summary.total', 2)
                 ->where('summary.active', 1)
-                ->where('summary.recentRuns', 1));
+                ->where('summary.recentRuns', 1)
+                ->where('runs.data.0.recipients', ['billing@example.test']));
     }
 
     #[Test]
@@ -800,6 +857,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
     public function dispatcher_creates_one_scheduled_run_for_due_configuration(): void
     {
         Queue::fake();
+        Log::spy();
 
         $schedule = LaboratoryBillingReportSchedule::query()->create([
             'name' => 'Vencido',
@@ -819,6 +877,11 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
 
         $this->assertSame(1, LaboratoryBillingReportRun::query()->where('schedule_id', $schedule->id)->count());
         Queue::assertPushed(GenerateLaboratoryBillingReportJob::class, 1);
+        Log::shouldHaveReceived('info')->withArgs(fn ($message, $context = []) => $message === '[Laboratory Billing Report] dispatcher started'
+            && $context['due_schedules'] === 1);
+        Log::shouldHaveReceived('info')->withArgs(fn ($message, $context = []) => $message === '[Laboratory Billing Report] scheduled run dispatched'
+            && $context['schedule_id'] === $schedule->id
+            && $context['recipients_count'] === 1);
     }
 
     #[Test]
@@ -826,6 +889,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
     {
         Notification::fake();
         Storage::fake('local');
+        Log::spy();
         config(['famedic.laboratory_billing.report_disk' => 'local']);
 
         $this->seedRequest([
@@ -867,6 +931,14 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         $this->assertNotNull($run->file_path);
         Storage::disk('local')->assertExists($run->file_path);
         Notification::assertSentOnDemand(LaboratoryBillingAutomaticReportNotification::class);
+        Log::shouldHaveReceived('info')->withArgs(fn ($message, $context = []) => $message === '[Laboratory Billing Report] job started'
+            && $context['run_id'] === $run->id);
+        Log::shouldHaveReceived('info')->withArgs(fn ($message, $context = []) => $message === '[Laboratory Billing Report] mail notification submitted'
+            && $context['run_id'] === $run->id
+            && $context['recipient'] === 'b***@example.test');
+        Log::shouldHaveReceived('info')->withArgs(fn ($message, $context = []) => $message === '[Laboratory Billing Report] job sent'
+            && $context['run_id'] === $run->id
+            && $context['delivery_method'] === 'attachment');
     }
 
     #[Test]
@@ -1650,6 +1722,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'customers',
             'users',
             'notifications',
+            'failed_jobs',
         ] as $table) {
             Schema::dropIfExists($table);
         }
@@ -1672,6 +1745,16 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             $table->text('message')->nullable();
             $table->boolean('is_read')->default(false);
             $table->timestamp('created_at')->nullable();
+        });
+
+        Schema::create('failed_jobs', function (Blueprint $table) {
+            $table->id();
+            $table->string('uuid')->unique();
+            $table->text('connection');
+            $table->text('queue');
+            $table->longText('payload');
+            $table->longText('exception');
+            $table->timestamp('failed_at')->useCurrent();
         });
 
         Schema::create('administrators', function (Blueprint $table) {
@@ -1920,6 +2003,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'customers',
             'users',
             'notifications',
+            'failed_jobs',
         ] as $table) {
             Schema::dropIfExists($table);
         }

@@ -205,6 +205,25 @@ function MetricCard({ label, value, helper, icon: Icon, tone = "slate" }) {
 	);
 }
 
+function RecipientsList({ recipients = [] }) {
+	if (!recipients.length) {
+		return <span className="text-zinc-500">Sin destinatarios</span>;
+	}
+
+	return (
+		<div className="flex min-w-56 max-w-sm flex-wrap gap-1.5">
+			{recipients.map((recipient) => (
+				<span
+					key={recipient}
+					className="rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700"
+				>
+					{recipient}
+				</span>
+			))}
+		</div>
+	);
+}
+
 function FieldError({ children }) {
 	if (!children) return null;
 	return (
@@ -1508,7 +1527,7 @@ export default function AutomaticReports({
 							<div>
 								<Subheading>Historial de envíos</Subheading>
 								<Text className={`mt-1 ${billingMutedTextClass}`}>
-									Los reportes enviados, omitidos o fallidos aparecerán aquí.
+									Consulta cada ejecución y los correos usados como destinatarios.
 								</Text>
 							</div>
 							<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -1585,6 +1604,7 @@ export default function AutomaticReports({
 										<TableHead>
 											<TableRow>
 												<TableHeader>Reporte</TableHeader>
+												<TableHeader>Destinatarios</TableHeader>
 												<TableHeader>Tipo</TableHeader>
 												<TableHeader>Estado</TableHeader>
 												<TableHeader>Periodo</TableHeader>
@@ -1598,6 +1618,9 @@ export default function AutomaticReports({
 											{runsData.map((run) => (
 												<TableRow key={run.id}>
 													<TableCell>{run.schedule_name || "-"}</TableCell>
+													<TableCell>
+														<RecipientsList recipients={run.recipients || []} />
+													</TableCell>
 													<TableCell>
 														{TYPE_LABELS[run.run_type] || run.run_type || "-"}
 													</TableCell>

@@ -9,6 +9,7 @@ use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportScheduleCalcul
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class DispatchLaboratoryBillingReportsCommand extends Command
 {
@@ -23,6 +24,11 @@ class DispatchLaboratoryBillingReportsCommand extends Command
             ->whereNotNull('next_run_at')
             ->where('next_run_at', '<=', now())
             ->pluck('id');
+
+        Log::info('[Laboratory Billing Report] dispatcher started', [
+            'due_schedules' => $dueScheduleIds->count(),
+            'now' => now()->toIso8601String(),
+        ]);
 
         foreach ($dueScheduleIds as $scheduleId) {
             Cache::lock("laboratory-billing-report-schedule:{$scheduleId}", 120)->get(function () use ($scheduleId, $calculator) {
@@ -49,6 +55,15 @@ class DispatchLaboratoryBillingReportsCommand extends Command
                         ]
                     );
 
+                    if (! $run->wasRecentlyCreated) {
+                        Log::info('[Laboratory Billing Report] duplicate scheduled run skipped', [
+                            'schedule_id' => $schedule->id,
+                            'run_id' => $run->id,
+                            'idempotency_key' => $idempotencyKey,
+                            'intended_for_at' => optional($schedule->next_run_at)->toIso8601String(),
+                        ]);
+                    }
+
                     $schedule->update([
                         'next_run_at' => $calculator->nextRunAt($schedule, now()->addMinute()),
                     ]);
@@ -57,10 +72,22 @@ class DispatchLaboratoryBillingReportsCommand extends Command
                 });
 
                 if ($run && $run->wasRecentlyCreated) {
+                    Log::info('[Laboratory Billing Report] scheduled run dispatched', [
+                        'schedule_id' => $run->schedule_id,
+                        'run_id' => $run->id,
+                        'idempotency_key' => $run->idempotency_key,
+                        'intended_for_at' => optional($run->intended_for_at)->toIso8601String(),
+                        'recipients_count' => count($run->recipients ?? []),
+                    ]);
+
                     GenerateLaboratoryBillingReportJob::dispatch($run->id);
                 }
             });
         }
+
+        Log::info('[Laboratory Billing Report] dispatcher finished', [
+            'due_schedules' => $dueScheduleIds->count(),
+        ]);
 
         $this->info('Laboratory billing report dispatch finished.');
 
