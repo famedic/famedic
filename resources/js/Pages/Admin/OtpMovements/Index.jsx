@@ -309,8 +309,8 @@ export default function OtpMovementsIndex({ events, summary, filters, options })
 					</div>
 				)}
 
-				{events.data?.length ? (
-					<PaginatedTable paginator={events}>
+				{events?.data?.length ? (
+					<PaginatedTable paginatedData={events}>
 						<Table>
 							<TableHead>
 								<TableRow>
