@@ -7,62 +7,98 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /** MySQL identifier limit is 64 chars; Laravel auto-names exceed that for long table names. */
-    private const FK_RECEIPT = 'otp_sms_rcpt_apps_receipt_fk';
+    /**
+     * MySQL identifier limit: 64 chars. Laravel auto-names on long table names exceed it.
+     *
+     * @see tests/Unit/Database/OtpMonitorMigrationIdentifierLengthTest.php
+     */
+    public const TABLE = 'otp_sms_delivery_receipt_applications';
 
-    private const FK_OPERATION = 'otp_sms_rcpt_apps_operation_fk';
+    public const FK_RECEIPT = 'otp_dlr_apps_receipt_fk';
 
-    private const UQ_RECEIPT = 'otp_sms_rcpt_apps_receipt_uq';
+    public const FK_OPERATION = 'otp_dlr_apps_operation_fk';
 
-    private const IDX_OPERATION = 'otp_sms_rcpt_apps_operation_idx';
+    public const UQ_RECEIPT = 'otp_dlr_apps_receipt_uq';
 
-    private const IDX_APPLIED_AT = 'otp_sms_rcpt_apps_applied_idx';
+    public const IDX_OPERATION = 'otp_dlr_apps_operation_idx';
+
+    public const IDX_APPLIED_AT = 'otp_dlr_apps_applied_idx';
 
     public function up(): void
     {
-        if (! Schema::hasTable('otp_sms_delivery_receipt_applications')) {
-            Schema::create('otp_sms_delivery_receipt_applications', function (Blueprint $table): void {
-                $table->id();
-                $table->unsignedBigInteger('otp_sms_delivery_receipt_id');
-                $table->unsignedBigInteger('otp_delivery_operation_id');
-                $table->timestamp('applied_at');
-
-                $table->unique('otp_sms_delivery_receipt_id', self::UQ_RECEIPT);
-                $table->index('otp_delivery_operation_id', self::IDX_OPERATION);
-                $table->index('applied_at', self::IDX_APPLIED_AT);
-
-                $table->foreign('otp_sms_delivery_receipt_id', self::FK_RECEIPT)
-                    ->references('id')
-                    ->on('otp_sms_delivery_receipts')
-                    ->cascadeOnDelete();
-
-                $table->foreign('otp_delivery_operation_id', self::FK_OPERATION)
-                    ->references('id')
-                    ->on('otp_delivery_operations')
-                    ->cascadeOnDelete();
-            });
+        if (! Schema::hasTable(self::TABLE)) {
+            $this->createTable();
 
             return;
         }
 
-        // QA recovery: table may exist from a failed run where auto-named FKs exceeded 64 chars.
-        Schema::table('otp_sms_delivery_receipt_applications', function (Blueprint $table): void {
-            if (! $this->indexExists('otp_sms_delivery_receipt_applications', self::UQ_RECEIPT)) {
+        $this->repairPartialTable();
+    }
+
+    public function down(): void
+    {
+        // Intentionally non-destructive under schema drift.
+    }
+
+    private function createTable(): void
+    {
+        Schema::create(self::TABLE, function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('otp_sms_delivery_receipt_id');
+            $table->unsignedBigInteger('otp_delivery_operation_id');
+            $table->timestamp('applied_at');
+
+            $table->unique('otp_sms_delivery_receipt_id', self::UQ_RECEIPT);
+            $table->index('otp_delivery_operation_id', self::IDX_OPERATION);
+            $table->index('applied_at', self::IDX_APPLIED_AT);
+
+            $table->foreign('otp_sms_delivery_receipt_id', self::FK_RECEIPT)
+                ->references('id')
+                ->on('otp_sms_delivery_receipts')
+                ->cascadeOnDelete();
+
+            $table->foreign('otp_delivery_operation_id', self::FK_OPERATION)
+                ->references('id')
+                ->on('otp_delivery_operations')
+                ->cascadeOnDelete();
+        });
+    }
+
+    /**
+     * Staging recovery: CREATE TABLE may succeed while later ALTER FK fails (MySQL 1059).
+     * Never drops the table or rows — only adds missing columns/constraints.
+     */
+    private function repairPartialTable(): void
+    {
+        Schema::table(self::TABLE, function (Blueprint $table): void {
+            if (! Schema::hasColumn(self::TABLE, 'otp_sms_delivery_receipt_id')) {
+                $table->unsignedBigInteger('otp_sms_delivery_receipt_id')->after('id');
+            }
+            if (! Schema::hasColumn(self::TABLE, 'otp_delivery_operation_id')) {
+                $table->unsignedBigInteger('otp_delivery_operation_id')->after('otp_sms_delivery_receipt_id');
+            }
+            if (! Schema::hasColumn(self::TABLE, 'applied_at')) {
+                $table->timestamp('applied_at')->after('otp_delivery_operation_id');
+            }
+        });
+
+        Schema::table(self::TABLE, function (Blueprint $table): void {
+            if (! $this->uniqueOnColumnExists(self::TABLE, 'otp_sms_delivery_receipt_id')) {
                 $table->unique('otp_sms_delivery_receipt_id', self::UQ_RECEIPT);
             }
-            if (! $this->indexExists('otp_sms_delivery_receipt_applications', self::IDX_OPERATION)) {
+            if (! $this->indexOnColumnExists(self::TABLE, 'otp_delivery_operation_id')) {
                 $table->index('otp_delivery_operation_id', self::IDX_OPERATION);
             }
-            if (! $this->indexExists('otp_sms_delivery_receipt_applications', self::IDX_APPLIED_AT)) {
+            if (! $this->indexOnColumnExists(self::TABLE, 'applied_at')) {
                 $table->index('applied_at', self::IDX_APPLIED_AT);
             }
-            if (! $this->foreignKeyExists('otp_sms_delivery_receipt_applications', self::FK_RECEIPT)) {
+            if (! $this->foreignKeyOnColumnExists(self::TABLE, 'otp_sms_delivery_receipt_id')) {
                 $table->foreign('otp_sms_delivery_receipt_id', self::FK_RECEIPT)
                     ->references('id')
                     ->on('otp_sms_delivery_receipts')
                     ->cascadeOnDelete();
             }
-            if (! $this->foreignKeyExists('otp_sms_delivery_receipt_applications', self::FK_OPERATION)) {
+            if (! $this->foreignKeyOnColumnExists(self::TABLE, 'otp_delivery_operation_id')) {
                 $table->foreign('otp_delivery_operation_id', self::FK_OPERATION)
                     ->references('id')
                     ->on('otp_delivery_operations')
@@ -71,32 +107,43 @@ return new class extends Migration
         });
     }
 
-    public function down(): void
-    {
-        // Intentionally non-destructive under schema drift.
-    }
-
-    private function foreignKeyExists(string $table, string $name): bool
-    {
-        $database = Schema::getConnection()->getDatabaseName();
-
-        $row = DB::selectOne(
-            'SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
-             WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_NAME = ? AND CONSTRAINT_TYPE = ? LIMIT 1',
-            [$database, $table, $name, 'FOREIGN KEY'],
-        );
-
-        return $row !== null;
-    }
-
-    private function indexExists(string $table, string $name): bool
+    private function uniqueOnColumnExists(string $table, string $column): bool
     {
         $database = Schema::getConnection()->getDatabaseName();
 
         $row = DB::selectOne(
             'SELECT INDEX_NAME FROM information_schema.STATISTICS
-             WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
-            [$database, $table, $name],
+             WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ? AND NON_UNIQUE = 0
+             LIMIT 1',
+            [$database, $table, $column],
+        );
+
+        return $row !== null;
+    }
+
+    private function indexOnColumnExists(string $table, string $column): bool
+    {
+        $database = Schema::getConnection()->getDatabaseName();
+
+        $row = DB::selectOne(
+            'SELECT INDEX_NAME FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ? AND NON_UNIQUE = 1
+             LIMIT 1',
+            [$database, $table, $column],
+        );
+
+        return $row !== null;
+    }
+
+    private function foreignKeyOnColumnExists(string $table, string $column): bool
+    {
+        $database = Schema::getConnection()->getDatabaseName();
+
+        $row = DB::selectOne(
+            'SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL
+             LIMIT 1',
+            [$database, $table, $column],
         );
 
         return $row !== null;
