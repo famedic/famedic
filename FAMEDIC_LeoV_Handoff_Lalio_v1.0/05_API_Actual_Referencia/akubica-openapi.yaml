@@ -1,0 +1,390 @@
+openapi: 3.0.3
+info:
+  title: Famedic Akubica API v1
+  description: |
+    API para integración del asistente virtual Akubica (WhatsApp).
+    Auth OTP + Bearer Sanctum. El pago se realiza en plataforma Famedic, no en esta API.
+  version: 1.0.0
+  contact:
+    name: Famedic
+servers:
+  - url: https://staging.famedic.com.mx/api/v1
+    description: Staging
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum
+
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    RegisterRequest:
+      type: object
+      required: [email, phone, full_name]
+      properties:
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        full_name:
+          type: string
+          minLength: 3
+        phone_country:
+          type: string
+          default: MX
+    OtpVerifyRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Solicitar OTP de registro
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: OTP enviado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /auth/register/verify-code:
+    post:
+      tags: [Auth]
+      summary: Verificar registro y obtener Bearer token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpVerifyRequest'
+      responses:
+        '200':
+          description: Usuario creado + token
+
+  /auth/login/request-code:
+    post:
+      tags: [Auth]
+      summary: Solicitar OTP de login
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: OTP enviado
+
+  /auth/login/verify-code:
+    post:
+      tags: [Auth]
+      summary: Verificar login y obtener Bearer token
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpVerifyRequest'
+      responses:
+        '200':
+          description: Token emitido
+
+  /auth/token:
+    delete:
+      tags: [Auth]
+      summary: Revocar token actual
+      responses:
+        '200':
+          description: Token revocado
+
+  /catalog/laboratory-brands:
+    get:
+      tags: [Catalog]
+      summary: Listar marcas de laboratorio
+      responses:
+        '200':
+          description: Lista de marcas
+
+  /catalog/laboratory-tests:
+    get:
+      tags: [Catalog]
+      summary: Buscar estudios
+      parameters:
+        - name: brand
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Estudios paginados
+
+  /cart:
+    get:
+      tags: [Cart]
+      summary: Ver carrito
+      parameters:
+        - name: brand
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Carrito
+
+  /cart/items:
+    post:
+      tags: [Cart]
+      summary: Agregar estudio al carrito
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brand, laboratory_test_id]
+              properties:
+                brand:
+                  type: string
+                laboratory_test_id:
+                  type: integer
+      responses:
+        '200':
+          description: Item agregado
+
+  /cart/totals:
+    get:
+      tags: [Cart]
+      summary: Totales del carrito
+      parameters:
+        - name: brand
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Totales con cupón si aplica
+
+  /cart/coupon:
+    get:
+      tags: [Coupons]
+      summary: Consultar cupón aplicado
+      parameters:
+        - name: brand
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cupón o null
+    post:
+      tags: [Coupons]
+      summary: Aplicar cupón
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brand, code]
+              properties:
+                brand:
+                  type: string
+                code:
+                  type: string
+      responses:
+        '200':
+          description: Cupón aplicado + totales
+    delete:
+      tags: [Coupons]
+      summary: Quitar cupón
+      parameters:
+        - name: brand
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cupón removido
+
+  /checkout/prepare:
+    get:
+      tags: [Checkout]
+      summary: Preparar checkout
+      parameters:
+        - name: brand
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resumen checkout
+
+  /checkout/draft:
+    post:
+      tags: [Checkout]
+      summary: Sincronizar borrador
+      responses:
+        '200':
+          description: Draft actualizado
+
+  /checkout/payment-link:
+    post:
+      tags: [Checkout]
+      summary: Generar liga de pago a Famedic (sin cobro)
+      responses:
+        '200':
+          description: URL temporal
+
+  /orders:
+    get:
+      tags: [Orders]
+      summary: Listar pedidos
+      responses:
+        '200':
+          description: Pedidos paginados
+
+  /orders/{order_id}/results:
+    get:
+      tags: [Orders]
+      summary: Detalle de resultados
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Metadata + download bearer
+
+  /orders/{order_id}/results/download:
+    get:
+      tags: [Downloads]
+      summary: Descargar PDF de resultados (Bearer-native)
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: PDF binario
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '409':
+          description: RESULT_NOT_READY
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/{order_id}/invoices/{invoice_id}/download:
+    get:
+      tags: [Downloads]
+      summary: Descargar PDF de factura (Bearer-native)
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: invoice_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: PDF binario
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /catalog/medications/{medication_id}:
+    get:
+      tags: [Disabled]
+      summary: Farmacia (desactivado)
+      parameters:
+        - name: medication_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '503':
+          description: CATALOG_UNAVAILABLE
+
+  /orders/{order_id}/cancel:
+    put:
+      tags: [Disabled]
+      summary: Cancelación (desactivada)
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '503':
+          description: FEATURE_DISABLED

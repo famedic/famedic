@@ -154,6 +154,7 @@ class LoginController extends Controller
                     challengePublicId: is_string($payload['challenge_id'] ?? null) ? $payload['challenge_id'] : null,
                     isDecoy: true,
                     isResend: false,
+                    destinationMasked: is_string($payload['destination_masked'] ?? null) ? $payload['destination_masked'] : null,
                 );
 
                 return ApiResponse::success($payload, null, 202);
@@ -192,6 +193,8 @@ class LoginController extends Controller
             challengePublicId: is_string($payload['challenge_id'] ?? null) ? $payload['challenge_id'] : null,
             isDecoy: false,
             isResend: false,
+            destinationMasked: is_string($payload['destination_masked'] ?? null) ? $payload['destination_masked'] : null,
+            userId: $user->id ?? null,
         );
 
         return ApiResponse::success($payload, null, 202);

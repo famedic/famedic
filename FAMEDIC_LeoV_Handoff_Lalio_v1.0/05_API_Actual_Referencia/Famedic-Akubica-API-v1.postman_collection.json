@@ -1,0 +1,305 @@
+{
+  "info": {
+    "_postman_id": "famedic-akubica-api-v1-s15",
+    "name": "Famedic Akubica API v1",
+    "description": "Colección Sprint 15 — flujo completo Akubica.\n\nBase URL: https://staging.famedic.com.mx/api/v1\n\nOrden: carpetas 01 → 17. Empezar con registro de usuario nuevo.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "base_url", "value": "https://staging.famedic.com.mx/api/v1"}
+  ],
+  "item": [
+    {
+      "name": "01 - Registro nuevo usuario",
+      "item": [
+        {
+          "name": "POST Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"phone\": \"{{phone}}\",\n  \"full_name\": \"Juan Pérez López\",\n  \"phone_country\": \"MX\"\n}"
+            },
+            "url": "{{base_url}}/auth/register"
+          }
+        },
+        {
+          "name": "POST Register verify-code",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "if (json?.data?.token) { pm.environment.set('token', json.data.token); }",
+                "if (json?.data?.user?.email) { pm.environment.set('email', json.data.user.email); }"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"code\": \"{{otp_code}}\"\n}"
+            },
+            "url": "{{base_url}}/auth/register/verify-code"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Login usuario existente",
+      "item": [
+        {
+          "name": "POST Login request-code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{email}}\"\n}"},
+            "url": "{{base_url}}/auth/login/request-code"
+          }
+        },
+        {
+          "name": "POST Login verify-code",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const json = pm.response.json();",
+                "if (json?.data?.token) { pm.environment.set('token', json.data.token); }"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"code\": \"{{otp_code}}\"\n}"},
+            "url": "{{base_url}}/auth/login/verify-code"
+          }
+        },
+        {
+          "name": "DELETE Revoke token",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Accept", "value": "application/json"}
+            ],
+            "url": "{{base_url}}/auth/token"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Perfil usuario",
+      "item": [
+        {"name": "GET Family", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/user/family"}},
+        {"name": "GET Contacts", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/user/contacts"}},
+        {"name": "GET Addresses", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/user/addresses"}},
+        {"name": "GET Tax profiles", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/user/tax-profiles"}},
+        {"name": "GET Payment methods", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/user/payment-methods"}}
+      ]
+    },
+    {
+      "name": "04 - Catálogo laboratorio",
+      "item": [
+        {"name": "GET Laboratory brands", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/catalog/laboratory-brands"}},
+        {"name": "GET Test categories", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": {"raw": "{{base_url}}/catalog/laboratory-test-categories?brand={{brand}}", "host": ["{{base_url}}"], "path": ["catalog", "laboratory-test-categories"], "query": [{"key": "brand", "value": "{{brand}}"}]}}},
+        {
+          "name": "GET Laboratory tests",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "const j = pm.response.json();",
+            "const items = j?.data?.items || j?.data?.data || j?.data;",
+            "if (Array.isArray(items) && items.length && items[0]?.id) {",
+            "  pm.environment.set('laboratory_test_id', String(items[0].id));",
+            "}"
+          ]}}],
+          "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": {"raw": "{{base_url}}/catalog/laboratory-tests?brand={{brand}}&per_page=10", "host": ["{{base_url}}"], "path": ["catalog", "laboratory-tests"], "query": [{"key": "brand", "value": "{{brand}}"}, {"key": "per_page", "value": "10"}]}}
+        },
+        {"name": "GET Laboratory stores", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": {"raw": "{{base_url}}/catalog/laboratory-stores?brand={{brand}}", "host": ["{{base_url}}"], "path": ["catalog", "laboratory-stores"], "query": [{"key": "brand", "value": "{{brand}}"}]}}},
+        {"name": "GET Laboratory test detail", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/catalog/laboratory-tests/{{laboratory_test_id}}"}}
+      ]
+    },
+    {
+      "name": "05 - Carrito",
+      "item": [
+        {
+          "name": "POST Add cart item",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "const j = pm.response.json();",
+            "if (j?.data?.items?.length) pm.environment.set('cart_item_id', j.data.items[0].id);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"laboratory_test_id\": {{laboratory_test_id}}\n}"},
+            "url": "{{base_url}}/cart/items"
+          }
+        },
+        {"name": "GET Cart", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": {"raw": "{{base_url}}/cart?brand={{brand}}", "host": ["{{base_url}}"], "path": ["cart"], "query": [{"key": "brand", "value": "{{brand}}"}]}}},
+        {"name": "GET Cart totals", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": {"raw": "{{base_url}}/cart/totals?brand={{brand}}", "host": ["{{base_url}}"], "path": ["cart", "totals"], "query": [{"key": "brand", "value": "{{brand}}"}]}}},
+        {"name": "DELETE Cart item", "request": {"method": "DELETE", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/cart/items/{{cart_item_id}}"}},
+        {"name": "DELETE Clear cart", "request": {"method": "DELETE", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": {"raw": "{{base_url}}/cart?brand={{brand}}", "host": ["{{base_url}}"], "path": ["cart"], "query": [{"key": "brand", "value": "{{brand}}"}]}}}
+      ]
+    },
+    {
+      "name": "06 - Cupones",
+      "item": [
+        {"name": "GET Cart coupon", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": {"raw": "{{base_url}}/cart/coupon?brand={{brand}}", "host": ["{{base_url}}"], "path": ["cart", "coupon"], "query": [{"key": "brand", "value": "{{brand}}"}]}}},
+        {"name": "POST Apply coupon", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"code\": \"{{coupon_code}}\"\n}"}, "url": "{{base_url}}/cart/coupon"}},
+        {"name": "DELETE Remove coupon", "request": {"method": "DELETE", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": {"raw": "{{base_url}}/cart/coupon?brand={{brand}}", "host": ["{{base_url}}"], "path": ["cart", "coupon"], "query": [{"key": "brand", "value": "{{brand}}"}]}}}
+      ]
+    },
+    {
+      "name": "07 - Contactos pacientes",
+      "item": [
+        {
+          "name": "POST Create contact",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["const j = pm.response.json(); if (j?.data?.id) pm.environment.set('contact_id', j.data.id);"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"name\": \"Juan\",\n  \"paternal_lastname\": \"Pérez\",\n  \"maternal_lastname\": \"López\",\n  \"phone\": \"{{phone}}\",\n  \"phone_country\": \"MX\",\n  \"birth_date\": \"1990-05-20\",\n  \"gender\": \"male\"\n}"},
+            "url": "{{base_url}}/user/contacts"
+          }
+        },
+        {"name": "GET Contacts", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/user/contacts"}}
+      ]
+    },
+    {
+      "name": "08 - Direcciones",
+      "item": [
+        {
+          "name": "POST Create address",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["const j = pm.response.json(); if (j?.data?.id) pm.environment.set('address_id', j.data.id);"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"street\": \"Av. Constitución\",\n  \"number\": \"100\",\n  \"neighborhood\": \"Centro\",\n  \"state\": \"Nuevo León\",\n  \"city\": \"Monterrey\",\n  \"zipcode\": \"64000\"\n}"},
+            "url": "{{base_url}}/user/addresses"
+          }
+        },
+        {"name": "GET Addresses", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/user/addresses"}}
+      ]
+    },
+    {
+      "name": "09 - Checkout prepare y draft",
+      "item": [
+        {"name": "GET Checkout prepare", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": {"raw": "{{base_url}}/checkout/prepare?brand={{brand}}", "host": ["{{base_url}}"], "path": ["checkout", "prepare"], "query": [{"key": "brand", "value": "{{brand}}"}]}}},
+        {"name": "POST Sync draft", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"contact_id\": {{contact_id}},\n  \"address_id\": {{address_id}}\n}"}, "url": "{{base_url}}/checkout/draft"}}
+      ]
+    },
+    {
+      "name": "10 - Citas laboratorio",
+      "item": [
+        {"name": "GET Requirements", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": {"raw": "{{base_url}}/laboratory-appointments/requirements?brand={{brand}}", "host": ["{{base_url}}"], "path": ["laboratory-appointments", "requirements"], "query": [{"key": "brand", "value": "{{brand}}"}]}}},
+        {"name": "GET Appointments", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": {"raw": "{{base_url}}/laboratory-appointments?brand={{brand}}", "host": ["{{base_url}}"], "path": ["laboratory-appointments"], "query": [{"key": "brand", "value": "{{brand}}"}]}}},
+        {"name": "POST Create appointment", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"contact_id\": {{contact_id}},\n  \"address_id\": {{address_id}},\n  \"scheduled_at\": \"2026-12-01T10:00:00-06:00\"\n}"}, "url": "{{base_url}}/laboratory-appointments"}}
+      ]
+    },
+    {
+      "name": "11 - Payment link",
+      "item": [
+        {"name": "POST Payment link", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"brand\": \"{{brand}}\",\n  \"expires_in_minutes\": 60\n}"}, "url": "{{base_url}}/checkout/payment-link"}}
+      ]
+    },
+    {
+      "name": "12 - Pedidos",
+      "item": [
+        {
+          "name": "GET List orders",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "const j = pm.response.json();",
+            "const items = j?.data?.items || j?.data?.data || j?.data;",
+            "if (Array.isArray(items) && items.length && items[0]?.id) {",
+            "  pm.environment.set('order_id', String(items[0].id));",
+            "}"
+          ]}}],
+          "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": {"raw": "{{base_url}}/orders?per_page=20", "host": ["{{base_url}}"], "path": ["orders"], "query": [{"key": "per_page", "value": "20"}]}}
+        },
+        {"name": "GET Order status", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/orders/{{order_id}}/status"}},
+        {"name": "GET Order products", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/orders/{{order_id}}/products"}}
+      ]
+    },
+    {
+      "name": "13 - Resultados",
+      "item": [
+        {"name": "GET List results", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/orders/results"}},
+        {"name": "GET Order results", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/orders/{{order_id}}/results"}}
+      ]
+    },
+    {
+      "name": "14 - Facturas",
+      "item": [
+        {"name": "GET List invoices", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/orders/invoices"}},
+        {
+          "name": "GET Order invoices",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "const j = pm.response.json();",
+            "const items = j?.data?.items || j?.data?.invoices || j?.data;",
+            "if (Array.isArray(items) && items.length && items[0]?.id) {",
+            "  pm.environment.set('invoice_id', String(items[0].id));",
+            "}"
+          ]}}],
+          "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/orders/{{order_id}}/invoices"}
+        }
+      ]
+    },
+    {
+      "name": "15 - Solicitud factura",
+      "item": [
+        {
+          "name": "POST Tax profile",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "const j = pm.response.json();",
+            "if (j?.data?.id) pm.environment.set('tax_profile_id', String(j.data.id));"
+          ]}}],
+          "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"rfc\": \"XAXX010101000\",\n  \"business_name\": \"Empresa Demo SA de CV\",\n  \"tax_regime\": \"601\",\n  \"postal_code\": \"64000\"\n}"}, "url": "{{base_url}}/user/tax-profiles"}
+        },
+        {"name": "GET Invoice request status", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/orders/{{order_id}}/invoice-request/status"}},
+        {"name": "POST Invoice request", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"tax_profile_id\": {{tax_profile_id}}\n}"}, "url": "{{base_url}}/orders/{{order_id}}/invoice-request"}}
+      ]
+    },
+    {
+      "name": "16 - Descargas Bearer-native",
+      "item": [
+        {"name": "GET Download result PDF", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/pdf"}], "url": "{{base_url}}/orders/{{order_id}}/results/download"}},
+        {"name": "GET Download invoice PDF", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/pdf"}], "url": "{{base_url}}/orders/{{order_id}}/invoices/{{invoice_id}}/download"}}
+      ]
+    },
+    {
+      "name": "17 - Features desactivadas",
+      "item": [
+        {
+          "name": "GET Medication 503",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Farmacia desactivada responde 503', () => pm.response.to.have.status(503));"
+          ]}}],
+          "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}], "url": "{{base_url}}/catalog/medications/1"}
+        },
+        {
+          "name": "PUT Cancel order 503",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Cancelación desactivada responde 503', () => pm.response.to.have.status(503));"
+          ]}}],
+          "request": {"method": "PUT", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{}"}, "url": "{{base_url}}/orders/{{order_id}}/cancel"}
+        }
+      ]
+    }
+  ]
+}

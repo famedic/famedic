@@ -7,6 +7,7 @@ use App\Models\Api\V1\IdempotencyRecord;
 use App\Services\Api\V1\Idempotency\IdempotencyActorResolver;
 use App\Services\Api\V1\Idempotency\IdempotencyKey;
 use App\Services\Api\V1\Idempotency\IdempotencyService;
+use App\Services\Otp\Monitoring\OtpMovementRecorder;
 use App\Support\Api\V1\AkubicaCorrelationId;
 use Closure;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class EnforceIdempotencyKey
     public function __construct(
         private readonly IdempotencyService $idempotency,
         private readonly IdempotencyActorResolver $actors,
+        private readonly OtpMovementRecorder $movementRecorder,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
@@ -102,6 +104,13 @@ class EnforceIdempotencyKey
                 'status' => $record->status,
             ]);
 
+            $this->movementRecorder->recordIdempotencyConflict(
+                originalCorrelationId: (string) $record->correlation_id,
+                replayCorrelationId: $replayCorrelationId,
+                path: (string) $record->path,
+                idempotencyKey: request()->header(IdempotencyKey::HEADER),
+            );
+
             return ApiResponse::error(
                 'IDEMPOTENCY_KEY_CONFLICT',
                 'La Idempotency-Key ya fue usada con un payload diferente.',
@@ -124,6 +133,14 @@ class EnforceIdempotencyKey
                 'path' => $record->path,
                 'http_status' => $record->http_status,
             ]);
+
+            $this->movementRecorder->recordIdempotencyReplay(
+                originalCorrelationId: (string) $record->correlation_id,
+                replayCorrelationId: $replayCorrelationId,
+                path: (string) $record->path,
+                httpStatus: (int) $record->http_status,
+                idempotencyKey: request()->header(IdempotencyKey::HEADER),
+            );
 
             AkubicaCorrelationId::bind(request(), $record->correlation_id);
 
@@ -157,6 +174,13 @@ class EnforceIdempotencyKey
                 'replay_correlation_id' => $replayCorrelationId,
                 'path' => $record->path,
             ]);
+
+            $this->movementRecorder->recordIdempotencyUncertain(
+                originalCorrelationId: (string) $record->correlation_id,
+                replayCorrelationId: $replayCorrelationId,
+                path: (string) $record->path,
+                idempotencyKey: request()->header(IdempotencyKey::HEADER),
+            );
 
             return $this->uncertainResponse($record->fresh() ?? $record);
         }

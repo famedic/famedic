@@ -7,6 +7,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use Spatie\Permission\Models\Permission;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureUserHasAdminAccount
@@ -267,6 +268,11 @@ class EnsureUserHasAdminAccount
                             'current' => Route::currentRouteName() === 'admin.payment-attempts.index'
                                 || Route::currentRouteName() === 'admin.payment-attempts.show',
                         ] : null,
+                        $this->adminHasPermission($request, 'otp-movements.monitor') ? [
+                            'label' => 'Movimientos OTP',
+                            'url' => route('admin.otp-movements-monitor.index'),
+                            'current' => str_starts_with((string) Route::currentRouteName(), 'admin.otp-movements-monitor'),
+                        ] : null,
                         $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') ? [
                             'label' => 'Monitor notificaciones lab',
                             'url' => route('admin.laboratory-notifications-monitor.index'),
@@ -334,5 +340,18 @@ class EnsureUserHasAdminAccount
         ]);
 
         return $next($request);
+    }
+
+    private function adminHasPermission(Request $request, string $permission): bool
+    {
+        if (! Permission::query()
+            ->where('name', $permission)
+            ->where('guard_name', 'web')
+            ->exists()
+        ) {
+            return false;
+        }
+
+        return $request->user()->administrator->hasPermissionTo($permission);
     }
 }

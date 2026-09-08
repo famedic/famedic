@@ -2,10 +2,15 @@
 
 namespace App\Services\Otp\Delivery;
 
+use App\Services\Otp\Monitoring\OtpMovementRecorder;
 use Illuminate\Support\Facades\Log;
 
 final class OtpDeliveryObservability
 {
+    public function __construct(
+        private readonly OtpMovementRecorder $movementRecorder,
+    ) {}
+
     /** @param array<string, scalar|null> $dims */
     public function emit(string $event, array $dims): void
     {
@@ -17,6 +22,7 @@ final class OtpDeliveryObservability
         $context = array_intersect_key($dims, array_flip($allowed));
         $context['environment'] ??= app()->environment();
         Log::info($event, $context);
+        $this->movementRecorder->recordDeliveryObserved($event, $context);
     }
 
     public function durationBucket(int $milliseconds): string

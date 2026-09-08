@@ -47,6 +47,7 @@ use App\Http\Controllers\Admin\OnlinePharmacyPurchases\InvoiceController as Onli
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\ResolvedDevAssistanceRequestController as OnlinePharmacyResolvedDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\UnresolvedDevAssistanceRequestController as OnlinePharmacyUnresolvedDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\VendorPaymentsController as OnlinePharmacyVendorPaymentsController;
+use App\Http\Controllers\Admin\OtpMovementsMonitorController;
 use App\Http\Controllers\Admin\PaymentAttemptController as AdminPaymentAttemptController;
 use App\Http\Controllers\Admin\EmailSimulatorController;
 use App\Http\Controllers\Admin\GdaNotificationSimulatorController;
@@ -192,6 +193,12 @@ Route::prefix('admin')->middleware([
 
         // Intentos de pago
         Route::resource('payment-attempts', AdminPaymentAttemptController::class)->only(['index', 'show']);
+
+        Route::get('otp-movements-monitor', [OtpMovementsMonitorController::class, 'index'])
+            ->name('otp-movements-monitor.index');
+        Route::get('otp-movements-monitor/{movementKey}', [OtpMovementsMonitorController::class, 'show'])
+            ->name('otp-movements-monitor.show')
+            ->where('movementKey', '.+');
 
         // Monitoreo de notificaciones de laboratorio (toma de muestra vs resultados)
         Route::get('laboratory-notifications-monitor', [LaboratoryNotificationMonitorController::class, 'index'])
