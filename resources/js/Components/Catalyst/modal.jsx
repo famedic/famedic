@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 
-import { useSupportWidgetModalVisibility } from '@/hooks/useSupportWidgetModalVisibility';
+import { useSupportWidgetModalVisibility } from '@/Hooks/useSupportWidgetModalVisibility';
 
 export default function Modal({ open, onClose, children, size = 'md' }) {
     useSupportWidgetModalVisibility(open);

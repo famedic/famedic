@@ -1,7 +1,7 @@
 import * as Headless from "@headlessui/react";
 import clsx from "clsx";
 
-import { useSupportWidgetModalVisibility } from "@/hooks/useSupportWidgetModalVisibility";
+import { useSupportWidgetModalVisibility } from "@/Hooks/useSupportWidgetModalVisibility";
 import { Text } from "./text";
 
 const sizes = {
