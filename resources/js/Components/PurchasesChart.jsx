@@ -36,6 +36,12 @@ export default function PurchasesChart({ chart }) {
 		<div>
 			<div className="flex flex-wrap justify-end gap-x-4 gap-y-2">
 				<div className="flex items-center gap-1">
+					<Text>{formatPurchaseCount(chart.count)}</Text>
+					<Badge color="slate">
+						{chart.count === 1 ? "compra" : "compras"}
+					</Badge>
+				</div>
+				<div className="flex items-center gap-1">
 					<Text>{chart.averagePerDay}</Text>
 					<Badge color="slate">promedio</Badge>
 				</div>
@@ -91,6 +97,12 @@ export default function PurchasesChart({ chart }) {
 			)}
 		</div>
 	);
+}
+
+function formatPurchaseCount(count) {
+	return Number.isFinite(Number(count))
+		? Number(count).toLocaleString("es-MX")
+		: "0";
 }
 
 function LineChartTooltip({ active, payload, label }) {
