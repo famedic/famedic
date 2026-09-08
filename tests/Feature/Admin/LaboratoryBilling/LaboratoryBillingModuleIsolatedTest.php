@@ -1028,7 +1028,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             '_included_sections' => $schedule->included_sections,
             'schedule_name' => $schedule->name,
             'run_type_label' => 'Manual',
-        ], null, Storage::disk('local')->path($run->file_path)))->toMail((object) []);
+        ], null, $run->file_disk, $run->file_path))->toMail((object) []);
         $html = view('emails.laboratory-billing.automatic-report', [
             'schedule' => $schedule,
             'run' => $run,
@@ -1040,7 +1040,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             ],
             'metrics' => $report['metrics'],
             'downloadUrl' => null,
-            'attachmentPath' => Storage::disk('local')->path($run->file_path),
+            'attachmentPath' => $run->file_path,
             'moduleUrl' => route('admin.laboratory-billing.automatic-reports.index'),
             'isTest' => false,
         ])->render();
@@ -1057,10 +1057,94 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         $this->assertStringNotContainsString('custom_range', $html);
         $this->assertStringContainsString('Pendientes del periodo', $html);
         $this->assertStringContainsString('reporte-facturacion-laboratorio.xlsx está adjunto', $html);
+        $this->assertCount(1, $mail->rawAttachments);
+        $this->assertSame('reporte-facturacion-laboratorio.xlsx', $mail->rawAttachments[0]['name']);
+        $this->assertSame('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $mail->rawAttachments[0]['options']['mime']);
+        $this->assertSame([], $mail->attachments);
         $this->assertStringNotContainsString('Pendientes actuales: 516', $html);
         $this->assertStringNotContainsString('MAR-2025', $html);
         Notification::assertSentOnDemand(LaboratoryBillingAutomaticReportNotification::class);
         Queue::assertNotPushed(GenerateLaboratoryBillingReportJob::class);
+    }
+
+    #[Test]
+    public function automatic_report_notification_attaches_excel_from_storage_disk(): void
+    {
+        Storage::fake('s3');
+
+        $schedule = $this->makeReportSchedule(['include_excel' => true]);
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_TEST, [
+            'file_disk' => 's3',
+            'file_path' => 'laboratory-billing/reports/1/reporte-facturacion-laboratorio.xlsx',
+        ]);
+        Storage::disk('s3')->put($run->file_path, 'fake xlsx bytes');
+
+        $mail = (new LaboratoryBillingAutomaticReportNotification(
+            $schedule,
+            $run,
+            $this->minimalReportData(),
+            null,
+            $run->file_disk,
+            $run->file_path,
+        ))->toMail((object) []);
+
+        $this->assertSame([], $mail->attachments);
+        $this->assertCount(1, $mail->rawAttachments);
+        $this->assertSame('fake xlsx bytes', $mail->rawAttachments[0]['data']);
+        $this->assertSame('reporte-facturacion-laboratorio.xlsx', $mail->rawAttachments[0]['name']);
+        $this->assertSame('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $mail->rawAttachments[0]['options']['mime']);
+        $this->assertSame($run->file_path, $mail->viewData['attachmentPath']);
+    }
+
+    #[Test]
+    public function automatic_report_notification_logs_missing_attachment_without_local_path_lookup(): void
+    {
+        Storage::fake('s3');
+        Log::spy();
+
+        $schedule = $this->makeReportSchedule(['include_excel' => true]);
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_TEST, [
+            'file_disk' => 's3',
+            'file_path' => 'laboratory-billing/reports/1/reporte-facturacion-laboratorio.xlsx',
+        ]);
+
+        $mail = (new LaboratoryBillingAutomaticReportNotification(
+            $schedule,
+            $run,
+            $this->minimalReportData(),
+            null,
+            $run->file_disk,
+            $run->file_path,
+        ))->toMail((object) []);
+
+        $this->assertSame([], $mail->attachments);
+        $this->assertSame([], $mail->rawAttachments);
+        $this->assertNull($mail->viewData['attachmentPath']);
+        Log::shouldHaveReceived('error')->withArgs(fn ($message, $context = []) => $message === '[Laboratory Billing Report] attachment file missing'
+            && $context['run_id'] === $run->id
+            && $context['disk'] === 's3'
+            && $context['path'] === $run->file_path);
+    }
+
+    #[Test]
+    public function automatic_report_notification_has_no_attachment_when_excel_is_not_included(): void
+    {
+        $schedule = $this->makeReportSchedule(['include_excel' => false]);
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_TEST);
+
+        $mail = (new LaboratoryBillingAutomaticReportNotification(
+            $schedule,
+            $run,
+            $this->minimalReportData(),
+            null,
+            null,
+            null,
+        ))->toMail((object) []);
+
+        $this->assertSame([], $mail->attachments);
+        $this->assertSame([], $mail->rawAttachments);
+        $this->assertNull($mail->viewData['attachmentPath']);
+        $this->assertNull($mail->viewData['downloadUrl']);
     }
 
     #[Test]
@@ -1786,6 +1870,45 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'recipients' => $schedule->recipients,
             'filters' => [],
         ], $overrides));
+    }
+
+    private function minimalReportData(): array
+    {
+        return [
+            'period' => [
+                'name' => 'Día anterior',
+                'date_label' => '9 de agosto de 2026',
+                'timezone' => 'America/Monterrey',
+            ],
+            'metrics' => [
+                'received' => 0,
+                'completed' => 0,
+                'pending_period' => 0,
+                'overdue_period' => 0,
+                'pending_backlog' => 0,
+                'overdue_backlog' => 0,
+                'compliance_percent' => 0,
+                'average_response_duration' => [
+                    'value' => 'Sin datos',
+                    'detail' => null,
+                ],
+                'missing_files' => [
+                    'missing_pdf' => 0,
+                    'missing_xml' => 0,
+                    'missing_both' => 0,
+                ],
+                'aging' => [
+                    'within_sla' => 0,
+                    'overdue_1_3' => 0,
+                    'overdue_4_7' => 0,
+                    'overdue_more_7' => 0,
+                ],
+            ],
+            'applied_filters' => [],
+            '_included_sections' => ['activity'],
+            'schedule_name' => 'Reporte facturación',
+            'run_type_label' => 'Prueba',
+        ];
     }
 
     private function makeAdmin(array $permissions): User

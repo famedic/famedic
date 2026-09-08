@@ -26,6 +26,7 @@ class LaboratoryBillingReportDeliveryService
             default => ucfirst((string) $run->run_type),
         };
         $downloadUrl = null;
+        $attachmentDisk = null;
         $attachmentPath = null;
 
         Log::info('[Laboratory Billing Report] delivery started', [
@@ -36,7 +37,7 @@ class LaboratoryBillingReportDeliveryService
         ]);
 
         if ($schedule->include_excel) {
-            [$downloadUrl, $attachmentPath] = $this->generateExcel($run, $reportData);
+            [$downloadUrl, $attachmentDisk, $attachmentPath] = $this->generateExcel($run, $reportData);
         } else {
             $run->update(['delivery_method' => 'email_only']);
         }
@@ -48,6 +49,7 @@ class LaboratoryBillingReportDeliveryService
                     $run,
                     $reportData,
                     $downloadUrl,
+                    $attachmentDisk,
                     $attachmentPath,
                 ));
 
@@ -80,21 +82,17 @@ class LaboratoryBillingReportDeliveryService
             'link_expires_at' => $linkExpiresAt,
         ]);
 
-        if ($size <= $maxAttachmentBytes && method_exists(Storage::disk($disk), 'path')) {
-            try {
-                $run->update(['delivery_method' => 'attachment']);
+        if ($size <= $maxAttachmentBytes) {
+            $run->update(['delivery_method' => 'attachment']);
 
-                Log::info('[Laboratory Billing Report] excel generated for attachment', [
-                    'run_id' => $run->id,
-                    'disk' => $disk,
-                    'path' => $path,
-                    'file_size' => $size,
-                ]);
+            Log::info('[Laboratory Billing Report] excel generated for attachment', [
+                'run_id' => $run->id,
+                'disk' => $disk,
+                'path' => $path,
+                'file_size' => $size,
+            ]);
 
-                return [null, Storage::disk($disk)->path($path)];
-            } catch (\Throwable) {
-                // Some remote disks do not expose a local path; use the signed route instead.
-            }
+            return [null, $disk, $path];
         }
 
         $url = URL::temporarySignedRoute(
@@ -113,7 +111,7 @@ class LaboratoryBillingReportDeliveryService
             'link_expires_at' => $linkExpiresAt->toIso8601String(),
         ]);
 
-        return [$url, null];
+        return [$url, null, null];
     }
 
     private function maskedEmail(string $email): string
