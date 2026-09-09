@@ -227,6 +227,13 @@ return [
         ),
     ],
 
+    'zoho_salesiq' => [
+        'enabled' => filter_var(
+            env('ZOHO_SALESIQ_ENABLED', false),
+            FILTER_VALIDATE_BOOL
+        ),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Portal de usuario — Soporte y contacto público

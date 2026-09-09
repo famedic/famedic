@@ -3,6 +3,7 @@ import {
 	applySupportWidgetVisibility,
 	shouldShowSupportWidgets,
 	supportWidgetsConfig,
+	zohoSalesIQConfig,
 } from "./supportWidgets";
 
 const WIDGET_SRC =
@@ -11,6 +12,10 @@ const WIDGET_SRC =
 let initialized = false;
 
 function isEnabled() {
+	const zohoConfig = zohoSalesIQConfig(window);
+
+	if (!zohoConfig.enabled || !zohoConfig.shouldRender) return false;
+
 	return shouldShowSupportWidgets({
 		...supportWidgetsConfig(window),
 		pathname: window.location.pathname,

@@ -70,6 +70,10 @@
     @php
         $supportWidgetsEnabled = (bool) config('famedic.support_widgets.enabled');
         $supportWidgetsShouldRender = $supportWidgetsEnabled && ! request()->is('admin', 'admin/*');
+        $zohoSalesIQEnabled = (bool) config('famedic.zoho_salesiq.enabled');
+        $zohoSalesIQShouldRender = $zohoSalesIQEnabled
+            && app()->environment('production')
+            && ! request()->is('admin', 'admin/*');
     @endphp
 
     <script>
@@ -77,6 +81,10 @@
             enabled: @json($supportWidgetsEnabled),
             shouldRender: @json($supportWidgetsShouldRender),
             isAdminRoute: @json(request()->is('admin', 'admin/*')),
+        };
+        window.__FAMEDIC_ZOHO_SALESIQ__ = {
+            enabled: @json($zohoSalesIQEnabled),
+            shouldRender: @json($zohoSalesIQShouldRender),
         };
     </script>
 

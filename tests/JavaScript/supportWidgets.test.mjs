@@ -7,6 +7,7 @@ import puppeteer from "puppeteer";
 
 import {
 	applySupportWidgetVisibility,
+	initSupportWidgetVisibilityController,
 	isAdminPath,
 	resetSupportWidgetVisibilityForTests,
 	setSupportWidgetModalOpen,
@@ -21,6 +22,10 @@ function fakeWindow({ pathname = "/laboratories", zoho = true } = {}) {
 	const listeners = {};
 	const win = {
 		__FAMEDIC_SUPPORT_WIDGETS__: {
+			enabled: true,
+			shouldRender: true,
+		},
+		__FAMEDIC_ZOHO_SALESIQ__: {
 			enabled: true,
 			shouldRender: true,
 		},
@@ -114,6 +119,23 @@ test("does not fail when Zoho has not loaded", () => {
 
 	assert.doesNotThrow(() => applySupportWidgetVisibility({ win, doc: win.document }));
 	assert.equal(classList.has(supportWidgetsHiddenClass()), false);
+});
+
+test("does not touch Zoho SalesIQ when its feature flag is disabled", () => {
+	resetSupportWidgetVisibilityForTests();
+	const { win, calls } = fakeWindow();
+	const listeners = [];
+	win.__FAMEDIC_ZOHO_SALESIQ__ = {
+		enabled: false,
+		shouldRender: false,
+	};
+	win.addEventListener = (name) => listeners.push(name);
+
+	applySupportWidgetVisibility({ win, doc: win.document, modalCount: 1 });
+	initSupportWidgetVisibilityController(win);
+
+	assert.deepEqual(calls, []);
+	assert.equal(listeners.includes("zoho-salesiq-ready"), false);
 });
 
 test("hidden class is applied when a public modal blocks support widgets", () => {

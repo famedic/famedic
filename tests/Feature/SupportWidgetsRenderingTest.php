@@ -7,6 +7,7 @@ beforeEach(function () {
     $this->withoutVite();
 
     config(['famedic.support_widgets.enabled' => true]);
+    config(['famedic.zoho_salesiq.enabled' => false]);
 
     Route::middleware('web')->get('/support-widget-probe', fn () => Inertia::render('Welcome'));
     Route::middleware('web')->get('/admin/support-widget-probe', fn () => Inertia::render('Admin/Admin'));
@@ -18,6 +19,16 @@ test('support widgets render on public routes when enabled', function () {
         ->assertSee('window.__FAMEDIC_SUPPORT_WIDGETS__', false)
         ->assertSee('shouldRender: true', false)
         ->assertSee('diffuser-cdn.app-us1.com/whatsapp/widget.cjs.production.min.js', false);
+});
+
+test('Zoho SalesIQ is disabled by default and no Zoho script is rendered', function () {
+    $this->get('/support-widget-probe')
+        ->assertOk()
+        ->assertSee('window.__FAMEDIC_ZOHO_SALESIQ__', false)
+        ->assertSee('enabled: false', false)
+        ->assertDontSee('salesiq.zohopublic.com', false)
+        ->assertDontSee('zsiqscript', false)
+        ->assertDontSee('$zoho.salesiq.ready', false);
 });
 
 test('support widgets do not render on admin routes', function () {

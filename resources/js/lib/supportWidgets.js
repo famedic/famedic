@@ -1,15 +1,17 @@
 const MODAL_STATE_EVENT = "famedic:modal-state-change";
 const SUPPORT_WIDGETS_HIDDEN_CLASS = "support-widgets-hidden";
-const SUPPORT_WIDGET_SELECTOR = [
-	'iframe[src*="salesiq"]',
-	'iframe[src*="zohopublic.com"]',
+const ACTIVE_CAMPAIGN_WIDGET_SELECTOR = [
 	'iframe[src*="diffuser-cdn.app-us1.com"]',
-	'[id*="zsiq"]',
-	'[class*="zsiq"]',
 	'[id*="whatsapp"]',
 	'[class*="whatsapp"]',
 	'[data-widget-id="06a47e35-87c0-72a7-8000-831831976ef4"]',
-].join(",");
+];
+const ZOHO_SALESIQ_WIDGET_SELECTOR = [
+	'iframe[src*="salesiq"]',
+	'iframe[src*="zohopublic.com"]',
+	'[id*="zsiq"]',
+	'[class*="zsiq"]',
+];
 
 let activeModalCount = 0;
 let initialized = false;
@@ -42,7 +44,20 @@ export function supportWidgetsConfig(win = window) {
 	};
 }
 
+export function zohoSalesIQConfig(win = window) {
+	const config = win.__FAMEDIC_ZOHO_SALESIQ__ || {};
+
+	return {
+		enabled: Boolean(config.enabled),
+		shouldRender: Boolean(config.shouldRender),
+	};
+}
+
 export function setZohoSalesIQVisible(visible, win = window) {
+	const config = zohoSalesIQConfig(win);
+
+	if (!config.enabled || !config.shouldRender) return;
+
 	const salesiq = win.$zoho?.salesiq;
 
 	salesiq?.floatbutton?.visible?.("hide");
@@ -50,6 +65,17 @@ export function setZohoSalesIQVisible(visible, win = window) {
 	if (!visible) {
 		salesiq?.floatwindow?.visible?.("hide");
 	}
+}
+
+function supportWidgetSelector(win = window) {
+	const selectors = [...ACTIVE_CAMPAIGN_WIDGET_SELECTOR];
+	const zohoConfig = zohoSalesIQConfig(win);
+
+	if (zohoConfig.enabled && zohoConfig.shouldRender) {
+		selectors.push(...ZOHO_SALESIQ_WIDGET_SELECTOR);
+	}
+
+	return selectors.join(",");
 }
 
 function fixedWidgetContainer(element, win) {
@@ -67,7 +93,7 @@ function fixedWidgetContainer(element, win) {
 }
 
 export function setThirdPartyWidgetDomVisible(visible, win = window, doc = document) {
-	doc.querySelectorAll?.(SUPPORT_WIDGET_SELECTOR).forEach((element) => {
+	doc.querySelectorAll?.(supportWidgetSelector(win)).forEach((element) => {
 		const target = fixedWidgetContainer(element, win);
 
 		if (!target.dataset) return;
@@ -141,7 +167,9 @@ export function initSupportWidgetVisibilityController(win = window) {
 		activeModalCount = Math.max(0, Number(event.detail?.openModalCount) || 0);
 		sync();
 	});
-	win.addEventListener("zoho-salesiq-ready", sync);
+	if (zohoSalesIQConfig(win).enabled) {
+		win.addEventListener("zoho-salesiq-ready", sync);
+	}
 	sync();
 }
 
