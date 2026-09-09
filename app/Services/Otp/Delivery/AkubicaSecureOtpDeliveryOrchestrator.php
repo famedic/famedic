@@ -189,31 +189,51 @@ final class AkubicaSecureOtpDeliveryOrchestrator
         }
 
         $this->observe('otp_delivery_attempted', $challenge->purpose, 'sms', $result, $correlationId, (string) $challenge->public_id);
-        $operation->update([
-            'status' => $result->resultClass === OtpDeliveryResultClass::Accepted ? 'sms_accepted'
-                : ($result->resultClass->isTemporaryRetryable() ? 'sms_temporary_failed' : 'sms_permanent_failed'),
-            'provider_alias' => $result->providerAlias,
-            'result_class' => $result->resultClass->value,
-            'attempt_count' => $result->attemptNumber,
-            'provider_message_id' => $result->providerMessageId,
-            'sms_delivery_status' => $result->resultClass === OtpDeliveryResultClass::Accepted
-                ? VonageSmsDeliveryStatus::Accepted->value
-                : null,
-            'sms_delivery_status_at' => $result->resultClass === OtpDeliveryResultClass::Accepted ? now() : null,
-        ]);
-
-        if ($result->providerMessageId !== null && $result->providerMessageId !== '') {
-            $this->smsDeliveryReceiptReconciler->reconcilePendingForMessageId(
-                $result->providerMessageId,
-                $operation->fresh(),
-            );
-        }
 
         if ($result->resultClass === OtpDeliveryResultClass::Accepted) {
+            try {
+                $operation->update([
+                    'status' => 'sms_accepted',
+                    'provider_alias' => $result->providerAlias,
+                    'result_class' => $result->resultClass->value,
+                    'attempt_count' => $result->attemptNumber,
+                    'provider_message_id' => $result->providerMessageId,
+                    'sms_delivery_status' => VonageSmsDeliveryStatus::Accepted->value,
+                    'sms_delivery_status_at' => now(),
+                ]);
+
+                if ($result->providerMessageId !== null && $result->providerMessageId !== '') {
+                    $this->smsDeliveryReceiptReconciler->reconcilePendingForMessageId(
+                        $result->providerMessageId,
+                        $operation->fresh(),
+                    );
+                }
+            } catch (\Throwable $e) {
+                VonageSmsDeliveryDiagnostics::log('post_acceptance_persist_failed', [
+                    'correlation_id' => $correlationId,
+                    'challenge_public_id' => (string) $challenge->public_id,
+                    'exception_class' => $e::class,
+                    'failure_stage' => 'operation_update_or_reconcile',
+                    'message_id_prefix' => $result->providerMessageId !== null
+                        ? substr($result->providerMessageId, 0, 8)
+                        : null,
+                ]);
+            }
+
             $this->reservations->markAccepted($operationKey, $ttl);
 
             return OtpDeliveryOutcome::Succeeded;
         }
+
+        $operation->update([
+            'status' => $result->resultClass->isTemporaryRetryable() ? 'sms_temporary_failed' : 'sms_permanent_failed',
+            'provider_alias' => $result->providerAlias,
+            'result_class' => $result->resultClass->value,
+            'attempt_count' => $result->attemptNumber,
+            'provider_message_id' => $result->providerMessageId,
+            'sms_delivery_status' => null,
+            'sms_delivery_status_at' => null,
+        ]);
 
         if ($allowEmailFallback
             && $fallbackIdentity !== null

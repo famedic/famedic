@@ -31,6 +31,8 @@ use App\Services\Otp\OtpRateLimitService;
 use App\Services\Otp\SecureOtpCodeGenerator;
 use App\Http\Responses\Api\V1\OtpExceptionHttpMapper;
 use App\Contracts\Otp\OtpDeliveryProvider;
+use App\Contracts\Otp\VonageSmsSendGateway;
+use App\Services\Otp\Delivery\HttpVonageSmsSendGateway;
 use App\Services\Otp\Delivery\AkubicaSecureOtpDeliveryOrchestrator;
 use App\Services\Otp\Delivery\ArrayOtpDeliveryReservationStore;
 use App\Services\Otp\Delivery\FakeOtpDeliveryProvider;
@@ -108,6 +110,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(\App\Services\Otp\Registration\AkubicaRegisterOtpService::class);
         $this->app->singleton(OtpDeliveryObservability::class);
         $this->app->singleton(FakeOtpDeliveryProvider::class);
+        $this->app->singleton(VonageSmsSendGateway::class, HttpVonageSmsSendGateway::class);
         $this->app->bind(OtpDeliveryReservationStore::class, function ($app) {
             if (config('otp.p0a.delivery.driver') === 'fake' || $app->environment('testing')) {
                 if (config('otp.p0a.delivery.reservation_store', 'auto') === 'redis') {

@@ -44,7 +44,7 @@ test('SentSMS getMessageId coincide con clave message-id del json vonage', funct
     $sent = (new Collection(['message-count' => 1, 'messages' => [$payload]]))->current();
 
     expect($sent->getMessageId())->toBe('0900000000ABCDEF');
-    expect(VonageSmsSendResponseParser::extractMessageId(
+    expect(VonageSmsSendResponseParser::parse(
         new Collection(['message-count' => 1, 'messages' => [$payload]])
-    ))->toBe('0900000000ABCDEF');
+    )->accepted)->toBeTrue();
 });

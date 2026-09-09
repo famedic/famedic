@@ -10,7 +10,7 @@ use Illuminate\Support\Collection;
 /**
  * Reconciles DLR callbacks that arrived before provider_message_id was persisted.
  */
-final class VonageSmsDeliveryReceiptReconciler
+class VonageSmsDeliveryReceiptReconciler
 {
     public function __construct(
         private readonly VonageSmsDeliveryReceiptNormalizer $normalizer,

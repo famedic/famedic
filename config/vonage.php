@@ -29,6 +29,8 @@ return [
         'enabled' => filter_var(env('VONAGE_SMS_DLR_ENABLED', false), FILTER_VALIDATE_BOOL),
         'webhook_token' => env('VONAGE_SMS_DLR_WEBHOOK_TOKEN'),
         'callback_mode' => env('VONAGE_SMS_DLR_CALLBACK_MODE', 'per_message'),
+        'callback_base_url' => env('VONAGE_SMS_DLR_CALLBACK_BASE_URL'),
+        'callback_max_length' => (int) env('VONAGE_SMS_DLR_CALLBACK_MAX_LENGTH', 200),
         'signature_secret' => env('VONAGE_SIGNATURE_SECRET'),
         'signature_method' => env('VONAGE_SIGNATURE_METHOD', 'md5hash'),
     ],
