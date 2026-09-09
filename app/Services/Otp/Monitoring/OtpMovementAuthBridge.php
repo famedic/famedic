@@ -7,7 +7,6 @@ use App\Enums\Otp\OtpMovementStage;
 use App\Enums\Otp\OtpMovementStatus;
 use App\Models\OtpChallenge;
 use App\Models\User;
-use App\Services\Api\V1\Audit\AuditEventDefinitions;
 use App\Services\Api\V1\Audit\AuditOutcome;
 use Illuminate\Http\Request;
 
@@ -54,7 +53,7 @@ final class OtpMovementAuthBridge
             'is_resend' => $isResend,
             'idempotency_key' => $request->header('Idempotency-Key'),
             'otp_challenge_id' => $this->challengeRowId($challengePublicId),
-            'technical_message' => $this->requestMessage($stage, $isDecoy, $errorCode),
+            'technical_message' => $this->requestMessage($stage, $isDecoy, $errorCode, $metadata),
             'meta' => $metadata,
         ]);
     }
@@ -124,7 +123,7 @@ final class OtpMovementAuthBridge
             'is_resend' => $isResend,
             'idempotency_key' => $request->header('Idempotency-Key'),
             'otp_challenge_id' => $this->challengeRowId($challengePublicId),
-            'technical_message' => $this->requestMessage($stage, $isDecoy, $errorCode),
+            'technical_message' => $this->requestMessage($stage, $isDecoy, $errorCode, $metadata),
             'meta' => $metadata,
         ]);
     }
@@ -193,7 +192,7 @@ final class OtpMovementAuthBridge
             'error_code' => $errorCode,
             'idempotency_key' => $request->header('Idempotency-Key'),
             'otp_challenge_id' => $this->challengeRowId($challengePublicId),
-            'technical_message' => $this->requestMessage($stage, false, $errorCode),
+            'technical_message' => $this->requestMessage($stage, false, $errorCode, $metadata),
             'meta' => $metadata,
         ]);
     }
@@ -325,19 +324,41 @@ final class OtpMovementAuthBridge
         return $id !== null ? (int) $id : null;
     }
 
-    private function requestMessage(OtpMovementStage $stage, bool $isDecoy, ?string $errorCode): string
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function requestMessage(OtpMovementStage $stage, bool $isDecoy, ?string $errorCode, array $metadata = []): string
     {
         if ($isDecoy) {
-            return 'Respuesta decoy emitida; no se creó challenge ni entrega.';
+            $reason = $this->closedDecoyReason($metadata['decoy_reason'] ?? null);
+
+            return 'Respuesta protegida/decoy: proveedor no llamado. Razón interna: '.$reason.'.';
         }
 
         return match ($stage) {
-            OtpMovementStage::ChallengeCreated => 'Challenge creado; entrega pendiente o en curso.',
+            OtpMovementStage::ChallengeCreated => 'Challenge creado: proveedor aceptó o entrega registrada en la línea de tiempo.',
             OtpMovementStage::ResendRequested => 'Reenvío procesado; nuevo código generado si aplica.',
             OtpMovementStage::RateLimited => 'Solicitud rechazada por rate limit o cooldown.',
             OtpMovementStage::ConfigurationError => 'Configuración OTP incompleta o feature deshabilitada.',
-            default => $errorCode ? 'Solicitud finalizada con error: '.$errorCode : 'Solicitud recibida.',
+            default => $errorCode ? 'Fallo antes del envío: '.$errorCode : 'Solicitud recibida.',
         };
+    }
+
+    private function closedDecoyReason(mixed $reason): string
+    {
+        if (! is_string($reason)) {
+            return 'unknown';
+        }
+
+        return in_array($reason, [
+            'user_not_found',
+            'phone_not_verified',
+            'user_inactive',
+            'customer_missing',
+            'ambiguous_match',
+            'phone_format_mismatch',
+            'unknown',
+        ], true) ? $reason : 'unknown';
     }
 
     private function verifyMessage(OtpMovementStage $stage, ?string $errorCode): string

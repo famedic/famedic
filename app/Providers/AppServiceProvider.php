@@ -76,6 +76,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(OtpCodeGenerator::class, SecureOtpCodeGenerator::class);
         $this->app->singleton(OtpAbuseKeyHasher::class);
+        $this->app->scoped(\App\Services\Otp\Diagnostics\OtpDiagnosticContext::class);
         $this->app->singleton(\App\Services\Api\V1\Audit\AuditActorResolver::class);
         $this->app->singleton(\App\Services\Api\V1\Audit\AuditMetadataNormalizer::class, function () {
             return \App\Services\Api\V1\Audit\AuditMetadataNormalizer::fromConfig();

@@ -196,6 +196,8 @@ Route::prefix('admin')->middleware([
 
         Route::get('otp-movements-monitor', [OtpMovementsMonitorController::class, 'index'])
             ->name('otp-movements-monitor.index');
+        Route::post('otp-movements-monitor/test-sms', [OtpMovementsMonitorController::class, 'testSms'])
+            ->name('otp-movements-monitor.test-sms');
         Route::get('otp-movements-monitor/{movementKey}', [OtpMovementsMonitorController::class, 'show'])
             ->name('otp-movements-monitor.show')
             ->where('movementKey', '.+');

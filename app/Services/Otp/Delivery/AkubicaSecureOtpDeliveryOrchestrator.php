@@ -3,10 +3,11 @@
 namespace App\Services\Otp\Delivery;
 
 use App\Contracts\Otp\OtpDeliveryProvider;
+use App\Enums\Otp\VonageSmsDeliveryStatus;
 use App\Models\OtpChallenge;
 use App\Models\OtpDeliveryOperation;
-use App\Enums\Otp\VonageSmsDeliveryStatus;
 use App\Notifications\Api\V1\Auth\AkubicaSecureRegisterOtpMailNotification;
+use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
 use App\Services\Otp\OtpAbuseKeyHasher;
 use App\Services\Otp\Registration\AkubicaRegistrationPolicy;
 use App\Services\Otp\Registration\RegistrationIdentity;
@@ -22,8 +23,8 @@ final class AkubicaSecureOtpDeliveryOrchestrator
         private readonly OtpAbuseKeyHasher $hasher,
         private readonly OtpDeliveryObservability $observability,
         private readonly VonageSmsDeliveryReceiptReconciler $smsDeliveryReceiptReconciler,
-    ) {
-    }
+        private readonly OtpDiagnosticContext $otpDiagnostics,
+    ) {}
 
     public function deliverRegisterSafely(
         OtpChallenge $challenge,
@@ -32,6 +33,8 @@ final class AkubicaSecureOtpDeliveryOrchestrator
         string $correlationId,
     ): OtpDeliveryOutcome {
         if (! AkubicaRegistrationPolicy::deliveryEnabled()) {
+            $this->otpDiagnostics->markProviderNotCalled('challenge_created');
+
             return OtpDeliveryOutcome::Skipped;
         }
 
@@ -77,6 +80,8 @@ final class AkubicaSecureOtpDeliveryOrchestrator
         string $correlationId,
     ): OtpDeliveryOutcome {
         if (! (bool) config('otp.p0a.flags.sms_delivery_enabled', false)) {
+            $this->otpDiagnostics->markProviderNotCalled('challenge_created');
+
             return OtpDeliveryOutcome::Skipped;
         }
 
@@ -109,6 +114,7 @@ final class AkubicaSecureOtpDeliveryOrchestrator
         $operationKey = $this->hasher->hashOpaque('delivery|v1|'.$challenge->purpose, (string) $challenge->public_id);
         $ttl = (int) config('otp.p0a.delivery.reservation_ttl_seconds', 600);
         if (! $this->reservations->reserve($operationKey, $ttl)) {
+            $this->otpDiagnostics->markProviderNotCalled('replay');
             $this->observability->emit('otp_delivery_duplicate_suppressed', [
                 'purpose' => $challenge->purpose,
                 'channel' => 'sms',
@@ -120,6 +126,7 @@ final class AkubicaSecureOtpDeliveryOrchestrator
 
             return OtpDeliveryOutcome::DuplicateSuppressed;
         }
+        $this->otpDiagnostics->markReservationCreated();
 
         try {
             $operation = OtpDeliveryOperation::create([
@@ -130,8 +137,10 @@ final class AkubicaSecureOtpDeliveryOrchestrator
                 'primary_channel' => 'sms',
                 'correlation_id' => $correlationId,
             ]);
+            $this->otpDiagnostics->markDeliveryOperationCreated();
         } catch (UniqueConstraintViolationException|\Illuminate\Database\QueryException) {
             $this->reservations->release($operationKey);
+            $this->otpDiagnostics->markProviderNotCalled('replay');
 
             return OtpDeliveryOutcome::DuplicateSuppressed;
         }
@@ -160,6 +169,8 @@ final class AkubicaSecureOtpDeliveryOrchestrator
                 && AkubicaRegistrationPolicy::emailFallbackEnabled()
                 && $this->deliverEmail($operation, $operationKey, $ttl, $plainCode, $fallbackIdentity, $challenge->purpose, $correlationId, (string) $challenge->public_id)
             ) {
+                $this->otpDiagnostics->markDeliveryAccepted();
+
                 return OtpDeliveryOutcome::Succeeded;
             }
 
@@ -170,15 +181,34 @@ final class AkubicaSecureOtpDeliveryOrchestrator
                 ]);
             }
             $this->reservations->release($operationKey);
+            $this->otpDiagnostics->markProviderNotCalled();
 
             return OtpDeliveryOutcome::Failed;
         }
 
         try {
+            $this->otpDiagnostics->markProviderCalled();
+            VonageSmsDeliveryDiagnostics::log('provider_call_started', [
+                'correlation_id' => $correlationId,
+                'challenge_public_id' => (string) $challenge->public_id,
+                'failure_stage' => 'orchestrator_provider_send',
+            ]);
+
             $result = $this->provider->send(new OtpDeliveryRequest(
                 $challenge->purpose, 'sms', $phone, $plainCode, $correlationId, 1, null,
             ));
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            VonageSmsDeliveryDiagnostics::log('provider_outcome_uncertain', [
+                'correlation_id' => $correlationId,
+                'challenge_public_id' => (string) $challenge->public_id,
+                'failure_stage' => 'provider_send_exception',
+                'exception_class' => $e::class,
+                'exception_message' => app()->environment('local')
+                    ? VonageSmsDeliveryDiagnostics::sanitizeErrorText($e->getMessage())
+                    : null,
+                'final_result_class' => OtpDeliveryResultClass::TransportError->value,
+            ]);
+
             $result = new OtpDeliveryResult(
                 OtpDeliveryResultClass::TransportError,
                 null,
@@ -186,8 +216,10 @@ final class AkubicaSecureOtpDeliveryOrchestrator
                 0,
                 $this->provider->alias(),
             );
+            $this->otpDiagnostics->markDeliveryUncertain();
         }
 
+        $this->otpDiagnostics->markFromDeliveryResult($result->resultClass);
         $this->observe('otp_delivery_attempted', $challenge->purpose, 'sms', $result, $correlationId, (string) $challenge->public_id);
 
         if ($result->resultClass === OtpDeliveryResultClass::Accepted) {
@@ -202,7 +234,19 @@ final class AkubicaSecureOtpDeliveryOrchestrator
                     'sms_delivery_status_at' => now(),
                 ]);
 
-                if ($result->providerMessageId !== null && $result->providerMessageId !== '') {
+                VonageSmsDeliveryDiagnostics::log('operation_persist_completed', [
+                    'correlation_id' => $correlationId,
+                    'challenge_public_id' => (string) $challenge->public_id,
+                    'operation_id' => $operation->id,
+                    'failure_stage' => 'operation_persist_completed',
+                    'provider_message_id_present' => $result->providerMessageId !== null && $result->providerMessageId !== '',
+                    'final_result_class' => $result->resultClass->value,
+                ]);
+
+                if ((bool) config('vonage.sms_dlr.enabled', false)
+                    && $result->providerMessageId !== null
+                    && $result->providerMessageId !== ''
+                ) {
                     $this->smsDeliveryReceiptReconciler->reconcilePendingForMessageId(
                         $result->providerMessageId,
                         $operation->fresh(),
@@ -213,14 +257,26 @@ final class AkubicaSecureOtpDeliveryOrchestrator
                     'correlation_id' => $correlationId,
                     'challenge_public_id' => (string) $challenge->public_id,
                     'exception_class' => $e::class,
+                    'exception_message' => app()->environment('local')
+                        ? VonageSmsDeliveryDiagnostics::sanitizeErrorText($e->getMessage())
+                        : null,
                     'failure_stage' => 'operation_update_or_reconcile',
                     'message_id_prefix' => $result->providerMessageId !== null
                         ? substr($result->providerMessageId, 0, 8)
                         : null,
+                    'final_result_class' => $result->resultClass->value,
                 ]);
             }
 
             $this->reservations->markAccepted($operationKey, $ttl);
+
+            VonageSmsDeliveryDiagnostics::log('final_result_class', [
+                'correlation_id' => $correlationId,
+                'challenge_public_id' => (string) $challenge->public_id,
+                'operation_id' => $operation->id,
+                'failure_stage' => 'delivery_succeeded',
+                'final_result_class' => OtpDeliveryOutcome::Succeeded->value,
+            ]);
 
             return OtpDeliveryOutcome::Succeeded;
         }
@@ -241,6 +297,8 @@ final class AkubicaSecureOtpDeliveryOrchestrator
             && AkubicaRegistrationPolicy::emailFallbackEnabled()
         ) {
             if ($this->deliverEmail($operation, $operationKey, $ttl, $plainCode, $fallbackIdentity, $challenge->purpose, $correlationId, (string) $challenge->public_id)) {
+                $this->otpDiagnostics->markDeliveryAccepted();
+
                 return OtpDeliveryOutcome::Succeeded;
             }
 
@@ -330,16 +388,37 @@ final class AkubicaSecureOtpDeliveryOrchestrator
         string $correlationId,
         string $challengePublicId,
     ): void {
-        $this->observability->emit($event, [
-            'purpose' => $purpose,
-            'channel' => $channel,
-            'provider_alias' => $result->providerAlias,
-            'result_class' => $result->resultClass->value,
-            'attempt_number' => $result->attemptNumber,
-            'http_status_class' => $result->httpStatusClass,
-            'duration_bucket' => $this->observability->durationBucket($result->durationMs),
-            'correlation_id' => $correlationId,
-            'otp_challenge_public_id' => $challengePublicId,
-        ]);
+        try {
+            $this->observability->emit($event, [
+                'purpose' => $purpose,
+                'channel' => $channel,
+                'provider_alias' => $result->providerAlias,
+                'result_class' => $result->resultClass->value,
+                'attempt_number' => $result->attemptNumber,
+                'http_status_class' => $result->httpStatusClass,
+                'duration_bucket' => $this->observability->durationBucket($result->durationMs),
+                'correlation_id' => $correlationId,
+                'otp_challenge_public_id' => $challengePublicId,
+            ]);
+
+            VonageSmsDeliveryDiagnostics::log('observability_completed', [
+                'correlation_id' => $correlationId,
+                'challenge_public_id' => $challengePublicId,
+                'failure_stage' => 'observability_completed',
+                'final_result_class' => $result->resultClass->value,
+            ]);
+            $this->otpDiagnostics->markObservabilityCompleted();
+        } catch (\Throwable $e) {
+            VonageSmsDeliveryDiagnostics::log('observability_failed', [
+                'correlation_id' => $correlationId,
+                'challenge_public_id' => $challengePublicId,
+                'failure_stage' => 'observability_emit',
+                'exception_class' => $e::class,
+                'exception_message' => app()->environment('local')
+                    ? VonageSmsDeliveryDiagnostics::sanitizeErrorText($e->getMessage())
+                    : null,
+                'final_result_class' => $result->resultClass->value,
+            ]);
+        }
     }
 }

@@ -6,11 +6,13 @@ use App\Models\OtpAbuseEvent;
 use App\Models\OtpChallenge;
 use App\Models\OtpCode;
 use App\Models\OtpDeliveryOperation;
+use App\Models\OtpMovementEvent;
 use App\Models\OtpRateLimit;
 use App\Models\User;
 use App\Notifications\Api\V1\Auth\AkubicaOtpNotification;
 use App\Services\Otp\Delivery\FakeOtpDeliveryProvider;
 use App\Services\Otp\Delivery\OtpDeliveryResultClass;
+use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -677,7 +679,9 @@ test('p0a4 unverified phone is treated as decoy and never authenticates', functi
     ])->assertStatus(202);
 
     expect(OtpChallenge::query()->count())->toBe(0)
-        ->and(count(app(FakeOtpDeliveryProvider::class)->sent))->toBe(0);
+        ->and(count(app(FakeOtpDeliveryProvider::class)->sent))->toBe(0)
+        ->and(OtpMovementEvent::query()->where('is_decoy', true)->value('meta.decoy_reason'))->toBe('phone_not_verified')
+        ->and(OtpMovementEvent::query()->where('is_decoy', true)->value('technical_message'))->toContain('phone_not_verified');
 
     $this->postJson('/api/v1/auth/login/verify-code', [
         'challenge_id' => $response->json('data.challenge_id'),
@@ -686,6 +690,43 @@ test('p0a4 unverified phone is treated as decoy and never authenticates', functi
         ->assertJsonPath('error.code', 'INVALID_CODE');
 
     expect(PersonalAccessToken::query()->count())->toBe(0);
+});
+
+test('p0a4 decoy reason is exposed only through authorized diagnostic headers', function () {
+    enableAkubicaLoginOtpFlags();
+    $token = str_repeat('a', 64);
+    config()->set('otp.diagnostic_response_headers.enabled', true);
+    config()->set('otp.diagnostic_response_headers.token', $token);
+    $this->app->detectEnvironment(fn () => 'local');
+
+    User::factory()->create([
+        'email' => 'headers.unverified@ejemplo.com',
+        'phone' => '5512345971',
+        'phone_country' => 'MX',
+        'phone_verified_at' => null,
+    ]);
+
+    $public = $this->postJson('/api/v1/auth/login/request-code', [
+        'phone' => '5512345971',
+    ])->assertStatus(202);
+
+    $public->assertHeaderMissing(OtpDiagnosticContext::HEADER_REASON);
+
+    $diagnostic = $this->withHeaders([
+        'X-OTP-Diagnostic' => 'true',
+        'X-OTP-Diagnostic-Token' => $token,
+    ])->postJson('/api/v1/auth/login/request-code', [
+        'phone' => '5512345971',
+    ])->assertStatus(202);
+
+    $diagnostic->assertHeader(OtpDiagnosticContext::HEADER_OUTCOME, 'decoy')
+        ->assertHeader(OtpDiagnosticContext::HEADER_PROVIDER_RESULT, 'not_called')
+        ->assertHeader(OtpDiagnosticContext::HEADER_REASON, 'phone_not_verified');
+
+    expect(array_keys($public->json('data')))->toEqualCanonicalizing(array_keys($diagnostic->json('data')))
+        ->and(json_encode($public->json()))->not->toContain('phone_not_verified')
+        ->and(json_encode($diagnostic->json()))->not->toContain('phone_not_verified')
+        ->and(app(FakeOtpDeliveryProvider::class)->sent)->toHaveCount(0);
 });
 
 test('p0a4 register challenge cannot be used for login verify', function () {

@@ -24,6 +24,7 @@ final class VonageSmsDeliveryDiagnostics
 
         $sanitized = preg_replace('/https?:\/\/\S+/i', '[URL_REDACTED]', trim($errorText));
         $sanitized = preg_replace('/\b[a-f0-9]{32,}\b/i', '[TOKEN_REDACTED]', (string) $sanitized);
+        $sanitized = preg_replace('/\+?\d[\d\s().-]{7,}\d/', '[PHONE_OR_NUMBER_REDACTED]', (string) $sanitized);
 
         return mb_substr((string) $sanitized, 0, 120);
     }
@@ -48,6 +49,12 @@ final class VonageSmsDeliveryDiagnostics
             'callback_host',
             'callback_url_length',
             'message_id_prefix',
+            'provider_status',
+            'provider_message_id_present',
+            'response_interpretable',
+            'final_result_class',
+            'operation_id',
+            'exception_message',
         ];
 
         $filtered = array_intersect_key($context, array_flip($allowed));

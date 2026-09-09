@@ -281,6 +281,19 @@ class RegisterController extends Controller
                 $request->ip(),
             );
         } catch (OtpConfigurationException|OtpChallengeException $e) {
+            if (app()->environment('local')) {
+                Log::warning('akubica_register_p0a_domain_exception', [
+                    'correlation_id' => $request->header('X-Correlation-Id'),
+                    'exception_class' => $e::class,
+                    'error_code' => $e instanceof OtpChallengeException ? $e->errorCode : 'OTP_CONFIGURATION_INVALID',
+                    'exception_message' => \App\Services\Otp\Delivery\VonageSmsDeliveryDiagnostics::sanitizeErrorText($e->getMessage()),
+                    'previous_exception_class' => $e->getPrevious() !== null ? $e->getPrevious()::class : null,
+                    'previous_exception_message' => $e->getPrevious() !== null
+                        ? \App\Services\Otp\Delivery\VonageSmsDeliveryDiagnostics::sanitizeErrorText($e->getPrevious()->getMessage())
+                        : null,
+                ]);
+            }
+
             $response = $this->otpExceptionHttpMapper->toResponse($e);
             if (is_string($material) && $material !== '') {
                 $classified = $this->authOtpAudit->classifyErrorResponse($response);

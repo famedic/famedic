@@ -7,6 +7,7 @@ use App\Models\Api\V1\IdempotencyRecord;
 use App\Services\Api\V1\Idempotency\IdempotencyActorResolver;
 use App\Services\Api\V1\Idempotency\IdempotencyKey;
 use App\Services\Api\V1\Idempotency\IdempotencyService;
+use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
 use App\Services\Otp\Monitoring\OtpMovementRecorder;
 use App\Support\Api\V1\AkubicaCorrelationId;
 use Closure;
@@ -26,6 +27,7 @@ class EnforceIdempotencyKey
         private readonly IdempotencyService $idempotency,
         private readonly IdempotencyActorResolver $actors,
         private readonly OtpMovementRecorder $movementRecorder,
+        private readonly OtpDiagnosticContext $otpDiagnostics,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
@@ -142,6 +144,7 @@ class EnforceIdempotencyKey
                 idempotencyKey: request()->header(IdempotencyKey::HEADER),
             );
 
+            $this->otpDiagnostics->markReplay();
             AkubicaCorrelationId::bind(request(), $record->correlation_id);
 
             return $this->idempotency->buildReplayResponse($record);
@@ -182,6 +185,8 @@ class EnforceIdempotencyKey
                 idempotencyKey: request()->header(IdempotencyKey::HEADER),
             );
 
+            $this->otpDiagnostics->markDeliveryUncertain();
+
             return $this->uncertainResponse($record->fresh() ?? $record);
         }
 
@@ -190,6 +195,8 @@ class EnforceIdempotencyKey
 
     private function uncertainResponse(IdempotencyRecord $record): Response
     {
+        $this->otpDiagnostics->markDeliveryUncertain();
+
         // 409 groups idempotency key semantics (conflict / in-progress / uncertain).
         // retryable=false for the same key while the record remains within TTL.
         return ApiResponse::error(

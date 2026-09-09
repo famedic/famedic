@@ -11,6 +11,7 @@ use App\Models\OtpCode;
 use App\Models\RegularAccount;
 use App\Models\User;
 use App\Notifications\Api\V1\Auth\AkubicaOtpNotification;
+use App\Services\Otp\Delivery\FakeOtpDeliveryProvider;
 use App\Services\Otp\Registration\AkubicaRegisterOtpDecoyStore;
 use App\Services\Otp\Registration\AkubicaRegistrationPolicy;
 use Illuminate\Support\Facades\DB;
@@ -126,6 +127,7 @@ test('p0a55 happy path creates accounts consumes intent and issues one token', f
     $user = User::query()->where('email', 'happy.p0a55@ejemplo.test')->first();
     expect($user)->not->toBeNull()
         ->and($user->email_verified_at)->not->toBeNull()
+        ->and($user->phone_verified_at)->toBeNull()
         ->and($user->customer)->not->toBeNull()
         ->and($user->customer->customerable_type)->toBe(RegularAccount::class);
 
@@ -139,6 +141,67 @@ test('p0a55 happy path creates accounts consumes intent and issues one token', f
 
     Notification::assertNothingSent();
     expect($response->json())->not->toHaveKey('error');
+});
+
+test('p0a55 verified sms registration leaves user eligible for login otp', function () {
+    enableRegisterOtpWithFakeDelivery();
+    app()->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('654321'));
+
+    $start = $this->postJson('/api/v1/auth/register', [
+        'email' => 'eligible.login.after.register@ejemplo.test',
+        'phone' => '+52 55 1234 5951',
+        'full_name' => 'Nombre Apellido',
+    ])->assertStatus(202);
+
+    expect(app(FakeOtpDeliveryProvider::class)->sent)->toHaveCount(1);
+
+    $this->postJson('/api/v1/auth/register/verify-code', [
+        'challenge_id' => $start->json('data.challenge_id'),
+        'code' => '654321',
+    ])->assertOk();
+
+    $user = User::query()
+        ->where('email', 'eligible.login.after.register@ejemplo.test')
+        ->with('customer')
+        ->first();
+
+    expect($user)->not->toBeNull()
+        ->and($user->phone_verified_at)->not->toBeNull()
+        ->and($user->customer)->not->toBeNull();
+
+    enableLoginOtpWithFakeDelivery();
+    app()->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('111111'));
+
+    $login = $this->postJson('/api/v1/auth/login/request-code', [
+        'phone' => '+52 55 1234 5951',
+    ])->assertStatus(202);
+
+    expect($login->json('data.destination_masked'))->toBe('***5951')
+        ->and(OtpChallenge::query()->where('purpose', 'akubica_login')->count())->toBe(1)
+        ->and(app(FakeOtpDeliveryProvider::class)->sent)->toHaveCount(1)
+        ->and(app(FakeOtpDeliveryProvider::class)->sent[0]['purpose'])->toBe('akubica_login');
+});
+
+test('p0a55 requested but unverified registration does not make login eligible', function () {
+    enableRegisterOtpWithFakeDelivery();
+    app()->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('654321'));
+
+    $this->postJson('/api/v1/auth/register', [
+        'email' => 'pending.login.after.register@ejemplo.test',
+        'phone' => '+52 55 1234 5952',
+        'full_name' => 'Nombre Apellido',
+    ])->assertStatus(202);
+
+    enableLoginOtpWithFakeDelivery();
+
+    $response = $this->postJson('/api/v1/auth/login/request-code', [
+        'phone' => '+52 55 1234 5952',
+    ])->assertStatus(202);
+
+    expect(OtpChallenge::query()->where('purpose', 'akubica_login')->count())->toBe(0)
+        ->and(User::query()->where('email', 'pending.login.after.register@ejemplo.test')->exists())->toBeFalse()
+        ->and(app(FakeOtpDeliveryProvider::class)->sent)->toHaveCount(0)
+        ->and($response->json('data.destination_masked'))->toBe('***5952');
 });
 
 // ── C. Security ────────────────────────────────────────────────────────

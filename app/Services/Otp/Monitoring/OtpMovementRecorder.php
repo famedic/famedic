@@ -170,7 +170,7 @@ final class OtpMovementRecorder
             'http_status' => $httpStatus,
             'is_replay' => true,
             'idempotency_key' => $idempotencyKey,
-            'technical_message' => 'Solicitud reutilizada por idempotencia; respuesta almacenada devuelta.',
+            'technical_message' => 'Replay de idempotencia: no se envió otro SMS.',
             'meta' => [
                 'original_correlation_id' => $originalCorrelationId,
             ],

@@ -14,15 +14,28 @@ final class OtpDeliveryObservability
     /** @param array<string, scalar|null> $dims */
     public function emit(string $event, array $dims): void
     {
-        $allowed = [
-            'environment', 'purpose', 'channel', 'provider_alias', 'result_class',
-            'attempt_number', 'http_status_class', 'application_error_code', 'duration_bucket',
-            'correlation_id', 'otp_challenge_public_id',
-        ];
-        $context = array_intersect_key($dims, array_flip($allowed));
-        $context['environment'] ??= app()->environment();
-        Log::info($event, $context);
-        $this->movementRecorder->recordDeliveryObserved($event, $context);
+        try {
+            $allowed = [
+                'environment', 'purpose', 'channel', 'provider_alias', 'result_class',
+                'attempt_number', 'http_status_class', 'application_error_code', 'duration_bucket',
+                'correlation_id', 'otp_challenge_public_id',
+            ];
+            $context = array_intersect_key($dims, array_flip($allowed));
+            $context['environment'] ??= app()->environment();
+            Log::info($event, $context);
+            $this->movementRecorder->recordDeliveryObserved($event, $context);
+        } catch (\Throwable $e) {
+            VonageSmsDeliveryDiagnostics::log('observability_failed', [
+                'correlation_id' => is_string($dims['correlation_id'] ?? null) ? $dims['correlation_id'] : null,
+                'challenge_public_id' => is_string($dims['otp_challenge_public_id'] ?? null) ? $dims['otp_challenge_public_id'] : null,
+                'failure_stage' => 'observability_emit',
+                'exception_class' => $e::class,
+                'exception_message' => app()->environment('local')
+                    ? VonageSmsDeliveryDiagnostics::sanitizeErrorText($e->getMessage())
+                    : null,
+                'final_result_class' => is_string($dims['result_class'] ?? null) ? $dims['result_class'] : null,
+            ]);
+        }
     }
 
     public function durationBucket(int $milliseconds): string

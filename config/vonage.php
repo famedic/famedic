@@ -34,4 +34,14 @@ return [
         'signature_secret' => env('VONAGE_SIGNATURE_SECRET'),
         'signature_method' => env('VONAGE_SIGNATURE_METHOD', 'md5hash'),
     ],
+
+    'sms_diagnostic' => [
+        'enabled' => filter_var(env('VONAGE_SMS_DIAGNOSTIC_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'allowed_destinations' => env('VONAGE_SMS_DIAGNOSTIC_ALLOWED_DESTINATIONS', ''),
+        'production_enabled' => filter_var(
+            env('VONAGE_SMS_DIAGNOSTIC_PRODUCTION_ENABLED', false),
+            FILTER_VALIDATE_BOOL
+        ),
+        'message' => 'Mensaje de prueba FAMEDIC. La conexión SMS con Vonage funciona correctamente.',
+    ],
 ];

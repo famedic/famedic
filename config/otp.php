@@ -65,6 +65,10 @@ $sanctumTokenTtlEnvKey = (
     : 'OTP_P0A_SANCTUM_TARGET_EXPIRATION_MINUTES';
 
 return [
+    'diagnostic_response_headers' => [
+        'enabled' => $otpEnvBool('OTP_DIAGNOSTIC_RESPONSE_HEADERS_ENABLED', false),
+        'token' => env('OTP_DIAGNOSTIC_RESPONSE_TOKEN', ''),
+    ],
 
     /*
     |--------------------------------------------------------------------------

@@ -282,6 +282,9 @@ final class OtpMovementQueryService
             'is_decoy' => $event->is_decoy,
             'endpoint' => $event->endpoint,
             'technical_message' => $event->technical_message,
+            'decoy_reason' => is_string($event->meta['decoy_reason'] ?? null)
+                ? $event->meta['decoy_reason']
+                : null,
             'idempotency_key_fingerprint' => $event->idempotency_key_fingerprint,
             'partial_traceability' => false,
             'sms_delivery' => $this->formatSmsDelivery($event->deliveryOperation),
@@ -429,6 +432,9 @@ final class OtpMovementQueryService
             'provider_result_class' => $event->provider_result_class,
             'http_status' => $event->http_status,
             'technical_message' => $event->technical_message,
+            'decoy_reason' => is_string($event->meta['decoy_reason'] ?? null)
+                ? $event->meta['decoy_reason']
+                : null,
             'is_historical' => false,
             'partial' => $partial,
             'meta' => $event->meta,

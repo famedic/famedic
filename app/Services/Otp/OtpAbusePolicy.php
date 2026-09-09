@@ -7,6 +7,7 @@ use App\Exceptions\Otp\OtpInvalidCodeException;
 use App\Exceptions\Otp\OtpRateLimitExceededException;
 use App\Exceptions\Otp\OtpTemporarilyBlockedException;
 use App\Models\OtpChallenge;
+use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -25,8 +26,8 @@ class OtpAbusePolicy
     public function __construct(
         private readonly OtpChallengeService $challenges,
         private readonly OtpRateLimitService $rateLimits,
-    ) {
-    }
+        private readonly OtpDiagnosticContext $otpDiagnostics,
+    ) {}
 
     /**
      * Authorize + create challenge + record delivery attempt (no real delivery).
@@ -40,17 +41,21 @@ class OtpAbusePolicy
         OtpRequestContext $context,
     ): OtpChallengeCreationResult {
         $context = $this->alignContext($data, $context);
+        $this->otpDiagnostics->markEligibility();
 
         $outcome = DB::transaction(function () use ($data, $context) {
             $decision = $this->rateLimits->evaluateIssueLocked($context);
 
             if (! $decision->allowed) {
+                $this->otpDiagnostics->markRateLimited();
+
                 // Return deny without throwing so the transaction can commit
                 // bucket state (e.g. blocked_until) before audit/exception.
                 return ['decision' => $decision];
             }
 
             $result = $this->challenges->create($data);
+            $this->otpDiagnostics->markChallengeCreated();
 
             $this->rateLimits->commitAllowedIssueLocked($context, $result->challenge->id);
             // Same outer transaction: delivery counter rolls back with the challenge

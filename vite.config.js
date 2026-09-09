@@ -47,7 +47,13 @@ export default defineConfig(({ mode }) => {
             },
             watch: {
                 usePolling: true,
-                ignored: ['**/.env', '**/.env.*'],
+                ignored: [
+                    '**/.env',
+                    '**/.env.*',
+                    '**/node_modules/**',
+                    '**/vendor/**',
+                    '**/storage/**',
+                ],
             },
         },
         plugins: [

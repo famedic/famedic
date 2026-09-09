@@ -21,6 +21,7 @@ use App\Exceptions\Otp\RegistrationIntentInvalidStateException;
 use App\Exceptions\Otp\RegistrationIntentNotFoundException;
 use App\Exceptions\Otp\RegistrationIntentPayloadException;
 use App\Http\Responses\ApiResponse;
+use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
 use App\Services\Otp\OtpRateLimitDecision;
 use Illuminate\Http\JsonResponse;
 
@@ -30,13 +31,20 @@ use Illuminate\Http\JsonResponse;
  */
 final class OtpExceptionHttpMapper
 {
+    public function __construct(
+        private readonly OtpDiagnosticContext $otpDiagnostics,
+    ) {}
+
     public function toResponse(\Throwable $e): JsonResponse
     {
         if ($e instanceof OtpRateLimitExceededException || $e instanceof OtpTemporarilyBlockedException) {
+            $this->otpDiagnostics->markRateLimited();
+
             return $this->rateLimitResponse($e->decision);
         }
 
         if ($e instanceof OtpTemporaryUnavailableException) {
+            $this->otpDiagnostics->markPreDeliveryFailure();
             $retryAfter = max(1, $e->retryAfterSeconds);
             $response = ApiResponse::error(
                 'OTP_TEMPORARY_UNAVAILABLE',
@@ -51,6 +59,8 @@ final class OtpExceptionHttpMapper
         }
 
         if ($e instanceof RegistrationCompletedLoginRequiredException) {
+            $this->otpDiagnostics->markPreDeliveryFailure();
+
             return ApiResponse::error(
                 'LOGIN_REQUIRED',
                 'El registro se completo. Solicita un codigo de inicio de sesion.',
@@ -59,6 +69,8 @@ final class OtpExceptionHttpMapper
         }
 
         if ($e instanceof OtpConfigurationException) {
+            $this->otpDiagnostics->markConfigurationError();
+
             return ApiResponse::error(
                 'OTP_CONFIGURATION_INVALID',
                 'El inicio de sesion OTP no esta disponible.',
@@ -67,6 +79,8 @@ final class OtpExceptionHttpMapper
         }
 
         if ($e instanceof OtpDeliveryFailedException) {
+            $this->otpDiagnostics->markDeliveryRejected();
+
             return ApiResponse::error(
                 'DELIVERY_FAILED',
                 'No se pudo enviar el codigo de verificacion.',

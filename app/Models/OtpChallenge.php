@@ -70,6 +70,11 @@ class OtpChallenge extends Model
         return $this->hasOne(AkubicaRegistrationIntent::class, 'otp_challenge_id');
     }
 
+    public function deliveryOperation(): HasOne
+    {
+        return $this->hasOne(OtpDeliveryOperation::class, 'otp_challenge_id');
+    }
+
     public function isConsumed(): bool
     {
         return $this->consumed_at !== null;

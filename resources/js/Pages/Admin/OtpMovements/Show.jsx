@@ -149,6 +149,11 @@ export default function OtpMovementsShow({
 												{entry.technical_message}
 											</Text>
 										)}
+										{entry.decoy_reason && (
+											<Text className="mt-2 text-xs text-zinc-500">
+												Razón decoy interna: {entry.decoy_reason}
+											</Text>
+										)}
 									</div>
 								</li>
 							))}

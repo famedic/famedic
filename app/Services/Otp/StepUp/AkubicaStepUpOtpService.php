@@ -16,12 +16,12 @@ use App\Models\User;
 use App\Services\Otp\CreateOtpChallengeData;
 use App\Services\Otp\Delivery\AkubicaSecureOtpDeliveryOrchestrator;
 use App\Services\Otp\Delivery\OtpDeliveryOutcome;
+use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
 use App\Services\Otp\OtpAbusePolicy;
 use App\Services\Otp\OtpRequestContext;
 use App\Services\Otp\Registration\MexicoPhoneNormalizer;
 use App\Services\Otp\Registration\PhoneIdentity;
 use App\Support\Api\V1\OrderDocumentDownloadSupport;
-use Illuminate\Support\Str;
 
 /**
  * P0-B1/B3 — Step-up OTP for sensitive Akubica resources (results + invoices).
@@ -40,8 +40,8 @@ class AkubicaStepUpOtpService
         private readonly MexicoPhoneNormalizer $phoneNormalizer,
         private readonly OtpStepUpGrantService $grantService,
         private readonly OrderDocumentDownloadSupport $orderOwnership,
-    ) {
-    }
+        private readonly OtpDiagnosticContext $otpDiagnostics,
+    ) {}
 
     public static function isResultsEnabled(): bool
     {
@@ -383,6 +383,8 @@ class AkubicaStepUpOtpService
         if ($challenge === null) {
             throw new OtpChallengeMismatchException;
         }
+
+        $this->otpDiagnostics->markRealChallengeProviderNotApplicable();
 
         if ($challenge->purpose !== $purpose->value
             || $challenge->context_type !== $resourceType

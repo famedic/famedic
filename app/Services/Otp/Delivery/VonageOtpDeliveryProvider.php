@@ -11,8 +11,7 @@ final class VonageOtpDeliveryProvider implements OtpDeliveryProvider
     public function __construct(
         private readonly OtpDeliveryClassifier $classifier,
         private readonly VonageSmsSendGateway $gateway,
-    ) {
-    }
+    ) {}
 
     public function send(OtpDeliveryRequest $request): OtpDeliveryResult
     {
@@ -104,8 +103,36 @@ final class VonageOtpDeliveryProvider implements OtpDeliveryProvider
         VonageSmsCallbackApplyResult $callback,
     ): VonageSmsSendAttemptOutcome {
         try {
+            VonageSmsDeliveryDiagnostics::log('provider_call_started', [
+                'correlation_id' => $request->correlationId,
+                'failure_stage' => 'provider_call_started',
+                'callback_applied' => $callback->applied,
+                'callback_skip_reason' => $callback->skipReason,
+                'callback_host' => $callback->callbackHost,
+                'callback_url_length' => $callback->callbackUrlLength,
+            ]);
+
             $response = $this->gateway->send($sms, $key, $secret);
+            VonageSmsDeliveryDiagnostics::log('provider_response_received', [
+                'correlation_id' => $request->correlationId,
+                'failure_stage' => 'provider_response_received',
+                'callback_applied' => $callback->applied,
+                'callback_host' => $callback->callbackHost,
+                'callback_url_length' => $callback->callbackUrlLength,
+            ]);
+
             $parsed = VonageSmsSendResponseParser::parse($response);
+            VonageSmsDeliveryDiagnostics::log('response_parse_completed', [
+                'correlation_id' => $request->correlationId,
+                'failure_stage' => 'response_parse_completed',
+                'provider_status' => $parsed->vonageStatus,
+                'provider_message_id_present' => $parsed->messageId !== null,
+                'response_interpretable' => $parsed->interpretable,
+                'callback_applied' => $callback->applied,
+                'callback_host' => $callback->callbackHost,
+                'callback_url_length' => $callback->callbackUrlLength,
+                'message_id_prefix' => $parsed->messageId !== null ? substr($parsed->messageId, 0, 8) : null,
+            ]);
 
             if (! $parsed->interpretable) {
                 VonageSmsDeliveryDiagnostics::log('provider_outcome_uncertain', [
@@ -157,6 +184,9 @@ final class VonageOtpDeliveryProvider implements OtpDeliveryProvider
                 'correlation_id' => $request->correlationId,
                 'failure_stage' => 'vonage_response_accepted',
                 'vonage_status' => $parsed->vonageStatus,
+                'provider_status' => $parsed->vonageStatus,
+                'provider_message_id_present' => $parsed->messageId !== null,
+                'final_result_class' => OtpDeliveryResultClass::Accepted->value,
                 'callback_applied' => $callback->applied,
                 'callback_skip_reason' => $callback->skipReason,
                 'callback_host' => $callback->callbackHost,
@@ -179,10 +209,14 @@ final class VonageOtpDeliveryProvider implements OtpDeliveryProvider
                 'correlation_id' => $request->correlationId,
                 'failure_stage' => 'vonage_send_exception',
                 'exception_class' => $e::class,
+                'exception_message' => app()->environment('local')
+                    ? VonageSmsDeliveryDiagnostics::sanitizeErrorText($e->getMessage())
+                    : null,
                 'http_status_class' => $this->httpClass($e),
                 'callback_applied' => $callback->applied,
                 'callback_host' => $callback->callbackHost,
                 'callback_url_length' => $callback->callbackUrlLength,
+                'final_result_class' => $class->value,
             ]);
 
             return new VonageSmsSendAttemptOutcome(new OtpDeliveryResult(

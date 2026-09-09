@@ -43,6 +43,9 @@ return [
         'laboratory-notifications' => [
             ['monitor' => 'Monitorear notificaciones de laboratorio'],
         ],
+        'otp-movements' => [
+            ['test-sms' => 'Enviar SMS real de diagnóstico Vonage'],
+        ],
         'logs-general' => [
             ['manage' => 'Ver y descargar logs'],
         ],

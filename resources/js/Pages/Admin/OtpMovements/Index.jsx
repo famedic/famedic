@@ -1,10 +1,18 @@
 import { useMemo, useState } from "react";
 import { Link, useForm } from "@inertiajs/react";
+import axios from "axios";
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading } from "@/Components/Catalyst/heading";
 import { Text } from "@/Components/Catalyst/text";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
+import {
+	Dialog,
+	DialogActions,
+	DialogBody,
+	DialogDescription,
+	DialogTitle,
+} from "@/Components/Catalyst/dialog";
 import {
 	Table,
 	TableBody,
@@ -31,7 +39,237 @@ function StatusBadge({ status, label, color }) {
 	return <Badge color={color || "zinc"}>{label || status}</Badge>;
 }
 
-export default function OtpMovementsIndex({ events, summary, filters, options }) {
+function SmsDiagnosticDialog({ open, onClose, smsDiagnostic }) {
+	const [destination, setDestination] = useState("");
+	const [mode, setMode] = useState("send_only");
+	const [confirmed, setConfirmed] = useState(false);
+	const [processing, setProcessing] = useState(false);
+	const [error, setError] = useState(null);
+	const [result, setResult] = useState(null);
+
+	const modes = smsDiagnostic?.modes || {};
+	const dlrMode = modes.send_with_dlr || {};
+	const canSubmit =
+		smsDiagnostic?.enabled &&
+		smsDiagnostic?.can_send &&
+		destination.trim() &&
+		confirmed &&
+		!processing &&
+		(mode !== "send_with_dlr" || dlrMode.enabled);
+
+	const close = () => {
+		if (!processing) {
+			onClose();
+		}
+	};
+
+	const submit = async (event) => {
+		event.preventDefault();
+		if (!canSubmit) {
+			return;
+		}
+
+		setProcessing(true);
+		setError(null);
+		setResult(null);
+
+		try {
+			const response = await axios.post(route("admin.otp-movements-monitor.test-sms"), {
+				destination,
+				mode,
+				confirm: confirmed,
+			});
+			setResult(response.data.data);
+			setConfirmed(false);
+		} catch (err) {
+			setError(
+				err.response?.data?.message ||
+					err.response?.data?.errors?.destination?.[0] ||
+					"No fue posible enviar la prueba SMS.",
+			);
+		} finally {
+			setProcessing(false);
+		}
+	};
+
+	return (
+		<Dialog open={open} onClose={close} size="2xl">
+			<form onSubmit={submit}>
+				<DialogTitle>Probar envío SMS</DialogTitle>
+				<DialogDescription>
+					Esta herramienta envía un mensaje real de diagnóstico por Vonage sin crear
+					usuario, customer, challenge ni código OTP.
+				</DialogDescription>
+
+				<DialogBody className="space-y-5">
+					<div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+						Esta acción enviará un SMS real y puede generar costo.
+					</div>
+
+					{(!smsDiagnostic?.enabled || !smsDiagnostic?.can_send) && (
+						<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100">
+							{!smsDiagnostic?.enabled
+								? "La herramienta está apagada por configuración."
+								: "Tu administrador no tiene el permiso otp-movements.test-sms."}
+						</div>
+					)}
+
+					<label className="block space-y-1 text-sm">
+						<span className="font-medium text-zinc-800 dark:text-zinc-100">
+							Destino telefónico
+						</span>
+						<input
+							type="tel"
+							value={destination}
+							onChange={(event) => setDestination(event.target.value)}
+							placeholder="+528112345678"
+							disabled={processing}
+							className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+						/>
+					</label>
+
+					<div className="space-y-2 text-sm">
+						<p className="font-medium text-zinc-800 dark:text-zinc-100">
+							Destinos permitidos
+						</p>
+						{smsDiagnostic?.allowed_destinations?.length ? (
+							<div className="flex flex-wrap gap-2">
+								{smsDiagnostic.allowed_destinations.map((item) => (
+									<Badge key={item} color="zinc">
+										{item}
+									</Badge>
+								))}
+							</div>
+						) : (
+							<Text className="text-sm text-zinc-500">
+								No hay allowlist configurada; el backend rechazará cualquier envío.
+							</Text>
+						)}
+					</div>
+
+					<div className="space-y-2 text-sm">
+						<p className="font-medium text-zinc-800 dark:text-zinc-100">
+							Modo de prueba
+						</p>
+						<label className="flex items-start gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+							<input
+								type="radio"
+								name="sms-test-mode"
+								value="send_only"
+								checked={mode === "send_only"}
+								onChange={() => setMode("send_only")}
+								disabled={processing}
+								className="mt-1"
+							/>
+							<span>
+								<span className="block font-medium">Solo envío</span>
+								<span className="block text-zinc-500">
+									Nunca adjunta callback DLR; sirve en local.
+								</span>
+							</span>
+						</label>
+						<label className="flex items-start gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+							<input
+								type="radio"
+								name="sms-test-mode"
+								value="send_with_dlr"
+								checked={mode === "send_with_dlr"}
+								onChange={() => setMode("send_with_dlr")}
+								disabled={processing || !dlrMode.enabled}
+								className="mt-1"
+							/>
+							<span>
+								<span className="block font-medium">Envío + seguimiento DLR</span>
+								<span className="block text-zinc-500">
+									Adjunta callback per_message solo con base HTTPS pública válida.
+								</span>
+								{!dlrMode.enabled && dlrMode.disabled_reason && (
+									<span className="mt-1 block text-amber-700 dark:text-amber-300">
+										{dlrMode.disabled_reason}
+									</span>
+								)}
+							</span>
+						</label>
+					</div>
+
+					<label className="flex items-start gap-3 text-sm">
+						<input
+							type="checkbox"
+							checked={confirmed}
+							onChange={(event) => setConfirmed(event.target.checked)}
+							disabled={processing}
+							className="mt-1"
+						/>
+						<span>Confirmo que deseo enviar este SMS real de diagnóstico.</span>
+					</label>
+
+					{error && (
+						<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100">
+							{error}
+						</div>
+					)}
+
+					{result && (
+						<div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/60">
+							<p className="font-semibold text-zinc-900 dark:text-zinc-100">
+								{result.diagnosis}
+							</p>
+							<dl className="mt-3 grid gap-2 sm:grid-cols-2">
+								<div>
+									<dt className="text-zinc-500">Correlation ID</dt>
+									<dd className="break-all">{result.correlation_id}</dd>
+								</div>
+								<div>
+									<dt className="text-zinc-500">Fecha y hora</dt>
+									<dd>{new Date(result.sent_at).toLocaleString("es-MX")}</dd>
+								</div>
+								<div>
+									<dt className="text-zinc-500">Entorno</dt>
+									<dd>{result.environment}</dd>
+								</div>
+								<div>
+									<dt className="text-zinc-500">Destino</dt>
+									<dd>{result.destination_masked}</dd>
+								</div>
+								<div>
+									<dt className="text-zinc-500">Modo</dt>
+									<dd>{result.mode === "send_with_dlr" ? "Envío + DLR" : "Solo envío"}</dd>
+								</div>
+								<div>
+									<dt className="text-zinc-500">Status Vonage</dt>
+									<dd>{result.vonage_status ?? "No disponible"}</dd>
+								</div>
+								<div>
+									<dt className="text-zinc-500">Mensaje proveedor</dt>
+									<dd>{result.provider_message_id_prefix || "No disponible"}</dd>
+								</div>
+								<div>
+									<dt className="text-zinc-500">Callback DLR</dt>
+									<dd>
+										{result.callback?.applied
+											? `Aplicado (${result.callback.host})`
+											: result.callback?.disabled_reason || "No aplicado"}
+									</dd>
+								</div>
+							</dl>
+						</div>
+					)}
+				</DialogBody>
+
+				<DialogActions>
+					<Button type="button" outline onClick={close} disabled={processing}>
+						Cerrar
+					</Button>
+					<Button type="submit" disabled={!canSubmit}>
+						{processing ? "Enviando..." : "Enviar SMS de prueba"}
+					</Button>
+				</DialogActions>
+			</form>
+		</Dialog>
+	);
+}
+
+export default function OtpMovementsIndex({ events, summary, filters, options, smsDiagnostic }) {
 	const { data, setData, get, processing } = useForm({
 		start_date: filters.start_date || "",
 		end_date: filters.end_date || "",
@@ -52,6 +290,7 @@ export default function OtpMovementsIndex({ events, summary, filters, options })
 	});
 
 	const [showFilters, setShowFilters] = useState(false);
+	const [smsDiagnosticOpen, setSmsDiagnosticOpen] = useState(false);
 
 	const showUpdateButton = useMemo(
 		() =>
@@ -114,6 +353,14 @@ export default function OtpMovementsIndex({ events, summary, filters, options })
 						</Text>
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
+						<Button
+							outline
+							type="button"
+							onClick={() => setSmsDiagnosticOpen(true)}
+							disabled={!smsDiagnostic?.can_send}
+						>
+							Probar envío SMS
+						</Button>
 						<Button outline type="button" onClick={() => setShowFilters((v) => !v)}>
 							Filtros
 							<FilterCountBadge count={filtersCount} />
@@ -422,6 +669,11 @@ export default function OtpMovementsIndex({ events, summary, filters, options })
 					</div>
 				)}
 			</div>
+			<SmsDiagnosticDialog
+				open={smsDiagnosticOpen}
+				onClose={() => setSmsDiagnosticOpen(false)}
+				smsDiagnostic={smsDiagnostic}
+			/>
 		</AdminLayout>
 	);
 }

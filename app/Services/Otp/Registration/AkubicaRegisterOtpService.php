@@ -23,10 +23,14 @@ use App\Exceptions\Otp\RegistrationCompletedLoginRequiredException;
 use App\Exceptions\Otp\RegistrationIntentPayloadException;
 use App\Models\AkubicaRegistrationIntent;
 use App\Models\OtpChallenge;
+use App\Models\OtpDeliveryOperation;
 use App\Models\User;
-use App\Services\Otp\MysqlContentionClassifier;
 use App\Services\Otp\Delivery\AkubicaSecureOtpDeliveryOrchestrator;
 use App\Services\Otp\Delivery\OtpDeliveryOutcome;
+use App\Services\Otp\Delivery\OtpDeliveryResultClass;
+use App\Services\Otp\Delivery\VonageSmsDeliveryDiagnostics;
+use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
+use App\Services\Otp\MysqlContentionClassifier;
 use App\Services\Otp\OtpRateLimitDecision;
 use App\Services\Otp\OtpRateLimitService;
 use App\Services\Otp\OtpRequestContext;
@@ -61,8 +65,8 @@ final class AkubicaRegisterOtpService
         private readonly AkubicaRegistrationPayloadCipher $cipher,
         private readonly MysqlContentionClassifier $contentionClassifier,
         private readonly AkubicaSecureOtpDeliveryOrchestrator $deliveryOrchestrator,
-    ) {
-    }
+        private readonly OtpDiagnosticContext $otpDiagnostics,
+    ) {}
 
     public static function isEnabled(): bool
     {
@@ -108,8 +112,10 @@ final class AkubicaRegisterOtpService
     public function request(RegistrationIdentity $identity, ?string $clientIp): array
     {
         $this->assertConfigurationReady();
+        $correlationId = \App\Support\Api\V1\AkubicaCorrelationId::currentOrGenerate();
 
         $collision = $this->collisionResolver->resolve($identity->email, $identity->phone);
+        $this->otpDiagnostics->markEligibility();
 
         if ($collision->kind === RegistrationCollisionKind::AmbiguousPhone
             || $collision->kind === RegistrationCollisionKind::InvalidIdentity
@@ -121,14 +127,42 @@ final class AkubicaRegisterOtpService
         }
 
         if ($collision->kind->shouldUseDecoy()) {
+            $this->otpDiagnostics->markDecoy();
+
             return $this->decoyRequestResponse($identity);
         }
 
         try {
+            VonageSmsDeliveryDiagnostics::log('registration_create_pending_started', [
+                'correlation_id' => $correlationId,
+                'failure_stage' => 'registration_create_pending_started',
+            ]);
             $result = $this->intentService->createPending($identity, $clientIp);
+            $this->otpDiagnostics->markIntentCreated();
+            VonageSmsDeliveryDiagnostics::log('operation_persist_completed', [
+                'correlation_id' => $correlationId,
+                'challenge_public_id' => (string) $result->challenge->public_id,
+                'failure_stage' => 'registration_create_pending_completed',
+            ]);
         } catch (QueryException|UniqueConstraintViolationException $e) {
+            VonageSmsDeliveryDiagnostics::log('registration_create_pending_failed', [
+                'correlation_id' => $correlationId,
+                'exception_class' => $e::class,
+                'exception_message' => app()->environment('local')
+                    ? VonageSmsDeliveryDiagnostics::sanitizeErrorText($e->getMessage())
+                    : null,
+                'failure_stage' => 'registration_create_pending_query_exception',
+            ]);
             $this->rethrowContention($e);
         } catch (\Throwable $e) {
+            VonageSmsDeliveryDiagnostics::log('registration_create_pending_failed', [
+                'correlation_id' => $correlationId,
+                'exception_class' => $e::class,
+                'exception_message' => app()->environment('local')
+                    ? VonageSmsDeliveryDiagnostics::sanitizeErrorText($e->getMessage())
+                    : null,
+                'failure_stage' => 'registration_create_pending_exception',
+            ]);
             $this->rethrowIfContention($e);
             throw $e;
         }
@@ -152,6 +186,8 @@ final class AkubicaRegisterOtpService
 
         $previous = OtpChallenge::query()->where('public_id', $challengePublicId)->first();
         if ($previous === null) {
+            $this->otpDiagnostics->markDecoy();
+
             return $this->resendDecoy($challengePublicId);
         }
 
@@ -173,6 +209,7 @@ final class AkubicaRegisterOtpService
                 $identity,
                 $clientIp,
             );
+            $this->otpDiagnostics->markIntentCreated();
         } catch (\App\Exceptions\Otp\RegistrationIntentInvalidStateException|
             \App\Exceptions\Otp\RegistrationIntentExpiredException|
             \App\Exceptions\Otp\RegistrationIntentNotFoundException
@@ -215,6 +252,7 @@ final class AkubicaRegisterOtpService
         }
 
         assert($challenge instanceof OtpChallenge);
+        $this->otpDiagnostics->markRealChallengeProviderNotApplicable();
 
         if ($challenge->purpose !== P0aOtpPurpose::AkubicaRegister->value
             || $challenge->context_type !== AkubicaRegistrationIntentService::CONTEXT_TYPE
@@ -379,6 +417,7 @@ final class AkubicaRegisterOtpService
                 'phone' => $payload->phone->nationalNumber(),
                 'full_name' => $payload->fullName,
                 'phone_country' => $payload->phone->countryCode(),
+                'phone_verified' => $this->challengeWasVerifiedViaSms($challenge),
             ]);
         } catch (UniqueConstraintViolationException $e) {
             $this->invalidateIntentAndChallenge(
@@ -420,6 +459,21 @@ final class AkubicaRegisterOtpService
         }
 
         return ['user' => $user->fresh(['customer'])];
+    }
+
+    private function challengeWasVerifiedViaSms(OtpChallenge $challenge): bool
+    {
+        if ($challenge->channel !== P0aOtpChannel::Sms->value) {
+            return false;
+        }
+
+        return OtpDeliveryOperation::query()
+            ->where('otp_challenge_id', $challenge->id)
+            ->where('primary_channel', 'sms')
+            ->where('fallback_used', false)
+            ->where('result_class', OtpDeliveryResultClass::Accepted->value)
+            ->where('status', 'sms_accepted')
+            ->exists();
     }
 
     /**
@@ -524,6 +578,7 @@ final class AkubicaRegisterOtpService
             'invalidated_at' => null,
             'invalidation_reason' => null,
         ]);
+        $this->otpDiagnostics->markDecoy();
 
         return [
             'requires_otp' => true,
@@ -547,6 +602,7 @@ final class AkubicaRegisterOtpService
      */
     private function verifyDecoy(string $publicId, string $code): never
     {
+        $this->otpDiagnostics->markDecoy();
         $decoy = $this->decoyStore->get($publicId);
         if ($decoy === null) {
             throw new OtpChallengeNotFoundException;
@@ -631,6 +687,7 @@ final class AkubicaRegisterOtpService
             'invalidated_at' => null,
             'invalidation_reason' => null,
         ]);
+        $this->otpDiagnostics->markDecoy();
 
         return [
             'requires_otp' => true,

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\Otp\Monitoring\OtpMovementQueryService;
+use App\Services\Otp\Monitoring\VonageSmsConnectionTestService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -12,6 +13,7 @@ class OtpMovementsMonitorController extends Controller
 {
     public function __construct(
         private readonly OtpMovementQueryService $queryService,
+        private readonly VonageSmsConnectionTestService $smsConnectionTestService,
     ) {}
 
     public function index(Request $request)
@@ -55,6 +57,13 @@ class OtpMovementsMonitorController extends Controller
             'summary' => $result['summary'],
             'filters' => $filters,
             'options' => $result['options'],
+            'smsDiagnostic' => array_merge(
+                $this->smsConnectionTestService->metadata(),
+                [
+                    'can_send' => (bool) $request->user()->administrator?->hasPermissionTo('otp-movements.test-sms'),
+                    'message' => config('vonage.sms_diagnostic.message'),
+                ],
+            ),
         ]);
     }
 
@@ -65,5 +74,27 @@ class OtpMovementsMonitorController extends Controller
         $detail = $this->queryService->showMovement(urldecode($movementKey));
 
         return Inertia::render('Admin/OtpMovements/Show', $detail);
+    }
+
+    public function testSms(Request $request)
+    {
+        $administrator = $request->user()?->administrator;
+        $administrator?->hasPermissionTo('otp-movements.test-sms') || abort(403);
+
+        $validated = $request->validate([
+            'destination' => ['required', 'string', 'max:32'],
+            'mode' => ['required', 'string', 'in:send_only,send_with_dlr'],
+            'confirm' => ['accepted'],
+        ]);
+
+        $result = $this->smsConnectionTestService->send(
+            (int) $administrator->id,
+            (string) $validated['destination'],
+            (string) $validated['mode'],
+        );
+
+        return response()->json([
+            'data' => $result->toArray(),
+        ]);
     }
 }

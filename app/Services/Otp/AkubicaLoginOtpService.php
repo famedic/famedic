@@ -17,6 +17,7 @@ use App\Models\OtpChallenge;
 use App\Models\User;
 use App\Services\Otp\Delivery\AkubicaSecureOtpDeliveryOrchestrator;
 use App\Services\Otp\Delivery\OtpDeliveryOutcome;
+use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
 use App\Services\Otp\Registration\MexicoPhoneNormalizer;
 use App\Services\Otp\Registration\PhoneIdentity;
 use Illuminate\Support\Carbon;
@@ -42,14 +43,16 @@ class AkubicaLoginOtpService
 {
     public const CONTEXT_TYPE = 'akubica_login';
 
+    private ?string $lastDecoyReason = null;
+
     public function __construct(
         private readonly OtpAbusePolicy $abusePolicy,
         private readonly IssueAkubicaTokenAction $issueAkubicaTokenAction,
         private readonly AkubicaLoginOtpDecoyStore $decoyStore,
         private readonly AkubicaSecureOtpDeliveryOrchestrator $deliveryOrchestrator,
         private readonly MexicoPhoneNormalizer $phoneNormalizer,
-    ) {
-    }
+        private readonly OtpDiagnosticContext $otpDiagnostics,
+    ) {}
 
     public static function isEnabled(): bool
     {
@@ -98,21 +101,51 @@ class AkubicaLoginOtpService
      */
     public function findEligibleUser(PhoneIdentity $phone): ?User
     {
+        $this->otpDiagnostics->markEligibility();
+        $this->lastDecoyReason = null;
+
         $users = $this->findUsersByPhone($phone);
-        if ($users->count() !== 1) {
+        if ($users->isEmpty()) {
+            $this->markDecoyReason(OtpDiagnosticContext::REASON_USER_NOT_FOUND);
+
+            return null;
+        }
+
+        if ($users->count() > 1) {
+            $this->markDecoyReason(OtpDiagnosticContext::REASON_AMBIGUOUS_MATCH);
+
             return null;
         }
 
         /** @var User $user */
         $user = $users->first();
 
+        if ($this->isInactive($user)) {
+            $this->markDecoyReason(OtpDiagnosticContext::REASON_USER_INACTIVE);
+
+            return null;
+        }
+
+        if ($user->customer === null) {
+            $this->markDecoyReason(OtpDiagnosticContext::REASON_CUSTOMER_MISSING);
+
+            return null;
+        }
+
         if ((bool) config('otp.p0a.policy.require_verified_phone', true)
             && $user->phone_verified_at === null
         ) {
+            $this->markDecoyReason(OtpDiagnosticContext::REASON_PHONE_NOT_VERIFIED);
+
             return null;
         }
 
         return $user;
+    }
+
+    public function lastDecoyReason(): ?string
+    {
+        return $this->lastDecoyReason;
     }
 
     /**
@@ -190,6 +223,7 @@ class AkubicaLoginOtpService
             'invalidated_at' => null,
             'invalidated_reason' => null,
         ]);
+        $this->otpDiagnostics->markDecoy($this->lastDecoyReason ?? OtpDiagnosticContext::REASON_UNKNOWN);
 
         return [
             'requires_otp' => true,
@@ -217,6 +251,7 @@ class AkubicaLoginOtpService
         }
 
         assert($challenge instanceof OtpChallenge);
+        $this->otpDiagnostics->markRealChallengeProviderNotApplicable();
 
         if ($challenge->purpose !== P0aOtpPurpose::AkubicaLogin->value
             || $challenge->context_type !== self::CONTEXT_TYPE
@@ -337,6 +372,7 @@ class AkubicaLoginOtpService
      */
     private function verifyDecoy(string $publicId, string $code): never
     {
+        $this->otpDiagnostics->markDecoy();
         $decoy = $this->decoyStore->get($publicId);
         if ($decoy === null) {
             throw new OtpChallengeNotFoundException;
@@ -419,6 +455,7 @@ class AkubicaLoginOtpService
             'invalidated_at' => null,
             'invalidated_reason' => null,
         ]);
+        $this->otpDiagnostics->markDecoy();
 
         return [
             'requires_otp' => true,
@@ -519,6 +556,7 @@ class AkubicaLoginOtpService
         $legacyTrunk = '1'.$national;
 
         $query = User::query()
+            ->with('customer')
             ->where(function ($q) use ($national, $legacyTrunk) {
                 $q->where('phone', $national)
                     ->orWhere('phone', $legacyTrunk)
@@ -535,5 +573,18 @@ class AkubicaLoginOtpService
         });
 
         return $query->get();
+    }
+
+    private function markDecoyReason(string $reason): void
+    {
+        $this->lastDecoyReason = $reason;
+        $this->otpDiagnostics->markDecoyReason($reason);
+    }
+
+    private function isInactive(User $user): bool
+    {
+        $state = strtolower(trim((string) ($user->state ?? '')));
+
+        return in_array($state, ['inactive', 'disabled', 'blocked', 'suspended'], true);
     }
 }

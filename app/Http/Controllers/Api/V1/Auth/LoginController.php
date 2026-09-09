@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Services\Api\V1\Audit\AuditOutcome;
 use App\Services\Api\V1\Audit\AuthOtpAuditRecorder;
 use App\Services\Otp\AkubicaLoginOtpService;
+use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 
@@ -33,6 +34,7 @@ class LoginController extends Controller
         private AkubicaLoginOtpService $akubicaLoginOtpService,
         private OtpExceptionHttpMapper $otpExceptionHttpMapper,
         private AuthOtpAuditRecorder $authOtpAudit,
+        private OtpDiagnosticContext $otpDiagnostics,
     ) {}
 
     public function requestCode(LoginRequestCodeRequest $request): JsonResponse
@@ -155,6 +157,9 @@ class LoginController extends Controller
                     isDecoy: true,
                     isResend: false,
                     destinationMasked: is_string($payload['destination_masked'] ?? null) ? $payload['destination_masked'] : null,
+                    metadata: [
+                        'decoy_reason' => $this->otpDiagnostics->reasonCode() ?? 'unknown',
+                    ],
                 );
 
                 return ApiResponse::success($payload, null, 202);

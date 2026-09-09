@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withCommands([
         \App\Console\Commands\MaterializeAkubicaUatFixturesCommand::class,
+        \App\Console\Commands\RepairRegisterSmsPhoneVerificationCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->validateCsrfTokens(except: [
@@ -52,6 +53,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.token.guard' => \App\Http\Middleware\UseApiTokenGuard::class,
             'api.idempotency' => \App\Http\Middleware\Api\V1\EnforceIdempotencyKey::class,
             'api.audit' => \App\Http\Middleware\Api\V1\InitializeApiV1AuditContext::class,
+            'otp.diagnostic' => \App\Http\Middleware\Api\V1\AddOtpDiagnosticResponseHeaders::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

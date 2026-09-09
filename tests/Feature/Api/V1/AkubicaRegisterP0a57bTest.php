@@ -182,6 +182,29 @@ test('p0a57b sms timeout with email fallback sends mail notification', function 
     Notification::assertSentOnDemand(AkubicaSecureRegisterOtpMailNotification::class);
 });
 
+test('p0a57b email fallback verification marks email only and leaves phone unverified', function () {
+    p0a57bEnableSecureRegister();
+    p0a57bEnableDelivery();
+    config()->set('otp.p0a.flags.email_fallback_enabled', true);
+    app(FakeOtpDeliveryProvider::class)->failOnceWith(OtpDeliveryResultClass::Timeout);
+
+    $payload = p0a57bRequestRegister('fallback.verify.p0a57b@ejemplo.test', '+52 55 1234 5708', '777777');
+    $payload['response']->assertStatus(202);
+
+    $this->postJson('/api/v1/auth/register/verify-code', [
+        'challenge_id' => $payload['challenge_id'],
+        'code' => '777777',
+    ])->assertOk();
+
+    $user = User::query()->where('email', 'fallback.verify.p0a57b@ejemplo.test')->first();
+
+    expect($user)->not->toBeNull()
+        ->and($user->email_verified_at)->not->toBeNull()
+        ->and($user->phone_verified_at)->toBeNull()
+        ->and(OtpDeliveryOperation::query()->first()->fallback_used)->toBeTrue()
+        ->and(OtpDeliveryOperation::query()->first()->result_class)->toBe(OtpDeliveryResultClass::FallbackAccepted->value);
+});
+
 test('p0a57b permanent sms failure without fallback returns delivery failed', function () {
     p0a57bEnableSecureRegister();
     p0a57bEnableDelivery();
@@ -265,4 +288,3 @@ test('p0a57b delivery off asserts no notifications on secure register', function
 
     Notification::assertNothingSent();
 });
-

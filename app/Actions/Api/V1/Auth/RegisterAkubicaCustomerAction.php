@@ -13,7 +13,7 @@ class RegisterAkubicaCustomerAction
     ) {}
 
     /**
-     * @param  array{email: string, phone: string, full_name: string, phone_country?: string}  $payload
+     * @param  array{email: string, phone: string, full_name: string, phone_country?: string, phone_verified?: bool}  $payload
      */
     public function __invoke(array $payload): User
     {
@@ -31,8 +31,17 @@ class RegisterAkubicaCustomerAction
 
         $regularAccount->load('customer.user');
 
+        $verifiedAt = now();
         $user = $regularAccount->customer->user;
-        $user->forceFill(['email_verified_at' => now()])->save();
+        $attributes = [
+            'email_verified_at' => $user->email_verified_at ?? $verifiedAt,
+        ];
+
+        if (($payload['phone_verified'] ?? false) === true) {
+            $attributes['phone_verified_at'] = $user->phone_verified_at ?? $verifiedAt;
+        }
+
+        $user->forceFill($attributes)->save();
 
         return $user->fresh(['customer']);
     }
