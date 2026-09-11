@@ -3,13 +3,36 @@ import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
 import { resolveLandingTemplate } from "@/Pages/MarketingCampaigns/templates";
 
+function formatCents(cents) {
+	if (cents == null || cents === "") {
+		return null;
+	}
+
+	return new Intl.NumberFormat("es-MX", {
+		style: "currency",
+		currency: "MXN",
+	}).format(Number(cents) / 100);
+}
+
 function formatPreviewProduct(product) {
+	const famedicPriceCents = product.famedic_price_cents ?? 0;
+	const publicPriceCents = product.public_price_cents ?? famedicPriceCents;
+	const famedicLabel =
+		product.formatted_famedic_price ||
+		product.price_label ||
+		formatCents(famedicPriceCents) ||
+		"$0.00 MXN";
+	const publicLabel =
+		product.formatted_public_price ||
+		formatCents(publicPriceCents) ||
+		famedicLabel;
+
 	return {
 		...product,
-		formatted_famedic_price: product.price_label || "$0.00 MXN",
-		formatted_public_price: product.price_label || "$0.00 MXN",
-		public_price_cents: product.famedic_price_cents ?? 0,
-		famedic_price_cents: product.famedic_price_cents ?? 0,
+		formatted_famedic_price: famedicLabel,
+		formatted_public_price: publicLabel,
+		public_price_cents: publicPriceCents,
+		famedic_price_cents: famedicPriceCents,
 		detail_url: "#",
 	};
 }

@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Enums\LaboratoryBrand;
 use App\Enums\MarketingCampaignHeroImageSource;
+use App\Enums\MarketingCampaignLinkProductSection;
 use App\Enums\MarketingCampaignLinkStatus;
 use App\Enums\MarketingCampaignStatus;
 use App\Enums\MarketingCampaignTargetType;
@@ -17,6 +18,7 @@ use App\Models\MarketingCampaignCollection;
 use App\Models\MarketingCampaignConversion;
 use App\Models\MarketingCampaignLink;
 use App\Models\MarketingCampaignLinkAlias;
+use App\Models\MarketingCampaignLinkProduct;
 use App\Models\MarketingCampaignVisit;
 use App\Models\MarketingCampaignVisitorIdentity;
 use App\Models\Permission;
@@ -656,6 +658,48 @@ class MarketingCampaignAdminTest extends TestCase
                 ->where('link.show_brand_logo', false)
                 ->where('link.hero_image_source', MarketingCampaignHeroImageSource::Upload->value)
                 ->where('link.landing_layout', 'default'));
+    }
+
+    #[Test]
+    public function edit_link_expone_precios_publicos_y_famedic_para_productos_principales_y_relacionados(): void
+    {
+        $admin = $this->makeMarketingAdmin();
+        $campaign = MarketingCampaign::factory()->create();
+        $link = MarketingCampaignLink::factory()
+            ->for($campaign, 'campaign')
+            ->create(['target_type' => MarketingCampaignTargetType::Brand]);
+        $primary = LaboratoryTest::factory()->create([
+            'brand' => LaboratoryBrand::OLAB,
+            'public_price_cents' => 1000,
+            'famedic_price_cents' => 0,
+        ]);
+        $related = LaboratoryTest::factory()->create([
+            'brand' => LaboratoryBrand::OLAB,
+            'public_price_cents' => 432100,
+            'famedic_price_cents' => 321000,
+        ]);
+
+        MarketingCampaignLinkProduct::factory()->create([
+            'marketing_campaign_link_id' => $link->id,
+            'laboratory_test_id' => $primary->id,
+            'section' => MarketingCampaignLinkProductSection::Primary,
+            'position' => 0,
+        ]);
+        MarketingCampaignLinkProduct::factory()->related()->create([
+            'marketing_campaign_link_id' => $link->id,
+            'laboratory_test_id' => $related->id,
+            'position' => 0,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.links.edit', [$campaign, $link]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/MarketingCampaigns/Links/Edit')
+                ->where('link.primary_products.0.public_price_cents', 1000)
+                ->where('link.primary_products.0.famedic_price_cents', 0)
+                ->where('link.related_products.0.public_price_cents', 432100)
+                ->where('link.related_products.0.famedic_price_cents', 321000));
     }
 
     #[Test]

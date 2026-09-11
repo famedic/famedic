@@ -89,6 +89,31 @@ test("public landing templates are selected through a shared registry", () => {
 	assert.match(preview, /const Template = resolveLandingTemplate\(content\.landing_template \|\| landingTemplate\)/);
 });
 
+test("live preview keeps related product public prices instead of falling back to zero", () => {
+	const controller = readFileSync(
+		"app/Http/Controllers/Admin/MarketingCampaignLinkController.php",
+		"utf8",
+	);
+	const preview = readFileSync(
+		"resources/js/Pages/Admin/MarketingCampaigns/Components/MarketingCampaignLandingPreview.jsx",
+		"utf8",
+	);
+
+	assert.match(
+		controller,
+		/primaryLandingProducts\.laboratoryTest:id,name,other_name,brand,public_price_cents,famedic_price_cents/,
+	);
+	assert.match(
+		controller,
+		/relatedLandingProducts\.laboratoryTest:id,name,other_name,brand,public_price_cents,famedic_price_cents/,
+	);
+	assert.match(controller, /'public_price_cents' => \(int\) \$test->public_price_cents/);
+	assert.match(preview, /const publicPriceCents = product\.public_price_cents \?\? famedicPriceCents/);
+	assert.match(preview, /formatCents\(publicPriceCents\)/);
+	assert.doesNotMatch(preview, /public_price_cents:\s*product\.famedic_price_cents \?\? 0/);
+	assert.doesNotMatch(preview, /formatted_public_price:\s*product\.price_label \|\| "\$0\.00 MXN"/);
+});
+
 test("admin selector communicates recommended template use cases", () => {
 	const selector = readFileSync(
 		"resources/js/Pages/Admin/MarketingCampaigns/Components/MarketingCampaignLandingTemplateSelector.jsx",

@@ -76,9 +76,9 @@ class MarketingCampaignLinkController extends Controller
 
         $marketingCampaignLink->load([
             'aliases' => fn ($query) => $query->orderByDesc('created_at'),
-            'primaryLandingProducts.laboratoryTest:id,name,other_name,brand,famedic_price_cents,laboratory_test_category_id',
+            'primaryLandingProducts.laboratoryTest:id,name,other_name,brand,public_price_cents,famedic_price_cents,laboratory_test_category_id',
             'primaryLandingProducts.laboratoryTest.laboratoryTestCategory:id,name',
-            'relatedLandingProducts.laboratoryTest:id,name,other_name,brand,famedic_price_cents,laboratory_test_category_id',
+            'relatedLandingProducts.laboratoryTest:id,name,other_name,brand,public_price_cents,famedic_price_cents,laboratory_test_category_id',
             'relatedLandingProducts.laboratoryTest.laboratoryTestCategory:id,name',
             'landingCategories.category:id,name',
             'landingImages' => fn ($query) => $query->where('type', 'gallery')->orderBy('position')->orderBy('id'),
@@ -270,6 +270,7 @@ class MarketingCampaignLinkController extends Controller
             'brand' => $test->brand?->value,
             'brand_label' => $test->brand?->label(),
             'category_name' => $test->laboratoryTestCategory?->name,
+            'public_price_cents' => (int) $test->public_price_cents,
             'famedic_price_cents' => (int) $test->famedic_price_cents,
         ];
     }
