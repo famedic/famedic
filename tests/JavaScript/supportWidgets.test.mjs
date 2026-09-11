@@ -283,16 +283,18 @@ test("checkout removes the legacy WhatsApp launcher with the red badge", () => {
 	assert.doesNotMatch(legacyLauncher, /wa\.me/);
 });
 
-test("internal Famedic help bubble does not render when the official widget is active", () => {
+test("internal Famedic help bubble does not render on admin or when the official widget is active", () => {
 	const helpBubble = readFileSync(
 		new URL("../../resources/js/Components/Catalyst/HelpBubble.jsx", import.meta.url),
 		"utf8",
 	);
 
+	assert.match(helpBubble, /isAdminPath/);
+	assert.match(helpBubble, /adminPath/);
 	assert.match(helpBubble, /officialSupportWidgetIsVisible/);
 	assert.match(helpBubble, /shouldShowSupportWidgets/);
 	assert.match(helpBubble, /supportWidgetsConfig/);
-	assert.match(helpBubble, /hidden \|\| officialSupportWidgetIsVisible/);
+	assert.match(helpBubble, /hidden \|\| adminPath \|\| officialSupportWidgetIsVisible/);
 });
 
 test("checkout positions ActiveCampaign above the measured sticky footer", () => {
