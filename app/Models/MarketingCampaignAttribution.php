@@ -19,6 +19,7 @@ class MarketingCampaignAttribution extends Model
             'first_touched_at' => 'datetime',
             'last_touched_at' => 'datetime',
             'expires_at' => 'datetime',
+            'identified_at' => 'datetime',
         ];
     }
 
@@ -32,6 +33,11 @@ class MarketingCampaignAttribution extends Model
         return $this->belongsTo(MarketingCampaignVisit::class, 'last_visit_id');
     }
 
+    public function identifiedVisit(): BelongsTo
+    {
+        return $this->belongsTo(MarketingCampaignVisit::class, 'identified_visit_id');
+    }
+
     public function firstCampaign(): BelongsTo
     {
         return $this->belongsTo(MarketingCampaign::class, 'first_campaign_id');
@@ -42,6 +48,11 @@ class MarketingCampaignAttribution extends Model
         return $this->belongsTo(MarketingCampaign::class, 'last_campaign_id');
     }
 
+    public function identifiedCampaign(): BelongsTo
+    {
+        return $this->belongsTo(MarketingCampaign::class, 'identified_campaign_id');
+    }
+
     public function firstLink(): BelongsTo
     {
         return $this->belongsTo(MarketingCampaignLink::class, 'first_link_id');
@@ -50,6 +61,11 @@ class MarketingCampaignAttribution extends Model
     public function lastLink(): BelongsTo
     {
         return $this->belongsTo(MarketingCampaignLink::class, 'last_link_id');
+    }
+
+    public function identifiedLink(): BelongsTo
+    {
+        return $this->belongsTo(MarketingCampaignLink::class, 'identified_link_id');
     }
 
     public function visits(): HasMany

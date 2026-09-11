@@ -239,5 +239,8 @@ function bootstrapIsolatedMarketingCampaignSchema(): void
     $conversionMigration = require database_path('migrations/2026_09_11_020000_create_marketing_campaign_conversions_table.php');
     $conversionMigration->up();
 
+    $dashboardMetricsMigration = require database_path('migrations/2026_09_11_030000_add_marketing_campaign_dashboard_metrics_columns.php');
+    $dashboardMetricsMigration->up();
+
     app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
 }

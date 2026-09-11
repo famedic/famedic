@@ -8,6 +8,7 @@ use App\Actions\Admin\MarketingCampaigns\UpdateMarketingCampaignAction;
 use App\Enums\MarketingCampaignStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\MarketingCampaigns\IndexMarketingCampaignRequest;
+use App\Http\Requests\Admin\MarketingCampaigns\ShowMarketingCampaignRequest;
 use App\Http\Requests\Admin\MarketingCampaigns\StoreMarketingCampaignRequest;
 use App\Http\Requests\Admin\MarketingCampaigns\StoreMarketingCampaignSetupRequest;
 use App\Http\Requests\Admin\MarketingCampaigns\UpdateMarketingCampaignRequest;
@@ -157,7 +158,7 @@ class MarketingCampaignController extends Controller
             ->flashMessage('Campaña creada.');
     }
 
-    public function show(MarketingCampaign $marketingCampaign): Response
+    public function show(ShowMarketingCampaignRequest $request, MarketingCampaign $marketingCampaign): Response
     {
         $this->authorize('view', $marketingCampaign);
 
@@ -173,6 +174,7 @@ class MarketingCampaignController extends Controller
 
         $presenter = app(MarketingCampaignDashboardPresenter::class);
         $links = $marketingCampaign->links;
+        $dashboardFilters = $request->dashboardFilters();
         $linkResolver = app(MarketingCampaignCollectionLinkResolver::class);
         $collectionIds = $marketingCampaign->collections->pluck('id')->all();
         $collectionLinkCounts = $linkResolver->countsForCampaign(
@@ -218,6 +220,8 @@ class MarketingCampaignController extends Controller
             }),
             'summary' => $presenter->summary($marketingCampaign, $links),
             'checklist' => $presenter->checklist($marketingCampaign, $links),
+            'analytics' => $presenter->analytics($marketingCampaign, $links, $dashboardFilters),
+            'analyticsFilters' => $dashboardFilters,
             'capabilities' => [
                 'canView' => true,
                 'canEdit' => $canEdit,

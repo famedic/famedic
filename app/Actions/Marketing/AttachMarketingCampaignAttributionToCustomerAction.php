@@ -3,8 +3,8 @@
 namespace App\Actions\Marketing;
 
 use App\Models\MarketingCampaignAttribution;
-use App\Models\MarketingCampaignVisitorIdentity;
 use App\Models\MarketingCampaignVisit;
+use App\Models\MarketingCampaignVisitorIdentity;
 use App\Models\User;
 use App\Services\Marketing\MarketingCampaignAttributionCookieFactory;
 use Illuminate\Http\Request;
@@ -14,10 +14,15 @@ use Illuminate\Support\Facades\Log;
 class AttachMarketingCampaignAttributionToCustomerAction
 {
     public const STATUS_ATTACHED = 'attached';
+
     public const STATUS_CONFLICT = 'conflict';
+
     public const STATUS_NO_CUSTOMER = 'no_customer';
+
     public const STATUS_NO_COOKIE = 'no_cookie';
+
     public const STATUS_NO_IDENTITY = 'no_identity';
+
     public const STATUS_NO_ACTIVE_ATTRIBUTION = 'no_active_attribution';
 
     public function __construct(
@@ -82,6 +87,15 @@ class AttachMarketingCampaignAttributionToCustomerAction
             ], static fn (?int $value): bool => $value !== null);
 
             if ($updates !== []) {
+                if ($attribution->identified_at === null) {
+                    $updates = array_merge($updates, [
+                        'identified_campaign_id' => $attribution->last_campaign_id,
+                        'identified_link_id' => $attribution->last_link_id,
+                        'identified_visit_id' => $attribution->last_visit_id,
+                        'identified_at' => now(),
+                    ]);
+                }
+
                 $attribution->forceFill($updates)->save();
             }
 

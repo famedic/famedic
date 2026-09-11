@@ -12,8 +12,8 @@ use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignAttribution;
 use App\Models\MarketingCampaignLink;
 use App\Models\MarketingCampaignLinkAlias;
-use App\Models\MarketingCampaignVisitorIdentity;
 use App\Models\MarketingCampaignVisit;
+use App\Models\MarketingCampaignVisitorIdentity;
 use App\Models\User;
 use App\Services\Marketing\MarketingCampaignAttributionTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
@@ -351,6 +351,10 @@ class MarketingCampaignAttributionTest extends TestCase
         $this->assertSame(AttachMarketingCampaignAttributionToCustomerAction::STATUS_ATTACHED, $status);
         $this->assertSame($user->id, $attribution->user_id);
         $this->assertSame($user->customer->id, $attribution->customer_id);
+        $this->assertSame($cycle['campaign']->id, $attribution->identified_campaign_id);
+        $this->assertSame($cycle['link']->id, $attribution->identified_link_id);
+        $this->assertSame($cycle['visit']->id, $attribution->identified_visit_id);
+        $this->assertNotNull($attribution->identified_at);
         $this->assertSame($user->id, $visit->user_id);
         $this->assertSame($user->customer->id, $visit->customer_id);
     }
@@ -364,10 +368,12 @@ class MarketingCampaignAttributionTest extends TestCase
         $action = app(AttachMarketingCampaignAttributionToCustomerAction::class);
 
         $this->assertSame(AttachMarketingCampaignAttributionToCustomerAction::STATUS_ATTACHED, $action($request, $user, 'test_register'));
+        $identifiedAt = $cycle['attribution']->fresh()->identified_at;
         $this->assertSame(AttachMarketingCampaignAttributionToCustomerAction::STATUS_ATTACHED, $action($request, $user, 'test_login'));
 
         $this->assertSame(1, MarketingCampaignAttribution::query()->where('user_id', $user->id)->count());
         $this->assertSame(1, MarketingCampaignVisit::query()->where('customer_id', $user->customer->id)->count());
+        $this->assertTrue($identifiedAt->equalTo($cycle['attribution']->fresh()->identified_at));
     }
 
     #[Test]
@@ -393,6 +399,7 @@ class MarketingCampaignAttributionTest extends TestCase
         $this->assertSame(AttachMarketingCampaignAttributionToCustomerAction::STATUS_CONFLICT, $status);
         $this->assertSame($existing->id, $attribution->user_id);
         $this->assertSame($existing->customer->id, $attribution->customer_id);
+        $this->assertNull($attribution->identified_at);
     }
 
     #[Test]
@@ -417,6 +424,7 @@ class MarketingCampaignAttributionTest extends TestCase
 
         $this->assertSame(AttachMarketingCampaignAttributionToCustomerAction::STATUS_CONFLICT, $status);
         $this->assertNull($cycle['attribution']->fresh()->user_id);
+        $this->assertNull($cycle['attribution']->fresh()->identified_at);
         $this->assertSame($existing->id, $cycle['visit']->fresh()->user_id);
     }
 
@@ -447,6 +455,7 @@ class MarketingCampaignAttributionTest extends TestCase
             $action($this->attributionRequestWithCookie($cycle['token']), $user, 'test_login'),
         );
         $this->assertNull($cycle['attribution']->fresh()->user_id);
+        $this->assertNull($cycle['attribution']->fresh()->identified_at);
         $this->assertNull($cycle['visit']->fresh()->customer_id);
     }
 

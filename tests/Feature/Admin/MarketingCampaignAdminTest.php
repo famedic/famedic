@@ -8,11 +8,17 @@ use App\Enums\MarketingCampaignLinkStatus;
 use App\Enums\MarketingCampaignStatus;
 use App\Enums\MarketingCampaignTargetType;
 use App\Models\Administrator;
+use App\Models\Customer;
+use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryTest;
 use App\Models\MarketingCampaign;
+use App\Models\MarketingCampaignAttribution;
 use App\Models\MarketingCampaignCollection;
+use App\Models\MarketingCampaignConversion;
 use App\Models\MarketingCampaignLink;
 use App\Models\MarketingCampaignLinkAlias;
+use App\Models\MarketingCampaignVisit;
+use App\Models\MarketingCampaignVisitorIdentity;
 use App\Models\Permission;
 use App\Models\User;
 use App\Support\Workspace\WorkspaceCatalog;
@@ -1432,6 +1438,230 @@ class MarketingCampaignAdminTest extends TestCase
     }
 
     #[Test]
+    public function show_incluye_metricas_agregadas_sin_identificadores_sensibles(): void
+    {
+        $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
+        $campaign = MarketingCampaign::factory()->create(['name' => 'Dashboard seguro']);
+        $link = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create(['name' => 'Paid social']);
+
+        $metric = $this->createDashboardMetric($campaign, $link, [
+            'token_hash' => hash('sha256', 'dashboard-sensitive-token'),
+            'utm_source' => 'facebook',
+            'utm_medium' => 'paid_social',
+            'amount_cents' => 12_500,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', $campaign))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/MarketingCampaigns/Show')
+                ->where('analytics.totals.visits', 1)
+                ->where('analytics.totals.unique_visitors', 1)
+                ->where('analytics.totals.registrations', 1)
+                ->where('analytics.totals.buyers', 1)
+                ->where('analytics.totals.purchases', 1)
+                ->where('analytics.totals.revenue_cents', 12_500)
+                ->where('analytics.totals.average_ticket_cents', 12_500)
+                ->where('analytics.totals.visit_to_registration_rate', 100)
+                ->where('analytics.totals.visit_to_purchase_rate', 100)
+                ->has('analytics.links', 1)
+                ->where('analytics.links.0.revenue_cents', 12_500)
+                ->has('analytics.utm_breakdown', 1)
+                ->where('analytics.utm_breakdown.0.source', 'facebook'));
+
+        $payload = $response->getContent();
+
+        $this->assertStringNotContainsString($metric['token_hash'], $payload);
+        $this->assertStringNotContainsString($metric['customer']->user->email, $payload);
+        $this->assertStringNotContainsString('gclid-secret', $payload);
+        $this->assertStringNotContainsString('fbclid-secret', $payload);
+    }
+
+    #[Test]
+    public function dashboard_filtra_por_fecha_enlace_y_utms(): void
+    {
+        $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
+        $campaign = MarketingCampaign::factory()->create();
+        $included = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create(['name' => 'Incluido']);
+        $other = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create(['name' => 'Excluido']);
+
+        $this->createDashboardMetric($campaign, $included, [
+            'visited_at' => now()->setDate(2026, 9, 5)->setTime(12, 0),
+            'utm_source' => 'google',
+            'utm_medium' => 'cpc',
+            'amount_cents' => 20_000,
+        ]);
+        $this->createDashboardMetric($campaign, $other, [
+            'visited_at' => now()->setDate(2026, 9, 5)->setTime(12, 0),
+            'utm_source' => 'facebook',
+            'utm_medium' => 'paid_social',
+            'amount_cents' => 30_000,
+        ]);
+        $this->createDashboardMetric($campaign, $included, [
+            'visited_at' => now()->setDate(2026, 8, 1)->setTime(12, 0),
+            'utm_source' => 'google',
+            'utm_medium' => 'cpc',
+            'amount_cents' => 40_000,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', [
+                $campaign,
+                'from' => '2026-09-01',
+                'to' => '2026-09-30',
+                'link_id' => $included->id,
+                'utm_source' => 'google',
+                'utm_medium' => 'cpc',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('analyticsFilters.from', '2026-09-01')
+                ->where('analyticsFilters.to', '2026-09-30')
+                ->where('analyticsFilters.link_id', (string) $included->id)
+                ->where('analytics.totals.visits', 1)
+                ->where('analytics.totals.purchases', 1)
+                ->where('analytics.totals.revenue_cents', 20_000)
+                ->has('analytics.links', 2));
+    }
+
+    #[Test]
+    public function dashboard_devuelve_tasas_nulas_cuando_no_hay_base(): void
+    {
+        $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
+        $campaign = MarketingCampaign::factory()->create();
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', $campaign))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('analytics.totals.visits', 0)
+                ->where('analytics.totals.unique_visitors', 0)
+                ->where('analytics.totals.average_ticket_cents', null)
+                ->where('analytics.totals.visit_to_registration_rate', null)
+                ->where('analytics.totals.visit_to_purchase_rate', null)
+                ->where('analytics.totals.registration_to_purchase_rate', null));
+    }
+
+    #[Test]
+    public function dashboard_muestra_first_touch_sin_sumarlo_a_last_touch_oficial(): void
+    {
+        $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
+        $firstCampaign = MarketingCampaign::factory()->create(['name' => 'First']);
+        $lastCampaign = MarketingCampaign::factory()->create(['name' => 'Last']);
+        $firstLink = MarketingCampaignLink::factory()->for($firstCampaign, 'campaign')->create();
+        $lastLink = MarketingCampaignLink::factory()->for($lastCampaign, 'campaign')->create();
+
+        $this->createDashboardMetric($lastCampaign, $lastLink, [
+            'first_campaign' => $firstCampaign,
+            'first_link' => $firstLink,
+            'amount_cents' => 55_000,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', $firstCampaign))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('analytics.totals.purchases', 0)
+                ->where('analytics.totals.revenue_cents', 0)
+                ->where('analytics.first_touch.purchases', 1)
+                ->where('analytics.first_touch.revenue_cents', 55_000));
+    }
+
+    #[Test]
+    public function dashboard_registros_usan_snapshot_de_visita_identificada_no_last_touch_posterior(): void
+    {
+        $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
+        $campaign = MarketingCampaign::factory()->create();
+        $identifiedLink = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create(['name' => 'Identificado']);
+        $laterLink = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create(['name' => 'Posterior']);
+
+        $metric = $this->createDashboardMetric($campaign, $identifiedLink, [
+            'utm_source' => 'facebook',
+            'utm_medium' => 'paid_social',
+            'amount_cents' => 25_000,
+        ]);
+        $attribution = MarketingCampaignAttribution::query()
+            ->where('visitor_token_hash', $metric['token_hash'])
+            ->firstOrFail();
+
+        $laterVisit = MarketingCampaignVisit::query()->create([
+            'marketing_campaign_id' => $campaign->id,
+            'marketing_campaign_link_id' => $laterLink->id,
+            'marketing_campaign_attribution_id' => $attribution->id,
+            'visitor_token_hash' => $metric['token_hash'],
+            'marketing_campaign_visitor_identity_id' => $attribution->marketing_campaign_visitor_identity_id,
+            'user_id' => $metric['customer']->user_id,
+            'customer_id' => $metric['customer']->id,
+            'utm_source' => 'google',
+            'utm_medium' => 'cpc',
+            'landing_path' => '/c/'.$laterLink->slug,
+            'visited_at' => now(),
+            'created_at' => now(),
+        ]);
+
+        $attribution->forceFill([
+            'last_link_id' => $laterLink->id,
+            'last_visit_id' => $laterVisit->id,
+            'last_touched_at' => $laterVisit->visited_at,
+        ])->save();
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', [
+                $campaign,
+                'link_id' => $identifiedLink->id,
+                'utm_source' => 'facebook',
+                'utm_medium' => 'paid_social',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('analytics.totals.registrations', 1)
+                ->where('analytics.totals.purchases', 1));
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', [
+                $campaign,
+                'link_id' => $laterLink->id,
+                'utm_source' => 'google',
+                'utm_medium' => 'cpc',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('analytics.totals.registrations', 0)
+                ->where('analytics.totals.purchases', 0));
+    }
+
+    #[Test]
+    public function show_rechaza_filtros_invalidos_y_usuario_sin_permiso(): void
+    {
+        $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
+        $plain = User::factory()->create();
+        Administrator::factory()->for($plain)->create();
+        $campaign = MarketingCampaign::factory()->create();
+        $otherCampaign = MarketingCampaign::factory()->create();
+        $foreignLink = MarketingCampaignLink::factory()->for($otherCampaign, 'campaign')->create();
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', [
+                $campaign,
+                'from' => '2025-01-01',
+                'to' => '2026-03-01',
+            ]))
+            ->assertSessionHasErrors('to');
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', [
+                $campaign,
+                'link_id' => $foreignLink->id,
+            ]))
+            ->assertSessionHasErrors('link_id');
+
+        $this->actingAs($plain)
+            ->get(route('admin.marketing-campaigns.show', $campaign))
+            ->assertForbidden();
+    }
+
+    #[Test]
     public function product_search_valida_consulta_filtra_y_autoriza(): void
     {
         $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
@@ -1500,5 +1730,115 @@ class MarketingCampaignAdminTest extends TestCase
         $this->actingAs($plain)
             ->getJson(route('admin.marketing-campaigns.product-search', ['q' => 'Hemo']))
             ->assertForbidden();
+    }
+
+    /**
+     * @return array{token_hash: string, customer: Customer}
+     */
+    private function createDashboardMetric(MarketingCampaign $lastCampaign, MarketingCampaignLink $lastLink, array $overrides = []): array
+    {
+        $visitedAt = $overrides['visited_at'] ?? now()->subDay();
+        $firstCampaign = $overrides['first_campaign'] ?? $lastCampaign;
+        $firstLink = $overrides['first_link'] ?? $lastLink;
+        $tokenHash = $overrides['token_hash'] ?? hash('sha256', uniqid('marketing-dashboard-', true));
+        $user = User::factory()->create();
+        $customer = Customer::factory()->for($user)->create();
+        $identity = MarketingCampaignVisitorIdentity::query()->create([
+            'visitor_token_hash' => $tokenHash,
+            'created_at' => $visitedAt,
+            'updated_at' => $visitedAt,
+        ]);
+
+        $attribution = MarketingCampaignAttribution::query()->create([
+            'visitor_token_hash' => $tokenHash,
+            'marketing_campaign_visitor_identity_id' => $identity->id,
+            'first_campaign_id' => $firstCampaign->id,
+            'first_link_id' => $firstLink->id,
+            'last_campaign_id' => $lastCampaign->id,
+            'last_link_id' => $lastLink->id,
+            'first_touched_at' => $visitedAt,
+            'last_touched_at' => $visitedAt,
+            'expires_at' => $visitedAt->copy()->addDays(30),
+            'user_id' => $user->id,
+            'customer_id' => $customer->id,
+            'identified_campaign_id' => $lastCampaign->id,
+            'identified_link_id' => $lastLink->id,
+            'identified_at' => $visitedAt->copy()->addMinutes(5),
+        ]);
+
+        $visit = MarketingCampaignVisit::query()->create([
+            'marketing_campaign_id' => $lastCampaign->id,
+            'marketing_campaign_link_id' => $lastLink->id,
+            'marketing_campaign_attribution_id' => $attribution->id,
+            'visitor_token_hash' => $tokenHash,
+            'marketing_campaign_visitor_identity_id' => $identity->id,
+            'user_id' => $user->id,
+            'customer_id' => $customer->id,
+            'utm_source' => $overrides['utm_source'] ?? 'facebook',
+            'utm_medium' => $overrides['utm_medium'] ?? 'cpc',
+            'utm_campaign' => 'dashboard-test',
+            'gclid' => 'gclid-secret',
+            'fbclid' => 'fbclid-secret',
+            'landing_path' => '/c/'.$lastLink->slug,
+            'visited_at' => $visitedAt,
+            'created_at' => $visitedAt,
+        ]);
+
+        $attribution->update([
+            'first_visit_id' => $visit->id,
+            'last_visit_id' => $visit->id,
+            'identified_visit_id' => $visit->id,
+        ]);
+
+        $purchase = LaboratoryPurchase::query()->create([
+            'brand' => LaboratoryBrand::OLAB->value,
+            'gda_order_id' => (string) random_int(100000, 999999),
+            'name' => 'Paciente',
+            'paternal_lastname' => 'Dashboard',
+            'maternal_lastname' => 'Marketing',
+            'phone' => '5555555555',
+            'phone_country' => 'MX',
+            'birth_date' => '1990-01-01',
+            'gender' => 2,
+            'street' => 'Calle',
+            'number' => '1',
+            'neighborhood' => 'Centro',
+            'state' => 'CDMX',
+            'city' => 'CDMX',
+            'zipcode' => '01000',
+            'total_cents' => $overrides['amount_cents'] ?? 10_000,
+            'customer_id' => $customer->id,
+            'created_at' => $visitedAt->copy()->addMinutes(10),
+            'updated_at' => $visitedAt->copy()->addMinutes(10),
+        ]);
+
+        MarketingCampaignConversion::query()->create([
+            'marketing_campaign_attribution_id' => $attribution->id,
+            'marketing_campaign_visitor_identity_id' => $identity->id,
+            'first_campaign_id' => $firstCampaign->id,
+            'first_link_id' => $firstLink->id,
+            'first_visit_id' => $visit->id,
+            'last_campaign_id' => $lastCampaign->id,
+            'last_link_id' => $lastLink->id,
+            'last_visit_id' => $visit->id,
+            'user_id' => $user->id,
+            'customer_id' => $customer->id,
+            'conversion_type' => MarketingCampaignConversion::TYPE_LABORATORY_PURCHASE,
+            'purchase_id' => $purchase->id,
+            'currency' => 'MXN',
+            'amount_cents' => $overrides['amount_cents'] ?? 10_000,
+            'utm_source' => $overrides['utm_source'] ?? 'facebook',
+            'utm_medium' => $overrides['utm_medium'] ?? 'cpc',
+            'utm_campaign' => 'dashboard-test',
+            'gclid' => 'gclid-secret',
+            'fbclid' => 'fbclid-secret',
+            'converted_at' => $visitedAt->copy()->addMinutes(10),
+            'created_at' => $visitedAt->copy()->addMinutes(10),
+        ]);
+
+        return [
+            'token_hash' => $tokenHash,
+            'customer' => $customer->load('user'),
+        ];
     }
 }
