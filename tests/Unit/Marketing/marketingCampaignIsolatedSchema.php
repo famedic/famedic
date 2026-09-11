@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Schema;
 function marketingCampaignIsolatedTableNames(): array
 {
     return [
+        'marketing_campaign_conversions',
         'marketing_campaign_visits',
         'marketing_campaign_attributions',
         'marketing_campaign_visitor_identities',
@@ -24,6 +25,9 @@ function marketingCampaignIsolatedTableNames(): array
         'roles',
         'laboratory_tests',
         'laboratory_test_categories',
+        'transactionables',
+        'transactions',
+        'laboratory_purchases',
         'notifications',
         'laboratory_concierges',
         'administrators',
@@ -123,6 +127,57 @@ function bootstrapIsolatedMarketingCampaignSchema(): void
         $table->softDeletes();
     });
 
+    Schema::create('laboratory_purchases', function (Blueprint $table) {
+        $table->id();
+        $table->string('brand', 80);
+        $table->string('gda_order_id')->default('0');
+        $table->string('name')->default('Paciente');
+        $table->string('paternal_lastname')->default('Prueba');
+        $table->string('maternal_lastname')->default('Marketing');
+        $table->string('phone')->default('5555555555');
+        $table->string('phone_country')->default('MX');
+        $table->date('birth_date')->default('1990-01-01');
+        $table->string('gender')->nullable();
+        $table->string('street')->default('Calle');
+        $table->string('number')->default('1');
+        $table->string('neighborhood')->default('Centro');
+        $table->string('state')->default('CDMX');
+        $table->string('city')->default('CDMX');
+        $table->string('zipcode')->default('01000');
+        $table->string('additional_references')->nullable();
+        $table->unsignedInteger('total_cents');
+        $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
+        $table->timestamps();
+        $table->softDeletes();
+    });
+
+    Schema::create('transactions', function (Blueprint $table) {
+        $table->id();
+        $table->integer('transaction_amount_cents')->nullable();
+        $table->string('payment_method');
+        $table->string('payment_provider')->nullable();
+        $table->string('reference_id')->nullable();
+        $table->string('provider_order_id')->nullable();
+        $table->string('provider_transaction_id')->nullable();
+        $table->string('payment_status')->nullable();
+        $table->json('details')->nullable();
+        $table->string('description')->nullable();
+        $table->string('gateway')->nullable();
+        $table->string('gateway_transaction_id')->nullable();
+        $table->string('gateway_status')->nullable();
+        $table->json('gateway_response')->nullable();
+        $table->json('raw_response')->nullable();
+        $table->string('gateway_token')->nullable();
+        $table->timestamp('gateway_processed_at')->nullable();
+        $table->timestamps();
+        $table->softDeletes();
+    });
+
+    Schema::create('transactionables', function (Blueprint $table) {
+        $table->foreignId('transaction_id')->constrained()->cascadeOnDelete();
+        $table->morphs('transactionable');
+    });
+
     Schema::create('permissions', function (Blueprint $table) {
         $table->id();
         $table->string('name');
@@ -180,6 +235,9 @@ function bootstrapIsolatedMarketingCampaignSchema(): void
 
     $visitorIdentityMigration = require database_path('migrations/2026_09_11_010000_add_visitor_identities_to_marketing_attribution.php');
     $visitorIdentityMigration->up();
+
+    $conversionMigration = require database_path('migrations/2026_09_11_020000_create_marketing_campaign_conversions_table.php');
+    $conversionMigration->up();
 
     app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
 }
