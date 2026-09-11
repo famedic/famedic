@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\LaboratoryBrand;
+use App\Enums\MarketingCampaignLandingTemplate;
 use App\Enums\MarketingCampaignLinkStatus;
 use App\Enums\MarketingCampaignTargetType;
 use App\Models\MarketingCampaign;
@@ -37,6 +38,11 @@ class MarketingCampaignLinkFactory extends Factory
             'show_brand_logo' => true,
             'show_campaign_dates' => false,
             'landing_layout' => 'default',
+            'landing_template' => MarketingCampaignLandingTemplate::Conversion,
+            'editorial_eyebrow' => null,
+            'editorial_title' => null,
+            'editorial_body' => null,
+            'editorial_items' => null,
             'starts_at' => null,
             'ends_at' => null,
         ];

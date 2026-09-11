@@ -25,6 +25,8 @@ import MarketingCampaignUtmFields from "./MarketingCampaignUtmFields";
 import MarketingCampaignFormSection from "./MarketingCampaignFormSection";
 import MarketingCampaignHeroImageFields from "./MarketingCampaignHeroImageFields";
 import MarketingCampaignGalleryFields from "./MarketingCampaignGalleryFields";
+import MarketingCampaignEditorialFields from "./MarketingCampaignEditorialFields";
+import MarketingCampaignLandingTemplateSelector from "./MarketingCampaignLandingTemplateSelector";
 import MarketingCampaignProductSelector from "./MarketingCampaignProductSelector";
 import MarketingCampaignCategorySelector from "./MarketingCampaignCategorySelector";
 import { resolveLinkBrandValue } from "./marketingCampaignLinkBrand";
@@ -69,6 +71,7 @@ export default function MarketingCampaignLinkForm({
 	brands = {},
 	categories = [],
 	collections = [],
+	landingTemplateOptions = [],
 	productSearchUrl,
 	aliases = [],
 	isEdit = false,
@@ -222,6 +225,19 @@ export default function MarketingCampaignLinkForm({
 				description="Textos públicos, CTAs y opciones de visualización."
 			>
 				<div className="space-y-4">
+					<MarketingCampaignLandingTemplateSelector
+						value={data.landing_template || "conversion"}
+						onChange={(value) => setData("landing_template", value)}
+						options={landingTemplateOptions}
+						error={errors.landing_template}
+					/>
+
+					<MarketingCampaignEditorialFields
+						data={data}
+						setData={setData}
+						errors={errors}
+					/>
+
 					<Field>
 						<Label>Texto superior</Label>
 						<Input

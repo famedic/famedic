@@ -13,7 +13,12 @@ export default function MarketingCampaignsCreate({
 	productSearchUrl,
 	utmPresets = [],
 	promotionOptions = [],
+	landingTemplateOptions = [],
 }) {
+	const resetDraftOnMount =
+		typeof window !== "undefined" &&
+		new URLSearchParams(window.location.search).get("fresh") === "1";
+
 	return (
 		<AdminLayout title="Nueva campaña">
 			<div className="mx-auto max-w-5xl space-y-8">
@@ -43,6 +48,8 @@ export default function MarketingCampaignsCreate({
 					productSearchUrl={productSearchUrl}
 					utmPresets={utmPresets}
 					promotionOptions={promotionOptions}
+					landingTemplateOptions={landingTemplateOptions}
+					resetDraftOnMount={resetDraftOnMount}
 				/>
 			</div>
 		</AdminLayout>

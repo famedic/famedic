@@ -47,6 +47,7 @@ export default function MarketingCampaignProductSelector({
 	excludeIds,
 	emptyMessage = "Ningún estudio seleccionado.",
 	addLabel = "Agregar estudios",
+	addHint,
 	variant = "default",
 	showSelectedCount = true,
 }) {
@@ -103,6 +104,11 @@ export default function MarketingCampaignProductSelector({
 		...resolvedSelectedItems.map((item) => Number(item.id)),
 		...resolvedExcludeIds.map((id) => Number(id)),
 	]);
+	const resolvedAddHint =
+		addHint ??
+		(maxItems > 1
+			? "Puedes agregar varios estudios: busca, selecciona uno y vuelve a buscar para sumar más."
+			: null);
 
 	const addItem = (product) => {
 		if (
@@ -193,6 +199,11 @@ export default function MarketingCampaignProductSelector({
 					</Text>
 				)}
 				{error && <ErrorMessage>{error}</ErrorMessage>}
+				{resolvedAddHint && (
+					<Text className="mt-1 text-sm text-zinc-500">
+						{resolvedAddHint}
+					</Text>
+				)}
 			</Field>
 
 			{results.length > 0 && (

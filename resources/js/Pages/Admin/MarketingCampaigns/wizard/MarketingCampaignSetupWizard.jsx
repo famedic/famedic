@@ -13,7 +13,9 @@ import {
 import Card from "@/Components/Card";
 import MarketingCampaignDateRangeFields from "../Components/MarketingCampaignDateRangeFields";
 import MarketingCampaignHeroImageFields from "../Components/MarketingCampaignHeroImageFields";
+import MarketingCampaignEditorialFields from "../Components/MarketingCampaignEditorialFields";
 import MarketingCampaignGalleryFields from "../Components/MarketingCampaignGalleryFields";
+import MarketingCampaignLandingTemplateSelector from "../Components/MarketingCampaignLandingTemplateSelector";
 import MarketingCampaignProductSelector from "../Components/MarketingCampaignProductSelector";
 import MarketingCampaignUtmFields from "../Components/MarketingCampaignUtmFields";
 import MarketingCampaignLandingPreview from "../Components/MarketingCampaignLandingPreview";
@@ -90,10 +92,12 @@ export default function MarketingCampaignSetupWizard({
 	brands = {},
 	categories = [],
 	collections = [],
+	landingTemplateOptions = [],
 	productSearchUrl,
 	utmPresets = [],
 	promotionOptions = [],
 	maxCollectionItems = 50,
+	resetDraftOnMount = false,
 }) {
 	const campaignId = campaign?.id ?? null;
 	const steps = useMemo(() => getSteps(mode), [mode]);
@@ -112,12 +116,17 @@ export default function MarketingCampaignSetupWizard({
 	);
 
 	const [state, setState] = useState(() => {
-		const draft = loadDraft(mode, campaignId);
+		if (resetDraftOnMount) {
+			clearDraft(mode, campaignId);
+		}
+
+		const draft = resetDraftOnMount ? null : loadDraft(mode, campaignId);
 		return initialWizardState(mode, { campaign, initialDraft: draft });
 	});
 	const [stepErrors, setStepErrors] = useState({});
 	const [processing, setProcessing] = useState(false);
 	const [serverErrors, setServerErrors] = useState({});
+	const [mobilePane, setMobilePane] = useState("edit");
 
 	useEffect(() => {
 		saveDraft(mode, state, campaignId);
@@ -681,7 +690,7 @@ export default function MarketingCampaignSetupWizard({
 					state.brand && (
 						<div className="space-y-3">
 							<Text className="text-sm font-medium">
-								Productos destacados (opcional)
+								Productos destacados (puedes agregar varios)
 							</Text>
 							<MarketingCampaignProductSelector
 								brand={state.brand}
@@ -699,6 +708,19 @@ export default function MarketingCampaignSetupWizard({
 
 	const renderContentStep = () => (
 		<div className="space-y-6">
+			<MarketingCampaignLandingTemplateSelector
+				value={state.link.landing_template || "conversion"}
+				onChange={(value) => patchLink("landing_template", value)}
+				options={landingTemplateOptions}
+				error={stepErrors["link.landing_template"] || serverErrors["link.landing_template"]}
+			/>
+
+			<MarketingCampaignEditorialFields
+				data={state.link}
+				setData={(key, value) => patchLink(key, value)}
+				errors={{ ...stepErrors, ...serverErrors }}
+			/>
+
 			<div className="grid gap-4 sm:grid-cols-2">
 				<Field>
 					<Label>Texto superior</Label>
@@ -883,6 +905,13 @@ export default function MarketingCampaignSetupWizard({
 					public_description: prepared.link.public_description,
 					hero_url: heroPreviewUrl,
 					hero_alt: prepared.link.hero_image_alt,
+					landing_template: prepared.link.landing_template || "conversion",
+					editorial: {
+						eyebrow: prepared.link.editorial_eyebrow,
+						title: prepared.link.editorial_title,
+						body: prepared.link.editorial_body,
+						items: prepared.link.editorial_items || [],
+					},
 				}}
 				brand={
 					previewBrand
@@ -897,6 +926,46 @@ export default function MarketingCampaignSetupWizard({
 				gallery={previewGallery}
 				showPrices={prepared.link.show_prices}
 				showLogo={prepared.link.show_brand_logo}
+				landingTemplate={prepared.link.landing_template || "conversion"}
+				primaryAction={{ label: prepared.link.primary_cta_label }}
+				secondaryAction={{ label: prepared.link.secondary_cta_label }}
+			/>
+		</div>
+	);
+
+	const renderLivePreview = (compact = false) => (
+		<div className={compact ? "space-y-4" : "sticky top-6 space-y-4"}>
+			<Text className="font-semibold">Vista previa en vivo</Text>
+			<MarketingCampaignLandingPreview
+				content={{
+					eyebrow: prepared.link.eyebrow,
+					public_title: prepared.link.public_title,
+					public_subtitle: prepared.link.public_subtitle,
+					public_description: prepared.link.public_description,
+					hero_url: heroPreviewUrl,
+					hero_alt: prepared.link.hero_image_alt,
+					landing_template: prepared.link.landing_template || "conversion",
+					editorial: {
+						eyebrow: prepared.link.editorial_eyebrow,
+						title: prepared.link.editorial_title,
+						body: prepared.link.editorial_body,
+						items: prepared.link.editorial_items || [],
+					},
+				}}
+				brand={
+					previewBrand
+						? {
+								label: previewBrand.label || previewBrand.name,
+								logo_url: previewBrand.logo_url,
+							}
+						: null
+				}
+				products={previewProducts}
+				relatedProducts={prepared.relatedProducts}
+				gallery={previewGallery}
+				showPrices={prepared.link.show_prices}
+				showLogo={prepared.link.show_brand_logo}
+				landingTemplate={prepared.link.landing_template || "conversion"}
 				primaryAction={{ label: prepared.link.primary_cta_label }}
 				secondaryAction={{ label: prepared.link.secondary_cta_label }}
 			/>
@@ -922,12 +991,45 @@ export default function MarketingCampaignSetupWizard({
 
 			<ErrorSummary errors={{ ...stepErrors, ...serverErrors }} />
 
-			<section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
-				<Text className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500">
-					{currentStepDef.label}
-				</Text>
-				{stepContent}
-			</section>
+			<div className="lg:hidden">
+				<div className="grid grid-cols-2 rounded-lg border border-zinc-200 p-1 dark:border-zinc-700">
+					<Button
+						type="button"
+						outline={mobilePane !== "edit"}
+						onClick={() => setMobilePane("edit")}
+					>
+						Editar
+					</Button>
+					<Button
+						type="button"
+						outline={mobilePane !== "preview"}
+						onClick={() => setMobilePane("preview")}
+					>
+						Vista previa
+					</Button>
+				</div>
+			</div>
+
+			<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+				<section
+					className={`rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900 ${
+						mobilePane === "preview" ? "hidden lg:block" : ""
+					}`}
+				>
+					<Text className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500">
+						{currentStepDef.label}
+					</Text>
+					{stepContent}
+				</section>
+
+				<aside
+					className={`${
+						mobilePane === "preview" ? "block" : "hidden"
+					} lg:block`}
+				>
+					{renderLivePreview(mobilePane === "preview")}
+				</aside>
+			</div>
 
 			<div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white/95 p-4 shadow-lg backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95">
 				<div className="flex flex-wrap gap-2">

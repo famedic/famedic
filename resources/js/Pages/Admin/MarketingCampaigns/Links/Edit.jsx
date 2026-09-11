@@ -5,6 +5,7 @@ import { Heading } from "@/Components/Catalyst/heading";
 import { Text } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
 import MarketingCampaignLinkForm from "../Components/MarketingCampaignLinkForm";
+import MarketingCampaignLandingPreview from "../Components/MarketingCampaignLandingPreview";
 import {
 	toDatetimeLocalValue,
 	fromDatetimeLocalValue,
@@ -33,6 +34,11 @@ function normalizeLandingForm(form, primaryProducts, relatedProducts, relatedCat
 		primary_cta_label: form.primary_cta_label || null,
 		secondary_cta_label: form.secondary_cta_label || null,
 		landing_layout: form.landing_layout || "default",
+		landing_template: form.landing_template || "conversion",
+		editorial_eyebrow: form.editorial_eyebrow || null,
+		editorial_title: form.editorial_title || null,
+		editorial_body: form.editorial_body || null,
+		editorial_items: form.editorial_items || [],
 		utm_source: form.utm_source || null,
 		utm_medium: form.utm_medium || null,
 		utm_campaign: form.utm_campaign || null,
@@ -64,6 +70,16 @@ function initialGalleryItems(images = []) {
 	}));
 }
 
+function formatPrice(product) {
+	if (!product?.famedic_price_cents && product?.famedic_price_cents !== 0) {
+		return null;
+	}
+	return new Intl.NumberFormat("es-MX", {
+		style: "currency",
+		currency: "MXN",
+	}).format(product.famedic_price_cents / 100);
+}
+
 export default function MarketingCampaignLinksEdit({
 	campaign,
 	link,
@@ -71,6 +87,7 @@ export default function MarketingCampaignLinksEdit({
 	brands = {},
 	categories = [],
 	collections = [],
+	landingTemplateOptions = [],
 	productSearchUrl,
 	aliases = [],
 }) {
@@ -107,6 +124,11 @@ export default function MarketingCampaignLinksEdit({
 		show_brand_logo: link.show_brand_logo ?? true,
 		show_campaign_dates: link.show_campaign_dates ?? false,
 		landing_layout: link.landing_layout || "default",
+		landing_template: link.landing_template || "conversion",
+		editorial_eyebrow: link.editorial_eyebrow || "",
+		editorial_title: link.editorial_title || "",
+		editorial_body: link.editorial_body || "",
+		editorial_items: link.editorial_items || [],
 		utm_source: link.utm_source || "",
 		utm_medium: link.utm_medium || "",
 		utm_campaign: link.utm_campaign || "",
@@ -140,10 +162,31 @@ export default function MarketingCampaignLinksEdit({
 	};
 
 	const aliasList = aliases.length ? aliases : link.aliases || [];
+	const previewBrandValue = data.target_payload?.brand || primaryProducts[0]?.brand;
+	const previewBrand = previewBrandValue ? brands[previewBrandValue] : null;
+	const liveHeroPreviewUrl =
+		data.hero_image_source === "external"
+			? data.hero_image_url
+			: data.hero_image instanceof File
+				? URL.createObjectURL(data.hero_image)
+				: link.hero_image_preview_url || null;
+	const previewGallery = galleryItems
+		.map((item) => ({
+			key: item.key || item.id,
+			url:
+				item.url ||
+				(item.file instanceof File ? URL.createObjectURL(item.file) : null),
+			alt: item.alt,
+		}))
+		.filter((item) => item.url);
+	const previewProducts = primaryProducts.map((product) => ({
+		...product,
+		price_label: formatPrice(product),
+	}));
 
 	return (
 		<AdminLayout title={`Editar enlace · ${link.name}`}>
-			<div className="mx-auto max-w-3xl space-y-8">
+			<div className="mx-auto max-w-7xl space-y-8">
 				<div className="flex flex-wrap items-end justify-between gap-4">
 					<div>
 						<Heading>Editar enlace</Heading>
@@ -160,32 +203,75 @@ export default function MarketingCampaignLinksEdit({
 					>
 						Volver a la campaña
 					</Button>
+					{link.preview_url && (
+						<Button href={link.preview_url} target="_blank" outline>
+							Vista previa real
+						</Button>
+					)}
 				</div>
 
-				<MarketingCampaignLinkForm
-					data={data}
-					setData={setData}
-					errors={errors}
-					statusOptions={statusOptions}
-					brands={brands}
-					categories={categories}
-					collections={collections}
-					productSearchUrl={productSearchUrl}
-					aliases={aliasList}
-					isEdit
-					processing={processing}
-					onSubmit={submit}
-					submitLabel="Guardar enlace"
-					primaryProducts={primaryProducts}
-					onPrimaryProductsChange={setPrimaryProducts}
-					relatedProducts={relatedProducts}
-					onRelatedProductsChange={setRelatedProducts}
-					relatedCategoryItems={relatedCategoryItems}
-					onRelatedCategoryItemsChange={setRelatedCategoryItems}
-					galleryItems={galleryItems}
-					onGalleryItemsChange={setGalleryItems}
-					heroPreviewUrl={link.hero_image_preview_url || null}
-				/>
+				<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
+					<MarketingCampaignLinkForm
+						data={data}
+						setData={setData}
+						errors={errors}
+						statusOptions={statusOptions}
+						brands={brands}
+						categories={categories}
+						collections={collections}
+						landingTemplateOptions={landingTemplateOptions}
+						productSearchUrl={productSearchUrl}
+						aliases={aliasList}
+						isEdit
+						processing={processing}
+						onSubmit={submit}
+						submitLabel="Guardar enlace"
+						primaryProducts={primaryProducts}
+						onPrimaryProductsChange={setPrimaryProducts}
+						relatedProducts={relatedProducts}
+						onRelatedProductsChange={setRelatedProducts}
+						relatedCategoryItems={relatedCategoryItems}
+						onRelatedCategoryItemsChange={setRelatedCategoryItems}
+						galleryItems={galleryItems}
+						onGalleryItemsChange={setGalleryItems}
+						heroPreviewUrl={link.hero_image_preview_url || null}
+					/>
+					<aside className="sticky top-6 self-start">
+						<MarketingCampaignLandingPreview
+							content={{
+								eyebrow: data.eyebrow,
+								public_title: data.public_title,
+								public_subtitle: data.public_subtitle,
+								public_description: data.public_description,
+								hero_url: liveHeroPreviewUrl,
+								hero_alt: data.hero_image_alt,
+								landing_template: data.landing_template || "conversion",
+								editorial: {
+									eyebrow: data.editorial_eyebrow,
+									title: data.editorial_title,
+									body: data.editorial_body,
+									items: data.editorial_items || [],
+								},
+							}}
+							brand={
+								previewBrand
+									? {
+											label: previewBrand.label || previewBrand.name,
+											logo_url: previewBrand.logo_url,
+										}
+									: null
+							}
+							products={previewProducts}
+							relatedProducts={relatedProducts}
+							gallery={previewGallery}
+							showPrices={data.show_prices}
+							showLogo={data.show_brand_logo}
+							landingTemplate={data.landing_template || "conversion"}
+							primaryAction={{ label: data.primary_cta_label }}
+							secondaryAction={{ label: data.secondary_cta_label }}
+						/>
+					</aside>
+				</div>
 			</div>
 		</AdminLayout>
 	);

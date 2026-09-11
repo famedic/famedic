@@ -181,6 +181,7 @@ Route::prefix('admin')->middleware([
 
             Route::get('/{marketing_campaign}/links/create', [MarketingCampaignLinkController::class, 'create'])->name('links.create');
             Route::post('/{marketing_campaign}/links', [MarketingCampaignLinkController::class, 'store'])->name('links.store');
+            Route::get('/{marketing_campaign}/links/{marketing_campaign_link}/preview', [MarketingCampaignLinkController::class, 'preview'])->name('links.preview');
             Route::get('/{marketing_campaign}/links/{marketing_campaign_link}/edit', [MarketingCampaignLinkController::class, 'edit'])->name('links.edit');
             Route::put('/{marketing_campaign}/links/{marketing_campaign_link}', [MarketingCampaignLinkController::class, 'update'])->name('links.update');
             Route::post('/{marketing_campaign}/links/{marketing_campaign_link}/duplicate', [MarketingCampaignLinkController::class, 'duplicate'])->name('links.duplicate');

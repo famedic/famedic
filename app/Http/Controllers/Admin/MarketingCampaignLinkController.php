@@ -6,6 +6,7 @@ use App\Actions\Admin\MarketingCampaigns\CreateMarketingCampaignLinkAction;
 use App\Actions\Admin\MarketingCampaigns\DuplicateMarketingCampaignLinkAction;
 use App\Actions\Admin\MarketingCampaigns\UpdateMarketingCampaignLinkAction;
 use App\Enums\LaboratoryBrand;
+use App\Enums\MarketingCampaignLandingTemplate;
 use App\Enums\MarketingCampaignLinkStatus;
 use App\Enums\MarketingCampaignTargetType;
 use App\Http\Controllers\Controller;
@@ -14,7 +15,10 @@ use App\Http\Requests\Admin\MarketingCampaigns\UpdateMarketingCampaignLinkReques
 use App\Models\LaboratoryTestCategory;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignLink;
+use App\Services\Marketing\MarketingCampaignLandingViewModelFactory;
+use App\Services\Marketing\Targets\MarketingCampaignTargetResolverRegistry;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -102,6 +106,13 @@ class MarketingCampaignLinkController extends Controller
                 'show_brand_logo' => (bool) $marketingCampaignLink->show_brand_logo,
                 'show_campaign_dates' => (bool) $marketingCampaignLink->show_campaign_dates,
                 'landing_layout' => $marketingCampaignLink->landing_layout ?: 'default',
+                'landing_template' => $marketingCampaignLink->landing_template?->value
+                    ?? $marketingCampaignLink->landing_template
+                    ?? MarketingCampaignLandingTemplate::Conversion->value,
+                'editorial_eyebrow' => $marketingCampaignLink->editorial_eyebrow,
+                'editorial_title' => $marketingCampaignLink->editorial_title,
+                'editorial_body' => $marketingCampaignLink->editorial_body,
+                'editorial_items' => $marketingCampaignLink->editorial_items ?? [],
                 'hero_image_source' => $marketingCampaignLink->hero_image_source?->value
                     ?? $marketingCampaignLink->hero_image_source
                     ?? 'none',
@@ -151,6 +162,10 @@ class MarketingCampaignLinkController extends Controller
                         'source' => $image->source,
                     ])
                     ->values(),
+                'preview_url' => route('admin.marketing-campaigns.links.preview', [
+                    $marketingCampaign,
+                    $marketingCampaignLink,
+                ]),
             ],
             ...$this->formOptions($marketingCampaign),
         ]);
@@ -204,6 +219,39 @@ class MarketingCampaignLinkController extends Controller
             ->flashMessage('Enlace duplicado como borrador.');
     }
 
+    public function preview(
+        Request $request,
+        MarketingCampaign $marketingCampaign,
+        MarketingCampaignLink $marketingCampaignLink,
+        MarketingCampaignTargetResolverRegistry $targetResolvers,
+        MarketingCampaignLandingViewModelFactory $landingFactory,
+    ): Response {
+        $this->ensureLinkBelongsToCampaign($marketingCampaign, $marketingCampaignLink);
+        $this->authorize('view', $marketingCampaignLink);
+
+        $resolution = $targetResolvers->resolve($marketingCampaignLink, []);
+
+        abort_if($resolution->isInvalid() || ! $resolution->isResolved() || $resolution->target === null, 404);
+
+        $viewModel = $landingFactory->make(
+            $marketingCampaign,
+            $marketingCampaignLink,
+            $resolution->target,
+        );
+
+        return Inertia::render('MarketingCampaigns/Landing', [
+            ...$viewModel,
+            'preview' => [
+                'admin' => true,
+                'label' => 'Vista previa administrativa',
+                'back_url' => route('admin.marketing-campaigns.links.edit', [
+                    $marketingCampaign,
+                    $marketingCampaignLink,
+                ]),
+            ],
+        ]);
+    }
+
     /**
      * @return array{id: int, name: string, other_name: ?string}|null
      */
@@ -246,6 +294,7 @@ class MarketingCampaignLinkController extends Controller
                 ])
                 ->values()
                 ->all(),
+            'landingTemplateOptions' => MarketingCampaignLandingTemplate::options(),
             'brands' => LaboratoryBrand::brandsData(),
             'categories' => LaboratoryTestCategory::query()
                 ->orderBy('name')

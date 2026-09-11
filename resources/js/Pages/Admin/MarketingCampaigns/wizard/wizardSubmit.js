@@ -27,6 +27,11 @@ export function buildLinkPayload(state, context) {
 		show_brand_logo: link.show_brand_logo ?? true,
 		show_campaign_dates: link.show_campaign_dates ?? false,
 		landing_layout: link.landing_layout || "default",
+		landing_template: link.landing_template || "conversion",
+		editorial_eyebrow: nullIfEmpty(link.editorial_eyebrow),
+		editorial_title: nullIfEmpty(link.editorial_title),
+		editorial_body: nullIfEmpty(link.editorial_body),
+		editorial_items: link.editorial_items || [],
 		hero_image_source: link.hero_image_source || "none",
 		hero_image_url:
 			link.hero_image_source === "external"

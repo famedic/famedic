@@ -9,6 +9,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 
 class MarketingCampaignDashboardPresenter
@@ -143,7 +144,7 @@ class MarketingCampaignDashboardPresenter
 
         $visitTotals = (clone $visits)
             ->selectRaw('COUNT(*) as visits_count')
-            ->selectRaw('COUNT(DISTINCT marketing_campaign_visitor_identity_id) as visitors_count')
+            ->selectRaw("COUNT(DISTINCT {$this->visitVisitorIdentifierColumn()}) as visitors_count")
             ->first();
         $registrationCount = (int) (clone $registrations)->count();
         $conversionTotals = (clone $lastTouchConversions)
@@ -330,6 +331,13 @@ class MarketingCampaignDashboardPresenter
         return round(($numerator / $denominator) * 100, 2);
     }
 
+    private function visitVisitorIdentifierColumn(): string
+    {
+        return Schema::hasColumn('marketing_campaign_visits', 'marketing_campaign_visitor_identity_id')
+            ? 'marketing_campaign_visitor_identity_id'
+            : 'visitor_token_hash';
+    }
+
     /**
      * @param  array{from: Carbon|null, to: Carbon|null}  $period
      * @param  array<string, string>  $filters
@@ -340,7 +348,7 @@ class MarketingCampaignDashboardPresenter
         $visitQuery = DB::table('marketing_campaign_visits')
             ->selectRaw('marketing_campaign_link_id as link_id')
             ->selectRaw('COUNT(*) as visits')
-            ->selectRaw('COUNT(DISTINCT marketing_campaign_visitor_identity_id) as unique_visitors')
+            ->selectRaw("COUNT(DISTINCT {$this->visitVisitorIdentifierColumn()}) as unique_visitors")
             ->where('marketing_campaign_id', $campaignId)
             ->groupBy('marketing_campaign_link_id');
         $this->applyDate($visitQuery, 'visited_at', $period);
@@ -407,7 +415,7 @@ class MarketingCampaignDashboardPresenter
             ->selectRaw("COALESCE(utm_source, '') as source")
             ->selectRaw("COALESCE(utm_medium, '') as medium")
             ->selectRaw('COUNT(*) as visits')
-            ->selectRaw('COUNT(DISTINCT marketing_campaign_visitor_identity_id) as unique_visitors')
+            ->selectRaw("COUNT(DISTINCT {$this->visitVisitorIdentifierColumn()}) as unique_visitors")
             ->groupBy('utm_source', 'utm_medium');
 
         $registrationQuery = $this->registrationBaseQuery($campaignId, $period, $linkId, $filters)

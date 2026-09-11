@@ -3,6 +3,7 @@
 namespace App\Services\Marketing;
 
 use App\Enums\LaboratoryBrand;
+use App\Enums\MarketingCampaignLandingTemplate;
 use App\Enums\MarketingCampaignTargetType;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignLink;
@@ -62,6 +63,10 @@ class MarketingCampaignLandingViewModelFactory
         $products = $this->productsResolver->resolve($link, $resolved, $allowedQuery);
 
         $brandEnum = is_string($brand['value'] ?? null) ? LaboratoryBrand::tryFrom($brand['value']) : null;
+        $template = $link->landing_template instanceof MarketingCampaignLandingTemplate
+            ? $link->landing_template
+            : MarketingCampaignLandingTemplate::tryFrom((string) $link->landing_template)
+                ?? MarketingCampaignLandingTemplate::Conversion;
 
         $isAuthenticated = auth()->check();
         $loginUrl = route('campaign-links.require-auth', ['slug' => $link->slug, ...$allowedQuery]);
@@ -88,6 +93,13 @@ class MarketingCampaignLandingViewModelFactory
                 'show_brand_logo' => (bool) ($link->show_brand_logo ?? true),
                 'show_campaign_dates' => (bool) ($link->show_campaign_dates ?? false),
                 'landing_layout' => $link->landing_layout ?: 'default',
+                'landing_template' => $template->value,
+                'editorial' => [
+                    'eyebrow' => $this->firstFilled([$link->editorial_eyebrow, $eyebrow]),
+                    'title' => $this->firstFilled([$link->editorial_title, $subtitle, $title]),
+                    'body' => $this->firstFilled([$link->editorial_body, $description]),
+                    'items' => $this->editorialItems($link),
+                ],
             ],
             'brand' => $brand,
             'category' => $resolved->category,
@@ -159,6 +171,30 @@ class MarketingCampaignLandingViewModelFactory
                 'alt' => $image->alt_text,
             ])
             ->filter(fn (array $image) => filled($image['url']))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array{title: string, description: ?string, icon: string}>
+     */
+    private function editorialItems(MarketingCampaignLink $link): array
+    {
+        $items = is_array($link->editorial_items) ? $link->editorial_items : [];
+        $allowedIcons = ['shield', 'heart', 'lab', 'clock'];
+
+        return collect($items)
+            ->take(4)
+            ->map(fn ($item) => [
+                'title' => trim((string) ($item['title'] ?? '')),
+                'description' => filled($item['description'] ?? null)
+                    ? trim((string) $item['description'])
+                    : null,
+                'icon' => in_array($item['icon'] ?? null, $allowedIcons, true)
+                    ? $item['icon']
+                    : 'shield',
+            ])
+            ->filter(fn (array $item) => $item['title'] !== '')
             ->values()
             ->all();
     }

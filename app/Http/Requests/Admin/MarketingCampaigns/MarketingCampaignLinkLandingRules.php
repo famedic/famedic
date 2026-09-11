@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin\MarketingCampaigns;
 
 use App\Enums\MarketingCampaignHeroImageSource;
+use App\Enums\MarketingCampaignLandingTemplate;
 use Illuminate\Validation\Rule;
 
 trait MarketingCampaignLinkLandingRules
@@ -23,6 +24,14 @@ trait MarketingCampaignLinkLandingRules
             'show_brand_logo' => ['sometimes', 'boolean'],
             'show_campaign_dates' => ['sometimes', 'boolean'],
             'landing_layout' => ['nullable', 'string', Rule::in(['default'])],
+            'landing_template' => ['nullable', Rule::enum(MarketingCampaignLandingTemplate::class)],
+            'editorial_eyebrow' => ['nullable', 'string', 'max:120', $this->plainTextRule()],
+            'editorial_title' => ['nullable', 'string', 'max:180', $this->plainTextRule()],
+            'editorial_body' => ['nullable', 'string', 'max:5000', $this->plainTextRule()],
+            'editorial_items' => ['nullable', 'array', 'max:4'],
+            'editorial_items.*.title' => ['nullable', 'string', 'max:120', $this->plainTextRule()],
+            'editorial_items.*.description' => ['nullable', 'string', 'max:500', $this->plainTextRule()],
+            'editorial_items.*.icon' => ['nullable', 'string', Rule::in(['shield', 'heart', 'lab', 'clock'])],
 
             'hero_image_source' => ['nullable', Rule::in(array_map(
                 fn (MarketingCampaignHeroImageSource $case) => $case->value,
@@ -69,6 +78,17 @@ trait MarketingCampaignLinkLandingRules
         if (! is_array($this->input('gallery_items'))) {
             $this->merge(['gallery_items' => []]);
         }
+
+        if (is_string($this->input('editorial_items'))) {
+            $decoded = json_decode($this->input('editorial_items'), true);
+            $this->merge([
+                'editorial_items' => is_array($decoded) ? $decoded : [],
+            ]);
+        }
+
+        if (! is_array($this->input('editorial_items'))) {
+            $this->merge(['editorial_items' => []]);
+        }
     }
 
     protected function prepareLandingBooleans(): void
@@ -85,6 +105,10 @@ trait MarketingCampaignLinkLandingRules
             $merge['landing_layout'] = 'default';
         }
 
+        if (! $this->filled('landing_template')) {
+            $merge['landing_template'] = MarketingCampaignLandingTemplate::Conversion->value;
+        }
+
         if (! $this->filled('hero_image_source')) {
             $merge['hero_image_source'] = MarketingCampaignHeroImageSource::None->value;
         }
@@ -98,5 +122,14 @@ trait MarketingCampaignLinkLandingRules
         if ($merge !== []) {
             $this->merge($merge);
         }
+    }
+
+    private function plainTextRule(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            if (is_string($value) && preg_match('/<[^>]*>/', $value)) {
+                $fail('El campo :attribute no acepta HTML.');
+            }
+        };
     }
 }

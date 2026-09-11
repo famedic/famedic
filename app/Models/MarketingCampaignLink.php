@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\MarketingCampaignHeroImageSource;
+use App\Enums\MarketingCampaignLandingTemplate;
 use App\Enums\MarketingCampaignLinkProductSection;
 use App\Enums\MarketingCampaignLinkStatus;
 use App\Enums\MarketingCampaignTargetType;
@@ -31,6 +32,8 @@ class MarketingCampaignLink extends Model
             'show_brand_logo' => 'boolean',
             'show_campaign_dates' => 'boolean',
             'hero_image_source' => MarketingCampaignHeroImageSource::class,
+            'landing_template' => MarketingCampaignLandingTemplate::class,
+            'editorial_items' => 'array',
         ];
     }
 

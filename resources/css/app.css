@@ -6,6 +6,11 @@
 	:root.support-widgets-hidden iframe[src*="salesiq"],
 	:root.support-widgets-hidden iframe[src*="zohopublic.com"],
 	:root.support-widgets-hidden iframe[src*="diffuser-cdn.app-us1.com"],
+	:root.support-widgets-hidden #ac-whatsapp-widget-button,
+	:root.support-widgets-hidden #ac-whatsapp-widget-window,
+	:root.support-widgets-hidden #ac-whatsapp-widget-wrapper,
+	:root.support-widgets-hidden [id*="whatsapp"],
+	:root.support-widgets-hidden [class*="whatsapp"],
 	:root.support-widgets-hidden [id*="zsiq"],
 	:root.support-widgets-hidden [class*="zsiq"],
 	:root.support-widgets-hidden [data-widget-id="06a47e35-87c0-72a7-8000-831831976ef4"] {

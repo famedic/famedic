@@ -11,6 +11,7 @@ export default function MarketingCampaignLinksCreate({
 	brands = {},
 	categories = [],
 	collections = [],
+	landingTemplateOptions = [],
 	productSearchUrl,
 	utmPresets = [],
 	promotionOptions = [],
@@ -45,6 +46,7 @@ export default function MarketingCampaignLinksCreate({
 					brands={brands}
 					categories={categories}
 					collections={collections}
+					landingTemplateOptions={landingTemplateOptions}
 					productSearchUrl={productSearchUrl}
 					utmPresets={utmPresets}
 					promotionOptions={promotionOptions}

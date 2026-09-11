@@ -89,6 +89,11 @@ export function initialWizardState(mode, props = {}) {
 			show_brand_logo: true,
 			show_campaign_dates: false,
 			landing_layout: "default",
+			landing_template: "conversion",
+			editorial_eyebrow: "",
+			editorial_title: "",
+			editorial_body: "",
+			editorial_items: [],
 			hero_image_source: "none",
 			hero_image_url: "",
 			hero_image_alt: "",
@@ -185,6 +190,11 @@ export function buildDefaultContent(state, { brands = {}, categories = [], colle
 		show_prices: true,
 		show_brand_logo: true,
 		show_campaign_dates: false,
+		landing_template: state.link.landing_template || "conversion",
+		editorial_eyebrow: state.link.editorial_eyebrow || "",
+		editorial_title: state.link.editorial_title || "",
+		editorial_body: state.link.editorial_body || "",
+		editorial_items: state.link.editorial_items || [],
 	};
 }
 

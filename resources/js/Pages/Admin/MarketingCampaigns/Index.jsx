@@ -159,7 +159,9 @@ export default function MarketingCampaignsIndex({
 					</div>
 					{(capabilities.canCreate ?? capabilities.create) && (
 						<Button
-							href={route("admin.marketing-campaigns.create")}
+							href={route("admin.marketing-campaigns.create", {
+								fresh: 1,
+							})}
 							color="lime"
 						>
 							<PlusIcon />

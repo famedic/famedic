@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin\MarketingCampaigns;
 
 use App\Enums\MarketingCampaignLinkStatus;
+use App\Enums\MarketingCampaignLandingTemplate;
 use App\Enums\MarketingCampaignStatus;
 use App\Enums\MarketingCampaignTargetType;
 use App\Models\MarketingCampaign;
@@ -66,6 +67,14 @@ class StoreMarketingCampaignSetupRequest extends FormRequest
             'link.show_brand_logo' => ['sometimes', 'boolean'],
             'link.show_campaign_dates' => ['sometimes', 'boolean'],
             'link.landing_layout' => ['nullable', 'string', Rule::in(['default'])],
+            'link.landing_template' => ['nullable', Rule::enum(MarketingCampaignLandingTemplate::class)],
+            'link.editorial_eyebrow' => ['nullable', 'string', 'max:120', $this->plainTextRule()],
+            'link.editorial_title' => ['nullable', 'string', 'max:180', $this->plainTextRule()],
+            'link.editorial_body' => ['nullable', 'string', 'max:5000', $this->plainTextRule()],
+            'link.editorial_items' => ['nullable', 'array', 'max:4'],
+            'link.editorial_items.*.title' => ['nullable', 'string', 'max:120', $this->plainTextRule()],
+            'link.editorial_items.*.description' => ['nullable', 'string', 'max:500', $this->plainTextRule()],
+            'link.editorial_items.*.icon' => ['nullable', 'string', Rule::in(['shield', 'heart', 'lab', 'clock'])],
             'link.hero_image_source' => ['nullable', Rule::in(array_map(
                 fn ($case) => $case->value,
                 \App\Enums\MarketingCampaignHeroImageSource::cases(),
@@ -104,6 +113,10 @@ class StoreMarketingCampaignSetupRequest extends FormRequest
             $link['landing_layout'] = 'default';
         }
 
+        if (! filled($link['landing_template'] ?? null)) {
+            $link['landing_template'] = MarketingCampaignLandingTemplate::Conversion->value;
+        }
+
         if (! filled($link['hero_image_source'] ?? null)) {
             $link['hero_image_source'] = 'none';
         }
@@ -116,6 +129,15 @@ class StoreMarketingCampaignSetupRequest extends FormRequest
 
         if (! is_array($link['target_payload'] ?? null)) {
             $link['target_payload'] = [];
+        }
+
+        if (is_string($link['editorial_items'] ?? null)) {
+            $decoded = json_decode($link['editorial_items'], true);
+            $link['editorial_items'] = is_array($decoded) ? $decoded : [];
+        }
+
+        if (! is_array($link['editorial_items'] ?? null)) {
+            $link['editorial_items'] = [];
         }
 
         if (is_string($link['gallery_items'] ?? null)) {
@@ -190,5 +212,14 @@ class StoreMarketingCampaignSetupRequest extends FormRequest
                 'gallery_uploads' => $this->file('link.gallery_uploads', []),
             ]),
         ];
+    }
+
+    private function plainTextRule(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            if (is_string($value) && preg_match('/<[^>]*>/', $value)) {
+                $fail('El campo :attribute no acepta HTML.');
+            }
+        };
     }
 }

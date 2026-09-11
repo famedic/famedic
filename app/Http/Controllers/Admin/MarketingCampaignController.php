@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Actions\Admin\MarketingCampaigns\CreateMarketingCampaignAction;
 use App\Actions\Admin\MarketingCampaigns\CreateMarketingCampaignSetupAction;
 use App\Actions\Admin\MarketingCampaigns\UpdateMarketingCampaignAction;
+use App\Enums\MarketingCampaignLandingTemplate;
 use App\Enums\MarketingCampaignStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\MarketingCampaigns\IndexMarketingCampaignRequest;
@@ -115,6 +116,7 @@ class MarketingCampaignController extends Controller
             'productSearchUrl' => route('admin.marketing-campaigns.product-search'),
             'utmPresets' => $this->utmPresets(),
             'promotionOptions' => $this->promotionOptions(),
+            'landingTemplateOptions' => MarketingCampaignLandingTemplate::options(),
         ]);
     }
 
