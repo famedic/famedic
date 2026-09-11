@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\CartsDashboard\CartsAnalyticsService;
-use App\Services\CartsDashboard\CartsDashboardRepository;
 use App\Support\CartsDashboard\CartsDashboardFilter;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -14,7 +13,6 @@ class CartsDashboardController extends Controller
 {
     public function __construct(
         private CartsAnalyticsService $analytics,
-        private CartsDashboardRepository $repository,
     ) {
     }
 
@@ -29,24 +27,32 @@ class CartsDashboardController extends Controller
             'filters' => $filter->toArray(),
             'filterOptions' => [
                 'brands' => $this->analytics->brandOptions(),
-                'cities' => $this->repository->availableCities(),
-                'payment_methods' => [
-                    ['value' => 'efevoopay', 'label' => 'Tarjeta (Efevoo)'],
-                    ['value' => 'odessa', 'label' => 'Saldo a la Vista (Odessa)'],
-                    ['value' => 'paypal', 'label' => 'PayPal'],
-                    ['value' => 'coupon_balance', 'label' => 'Crédito a favor'],
+                'types' => [
+                    ['value' => 'lab', 'label' => 'Laboratorio'],
+                    ['value' => 'pharmacy', 'label' => 'Farmacia'],
+                ],
+                'periods' => [
+                    ['value' => 'today', 'label' => 'Hoy'],
+                    ['value' => 'last_7_days', 'label' => 'Ultimos 7 dias'],
+                    ['value' => 'last_30_days', 'label' => 'Ultimos 30 dias'],
+                    ['value' => 'this_month', 'label' => 'Este mes'],
+                    ['value' => 'custom', 'label' => 'Rango personalizado'],
                 ],
             ],
             'kpis' => $dashboard['kpis'],
-            'salesVsAbandoned' => $dashboard['sales_vs_abandoned'],
-            'trends' => $dashboard['trends'],
+            'operationalKpis' => $dashboard['operational_kpis'],
+            'daily' => $dashboard['daily'],
+            'funnel' => $dashboard['funnel'],
+            'payments' => $dashboard['payments'],
+            'appointments' => $dashboard['appointments'],
+            'contact' => $dashboard['contact'],
             'laboratories' => $dashboard['laboratories'],
             'laboratoryCharts' => $dashboard['laboratory_charts'],
+            'customerProfile' => $dashboard['customer_profile'],
+            'ticketAverages' => $dashboard['ticket_averages'],
             'topStudies' => $dashboard['top_studies'],
-            'revenueDistribution' => $dashboard['revenue_distribution'],
             'meta' => $dashboard['meta'],
             'cartsIndexUrl' => route('admin.carts.index'),
-            'exportUrl' => route('admin.carts.export'),
         ]);
     }
 }

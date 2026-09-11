@@ -21,6 +21,12 @@ class TagAbandonedCartsToActiveCampaignCommand extends Command
             return self::SUCCESS;
         }
 
+        if (config('services.activecampaign.cart_outbox_enabled', false)) {
+            $this->info('Cart outbox habilitado; el flujo legacy activecampaign:tag-abandoned-carts no se ejecuta.');
+
+            return self::SUCCESS;
+        }
+
         $minutes = (int) ($this->option('minutes') ?: config('services.activecampaign.cart_abandoned_minutes', 60));
         $minutes = max(10, $minutes);
 

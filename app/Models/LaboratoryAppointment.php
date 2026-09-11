@@ -58,6 +58,11 @@ class LaboratoryAppointment extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function cart(): BelongsTo
+    {
+        return $this->belongsTo(Cart::class);
+    }
+
     public function laboratoryStore(): BelongsTo
     {
         return $this->belongsTo(LaboratoryStore::class);
@@ -191,10 +196,12 @@ class LaboratoryAppointment extends Model
             );
     }
 
+    /**
+     * @deprecated Prefer LaboratoryAppointmentPaymentValidity via LaboratoryAppointmentCheckoutResolver.
+     */
     public function scopeRecentlyConfirmed(Builder $query): void
     {
-        $query->whereNotNull('confirmed_at')
-            ->where('confirmed_at', '>=', now()->subDay());
+        $query->whereNotNull('confirmed_at');
     }
 
     public function scopeUncompleted(Builder $query): void
@@ -205,6 +212,13 @@ class LaboratoryAppointment extends Model
     public function scopeUnconfirmed(Builder $query): void
     {
         $query->whereNull('confirmed_at');
+    }
+
+    public function scopeAwaitingConcierge(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('confirmed_at')
+            ->whereNull('laboratory_purchase_id');
     }
 
     public function scopeOfBrand(Builder $query, LaboratoryBrand $brand): void

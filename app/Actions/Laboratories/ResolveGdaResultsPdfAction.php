@@ -2,17 +2,18 @@
 
 namespace App\Actions\Laboratories;
 
-use App\Exceptions\GdaResultsNotAvailableException;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
+use App\Support\Laboratory\GdaResultsPdfStatus;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class ResolveGdaResultsPdfAction
 {
     public function __construct(
-        protected GetGDAResultsAction $getGdaResultsAction,
         protected StoreGdaResultsPdfToStorageAction $storeGdaResultsPdfToStorageAction,
+        protected SyncGdaResultPdfToStorageAction $syncGdaResultPdfToStorageAction,
+        protected EnsureLatestGdaResultsPdfAction $ensureLatestGdaResultsPdfAction,
     ) {
     }
 
@@ -20,7 +21,7 @@ class ResolveGdaResultsPdfAction
      * Resuelve el PDF de resultados para una notificación, usando siempre la notificación
      * más reciente de la orden y refrescando desde GDA cuando hay eventos nuevos.
      *
-     * @return array{pdf_base64: string, storage_path: string|null, notification: LaboratoryNotification, cached: bool, refreshed: bool}
+     * @return array{pdf_base64: string, storage_path: string|null, notification: LaboratoryNotification, cached: bool, refreshed: bool, refresh_dispatched: bool}
      */
     public function __invoke(LaboratoryNotification $notification): array
     {
@@ -33,13 +34,27 @@ class ResolveGdaResultsPdfAction
         $purchase = $this->resolvePurchase($notification);
 
         if ($purchase && $this->hasStoredResults($purchase)) {
+            $ensure = $this->ensureLatestGdaResultsPdfAction->execute($purchase, 'resolve');
+
             Log::info('Using stored GDA results PDF from purchase.results', [
                 'notification_id' => $notification->id,
                 'purchase_id' => $purchase->id,
                 'path' => $purchase->results,
+                'freshness_status' => $ensure['assessment']?->freshnessStatus,
+                'refresh_dispatched' => $ensure['refresh_dispatched'],
             ]);
 
-            return $this->buildResultFromStorage($purchase, $notification, cached: true, refreshed: false);
+            return $this->buildResultFromStorage(
+                $purchase,
+                $notification,
+                cached: true,
+                refreshed: false,
+                refreshDispatched: $ensure['refresh_dispatched'],
+            );
+        }
+
+        if ($purchase) {
+            $this->ensureLatestGdaResultsPdfAction->execute($purchase, 'resolve_no_stored_pdf');
         }
 
         if (! empty($notification->results_pdf_base64) && $purchase) {
@@ -82,6 +97,7 @@ class ResolveGdaResultsPdfAction
                 'notification' => $notification,
                 'cached' => true,
                 'refreshed' => false,
+                'refresh_dispatched' => false,
             ];
         }
 
@@ -96,14 +112,11 @@ class ResolveGdaResultsPdfAction
             'pdf_fetched_at' => $notification->pdfFetchedAt()?->toIso8601String(),
         ]);
 
-        $pdfBase64 = $this->fetchFromGdaApi($notification);
-
         if ($purchase) {
-            $this->storeGdaResultsPdfToStorageAction->execute(
-                $purchase,
-                $pdfBase64,
-                $notification,
-                overwrite: false
+            $this->syncGdaResultPdfToStorageAction->execute(
+                $purchase->id,
+                $notification->id,
+                force: false
             );
 
             return $this->buildResultFromStorage(
@@ -113,6 +126,8 @@ class ResolveGdaResultsPdfAction
                 refreshed: true
             );
         }
+
+        $pdfBase64 = $this->fetchFromGdaApi($notification);
 
         $notification->update([
             'gda_message' => array_merge($notification->gda_message ?? [], [
@@ -127,6 +142,7 @@ class ResolveGdaResultsPdfAction
             'notification' => $notification->fresh(),
             'cached' => false,
             'refreshed' => true,
+            'refresh_dispatched' => false,
         ];
     }
 
@@ -145,7 +161,7 @@ class ResolveGdaResultsPdfAction
 
         $purchase = $this->resolvePurchase($notification);
 
-        if ($purchase && $this->hasStoredResults($purchase) && ! $this->isGdaManagedResultsPath($purchase->results)) {
+        if ($purchase && $this->hasStoredResults($purchase) && ! GdaResultsPdfStatus::isGdaManagedPath($purchase->results)) {
             Log::warning('GDA results PDF not stored because purchase already has results', [
                 'purchase_id' => $purchase->id,
                 'existing_results' => $purchase->results,
@@ -168,16 +184,14 @@ class ResolveGdaResultsPdfAction
         Log::info('Admin forced GDA results PDF refresh', [
             'notification_id' => $notification->id,
             'gda_order_id' => $notification->gda_order_id,
+            'purchase_id' => $purchase?->id,
         ]);
 
-        $pdfBase64 = $this->fetchFromGdaApi($notification);
-
         if ($purchase) {
-            $this->storeGdaResultsPdfToStorageAction->execute(
-                $purchase,
-                $pdfBase64,
-                $notification,
-                overwrite: true
+            $this->syncGdaResultPdfToStorageAction->execute(
+                $purchase->id,
+                $notification->id,
+                force: true
             );
 
             return array_merge(
@@ -185,6 +199,8 @@ class ResolveGdaResultsPdfAction
                 ['forced' => true]
             );
         }
+
+        $pdfBase64 = $this->fetchFromGdaApi($notification);
 
         $notification->update([
             'gda_message' => array_merge($notification->gda_message ?? [], [
@@ -215,97 +231,7 @@ class ResolveGdaResultsPdfAction
 
     private function fetchFromGdaApi(LaboratoryNotification $notification): string
     {
-        $payload = $this->resolvePayload($notification);
-        $orderId = $this->resolveConsultOrderId($notification, $payload);
-
-        if (! $orderId) {
-            throw new \RuntimeException('Falta el ID de orden GDA.');
-        }
-
-        $marca = $payload['header']['marca'] ?? null;
-        $convenio = $payload['requisition']['convenio'] ?? null;
-
-        if (! $marca || ! $convenio) {
-            throw new \RuntimeException('No se encontraron marca o convenio en el payload de la notificación.');
-        }
-
-        try {
-            $results = ($this->getGdaResultsAction)($orderId, $payload);
-        } catch (GdaResultsNotAvailableException $e) {
-            $notification->update([
-                'gda_message' => array_merge($notification->gda_message ?? [], [
-                    'last_gda_not_available_at' => now()->toISOString(),
-                    'last_gda_not_available_message' => $e->gdaMessage,
-                    'last_gda_not_available_consult_id' => $orderId,
-                ]),
-            ]);
-
-            throw $e;
-        }
-
-        $pdfBase64 = $results['infogda_resultado_b64'] ?? null;
-
-        if (empty($pdfBase64)) {
-            throw new \RuntimeException('No se encontraron resultados PDF en la respuesta de GDA.');
-        }
-
-        $notification->update([
-            'gda_message' => array_merge($notification->gda_message ?? [], [
-                'last_gda_not_available_at' => null,
-                'last_gda_not_available_message' => null,
-                'last_successful_consult_id' => $orderId,
-            ]),
-        ]);
-
-        return $pdfBase64;
-    }
-
-    /**
-     * Prefiere el folio consultable de la compra (etiqueta GZ0L…) cuando la
-     * notificación guardó un ServiceRequest.id numérico por error histórico.
-     */
-    private function resolveConsultOrderId(LaboratoryNotification $notification, array $payload): ?string
-    {
-        $purchase = $this->resolvePurchase($notification);
-        $resolver = app(ResolveConsultableGdaId::class);
-
-        $candidates = [
-            $purchase?->gda_order_id,
-            data_get($payload, 'code.coding.0.infogda_muestras.0.infogda_etiqueta'),
-            $notification->gda_order_id,
-            data_get($payload, 'id'),
-            data_get($payload, 'requisition.value'),
-        ];
-
-        foreach ($candidates as $candidate) {
-            if ($candidate === null || $candidate === '') {
-                continue;
-            }
-
-            $normalized = (string) $candidate;
-
-            if ($resolver->isConsultable($normalized)) {
-                return $normalized;
-            }
-        }
-
-        return $notification->gda_order_id
-            ?: (data_get($payload, 'id') ? (string) data_get($payload, 'id') : null);
-    }
-
-    private function resolvePayload(LaboratoryNotification $notification): array
-    {
-        $payload = $notification->payload;
-
-        if (is_string($payload)) {
-            $payload = json_decode($payload, true);
-        }
-
-        if (! is_array($payload)) {
-            throw new \RuntimeException('No se pudo obtener el payload de la notificación.');
-        }
-
-        return $payload;
+        return $this->syncGdaResultPdfToStorageAction->fetchPdfBase64($notification);
     }
 
     private function resolvePurchase(LaboratoryNotification $notification): ?LaboratoryPurchase
@@ -324,19 +250,15 @@ class ResolveGdaResultsPdfAction
         return ! empty($purchase->results) && Storage::exists($purchase->results);
     }
 
-    private function isGdaManagedResultsPath(string $path): bool
-    {
-        return str_contains($path, 'results/gda-');
-    }
-
     /**
-     * @return array{pdf_base64: string, storage_path: string, notification: LaboratoryNotification, cached: bool, refreshed: bool}
+     * @return array{pdf_base64: string, storage_path: string, notification: LaboratoryNotification, cached: bool, refreshed: bool, refresh_dispatched: bool}
      */
     private function buildResultFromStorage(
         LaboratoryPurchase $purchase,
         LaboratoryNotification $notification,
         bool $cached,
-        bool $refreshed
+        bool $refreshed,
+        bool $refreshDispatched = false
     ): array {
         $binary = Storage::get($purchase->results);
 
@@ -350,6 +272,7 @@ class ResolveGdaResultsPdfAction
             'notification' => $notification,
             'cached' => $cached,
             'refreshed' => $refreshed,
+            'refresh_dispatched' => $refreshDispatched,
         ];
     }
 

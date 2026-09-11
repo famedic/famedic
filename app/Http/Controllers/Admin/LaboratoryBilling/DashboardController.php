@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\LaboratoryBilling\LaboratoryBillingDateRangeRequest;
 use App\Services\LaboratoryBilling\LaboratoryBillingDateRange;
 use App\Services\LaboratoryBilling\LaboratoryBillingMetricsService;
 use App\Services\LaboratoryBilling\LaboratoryBillingStatusResolver;
+use App\Services\LaboratoryBilling\LaboratoryBillingAccess;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,6 +17,7 @@ class DashboardController extends Controller
         LaboratoryBillingDateRangeRequest $request,
         LaboratoryBillingMetricsService $metrics,
         LaboratoryBillingStatusResolver $resolver,
+        LaboratoryBillingAccess $access,
     ): Response {
         $range = LaboratoryBillingDateRange::fromInput($request->input('from'), $request->input('to'));
 
@@ -29,6 +31,7 @@ class DashboardController extends Controller
             'newTaxProfiles' => $metrics->newTaxProfilesSeries($range),
             'topOverdue' => $metrics->topOverdue($range),
             'recentActivity' => $metrics->recentActivity($range),
+            'canManageAutomaticReports' => $access->allowsReports($request->user()),
         ]);
     }
 }

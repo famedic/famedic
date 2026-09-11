@@ -67,6 +67,26 @@
     @viteReactRefresh
     @vite(['resources/js/app.jsx'])
     @inertiaHead
+    @php
+        $supportWidgetsEnabled = (bool) config('famedic.support_widgets.enabled');
+        $supportWidgetsShouldRender = $supportWidgetsEnabled && ! request()->is('admin', 'admin/*');
+        $zohoSalesIQEnabled = (bool) config('famedic.zoho_salesiq.enabled');
+        $zohoSalesIQShouldRender = $zohoSalesIQEnabled
+            && app()->environment('production')
+            && ! request()->is('admin', 'admin/*');
+    @endphp
+
+    <script>
+        window.__FAMEDIC_SUPPORT_WIDGETS__ = {
+            enabled: @json($supportWidgetsEnabled),
+            shouldRender: @json($supportWidgetsShouldRender),
+            isAdminRoute: @json(request()->is('admin', 'admin/*')),
+        };
+        window.__FAMEDIC_ZOHO_SALESIQ__ = {
+            enabled: @json($zohoSalesIQEnabled),
+            shouldRender: @json($zohoSalesIQShouldRender),
+        };
+    </script>
 
     @env('production')
     <script src="https://cdn.usefathom.com/script.js" data-spa="auto" data-site="CURLVLNC" defer></script>
@@ -130,29 +150,25 @@
         </script>
         <!-- End Google tag (gtag.js) -->
 
-        <!-- ActiveCampaign Tracking Code for https://famedic.com.mx -->
+        <!-- ActiveCampaign Site Tracking config for https://famedic.com.mx -->
         <script>
-            (function(e,t,o,n,p,r,i){e.visitorGlobalObjectAlias=n;e[e.visitorGlobalObjectAlias]=e[e.visitorGlobalObjectAlias]||function(){(e[e.visitorGlobalObjectAlias].q=e[e.visitorGlobalObjectAlias].q||[]).push(arguments)};e[e.visitorGlobalObjectAlias].l=(new Date).getTime();r=t.createElement("script");r.src=o;r.async=true;i=t.getElementsByTagName("script")[0];i.parentNode.insertBefore(r,i)})(window,document,"https://diffuser-cdn.app-us1.com/diffuser/diffuser.js","vgo");
-            vgo('setAccount', '69689492');
-            vgo('setTrackByDefault', true);
-            vgo('process');
+            window.__FAMEDIC_ACTIVE_CAMPAIGN_SITE_TRACKING__ = {
+                enabled: true,
+                accountId: '69689492',
+            };
         </script>
 
         @endenv
 
-        @env('staging', 'testing')
+        @if($supportWidgetsShouldRender)
             @unless(request()->routeIs(
-                'laboratory.checkout',
                 'online-pharmacy.checkout',
                 'medical-attention.checkout'
             ))
-                <!-- ActiveCampaign WhatsApp Widget (omitido en checkout: ya hay ayuda propia y tapa botones fijos) -->
+                <!-- ActiveCampaign WhatsApp Widget -->
                 <script src="https://diffuser-cdn.app-us1.com/whatsapp/widget.cjs.production.min.js" data-widget-id="06a47e35-87c0-72a7-8000-831831976ef4" data-account-id="69689492"></script>
             @endunless
-        @endenv
-    @unless(app()->environment('production'))
-        <script>window.__FAMEDIC_ZOHO_SALESIQ__ = { enabled: true };</script>
-    @endunless
+        @endif
 
 </body>
 

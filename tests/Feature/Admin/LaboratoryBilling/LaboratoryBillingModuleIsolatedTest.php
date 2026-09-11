@@ -5,11 +5,17 @@ namespace Tests\Feature\Admin\LaboratoryBilling;
 use App\Models\Administrator;
 use App\Models\Customer;
 use App\Models\InvoiceRequest;
+use App\Models\LaboratoryAppointment;
+use App\Models\LaboratoryBillingReportRun;
+use App\Models\LaboratoryBillingReportSchedule;
 use App\Models\LaboratoryPurchase;
+use App\Models\LaboratoryStore;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\TaxProfile;
 use App\Models\User;
+use App\Jobs\LaboratoryBilling\GenerateLaboratoryBillingReportJob;
+use App\Notifications\LaboratoryBillingAutomaticReportNotification;
 use App\Services\LaboratoryBilling\LaboratoryBillingAccess;
 use App\Services\LaboratoryBilling\LaboratoryBillingDateRange;
 use App\Services\LaboratoryBilling\LaboratoryBillingInvoicesQuery;
@@ -17,13 +23,21 @@ use App\Services\LaboratoryBilling\LaboratoryBillingMetricsService;
 use App\Services\LaboratoryBilling\LaboratoryBillingPresenter;
 use App\Services\LaboratoryBilling\LaboratoryBillingRequestsQuery;
 use App\Services\LaboratoryBilling\LaboratoryBillingTaxProfilesQuery;
+use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDataService;
+use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportPeriodResolver;
+use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportScheduleCalculator;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
+use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -40,7 +54,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         parent::setUp();
 
         config([
-            'famedic.laboratory_billing.invoice_delay_threshold_days' => 3,
+            'famedic.laboratory_billing.invoice_delay_threshold_business_days' => 3,
             'permission.teams' => false,
         ]);
 
@@ -75,11 +89,21 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
 
         $invoiceAdmin = $this->makeAdmin(['laboratory-purchases.manage.invoices']);
         $manageAdmin = $this->makeAdmin(['laboratory-purchases.manage']);
+        $reportsAdmin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $superAdmin = $this->makeSuperAdmin();
         $unauthorized = $this->makeAdmin([]);
 
         $this->assertTrue($access->allows($invoiceAdmin));
         $this->assertTrue($access->allows($manageAdmin));
+        $this->assertTrue($access->allows($reportsAdmin));
+        $this->assertTrue($access->allows($superAdmin));
         $this->assertFalse($access->allows($unauthorized));
+
+        $this->assertFalse($access->allowsReports($invoiceAdmin));
+        $this->assertTrue($access->allowsReports($manageAdmin));
+        $this->assertTrue($access->allowsReports($reportsAdmin));
+        $this->assertTrue($access->allowsReports($superAdmin));
+        $this->assertFalse($access->allowsReports($unauthorized));
     }
 
     #[Test]
@@ -93,7 +117,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'rfc' => 'COMP900101AAA',
         ]);
         $this->seedRequest([
-            'requested_at' => now()->subDays(5),
+            'requested_at' => now()->subDays(6),
             'gda_order_id' => 'LATE-1',
             'rfc' => 'LATE900101AAA',
         ]);
@@ -115,6 +139,45 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         $this->assertSame(4, $compliance['received']);
         $this->assertSame(1, $compliance['completed']);
         $this->assertSame(25.0, $compliance['percent']);
+    }
+
+    #[Test]
+    public function cancelled_purchases_are_excluded_from_billing_queries_metrics_and_exports(): void
+    {
+        $active = $this->seedRequest([
+            'requested_at' => now()->subDays(6),
+            'gda_order_id' => 'ACTIVE-LATE',
+        ]);
+        $cancelled = $this->seedRequest([
+            'requested_at' => now()->subDays(6),
+            'gda_order_id' => 'CANCELLED-LATE',
+            'with_complete_invoice' => true,
+        ]);
+        $cancelled['purchase']->delete();
+
+        $range = LaboratoryBillingDateRange::fromInput('2026-08-01', '2026-08-10');
+        $requests = app(LaboratoryBillingRequestsQuery::class);
+        $metrics = app(LaboratoryBillingMetricsService::class);
+
+        $this->assertSame([$active['request']->id], $requests->filteredQuery([], $range)->pluck('id')->all());
+        $this->assertSame(1, $requests->paginate([], $range)->total());
+        $this->assertSame(1, $requests->statusCounts([], $range)['all']);
+        $this->assertSame(1, $requests->statusCounts(['status' => 'overdue'], $range)['overdue']);
+        $this->assertSame(1, $requests->exportRows([], $range)->count());
+
+        $counts = $metrics->requestCounts($range);
+        $this->assertSame(1, $counts['total']);
+        $this->assertSame(1, $counts['overdue']);
+        $this->assertSame(0, $counts['completed']);
+        $this->assertSame(1, $metrics->compliance($range)['received']);
+        $this->assertSame(0, collect($metrics->requestsVsInvoicesSeries($range)['points'])->sum('invoices_completed'));
+
+        $this->assertCount(0, app(LaboratoryBillingInvoicesQuery::class)->exportRows([], $range));
+
+        $cancelledProfile = app(LaboratoryBillingTaxProfilesQuery::class)->findForShow($cancelled['taxProfile']);
+        $this->assertSame(0, $cancelledProfile['invoice_requests_count']);
+        $this->assertSame([], $cancelledProfile['recent_requests']);
+        $this->assertSame([], $cancelledProfile['monthly_usage']);
     }
 
     #[Test]
@@ -226,6 +289,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
     public function authorized_user_can_open_module_pages_and_unauthorized_gets_403(): void
     {
         $admin = $this->makeAdmin(['laboratory-purchases.manage.invoices']);
+        $reportsAdmin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
         $unauthorized = $this->makeAdmin([]);
         $this->seedRequest(['requested_at' => now()->subDay()]);
 
@@ -241,6 +305,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
                 ->component('Admin/LaboratoryBilling/Dashboard')
                 ->has('requestMetrics')
                 ->where('thresholdDays', 3)
+                ->where('canManageAutomaticReports', false)
                 ->has('adminNavigation'));
 
         $navigation = collect($response->original->getData()['page']['props']['adminNavigation'] ?? [])
@@ -277,6 +342,19 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             ]))
             ->assertOk();
 
+        $this->actingAs($reportsAdmin)
+            ->get(route('admin.laboratory-billing.automatic-reports.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/LaboratoryBilling/AutomaticReports')
+                ->has('schedules')
+                ->has('runs')
+                ->where('canManageAutomaticReports', true));
+
+        $this->actingAs($admin)
+            ->get(route('admin.laboratory-billing.automatic-reports.index'))
+            ->assertForbidden();
+
         $this->actingAs($admin)
             ->get(route('admin.laboratory-billing.export.requests', [
                 'from' => '2026-08-01',
@@ -291,6 +369,265 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         $this->actingAs($unauthorized)
             ->get(route('admin.laboratory-billing.export.requests'))
             ->assertForbidden();
+    }
+
+    #[Test]
+    public function automatic_reports_authorize_superadmin_manage_and_reports_permissions_only(): void
+    {
+        $superAdmin = $this->makeSuperAdmin();
+        $manageAdmin = $this->makeAdmin(['laboratory-purchases.manage']);
+        $reportsAdmin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $invoiceManager = $this->makeAdmin(['laboratory-purchases.manage.invoices']);
+        $unauthorized = $this->makeAdmin([]);
+
+        $this->actingAs($superAdmin)
+            ->get(route('admin.laboratory-billing.automatic-reports.index'))
+            ->assertOk();
+
+        $this->actingAs($manageAdmin)
+            ->get(route('admin.laboratory-billing.automatic-reports.index'))
+            ->assertOk();
+
+        $this->actingAs($reportsAdmin)
+            ->get(route('admin.laboratory-billing.automatic-reports.index'))
+            ->assertOk();
+
+        $this->actingAs($invoiceManager)
+            ->get(route('admin.laboratory-billing.automatic-reports.index'))
+            ->assertForbidden();
+
+        $this->actingAs($unauthorized)
+            ->get(route('admin.laboratory-billing.automatic-reports.index'))
+            ->assertForbidden();
+    }
+
+    #[Test]
+    public function invoice_manager_cannot_submit_automatic_report_actions_directly(): void
+    {
+        Queue::fake();
+
+        $invoiceManager = $this->makeAdmin(['laboratory-purchases.manage.invoices']);
+        $schedule = $this->makeReportSchedule();
+        $payload = [
+            'name' => 'No debería crear',
+            'is_active' => false,
+            'weekdays' => [],
+            'send_time' => '08:00',
+            'timezone' => 'America/Monterrey',
+            'period_type' => 'previous_day',
+            'recipients' => 'billing@example.test',
+            'included_sections' => ['activity'],
+            'include_excel' => true,
+        ];
+
+        $this->actingAs($invoiceManager)
+            ->post(route('admin.laboratory-billing.automatic-reports.store'), $payload)
+            ->assertForbidden();
+
+        $this->actingAs($invoiceManager)
+            ->put(route('admin.laboratory-billing.automatic-reports.update', $schedule), $payload)
+            ->assertForbidden();
+
+        $this->actingAs($invoiceManager)
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => 'previous_day',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($invoiceManager)
+            ->post(route('admin.laboratory-billing.automatic-reports.test', $schedule), [
+                'period_type' => 'previous_day',
+            ])
+            ->assertForbidden();
+
+        Queue::assertNothingPushed();
+    }
+
+    #[Test]
+    public function failed_jobs_screen_lists_failures_for_log_admins_only(): void
+    {
+        $logAdmin = $this->makeAdmin(['logs-general.manage']);
+        $invoiceManager = $this->makeAdmin(['laboratory-purchases.manage.invoices']);
+        $unauthorized = $this->makeAdmin([]);
+
+        DB::table('failed_jobs')->insert([
+            'uuid' => 'failed-report-job-uuid',
+            'connection' => 'database',
+            'queue' => 'default',
+            'payload' => json_encode([
+                'displayName' => GenerateLaboratoryBillingReportJob::class,
+                'job' => 'Illuminate\\Queue\\CallQueuedHandler@call',
+            ]),
+            'exception' => "RuntimeException: SMTP timeout\n#0 /app/example.php(1)",
+            'failed_at' => now()->toDateTimeString(),
+        ]);
+        $failedJobId = (int) DB::table('failed_jobs')->value('id');
+
+        $this->actingAs($logAdmin)
+            ->get(route('admin.failed-jobs.index', ['failed_job' => $failedJobId]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Admin/FailedJobs')
+                ->where('stats.total', 1)
+                ->where('stats.today', 1)
+                ->where('tableExists', true)
+                ->has('failedJobs.data', 1)
+                ->where('failedJobs.data.0.job_name', GenerateLaboratoryBillingReportJob::class)
+                ->where('selectedJob.id', $failedJobId)
+                ->where('selectedJob.exception_summary', 'RuntimeException: SMTP timeout'));
+
+        $this->actingAs($invoiceManager)
+            ->get(route('admin.failed-jobs.index'))
+            ->assertForbidden();
+
+        $this->actingAs($unauthorized)
+            ->get(route('admin.failed-jobs.index'))
+            ->assertForbidden();
+    }
+
+    #[Test]
+    public function invoice_manager_does_not_see_failed_jobs_navigation(): void
+    {
+        $invoiceManager = $this->makeAdmin(['laboratory-purchases.manage.invoices']);
+
+        $this->actingAs($invoiceManager)
+            ->get(route('admin.laboratory-billing.dashboard'))
+            ->assertOk()
+            ->assertDontSee('Jobs fallidos');
+    }
+
+    #[Test]
+    public function automatic_report_index_exposes_summary_cards_without_loading_full_collections(): void
+    {
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $active = $this->makeReportSchedule(['name' => 'Activo', 'is_active' => true]);
+        $paused = $this->makeReportSchedule(['name' => 'Pausado', 'is_active' => false]);
+        $this->makeReportRun($active, LaboratoryBillingReportRun::TYPE_SCHEDULED, [
+            'created_at' => now()->subDays(2),
+            'updated_at' => now()->subDays(2),
+        ]);
+        $this->makeReportRun($paused, LaboratoryBillingReportRun::TYPE_SCHEDULED, [
+            'created_at' => now()->subDays(10),
+            'updated_at' => now()->subDays(10),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.laboratory-billing.automatic-reports.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.total', 2)
+                ->where('summary.active', 1)
+                ->where('summary.recentRuns', 1)
+                ->where('runs.data.0.recipients', ['billing@example.test']));
+    }
+
+    #[Test]
+    public function automatic_report_preview_is_read_only_authorized_and_uses_report_data_service_metrics(): void
+    {
+        Notification::fake();
+        Queue::fake();
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $unauthorized = $this->makeAdmin([]);
+        $this->seedRequest([
+            'requested_at' => Carbon::parse('2026-08-09 09:00:00', 'America/Monterrey'),
+            'brand' => 'olab',
+            'rfc' => 'PREV900101AA',
+        ]);
+        $this->seedRequest([
+            'requested_at' => Carbon::parse('2026-08-09 09:00:00', 'America/Monterrey'),
+            'brand' => 'swisslab',
+            'rfc' => 'OTRA900101AA',
+        ]);
+        $schedule = $this->makeReportSchedule([
+            'period_type' => LaboratoryBillingReportSchedule::PERIOD_PREVIOUS_DAY,
+            'filters' => ['brand' => 'olab'],
+            'next_run_at' => Carbon::parse('2026-08-11 08:00:00', 'America/Monterrey'),
+            'include_excel' => true,
+        ]);
+        $originalNextRun = $schedule->next_run_at?->toDateTimeString();
+        $runsBefore = LaboratoryBillingReportRun::query()->count();
+
+        $this->actingAs($unauthorized)
+            ->getJson(route('admin.laboratory-billing.automatic-reports.preview', $schedule))
+            ->assertForbidden();
+
+        $response = $this->actingAs($admin)
+            ->getJson(route('admin.laboratory-billing.automatic-reports.preview', [
+                'schedule' => $schedule->id,
+                'test' => 1,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('is_test', true)
+            ->assertJsonPath('excel.download_url', null)
+            ->assertJsonPath('schedule.name', 'Reporte facturación');
+
+        $period = app(LaboratoryBillingReportPeriodResolver::class)->resolve(
+            LaboratoryBillingReportSchedule::PERIOD_PREVIOUS_DAY,
+            now(LaboratoryBillingReportPeriodResolver::TIMEZONE)
+        );
+        $expected = app(LaboratoryBillingReportDataService::class)->build(
+            $period,
+            ['brand' => 'olab'],
+            now(LaboratoryBillingReportPeriodResolver::TIMEZONE)
+        );
+
+        $this->assertSame($expected['metrics']['received'], $response->json('metrics.received'));
+        $this->assertSame($expected['metrics']['pending_backlog'], $response->json('metrics.pending_backlog'));
+        $this->assertSame($runsBefore, LaboratoryBillingReportRun::query()->count());
+        $this->assertSame($originalNextRun, $schedule->fresh()->next_run_at?->toDateTimeString());
+        Notification::assertNothingSent();
+        Queue::assertNothingPushed();
+    }
+
+    #[Test]
+    public function automatic_report_form_rejects_invalid_email_normalizes_recipients_and_exposes_no_store_filter(): void
+    {
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.laboratory-billing.automatic-reports.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('options.stores.0.value', '__none__')
+                ->where('options.stores.0.label', 'Sin sucursal'));
+
+        $payload = [
+            'name' => 'PRUEBA LOCAL - Reporte de facturación',
+            'is_active' => true,
+            'weekdays' => [1, 2, 3, 4, 5],
+            'send_time' => '23:59',
+            'timezone' => 'America/Monterrey',
+            'period_type' => 'last_7_days',
+            'recipients' => 'correo-invalido',
+            'included_sections' => ['activity', 'backlog', 'overdue', 'completed', 'aging', 'missing_files'],
+            'include_excel' => true,
+            'brand' => '',
+            'laboratory_store_id' => '',
+            'status' => '',
+        ];
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.store'), $payload)
+            ->assertSessionHasErrors('recipients.0');
+
+        $payload['recipients'] = "local-billing-report@example.test\nLOCAL-BILLING-REPORT@example.test";
+
+        $this->actingAs($admin)
+            ->post(route('admin.laboratory-billing.automatic-reports.store'), $payload)
+            ->assertRedirect(route('admin.laboratory-billing.automatic-reports.index'));
+
+        $schedule = LaboratoryBillingReportSchedule::query()
+            ->where('name', 'PRUEBA LOCAL - Reporte de facturación')
+            ->firstOrFail();
+
+        $this->assertSame(['local-billing-report@example.test'], $schedule->recipients);
+        $this->assertTrue($schedule->is_active);
+        $this->assertSame([1, 2, 3, 4, 5], $schedule->weekdays);
+        $this->assertSame('last_7_days', $schedule->period_type);
+        $this->assertSame('23:59', substr($schedule->send_time, 0, 5));
+        $this->assertSame('2026-08-10 23:59:00', $schedule->next_run_at?->timezone('America/Monterrey')->toDateTimeString());
     }
 
     #[Test]
@@ -368,6 +705,13 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         $super = $super->fresh()->load('administrator');
 
         $this->assertTrue($super->can('uploadInvoice', $purchase));
+
+        $purchase->delete();
+        $cancelledPurchase = LaboratoryPurchase::withTrashed()->findOrFail($purchase->id);
+
+        $this->assertFalse($invoiceAdmin->can('uploadInvoice', $cancelledPurchase));
+        $this->assertFalse($manageAdmin->can('uploadInvoice', $cancelledPurchase));
+        $this->assertFalse($super->can('uploadInvoice', $cancelledPurchase));
     }
 
     #[Test]
@@ -454,6 +798,1024 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
     }
 
     #[Test]
+    public function automatic_report_limits_pending_and_overdue_to_selected_period(): void
+    {
+        $oldPending = $this->seedRequest([
+            'requested_at' => Carbon::parse('2026-07-20 09:00:00', 'America/Monterrey'),
+            'gda_order_id' => 'OLD-PENDING',
+            'rfc' => 'OLDP900101AAA',
+        ]);
+        $this->seedRequest([
+            'requested_at' => Carbon::parse('2026-08-05 09:00:00', 'America/Monterrey'),
+            'with_complete_invoice' => true,
+            'invoice_completed_at' => Carbon::parse('2026-08-05 11:00:00', 'America/Monterrey'),
+            'gda_order_id' => 'DONE-IN-PERIOD',
+            'rfc' => 'DONE900101AAA',
+        ]);
+        $periodPending = $this->seedRequest([
+            'requested_at' => Carbon::parse('2026-08-06 09:00:00', 'America/Monterrey'),
+            'gda_order_id' => 'RECEIVED-IN-PERIOD',
+            'rfc' => 'RECV900101AAA',
+        ]);
+
+        $period = [
+            'start' => Carbon::parse('2026-08-01 00:00:00', 'America/Monterrey'),
+            'end' => Carbon::parse('2026-08-10 23:59:59', 'America/Monterrey'),
+            'start_utc' => Carbon::parse('2026-08-01 00:00:00', 'America/Monterrey')->utc(),
+            'end_utc' => Carbon::parse('2026-08-10 23:59:59', 'America/Monterrey')->utc(),
+            'label' => '1 ago 2026 - 10 ago 2026',
+            'timezone' => 'America/Monterrey',
+        ];
+
+        $report = app(LaboratoryBillingReportDataService::class)->build($period, [], now('America/Monterrey'));
+
+        $this->assertSame(2, $report['metrics']['received']);
+        $this->assertSame(1, $report['metrics']['completed']);
+        $this->assertSame(1, $report['metrics']['pending_backlog']);
+        $this->assertFalse($report['rows']['backlog']->pluck('id')->contains($oldPending['request']->id));
+        $this->assertTrue($report['rows']['backlog']->pluck('id')->contains($periodPending['request']->id));
+    }
+
+    #[Test]
+    public function automatic_report_uses_one_period_cohort_for_preview_email_excel_and_history(): void
+    {
+        Notification::fake();
+        Queue::fake();
+        Storage::fake('local');
+        config(['famedic.laboratory_billing.report_disk' => 'local']);
+        Carbon::setTestNow(Carbon::parse('2026-09-08 07:30:00', 'America/Monterrey'));
+        $utc = fn (string $date): Carbon => Carbon::parse($date, 'America/Monterrey')->utc();
+
+        $store = LaboratoryStore::query()->create([
+            'name' => 'Sucursal Periodo',
+            'brand' => 'olab',
+            'state' => 'NL',
+        ]);
+
+        $oldPending = $this->seedRequest([
+            'requested_at' => $utc('2025-03-10 09:00:00'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'MAR-2025-PENDING',
+            'rfc' => 'MAR250101AAA',
+        ]);
+        $oldOverdue = $this->seedRequest([
+            'requested_at' => $utc('2025-03-11 09:00:00'),
+            'with_pdf_only' => true,
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'MAR-2025-OVERDUE',
+            'rfc' => 'MAR250102AAA',
+        ]);
+        $insidePending = $this->seedRequest([
+            'requested_at' => $utc('2026-08-11 09:00:00'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'IN-PERIOD-PENDING',
+            'rfc' => 'INPE260101AAA',
+        ]);
+        $insideCompleted = $this->seedRequest([
+            'requested_at' => $utc('2026-08-21 09:00:00'),
+            'with_complete_invoice' => true,
+            'invoice_completed_at' => $utc('2026-09-01 10:00:00'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'IN-PERIOD-COMPLETE',
+            'rfc' => 'INCO260101AAA',
+        ]);
+        $startBoundary = $this->seedRequest([
+            'requested_at' => $utc('2026-08-10 00:00:00'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'START-BOUNDARY',
+            'rfc' => 'STAR260101AA',
+        ]);
+        $endBoundary = $this->seedRequest([
+            'requested_at' => $utc('2026-09-08 23:59:59'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'END-BOUNDARY',
+            'rfc' => 'ENDB260101AA',
+        ]);
+        $beforeStart = $this->seedRequest([
+            'requested_at' => $utc('2026-08-09 23:59:59'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'BEFORE-START',
+            'rfc' => 'BEFO260101AA',
+        ]);
+        $afterEnd = $this->seedRequest([
+            'requested_at' => $utc('2026-09-09 00:00:00'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'gda_order_id' => 'AFTER-END',
+            'rfc' => 'AFTE260101AA',
+        ]);
+        $otherBrand = $this->seedRequest([
+            'requested_at' => $utc('2026-08-22 09:00:00'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'swisslab',
+            'gda_order_id' => 'OTHER-BRAND',
+            'rfc' => 'OTHE260101AA',
+        ]);
+
+        $period = app(LaboratoryBillingReportPeriodResolver::class)->resolve(
+            LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+            now('America/Monterrey'),
+            '2026-08-10',
+            '2026-09-08',
+        );
+        $filters = [
+            'brand' => 'olab',
+            'laboratory_store_id' => $store->id,
+            '_period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+        ];
+        $report = app(LaboratoryBillingReportDataService::class)->build($period, $filters, now('America/Monterrey'));
+        $periodIds = $report['rows']['received']->pluck('id');
+
+        $this->assertSame(4, $report['metrics']['received']);
+        $this->assertSame(1, $report['metrics']['completed']);
+        $this->assertSame(3, $report['metrics']['pending_backlog']);
+        $this->assertSame(2, $report['metrics']['overdue_backlog']);
+        $this->assertSame(25.0, $report['metrics']['compliance_percent']);
+        $this->assertSame(265.0, $report['metrics']['average_response_hours']);
+        $this->assertEqualsCanonicalizing([
+            $insidePending['request']->id,
+            $insideCompleted['request']->id,
+            $startBoundary['request']->id,
+            $endBoundary['request']->id,
+        ], $periodIds->all());
+        $this->assertFalse($periodIds->contains($oldPending['request']->id));
+        $this->assertFalse($report['rows']['overdue']->pluck('id')->contains($oldOverdue['request']->id));
+        $this->assertFalse($periodIds->contains($beforeStart['request']->id));
+        $this->assertFalse($periodIds->contains($afterEnd['request']->id));
+        $this->assertFalse($periodIds->contains($otherBrand['request']->id));
+        $this->assertStringContainsString('10 Aug 2026 12:00 am', $report['period']['label']);
+        $this->assertStringContainsString('8 Sep 2026 11:59 pm', $report['period']['label']);
+        $this->assertSame('Rango personalizado', $report['period']['name']);
+        $this->assertSame('Del 10 de agosto de 2026 al 8 de septiembre de 2026', $report['period']['date_label']);
+        $this->assertSame('America/Monterrey', $report['period']['timezone']);
+
+        $schedule = $this->makeReportSchedule([
+            'filters' => ['brand' => 'olab', 'laboratory_store_id' => $store->id],
+            'included_sections' => ['activity', 'backlog', 'overdue', 'completed', 'aging', 'missing_files'],
+        ]);
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $preview = $this->actingAs($admin)
+            ->getJson(route('admin.laboratory-billing.automatic-reports.preview', [
+                'schedule' => $schedule->id,
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-08-10',
+                'custom_to' => '2026-09-08',
+            ]))
+            ->assertOk();
+
+        $this->assertSame($report['metrics']['received'], $preview->json('metrics.received'));
+        $this->assertSame($report['metrics']['completed'], $preview->json('metrics.completed'));
+        $this->assertSame($report['metrics']['pending_backlog'], $preview->json('metrics.pending_backlog'));
+        $this->assertSame($report['metrics']['overdue_backlog'], $preview->json('metrics.overdue_backlog'));
+        $this->assertSame('Rango personalizado', $preview->json('period.name'));
+        $this->assertSame('Del 10 de agosto de 2026 al 8 de septiembre de 2026', $preview->json('period.date_label'));
+        $this->assertSame($report['metrics']['average_response_duration'], $preview->json('metrics.average_response_duration'));
+        $this->assertStringNotContainsString('custom_range', $preview->json('period.name'));
+        $this->assertSame(0, LaboratoryBillingReportRun::query()->count());
+
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_MANUAL, [
+            'period_start' => $period['start_utc'],
+            'period_end' => $period['end_utc'],
+            'filters' => [
+                ...$filters,
+                '_period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                '_custom_from' => '2026-08-10',
+                '_custom_to' => '2026-09-08',
+            ],
+        ]);
+        app(GenerateLaboratoryBillingReportJob::class, ['runId' => $run->id])->handle(
+            app(LaboratoryBillingReportPeriodResolver::class),
+            app(LaboratoryBillingReportDataService::class),
+            app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDeliveryService::class),
+        );
+
+        $run->refresh();
+        $this->assertSame($report['metrics']['received'], $run->metrics['received']);
+        $this->assertSame($report['metrics']['pending_backlog'], $run->metrics['pending_backlog']);
+        $this->assertSame('2026-08-10 06:00:00', $run->getRawOriginal('period_start'));
+        $this->assertSame('2026-09-09 05:59:59', $run->getRawOriginal('period_end'));
+
+        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load(Storage::disk('local')->path($run->file_path));
+        $activityRows = $spreadsheet->getSheetByName('Actividad del periodo')->toArray();
+        $pendingRows = $spreadsheet->getSheetByName('Pendientes del periodo')->toArray();
+        $overdueRows = $spreadsheet->getSheetByName('Atrasadas del periodo')->toArray();
+        $completedRows = $spreadsheet->getSheetByName('Completadas del periodo')->toArray();
+        $excelText = json_encode([$activityRows, $pendingRows, $overdueRows, $completedRows], JSON_THROW_ON_ERROR);
+
+        $this->assertStringContainsString('IN-PERIOD-PENDING', $excelText);
+        $this->assertStringContainsString('IN-PERIOD-COMPLETE', $excelText);
+        $this->assertStringContainsString('START-BOUNDARY', $excelText);
+        $this->assertStringContainsString('END-BOUNDARY', $excelText);
+        $this->assertStringNotContainsString('MAR-2025-PENDING', $excelText);
+        $this->assertStringNotContainsString('MAR-2025-OVERDUE', $excelText);
+        $this->assertStringNotContainsString('BEFORE-START', $excelText);
+        $this->assertStringNotContainsString('AFTER-END', $excelText);
+        $this->assertStringNotContainsString('OTHER-BRAND', $excelText);
+        $this->assertStringContainsString('Todas las métricas y registros corresponden únicamente al periodo seleccionado.', json_encode($spreadsheet->getSheetByName('Resumen')->toArray(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+
+        $mail = (new LaboratoryBillingAutomaticReportNotification($schedule, $run, [
+            ...$report,
+            '_included_sections' => $schedule->included_sections,
+            'schedule_name' => $schedule->name,
+            'run_type_label' => 'Manual',
+        ], null, $run->file_disk, $run->file_path))->toMail((object) []);
+        $html = view('emails.laboratory-billing.automatic-report', [
+            'schedule' => $schedule,
+            'run' => $run,
+            'reportData' => [
+                ...$report,
+                '_included_sections' => $schedule->included_sections,
+                'schedule_name' => $schedule->name,
+                'run_type_label' => 'Manual',
+            ],
+            'metrics' => $report['metrics'],
+            'downloadUrl' => null,
+            'attachmentPath' => $run->file_path,
+            'moduleUrl' => route('admin.laboratory-billing.automatic-reports.index'),
+            'isTest' => false,
+        ])->render();
+
+        $this->assertStringContainsString('Reporte de facturación | Reporte facturación | 10/08/2026–08/09/2026', $mail->subject);
+        $this->assertStringContainsString('src="https://famedic.com.mx/images/logo.png"', $html);
+        $this->assertStringContainsString('alt="Logo Famedic"', $html);
+        $this->assertStringContainsString('Famedic Plataforma', $html);
+        $this->assertStringContainsString('Reporte de solicitudes de facturación GDA', $html);
+        $this->assertStringContainsString('Facturación individual de pacientes', $html);
+        $this->assertStringContainsString('Rango personalizado', $html);
+        $this->assertStringContainsString('Del 10 de agosto de 2026 al 8 de septiembre de 2026', $html);
+        $this->assertStringContainsString('11 días 1 hora', $html);
+        $this->assertStringNotContainsString('custom_range', $html);
+        $this->assertStringContainsString('Pendientes del periodo', $html);
+        $this->assertStringContainsString('reporte-facturacion-laboratorio.xlsx está adjunto', $html);
+        $this->assertCount(1, $mail->rawAttachments);
+        $this->assertSame('reporte-facturacion-laboratorio.xlsx', $mail->rawAttachments[0]['name']);
+        $this->assertSame('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $mail->rawAttachments[0]['options']['mime']);
+        $this->assertSame([], $mail->attachments);
+        $this->assertStringNotContainsString('Pendientes actuales: 516', $html);
+        $this->assertStringNotContainsString('MAR-2025', $html);
+        Notification::assertSentOnDemand(LaboratoryBillingAutomaticReportNotification::class);
+        Queue::assertNotPushed(GenerateLaboratoryBillingReportJob::class);
+    }
+
+    #[Test]
+    public function automatic_report_notification_attaches_excel_from_storage_disk(): void
+    {
+        Storage::fake('s3');
+
+        $schedule = $this->makeReportSchedule(['include_excel' => true]);
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_TEST, [
+            'file_disk' => 's3',
+            'file_path' => 'laboratory-billing/reports/1/reporte-facturacion-laboratorio.xlsx',
+        ]);
+        Storage::disk('s3')->put($run->file_path, 'fake xlsx bytes');
+
+        $mail = (new LaboratoryBillingAutomaticReportNotification(
+            $schedule,
+            $run,
+            $this->minimalReportData(),
+            null,
+            $run->file_disk,
+            $run->file_path,
+        ))->toMail((object) []);
+
+        $this->assertSame([], $mail->attachments);
+        $this->assertCount(1, $mail->rawAttachments);
+        $this->assertSame('fake xlsx bytes', $mail->rawAttachments[0]['data']);
+        $this->assertSame('reporte-facturacion-laboratorio.xlsx', $mail->rawAttachments[0]['name']);
+        $this->assertSame('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $mail->rawAttachments[0]['options']['mime']);
+        $this->assertSame($run->file_path, $mail->viewData['attachmentPath']);
+    }
+
+    #[Test]
+    public function automatic_report_notification_logs_missing_attachment_without_local_path_lookup(): void
+    {
+        Storage::fake('s3');
+        Log::spy();
+
+        $schedule = $this->makeReportSchedule(['include_excel' => true]);
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_TEST, [
+            'file_disk' => 's3',
+            'file_path' => 'laboratory-billing/reports/1/reporte-facturacion-laboratorio.xlsx',
+        ]);
+
+        $mail = (new LaboratoryBillingAutomaticReportNotification(
+            $schedule,
+            $run,
+            $this->minimalReportData(),
+            null,
+            $run->file_disk,
+            $run->file_path,
+        ))->toMail((object) []);
+
+        $this->assertSame([], $mail->attachments);
+        $this->assertSame([], $mail->rawAttachments);
+        $this->assertNull($mail->viewData['attachmentPath']);
+        Log::shouldHaveReceived('error')->withArgs(fn ($message, $context = []) => $message === '[Laboratory Billing Report] attachment file missing'
+            && $context['run_id'] === $run->id
+            && $context['disk'] === 's3'
+            && $context['path'] === $run->file_path);
+    }
+
+    #[Test]
+    public function automatic_report_notification_has_no_attachment_when_excel_is_not_included(): void
+    {
+        $schedule = $this->makeReportSchedule(['include_excel' => false]);
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_TEST);
+
+        $mail = (new LaboratoryBillingAutomaticReportNotification(
+            $schedule,
+            $run,
+            $this->minimalReportData(),
+            null,
+            null,
+            null,
+        ))->toMail((object) []);
+
+        $this->assertSame([], $mail->attachments);
+        $this->assertSame([], $mail->rawAttachments);
+        $this->assertNull($mail->viewData['attachmentPath']);
+        $this->assertNull($mail->viewData['downloadUrl']);
+    }
+
+    #[Test]
+    public function automatic_report_schedule_calculates_next_run_and_paused_has_no_next_run(): void
+    {
+        $calculator = app(LaboratoryBillingReportScheduleCalculator::class);
+        $active = LaboratoryBillingReportSchedule::query()->create([
+            'name' => 'Diario facturación',
+            'is_active' => true,
+            'weekdays' => [1],
+            'send_time' => '12:05',
+            'timezone' => 'America/Monterrey',
+            'period_type' => 'previous_day',
+            'recipients' => ['admin@example.test'],
+            'included_sections' => ['activity', 'backlog'],
+            'include_excel' => true,
+        ]);
+        $paused = $active->replicate();
+        $paused->fill(['name' => 'Pausado', 'is_active' => false])->save();
+
+        $next = $calculator->nextRunAt($active, Carbon::parse('2026-08-10 12:00:00', 'America/Monterrey'));
+
+        $this->assertSame('2026-08-10 12:05:00', $next?->toDateTimeString());
+        $this->assertNull($calculator->nextRunAt($paused, now()));
+    }
+
+    #[Test]
+    public function dispatcher_creates_one_scheduled_run_for_due_configuration(): void
+    {
+        Queue::fake();
+        Log::spy();
+
+        $schedule = LaboratoryBillingReportSchedule::query()->create([
+            'name' => 'Vencido',
+            'is_active' => true,
+            'weekdays' => [(int) now('America/Monterrey')->isoWeekday()],
+            'send_time' => now('America/Monterrey')->format('H:i'),
+            'timezone' => 'America/Monterrey',
+            'period_type' => 'previous_day',
+            'recipients' => ['admin@example.test'],
+            'included_sections' => ['activity', 'backlog'],
+            'include_excel' => true,
+            'next_run_at' => Carbon::parse('2026-08-09 12:00:00', 'UTC'),
+        ]);
+
+        $this->artisan('laboratory-billing:dispatch-reports')->assertExitCode(0);
+        $this->artisan('laboratory-billing:dispatch-reports')->assertExitCode(0);
+
+        $this->assertSame(1, LaboratoryBillingReportRun::query()->where('schedule_id', $schedule->id)->count());
+        Queue::assertPushed(GenerateLaboratoryBillingReportJob::class, 1);
+        Log::shouldHaveReceived('info')->withArgs(fn ($message, $context = []) => $message === '[Laboratory Billing Report] dispatcher started'
+            && $context['due_schedules'] === 1);
+        Log::shouldHaveReceived('info')->withArgs(fn ($message, $context = []) => $message === '[Laboratory Billing Report] scheduled run dispatched'
+            && $context['schedule_id'] === $schedule->id
+            && $context['recipients_count'] === 1);
+    }
+
+    #[Test]
+    public function report_job_generates_excel_and_sends_notification_without_real_mail(): void
+    {
+        Notification::fake();
+        Storage::fake('local');
+        Log::spy();
+        config(['famedic.laboratory_billing.report_disk' => 'local']);
+
+        $this->seedRequest([
+            'requested_at' => Carbon::parse('2026-08-06 09:00:00', 'America/Monterrey'),
+            'gda_order_id' => 'JOB-1',
+            'rfc' => 'JOBR900101AAA',
+        ]);
+
+        $schedule = LaboratoryBillingReportSchedule::query()->create([
+            'name' => 'Job facturación',
+            'is_active' => true,
+            'weekdays' => [1],
+            'send_time' => '08:00',
+            'timezone' => 'America/Monterrey',
+            'period_type' => 'previous_day',
+            'recipients' => ['billing@example.test'],
+            'included_sections' => ['activity', 'backlog', 'overdue', 'completed'],
+            'include_excel' => true,
+        ]);
+        $run = LaboratoryBillingReportRun::query()->create([
+            'schedule_id' => $schedule->id,
+            'run_type' => LaboratoryBillingReportRun::TYPE_TEST,
+            'idempotency_key' => 'test-job-'.uniqid(),
+            'status' => LaboratoryBillingReportRun::STATUS_PENDING,
+            'intended_for_at' => now(),
+            'recipients' => ['billing@example.test'],
+            'filters' => [],
+        ]);
+
+        app(GenerateLaboratoryBillingReportJob::class, ['runId' => $run->id])->handle(
+            app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportPeriodResolver::class),
+            app(LaboratoryBillingReportDataService::class),
+            app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDeliveryService::class),
+        );
+
+        $run->refresh();
+
+        $this->assertSame(LaboratoryBillingReportRun::STATUS_SENT, $run->status);
+        $this->assertNotNull($run->file_path);
+        Storage::disk('local')->assertExists($run->file_path);
+        Notification::assertSentOnDemand(LaboratoryBillingAutomaticReportNotification::class);
+        Log::shouldHaveReceived('info')->withArgs(fn ($message, $context = []) => $message === '[Laboratory Billing Report] job started'
+            && $context['run_id'] === $run->id);
+        Log::shouldHaveReceived('info')->withArgs(fn ($message, $context = []) => $message === '[Laboratory Billing Report] mail notification submitted'
+            && $context['run_id'] === $run->id
+            && $context['recipient'] === 'b***@example.test');
+        Log::shouldHaveReceived('info')->withArgs(fn ($message, $context = []) => $message === '[Laboratory Billing Report] job sent'
+            && $context['run_id'] === $run->id
+            && $context['delivery_method'] === 'attachment');
+    }
+
+    #[Test]
+    public function automatic_report_handles_legacy_complete_invoices_filters_stores_and_truncation(): void
+    {
+        config(['famedic.laboratory_billing.report_detail_row_limit' => 1]);
+
+        $store = LaboratoryStore::query()->create([
+            'name' => 'Sucursal Centro',
+            'brand' => 'olab',
+            'state' => 'NL',
+        ]);
+
+        $legacyComplete = $this->seedRequest([
+            'requested_at' => Carbon::parse('2026-08-04 09:00:00', 'America/Monterrey'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'brand' => 'olab',
+            'rfc' => 'LEGACY901AAA',
+        ]);
+        $legacyComplete['purchase']->invoice()->create([
+            'invoice' => 'invoices/legacy.pdf',
+            'invoice_xml' => 'invoices/legacy.xml',
+            'completed_at' => null,
+            'created_at' => Carbon::parse('2026-08-05 10:00:00', 'America/Monterrey'),
+            'updated_at' => Carbon::parse('2026-08-05 10:00:00', 'America/Monterrey'),
+        ]);
+
+        for ($i = 1; $i <= 101; $i++) {
+            $this->seedRequest([
+                'requested_at' => Carbon::parse('2026-08-06 09:00:00', 'America/Monterrey'),
+                'with_store' => true,
+                'laboratory_store_id' => $store->id,
+                'brand' => 'olab',
+                'rfc' => 'PEND'.str_pad((string) $i, 9, '0', STR_PAD_LEFT),
+            ]);
+        }
+        $this->seedRequest([
+            'requested_at' => Carbon::parse('2026-08-07 09:00:00', 'America/Monterrey'),
+            'brand' => 'swisslab',
+            'rfc' => 'OTHER901AAA',
+        ]);
+
+        $period = [
+            'start' => Carbon::parse('2026-08-01 00:00:00', 'America/Monterrey'),
+            'end' => Carbon::parse('2026-08-10 23:59:59', 'America/Monterrey'),
+            'start_utc' => Carbon::parse('2026-08-01 00:00:00', 'America/Monterrey')->utc(),
+            'end_utc' => Carbon::parse('2026-08-10 23:59:59', 'America/Monterrey')->utc(),
+            'label' => '1 ago 2026 - 10 ago 2026',
+            'timezone' => 'America/Monterrey',
+        ];
+
+        $report = app(LaboratoryBillingReportDataService::class)->build($period, [
+            'brand' => 'olab',
+            'laboratory_store_id' => $store->id,
+        ], now('America/Monterrey'));
+
+        $this->assertSame(102, $report['metrics']['received']);
+        $this->assertSame(1, $report['metrics']['completed']);
+        $this->assertSame(101, $report['metrics']['pending_backlog']);
+        $this->assertTrue($report['metrics']['detail_truncated']);
+        $this->assertSame(204, $report['metrics']['detail_total_rows']);
+        $this->assertSame(201, $report['metrics']['detail_exported_rows']);
+        $this->assertSame('Sucursal Centro', data_get($report['rows']['received']->first(), 'purchase.store.name'));
+
+        $this->assertFalse($report['rows']['backlog']->pluck('id')->contains($legacyComplete['request']->id));
+    }
+
+    #[Test]
+    public function automatic_report_labels_missing_store_without_blank_excel_cells(): void
+    {
+        $this->seedRequest([
+            'requested_at' => Carbon::parse('2026-08-06 09:00:00', 'America/Monterrey'),
+            'rfc' => 'NOSTORE01AAA',
+        ]);
+
+        $period = [
+            'start' => Carbon::parse('2026-08-01 00:00:00', 'America/Monterrey'),
+            'end' => Carbon::parse('2026-08-10 23:59:59', 'America/Monterrey'),
+            'start_utc' => Carbon::parse('2026-08-01 00:00:00', 'America/Monterrey')->utc(),
+            'end_utc' => Carbon::parse('2026-08-10 23:59:59', 'America/Monterrey')->utc(),
+            'label' => '1 ago 2026 - 10 ago 2026',
+            'timezone' => 'America/Monterrey',
+        ];
+
+        $report = app(LaboratoryBillingReportDataService::class)->build($period, [], now('America/Monterrey'));
+
+        $this->assertSame('Sin sucursal', data_get($report['rows']['backlog']->first(), 'purchase.store.name'));
+    }
+
+    #[Test]
+    public function automatic_report_can_filter_requests_without_store(): void
+    {
+        $withoutStore = $this->seedRequest([
+            'requested_at' => Carbon::parse('2026-08-06 09:00:00', 'America/Monterrey'),
+            'rfc' => 'NOSTORE02AA',
+        ]);
+        $store = LaboratoryStore::query()->create([
+            'name' => 'Sucursal filtro',
+            'brand' => 'olab',
+            'state' => 'NL',
+        ]);
+        $this->seedRequest([
+            'requested_at' => Carbon::parse('2026-08-06 09:00:00', 'America/Monterrey'),
+            'with_store' => true,
+            'laboratory_store_id' => $store->id,
+            'rfc' => 'WITHSTOREAA',
+        ]);
+
+        $period = [
+            'start' => Carbon::parse('2026-08-01 00:00:00', 'America/Monterrey'),
+            'end' => Carbon::parse('2026-08-10 23:59:59', 'America/Monterrey'),
+            'start_utc' => Carbon::parse('2026-08-01 00:00:00', 'America/Monterrey')->utc(),
+            'end_utc' => Carbon::parse('2026-08-10 23:59:59', 'America/Monterrey')->utc(),
+            'label' => '1 ago 2026 - 10 ago 2026',
+            'timezone' => 'America/Monterrey',
+        ];
+
+        $report = app(LaboratoryBillingReportDataService::class)->build($period, [
+            'laboratory_store_id' => '__none__',
+        ], now('America/Monterrey'));
+
+        $this->assertSame(1, $report['metrics']['received']);
+        $this->assertTrue($report['rows']['received']->pluck('id')->contains($withoutStore['request']->id));
+        $this->assertSame('Sin sucursal', data_get($report['rows']['received']->first(), 'purchase.store.name'));
+    }
+
+    #[Test]
+    public function report_job_uses_link_for_large_excel_and_exports_expected_sheets(): void
+    {
+        Notification::fake();
+        Storage::fake('local');
+        config([
+            'famedic.laboratory_billing.report_disk' => 'local',
+            'famedic.laboratory_billing.report_max_attachment_bytes' => 1,
+        ]);
+
+        $this->seedRequest([
+            'requested_at' => Carbon::parse('2026-08-06 09:00:00', 'America/Monterrey'),
+            'rfc' => 'LINK900101AA',
+        ]);
+
+        $schedule = $this->makeReportSchedule([
+            'include_excel' => true,
+            'included_sections' => ['activity', 'completed', 'backlog', 'overdue'],
+        ]);
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_TEST);
+
+        app(GenerateLaboratoryBillingReportJob::class, ['runId' => $run->id])->handle(
+            app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportPeriodResolver::class),
+            app(LaboratoryBillingReportDataService::class),
+            app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDeliveryService::class),
+        );
+
+        $run->refresh();
+        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load(Storage::disk('local')->path($run->file_path));
+
+        $this->assertSame('link', $run->delivery_method);
+        $this->assertNotNull($run->link_expires_at);
+        $this->assertSame([
+            'Resumen',
+            'Actividad del periodo',
+            'Pendientes del periodo',
+            'Atrasadas del periodo',
+            'Completadas del periodo',
+        ], $spreadsheet->getSheetNames());
+        Notification::assertSentOnDemand(LaboratoryBillingAutomaticReportNotification::class);
+    }
+
+    #[Test]
+    public function sent_report_job_is_not_delivered_again(): void
+    {
+        Notification::fake();
+
+        $schedule = $this->makeReportSchedule();
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_SCHEDULED, [
+            'status' => LaboratoryBillingReportRun::STATUS_SENT,
+            'sent_at' => now(),
+        ]);
+
+        app(GenerateLaboratoryBillingReportJob::class, ['runId' => $run->id])->handle(
+            app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportPeriodResolver::class),
+            app(LaboratoryBillingReportDataService::class),
+            app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDeliveryService::class),
+        );
+
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function failed_report_job_records_sanitized_error_without_sending_mail(): void
+    {
+        Notification::fake();
+        config(['famedic.laboratory_billing.report_disk' => 'missing-report-disk']);
+
+        $schedule = $this->makeReportSchedule(['include_excel' => true]);
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_SCHEDULED);
+
+        try {
+            app(GenerateLaboratoryBillingReportJob::class, ['runId' => $run->id])->handle(
+                app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportPeriodResolver::class),
+                app(LaboratoryBillingReportDataService::class),
+                app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDeliveryService::class),
+            );
+            $this->fail('The report job should fail with an invalid disk.');
+        } catch (\Throwable) {
+            $run->refresh();
+        }
+
+        $this->assertSame(LaboratoryBillingReportRun::STATUS_FAILED, $run->status);
+        $this->assertNotNull($run->finished_at);
+        $this->assertNotEmpty($run->error_message);
+        $this->assertStringNotContainsString("\n", $run->error_message);
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function manual_and_test_runs_do_not_change_the_scheduled_next_run(): void
+    {
+        Queue::fake();
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $nextRunAt = Carbon::parse('2026-08-11 14:00:00', 'UTC');
+        $schedule = $this->makeReportSchedule([
+            'is_active' => true,
+            'weekdays' => [2],
+            'send_time' => '08:00',
+            'next_run_at' => $nextRunAt,
+        ]);
+        $originalNextRunAt = $schedule->next_run_at?->utc()->toDateTimeString();
+
+        $this->actingAs($admin)
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => 'previous_day',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($admin)
+            ->post(route('admin.laboratory-billing.automatic-reports.test', $schedule), [
+                'period_type' => 'previous_day',
+            ])
+            ->assertRedirect();
+
+        $schedule->refresh();
+
+        $this->assertSame($originalNextRunAt, $schedule->next_run_at?->utc()->toDateTimeString());
+        $this->assertSame(1, LaboratoryBillingReportRun::query()->where('run_type', LaboratoryBillingReportRun::TYPE_MANUAL)->count());
+        $this->assertSame(1, LaboratoryBillingReportRun::query()->where('run_type', LaboratoryBillingReportRun::TYPE_TEST)->count());
+        Queue::assertPushed(GenerateLaboratoryBillingReportJob::class, 2);
+    }
+
+    #[Test]
+    public function manual_custom_range_persists_dates_filters_and_does_not_change_schedule(): void
+    {
+        Queue::fake();
+        Carbon::setTestNow(Carbon::parse('2026-09-18 10:00:00', 'America/Monterrey'));
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $nextRunAt = Carbon::parse('2026-09-21 14:00:00', 'UTC');
+        $schedule = $this->makeReportSchedule([
+            'period_type' => LaboratoryBillingReportSchedule::PERIOD_LAST_7_DAYS,
+            'filters' => ['brand' => 'olab'],
+            'next_run_at' => $nextRunAt,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-07-01',
+                'custom_to' => '2026-08-31',
+                'idempotency_key' => 'manual-custom-1',
+            ])
+            ->assertRedirect();
+
+        $run = LaboratoryBillingReportRun::query()->where('run_type', LaboratoryBillingReportRun::TYPE_MANUAL)->firstOrFail();
+
+        $this->assertSame('2026-07-01 06:00:00', $run->getRawOriginal('period_start'));
+        $this->assertSame('2026-09-01 05:59:59', $run->getRawOriginal('period_end'));
+        $this->assertSame(LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE, data_get($run->filters, '_period_type'));
+        $this->assertSame('olab', data_get($run->filters, 'brand'));
+        $this->assertSame($nextRunAt->toDateTimeString(), $schedule->fresh()->next_run_at?->toDateTimeString());
+        $this->assertSame(LaboratoryBillingReportSchedule::PERIOD_LAST_7_DAYS, $schedule->fresh()->period_type);
+        Queue::assertPushed(GenerateLaboratoryBillingReportJob::class, 1);
+    }
+
+    #[Test]
+    public function manual_custom_range_validation_rejects_invalid_future_and_too_large_ranges(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-18 10:00:00', 'America/Monterrey'));
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $schedule = $this->makeReportSchedule();
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '',
+                'custom_to' => '',
+            ])
+            ->assertSessionHasErrors(['custom_from', 'custom_to']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-08-31',
+                'custom_to' => '2026-08-01',
+            ])
+            ->assertSessionHasErrors(['custom_to']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-09-01',
+                'custom_to' => '2026-09-19',
+            ])
+            ->assertSessionHasErrors(['custom_to']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2025-09-17',
+                'custom_to' => '2026-09-18',
+            ])
+            ->assertSessionHasErrors(['custom_to']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-02-30',
+                'custom_to' => '2026-09-18',
+            ])
+            ->assertSessionHasErrors(['custom_from']);
+    }
+
+    #[Test]
+    public function custom_range_is_rejected_for_test_runs_and_schedule_configuration(): void
+    {
+        Queue::fake();
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $schedule = $this->makeReportSchedule();
+        $payload = [
+            'name' => 'No custom recurrent',
+            'is_active' => false,
+            'weekdays' => [],
+            'send_time' => '08:00',
+            'timezone' => 'America/Monterrey',
+            'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+            'recipients' => 'billing@example.test',
+            'included_sections' => ['activity'],
+            'include_excel' => true,
+        ];
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.store'), $payload)
+            ->assertSessionHasErrors(['period_type']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-billing.automatic-reports.index'))
+            ->post(route('admin.laboratory-billing.automatic-reports.test', $schedule), [
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-08-01',
+                'custom_to' => '2026-08-02',
+            ])
+            ->assertSessionHasErrors(['period_type']);
+
+        Queue::assertNothingPushed();
+    }
+
+    #[Test]
+    public function manual_idempotency_token_prevents_duplicate_direct_clicks(): void
+    {
+        Queue::fake();
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $schedule = $this->makeReportSchedule();
+        $payload = [
+            'period_type' => LaboratoryBillingReportSchedule::PERIOD_LAST_30_DAYS,
+            'idempotency_key' => 'double-click-token',
+        ];
+
+        $this->actingAs($admin)
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), $payload)
+            ->assertRedirect();
+        $this->actingAs($admin)
+            ->post(route('admin.laboratory-billing.automatic-reports.run', $schedule), $payload)
+            ->assertRedirect();
+
+        $this->assertSame(1, LaboratoryBillingReportRun::query()->where('run_type', LaboratoryBillingReportRun::TYPE_MANUAL)->count());
+        Queue::assertPushed(GenerateLaboratoryBillingReportJob::class, 1);
+    }
+
+    #[Test]
+    public function custom_preview_is_read_only_and_uses_selected_range(): void
+    {
+        Notification::fake();
+        Queue::fake();
+        Carbon::setTestNow(Carbon::parse('2026-09-18 10:00:00', 'America/Monterrey'));
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $schedule = $this->makeReportSchedule();
+        $runsBefore = LaboratoryBillingReportRun::query()->count();
+
+        $response = $this->actingAs($admin)
+            ->getJson(route('admin.laboratory-billing.automatic-reports.preview', [
+                'schedule' => $schedule->id,
+                'period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                'custom_from' => '2026-07-01',
+                'custom_to' => '2026-08-31',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('period.is_custom', true)
+            ->assertJsonPath('period.type_label', 'Rango personalizado');
+
+        $this->assertStringContainsString('1 de julio de 2026', $response->json('period.date_label'));
+        $this->assertSame($runsBefore, LaboratoryBillingReportRun::query()->count());
+        Notification::assertNothingSent();
+        Queue::assertNothingPushed();
+    }
+
+    #[Test]
+    public function job_notification_excel_and_history_use_manual_run_stored_period(): void
+    {
+        Notification::fake();
+        Storage::fake('local');
+        config(['famedic.laboratory_billing.report_disk' => 'local']);
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $schedule = $this->makeReportSchedule();
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_MANUAL, [
+            'period_start' => Carbon::parse('2026-07-01 00:00:00', 'America/Monterrey')->utc(),
+            'period_end' => Carbon::parse('2026-08-31 23:59:59', 'America/Monterrey')->utc(),
+            'filters' => [
+                '_period_type' => LaboratoryBillingReportSchedule::PERIOD_CUSTOM_RANGE,
+                '_custom_from' => '2026-07-01',
+                '_custom_to' => '2026-08-31',
+            ],
+        ]);
+
+        app(GenerateLaboratoryBillingReportJob::class, ['runId' => $run->id])->handle(
+            app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportPeriodResolver::class),
+            app(LaboratoryBillingReportDataService::class),
+            app(\App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDeliveryService::class),
+        );
+
+        $run->refresh();
+        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load(Storage::disk('local')->path($run->file_path));
+
+        $this->assertSame('2026-07-01 06:00:00', $run->getRawOriginal('period_start'));
+        $this->assertSame('2026-09-01 05:59:59', $run->getRawOriginal('period_end'));
+        $this->assertStringContainsString('1 Jul 2026', (string) $spreadsheet->getSheetByName('Resumen')->getCell('B4')->getValue());
+        Notification::assertSentOnDemand(LaboratoryBillingAutomaticReportNotification::class);
+
+        $this->actingAs($admin)
+            ->get(route('admin.laboratory-billing.automatic-reports.index', ['tab' => 'history']))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('runs.data.0.period_label', 'Personalizado: 01/07/2026–31/08/2026'));
+    }
+
+    #[Test]
+    public function paused_schedule_is_not_dispatched(): void
+    {
+        Queue::fake();
+
+        $schedule = $this->makeReportSchedule([
+            'is_active' => false,
+            'next_run_at' => Carbon::parse('2026-08-09 12:00:00', 'UTC'),
+        ]);
+
+        $this->artisan('laboratory-billing:dispatch-reports')->assertExitCode(0);
+
+        $this->assertSame(0, LaboratoryBillingReportRun::query()->where('schedule_id', $schedule->id)->count());
+        Queue::assertNothingPushed();
+    }
+
+    #[Test]
+    public function report_download_requires_permission_signature_live_link_and_existing_file(): void
+    {
+        Storage::fake('local');
+
+        $authorized = $this->makeAdmin(['laboratory-purchases.manage.billing-reports']);
+        $invoiceManager = $this->makeAdmin(['laboratory-purchases.manage.invoices']);
+        $unauthorized = $this->makeAdmin([]);
+        $schedule = $this->makeReportSchedule();
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_SCHEDULED, [
+            'file_disk' => 'local',
+            'file_path' => 'laboratory-billing/reports/secure/report.xlsx',
+            'link_expires_at' => now()->addHour(),
+        ]);
+        Storage::disk('local')->put($run->file_path, 'xlsx-bytes');
+
+        $url = URL::temporarySignedRoute(
+            'admin.laboratory-billing.automatic-runs.download',
+            now()->addHour(),
+            ['run' => $run->id]
+        );
+
+        $this->actingAs($unauthorized)->get($url)->assertForbidden();
+        $this->actingAs($invoiceManager)->get($url)->assertForbidden();
+        $this->actingAs($authorized)->get($url.'&tampered=1')->assertForbidden();
+        $this->actingAs($authorized)->get($url)->assertOk();
+
+        $expiredSignedUrl = URL::temporarySignedRoute(
+            'admin.laboratory-billing.automatic-runs.download',
+            now()->subMinute(),
+            ['run' => $run->id]
+        );
+        $this->actingAs($authorized)->get($expiredSignedUrl)->assertForbidden();
+
+        $run->update(['link_expires_at' => now()->addHour(), 'file_path' => 'laboratory-billing/reports/secure/missing.xlsx']);
+        $url = URL::temporarySignedRoute(
+            'admin.laboratory-billing.automatic-runs.download',
+            now()->addHour(),
+            ['run' => $run->id]
+        );
+        $this->actingAs($authorized)->get($url)->assertNotFound();
+    }
+
+    #[Test]
+    public function prune_report_files_deletes_expired_excel_and_keeps_history(): void
+    {
+        Storage::fake('local');
+        config(['famedic.laboratory_billing.report_file_retention_days' => 14]);
+
+        $schedule = $this->makeReportSchedule();
+        $run = $this->makeReportRun($schedule, LaboratoryBillingReportRun::TYPE_SCHEDULED, [
+            'file_disk' => 'local',
+            'file_path' => 'laboratory-billing/reports/old/report.xlsx',
+            'file_size' => 120,
+            'link_expires_at' => now()->addHour(),
+            'created_at' => now()->subDays(20),
+            'updated_at' => now()->subDays(20),
+        ]);
+        Storage::disk('local')->put($run->file_path, 'xlsx-bytes');
+
+        $this->artisan('laboratory-billing:prune-report-files')->assertExitCode(0);
+
+        Storage::disk('local')->assertMissing('laboratory-billing/reports/old/report.xlsx');
+        $run->refresh();
+        $this->assertNull($run->file_path);
+        $this->assertNull($run->file_size);
+        $this->assertNull($run->link_expires_at);
+        $this->assertSame(LaboratoryBillingReportRun::STATUS_PENDING, $run->status);
+    }
+
+    #[Test]
     public function historical_complete_backfill_uses_least_of_created_and_updated(): void
     {
         $purchase = $this->seedRequest(['requested_at' => now()->subDays(4)])['purchase'];
@@ -484,6 +1846,77 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         $this->assertSame($updated, \Illuminate\Support\Facades\DB::table('invoices')->where('id', $invoiceId)->value('completed_at'));
     }
 
+    private function makeReportSchedule(array $overrides = []): LaboratoryBillingReportSchedule
+    {
+        return LaboratoryBillingReportSchedule::query()->create(array_merge([
+            'name' => 'Reporte facturación',
+            'is_active' => true,
+            'weekdays' => [1],
+            'send_time' => '08:00',
+            'timezone' => 'America/Monterrey',
+            'period_type' => 'previous_day',
+            'filters' => [],
+            'recipients' => ['billing@example.test'],
+            'included_sections' => ['activity', 'completed', 'backlog', 'overdue', 'aging', 'missing_files'],
+            'include_excel' => true,
+        ], $overrides));
+    }
+
+    private function makeReportRun(
+        LaboratoryBillingReportSchedule $schedule,
+        string $type,
+        array $overrides = [],
+    ): LaboratoryBillingReportRun {
+        return LaboratoryBillingReportRun::query()->create(array_merge([
+            'schedule_id' => $schedule->id,
+            'run_type' => $type,
+            'idempotency_key' => 'laboratory-billing-report:test:'.$schedule->id.':'.uniqid('', true),
+            'status' => LaboratoryBillingReportRun::STATUS_PENDING,
+            'intended_for_at' => now(),
+            'recipients' => $schedule->recipients,
+            'filters' => [],
+        ], $overrides));
+    }
+
+    private function minimalReportData(): array
+    {
+        return [
+            'period' => [
+                'name' => 'Día anterior',
+                'date_label' => '9 de agosto de 2026',
+                'timezone' => 'America/Monterrey',
+            ],
+            'metrics' => [
+                'received' => 0,
+                'completed' => 0,
+                'pending_period' => 0,
+                'overdue_period' => 0,
+                'pending_backlog' => 0,
+                'overdue_backlog' => 0,
+                'compliance_percent' => 0,
+                'average_response_duration' => [
+                    'value' => 'Sin datos',
+                    'detail' => null,
+                ],
+                'missing_files' => [
+                    'missing_pdf' => 0,
+                    'missing_xml' => 0,
+                    'missing_both' => 0,
+                ],
+                'aging' => [
+                    'within_sla' => 0,
+                    'overdue_1_3' => 0,
+                    'overdue_4_7' => 0,
+                    'overdue_more_7' => 0,
+                ],
+            ],
+            'applied_filters' => [],
+            '_included_sections' => ['activity'],
+            'schedule_name' => 'Reporte facturación',
+            'run_type_label' => 'Prueba',
+        ];
+    }
+
     private function makeAdmin(array $permissions): User
     {
         $user = User::query()->create([
@@ -503,6 +1936,20 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             ]);
             $administrator->givePermissionTo($permission);
         }
+
+        return $user->fresh()->load('administrator');
+    }
+
+    private function makeSuperAdmin(): User
+    {
+        $user = $this->makeAdmin([]);
+        $role = Role::query()->firstOrCreate([
+            'name' => 'superadmin',
+            'guard_name' => 'web',
+        ]);
+
+        $user->administrator->assignRole($role);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         return $user->fresh()->load('administrator');
     }
@@ -537,7 +1984,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         ]);
 
         $purchase = LaboratoryPurchase::query()->create([
-            'brand' => 'olab',
+            'brand' => $overrides['brand'] ?? 'olab',
             'gda_order_id' => $overrides['gda_order_id'] ?? ('ORD-'.random_int(1000, 9999)),
             'name' => $overrides['patient_name'] ?? 'Ana',
             'paternal_lastname' => 'Paciente',
@@ -557,6 +2004,25 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'created_at' => $overrides['purchase_created_at'] ?? now(),
             'updated_at' => $overrides['purchase_created_at'] ?? now(),
         ]);
+
+        if (! empty($overrides['with_store'])) {
+            $store = filled($overrides['laboratory_store_id'] ?? null)
+                ? LaboratoryStore::query()->findOrFail($overrides['laboratory_store_id'])
+                : LaboratoryStore::query()->create([
+                    'name' => $overrides['store_name'] ?? 'Sucursal prueba',
+                    'brand' => $overrides['brand'] ?? 'olab',
+                    'state' => $overrides['store_state'] ?? 'NL',
+                ]);
+
+            LaboratoryAppointment::query()->create([
+                'customer_id' => $customer->id,
+                'laboratory_purchase_id' => $purchase->id,
+                'laboratory_store_id' => $store->id,
+                'brand' => $overrides['brand'] ?? 'olab',
+                'created_at' => $overrides['requested_at'] ?? now(),
+                'updated_at' => $overrides['requested_at'] ?? now(),
+            ]);
+        }
 
         $request = $purchase->invoiceRequest()->create([
             'tax_profile_id' => $taxProfile->id,
@@ -608,6 +2074,10 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'roles',
             'invoices',
             'invoice_requests',
+            'laboratory_billing_report_runs',
+            'laboratory_billing_report_schedules',
+            'laboratory_appointments',
+            'laboratory_stores',
             'tax_profiles',
             'laboratory_purchases',
             'laboratory_concierges',
@@ -615,6 +2085,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'customers',
             'users',
             'notifications',
+            'failed_jobs',
         ] as $table) {
             Schema::dropIfExists($table);
         }
@@ -637,6 +2108,16 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             $table->text('message')->nullable();
             $table->boolean('is_read')->default(false);
             $table->timestamp('created_at')->nullable();
+        });
+
+        Schema::create('failed_jobs', function (Blueprint $table) {
+            $table->id();
+            $table->string('uuid')->unique();
+            $table->text('connection');
+            $table->text('queue');
+            $table->longText('payload');
+            $table->longText('exception');
+            $table->timestamp('failed_at')->useCurrent();
         });
 
         Schema::create('administrators', function (Blueprint $table) {
@@ -737,6 +2218,26 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             $table->softDeletes();
         });
 
+        Schema::create('laboratory_stores', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('brand')->default('olab');
+            $table->string('state')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('laboratory_appointments', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('customer_id')->nullable();
+            $table->foreignId('laboratory_purchase_id')->nullable();
+            $table->foreignId('laboratory_store_id')->nullable();
+            $table->string('brand')->default('olab');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
         Schema::create('invoice_requests', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tax_profile_id')->nullable();
@@ -761,12 +2262,58 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             $table->softDeletes();
         });
 
+        Schema::create('laboratory_billing_report_schedules', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->boolean('is_active')->default(false);
+            $table->json('weekdays')->nullable();
+            $table->time('send_time')->nullable();
+            $table->string('timezone')->default('America/Monterrey');
+            $table->string('period_type')->default('previous_day');
+            $table->json('filters')->nullable();
+            $table->json('included_sections')->nullable();
+            $table->json('recipients')->nullable();
+            $table->boolean('include_excel')->default(true);
+            $table->timestamp('next_run_at')->nullable();
+            $table->timestamp('last_run_at')->nullable();
+            $table->foreignId('created_by')->nullable();
+            $table->foreignId('updated_by')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('laboratory_billing_report_runs', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('schedule_id')->nullable();
+            $table->string('run_type');
+            $table->string('idempotency_key')->unique();
+            $table->string('status')->default('pending');
+            $table->timestamp('intended_for_at')->nullable();
+            $table->timestamp('period_start')->nullable();
+            $table->timestamp('period_end')->nullable();
+            $table->timestamp('backlog_as_of')->nullable();
+            $table->json('recipients')->nullable();
+            $table->json('filters')->nullable();
+            $table->json('metrics')->nullable();
+            $table->string('delivery_method')->nullable();
+            $table->string('file_disk')->nullable();
+            $table->string('file_path')->nullable();
+            $table->unsignedBigInteger('file_size')->nullable();
+            $table->timestamp('link_expires_at')->nullable();
+            $table->timestamp('started_at')->nullable();
+            $table->timestamp('sent_at')->nullable();
+            $table->timestamp('finished_at')->nullable();
+            $table->text('error_message')->nullable();
+            $table->timestamps();
+        });
+
         Schema::enableForeignKeyConstraints();
 
         foreach ([
             'administrators.manage',
             'laboratory-purchases.manage',
             'laboratory-purchases.manage.invoices',
+            'laboratory-purchases.manage.billing-reports',
             'laboratory-purchases.manage.vendor-payments',
             'laboratory-tests.manage',
             'online-pharmacy-purchases.manage',
@@ -808,6 +2355,10 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'roles',
             'invoices',
             'invoice_requests',
+            'laboratory_billing_report_runs',
+            'laboratory_billing_report_schedules',
+            'laboratory_appointments',
+            'laboratory_stores',
             'tax_profiles',
             'laboratory_purchases',
             'laboratory_concierges',
@@ -815,6 +2366,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'customers',
             'users',
             'notifications',
+            'failed_jobs',
         ] as $table) {
             Schema::dropIfExists($table);
         }

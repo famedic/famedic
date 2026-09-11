@@ -167,6 +167,7 @@ class MurguiaMonitorController extends Controller
             'customers' => $customers,
             'filters' => $filters,
             'stats' => $stats,
+            'murguiaEndpoint' => $this->murguiaEndpointInfo(),
             'murguiaCheck' => $request->session()->pull('murguia_check'),
             'successMessage' => $request->session()->pull('success'),
             'errorMessage' => $request->session()->pull('error'),
@@ -218,6 +219,7 @@ class MurguiaMonitorController extends Controller
                 ]),
             ],
             'syncLogs' => $logs,
+            'murguiaEndpoint' => $this->murguiaEndpointInfo(),
             'murguiaCheck' => $request->session()->pull('murguia_check'),
         ]);
     }
@@ -251,6 +253,7 @@ class MurguiaMonitorController extends Controller
             ->back()
             ->with('murguia_check', [
                 'http' => $response->status(),
+                'endpoint' => $this->murguiaEndpointInfo(),
                 'body' => $body,
             ]);
     }
@@ -295,6 +298,7 @@ class MurguiaMonitorController extends Controller
         return response()->json([
             'http' => $response->status(),
             'ok' => $response->successful(),
+            'endpoint' => $this->murguiaEndpointInfo(),
             'body' => $body,
             'matched_customer' => $customer ? [
                 'id' => $customer->id,
@@ -353,5 +357,21 @@ class MurguiaMonitorController extends Controller
         return Inertia::render('Admin/MurguiaLogs', [
             'logs' => $logs,
         ]);
+    }
+
+    private function murguiaEndpointInfo(): array
+    {
+        $baseUrl = rtrim((string) config('services.murguia.url'), '/') . '/';
+        $host = parse_url($baseUrl, PHP_URL_HOST) ?: '';
+        $environment = preg_match('/(test|stage|staging|sandbox|dev|qa)/i', $host)
+            ? 'Pruebas'
+            : 'Productivo';
+
+        return [
+            'environment' => $environment,
+            'base_url' => $baseUrl,
+            'auth_url' => $baseUrl . 'api/Security/Auth',
+            'check_status_url' => $baseUrl . 'asegurados/consultar-estatus',
+        ];
     }
 }

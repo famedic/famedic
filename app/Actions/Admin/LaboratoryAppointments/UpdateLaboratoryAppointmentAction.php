@@ -54,9 +54,8 @@ class UpdateLaboratoryAppointmentAction
             'final_datetime_local' => $finalDateTime->format('Y-m-d H:i:s'),
         ]);
 
-        $laboratoryAppointment->update([
+        $attributes = [
             'appointment_date' => $finalDateTime,
-            'confirmed_at' => now(),
             'patient_name' => $patient_name,
             'patient_paternal_lastname' => $patient_paternal_lastname,
             'patient_maternal_lastname' => $patient_maternal_lastname,
@@ -66,7 +65,13 @@ class UpdateLaboratoryAppointmentAction
             'patient_phone_country' => $patient_phone_country,
             'laboratory_store_id' => $laboratory_store,
             'notes' => $notes,
-        ]);
+        ];
+
+        if ($laboratoryAppointment->confirmed_at === null) {
+            $attributes['confirmed_at'] = now();
+        }
+
+        $laboratoryAppointment->update($attributes);
 
         return $laboratoryAppointment->refresh();
     }

@@ -21,6 +21,9 @@ use Illuminate\Support\Facades\Schema;
  */
 class ActiveCampaignDashboardService
 {
+    private const TZ = 'America/Monterrey';
+
+    private const MISSING_TIMESTAMP = '—';
     /**
      * Payload inmediato (salud, negocio, tablas, meta). Sin gráficas pesadas.
      *
@@ -454,7 +457,7 @@ class ActiveCampaignDashboardService
                 $mapped = $this->mapDispatchRow($row);
                 $mapped['attempts'] = (int) $row->attempts;
                 $mapped['last_error'] = $this->truncateError($row->last_error);
-                $mapped['when'] = optional($row->updated_at)?->timezone('America/Monterrey')->format('d/m/Y H:i');
+                $mapped['when'] = $this->formatTimestamp($row->updated_at);
 
                 return $mapped;
             })
@@ -489,10 +492,19 @@ class ActiveCampaignDashboardService
             'email' => $row->email ?: '—',
             'status' => $row->status,
             'attempts' => (int) ($row->attempts ?? 0),
-            'when' => optional($row->created_at)?->timezone('America/Monterrey')->format('d/m/Y H:i'),
-            'synced_at' => optional($row->synced_at)?->timezone('America/Monterrey')->format('d/m/Y H:i'),
+            'when' => $this->formatTimestamp($row->created_at),
+            'synced_at' => $this->formatTimestamp($row->synced_at),
             'source' => 'activecampaign',
         ];
+    }
+
+    private function formatTimestamp(mixed $value, string $format = 'd/m/Y H:i'): string
+    {
+        if ($value === null) {
+            return self::MISSING_TIMESTAMP;
+        }
+
+        return Carbon::parse($value)->timezone(self::TZ)->format($format);
     }
 
     private function truncateError(?string $error): string

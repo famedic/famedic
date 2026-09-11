@@ -181,6 +181,7 @@ test('admin pedido cancelado recibe prop couponReversal', function () {
     ['purchase' => $purchase] = createConsumedCouponLabPurchase(55_000, 22_000, null);
 
     app(\App\Services\CouponApplicationService::class)->reverseForLaboratoryPurchase($purchase);
+    $purchase->delete();
 
     $response = $this->actingAs($adminUser)->get(
         route('admin.laboratory-purchases.show', $purchase)
@@ -189,6 +190,7 @@ test('admin pedido cancelado recibe prop couponReversal', function () {
     $response->assertOk();
     $response->assertInertia(fn ($page) => $page
         ->component('Admin/LaboratoryPurchase')
+        ->where('isCancelled', true)
         ->has('couponReversal')
         ->where('couponReversal.amount_restored_cents', 22_000)
     );
@@ -228,6 +230,7 @@ test('admin pedido sin cupón no recibe couponReversal', function () {
     $response->assertOk();
     $response->assertInertia(fn ($page) => $page
         ->component('Admin/LaboratoryPurchase')
+        ->where('isCancelled', false)
         ->where('couponReversal', null)
     );
 });

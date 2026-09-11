@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources;
 
-use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -65,11 +64,7 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
             && $transaction?->payment_method !== null
             && $transaction->payment_method !== 'coupon_balance';
 
-        $isNewResult = LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(
-            $p->id,
-            $p->gda_order_id,
-            $p->gda_consecutivo
-        );
+        $isNewResult = $p->hasUnseenResultsForPatient();
 
         $items = $p->laboratoryPurchaseItems ?? collect();
         $requiresAppointment = $items->contains(function ($item) {

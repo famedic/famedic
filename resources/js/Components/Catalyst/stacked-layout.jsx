@@ -49,12 +49,12 @@ export function StackedLayout({ navbar, sidebar, children }) {
 				<Footer
 					links={
 						<div>
-							<Subheading>Servicios</Subheading>
+							<Subheading className="!text-sm">Servicios</Subheading>
 
-							<ul role="list" className="mt-6 space-y-4">
+							<ul role="list" className="mt-4 space-y-2.5">
 								{mainNavigation.map((item) => (
 									<li key={item.label}>
-										<Text>
+										<Text className="text-sm">
 											<TextLink
 												className="group flex items-center no-underline hover:underline"
 												href={item.url}

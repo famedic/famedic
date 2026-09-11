@@ -33,6 +33,8 @@ class Customer extends Model
             'medical_attention_subscription_expires_at' => 'datetime',
             'ac_last_sync_at' => 'datetime',
             'ac_contact_id' => 'integer',
+            'ac_location' => 'array',
+            'ac_location_cached_at' => 'datetime',
         ];
     }
 
@@ -206,6 +208,11 @@ class Customer extends Model
         return $this->hasMany(LaboratoryAppointment::class);
     }
 
+    public function activeCampaignWebActivities(): HasMany
+    {
+        return $this->hasMany(ActiveCampaignWebActivity::class);
+    }
+
     public function onlinePharmacyCartItems(): HasMany
     {
         return $this->hasMany(OnlinePharmacyCartItem::class);
@@ -300,20 +307,14 @@ class Customer extends Model
 
     public function getRecentlyConfirmedUncompletedLaboratoryAppointment(LaboratoryBrand $laboratoryBrand): ?LaboratoryAppointment
     {
-        return $this->laboratoryAppointments()
-            ->recentlyConfirmed()
-            ->uncompleted()
-            ->ofBrand($laboratoryBrand)
-            ->with('laboratoryStore')
-            ->first();
+        return app(\App\Services\Laboratory\LaboratoryAppointmentCheckoutResolver::class)
+            ->payableConfirmedAppointment($this, $laboratoryBrand);
     }
 
     public function getPendingLaboratoryAppointment(LaboratoryBrand $laboratoryBrand): ?LaboratoryAppointment
     {
-        return $this->laboratoryAppointments()
-            ->unconfirmed()
-            ->ofBrand($laboratoryBrand)
-            ->first();
+        return app(\App\Services\Laboratory\LaboratoryAppointmentCheckoutResolver::class)
+            ->pendingAppointment($this, $laboratoryBrand);
     }
 
     // En app/Models/Customer.php

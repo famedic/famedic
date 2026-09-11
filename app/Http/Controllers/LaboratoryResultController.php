@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Http;
 use App\Models\LaboratoryQuote;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryNotification;
+use App\Actions\Laboratories\EnsureLatestGdaResultsPdfAction;
+use App\Actions\Laboratories\RecordPatientResultsAccessAction;
 use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
 use App\Exceptions\GdaResultsNotAvailableException;
 use Illuminate\Support\Facades\Gate;
@@ -129,10 +131,7 @@ class LaboratoryResultController extends Controller
     private function fetchAndSaveResults(LaboratoryNotification $notification): array
     {
         try {
-            $result = app(ResolveGdaResultsPdfAction::class)($notification);
-            $result['notification']->markAsRead();
-
-            return $result;
+            return app(ResolveGdaResultsPdfAction::class)($notification);
         } catch (\Exception $e) {
             logger()->error('❌ Error al obtener resultados de GDA:', [
                 'notification_id' => $notification->id,
@@ -197,6 +196,8 @@ class LaboratoryResultController extends Controller
                 'order_id' => $notification->gda_order_id,
                 'content_length' => strlen($pdfContent)
             ]);
+
+            $this->recordPatientResultsAccessAfterSuccessfulServe($result);
 
             return response($pdfContent)
                 ->header('Content-Type', 'application/pdf')
@@ -269,6 +270,8 @@ class LaboratoryResultController extends Controller
                 'content_length' => strlen($pdfContent)
             ]);
 
+            $this->recordPatientResultsAccessAfterSuccessfulServe($result);
+
             return response($pdfContent)
                 ->header('Content-Type', 'application/pdf')
                 ->header('Content-Disposition', 'attachment; filename="resultados_' . $notification->gda_order_id . '.pdf"');
@@ -313,7 +316,40 @@ class LaboratoryResultController extends Controller
             return null;
         }
 
+        app(EnsureLatestGdaResultsPdfAction::class)->execute(
+            $purchase,
+            'patient_view_or_download'
+        );
+
         return redirect()->route('laboratory-purchases.results', ['laboratory_purchase' => $purchase->id]);
+    }
+
+    /**
+     * Tras servir el PDF con éxito: registra acceso si es current/manual.
+     * Cotizaciones sin pedido conservan markAsRead de la notificación servida.
+     */
+    private function recordPatientResultsAccessAfterSuccessfulServe(array $result): void
+    {
+        $notification = $result['notification'] ?? null;
+
+        if (! $notification instanceof LaboratoryNotification) {
+            return;
+        }
+
+        $purchase = $notification->laboratoryPurchase
+            ?? ($notification->laboratory_purchase_id
+                ? LaboratoryPurchase::query()->find($notification->laboratory_purchase_id)
+                : null);
+
+        if ($purchase) {
+            app(RecordPatientResultsAccessAction::class)->execute($purchase);
+
+            return;
+        }
+
+        if (! ($result['refresh_dispatched'] ?? false)) {
+            $notification->markAsRead();
+        }
     }
 
     /**

@@ -3,7 +3,6 @@
 namespace App\Services\LaboratoryBilling;
 
 use App\Models\InvoiceRequest;
-use App\Models\LaboratoryPurchase;
 use App\Models\TaxProfile;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,17 +20,15 @@ class LaboratoryBillingTaxProfilesQuery
     {
         $query = $this->filteredQuery($filters, $range);
 
-        $labType = LaboratoryPurchase::class;
-
         $paginator = $query
             ->with(['customer.user'])
             ->withCount([
                 'invoiceRequests as invoice_requests_count' => fn (Builder $q) => $q->withTrashed()
-                    ->where('invoice_requestable_type', $labType),
+                    ->forActiveLaboratoryPurchases(),
             ])
             ->withMax([
                 'invoiceRequests as last_used_at' => fn (Builder $q) => $q->withTrashed()
-                    ->where('invoice_requestable_type', $labType),
+                    ->forActiveLaboratoryPurchases(),
             ], 'created_at')
             ->latest('created_at')
             ->paginate($perPage)
@@ -58,13 +55,11 @@ class LaboratoryBillingTaxProfilesQuery
 
     public function exportRows(array $filters, LaboratoryBillingDateRange $range): Collection
     {
-        $labType = LaboratoryPurchase::class;
-
         return $this->filteredQuery($filters, $range)
             ->with(['customer.user'])
             ->withCount([
                 'invoiceRequests as invoice_requests_count' => fn (Builder $q) => $q->withTrashed()
-                    ->where('invoice_requestable_type', $labType),
+                    ->forActiveLaboratoryPurchases(),
             ])
             ->limit(5000)
             ->get()
@@ -73,19 +68,17 @@ class LaboratoryBillingTaxProfilesQuery
 
     public function findForShow(TaxProfile $taxProfile): array
     {
-        $labType = LaboratoryPurchase::class;
-
         $taxProfile->load(['customer.user']);
         $taxProfile->loadCount([
             'invoiceRequests as invoice_requests_count' => fn (Builder $q) => $q->withTrashed()
-                ->where('invoice_requestable_type', $labType),
+                ->forActiveLaboratoryPurchases(),
         ]);
 
         $presented = $this->presenter->presentTaxProfile($taxProfile);
 
         $recentRequests = InvoiceRequest::withTrashed()
             ->where('tax_profile_id', $taxProfile->id)
-            ->where('invoice_requestable_type', $labType)
+            ->forActiveLaboratoryPurchases()
             ->with([
                 'invoiceRequestable' => fn ($morph) => $morph->withTrashed()->with(['invoice', 'customer.user']),
             ])
@@ -97,7 +90,7 @@ class LaboratoryBillingTaxProfilesQuery
 
         $monthlyUsage = InvoiceRequest::withTrashed()
             ->where('tax_profile_id', $taxProfile->id)
-            ->where('invoice_requestable_type', $labType)
+            ->forActiveLaboratoryPurchases()
             ->where('created_at', '>=', now()->subMonths(11)->startOfMonth())
             ->get(['id', 'created_at'])
             ->groupBy(fn (InvoiceRequest $request) => Carbon::parse($request->created_at)->timezone('America/Monterrey')->format('Y-m'))
@@ -152,11 +145,11 @@ class LaboratoryBillingTaxProfilesQuery
         }
 
         if (($filters['usage'] ?? null) === 'unused') {
-            $query->whereDoesntHave('invoiceRequests', fn (Builder $q) => $q->withTrashed());
+            $query->whereDoesntHave('invoiceRequests', fn (Builder $q) => $q->withTrashed()->forActiveLaboratoryPurchases());
         }
 
         if (($filters['usage'] ?? null) === 'used') {
-            $query->whereHas('invoiceRequests', fn (Builder $q) => $q->withTrashed());
+            $query->whereHas('invoiceRequests', fn (Builder $q) => $q->withTrashed()->forActiveLaboratoryPurchases());
         }
 
         if (($filters['is_default'] ?? null) === 'true') {

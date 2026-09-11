@@ -15,9 +15,9 @@ use App\Services\Laboratory\LabOrderNotificationGateService;
 use App\Support\GDA\GdaPayloadSanitizer;
 use App\Support\GDA\GdaWebhookPayloadResolver;
 use App\Support\Laboratory\GdaSimulatorSettings;
+use App\Support\Laboratory\GdaResultsPdfStatus;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 
 class HandleResultsNotificationAction
 {
@@ -169,12 +169,29 @@ class HandleResultsNotificationAction
 
         $purchase->refresh();
 
-        if (! empty($purchase->results) && Storage::exists($purchase->results)) {
-            Log::info('GDA results PDF sync job skipped: purchase already has results', [
-                'purchase_id' => $purchase->id,
-                'notification_id' => $notification->id,
-                'existing_results' => $purchase->results,
-            ]);
+        $assessment = GdaResultsPdfStatus::assessPurchase($purchase);
+        $context = [
+            'purchase_id' => $purchase->id,
+            'notification_id' => $notification->id,
+            'freshness_status' => $assessment->freshnessStatus,
+            'old_path' => $purchase->results,
+            'is_automatic_overwrite_candidate' => $assessment->isAutomaticOverwriteCandidate,
+        ];
+
+        if ($assessment->isManual()) {
+            Log::info('GDA results sync skipped: manual PDF protected', $context);
+
+            return;
+        }
+
+        if ($assessment->isGdaCurrent()) {
+            Log::info('GDA results sync skipped: PDF current', $context);
+
+            return;
+        }
+
+        if (! $assessment->shouldAutomaticallySync()) {
+            Log::info('GDA results PDF sync job skipped: not a sync candidate', $context);
 
             return;
         }
@@ -183,13 +200,21 @@ class HandleResultsNotificationAction
             return;
         }
 
+        if ($assessment->isAutomaticOverwriteCandidate) {
+            Log::info('GDA results stale PDF detected', $context + [
+                'stale_lag' => $assessment->staleLagLabel,
+            ]);
+        }
+
         SyncGdaResultPdfToStorageJob::dispatch($purchase->id, $notification->id)
             ->afterCommit();
 
-        Log::info('GDA results PDF sync job dispatched', [
-            'purchase_id' => $purchase->id,
-            'notification_id' => $notification->id,
-        ]);
+        Log::info(
+            $assessment->isAutomaticOverwriteCandidate
+                ? 'GDA results refresh dispatched'
+                : 'GDA results PDF sync job dispatched',
+            $context
+        );
     }
 
     protected function extractStudyExternalId(array $data): ?string

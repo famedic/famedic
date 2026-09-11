@@ -1,35 +1,13 @@
-/** Zona horaria del equipo concierge (CDMX). */
-export const CONCIERGE_TIMEZONE = "America/Mexico_City";
+/** @typedef {{ openMinutes: number, closeMinutes: number }} DaySchedule */
 
-/**
- * Horarios por día de la semana (0 = domingo).
- * Ajustar aquí si cambian las reglas de negocio del concierge.
- */
-const SCHEDULE_BY_DAY = {
-	0: { openMinutes: 8 * 60, closeMinutes: 14 * 60 },//Domingo
-	1: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },//Lunes
-	2: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },//Martes
-	3: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },//Miercoles
-	4: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },//Jueves
-	5: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },//Viernes
-	6: { openMinutes: 8 * 60, closeMinutes: 15 * 60 },//Sabado
-};
-
-export const CONCIERGE_SCHEDULE_LINES = [
-	"Lunes a viernes: 7:00 a 20:00",
-	"Sábado: 8:00 a 15:00",
-	"Domingo: 8:00 a 14:00",
-];
-
-const WEEKDAY_SHORT_TO_INDEX = {
-	Sun: 0,
-	Mon: 1,
-	Tue: 2,
-	Wed: 3,
-	Thu: 4,
-	Fri: 5,
-	Sat: 6,
-};
+import {
+	buildDisplayLines,
+	CONCIERGE_DISPLAY_GROUPS,
+	evaluateServiceHours,
+	formatMinutesAmPm,
+	getTimezoneParts,
+	normalizeScheduleByDay,
+} from "@/Utils/serviceHours";
 
 const WEEKDAY_LABELS = [
 	"Domingo",
@@ -41,62 +19,125 @@ const WEEKDAY_LABELS = [
 	"Sábado",
 ];
 
-function getMexicoCityParts(date) {
-	const parts = new Intl.DateTimeFormat("en-US", {
-		timeZone: CONCIERGE_TIMEZONE,
-		weekday: "short",
-		hour: "2-digit",
-		minute: "2-digit",
-		hour12: false,
-	}).formatToParts(date);
+/** Fallback aligned with config/famedic.php concierge defaults. */
+export const DEFAULT_CONCIERGE_CONFIG = {
+	timezone: "America/Mexico_City",
+	scheduleByDay: {
+		0: { openMinutes: 8 * 60, closeMinutes: 14 * 60 },
+		1: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },
+		2: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },
+		3: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },
+		4: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },
+		5: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },
+		6: { openMinutes: 8 * 60, closeMinutes: 15 * 60 },
+	},
+	scheduleLines: buildDisplayLines(
+		{
+			0: { openMinutes: 8 * 60, closeMinutes: 14 * 60 },
+			1: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },
+			2: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },
+			3: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },
+			4: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },
+			5: { openMinutes: 7 * 60, closeMinutes: 20 * 60 },
+			6: { openMinutes: 8 * 60, closeMinutes: 15 * 60 },
+		},
+		CONCIERGE_DISPLAY_GROUPS,
+	),
+	availability: {
+		online_label: "Concierge en línea",
+		online_message:
+			"Nuestro equipo está disponible ahora para ayudarte a agendar tu cita.",
+		offline_label: "Concierge fuera de horario",
+		offline_message:
+			"Nuestro equipo podrá ayudarte en el siguiente horario disponible.",
+	},
+	checkoutOfflineMessages: [
+		"Ahora no estamos disponibles por teléfono.",
+		"Puedes dejar tu solicitud y te llamaremos en el siguiente horario disponible.",
+	],
+};
 
-	const value = (type) => parts.find((part) => part.type === type)?.value ?? "0";
+/** @deprecated Use config timezone from famedicConcierge */
+export const CONCIERGE_TIMEZONE = DEFAULT_CONCIERGE_CONFIG.timezone;
+
+/** @deprecated Use scheduleLines from famedicConcierge */
+export const CONCIERGE_SCHEDULE_LINES = DEFAULT_CONCIERGE_CONFIG.scheduleLines;
+
+/**
+ * @param {import('@inertiajs/react').PageProps['famedicConcierge']} raw
+ */
+export function normalizeConciergeConfig(raw) {
+	if (!raw || typeof raw !== "object") {
+		return {
+			timezone: DEFAULT_CONCIERGE_CONFIG.timezone,
+			scheduleLines: DEFAULT_CONCIERGE_CONFIG.scheduleLines,
+			scheduleByDay: DEFAULT_CONCIERGE_CONFIG.scheduleByDay,
+			availability: DEFAULT_CONCIERGE_CONFIG.availability,
+			checkoutOfflineMessages: DEFAULT_CONCIERGE_CONFIG.checkoutOfflineMessages,
+			phoneDisplay: "",
+			phoneTel: "",
+			afterHoursMessage: "",
+			description: "",
+		};
+	}
+
+	const scheduleByDay = normalizeScheduleByDay(raw.scheduleByDay);
+	const resolvedScheduleByDay =
+		Object.keys(scheduleByDay).length > 0
+			? scheduleByDay
+			: DEFAULT_CONCIERGE_CONFIG.scheduleByDay;
 
 	return {
-		dayOfWeek: WEEKDAY_SHORT_TO_INDEX[value("weekday")] ?? 0,
-		hour: Number(value("hour")),
-		minute: Number(value("minute")),
+		timezone: raw.timezone || DEFAULT_CONCIERGE_CONFIG.timezone,
+		scheduleLines:
+			Array.isArray(raw.scheduleLines) && raw.scheduleLines.length > 0
+				? raw.scheduleLines
+				: buildDisplayLines(resolvedScheduleByDay, CONCIERGE_DISPLAY_GROUPS),
+		scheduleByDay: resolvedScheduleByDay,
+		availability: {
+			online_label:
+				raw.availability?.online_label ??
+				DEFAULT_CONCIERGE_CONFIG.availability.online_label,
+			online_message:
+				raw.availability?.online_message ??
+				DEFAULT_CONCIERGE_CONFIG.availability.online_message,
+			offline_label:
+				raw.availability?.offline_label ??
+				DEFAULT_CONCIERGE_CONFIG.availability.offline_label,
+			offline_message:
+				raw.availability?.offline_message ??
+				DEFAULT_CONCIERGE_CONFIG.availability.offline_message,
+		},
+		checkoutOfflineMessages:
+			Array.isArray(raw.checkoutOfflineMessages) &&
+			raw.checkoutOfflineMessages.length > 0
+				? raw.checkoutOfflineMessages
+				: DEFAULT_CONCIERGE_CONFIG.checkoutOfflineMessages,
+		phoneDisplay: raw.phoneDisplay ?? "",
+		phoneTel: raw.phoneTel ?? "",
+		afterHoursMessage: raw.afterHoursMessage ?? "",
+		description: raw.description ?? "",
 	};
 }
 
-function toMinutes(hour, minute) {
-	return hour * 60 + minute;
-}
-
-function formatMinutes(totalMinutes) {
-	const hours = Math.floor(totalMinutes / 60);
-	const minutes = totalMinutes % 60;
-	return `${hours}:${String(minutes).padStart(2, "0")}`;
-}
-
-function isWithinSchedule(dayOfWeek, hour, minute) {
-	const schedule = SCHEDULE_BY_DAY[dayOfWeek];
-	if (!schedule) {
-		return false;
-	}
-
-	const now = toMinutes(hour, minute);
-	return now >= schedule.openMinutes && now < schedule.closeMinutes;
-}
-
-function getNextAvailableText(fromDate) {
-	const current = getMexicoCityParts(fromDate);
-	const now = toMinutes(current.hour, current.minute);
-	const todaySchedule = SCHEDULE_BY_DAY[current.dayOfWeek];
+function getNextAvailableText(fromDate, timeZone, scheduleByDay) {
+	const current = getTimezoneParts(fromDate, timeZone);
+	const now = current.hour * 60 + current.minute;
+	const todaySchedule = scheduleByDay[current.dayOfWeek];
 
 	if (todaySchedule && now < todaySchedule.openMinutes) {
-		return `Hoy a las ${formatMinutes(todaySchedule.openMinutes)}`;
+		return `Hoy a las ${formatMinutesAmPm(todaySchedule.openMinutes)}`;
 	}
 
 	for (let daysAhead = 1; daysAhead <= 7; daysAhead += 1) {
 		const probe = new Date(fromDate.getTime() + daysAhead * 86_400_000);
-		const parts = getMexicoCityParts(probe);
-		const schedule = SCHEDULE_BY_DAY[parts.dayOfWeek];
+		const parts = getTimezoneParts(probe, timeZone);
+		const schedule = scheduleByDay[parts.dayOfWeek];
 
 		if (schedule) {
 			const label =
 				daysAhead === 1 ? "Mañana" : WEEKDAY_LABELS[parts.dayOfWeek];
-			return `${label} a las ${formatMinutes(schedule.openMinutes)}`;
+			return `${label} a las ${formatMinutesAmPm(schedule.openMinutes)}`;
 		}
 	}
 
@@ -105,35 +146,36 @@ function getNextAvailableText(fromDate) {
 
 /**
  * @param {Date} [date]
- * @returns {{
- *   isAvailable: boolean,
- *   label: string,
- *   message: string,
- *   nextAvailableText: string | null,
- *   scheduleText: string[],
- * }}
+ * @param {import('@inertiajs/react').PageProps['famedicConcierge']} [conciergeConfig]
  */
-export default function getConciergeAvailability(date = new Date()) {
-	const { dayOfWeek, hour, minute } = getMexicoCityParts(date);
-	const isAvailable = isWithinSchedule(dayOfWeek, hour, minute);
+export default function getConciergeAvailability(date = new Date(), conciergeConfig) {
+	const config = normalizeConciergeConfig(conciergeConfig);
+	const { isAvailable } = evaluateServiceHours(date, {
+		timezone: config.timezone,
+		scheduleByDay: config.scheduleByDay,
+	});
 
 	if (isAvailable) {
 		return {
 			isAvailable: true,
-			label: "Concierge en línea",
-			message:
-				"Nuestro equipo está disponible ahora para ayudarte a agendar tu cita.",
+			label: config.availability.online_label,
+			message: config.availability.online_message,
 			nextAvailableText: null,
-			scheduleText: CONCIERGE_SCHEDULE_LINES,
+			scheduleText: config.scheduleLines,
+			checkoutOfflineMessages: config.checkoutOfflineMessages,
 		};
 	}
 
 	return {
 		isAvailable: false,
-		label: "Concierge fuera de horario",
-		message:
-			"Nuestro equipo podrá ayudarte en el siguiente horario disponible.",
-		nextAvailableText: getNextAvailableText(date),
-		scheduleText: CONCIERGE_SCHEDULE_LINES,
+		label: config.availability.offline_label,
+		message: config.availability.offline_message,
+		nextAvailableText: getNextAvailableText(
+			date,
+			config.timezone,
+			config.scheduleByDay,
+		),
+		scheduleText: config.scheduleLines,
+		checkoutOfflineMessages: config.checkoutOfflineMessages,
 	};
 }

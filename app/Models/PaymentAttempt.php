@@ -26,6 +26,7 @@ class PaymentAttempt extends Model
     protected $fillable = [
         'customer_id',
         'token_id',
+        'cart_id',
         'amount_cents',
         'gateway',
         'reference',
@@ -85,5 +86,10 @@ class PaymentAttempt extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function cart(): BelongsTo
+    {
+        return $this->belongsTo(Cart::class);
     }
 }

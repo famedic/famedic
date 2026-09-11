@@ -1,32 +1,20 @@
 import { Subheading } from "@/Components/Catalyst/heading";
 import { Button } from "@/Components/Catalyst/button";
-import { Text, Strong } from "@/Components/Catalyst/text";
-import { CheckIcon, PhoneIcon } from "@heroicons/react/20/solid";
+import { WhatsAppIcon } from "@/Components/Checkout/CheckoutWhatsAppHelp";
 import {
-	CalendarDaysIcon,
-	ClipboardDocumentListIcon,
-} from "@heroicons/react/24/outline";
-import {
-	Field,
-	Label,
-	ErrorMessage,
-} from "@/Components/Catalyst/fieldset";
+	CheckIcon,
+	InformationCircleIcon,
+	LockClosedIcon,
+	PhoneIcon,
+} from "@heroicons/react/20/solid";
+import Card from "@/Components/Card";
+import { Field, Label, ErrorMessage } from "@/Components/Catalyst/fieldset";
 import { Textarea } from "@/Components/Catalyst/textarea";
 import { Input } from "@/Components/Catalyst/input";
 import { Select } from "@/Components/Catalyst/select";
-import {
-	TabGroup,
-	TabList,
-	Tab,
-	TabPanels,
-	TabPanel,
-} from "@/Components/Catalyst/tabs";
-import { DevicePhoneMobileIcon } from "@heroicons/react/16/solid";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { router, useForm, usePage } from "@inertiajs/react";
 import clsx from "clsx";
-import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
-import CheckoutSaveSuccessAlert from "@/Components/Checkout/CheckoutSaveSuccessAlert";
 import getConciergeAvailability from "@/Utils/getConciergeAvailability";
 
 function toDatetimeLocal(value) {
@@ -68,10 +56,6 @@ function getDefaultHourWindow(dayOffset = 0) {
 	};
 }
 
-const TAB_CALL_NOW = 0;
-const TAB_RECEIVE_CALL = 1;
-const TAB_TRACKING = 2;
-
 function toDayOffsetOption(value) {
 	const map = { today: 0, tomorrow: 1, day_after_tomorrow: 2 };
 	return map[value] ?? 0;
@@ -106,57 +90,110 @@ function getSaveButtonLabel(hasSavedAvailability, isSubmitting) {
 		: "Guardar disponibilidad";
 }
 
-function TabPanelCard({ children, className }) {
+function getAppointmentVisualState({
+	hasSavedAvailability,
+	appointmentConfirmed,
+	appointmentUnavailable,
+}) {
+	if (appointmentConfirmed) {
+		return {
+			title: "Tu cita está confirmada",
+			description:
+				"Tu cita quedó agendada. Ya puedes continuar con el pago.",
+			indicator: "Continuar al pago",
+		};
+	}
+
+	if (appointmentUnavailable) {
+		return {
+			title: "Cita no disponible",
+			description:
+				"Necesitamos actualizar tu disponibilidad para gestionar una nueva cita por teléfono.",
+			indicator: "Requiere atención",
+		};
+	}
+
+	if (hasSavedAvailability) {
+		return {
+			title: "Crea tu cita para continuar",
+			description:
+				"Tu solicitud de cita ya fue precargada. Para agendarla necesitamos definir con nuestro equipo de concierge la sucursal, el paciente, la fecha y la hora.",
+			indicator: "Esperando llamada",
+		};
+	}
+
+	return {
+		title: "Crea tu cita para continuar",
+		description:
+			"Tu solicitud de cita ya fue precargada. Para agendarla necesitamos definir con nuestro equipo de concierge la sucursal, el paciente, la fecha y la hora.",
+		indicator: "Contacto pendiente",
+	};
+}
+
+function AppointmentStatusSummary({
+	hasSavedAvailability,
+	appointmentConfirmed,
+	appointmentUnavailable,
+}) {
+	const visualState = getAppointmentVisualState({
+		hasSavedAvailability,
+		appointmentConfirmed,
+		appointmentUnavailable,
+	});
+
 	return (
-		<div
-			className={clsx(
-				"rounded-xl border border-zinc-200/80 bg-white p-4 text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-100 sm:p-5",
-				className,
+		<div className="text-center">
+			<h3 className="text-2xl font-semibold tracking-normal text-famedic-dark sm:text-[1.7rem] dark:text-white">
+				{visualState.title}
+			</h3>
+			{!appointmentConfirmed && !appointmentUnavailable && (
+				<div className="mt-4">
+					<span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-100 dark:ring-emerald-800/70">
+						Solicitud precargada
+					</span>
+				</div>
 			)}
-		>
-			{children}
+			<p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+				{visualState.description}
+			</p>
 		</div>
 	);
 }
 
-function ConciergeStatusBadge({ isAvailable }) {
-	const label = isAvailable
-		? "Equipo de atención en línea"
-		: "Equipo fuera de horario";
-
+function AppointmentPaymentSafetyNotice() {
 	return (
-		<div
-			className="inline-flex items-center gap-2 rounded-full border border-zinc-200/80 bg-zinc-50 px-3 py-1 dark:border-zinc-700 dark:bg-zinc-800/60"
-			role="status"
-			aria-label={label}
-		>
-			<span
-				className={clsx(
-					"size-2.5 shrink-0 rounded-full",
-					isAvailable ? "bg-green-500" : "bg-amber-400",
-				)}
+		<div className="flex items-start gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3.5 text-sm text-indigo-900 dark:border-indigo-900/70 dark:bg-indigo-950/20 dark:text-indigo-100">
+			<InformationCircleIcon
+				className="mt-0.5 size-5 shrink-0 text-indigo-600 dark:text-indigo-300"
 				aria-hidden="true"
 			/>
-			<span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-				{label}
-			</span>
+			<p className="leading-6">
+				No se efectuará ningún cargo hasta que tu cita sea confirmada y
+				tú lo autorices.
+			</p>
 		</div>
 	);
 }
 
-function AppointmentTabButton({ selected, icon: Icon, label }) {
+function AppointmentPaymentAuthorizationNote() {
 	return (
-		<span
-			className={clsx(
-				"flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 text-sm font-semibold transition-colors sm:flex-row sm:gap-2 sm:py-1.5",
-				selected
-					? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-900/5 dark:bg-zinc-900 dark:text-white dark:ring-white/10"
-					: "text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white",
-			)}
-		>
-			<Icon className="size-5 shrink-0" aria-hidden="true" />
-			{label}
-		</span>
+		<div className="border-t border-zinc-200 pt-5 dark:border-zinc-700">
+			<div className="flex items-start gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-famedic-dark ring-1 ring-zinc-200 dark:bg-zinc-800 dark:text-famedic-lime dark:ring-zinc-700">
+					<LockClosedIcon className="size-4" aria-hidden="true" />
+				</span>
+				<div className="space-y-1">
+					<p className="font-semibold text-zinc-900 dark:text-zinc-100">
+						El pago se habilitará más adelante, solo con tu
+						autorización.
+					</p>
+					<p>
+						Con la cita confirmada podrás autorizar el pago o
+						cancelar la operación.
+					</p>
+				</div>
+			</div>
+		</div>
 	);
 }
 
@@ -183,157 +220,62 @@ function OptionCard({ selected, label, onClick }) {
 	);
 }
 
-const APPOINTMENT_PROGRESS_STEPS = [
-	{ id: "request", label: "Solicitud recibida" },
-	{ id: "team", label: "Equipo por confirmar" },
-	{ id: "confirmed", label: "Cita confirmada" },
-	{ id: "payment", label: "Lista para pagar" },
-];
-
-function AppointmentProgressSteps({ hasRequestSaved }) {
-	const activeIndex = hasRequestSaved ? 1 : 0;
-
-	return (
-		<ol className="space-y-2" aria-label="Progreso de tu cita">
-			{APPOINTMENT_PROGRESS_STEPS.map((step, index) => {
-				const isCompleted = index < activeIndex;
-				const isCurrent = index === activeIndex;
-
-				return (
-					<li
-						key={step.id}
-						className={clsx(
-							"flex items-center gap-3 rounded-lg px-3 py-2 text-sm",
-							isCompleted &&
-								"bg-green-50 text-green-900 dark:bg-green-950/30 dark:text-green-200",
-							isCurrent &&
-								"bg-violet-50 text-violet-900 ring-1 ring-violet-200 dark:bg-violet-950/30 dark:text-violet-100 dark:ring-violet-800",
-							!isCompleted &&
-								!isCurrent &&
-								"text-zinc-500 dark:text-zinc-400",
-						)}
-						aria-current={isCurrent ? "step" : undefined}
-					>
-						<span
-							className={clsx(
-								"flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-								isCompleted && "bg-green-600 text-white",
-								isCurrent &&
-									"bg-violet-700 text-white dark:bg-violet-600",
-								!isCompleted &&
-									!isCurrent &&
-									"border border-zinc-300 bg-zinc-100 text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800",
-							)}
-						>
-							{isCompleted ? (
-								<CheckIcon className="size-4" aria-hidden="true" />
-							) : (
-								index + 1
-							)}
-						</span>
-						<span className="font-medium">{step.label}</span>
-						{isCurrent && (
-							<span className="ml-auto text-xs font-normal opacity-80">
-								En curso
-							</span>
-						)}
-					</li>
-				);
-			})}
-		</ol>
-	);
-}
-
-function CallNowPanel({
-	isAvailable,
-	nextAvailableText,
-	scheduleText,
-	userPhone,
+function AppointmentContactActions({
 	telHref,
+	phoneDisplay,
+	whatsAppUrl,
+	whatsAppDisplay,
 	onCallClick,
 	onRequestCall,
+	isFormOpen,
 }) {
+	const whatsappButtonClasses =
+		"inline-flex min-h-[76px] w-full items-center justify-center gap-3 rounded-xl border border-[#1ea952] bg-[#25D366] px-5 py-3 text-center font-semibold text-white shadow-sm transition-colors hover:bg-[#20bd5a] focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 dark:border-[#25D366] dark:focus:ring-offset-zinc-900";
+	const callLinkClasses =
+		"inline-flex min-h-[54px] w-full items-center justify-center gap-2 rounded-xl border border-famedic-dark bg-white px-4 py-3 text-center text-sm font-semibold text-famedic-dark transition-colors hover:bg-famedic-dark/[0.03] focus:outline-none focus:ring-2 focus:ring-famedic-dark focus:ring-offset-2 dark:border-famedic-lime dark:bg-zinc-900 dark:text-famedic-lime dark:hover:bg-famedic-lime/10 dark:focus:ring-famedic-lime dark:focus:ring-offset-zinc-900";
+
 	return (
-		<TabPanelCard className="mx-auto max-w-md text-center">
-			<div className="flex justify-center">
-				<PhoneIcon
-					className={clsx(
-						"size-14",
-						isAvailable
-							? "fill-green-600 dark:fill-green-400"
-							: "fill-amber-500/80 dark:fill-amber-400/80",
-					)}
-					aria-hidden="true"
-				/>
+		<div>
+			<div className="space-y-3">
+				<a
+					href={whatsAppUrl}
+					target="_blank"
+					rel="noopener noreferrer"
+					className={whatsappButtonClasses}
+					aria-label="Abrir WhatsApp oficial de citas en una nueva pestaña o aplicación"
+				>
+					<WhatsAppIcon className="size-6 shrink-0" />
+					<span className="min-w-0">
+						<span className="block text-sm">
+							Crear cita por WhatsApp
+						</span>
+						<span className="mt-0.5 block text-xs font-medium text-white/85">
+							WhatsApp oficial de citas · {whatsAppDisplay}
+						</span>
+					</span>
+				</a>
+				<a
+					href={telHref}
+					onClick={onCallClick}
+					className={callLinkClasses}
+				>
+					<PhoneIcon className="size-5" aria-hidden="true" />
+					Llamar ahora al {phoneDisplay}
+				</a>
+				<button
+					type="button"
+					className="mx-auto flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-center text-sm font-semibold text-famedic-dark transition-colors hover:bg-famedic-dark/[0.04] focus:outline-none focus:ring-2 focus:ring-famedic-dark focus:ring-offset-2 sm:w-auto dark:text-famedic-lime dark:hover:bg-famedic-lime/10 dark:focus:ring-famedic-lime dark:focus:ring-offset-zinc-900"
+					onClick={onRequestCall}
+					aria-expanded={isFormOpen}
+					aria-controls="appointment-callback-form"
+				>
+					<PhoneIcon className="size-4" aria-hidden="true" />
+					Prefiero que me llamen
+				</button>
 			</div>
-
-			<div className="mt-4">
-				<ConciergeStatusBadge isAvailable={isAvailable} />
-			</div>
-
-			{isAvailable ? (
-				<>
-					<Text className="mt-4 text-sm text-zinc-600 dark:text-zinc-300">
-						Podemos ayudarte ahora a confirmar tu cita.
-					</Text>
-					<div className="mt-5">
-						<a href={telHref} onClick={onCallClick} className="inline-block">
-							<Button type="button">
-								<PhoneIcon aria-hidden="true" />
-								Llamar al (55) 6651 5232
-							</Button>
-						</a>
-					</div>
-					{userPhone && (
-						<Text className="mt-4 flex flex-wrap items-center justify-center gap-1 text-sm text-zinc-600 dark:text-zinc-300">
-							<span>También podemos llamarte al</span>
-							<span className="inline-flex items-center gap-1 font-medium text-zinc-800 dark:text-zinc-100">
-								<DevicePhoneMobileIcon
-									className="size-4"
-									aria-hidden="true"
-								/>
-								{userPhone}.
-							</span>
-						</Text>
-					)}
-					<button
-						type="button"
-						className="mt-5 text-sm font-medium text-sky-600 underline decoration-sky-600/30 underline-offset-2 hover:text-sky-700 dark:text-sky-400"
-						onClick={onRequestCall}
-					>
-						Prefiero que me llamen
-					</button>
-				</>
-			) : (
-				<>
-					<div className="mt-4 space-y-1 text-sm text-zinc-600 dark:text-zinc-300">
-						<p>Ahora no estamos disponibles por teléfono.</p>
-						<p>
-							Puedes dejar tu solicitud y te llamaremos en el siguiente
-							horario disponible.
-						</p>
-					</div>
-					{nextAvailableText && (
-						<Text className="mt-4 text-sm font-medium text-zinc-800 dark:text-zinc-100">
-							Próximo horario: {nextAvailableText}
-						</Text>
-					)}
-					<ul className="mt-4 space-y-0.5 text-left text-xs text-zinc-500 dark:text-zinc-400">
-						{scheduleText.map((line) => (
-							<li key={line}>{line}</li>
-						))}
-					</ul>
-					<div className="mt-5">
-						<Button type="button" onClick={onRequestCall}>
-							Solicitar llamada
-						</Button>
-					</div>
-				</>
-			)}
-		</TabPanelCard>
+		</div>
 	);
 }
-
 function ReceiveCallPanel({
 	copy,
 	receiveCallMode,
@@ -351,15 +293,21 @@ function ReceiveCallPanel({
 	submittingAvailability,
 	hasSavedAvailability,
 	onSubmit,
+	onCancel,
+	formRef,
 }) {
 	return (
-		<TabPanelCard>
-			<Subheading className="text-center text-base">{copy.title}</Subheading>
-			<Text className="mt-2 text-center text-sm text-zinc-600 dark:text-zinc-400">
+		<div
+			id="appointment-callback-form"
+			ref={formRef}
+			className="border-t border-zinc-200 pt-5 dark:border-zinc-700"
+		>
+			<Subheading className="text-base">{copy.title}</Subheading>
+			<p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
 				{copy.description}
-			</Text>
+			</p>
 
-			<div className="mt-5 grid gap-3">
+			<div className="mt-5 grid gap-3 sm:grid-cols-2">
 				<OptionCard
 					selected={receiveCallMode === "now"}
 					label={copy.nowOptionLabel}
@@ -383,7 +331,9 @@ function ReceiveCallPanel({
 							>
 								<option value="today">Hoy</option>
 								<option value="tomorrow">Mañana</option>
-								<option value="day_after_tomorrow">Pasado mañana</option>
+								<option value="day_after_tomorrow">
+									Pasado mañana
+								</option>
 							</Select>
 						</Field>
 						<div className="grid gap-4 sm:grid-cols-2">
@@ -392,7 +342,9 @@ function ReceiveCallPanel({
 								<Input
 									type="time"
 									value={startTime}
-									onChange={(e) => setStartTime(e.target.value)}
+									onChange={(e) =>
+										setStartTime(e.target.value)
+									}
 								/>
 							</Field>
 							<Field>
@@ -417,7 +369,9 @@ function ReceiveCallPanel({
 						placeholder="Ej. puedo contestar después de las 6 p. m. entre semana."
 					/>
 					{errors.patient_callback_comment && (
-						<ErrorMessage>{errors.patient_callback_comment}</ErrorMessage>
+						<ErrorMessage>
+							{errors.patient_callback_comment}
+						</ErrorMessage>
 					)}
 					{errors.callback_availability_starts_at && (
 						<ErrorMessage>
@@ -425,146 +379,46 @@ function ReceiveCallPanel({
 						</ErrorMessage>
 					)}
 					{errors.callback_availability_ends_at && (
-						<ErrorMessage>{errors.callback_availability_ends_at}</ErrorMessage>
+						<ErrorMessage>
+							{errors.callback_availability_ends_at}
+						</ErrorMessage>
 					)}
 				</Field>
-				<div className="flex flex-col items-center gap-2">
+				<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
 					<Button
 						type="button"
 						disabled={submittingAvailability || !canSave}
 						onClick={onSubmit}
 					>
-						{getSaveButtonLabel(hasSavedAvailability, submittingAvailability)}
+						{getSaveButtonLabel(
+							hasSavedAvailability,
+							submittingAvailability,
+						)}
+					</Button>
+					<Button type="button" plain onClick={onCancel}>
+						Cancelar
 					</Button>
 					{!canSave && (
-						<Text className="text-center text-xs text-zinc-500 dark:text-zinc-400">
-							Indica un horario o escribe un comentario para continuar.
-						</Text>
+						<p className="text-xs text-zinc-500 sm:ml-auto dark:text-zinc-400">
+							Indica un horario o escribe un comentario para
+							continuar.
+						</p>
 					)}
 				</div>
 			</div>
-		</TabPanelCard>
-	);
-}
-
-function AppointmentStatusPanel({
-	hasRequestSaved,
-	requestSavedAtFormatted,
-	patientFullName,
-	hasSavedAvailability,
-	callbackPreferenceSavedAtFormatted,
-	formattedCallbackAvailabilityRange,
-	patientCallbackComment,
-	onAddContactSchedule,
-	onUpdateAvailability,
-}) {
-	return (
-		<TabPanelCard>
-			<Subheading className="text-center text-base">
-				Estado de tu cita
-			</Subheading>
-			<Text className="mt-2 text-center text-sm text-zinc-600 dark:text-zinc-400">
-				Consulta el avance de tu solicitud y los datos que registraste.
-			</Text>
-
-			<div className="mt-5">
-				<AppointmentProgressSteps hasRequestSaved={hasRequestSaved} />
-			</div>
-
-			<div className="mt-5 space-y-4">
-				{hasRequestSaved ? (
-					<CheckoutSaveSuccessAlert
-						message="Recibimos tu solicitud correctamente."
-						hint={
-							<>
-								Un asesor del equipo de atención confirmará fecha, horario
-								y sucursal.
-								<br />
-								<Strong>Solicitud:</Strong> el {requestSavedAtFormatted}
-								{patientFullName && (
-									<>
-										<br />
-										<Strong>Paciente:</Strong> {patientFullName}
-									</>
-								)}
-							</>
-						}
-					/>
-				) : (
-					<div className="rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-center text-sm text-zinc-500 dark:border-zinc-600 dark:text-zinc-400">
-						<p>Aún no hay solicitud registrada.</p>
-						<p className="mt-1">
-							Usa «Llamar ahora» o «Que me llamen» para iniciar.
-						</p>
-					</div>
-				)}
-
-				{hasSavedAvailability ? (
-					<CheckoutSaveSuccessAlert
-						message="Tu horario de contacto quedó registrado."
-						hint={
-							<>
-								{callbackPreferenceSavedAtFormatted && (
-									<>
-										<Strong>Actualización:</Strong> el{" "}
-										{callbackPreferenceSavedAtFormatted}
-										<br />
-									</>
-								)}
-								{formattedCallbackAvailabilityRange && (
-									<>
-										<Strong>Horario:</Strong>{" "}
-										{formattedCallbackAvailabilityRange}
-										<br />
-									</>
-								)}
-								{patientCallbackComment?.trim() && (
-									<>
-										<Strong>Comentarios:</Strong>{" "}
-										{patientCallbackComment.trim()}
-									</>
-								)}
-							</>
-						}
-					/>
-				) : (
-					<div className="rounded-lg bg-zinc-50 px-4 py-3 text-center text-sm dark:bg-zinc-800/50">
-						<p className="text-zinc-600 dark:text-zinc-300">
-							No has indicado un horario preferido para recibir llamada.
-						</p>
-						<button
-							type="button"
-							className="mt-2 font-medium text-sky-600 underline underline-offset-2 hover:text-sky-700 dark:text-sky-400"
-							onClick={onAddContactSchedule}
-						>
-							Agregar horario de contacto
-						</button>
-					</div>
-				)}
-
-				{(hasRequestSaved || hasSavedAvailability) && (
-					<p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
-						¿Necesitas cambiar algo?{" "}
-						<button
-							type="button"
-							className="font-medium text-sky-600 underline underline-offset-2 dark:text-sky-400"
-							onClick={onUpdateAvailability}
-						>
-							Actualizar en «Que me llamen»
-						</button>
-					</p>
-				)}
-			</div>
-		</TabPanelCard>
+		</div>
 	);
 }
 
 export default function LaboratoryAppointmentStep({
 	laboratoryAppointment,
 	callbackPreferenceSavedAtFormatted,
+	appointmentFirstFlow = false,
+	appointmentConfirmed = false,
+	appointmentUnavailable = false,
 }) {
-	const { auth } = usePage().props;
-	const [tabIndex, setTabIndex] = useState(0);
+	const { famedicConcierge } = usePage().props;
+	const [openPanel, setOpenPanel] = useState(null);
 	const [minNowTick, setMinNowTick] = useState(() => minStartDatetimeLocal());
 	const [availabilityTick, setAvailabilityTick] = useState(() => Date.now());
 	const [receiveCallMode, setReceiveCallMode] = useState("now");
@@ -574,6 +428,7 @@ export default function LaboratoryAppointmentStep({
 	const [endTime, setEndTime] = useState(defaultWindow.endTime);
 
 	const hydratedFromServerKeyRef = useRef("");
+	const callbackFormRef = useRef(null);
 
 	const [submittingAvailability, setSubmittingAvailability] = useState(false);
 
@@ -589,7 +444,10 @@ export default function LaboratoryAppointmentStep({
 	});
 
 	useEffect(() => {
-		const t = setInterval(() => setMinNowTick(minStartDatetimeLocal()), 30000);
+		const t = setInterval(
+			() => setMinNowTick(minStartDatetimeLocal()),
+			30000,
+		);
 		return () => clearInterval(t);
 	}, []);
 
@@ -599,8 +457,12 @@ export default function LaboratoryAppointmentStep({
 	}, []);
 
 	const conciergeAvailability = useMemo(
-		() => getConciergeAvailability(new Date(availabilityTick)),
-		[availabilityTick],
+		() =>
+			getConciergeAvailability(
+				new Date(availabilityTick),
+				famedicConcierge,
+			),
+		[availabilityTick, famedicConcierge],
 	);
 
 	const receiveCallCopy = useMemo(
@@ -659,7 +521,9 @@ export default function LaboratoryAppointmentStep({
 						? "tomorrow"
 						: "day_after_tomorrow",
 			);
-			setStartTime(`${pad2(start.getHours())}:${pad2(start.getMinutes())}`);
+			setStartTime(
+				`${pad2(start.getHours())}:${pad2(start.getMinutes())}`,
+			);
 			if (end && !Number.isNaN(end.getTime())) {
 				setEndTime(`${pad2(end.getHours())}:${pad2(end.getMinutes())}`);
 			}
@@ -703,7 +567,9 @@ export default function LaboratoryAppointmentStep({
 
 		if (endDate <= startDate) {
 			endDate.setTime(startDate.getTime() + 60 * 60 * 1000);
-			setEndTime(`${pad2(endDate.getHours())}:${pad2(endDate.getMinutes())}`);
+			setEndTime(
+				`${pad2(endDate.getHours())}:${pad2(endDate.getMinutes())}`,
+			);
 		}
 
 		setData({
@@ -713,19 +579,13 @@ export default function LaboratoryAppointmentStep({
 		});
 	}, [receiveCallMode, dayOption, startTime, endTime]);
 
-	useEffect(() => {
-		const hasSavedCallbackProgress =
-			Boolean(callbackPreferenceSavedAtFormatted) ||
-			Boolean(laboratoryAppointment.has_left_callback_info);
-
-		setTabIndex(hasSavedCallbackProgress ? TAB_TRACKING : TAB_CALL_NOW);
-	}, [
-		laboratoryAppointment.id,
-		laboratoryAppointment.has_left_callback_info,
-		callbackPreferenceSavedAtFormatted,
-	]);
-
-	const telHref = "tel:5566515232";
+	const telHref = famedicConcierge?.phoneTel
+		? `tel:${famedicConcierge.phoneTel}`
+		: "tel:5566515232";
+	const phoneDisplay = famedicConcierge?.phoneDisplay ?? "(55) 6651 5232";
+	const appointmentWhatsApp = famedicConcierge?.appointmentWhatsApp ?? {};
+	const whatsAppUrl = appointmentWhatsApp.url;
+	const whatsAppDisplay = appointmentWhatsApp.display;
 
 	const onCallClick = (e) => {
 		e.preventDefault();
@@ -806,7 +666,7 @@ export default function LaboratoryAppointmentStep({
 			{
 				preserveScroll: true,
 				onSuccess: () => {
-					setTabIndex(TAB_TRACKING);
+					setOpenPanel(null);
 					router.reload({
 						only: [
 							"pendingLaboratoryAppointment",
@@ -824,112 +684,107 @@ export default function LaboratoryAppointmentStep({
 		);
 	};
 
-	const hasSavedCallbackPreference = Boolean(callbackPreferenceSavedAtFormatted);
-	const hasSavedAvailability = Boolean(
-		laboratoryAppointment.has_left_callback_info || hasSavedCallbackPreference,
+	const hasSavedCallbackPreference = Boolean(
+		callbackPreferenceSavedAtFormatted,
 	);
-	const requestSavedAtFormatted =
-		laboratoryAppointment.formatted_request_saved_at ?? null;
-	const hasRequestSaved = Boolean(requestSavedAtFormatted);
+	const hasSavedAvailability = Boolean(
+		laboratoryAppointment.has_left_callback_info ||
+			hasSavedCallbackPreference,
+	);
+	const openReceiveCallForm = () => {
+		setOpenPanel("form");
 
-	const goToReceiveCallTab = () => setTabIndex(TAB_RECEIVE_CALL);
+		window.setTimeout(() => {
+			if (!window.matchMedia("(max-width: 640px)").matches) {
+				return;
+			}
+
+			callbackFormRef.current?.scrollIntoView({
+				behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+					.matches
+					? "auto"
+					: "smooth",
+				block: "start",
+			});
+		}, 0);
+	};
+
+	const closePanels = () => setOpenPanel(null);
+
+	const appointmentFirstUnavailableMessage =
+		appointmentFirstFlow && appointmentUnavailable
+			? "Tu cita ya no está disponible para completar el pago. Puedes actualizar tu disponibilidad o solicitar que te llamemos para gestionar una nueva cita."
+			: null;
 
 	return (
-		<CheckoutWizardStep
-			title="Agenda tu cita con ayuda de nuestro equipo"
-			description="Elige cómo quieres que confirmemos fecha, horario y sucursal."
-		>
-			<TabGroup selectedIndex={tabIndex} onChange={setTabIndex}>
-				<TabList className="grid grid-cols-3 gap-2 rounded-xl bg-zinc-100 p-1.5 dark:bg-zinc-800/80">
-					<Tab className="rounded-lg outline-none transition-colors">
-						{(selected) => (
-							<AppointmentTabButton
-								selected={selected}
-								icon={PhoneIcon}
-								label="Llamar ahora"
-							/>
-						)}
-					</Tab>
-					<Tab className="rounded-lg outline-none transition-colors">
-						{(selected) => (
-							<AppointmentTabButton
-								selected={selected}
-								icon={CalendarDaysIcon}
-								label="Que me llamen"
-							/>
-						)}
-					</Tab>
-					<Tab className="rounded-lg outline-none transition-colors">
-						{(selected) => (
-							<AppointmentTabButton
-								selected={selected}
-								icon={ClipboardDocumentListIcon}
-								label="Estado de mi cita"
-							/>
-						)}
-					</Tab>
-				</TabList>
+		<Card className="bg-white p-6 sm:p-8 dark:bg-slate-900">
+			<div className="space-y-6">
+				{appointmentFirstUnavailableMessage && (
+					<p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">
+						{appointmentFirstUnavailableMessage}
+					</p>
+				)}
 
-				<TabPanels className="mt-5">
-					<TabPanel className="outline-none">
-						<CallNowPanel
-							isAvailable={conciergeAvailability.isAvailable}
-							nextAvailableText={conciergeAvailability.nextAvailableText}
-							scheduleText={conciergeAvailability.scheduleText}
-							userPhone={auth?.user?.phone}
-							telHref={telHref}
-							onCallClick={onCallClick}
-							onRequestCall={goToReceiveCallTab}
-						/>
-					</TabPanel>
+				<AppointmentStatusSummary
+					hasSavedAvailability={hasSavedAvailability}
+					appointmentConfirmed={appointmentConfirmed}
+					appointmentUnavailable={appointmentUnavailable}
+				/>
 
-					<TabPanel className="outline-none">
-						<ReceiveCallPanel
-							copy={receiveCallCopy}
-							receiveCallMode={receiveCallMode}
-							setReceiveCallMode={setReceiveCallMode}
-							dayOption={dayOption}
-							setDayOption={setDayOption}
-							startTime={startTime}
-							setStartTime={setStartTime}
-							endTime={endTime}
-							setEndTime={setEndTime}
-							data={data}
-							setData={setData}
-							errors={errors}
-							canSave={canSave}
-							submittingAvailability={submittingAvailability}
-							hasSavedAvailability={hasSavedAvailability}
-							onSubmit={submitAvailability}
-						/>
-					</TabPanel>
+				{!appointmentConfirmed && !appointmentUnavailable && (
+					<AppointmentPaymentSafetyNotice />
+				)}
 
-					<TabPanel className="outline-none">
-						<AppointmentStatusPanel
-							hasRequestSaved={hasRequestSaved}
-							requestSavedAtFormatted={requestSavedAtFormatted}
-							patientFullName={laboratoryAppointment.patient_full_name}
-							hasSavedAvailability={hasSavedAvailability}
-							callbackPreferenceSavedAtFormatted={
-								callbackPreferenceSavedAtFormatted
-							}
-							formattedCallbackAvailabilityRange={
-								laboratoryAppointment.formatted_callback_availability_range
-							}
-							patientCallbackComment={
-								laboratoryAppointment.patient_callback_comment
-							}
-							onAddContactSchedule={goToReceiveCallTab}
-							onUpdateAvailability={goToReceiveCallTab}
-						/>
-					</TabPanel>
-				</TabPanels>
-			</TabGroup>
+				<AppointmentContactActions
+					telHref={telHref}
+					phoneDisplay={phoneDisplay}
+					whatsAppUrl={whatsAppUrl}
+					whatsAppDisplay={whatsAppDisplay}
+					onCallClick={onCallClick}
+					onRequestCall={openReceiveCallForm}
+					isFormOpen={openPanel === "form"}
+				/>
 
-			<Text className="mt-5 text-center text-sm text-zinc-600 dark:text-slate-400">
-				Cuando el equipo de atención confirme tu cita, avanzaremos
-				automáticamente al resumen para pagar.
-			</Text>
-		</CheckoutWizardStep>
+				{openPanel === "form" && (
+					<ReceiveCallPanel
+						copy={receiveCallCopy}
+						receiveCallMode={receiveCallMode}
+						setReceiveCallMode={setReceiveCallMode}
+						dayOption={dayOption}
+						setDayOption={setDayOption}
+						startTime={startTime}
+						setStartTime={setStartTime}
+						endTime={endTime}
+						setEndTime={setEndTime}
+						data={data}
+						setData={setData}
+						errors={errors}
+						canSave={canSave}
+						submittingAvailability={submittingAvailability}
+						hasSavedAvailability={hasSavedAvailability}
+						onSubmit={submitAvailability}
+						onCancel={closePanels}
+						formRef={callbackFormRef}
+					/>
+				)}
+
+				{!appointmentConfirmed && !appointmentUnavailable && (
+					<AppointmentPaymentAuthorizationNote />
+				)}
+			</div>
+
+			{appointmentConfirmed || appointmentUnavailable ? (
+				<p className="mt-4 flex items-center justify-center gap-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
+					<LockClosedIcon
+						className="size-4 shrink-0"
+						aria-hidden="true"
+					/>
+					<span>
+						Tus datos están guardados. No realizaremos ningún cargo
+						todavía.
+					</span>
+				</p>
+			) : null}
+		</Card>
 	);
 }

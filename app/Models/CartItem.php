@@ -20,4 +20,9 @@ class CartItem extends Model
     {
         return $this->belongsTo(Cart::class);
     }
+
+    public function laboratoryTest(): BelongsTo
+    {
+        return $this->belongsTo(LaboratoryTest::class, 'product_id');
+    }
 }

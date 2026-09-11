@@ -1810,44 +1810,146 @@ class ActiveCampaignService
 
     public function trackEvent(string $email, string $eventName, array $eventData = []): void
     {
-        if (!config('services.activecampaign.track_events')) {
+        if (! config('services.activecampaign.track_events')) {
             Log::info('AC: trackEvent deshabilitado', [
                 'event' => $eventName,
-                'email' => $email
+                'email' => $email,
             ]);
+
             return;
+        }
+
+        $result = $this->trackEventResult($email, $eventName, $eventData);
+
+        if (! $result->success) {
+            Log::error('AC: Error trackEvent', [
+                'response' => $result->response,
+                'event' => $eventName,
+                'email' => $email,
+                'error' => $result->error,
+            ]);
+        }
+    }
+
+    /**
+     * Variante estructurada para outbox/jobs que necesitan saber si el envío fue exitoso.
+     *
+     * @param  array<string, mixed>  $eventData
+     */
+    public function trackEventResult(string $email, string $eventName, array $eventData = []): ActiveCampaignOperationResult
+    {
+        $started = hrtime(true);
+        $email = trim($email);
+
+        if ($email === '') {
+            return ActiveCampaignOperationResult::failure([
+                'operation' => 'track_event',
+                'resource' => 'site_event',
+                'http_status' => null,
+                'response' => null,
+                'error' => 'missing_email',
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => false,
+            ]);
+        }
+
+        $accountId = config('services.activecampaign.account_id');
+        $eventKey = config('services.activecampaign.event_key');
+
+        if (! is_string($accountId) || trim($accountId) === '' || ! is_string($eventKey) || trim($eventKey) === '') {
+            return ActiveCampaignOperationResult::failure([
+                'operation' => 'track_event',
+                'resource' => 'site_event',
+                'http_status' => null,
+                'response' => null,
+                'error' => 'site_event_not_configured',
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => false,
+            ]);
         }
 
         try {
             $response = Http::asForm()->post('https://trackcmp.net/event', [
-                'actid' => config('services.activecampaign.account_id'),
-                'key' => config('services.activecampaign.event_key'),
+                'actid' => $accountId,
+                'key' => $eventKey,
                 'event' => $eventName,
                 'eventdata' => json_encode([
                     'email' => $email,
-                    ...$eventData
+                    ...$eventData,
                 ]),
             ]);
 
-            if (!$response->successful()) {
-                Log::error('AC: Error trackEvent', [
-                    'response' => $response->body(),
-                    'event' => $eventName,
-                    'email' => $email
+            $httpStatus = $response->status();
+            $body = $response->json() ?? $response->body();
+
+            if (! $response->successful()) {
+                return ActiveCampaignOperationResult::failure([
+                    'operation' => 'track_event',
+                    'resource' => 'site_event',
+                    'http_status' => $httpStatus,
+                    'response' => $body,
+                    'error' => 'track_event_http_error',
+                    'duration_ms' => $this->elapsedMs($started),
+                    'retryable' => ActiveCampaignOperationResult::isRetryableHttpStatus($httpStatus),
                 ]);
-                return;
             }
 
             Log::info('AC: Evento registrado correctamente', [
                 'event' => $eventName,
                 'email' => $email,
-                'data' => $eventData
+            ]);
+
+            return ActiveCampaignOperationResult::success([
+                'operation' => 'track_event',
+                'resource' => 'site_event',
+                'http_status' => $httpStatus,
+                'response' => $body,
+                'duration_ms' => $this->elapsedMs($started),
             ]);
         } catch (\Throwable $e) {
             Log::error('AC: Excepción trackEvent', [
                 'error' => $e->getMessage(),
-                'event' => $eventName
+                'event' => $eventName,
             ]);
+
+            return ActiveCampaignOperationResult::failure([
+                'operation' => 'track_event',
+                'resource' => 'site_event',
+                'http_status' => null,
+                'response' => null,
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
+        }
+    }
+
+    /**
+     * Outbox Fase 3: site event de carrito vía trackcmp.net.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function handleOutboundCartSiteEvent(array $payload): void
+    {
+        if (! config('services.activecampaign.cart_site_events_enabled', false)) {
+            throw new ActiveCampaignSyncException('AC outbound cart site_event deshabilitado.');
+        }
+
+        $email = trim((string) ($payload['email'] ?? ''));
+        $eventName = trim((string) ($payload['event_name'] ?? ''));
+
+        if ($email === '' || $eventName === '') {
+            throw new ActiveCampaignSyncException('AC outbound cart site_event requiere email y event_name.');
+        }
+
+        $eventData = is_array($payload['event_data'] ?? null) ? $payload['event_data'] : [];
+
+        $result = $this->trackEventResult($email, $eventName, $eventData);
+
+        if (! $result->success) {
+            throw new ActiveCampaignSyncException(
+                'AC trackEvent falló ('.$eventName.'): '.($result->error ?? 'unknown')
+            );
         }
     }
 
@@ -2010,6 +2112,68 @@ class ActiveCampaignService
         $tagId = $this->resolveCouponTagId($dottedKey);
         if (! $tagId) {
             return;
+        }
+
+        $this->removeTagFromContactOrFail($contactId, $tagId);
+    }
+
+    /**
+     * Outbox Fase 2: tag_add de carrito vía activecampaign_dispatches.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function handleOutboundCartTagAdd(array $payload): void
+    {
+        $email = trim((string) ($payload['email'] ?? ''));
+
+        if ($email === '') {
+            throw new ActiveCampaignSyncException('AC outbound cart tag_add requiere email.');
+        }
+
+        $contact = is_array($payload['contact'] ?? null) ? $payload['contact'] : null;
+
+        if ($contact !== null) {
+            $this->syncContact($contact);
+        }
+
+        $tagId = (int) ($payload['tag_id'] ?? 0);
+
+        if ($tagId <= 0) {
+            throw new ActiveCampaignSyncException('AC outbound cart tag_add requiere tag_id configurado.');
+        }
+
+        $contactId = $this->getContactIdByEmail($email);
+
+        if (! $contactId) {
+            throw new ActiveCampaignSyncException("AC outbound cart tag_add: contacto no encontrado para {$email}.");
+        }
+
+        $this->addTagToContactOrFail($contactId, $tagId);
+    }
+
+    /**
+     * Outbox Fase 2/3: tag_remove de carrito (solo si cart_tag_remove_enabled).
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function handleOutboundCartTagRemove(array $payload): void
+    {
+        $email = trim((string) ($payload['email'] ?? ''));
+
+        if ($email === '') {
+            throw new ActiveCampaignSyncException('AC outbound cart tag_remove requiere email.');
+        }
+
+        $tagId = (int) ($payload['tag_id'] ?? 0);
+
+        if ($tagId <= 0) {
+            throw new ActiveCampaignSyncException('AC outbound cart tag_remove requiere tag_id configurado.');
+        }
+
+        $contactId = $this->getContactIdByEmail($email);
+
+        if (! $contactId) {
+            throw new ActiveCampaignSyncException("AC outbound cart tag_remove: contacto no encontrado para {$email}.");
         }
 
         $this->removeTagFromContactOrFail($contactId, $tagId);

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -26,6 +27,13 @@ class InvoiceRequest extends Model
         'formatted_cfdi_use',
         'formatted_created_at',
     ];
+
+    public function scopeForActiveLaboratoryPurchases(Builder $query): Builder
+    {
+        return $query
+            ->where('invoice_requestable_type', LaboratoryPurchase::class)
+            ->whereHasMorph('invoiceRequestable', [LaboratoryPurchase::class]);
+    }
 
     public function invoiceRequestable(): MorphTo
     {

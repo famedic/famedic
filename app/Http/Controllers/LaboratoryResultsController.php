@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Laboratories\EnsureLatestGdaResultsPdfAction;
 use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryNotification;
@@ -37,6 +38,11 @@ class LaboratoryResultsController extends Controller
             }
 
             if (! empty($laboratoryPurchase->results) && Storage::exists($laboratoryPurchase->results)) {
+                app(EnsureLatestGdaResultsPdfAction::class)->execute(
+                    $laboratoryPurchase,
+                    'patient_automatic_fetch'
+                );
+
                 return response()->json([
                     'success' => true,
                     'cached' => true,
@@ -61,7 +67,6 @@ class LaboratoryResultsController extends Controller
 
             try {
                 $result = app(ResolveGdaResultsPdfAction::class)($notification);
-                $result['notification']->markAsRead();
             } catch (\Throwable $e) {
                 Log::error('🔥 Error consultando GDA', [
                     'purchase_id' => $purchaseId,

@@ -117,13 +117,13 @@ export const SidebarItem = forwardRef(function SidebarItem(
 		// Active
 		"data-[active]:bg-zinc-950/5 data-[slot=icon]:*:data-[active]:fill-zinc-950",
 		// Current
-		"data-[slot=icon]:*:data-[current]:fill-zinc-950",
+		"data-[current]:bg-emerald-50/90 data-[current]:text-teal-950 data-[slot=icon]:*:data-[current]:fill-teal-700",
+		"dark:data-[current]:bg-teal-950/35 dark:data-[current]:text-teal-100 dark:data-[slot=icon]:*:data-[current]:fill-teal-300",
 		// Dark mode
 		forceHoverStyle && "bg-zinc-950/5 dark:bg-white/5",
 		"dark:text-white dark:data-[slot=icon]:*:fill-slate-400",
 		"dark:data-[hover]:bg-white/5 dark:data-[slot=icon]:*:data-[hover]:fill-white",
 		"dark:data-[active]:bg-white/5 dark:data-[slot=icon]:*:data-[active]:fill-white",
-		"dark:data-[slot=icon]:*:data-[current]:fill-white",
 		disabled &&
 			"cursor-not-allowed opacity-50 pointer-events-none data-[hover]:bg-transparent dark:data-[hover]:bg-transparent",
 	);
@@ -145,7 +145,7 @@ export const SidebarItem = forwardRef(function SidebarItem(
 			{current && (
 				<motion.span
 					layoutId="current-indicator"
-					className="absolute inset-y-2 -left-4 w-0.5 rounded-full bg-famedic-darker dark:bg-famedic-light"
+					className="absolute inset-y-2 -left-4 w-0.5 rounded-full bg-emerald-500 dark:bg-emerald-400"
 				/>
 			)}
 			{"href" in props ? (

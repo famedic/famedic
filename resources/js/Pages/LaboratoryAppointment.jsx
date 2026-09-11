@@ -80,7 +80,7 @@ export default function LaboratoryAppointment({
 	laboratoryAppointment,
 	callbackPreferenceSavedAtFormatted,
 }) {
-	const { auth } = usePage().props;
+	const { auth, famedicConcierge } = usePage().props;
 	const [showCheck, setShowCheck] = useState(true);
 	const [tabIndex, setTabIndex] = useState(0);
 	const [minNowTick, setMinNowTick] = useState(() => minStartDatetimeLocal());
@@ -226,7 +226,10 @@ export default function LaboratoryAppointment({
 		});
 	}, [receiveCallMode, dayOption, startTime, endTime]);
 
-	const telHref = "tel:5566515232";
+	const telHref = famedicConcierge?.phoneTel
+		? `tel:${famedicConcierge.phoneTel}`
+		: "tel:5566515232";
+	const phoneDisplay = famedicConcierge?.phoneDisplay ?? "(55) 6651 5232";
 
 	const onCallClick = (e) => {
 		e.preventDefault();
@@ -367,7 +370,7 @@ export default function LaboratoryAppointment({
 								<a href={telHref} onClick={onCallClick}>
 									<Button type="button">
 										<PhoneIcon />
-										(55) 6651 5232
+										{phoneDisplay}
 									</Button>
 								</a>
 								<Text className="mt-6 flex flex-wrap items-center justify-center text-sm text-zinc-700 dark:text-zinc-200">

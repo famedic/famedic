@@ -111,6 +111,7 @@ export default function Reports({
 	topOverdue,
 	unusedOldest,
 	topPatients,
+	canManageAutomaticReports = false,
 }) {
 	const [processing, setProcessing] = useState(false);
 	const onProcessingChange = useCallback((value) => setProcessing(value), []);
@@ -121,11 +122,15 @@ export default function Reports({
 				<div>
 					<Heading>Facturación · Reportes</Heading>
 					<Text className={`mt-1 ${billingMutedTextClass}`}>
-						Umbral de atraso: {thresholdDays} días naturales
+						Umbral de atraso: {thresholdDays} días hábiles
 					</Text>
 				</div>
 
-				<BillingNav active="reports" query={filters} />
+				<BillingNav
+					active="reports"
+					query={filters}
+					canManageAutomaticReports={canManageAutomaticReports}
+				/>
 
 				<BillingDateRangeFilter
 					filters={filters}

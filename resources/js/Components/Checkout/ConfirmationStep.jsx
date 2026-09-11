@@ -26,6 +26,8 @@ export default function ConfirmationStep({
     selectedCoupon,
     laboratoryAppointment,
     onEditStep,
+    includePaymentSection = true,
+    embedded = false,
 }) {
     const selectedContact = laboratoryAppointment
         ? {
@@ -48,10 +50,14 @@ export default function ConfirmationStep({
 
     return (
         <div className="space-y-4">
-            <Subheading>Confirma tu compra</Subheading>
-            <Text className="text-sm text-zinc-600 dark:text-slate-400">
-                Revisa que toda la información sea correcta antes de pagar.
-            </Text>
+            {!embedded && (
+                <>
+                    <Subheading>Confirma tu compra</Subheading>
+                    <Text className="text-sm text-zinc-600 dark:text-slate-400">
+                        Revisa que toda la información sea correcta antes de pagar.
+                    </Text>
+                </>
+            )}
 
             <ConfirmationSection
                 icon={UserCircleIcon}
@@ -95,23 +101,25 @@ export default function ConfirmationStep({
                 )}
             </ConfirmationSection>
 
-            <ConfirmationSection
-                icon={CreditCardIcon}
-                title="Método de pago"
-                onEdit={() => onEditStep("payment")}
-            >
-                {paymentLabel ? (
-                    <PaymentSummary
-                        paymentMethod={data.payment_method}
-                        paymentMethods={paymentMethods}
-                        selectedCoupon={selectedCoupon}
-                    />
-                ) : (
-                    <Text className="text-red-600 dark:text-red-400">
-                        No se ha seleccionado un método de pago
-                    </Text>
-                )}
-            </ConfirmationSection>
+            {includePaymentSection && (
+                <ConfirmationSection
+                    icon={CreditCardIcon}
+                    title="Método de pago"
+                    onEdit={() => onEditStep("payment")}
+                >
+                    {paymentLabel ? (
+                        <PaymentSummary
+                            paymentMethod={data.payment_method}
+                            paymentMethods={paymentMethods}
+                            selectedCoupon={selectedCoupon}
+                        />
+                    ) : (
+                        <Text className="text-red-600 dark:text-red-400">
+                            No se ha seleccionado un método de pago
+                        </Text>
+                    )}
+                </ConfirmationSection>
+            )}
 
             {laboratoryAppointment?.laboratory_store && (
                 <ConfirmationSection

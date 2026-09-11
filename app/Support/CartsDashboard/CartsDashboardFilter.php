@@ -14,26 +14,40 @@ final class CartsDashboardFilter
         public readonly Carbon $previousEnd,
         public readonly Carbon $startLocal,
         public readonly Carbon $endLocal,
+        public readonly string $period,
         public readonly ?string $type,
         public readonly ?string $brand,
-        public readonly ?string $displayStatus,
-        public readonly ?string $city,
-        public readonly ?string $paymentMethod,
         public readonly bool $bustCache = false,
     ) {
     }
 
     public static function fromRequest(Request $request): self
     {
-        $tz = 'America/Monterrey';
+        $tz = config('app.timezone', 'America/Monterrey');
+        $period = self::nullableString($request->input('period')) ?? 'last_30_days';
 
-        $endLocal = $request->filled('end_date')
-            ? Carbon::parse($request->string('end_date')->toString(), $tz)->endOfDay()
-            : Carbon::now($tz)->endOfDay();
+        if ($period === 'today') {
+            $startLocal = Carbon::now($tz)->startOfDay();
+            $endLocal = Carbon::now($tz)->endOfDay();
+        } elseif ($period === 'last_7_days') {
+            $endLocal = Carbon::now($tz)->endOfDay();
+            $startLocal = $endLocal->copy()->subDays(6)->startOfDay();
+        } elseif ($period === 'this_month') {
+            $startLocal = Carbon::now($tz)->startOfMonth();
+            $endLocal = Carbon::now($tz)->endOfDay();
+        } elseif ($period === 'custom') {
+            $endLocal = $request->filled('end_date')
+                ? Carbon::parse($request->string('end_date')->toString(), $tz)->endOfDay()
+                : Carbon::now($tz)->endOfDay();
 
-        $startLocal = $request->filled('start_date')
-            ? Carbon::parse($request->string('start_date')->toString(), $tz)->startOfDay()
-            : $endLocal->copy()->subDays(29)->startOfDay();
+            $startLocal = $request->filled('start_date')
+                ? Carbon::parse($request->string('start_date')->toString(), $tz)->startOfDay()
+                : $endLocal->copy()->subDays(29)->startOfDay();
+        } else {
+            $period = 'last_30_days';
+            $endLocal = Carbon::now($tz)->endOfDay();
+            $startLocal = $endLocal->copy()->subDays(29)->startOfDay();
+        }
 
         if ($startLocal->greaterThan($endLocal)) {
             [$startLocal, $endLocal] = [$endLocal->copy()->startOfDay(), $startLocal->copy()->endOfDay()];
@@ -50,11 +64,9 @@ final class CartsDashboardFilter
             previousEnd: $previousEndLocal->copy()->utc(),
             startLocal: $startLocal,
             endLocal: $endLocal,
+            period: $period,
             type: self::nullableString($request->input('type')),
             brand: self::nullableString($request->input('brand')),
-            displayStatus: self::nullableString($request->input('display_status')),
-            city: self::nullableString($request->input('city')),
-            paymentMethod: self::nullableString($request->input('payment_method')),
             bustCache: $request->boolean('refresh'),
         );
     }
@@ -67,17 +79,15 @@ final class CartsDashboardFilter
         return array_filter([
             'start_date' => $this->startLocal->toDateString(),
             'end_date' => $this->endLocal->toDateString(),
+            'period' => $this->period,
             'type' => $this->type,
             'brand' => $this->brand,
-            'display_status' => $this->displayStatus,
-            'city' => $this->city,
-            'payment_method' => $this->paymentMethod,
         ], fn ($value) => $value !== null && $value !== '');
     }
 
     public function cacheKey(string $suffix = 'full'): string
     {
-        return 'carts-dash:v2:'.sha1(json_encode($this->toArray()).'|'.$suffix);
+        return 'carts-dash:v3:'.sha1(json_encode($this->toArray()).'|'.$suffix);
     }
 
     private static function nullableString(mixed $value): ?string

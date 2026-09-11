@@ -42,6 +42,7 @@ export default function Dashboard({
 	newTaxProfiles,
 	topOverdue,
 	recentActivity,
+	canManageAutomaticReports = false,
 }) {
 	const [processing, setProcessing] = useState(false);
 	const onProcessingChange = useCallback((value) => setProcessing(value), []);
@@ -52,11 +53,15 @@ export default function Dashboard({
 				<div>
 					<Heading>Facturación · Resumen</Heading>
 					<Text className={`mt-1 ${billingMutedTextClass}`}>
-						Umbral de atraso: {thresholdDays} días naturales
+						Umbral de atraso: {thresholdDays} días hábiles
 					</Text>
 				</div>
 
-				<BillingNav active="dashboard" query={filters} />
+				<BillingNav
+					active="dashboard"
+					query={filters}
+					canManageAutomaticReports={canManageAutomaticReports}
+				/>
 
 				<BillingDateRangeFilter
 					filters={filters}
@@ -93,7 +98,7 @@ export default function Dashboard({
 									deltaPercent={requestMetrics?.overdue?.delta_percent}
 									tone="red"
 									icon={ExclamationTriangleIcon}
-									help={`Sin factura completa después de ${thresholdDays} días naturales desde la solicitud.`}
+									help={`Sin factura completa después de ${thresholdDays} días hábiles desde la solicitud.`}
 								/>
 								<BillingMetricCard
 									label="Completadas"

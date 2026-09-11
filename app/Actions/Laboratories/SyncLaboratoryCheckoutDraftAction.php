@@ -2,15 +2,28 @@
 
 namespace App\Actions\Laboratories;
 
+use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
 use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\LaboratoryCheckoutDraft;
+use App\Services\Carts\CartAbandonmentService;
+use App\Services\Carts\CartCheckoutFlowResolver;
+use App\Services\Carts\CartEventRecorder;
+use App\Services\Carts\CartUserActivityResolver;
+use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
 
 class SyncLaboratoryCheckoutDraftAction
 {
+    public function __construct(
+        private CartEventRecorder $cartEventRecorder,
+        private CartAbandonmentService $cartAbandonmentService,
+        private LaboratoryCheckoutStepGuard $checkoutStepGuard,
+        private CartCheckoutFlowResolver $checkoutFlowResolver,
+    ) {}
+
     /**
      * @param  array{
      *     step: string,
@@ -20,20 +33,22 @@ class SyncLaboratoryCheckoutDraftAction
      *     coupon_id?: int|null,
      *     promo_validation_token?: string|null,
      * }  $payload
+     * @param  array<string, mixed>|null  $clientContext
      */
     public function __invoke(
         Customer $customer,
         LaboratoryBrand $laboratoryBrand,
         array $payload,
+        ?array $clientContext = null,
     ): LaboratoryCheckoutDraft {
-        $requiresAppointment = $customer->getHasLaboratoryCartItemRequiringAppointment($laboratoryBrand);
+        $nextStep = $this->checkoutStepGuard->nextDraftStepAfterSync(
+            $customer,
+            $laboratoryBrand,
+            $payload['step'],
+        );
 
-        $nextStep = match ($payload['step']) {
-            'patient' => 'address',
-            'address' => 'payment',
-            'payment' => $requiresAppointment ? 'appointment' : 'confirmation',
-            default => 'patient',
-        };
+        $canPersistPayment = $payload['step'] === 'payment'
+            && $this->checkoutStepGuard->canSyncDraftStep($customer, $laboratoryBrand, 'payment');
 
         $attributes = [
             'checkout_step' => $nextStep,
@@ -47,7 +62,7 @@ class SyncLaboratoryCheckoutDraftAction
             $attributes['address_id'] = $payload['address_id'];
         }
 
-        if ($payload['step'] === 'payment') {
+        if ($canPersistPayment) {
             $attributes['payment_method'] = $payload['payment_method'] ?? null;
             $attributes['coupon_id'] = $payload['coupon_id'] ?? null;
             if (array_key_exists('promo_validation_token', $payload)) {
@@ -69,7 +84,13 @@ class SyncLaboratoryCheckoutDraftAction
             $attributes,
         );
 
-        $this->touchMonitoringCart($customer);
+        $cart = $this->activeLaboratoryCart($customer, $laboratoryBrand);
+        if ($cart) {
+            $this->cartAbandonmentService->maybeRecordResumed($cart, $clientContext);
+            app(CartUserActivityResolver::class)->recordCheckoutVisit($cart, $laboratoryBrand->value);
+        }
+
+        $this->recordCheckoutEvents($customer, $laboratoryBrand, $payload, $canPersistPayment, $clientContext);
 
         return $draft->fresh(['contact', 'address', 'coupon']);
     }
@@ -96,5 +117,139 @@ class SyncLaboratoryCheckoutDraftAction
             ->where('type', MonitoringCartType::Lab)
             ->where('status', MonitoringCartStatus::Active)
             ->update(['updated_at' => now()]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    private function recordCheckoutEvents(
+        Customer $customer,
+        LaboratoryBrand $laboratoryBrand,
+        array $payload,
+        bool $canPersistPayment,
+        ?array $clientContext = null,
+    ): void {
+        $cart = $this->activeLaboratoryCart($customer, $laboratoryBrand);
+        if (! $cart) {
+            return;
+        }
+
+        $this->cartEventRecorder->recordOnce(
+            $cart,
+            CartEventType::CheckoutStarted,
+            "cart:{$cart->id}:checkout_started",
+            $this->withClientContext(['brand' => $laboratoryBrand->value], $clientContext),
+            source: 'laboratory_checkout',
+        );
+
+        $this->checkoutFlowResolver->recordDeterminedFlow($cart, $customer, $laboratoryBrand);
+
+        if (array_key_exists('contact_id', $payload) && $payload['contact_id'] !== null) {
+            $this->cartEventRecorder->recordOnce(
+                $cart,
+                CartEventType::PatientSelected,
+                "cart:{$cart->id}:patient:{$payload['contact_id']}",
+                $this->withClientContext([
+                    'contact_id' => (int) $payload['contact_id'],
+                    'brand' => $laboratoryBrand->value,
+                ], $clientContext),
+                source: 'laboratory_checkout',
+            );
+        }
+
+        if (array_key_exists('address_id', $payload) && $payload['address_id'] !== null) {
+            $this->cartEventRecorder->recordOnce(
+                $cart,
+                CartEventType::AddressSelected,
+                "cart:{$cart->id}:address:{$payload['address_id']}",
+                $this->withClientContext([
+                    'address_id' => (int) $payload['address_id'],
+                    'brand' => $laboratoryBrand->value,
+                ], $clientContext),
+                source: 'laboratory_checkout',
+            );
+        }
+
+        if (
+            $canPersistPayment
+            && $payload['step'] === 'payment'
+            && filled($payload['payment_method'] ?? null)
+        ) {
+            $paymentMetadata = $this->paymentMethodEventMetadata(
+                (string) $payload['payment_method'],
+                $laboratoryBrand,
+            );
+
+            $this->cartEventRecorder->recordOnce(
+                $cart,
+                CartEventType::PaymentMethodSelected,
+                "cart:{$cart->id}:payment_method:{$payload['payment_method']}",
+                $this->withClientContext($paymentMetadata, $clientContext),
+                source: 'laboratory_checkout',
+            );
+        }
+    }
+
+    /**
+     * @return array{payment_method_type: string, gateway: string, brand: string}
+     */
+    private function paymentMethodEventMetadata(string $paymentMethod, LaboratoryBrand $laboratoryBrand): array
+    {
+        return match ($paymentMethod) {
+            'odessa' => [
+                'payment_method_type' => 'odessa',
+                'gateway' => 'odessa',
+                'brand' => $laboratoryBrand->value,
+            ],
+            'paypal' => [
+                'payment_method_type' => 'paypal',
+                'gateway' => 'paypal',
+                'brand' => $laboratoryBrand->value,
+            ],
+            'coupon_balance' => [
+                'payment_method_type' => 'coupon_balance',
+                'gateway' => 'coupon_balance',
+                'brand' => $laboratoryBrand->value,
+            ],
+            default => [
+                'payment_method_type' => ctype_digit($paymentMethod) ? 'efevoo_token' : $paymentMethod,
+                'gateway' => 'efevoopay',
+                'brand' => $laboratoryBrand->value,
+            ],
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @param  array<string, mixed>|null  $clientContext
+     * @return array<string, mixed>
+     */
+    private function withClientContext(array $metadata, ?array $clientContext): array
+    {
+        if ($clientContext === null || $clientContext === []) {
+            return $metadata;
+        }
+
+        return array_merge($metadata, ['client' => $clientContext]);
+    }
+
+    private function activeLaboratoryCart(Customer $customer, LaboratoryBrand $laboratoryBrand): ?Cart
+    {
+        if (! $customer->user_id) {
+            return null;
+        }
+
+        return Cart::query()
+            ->with('items')
+            ->where('user_id', $customer->user_id)
+            ->where('type', MonitoringCartType::Lab)
+            ->where('status', MonitoringCartStatus::Active)
+            ->get()
+            ->first(function (Cart $cart) use ($laboratoryBrand) {
+                $brands = collect($cart->labBrands())->pluck('value')->filter()->values();
+
+                return $brands->count() === 1 && $brands->first() === $laboratoryBrand->value;
+            });
     }
 }

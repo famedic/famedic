@@ -91,6 +91,10 @@ return new class extends Migration
 
     private function foreignKeyExists(string $table, string $column): bool
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return false;
+        }
+
         $result = DB::selectOne(
             'SELECT COUNT(*) AS count
              FROM information_schema.KEY_COLUMN_USAGE

@@ -14,7 +14,9 @@ use App\Exceptions\PayPalPaymentException;
 use App\Models\Address;
 use App\Models\Contact;
 use App\Services\CouponApplicationService;
+use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
 use App\Services\PayPalService;
+use App\Support\ClientContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -70,6 +72,13 @@ class PayPalController extends Controller
                 ]);
             }
 
+            if (! app(LaboratoryCheckoutStepGuard::class)->canInitiatePayment($customer, $brand)) {
+                throw ValidationException::withMessages([
+                    'patient_id' => app(LaboratoryCheckoutStepGuard::class)
+                        ->resolvePaymentBlockMessage($customer, $brand),
+                ]);
+            }
+
             if ($couponId !== null) {
                 $couponApplicationService->validateApplication(
                     $request->user(),
@@ -86,6 +95,7 @@ class PayPalController extends Controller
                 (int) $validated['total'],
                 $couponId,
                 $promoValidationToken,
+                ClientContext::fromRequest($request),
             );
         } catch (MissingLaboratoryAppointmentException $e) {
             throw ValidationException::withMessages(['patient_id' => 'Debes completar la cita en laboratorio para este pedido.']);
@@ -122,7 +132,7 @@ class PayPalController extends Controller
             'order_id' => ['required', 'string'],
         ]);
 
-        $result = $action($validated['order_id'], $request->user()->customer);
+        $result = $action($validated['order_id'], $request->user()->customer, ClientContext::fromRequest($request));
 
         $status = $result['status'];
         $purchase = $result['purchase'] ?? null;

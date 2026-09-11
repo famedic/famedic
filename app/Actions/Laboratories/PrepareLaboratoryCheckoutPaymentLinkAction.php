@@ -2,22 +2,29 @@
 
 namespace App\Actions\Laboratories;
 
-use App\Enums\LaboratoryBrand;
 use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\EfevooToken;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryCheckoutDraft;
+use App\Services\Laboratory\LaboratoryAppointmentPaymentValidity;
+use App\Services\Laboratory\LaboratoryCheckoutFlowEligibility;
 
 class PrepareLaboratoryCheckoutPaymentLinkAction
 {
     public function __construct(
         private PrepareCustomerLaboratoryCheckoutLinkAction $prepareCustomerCheckoutLink,
+        private LaboratoryCheckoutFlowEligibility $flowEligibility,
+        private LaboratoryAppointmentPaymentValidity $appointmentPaymentValidity,
     ) {}
 
-    public function __invoke(LaboratoryAppointment $appointment): string
+    public function __invoke(LaboratoryAppointment $appointment): ?string
     {
         $appointment->loadMissing(['customer.contacts', 'laboratoryStore']);
+
+        if (! $this->appointmentPaymentValidity->isValidForPayment($appointment)) {
+            return null;
+        }
 
         $customer = $appointment->customer;
         $brand = $appointment->brand;
@@ -28,13 +35,32 @@ class PrepareLaboratoryCheckoutPaymentLinkAction
             ->first();
 
         $contactId = $this->resolveContactId($customer, $appointment, $existingDraft);
+        $checkoutStep = $this->flowEligibility->usesAppointmentFirstFlow($customer, $brand)
+            ? 'payment'
+            : 'confirmation';
 
         return ($this->prepareCustomerCheckoutLink)(
             customer: $customer,
             brand: $brand,
             contactId: $contactId,
-            checkoutStep: 'confirmation',
+            checkoutStep: $checkoutStep,
+            addressId: $existingDraft?->address_id,
         );
+    }
+
+    public function canSendPendingPaymentEmail(LaboratoryAppointment $appointment): bool
+    {
+        $appointment->loadMissing('customer');
+
+        if ($appointment->hasPaidLaboratoryPurchase()) {
+            return false;
+        }
+
+        if ($appointment->customer?->user === null) {
+            return false;
+        }
+
+        return $this->appointmentPaymentValidity->isValidForPayment($appointment);
     }
 
     private function resolveContactId(
@@ -70,7 +96,7 @@ class PrepareLaboratoryCheckoutPaymentLinkAction
     /**
      * @return array<string, mixed>
      */
-    public function checkoutSummaryForMail(LaboratoryAppointment $appointment): array
+    public function checkoutSummaryForMail(LaboratoryAppointment $appointment, bool $appointmentFirstFlow = false): array
     {
         $appointment->loadMissing(['customer.contacts', 'laboratoryStore']);
 
@@ -104,13 +130,16 @@ class PrepareLaboratoryCheckoutPaymentLinkAction
         $dt = localizedDate($appointment->appointment_date);
 
         return [
+            'appointment_first_flow' => $appointmentFirstFlow,
             'patient_name' => $appointment->patient_full_name ?? '—',
             'patient_phone' => $appointment->patient_full_phone ?? '—',
             'patient_birth_date' => $appointment->formatted_patient_birth_date ?? '—',
             'patient_gender' => $appointment->formatted_patient_gender ?? '—',
             'contact_name' => $contact?->full_name ?? $appointment->patient_full_name ?? '—',
             'address' => $addressText ?: '—',
-            'payment_method' => $this->paymentMethodLabel($draft?->payment_method, $customer),
+            'payment_method' => $appointmentFirstFlow
+                ? 'Se seleccionará al continuar'
+                : $this->paymentMethodLabel($draft?->payment_method, $customer),
             'appointment_date' => $dt?->isoFormat('dddd D [de] MMMM [de] YYYY') ?? '—',
             'appointment_time' => $dt?->isoFormat('h:mm a') ?? '—',
             'branch_name' => $appointment->laboratoryStore?->name ?? '—',

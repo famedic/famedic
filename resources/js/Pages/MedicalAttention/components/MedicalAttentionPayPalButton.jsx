@@ -2,30 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { router } from "@inertiajs/react";
 import { Text } from "@/Components/Catalyst/text";
-
-function loadPayPalScript(clientId) {
-    return new Promise((resolve, reject) => {
-        if (window.paypal) {
-            resolve(window.paypal);
-            return;
-        }
-        const existing = document.querySelector(
-            'script[src*="paypal.com/sdk/js"]',
-        );
-        if (existing) {
-            existing.addEventListener("load", () => resolve(window.paypal));
-            existing.addEventListener("error", reject);
-            return;
-        }
-        const script = document.createElement("script");
-        script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=MXN&intent=capture`;
-        script.async = true;
-        script.onload = () => resolve(window.paypal);
-        script.onerror = () =>
-            reject(new Error("No se pudo cargar el SDK de PayPal"));
-        document.body.appendChild(script);
-    });
-}
+import { loadPayPalSdk } from "@/lib/paypal/loadPayPalSdk";
 
 export default function MedicalAttentionPayPalButton({
     paypalClientId,
@@ -45,7 +22,7 @@ export default function MedicalAttentionPayPalButton({
 
         (async () => {
             try {
-                const paypal = await loadPayPalScript(paypalClientId);
+                const paypal = await loadPayPalSdk({ clientId: paypalClientId });
                 if (cancelled || !containerRef.current) return;
 
                 await paypal

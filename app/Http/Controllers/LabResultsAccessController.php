@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Laboratories\EnsureLatestGdaResultsPdfAction;
+use App\Actions\Laboratories\RecordPatientResultsAccessAction;
 use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
 use App\Support\LabResultsOtp;
 use App\Models\LaboratoryNotification;
@@ -444,6 +446,9 @@ class LabResultsAccessController extends Controller
             abort(403);
         }
 
+        app(EnsureLatestGdaResultsPdfAction::class)->execute($purchase, 'patient_otp_pdf');
+        $purchase->refresh();
+
         $b64 = $this->getResultsPdfBase64($purchase->id);
         if (! $b64) {
             abort(503);
@@ -453,6 +458,8 @@ class LabResultsAccessController extends Controller
         if ($binary === false) {
             abort(503);
         }
+
+        app(RecordPatientResultsAccessAction::class)->execute($purchase);
 
         $event = $disposition === 'attachment' ? 'pdf_downloaded' : 'pdf_viewed';
         $this->persistAccessLog($event, $user->id, $purchase->id, null, [
@@ -694,9 +701,8 @@ class LabResultsAccessController extends Controller
 
         try {
             $result = app(ResolveGdaResultsPdfAction::class)($notification);
-            $result['notification']->markAsRead();
 
-            return $result['pdf_base64'];
+            return $result['pdf_base64'] ?? null;
         } catch (\Throwable $e) {
             Log::error('Failed to fetch PDF while validating OTP', [
                 'purchase_id' => $purchaseId,

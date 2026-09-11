@@ -5,6 +5,7 @@
 /public/hot
 /public/storage
 /storage/*.key
+/storage/app/imports/
 /vendor
 /database/test_db.sqlite
 .env
@@ -34,8 +35,12 @@ private_base64.txt
 docs/ACTIVECAMPAIGN_PRUEBAS.md
 docs/ACTIVECAMPAIGN_TAGS.md
 /docs/*
+!/docs/laboratory-stores/
+!/docs/laboratory-stores/**
 desktop.ini
 /backups/*
 start-dev.bat
 start-dev.ps1
 refund_logs.txt
+.env_backup_laptop
+database/famedic_jun_23

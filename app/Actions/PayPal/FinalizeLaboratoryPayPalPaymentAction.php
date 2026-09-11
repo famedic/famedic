@@ -32,8 +32,9 @@ class FinalizeLaboratoryPayPalPaymentAction
      * Actualiza la transacción con datos de captura y genera el pedido de laboratorio (idempotente).
      *
      * @param  array<string, mixed>  $capturePayload  Respuesta de capture API o recurso de webhook
+     * @param  array<string, mixed>|null  $clientContext
      */
-    public function __invoke(Transaction $transaction, array $capturePayload): ?LaboratoryPurchase
+    public function __invoke(Transaction $transaction, array $capturePayload, ?array $clientContext = null): ?LaboratoryPurchase
     {
         $info = $this->payPalService->extractCaptureInfo($capturePayload);
 
@@ -79,7 +80,7 @@ class FinalizeLaboratoryPayPalPaymentAction
         $transaction->refresh();
 
         try {
-            return $this->runFulfillment($transaction);
+            return $this->runFulfillment($transaction, $clientContext);
         } catch (Throwable $e) {
             Log::error('[PayPal] Fallo al generar pedido tras captura; intentando reembolso', [
                 'transaction_id' => $transaction->id,
@@ -105,7 +106,10 @@ class FinalizeLaboratoryPayPalPaymentAction
         }
     }
 
-    private function runFulfillment(Transaction $transaction): LaboratoryPurchase
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    private function runFulfillment(Transaction $transaction, ?array $clientContext = null): LaboratoryPurchase
     {
         $details = is_array($transaction->details) ? $transaction->details : [];
         $customer = Customer::find($details['customer_id'] ?? null);
@@ -157,6 +161,8 @@ class FinalizeLaboratoryPayPalPaymentAction
             isset($details['coupon_id']) ? (int) $details['coupon_id'] : null,
             $details['promo_validation_token'] ?? null,
             $details['cart_hash'] ?? null,
+            null,
+            $clientContext,
         );
     }
 

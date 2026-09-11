@@ -3,10 +3,11 @@
 namespace App\Http\Middleware;
 
 use App\Enums\LaboratoryBrand;
-use App\Support\AppEnvironmentLabel;
-use App\Support\MockEfevooPaymentSupport;
 use App\Services\NotificationService;
 use App\Services\Tracking\Tracking;
+use App\Support\AppEnvironmentLabel;
+use App\Support\FamedicPublicContactConfig;
+use App\Support\MockEfevooPaymentSupport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +49,14 @@ class HandleInertiaRequests extends Middleware
                     ]
                     : null,
             ],
+            'activeCampaignSiteTracking' => fn () => [
+                'enabled' => app()->environment(['production', 'testing']),
+                'email' => app()->environment(['production', 'testing']) &&
+                    $request->user() &&
+                    ! $request->user()->administrator
+                    ? $request->user()->email
+                    : null,
+            ],
             ...($request->user() ? [
                 'medicalAttentionSubscriptionIsActive' => $request->user()->customer?->medical_attention_subscription_is_active,
                 'formattedMedicalAttentionSubscriptionExpiresAt' => $request->user()->customer?->formatted_medical_attention_subscription_expires_at,
@@ -76,6 +85,7 @@ class HandleInertiaRequests extends Middleware
                 ],*/
             ],
             'userNavigation' => $request->user() ? $this->getUserNavigation((bool) $request->user()->administrator, (bool) $request->user()?->customer?->medical_attention_subscription_is_active) : [],
+            'famedicConcierge' => fn () => FamedicPublicContactConfig::conciergeForFrontend(),
             'flashMessage' => session('flashMessage'),
             'appEnv' => app()->environment(),
             'appEnvLabel' => AppEnvironmentLabel::current(),
@@ -161,6 +171,12 @@ class HandleInertiaRequests extends Middleware
                 'icon' => 'ShoppingBagIcon',
                 'current' => Route::currentRouteName() === 'laboratory-purchases.index' || Route::currentRouteName() === 'laboratory-purchases.show' || Route::currentRouteName() === 'online-pharmacy-purchases.index' || Route::currentRouteName() === 'online-pharmacy-purchases.show',
             ],
+            [
+                'label' => 'Compras pendientes',
+                'url' => route('user.purchases.index'),
+                'icon' => 'ShoppingBagIcon',
+                'current' => Route::currentRouteName() === 'user.purchases.index',
+            ],
             /*[
                 'label' => 'Mis cotizaciones',
                 'url' => route('laboratory-quotes.index'),
@@ -211,6 +227,12 @@ class HandleInertiaRequests extends Middleware
                     Route::currentRouteName() === 'contacts.create' ||
                     Route::currentRouteName() === 'contacts.edit',
             ],
+            [
+                'label' => 'Soporte',
+                'url' => route('user.support'),
+                'icon' => 'LifebuoyIcon',
+                'current' => Route::currentRouteName() === 'user.support',
+            ],
         ];
 
         if ($admin) {
@@ -229,7 +251,24 @@ class HandleInertiaRequests extends Middleware
     {
         return array_combine(
             array_map(fn ($brand) => $brand->value, LaboratoryBrand::cases()),
-            array_map(fn ($brand) => auth()->user()->customer?->laboratoryCartItems()->with('laboratoryTest')->ofBrand($brand)->get(), LaboratoryBrand::cases())
+            array_map(
+                fn ($brand) => auth()->user()->customer?->laboratoryCartItems()
+                    ->with('laboratoryTest')
+                    ->ofBrand($brand)
+                    ->get()
+                    ->map(fn ($cartItem) => [
+                        'id' => $cartItem->id,
+                        'laboratory_test' => [
+                            'id' => $cartItem->laboratoryTest?->id,
+                            'name' => $cartItem->laboratoryTest?->name,
+                            'requires_appointment' => (bool) $cartItem->laboratoryTest?->requires_appointment,
+                            'famedic_price_cents' => (int) $cartItem->laboratoryTest?->famedic_price_cents,
+                            'formatted_famedic_price' => $cartItem->laboratoryTest?->formatted_famedic_price,
+                        ],
+                    ])
+                    ->values(),
+                LaboratoryBrand::cases()
+            )
         );
     }
 

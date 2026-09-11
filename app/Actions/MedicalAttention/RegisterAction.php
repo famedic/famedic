@@ -48,7 +48,7 @@ class RegisterAction
 
         Log::info('Murguia register payload', [
             'customer_id' => $customer->id,
-            'payload' => $payload,
+            'payload_fields_count' => count($payload),
         ]);
 
 
@@ -61,10 +61,9 @@ class RegisterAction
         if ($response->status() === 409) {
             Log::warning('Murguia register conflict', [
                 'customer_id' => $customer->id,
-                'identifier' => $customer->medical_attention_identifier,
-                'error' => $response->json()['error'] ?? 'Unknown conflict',
+                'http_status' => $response->status(),
             ]);
-            throw new MurguiaConflictException('Customer already exists in Murguia: ' . $customer->medical_attention_identifier);
+            throw new MurguiaConflictException('Customer already exists in Murguia.');
         }
 
         return $response;

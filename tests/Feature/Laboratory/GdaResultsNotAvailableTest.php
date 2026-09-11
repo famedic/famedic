@@ -307,7 +307,7 @@ class GdaResultsNotAvailableTest extends TestCase
             'phone' => '8181234567',
             'phone_country' => 'MX',
             'birth_date' => '1990-01-01',
-            'gender' => 'male',
+            'gender' => \App\Enums\Gender::MALE->value,
             'street' => 'Calle',
             'number' => '123',
             'neighborhood' => 'Centro',

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Laboratories\OrderAction;
 use App\Enums\LaboratoryBrand;
+use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\CouponApplicationException;
 use App\Exceptions\PromoCodeException;
 use App\Exceptions\OdessaInsufficientFundsException;
@@ -14,15 +15,33 @@ use App\Models\Address;
 use App\Models\Contact;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
+use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
 use App\Services\Tracking\Purchase;
+use App\Support\ClientContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class LaboratoryPurchaseController extends Controller
 {
-    public function store(StoreLaboratoryPurchaseRequest $request, LaboratoryBrand $laboratoryBrand, OrderAction $orderAction)
+    public function store(StoreLaboratoryPurchaseRequest $request, LaboratoryBrand $laboratoryBrand, OrderAction $orderAction, LaboratoryCheckoutStepGuard $laboratoryCheckoutStepGuard)
     {
+        $customer = $request->user()->customer;
+
+        if (! $laboratoryCheckoutStepGuard->canInitiatePayment($customer, $laboratoryBrand)) {
+            return redirect()
+                ->route('laboratory.checkout', [
+                    'laboratory_brand' => $laboratoryBrand,
+                    'step' => LaboratoryCheckoutStepGuard::STEP_APPOINTMENT,
+                    'contact' => $request->input('contact'),
+                    'address' => $request->input('address'),
+                ])
+                ->with(
+                    'checkout_step_notice',
+                    $laboratoryCheckoutStepGuard->resolvePaymentBlockMessage($customer, $laboratoryBrand),
+                );
+        }
+
         try {
             $laboratoryPurchase = $orderAction(
                 customer: $request->user()->customer,
@@ -35,7 +54,20 @@ class LaboratoryPurchaseController extends Controller
                 promoValidationToken: $request->filled('promo_validation_token')
                     ? (string) $request->input('promo_validation_token')
                     : null,
+                clientContext: ClientContext::fromRequest($request),
             );
+        } catch (MissingLaboratoryAppointmentException $e) {
+            return redirect()
+                ->route('laboratory.checkout', [
+                    'laboratory_brand' => $laboratoryBrand,
+                    'step' => LaboratoryCheckoutStepGuard::STEP_APPOINTMENT,
+                    'contact' => $request->input('contact'),
+                    'address' => $request->input('address'),
+                ])
+                ->with(
+                    'checkout_step_notice',
+                    $laboratoryCheckoutStepGuard->resolvePaymentBlockMessage($customer, $laboratoryBrand),
+                );
         } catch (EfevooPaymentException $e) {
             return redirect()->back()
                 ->withErrors(['payment_method' => $e->getMessage()]);
@@ -289,14 +321,14 @@ class LaboratoryPurchaseController extends Controller
 
         $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
 
-        $hasManualResults = !empty($laboratoryPurchase->results);
+        $hasStoredResults = ! empty($laboratoryPurchase->results);
         $hasSampleCollected = false;
         $hasResultsAvailable = false;
         $latestSampleCollectionAt = null;
         $latestResultsAt = null;
         $hasResultsPdfCached = false;
 
-        if (!$hasManualResults) {
+        if (! $hasStoredResults) {
             $hasSampleCollected = $laboratoryPurchase->hasSampleCollected();
             $hasResultsAvailable = $laboratoryPurchase->hasResultsAvailable();
 
@@ -310,19 +342,15 @@ class LaboratoryPurchaseController extends Controller
             $hasResultsPdfCached = (bool) $latestResultsNotification?->hasResults();
         }
 
-        if ($hasManualResults) {
+        if ($hasStoredResults) {
             $hasResultsAvailable = true;
         }
 
-        if ($hasManualResults || $hasResultsAvailable) {
+        if ($hasStoredResults || $hasResultsAvailable) {
             $latestResultsAt = $laboratoryPurchase->formatLatestResultsAt();
         }
 
-        $isNewResult = ! $hasManualResults && LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(
-            $laboratoryPurchase->id,
-            $laboratoryPurchase->gda_order_id,
-            $laboratoryPurchase->gda_consecutivo
-        );
+        $isNewResult = $laboratoryPurchase->hasUnseenResultsForPatient();
 
         return Inertia::render('LaboratoryPurchase', [
             'laboratoryPurchase' => tap($laboratoryPurchase, function (LaboratoryPurchase $purchase) {

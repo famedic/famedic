@@ -66,6 +66,11 @@ class EnsureUserHasAdminAccount
                             Route::currentRouteName() === 'admin.laboratory-tests.create' ||
                             Route::currentRouteName() === 'admin.laboratory-tests.edit',
                     ] : null,
+                    $this->adminHasPermission($administrator, 'laboratory-stores.manage') ? [
+                        'label' => 'Sucursales',
+                        'url' => route('admin.laboratory-stores.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-stores.'),
+                    ] : null,
                     $request->user()->administrator->laboratoryConcierge ? [
                         'label' => 'Citas',
                         'url' => route('admin.laboratory-appointments.index'),
@@ -232,6 +237,13 @@ class EnsureUserHasAdminAccount
             || $this->adminHasPermission($administrator, 'administrators.manage')
             || $this->adminHasPermission($administrator, 'logs-general.manage')
             || $this->adminHasPermission($administrator, 'view_config_monitor');
+        $canViewOdessaReconciliation = $this->adminHasPermission($administrator, 'odessa-reconciliation.view')
+            || $this->adminHasPermission($administrator, 'odessa-reconciliation.manage')
+            || $this->adminHasPermission($administrator, 'odessa-reconciliation.review')
+            || $request->user()->administrator->roles()->where('roles.id', 1)->exists();
+        $canViewOdessaPreEnrollments = $this->adminHasPermission($administrator, 'odessa-pre-enrollments.view')
+            || $this->adminHasPermission($administrator, 'odessa-pre-enrollments.manage')
+            || $request->user()->administrator->roles()->where('roles.id', 1)->exists();
 
         $intelligenceItems = array_values(array_filter([
             $canOpenWorkspace ? [
@@ -287,6 +299,11 @@ class EnsureUserHasAdminAccount
                         'url' => route('admin.logs-general.manage'),
                         'current' => Route::currentRouteName() === 'admin.logs-general.manage',
                     ] : null,
+                    $request->user()->administrator->hasPermissionTo('logs-general.manage') ? [
+                        'label' => 'Jobs fallidos',
+                        'url' => route('admin.failed-jobs.index'),
+                        'current' => Route::currentRouteName() === 'admin.failed-jobs.index',
+                    ] : null,
                     $request->user()->administrator->hasPermissionTo('users.manage') ? [
                         'label' => 'Usuarios',
                         'url' => route('admin.users.index'),
@@ -330,7 +347,7 @@ class EnsureUserHasAdminAccount
                     ] : null,
                 ])),
             ],
-            $request->user()->administrator->roles()->where('roles.id', 1)->exists() ? [
+            ($request->user()->administrator->roles()->where('roles.id', 1)->exists() || $canViewOdessaReconciliation || $canViewOdessaPreEnrollments) ? [
                 'label' => 'Admin Membresías',
                 'icon' => 'IdentificationIcon',
                 'items' => [
@@ -359,6 +376,17 @@ class EnsureUserHasAdminAccount
                             'admin.murguia.logs',
                         ], true),
                     ],
+                    ...($canViewOdessaReconciliation ? [[
+                        'label' => 'ODESSA — conciliación',
+                        'url' => route('admin.odessa.reconciliations.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.odessa.reconciliation.')
+                            || str_starts_with((string) Route::currentRouteName(), 'admin.odessa.reconciliations.'),
+                    ]] : []),
+                    ...($canViewOdessaPreEnrollments ? [[
+                        'label' => 'ODESSA — preafiliaciones',
+                        'url' => route('admin.odessa.pre-enrollments.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.odessa.pre-enrollments.'),
+                    ]] : []),
                 ],
             ] : null,
         ]));

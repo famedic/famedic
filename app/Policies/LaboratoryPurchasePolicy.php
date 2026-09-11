@@ -41,6 +41,10 @@ class LaboratoryPurchasePolicy
      */
     public function uploadInvoice(User $user, LaboratoryPurchase $laboratoryPurchase): bool
     {
+        if ($laboratoryPurchase->trashed()) {
+            return false;
+        }
+
         return $this->administratorHasPermission($user, LaboratoryBillingAccess::PERMISSION_INVOICES)
             || $this->administratorHasPermission($user, LaboratoryBillingAccess::PERMISSION_MANAGE)
             || $this->isSuperAdmin($user);

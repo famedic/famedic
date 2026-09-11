@@ -8,6 +8,20 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote')->hourly();
 
+Schedule::command('carts:detect-abandonment')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(4);
+
+Schedule::command('carts:detect-appointment-pending')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(4);
+
+if (config('services.activecampaign.cart_outbox_enabled', false)) {
+    Schedule::command('activecampaign:sync-cart-outbox')
+        ->everyFiveMinutes()
+        ->withoutOverlapping(4);
+}
+
 if (config('services.activecampaign.tag_abandoned_carts_enabled', true)) {
     Schedule::command('activecampaign:tag-abandoned-carts')
         ->everyFifteenMinutes()
@@ -19,3 +33,15 @@ if (config('services.activecampaign.coupons_expiring_enabled', false)) {
         ->dailyAt('08:00')
         ->withoutOverlapping(30);
 }
+
+Schedule::command('odessa:prune-pre-enrollment-import-runs')
+    ->dailyAt('02:30')
+    ->withoutOverlapping(30);
+
+Schedule::command('laboratory-billing:dispatch-reports')
+    ->everyMinute()
+    ->withoutOverlapping(5);
+
+Schedule::command('laboratory-billing:prune-report-files')
+    ->dailyAt('03:10')
+    ->withoutOverlapping(30);

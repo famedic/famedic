@@ -53,7 +53,7 @@ export default function BillingComplianceChart({ compliance }) {
 				<Subheading>Cumplimiento de facturación</Subheading>
 				<Text className="text-xs text-zinc-500 dark:text-zinc-400">
 					{compliance?.definition ||
-						"Cohorte por fecha de solicitud. Completada = PDF + XML con completed_at (aunque la finalización sea fuera del rango)."}
+						"Cohorte por fecha de solicitud. Completada = PDF + XML; completed_at solo identifica la fecha de finalización cuando existe."}
 				</Text>
 			</div>
 			<Divider className="my-4" />

@@ -12,7 +12,7 @@ class BuildDailyChartDataAction
         ?Carbon $startDate = null,
         ?Carbon $endDate = null
     ): array {
-        if (!$startDate) {
+        if (! $startDate) {
             $minCreatedAt = $purchases->min('created_at');
             $startDate = $minCreatedAt
                 ? localizedDate($minCreatedAt)->setTimezone('America/Monterrey')->startOfDay()
@@ -21,7 +21,7 @@ class BuildDailyChartDataAction
             $startDate = $startDate->setTimezone('America/Monterrey')->startOfDay();
         }
 
-        if (!$endDate) {
+        if (! $endDate) {
             $maxCreatedAt = $purchases->max('created_at');
             $endDate = $maxCreatedAt
                 ? localizedDate($maxCreatedAt)->setTimezone('America/Monterrey')->endOfDay()
@@ -39,29 +39,35 @@ class BuildDailyChartDataAction
         $dataPoints = collect($this->generateDateRange($startDate, $endDate))->map(
             function (Carbon $localDate) use ($purchases, $hasADateFromPreviousYears) {
                 $startUtc = $localDate->copy()->startOfDay()->setTimezone('UTC');
-                $endUtc   = $localDate->copy()->endOfDay()->setTimezone('UTC');
+                $endUtc = $localDate->copy()->endOfDay()->setTimezone('UTC');
 
                 $dailyTotal = $purchases
                     ->whereBetween('created_at', [$startUtc, $endUtc])
                     ->sum('total_cents');
+                $dailyCount = $purchases
+                    ->whereBetween('created_at', [$startUtc, $endUtc])
+                    ->count();
 
                 return [
-                    'date'           => $hasADateFromPreviousYears
+                    'date' => $hasADateFromPreviousYears
                         ? $localDate->isoFormat('MMM D, Y')
                         : $localDate->isoFormat('MMM D'),
-                    'value'          => $dailyTotal,
+                    'value' => $dailyTotal,
+                    'count' => $dailyCount,
                     'formattedValue' => formattedCentsPrice($dailyTotal),
                 ];
             }
         );
 
         $averageValue = $dataPoints->avg('value');
-        $totalValue   = $dataPoints->sum('value');
+        $totalValue = $dataPoints->sum('value');
+        $countValue = $dataPoints->sum('count');
 
         return [
-            'dataPoints'    => $dataPoints->all(),
+            'dataPoints' => $dataPoints->all(),
+            'count' => $countValue,
             'averagePerDay' => formattedCentsPrice($averageValue),
-            'total'         => formattedCentsPrice($totalValue),
+            'total' => formattedCentsPrice($totalValue),
         ];
     }
 
@@ -79,6 +85,7 @@ class BuildDailyChartDataAction
     {
         return [
             'dataPoints' => [],
+            'count' => 0,
             'averagePerDay' => formattedCentsPrice(0),
             'total' => formattedCentsPrice(0),
         ];

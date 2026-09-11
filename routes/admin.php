@@ -19,12 +19,14 @@ use App\Http\Controllers\Admin\CustomerReferralController;
 use App\Http\Controllers\Admin\DocumentationController;
 use App\Http\Controllers\Admin\EfevooTokenController;
 use App\Http\Controllers\Admin\EmailSimulatorController;
+use App\Http\Controllers\Admin\FailedJobsController;
 use App\Http\Controllers\Admin\GdaNotificationSimulatorController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\DashboardController;
 use App\Http\Controllers\Admin\LaboratoryBilling\ExportController as LaboratoryBillingExportController;
 use App\Http\Controllers\Admin\LaboratoryBilling\InvoicesController;
+use App\Http\Controllers\Admin\LaboratoryBilling\AutomaticReportsController as LaboratoryBillingAutomaticReportsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\ReportsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\RequestsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\TaxProfilesController as TaxProfilesBillingController;
@@ -39,6 +41,7 @@ use App\Http\Controllers\Admin\LaboratoryPurchases\ResultsController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\UnresolvedDevAssistanceRequestController as LaboratoryUnresolvedDevAssistanceRequestController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\VendorPaymentsController as LaboratoryVendorPaymentsController;
 use App\Http\Controllers\Admin\LaboratoryResultController;
+use App\Http\Controllers\Admin\LaboratoryStoreController as AdminLaboratoryStoreController;
 use App\Http\Controllers\Admin\LaboratoryTestController;
 use App\Http\Controllers\Admin\LogsGeneralController;
 use App\Http\Controllers\Admin\MarketingCampaignCollectionController;
@@ -51,6 +54,8 @@ use App\Http\Controllers\Admin\MurguiaDashboardController;
 use App\Http\Controllers\Admin\MurguiaMonitorController;
 use App\Http\Controllers\Admin\MurguiaReconciliationController;
 use App\Http\Controllers\Admin\MurguiaReportController;
+use App\Http\Controllers\Admin\OdessaPreEnrollmentController;
+use App\Http\Controllers\Admin\OdessaReconciliationController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchaseController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\DevAssistanceRequestController as OnlinePharmacyDevAssistanceRequestController;
 use App\Http\Controllers\Admin\OnlinePharmacyPurchases\InvoiceController as OnlinePharmacyPurchasesInvoiceController;
@@ -150,6 +155,17 @@ Route::prefix('admin')->middleware([
         Route::resource('roles', RoleController::class)->except('show');
         Route::resource('laboratory-tests', LaboratoryTestController::class)->except(['destroy']);
         Route::post('laboratory-tests/export', ExportLaboratoryTestsController::class)->name('laboratory-tests.export');
+        Route::post('laboratory-stores/{laboratory_store}/restore', [AdminLaboratoryStoreController::class, 'restore'])
+            ->name('laboratory-stores.restore');
+        Route::patch('laboratory-stores/{laboratory_store}/hours', [AdminLaboratoryStoreController::class, 'updateHours'])
+            ->name('laboratory-stores.hours.update');
+        Route::patch('laboratory-stores/{laboratory_store}/capabilities', [AdminLaboratoryStoreController::class, 'updateCapabilities'])
+            ->name('laboratory-stores.capabilities.update');
+        Route::patch('laboratory-stores/{laboratory_store}/services', [AdminLaboratoryStoreController::class, 'updateServices'])
+            ->name('laboratory-stores.services.update');
+        Route::resource('laboratory-stores', AdminLaboratoryStoreController::class)
+            ->only(['index', 'show', 'update', 'destroy'])
+            ->withTrashed(['show', 'update', 'destroy']);
 
         Route::prefix('marketing-campaigns')->name('marketing-campaigns.')->group(function () {
             Route::get('product-search', MarketingCampaignProductSearchController::class)->name('product-search');
@@ -214,6 +230,15 @@ Route::prefix('admin')->middleware([
             Route::get('/tax-profiles', [TaxProfilesBillingController::class, 'index'])->name('tax-profiles.index');
             Route::get('/tax-profiles/{tax_profile}', [TaxProfilesBillingController::class, 'show'])->name('tax-profiles.show');
             Route::get('/reports', ReportsController::class)->name('reports');
+            Route::get('/automatic-reports', [LaboratoryBillingAutomaticReportsController::class, 'index'])->name('automatic-reports.index');
+            Route::post('/automatic-reports', [LaboratoryBillingAutomaticReportsController::class, 'store'])->name('automatic-reports.store');
+            Route::put('/automatic-reports/{schedule}', [LaboratoryBillingAutomaticReportsController::class, 'update'])->name('automatic-reports.update');
+            Route::get('/automatic-reports/{schedule}/preview', [LaboratoryBillingAutomaticReportsController::class, 'preview'])->name('automatic-reports.preview');
+            Route::post('/automatic-reports/{schedule}/run', [LaboratoryBillingAutomaticReportsController::class, 'run'])->name('automatic-reports.run');
+            Route::post('/automatic-reports/{schedule}/test', [LaboratoryBillingAutomaticReportsController::class, 'test'])->name('automatic-reports.test');
+            Route::get('/automatic-runs/{run}/download', [LaboratoryBillingAutomaticReportsController::class, 'download'])
+                ->middleware('signed')
+                ->name('automatic-runs.download');
             Route::get('/export/requests', [LaboratoryBillingExportController::class, 'requests'])->name('export.requests');
             Route::get('/export/invoices', [LaboratoryBillingExportController::class, 'invoices'])->name('export.invoices');
             Route::get('/export/tax-profiles', [LaboratoryBillingExportController::class, 'taxProfiles'])->name('export.tax-profiles');
@@ -259,6 +284,7 @@ Route::prefix('admin')->middleware([
         // Route::resource('laboratory-quotes', LaboratoryQuoteController::class)->only(['index', 'show']);
         Route::get('logs-general/manage', [LogsGeneralController::class, 'index'])->name('logs-general.manage');
         Route::get('logs-general/download', [LogsGeneralController::class, 'download'])->name('logs-general.download');
+        Route::get('failed-jobs', [FailedJobsController::class, 'index'])->name('failed-jobs.index');
 
         // Asistente IA de monitoreo
         Route::get('monitoring-ai', [MonitoringAiController::class, 'index'])->name('monitoring-ai.index');
@@ -456,6 +482,35 @@ Route::prefix('admin')->middleware([
             Route::get('murguia/upload', [MurguiaMonitorController::class, 'uploadPage'])->name('murguia.upload');
             Route::post('murguia/upload-excel', [MurguiaMonitorController::class, 'uploadExcel'])->name('murguia.upload-excel');
             Route::get('murguia/logs', [MurguiaMonitorController::class, 'logs'])->name('murguia.logs');
+        });
+
+        Route::redirect('odessa/reconciliation', '/admin/odessa/reconciliations/create')
+            ->name('odessa.reconciliation.index');
+        Route::prefix('odessa/pre-enrollments')->name('odessa.pre-enrollments.')->group(function () {
+            Route::get('/', [OdessaPreEnrollmentController::class, 'index'])->name('index');
+            Route::get('/import', [OdessaPreEnrollmentController::class, 'import'])->name('import');
+            Route::get('/import/preview', fn () => redirect()->route('admin.odessa.pre-enrollments.import'));
+            Route::post('/import/preview', [OdessaPreEnrollmentController::class, 'previewImport'])->middleware('throttle:odessa-pre-enrollments-preview')->name('import.preview');
+            Route::get('/import/confirm', fn () => redirect()->route('admin.odessa.pre-enrollments.import'));
+            Route::post('/import/confirm', [OdessaPreEnrollmentController::class, 'confirmImport'])->middleware('throttle:odessa-pre-enrollments-confirm')->name('import.confirm');
+            Route::get('/export', [OdessaPreEnrollmentController::class, 'export'])->name('export');
+            Route::get('/{preEnrollment}', [OdessaPreEnrollmentController::class, 'show'])->name('show');
+            Route::get('/{preEnrollment}/generate-credit/preview', [OdessaPreEnrollmentController::class, 'generateCreditPreview'])->name('generate-credit.preview');
+            Route::post('/{preEnrollment}/generate-credit', [OdessaPreEnrollmentController::class, 'generateCredit'])->name('generate-credit');
+            Route::post('/{preEnrollment}/murguia/register', [OdessaPreEnrollmentController::class, 'registerMurguia'])->middleware('throttle:odessa-pre-enrollments-murguia-register')->name('murguia.register');
+            Route::post('/{preEnrollment}/murguia/verify', [OdessaPreEnrollmentController::class, 'verifyMurguia'])->middleware('throttle:odessa-pre-enrollments-murguia-verify')->name('murguia.verify');
+            Route::post('/{preEnrollment}/murguia/retry', [OdessaPreEnrollmentController::class, 'retryMurguia'])->middleware('throttle:odessa-pre-enrollments-murguia-retry')->name('murguia.retry');
+        });
+        Route::prefix('odessa/reconciliations')->name('odessa.reconciliations.')->group(function () {
+            Route::get('/', [OdessaReconciliationController::class, 'index'])->name('index');
+            Route::get('/create', [OdessaReconciliationController::class, 'create'])->name('create');
+            Route::post('/', [OdessaReconciliationController::class, 'store'])->name('store');
+            Route::get('/{run}', [OdessaReconciliationController::class, 'show'])->name('show');
+            Route::get('/{run}/export', [OdessaReconciliationController::class, 'export'])->name('export');
+            Route::patch('/{run}/archive', [OdessaReconciliationController::class, 'archive'])->name('archive');
+            Route::patch('/{run}/items/{item}/review', [OdessaReconciliationController::class, 'review'])->name('items.review');
+            Route::get('/{run}/items/{item}/actions/{action}/preview', [OdessaReconciliationController::class, 'previewAction'])->name('items.actions.preview');
+            Route::post('/{run}/items/{item}/actions/{action}', [OdessaReconciliationController::class, 'executeAction'])->name('items.actions.execute');
         });
 
     });

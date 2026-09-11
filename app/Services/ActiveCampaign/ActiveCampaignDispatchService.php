@@ -9,6 +9,18 @@ use Throwable;
 class ActiveCampaignDispatchService
 {
     /** @var list<string> */
+    private const CART_EVENT_TYPES = [
+        'cart_abandoned',
+        'cart_resumed',
+        'cart_recovered',
+        'appointment_pending_5m',
+        'appointment_confirmed',
+        'call_requested',
+        'call_attempted',
+        'cart_completed',
+    ];
+
+    /** @var list<string> */
     private const COUPON_EVENT_PREFIXES = [
         'credit_',
         'promo_',
@@ -49,6 +61,49 @@ class ActiveCampaignDispatchService
             && (bool) config('services.activecampaign.coupons_expiring_enabled', false);
     }
 
+    public function isCartOutboxEnabled(): bool
+    {
+        return $this->isEnabled()
+            && (bool) config('services.activecampaign.cart_outbox_enabled', false);
+    }
+
+    public function isCartSiteEventsEnabled(): bool
+    {
+        return $this->isCartOutboxEnabled()
+            && (bool) config('services.activecampaign.cart_site_events_enabled', false);
+    }
+
+    public function isCartTagRemoveEnabled(): bool
+    {
+        return $this->isCartOutboxEnabled()
+            && (bool) config('services.activecampaign.cart_tag_remove_enabled', false);
+    }
+
+    public function isCartAppointmentSignalsEnabled(): bool
+    {
+        return $this->isCartOutboxEnabled()
+            && (bool) config('services.activecampaign.cart_appointment_signals_enabled', false);
+    }
+
+    public function isCartCallSignalsEnabled(): bool
+    {
+        return $this->isCartOutboxEnabled()
+            && (bool) config('services.activecampaign.cart_call_signals_enabled', false);
+    }
+
+    public function isCartSiteEvent(string $eventType): bool
+    {
+        return str_starts_with($eventType, 'famedic_cart_')
+            || str_starts_with($eventType, 'famedic_appointment_')
+            || str_starts_with($eventType, 'famedic_call_');
+    }
+
+    public function isCartEvent(string $eventType): bool
+    {
+        return in_array($eventType, self::CART_EVENT_TYPES, true)
+            || $this->isCartSiteEvent($eventType);
+    }
+
     public function isEnabledForCoupons(): bool
     {
         return $this->isCouponsEnabled();
@@ -72,6 +127,10 @@ class ActiveCampaignDispatchService
         }
 
         if ($eventType !== null && $this->isCouponEvent($eventType) && ! $this->isCouponsEnabled()) {
+            return false;
+        }
+
+        if ($eventType !== null && $this->isCartEvent($eventType) && ! $this->isCartOutboxEnabled()) {
             return false;
         }
 
@@ -123,6 +182,14 @@ class ActiveCampaignDispatchService
 
         if ($this->isCouponEvent($eventType) && ! $this->isCouponsEnabled()) {
             return $this->createDispatch($data, ActiveCampaignDispatch::STATUS_SKIPPED, 'coupons_integration_disabled');
+        }
+
+        if ($this->isCartEvent($eventType) && ! $this->isCartOutboxEnabled()) {
+            return $this->createDispatch($data, ActiveCampaignDispatch::STATUS_SKIPPED, 'cart_outbox_disabled');
+        }
+
+        if ($this->isCartSiteEvent($eventType) && ! $this->isCartSiteEventsEnabled()) {
+            return $this->createDispatch($data, ActiveCampaignDispatch::STATUS_SKIPPED, 'cart_site_events_disabled');
         }
 
         return $this->createDispatch($data, ActiveCampaignDispatch::STATUS_PENDING);

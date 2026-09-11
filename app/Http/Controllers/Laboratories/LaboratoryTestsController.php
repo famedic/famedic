@@ -6,6 +6,7 @@ use App\Enums\LaboratoryBrand;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Laboratories\IndexLaboratoryTestRequest;
 use App\Http\Requests\Laboratories\ShowLaboratoryTestRequest;
+use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
 use App\Models\LaboratoryTestCategory;
 use App\Services\Tracking\Search;
@@ -46,7 +47,7 @@ class LaboratoryTestsController extends Controller
         );
 
         return Inertia::render('LaboratoryTests', [
-            'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryBrand),
+            'laboratoryBrand' => $this->brandData($laboratoryBrand),
             'laboratoryTests' => $laboratoryTests,
             'laboratoryTestCategories' => collect([
                 LaboratoryTestCategory::find(12),
@@ -82,15 +83,37 @@ class LaboratoryTestsController extends Controller
         );
 
         // Get brand image URL
-        $brandImage = asset('images/gda/' . $laboratoryTest->brand->imageSrc());
+        $brandImage = asset('images/gda/'.$laboratoryTest->brand->imageSrc());
 
         // Prepare base data
         $data = [
-            'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryTest->brand),
+            'laboratoryBrand' => $this->brandData($laboratoryTest->brand),
             'laboratoryTests' => $paginated,
             'laboratoryTestCategories' => $categories->values(),
         ];
 
         return Inertia::render('LaboratoryTests', $data);
+    }
+
+    private function brandData(LaboratoryBrand $brand): array
+    {
+        $activeStores = LaboratoryStore::query()
+            ->ofBrand($brand)
+            ->where('is_active', true)
+            ->get(['state']);
+
+        return [
+            ...LaboratoryBrand::brandData($brand),
+            'active_store_count' => $activeStores->count(),
+            'states' => $activeStores
+                ->pluck('state')
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values()
+                ->all(),
+            'store_directory_url' => route('laboratory-stores.index', ['brand' => $brand->value]),
+            'nearby_store_directory_url' => route('laboratory-stores.index', ['brand' => $brand->value]),
+        ];
     }
 }

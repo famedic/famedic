@@ -4,6 +4,7 @@ namespace App\Actions\PayPal;
 
 use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
 use App\Enums\LaboratoryBrand;
+use App\Enums\CartEventType;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\PayPalPaymentException;
 use App\Exceptions\UnmatchingTotalPriceException;
@@ -13,6 +14,8 @@ use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\Transaction;
 use App\Services\CouponApplicationService;
+use App\Services\Carts\CartEventRecorder;
+use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\PromoCodeService;
 use App\Services\PayPalService;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +29,8 @@ class CreatePayPalOrderAction
         private PayPalService $payPalService,
         private CouponApplicationService $couponApplicationService,
         private PromoCodeService $promoCodeService,
+        private SyncMonitoringCartService $syncMonitoringCartService,
+        private CartEventRecorder $cartEventRecorder,
     ) {
     }
 
@@ -40,6 +45,7 @@ class CreatePayPalOrderAction
         int $totalCents,
         ?int $couponId = null,
         ?string $promoValidationToken = null,
+        ?array $clientContext = null,
     ): array {
         if (!$laboratoryBrand instanceof LaboratoryBrand) {
             $laboratoryBrand = LaboratoryBrand::from($laboratoryBrand);
@@ -110,6 +116,7 @@ class CreatePayPalOrderAction
             $discountCents,
             $amountToChargeCents,
             $amount,
+            $clientContext,
         ) {
             $tempReference = 'PAYPAL-PENDING-' . Str::uuid()->toString();
 
@@ -159,10 +166,58 @@ class CreatePayPalOrderAction
                 'customer_id' => $customer->id,
             ]);
 
+            $this->recordPaymentStarted($customer, $laboratoryBrand, $transaction, $amountToChargeCents, $clientContext);
+
             return [
                 'order_id' => $paypal['order_id'],
                 'transaction_id' => $transaction->id,
             ];
         });
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $clientContext
+     */
+    private function recordPaymentStarted(
+        Customer $customer,
+        LaboratoryBrand $laboratoryBrand,
+        Transaction $transaction,
+        int $amountCents,
+        ?array $clientContext = null,
+    ): void {
+        $this->syncMonitoringCartService->syncLaboratory($customer, $clientContext);
+        $cart = $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
+
+        if (! $cart) {
+            return;
+        }
+
+        $this->cartEventRecorder->recordOnce(
+            $cart,
+            CartEventType::PaymentStarted,
+            "paypal_transaction:{$transaction->id}:payment_started",
+            $this->withClientContext([
+                'transaction_id' => $transaction->id,
+                'gateway' => 'paypal',
+                'status' => $transaction->payment_status,
+                'amount_cents' => $amountCents,
+            ], $clientContext),
+            $transaction->created_at,
+            'paypal',
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @param  array<string, mixed>|null  $clientContext
+     * @return array<string, mixed>
+     */
+    private function withClientContext(array $metadata, ?array $clientContext): array
+    {
+        if ($clientContext === null || $clientContext === []) {
+            return $metadata;
+        }
+
+        return array_merge($metadata, ['client' => $clientContext]);
     }
 }

@@ -19,6 +19,19 @@ class SyncGdaResultPdfToStorageJob implements ShouldQueue, ShouldBeUnique
 
     public int $tries = 5;
 
+    /**
+     * TTL máximo del lock de unicidad mientras el job está en vuelo o reintentando.
+     *
+     * Laravel 11 libera el lock al terminar (éxito o fallo definitivo) en
+     * CallQueuedHandler::ensureUniqueJobLockIsReleased(). uniqueFor NO mantiene
+     * el lock una hora después de un sync exitoso: una notificación 1 hora
+     * después puede despachar otro job.
+     *
+     * Si el job se libera para retry, el lock se conserva hasta uniqueFor o hasta
+     * que el job termine. Eso evita martillar GDA con webhooks simultáneos
+     * (p. ej. PCR + perfil al mismo segundo) y permite que el retry en curso
+     * use latestResultsForOrder (la notificación más reciente).
+     */
     public int $uniqueFor = 3600;
 
     public function __construct(

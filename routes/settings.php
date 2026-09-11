@@ -17,6 +17,7 @@ use App\Http\Controllers\InAppNotificationController;
 use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\TaxProfileController;
 use App\Http\Controllers\TaxProfiles\FiscalCertificateController;
+use App\Http\Controllers\UserSupportController;
 use Illuminate\Support\Facades\Route;
 
 // Grupo principal SIN password.confirm
@@ -40,6 +41,8 @@ Route::middleware([
     Route::post('checkout/addresses', CheckoutAddressController::class)->name('checkout.addresses.store');
     Route::resource('contacts', ContactController::class)->except('show');
     Route::post('checkout/contacts', CheckoutContactController::class)->name('checkout.contacts.store');
+
+    Route::get('/user/support', UserSupportController::class)->name('user.support');
 
     // Métodos de pago con EfevooPay        
     Route::resource('payment-methods', PaymentMethodController::class)->only([
