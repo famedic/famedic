@@ -162,7 +162,7 @@ class MarketingCampaignLinkImageService
             ]);
         }
 
-        $disk = (string) config('filesystems.default', 'local');
+        $disk = $this->heroImageService->uploadDisk();
         $directory = sprintf(
             'marketing-campaigns/%d/links/%d/gallery',
             (int) $link->marketing_campaign_id,
@@ -171,7 +171,10 @@ class MarketingCampaignLinkImageService
 
         $extension = strtolower($upload->getClientOriginalExtension() ?: 'jpg');
         $filename = Str::uuid()->toString().'.'.$extension;
-        $path = $upload->storeAs($directory, $filename, $disk);
+        $path = $upload->storeAs($directory, $filename, [
+            'disk' => $disk,
+            'visibility' => 'public',
+        ]);
 
         if (! is_string($path) || $path === '') {
             throw ValidationException::withMessages([

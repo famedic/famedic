@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Field, Label } from "@/Components/Catalyst/fieldset";
 import { Input } from "@/Components/Catalyst/input";
 import { Text } from "@/Components/Catalyst/text";
@@ -7,8 +8,18 @@ import {
 	ChevronUpIcon,
 	XMarkIcon,
 } from "@heroicons/react/16/solid";
+import {
+	MARKETING_CAMPAIGN_IMAGE_MAX_BYTES,
+	MARKETING_CAMPAIGN_IMAGE_RECOMMENDED_BYTES,
+	formatFileSize,
+	validateMarketingCampaignImageFile,
+} from "./imageFileValidation";
 
 const MAX_ITEMS = 6;
+const MAX_SIZE_LABEL = formatFileSize(MARKETING_CAMPAIGN_IMAGE_MAX_BYTES);
+const RECOMMENDED_SIZE_LABEL = formatFileSize(
+	MARKETING_CAMPAIGN_IMAGE_RECOMMENDED_BYTES,
+);
 
 function previewUrl(item) {
 	if (item.preview) return item.preview;
@@ -22,8 +33,25 @@ export default function MarketingCampaignGalleryFields({
 	onChange,
 	errors = {},
 }) {
+	const [localFileMessage, setLocalFileMessage] = useState(null);
+	const fileMessages = items
+		.filter((item) => item.kind === "upload" && item.file)
+		.map((item) => ({
+			key: item.key,
+			...validateMarketingCampaignImageFile(item.file),
+		}))
+		.filter((message) => message.message);
+
 	const addUpload = (file) => {
 		if (!file || items.length >= MAX_ITEMS) return;
+		const validation = validateMarketingCampaignImageFile(file);
+
+		if (!validation.valid) {
+			setLocalFileMessage(validation);
+			return;
+		}
+
+		setLocalFileMessage(null);
 		onChange([
 			...items,
 			{
@@ -71,7 +99,15 @@ export default function MarketingCampaignGalleryFields({
 		<div className="space-y-4">
 			<Text className="text-sm text-zinc-500">
 				Hasta {MAX_ITEMS} imágenes. Puedes mezclar archivos subidos y
-				URLs HTTPS externas.
+				URLs HTTPS externas. Recomendado: 1200 x 900 px o 1200 x
+				1200 px, todas con la misma proporción para que la galería se
+				vea uniforme.
+			</Text>
+			<Text className="text-sm text-zinc-500">
+				Usa WebP o JPG optimizado, máximo {MAX_SIZE_LABEL} por archivo.
+				Lo ideal es que cada imagen pese cerca de{" "}
+				{RECOMMENDED_SIZE_LABEL}. Evita texto pequeño dentro de la
+				imagen porque puede perderse en celulares.
 			</Text>
 
 			<div className="flex flex-wrap gap-2">
@@ -104,6 +140,28 @@ export default function MarketingCampaignGalleryFields({
 				<Text className="text-sm text-red-600 dark:text-red-500">
 					{errors.gallery_items || errors.gallery_uploads}
 				</Text>
+			)}
+
+			{(localFileMessage || fileMessages.length > 0) && (
+				<div className="space-y-1">
+					{localFileMessage && (
+						<Text className="text-sm text-red-600 dark:text-red-500">
+							{localFileMessage.message}
+						</Text>
+					)}
+					{fileMessages.map((message) => (
+						<Text
+							key={message.key}
+							className={`text-sm ${
+								message.severity === "success"
+									? "text-emerald-700 dark:text-emerald-400"
+									: "text-amber-700 dark:text-amber-400"
+							}`}
+						>
+							{message.message}
+						</Text>
+					))}
+				</div>
 			)}
 
 			{items.length === 0 ? (

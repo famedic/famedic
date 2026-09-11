@@ -542,7 +542,7 @@ class MarketingCampaignAdminTest extends TestCase
     #[Test]
     public function puede_crear_y_editar_contenido_de_landing_y_rechaza_valores_invalidos(): void
     {
-        Storage::fake('local');
+        Storage::fake('public');
         $admin = $this->makeMarketingAdmin();
         $campaign = MarketingCampaign::factory()->create();
         $heroUpload = UploadedFile::fake()->image('hero.jpg');
@@ -581,7 +581,7 @@ class MarketingCampaignAdminTest extends TestCase
         $this->assertTrue((bool) $link->show_campaign_dates);
         $this->assertSame(MarketingCampaignHeroImageSource::Upload, $link->hero_image_source);
         $this->assertNotNull($link->hero_image_path);
-        Storage::disk('local')->assertExists($link->hero_image_path);
+        Storage::disk('public')->assertExists($link->hero_image_path);
 
         $this->actingAs($admin)
             ->post(route('admin.marketing-campaigns.links.store', $campaign), [
@@ -643,8 +643,8 @@ class MarketingCampaignAdminTest extends TestCase
         $this->assertFalse((bool) $link->show_brand_logo);
         $this->assertSame(MarketingCampaignHeroImageSource::Upload, $link->hero_image_source);
         $this->assertNotSame($previousPath, $link->hero_image_path);
-        Storage::disk('local')->assertExists($link->hero_image_path);
-        Storage::disk('local')->assertMissing($previousPath);
+        Storage::disk('public')->assertExists($link->hero_image_path);
+        Storage::disk('public')->assertMissing($previousPath);
 
         $this->actingAs($admin)
             ->get(route('admin.marketing-campaigns.links.edit', [$campaign, $link]))
@@ -1062,7 +1062,7 @@ class MarketingCampaignAdminTest extends TestCase
     #[Test]
     public function create_link_compensa_hero_si_falla_la_galeria(): void
     {
-        Storage::fake('local');
+        Storage::fake('public');
         $admin = $this->makeMarketingAdmin();
         $campaign = MarketingCampaign::factory()->create();
 
@@ -1088,7 +1088,7 @@ class MarketingCampaignAdminTest extends TestCase
             ->assertSessionHasErrors();
 
         $this->assertSame($beforeLinks, MarketingCampaignLink::query()->count());
-        $this->assertSame([], Storage::disk('local')->allFiles());
+        $this->assertSame([], Storage::disk('public')->allFiles());
     }
 
     #[Test]
@@ -1184,7 +1184,7 @@ class MarketingCampaignAdminTest extends TestCase
     #[Test]
     public function update_link_compensa_hero_nuevo_y_conserva_anterior_si_falla_galeria(): void
     {
-        Storage::fake('local');
+        Storage::fake('public');
         $admin = $this->makeMarketingAdmin();
         $campaign = MarketingCampaign::factory()->create();
 
@@ -1207,7 +1207,7 @@ class MarketingCampaignAdminTest extends TestCase
 
         $link = MarketingCampaignLink::query()->where('slug', 'enlace-update-cleanup')->firstOrFail();
         $originalPath = $link->hero_image_path;
-        Storage::disk('local')->assertExists($originalPath);
+        Storage::disk('public')->assertExists($originalPath);
 
         $this->actingAs($admin)
             ->put(route('admin.marketing-campaigns.links.update', [$campaign, $link]), [
@@ -1230,14 +1230,14 @@ class MarketingCampaignAdminTest extends TestCase
 
         $link->refresh();
         $this->assertSame($originalPath, $link->hero_image_path);
-        Storage::disk('local')->assertExists($originalPath);
-        $this->assertCount(1, Storage::disk('local')->allFiles());
+        Storage::disk('public')->assertExists($originalPath);
+        $this->assertCount(1, Storage::disk('public')->allFiles());
     }
 
     #[Test]
     public function update_link_exitoso_reemplaza_hero_y_elimina_anterior_cuando_no_es_compartido(): void
     {
-        Storage::fake('local');
+        Storage::fake('public');
         $admin = $this->makeMarketingAdmin();
         $campaign = MarketingCampaign::factory()->create();
 
@@ -1280,14 +1280,14 @@ class MarketingCampaignAdminTest extends TestCase
 
         $link->refresh();
         $this->assertNotSame($originalPath, $link->hero_image_path);
-        Storage::disk('local')->assertMissing($originalPath);
-        Storage::disk('local')->assertExists($link->hero_image_path);
+        Storage::disk('public')->assertMissing($originalPath);
+        Storage::disk('public')->assertExists($link->hero_image_path);
     }
 
     #[Test]
     public function update_link_no_elimina_hero_compartido_por_duplicado(): void
     {
-        Storage::fake('local');
+        Storage::fake('public');
         $admin = $this->makeMarketingAdmin();
         $campaign = MarketingCampaign::factory()->create();
 
@@ -1342,14 +1342,14 @@ class MarketingCampaignAdminTest extends TestCase
 
         $link->refresh();
         $this->assertNotSame($sharedPath, $link->hero_image_path);
-        Storage::disk('local')->assertExists($sharedPath);
-        Storage::disk('local')->assertExists($link->hero_image_path);
+        Storage::disk('public')->assertExists($sharedPath);
+        Storage::disk('public')->assertExists($link->hero_image_path);
     }
 
     #[Test]
     public function update_link_galeria_nueva_compensa_archivos_si_falla_despues(): void
     {
-        Storage::fake('local');
+        Storage::fake('public');
         $admin = $this->makeMarketingAdmin();
         $campaign = MarketingCampaign::factory()->create();
 
@@ -1397,14 +1397,14 @@ class MarketingCampaignAdminTest extends TestCase
             ])
             ->assertSessionHasErrors();
 
-        $this->assertSame([], Storage::disk('local')->allFiles());
+        $this->assertSame([], Storage::disk('public')->allFiles());
         $this->assertSame(0, $link->landingImages()->count());
     }
 
     #[Test]
     public function update_link_hero_externo_no_elimina_archivos_inexistentes_en_storage(): void
     {
-        Storage::fake('local');
+        Storage::fake('public');
         $admin = $this->makeMarketingAdmin();
         $campaign = MarketingCampaign::factory()->create();
 
@@ -1432,7 +1432,7 @@ class MarketingCampaignAdminTest extends TestCase
             ->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
 
         $link = MarketingCampaignLink::query()->where('slug', 'enlace-hero-externo-ok')->firstOrFail();
-        $this->assertSame([], Storage::disk('local')->allFiles());
+        $this->assertSame([], Storage::disk('public')->allFiles());
         $this->assertSame(MarketingCampaignHeroImageSource::External, $link->hero_image_source);
         $this->assertSame(1, $link->landingImages()->count());
     }

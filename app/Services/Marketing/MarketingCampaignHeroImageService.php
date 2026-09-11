@@ -110,7 +110,7 @@ class MarketingCampaignHeroImageService
             if (filled($link->hero_image_path)) {
                 return array_merge($data, [
                     'hero_image_source' => MarketingCampaignHeroImageSource::Upload->value,
-                    'hero_image_disk' => $link->hero_image_disk ?: config('filesystems.default'),
+                    'hero_image_disk' => $link->hero_image_disk ?: $this->uploadDisk(),
                     'hero_image_path' => $link->hero_image_path,
                     'hero_image_url' => null,
                 ]);
@@ -121,7 +121,7 @@ class MarketingCampaignHeroImageService
             ]);
         }
 
-        $disk = (string) config('filesystems.default', 'local');
+        $disk = $this->uploadDisk();
         $directory = sprintf(
             'marketing-campaigns/%d/links/%d',
             (int) $link->marketing_campaign_id,
@@ -130,7 +130,10 @@ class MarketingCampaignHeroImageService
 
         $extension = strtolower($upload->getClientOriginalExtension() ?: 'jpg');
         $filename = Str::uuid()->toString().'.'.$extension;
-        $path = $upload->storeAs($directory, $filename, $disk);
+        $path = $upload->storeAs($directory, $filename, [
+            'disk' => $disk,
+            'visibility' => 'public',
+        ]);
 
         if (! is_string($path) || $path === '') {
             throw ValidationException::withMessages([
@@ -181,10 +184,15 @@ class MarketingCampaignHeroImageService
         }
 
         try {
-            Storage::disk($disk ?: config('filesystems.default', 'local'))->delete($path);
+            Storage::disk($disk ?: $this->uploadDisk())->delete($path);
         } catch (\Throwable) {
             // best-effort
         }
+    }
+
+    public function uploadDisk(): string
+    {
+        return 'public';
     }
 
     public function assertSafeExternalUrl(string $url): void
