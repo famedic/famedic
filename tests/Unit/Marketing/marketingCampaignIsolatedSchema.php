@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Schema;
 function marketingCampaignIsolatedTableNames(): array
 {
     return [
+        '__temp__marketing_campaign_attributions',
         'marketing_campaign_conversions',
         'marketing_campaign_visits',
         'marketing_campaign_attributions',
@@ -28,6 +29,7 @@ function marketingCampaignIsolatedTableNames(): array
         'transactionables',
         'transactions',
         'laboratory_purchases',
+        'laboratory_notifications',
         'notifications',
         'laboratory_concierges',
         'administrators',
@@ -72,6 +74,14 @@ function bootstrapIsolatedMarketingCampaignSchema(): void
         $table->text('message')->nullable();
         $table->boolean('is_read')->default(false);
         $table->timestamp('created_at')->nullable();
+    });
+
+    Schema::create('laboratory_notifications', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
+        $table->timestamp('read_at')->nullable();
+        $table->timestamps();
+        $table->softDeletes();
     });
 
     Schema::create('administrators', function (Blueprint $table) {
@@ -241,6 +251,12 @@ function bootstrapIsolatedMarketingCampaignSchema(): void
 
     $dashboardMetricsMigration = require database_path('migrations/2026_09_11_030000_add_marketing_campaign_dashboard_metrics_columns.php');
     $dashboardMetricsMigration->up();
+
+    $landingTemplateMigration = require database_path('migrations/2026_09_11_100000_add_landing_template_to_marketing_campaign_links.php');
+    $landingTemplateMigration->up();
+
+    $editorialFieldsMigration = require database_path('migrations/2026_09_11_101000_add_editorial_fields_to_marketing_campaign_links.php');
+    $editorialFieldsMigration->up();
 
     app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
 }
