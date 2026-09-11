@@ -291,8 +291,12 @@ return new class extends Migration
     {
         // 1. Add the description and feature_list columns
         Schema::table('laboratory_tests', function (Blueprint $table) {
-            $table->text('description')->nullable()->after('name');
-            $table->json('feature_list')->nullable()->after('description');
+            if (! Schema::hasColumn('laboratory_tests', 'description')) {
+                $table->text('description')->nullable()->after('name');
+            }
+            if (! Schema::hasColumn('laboratory_tests', 'feature_list')) {
+                $table->json('feature_list')->nullable()->after('description');
+            }
             // Make indications nullable if it exists
             if (Schema::hasColumn('laboratory_tests', 'indications')) {
                 $table->text('indications')->nullable()->change();
@@ -320,6 +324,14 @@ return new class extends Migration
 
         // 4. Create new laboratory_tests records for newPackages (one per brand)
         if (DB::getDriverName() !== 'sqlite') {
+            $packageCategoryId = DB::table('laboratory_test_categories')->where('id', 12)->value('id')
+                ?? DB::table('laboratory_test_categories')->value('id')
+                ?? DB::table('laboratory_test_categories')->insertGetId([
+                    'name' => 'Checkups',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
             foreach ($this->newPackages as $pkg) {
                 foreach ($pkg['brand_codes'] as $brand => $gda_id) {
                     DB::table('laboratory_tests')->insert([
@@ -327,7 +339,7 @@ return new class extends Migration
                         'feature_list' => json_encode($pkg['feature_list']),
                         'public_price_cents' => $pkg['public_price_cents'],
                         'famedic_price_cents' => $pkg['famedic_price_cents'],
-                        'laboratory_test_category_id' => 12,
+                        'laboratory_test_category_id' => $packageCategoryId,
                         'brand' => $brand,
                         'gda_id' => $gda_id,
                         'created_at' => now(),

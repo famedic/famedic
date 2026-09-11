@@ -19,6 +19,10 @@ return new class extends Migration
             return;
         }
 
+        if (! $this->oldSourceTableExists('pregenerated_medical_attention_ids')) {
+            return;
+        }
+
         Log::info('Starting pregenerated certificates migration...');
 
         $totalProcessed = 0;
@@ -122,5 +126,54 @@ return new class extends Migration
             file_put_contents($reportPath, json_encode($skippedCustomerDetails, JSON_PRETTY_PRINT));
             Log::info('Detailed JSON report saved to: ' . $reportPath);
         }
+    }
+
+    private function oldSourceTableExists(string $table): bool
+    {
+        $connection = config('database.connections.mysqlold');
+
+        if (! is_array($connection) || empty($connection['host']) || empty($connection['database'])) {
+            Log::warning('Skipping pregenerated certificates migration because the old database connection is not configured.');
+
+            return false;
+        }
+
+        try {
+            DB::connection('mysqlold')->getPdo();
+        } catch (\Throwable $exception) {
+            if (! $this->isLegacyConnectionUnavailable($exception)) {
+                throw $exception;
+            }
+
+            Log::warning('Skipping pregenerated certificates migration because the old database connection is unavailable.', [
+                'code' => $exception->getCode(),
+            ]);
+
+            return false;
+        }
+
+        if (! DB::connection('mysqlold')->getSchemaBuilder()->hasTable($table)) {
+            Log::warning('Skipping pregenerated certificates migration because the old source table is unavailable.');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function isLegacyConnectionUnavailable(\Throwable $exception): bool
+    {
+        $code = (int) $exception->getCode();
+
+        if (in_array($code, [1045, 1049, 2002], true)) {
+            return true;
+        }
+
+        $message = $exception->getMessage();
+
+        return str_contains($message, 'php_network_getaddresses')
+            || str_contains($message, 'Connection refused')
+            || str_contains($message, 'Access denied')
+            || str_contains($message, 'Unknown database');
     }
 };
