@@ -22,11 +22,7 @@ class MarketingCampaignAttributionCookieFactory
 
         $token = trim($raw);
 
-        if ($token === '' || mb_strlen($token) > 128) {
-            return null;
-        }
-
-        if (! preg_match('/^[A-Za-z0-9_-]+$/', $token)) {
+        if (! $this->tokenService->isValid($token)) {
             return null;
         }
 

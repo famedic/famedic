@@ -39,6 +39,7 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
                 foreach ([
                     'marketing_campaign_visits',
                     'marketing_campaign_attributions',
+                    'marketing_campaign_visitor_identities',
                     'marketing_campaign_link_images',
                     'marketing_campaign_link_categories',
                     'marketing_campaign_link_products',
@@ -78,19 +79,24 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
         $landingMigration = require database_path('migrations/2026_08_06_230200_add_landing_fields_to_marketing_campaign_links.php');
         $commerceMigration = require database_path('migrations/2026_08_06_230300_add_landing_commerce_to_marketing_campaign_links.php');
         $attributionMigration = require database_path('migrations/2026_08_06_230400_create_marketing_campaign_attribution_tables.php');
+        $visitorIdentityMigration = require database_path('migrations/2026_09_11_010000_add_visitor_identities_to_marketing_attribution.php');
 
         // Primera ejecución: base + landing + commerce + attribution
         $this->runMigrationOnTempConnection($baseMigration, 'up');
         $this->runMigrationOnTempConnection($landingMigration, 'up');
         $this->runMigrationOnTempConnection($commerceMigration, 'up');
         $this->runMigrationOnTempConnection($attributionMigration, 'up');
+        $this->seedHistoricalAttributionFixtures();
+        $this->runMigrationOnTempConnection($visitorIdentityMigration, 'up');
         $this->assertMarketingTablesExist();
         $this->assertNamedConstraints();
         $this->assertLandingColumnsExistWithDefaults();
         $this->assertCommerceSchemaExists();
         $this->assertAttributionSchemaExists();
+        $this->assertHistoricalIdentitiesBackfilled();
 
         // down en orden inverso
+        $this->runMigrationOnTempConnection($visitorIdentityMigration, 'down');
         $this->runMigrationOnTempConnection($attributionMigration, 'down');
         $this->assertAttributionSchemaMissing();
         $this->runMigrationOnTempConnection($commerceMigration, 'down');
@@ -105,12 +111,14 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
         $this->runMigrationOnTempConnection($landingMigration, 'up');
         $this->runMigrationOnTempConnection($commerceMigration, 'up');
         $this->runMigrationOnTempConnection($attributionMigration, 'up');
+        $this->runMigrationOnTempConnection($visitorIdentityMigration, 'up');
         $this->assertMarketingTablesExist();
         $this->assertNamedConstraints();
         $this->assertLandingColumnsExistWithDefaults();
         $this->assertCommerceSchemaExists();
         $this->assertAttributionSchemaExists();
 
+        $this->runMigrationOnTempConnection($visitorIdentityMigration, 'down');
         $this->runMigrationOnTempConnection($attributionMigration, 'down');
         $this->assertAttributionSchemaMissing();
         $this->runMigrationOnTempConnection($commerceMigration, 'down');
@@ -250,6 +258,7 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
             'marketing_campaign_collection_items',
             'marketing_campaign_visits',
             'marketing_campaign_attributions',
+            'marketing_campaign_visitor_identities',
         ] as $table) {
             $this->assertTrue($schema->hasTable($table), "Falta tabla {$table}");
         }
@@ -267,6 +276,7 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
             'marketing_campaign_collection_items',
             'marketing_campaign_visits',
             'marketing_campaign_attributions',
+            'marketing_campaign_visitor_identities',
         ] as $table) {
             $this->assertFalse($schema->hasTable($table), "La tabla {$table} no debió existir tras down()");
         }
@@ -439,7 +449,11 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
     {
         $schema = Schema::connection($this->connection);
 
-        foreach (['marketing_campaign_visits', 'marketing_campaign_attributions'] as $table) {
+        foreach ([
+            'marketing_campaign_visits',
+            'marketing_campaign_attributions',
+            'marketing_campaign_visitor_identities',
+        ] as $table) {
             $this->assertTrue($schema->hasTable($table), "Falta tabla {$table}");
         }
 
@@ -455,6 +469,8 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
             'mc_visits_attribution_fk',
             'mc_attr_first_visit_fk',
             'mc_attr_last_visit_fk',
+            'mc_attr_vid_fk',
+            'mc_visits_vid_fk',
             'mc_attr_first_campaign_fk',
             'mc_attr_last_link_fk',
         ] as $name) {
@@ -469,6 +485,9 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
 
         foreach ([
             'mc_attr_token_hash_idx',
+            'mc_vid_token_hash_unique',
+            'mc_attr_vid_idx',
+            'mc_visits_vid_idx',
             'mc_visits_campaign_visited_idx',
             'mc_visits_link_visited_idx',
         ] as $name) {
@@ -476,11 +495,152 @@ class MarketingCampaignMysqlMigrationTest extends TestCase
         }
     }
 
+    private function seedHistoricalAttributionFixtures(): void
+    {
+        $db = DB::connection($this->connection);
+        $now = now()->format('Y-m-d H:i:s');
+        $old = now()->subDays(40)->format('Y-m-d H:i:s');
+        $expires = now()->addDays(30)->format('Y-m-d H:i:s');
+        $expired = now()->subDay()->format('Y-m-d H:i:s');
+        $sharedHash = str_repeat('a', 64);
+        $visitOnlyHash = str_repeat('b', 64);
+        $legacyInvalidHash = 'legacy-invalid-hash';
+
+        $db->table('marketing_campaigns')->insert([
+            'id' => 1001,
+            'name' => 'Migracion historica',
+            'status' => 'active',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        $db->table('marketing_campaign_links')->insert([
+            [
+                'id' => 2001,
+                'marketing_campaign_id' => 1001,
+                'name' => 'Historico A',
+                'slug' => 'historico-a',
+                'status' => 'active',
+                'target_type' => 'brand',
+                'target_payload' => json_encode(['brand' => 'olab']),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 2002,
+                'marketing_campaign_id' => 1001,
+                'name' => 'Historico B',
+                'slug' => 'historico-b',
+                'status' => 'active',
+                'target_type' => 'brand',
+                'target_payload' => json_encode(['brand' => 'olab']),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        ]);
+
+        $db->table('marketing_campaign_attributions')->insert([
+            [
+                'id' => 3001,
+                'visitor_token_hash' => $sharedHash,
+                'first_campaign_id' => 1001,
+                'first_link_id' => 2001,
+                'last_campaign_id' => 1001,
+                'last_link_id' => 2001,
+                'first_touched_at' => $old,
+                'last_touched_at' => $old,
+                'expires_at' => $expired,
+                'created_at' => $old,
+                'updated_at' => $old,
+            ],
+            [
+                'id' => 3002,
+                'visitor_token_hash' => $sharedHash,
+                'first_campaign_id' => 1001,
+                'first_link_id' => 2001,
+                'last_campaign_id' => 1001,
+                'last_link_id' => 2002,
+                'first_touched_at' => $now,
+                'last_touched_at' => $now,
+                'expires_at' => $expires,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 3003,
+                'visitor_token_hash' => $legacyInvalidHash,
+                'first_campaign_id' => 1001,
+                'first_link_id' => 2002,
+                'last_campaign_id' => 1001,
+                'last_link_id' => 2002,
+                'first_touched_at' => $old,
+                'last_touched_at' => $old,
+                'expires_at' => $expired,
+                'created_at' => $old,
+                'updated_at' => $old,
+            ],
+        ]);
+
+        $db->table('marketing_campaign_visits')->insert([
+            [
+                'id' => 4001,
+                'marketing_campaign_id' => 1001,
+                'marketing_campaign_link_id' => 2001,
+                'marketing_campaign_attribution_id' => 3001,
+                'visitor_token_hash' => $sharedHash,
+                'landing_path' => '/c/historico-a',
+                'visited_at' => $old,
+                'created_at' => $old,
+            ],
+            [
+                'id' => 4002,
+                'marketing_campaign_id' => 1001,
+                'marketing_campaign_link_id' => 2002,
+                'marketing_campaign_attribution_id' => null,
+                'visitor_token_hash' => $visitOnlyHash,
+                'landing_path' => '/c/historico-b',
+                'visited_at' => $now,
+                'created_at' => $now,
+            ],
+        ]);
+    }
+
+    private function assertHistoricalIdentitiesBackfilled(): void
+    {
+        $db = DB::connection($this->connection);
+        $sharedHash = str_repeat('a', 64);
+        $visitOnlyHash = str_repeat('b', 64);
+        $legacyInvalidHash = 'legacy-invalid-hash';
+
+        $this->assertSame(3, $db->table('marketing_campaign_visitor_identities')->count());
+        $this->assertSame(1, $db->table('marketing_campaign_visitor_identities')->where('visitor_token_hash', $sharedHash)->count());
+        $this->assertSame(1, $db->table('marketing_campaign_visitor_identities')->where('visitor_token_hash', $visitOnlyHash)->count());
+        $this->assertSame(1, $db->table('marketing_campaign_visitor_identities')->where('visitor_token_hash', $legacyInvalidHash)->count());
+
+        $this->assertSame(0, $db->table('marketing_campaign_attributions')->whereNull('marketing_campaign_visitor_identity_id')->count());
+        $this->assertSame(0, $db->table('marketing_campaign_visits')->whereNull('marketing_campaign_visitor_identity_id')->count());
+        $this->assertSame(
+            1,
+            $db->table('marketing_campaign_attributions')
+                ->where('visitor_token_hash', $sharedHash)
+                ->distinct()
+                ->count('marketing_campaign_visitor_identity_id'),
+        );
+        $this->assertSame(
+            '2026',
+            substr((string) $db->table('marketing_campaign_attributions')->where('id', 3002)->value('first_touched_at'), 0, 4),
+        );
+    }
+
     private function assertAttributionSchemaMissing(): void
     {
         $schema = Schema::connection($this->connection);
 
-        foreach (['marketing_campaign_visits', 'marketing_campaign_attributions'] as $table) {
+        foreach ([
+            'marketing_campaign_visits',
+            'marketing_campaign_attributions',
+            'marketing_campaign_visitor_identities',
+        ] as $table) {
             $this->assertFalse($schema->hasTable($table), "La tabla {$table} no debió existir tras down de 230400");
         }
     }

@@ -8,6 +8,7 @@ function marketingCampaignIsolatedTableNames(): array
     return [
         'marketing_campaign_visits',
         'marketing_campaign_attributions',
+        'marketing_campaign_visitor_identities',
         'marketing_campaign_link_images',
         'marketing_campaign_link_categories',
         'marketing_campaign_link_products',
@@ -176,6 +177,9 @@ function bootstrapIsolatedMarketingCampaignSchema(): void
 
     $attributionMigration = require database_path('migrations/2026_08_06_230400_create_marketing_campaign_attribution_tables.php');
     $attributionMigration->up();
+
+    $visitorIdentityMigration = require database_path('migrations/2026_09_11_010000_add_visitor_identities_to_marketing_attribution.php');
+    $visitorIdentityMigration->up();
 
     app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
 }

@@ -5,6 +5,7 @@ namespace App\Actions\Marketing;
 use App\DataTransferObjects\Marketing\MarketingCampaignEffectiveTrackingData;
 use App\Models\MarketingCampaignAttribution;
 use App\Models\MarketingCampaignLink;
+use App\Models\MarketingCampaignVisitorIdentity;
 use App\Models\MarketingCampaignVisit;
 use App\Services\Marketing\MarketingCampaignAttributionCookieFactory;
 use App\Services\Marketing\MarketingCampaignAttributionTokenService;
@@ -94,8 +95,10 @@ class CaptureMarketingCampaignVisitAction
             $customerId,
             $windowDays,
         ) {
+            $identity = $this->firstOrCreateLockedIdentity($tokenHash, $visitedAt);
+
             $attribution = MarketingCampaignAttribution::query()
-                ->where('visitor_token_hash', $tokenHash)
+                ->where('marketing_campaign_visitor_identity_id', $identity->id)
                 ->where('expires_at', '>', $visitedAt)
                 ->orderByDesc('id')
                 ->lockForUpdate()
@@ -106,6 +109,7 @@ class CaptureMarketingCampaignVisitAction
             if ($isNewCycle) {
                 $attribution = MarketingCampaignAttribution::query()->create([
                     'visitor_token_hash' => $tokenHash,
+                    'marketing_campaign_visitor_identity_id' => $identity->id,
                     'first_campaign_id' => $campaign->id,
                     'first_link_id' => $link->id,
                     'last_campaign_id' => $campaign->id,
@@ -125,6 +129,7 @@ class CaptureMarketingCampaignVisitAction
                     'marketing_campaign_link_id' => $link->id,
                     'marketing_campaign_attribution_id' => $attribution->id,
                     'visitor_token_hash' => $tokenHash,
+                    'marketing_campaign_visitor_identity_id' => $identity->id,
                     'user_id' => $userId,
                     'customer_id' => $customerId,
                     'landing_path' => $landingPath,
@@ -155,5 +160,30 @@ class CaptureMarketingCampaignVisitAction
 
             return new CaptureMarketingCampaignVisitResult($visit, $cookie, $tokenHash);
         });
+    }
+
+    private function firstOrCreateLockedIdentity(
+        string $tokenHash,
+        CarbonInterface $touchedAt,
+    ): MarketingCampaignVisitorIdentity {
+        $identity = MarketingCampaignVisitorIdentity::query()
+            ->where('visitor_token_hash', $tokenHash)
+            ->lockForUpdate()
+            ->first();
+
+        if ($identity !== null) {
+            return $identity;
+        }
+
+        MarketingCampaignVisitorIdentity::query()->insertOrIgnore([
+            'visitor_token_hash' => $tokenHash,
+            'created_at' => $touchedAt,
+            'updated_at' => $touchedAt,
+        ]);
+
+        return MarketingCampaignVisitorIdentity::query()
+            ->where('visitor_token_hash', $tokenHash)
+            ->lockForUpdate()
+            ->firstOrFail();
     }
 }

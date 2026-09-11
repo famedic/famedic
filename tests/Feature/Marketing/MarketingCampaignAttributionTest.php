@@ -10,6 +10,7 @@ use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignAttribution;
 use App\Models\MarketingCampaignLink;
 use App\Models\MarketingCampaignLinkAlias;
+use App\Models\MarketingCampaignVisitorIdentity;
 use App\Models\MarketingCampaignVisit;
 use App\Services\Marketing\MarketingCampaignAttributionTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
@@ -82,9 +83,14 @@ class MarketingCampaignAttributionTest extends TestCase
 
     private function cookieValueFromResponse(\Illuminate\Testing\TestResponse $response): string
     {
+        return $this->attributionCookieFromResponse($response)->getValue();
+    }
+
+    private function attributionCookieFromResponse(\Illuminate\Testing\TestResponse $response): \Symfony\Component\HttpFoundation\Cookie
+    {
         foreach ($response->headers->getCookies() as $cookie) {
             if ($cookie->getName() === $this->cookieName()) {
-                return $cookie->getValue();
+                return $cookie;
             }
         }
 
@@ -106,20 +112,49 @@ class MarketingCampaignAttributionTest extends TestCase
 
         $this->assertSame(1, MarketingCampaignVisit::query()->count());
         $this->assertSame(1, MarketingCampaignAttribution::query()->count());
+        $this->assertSame(1, MarketingCampaignVisitorIdentity::query()->count());
 
         $visit = MarketingCampaignVisit::query()->first();
         $attribution = MarketingCampaignAttribution::query()->first();
+        $identity = MarketingCampaignVisitorIdentity::query()->first();
 
         $this->assertSame('facebook', $visit->utm_source);
         $this->assertSame('default-medium', $visit->utm_medium);
         $this->assertSame('/c/primera-visita', $visit->landing_path);
         $this->assertSame($visit->id, $attribution->first_visit_id);
         $this->assertSame($visit->id, $attribution->last_visit_id);
+        $this->assertSame($identity->id, $attribution->marketing_campaign_visitor_identity_id);
+        $this->assertSame($identity->id, $visit->marketing_campaign_visitor_identity_id);
+        $this->assertSame($visit->visitor_token_hash, $identity->visitor_token_hash);
         $this->assertTrue($attribution->expires_at->greaterThan(now()->addDays(29)));
 
         $rawCookie = $this->cookieValueFromResponse($response);
         $this->assertNotSame($rawCookie, $visit->visitor_token_hash);
         $this->assertSame(64, strlen($visit->visitor_token_hash));
+    }
+
+    #[Test]
+    public function cookie_de_atribucion_es_httponly_lax_secure_y_alineada_a_la_ventana(): void
+    {
+        config([
+            'marketing-attribution.secure' => true,
+            'marketing-attribution.cookie_path' => '/',
+            'marketing-attribution.cookie_same_site' => 'lax',
+        ]);
+
+        $campaign = $this->makeActiveCampaign();
+        $this->makeActiveLink($campaign, ['slug' => 'cookie-segura']);
+
+        $response = $this->get(route('campaign-links.show', ['slug' => 'cookie-segura']));
+
+        $cookie = $this->attributionCookieFromResponse($response);
+        $attribution = MarketingCampaignAttribution::query()->firstOrFail();
+
+        $this->assertTrue($cookie->isHttpOnly());
+        $this->assertTrue($cookie->isSecure());
+        $this->assertSame('/', $cookie->getPath());
+        $this->assertSame('lax', strtolower((string) $cookie->getSameSite()));
+        $this->assertSame($attribution->expires_at->getTimestamp(), $cookie->getExpiresTime());
     }
 
     #[Test]
@@ -146,6 +181,33 @@ class MarketingCampaignAttributionTest extends TestCase
         $this->assertNotSame($attribution->first_visit_id, $attribution->last_visit_id);
         $this->assertSame('first', $attribution->firstVisit->utm_source);
         $this->assertSame('override', $attribution->lastVisit->utm_source);
+    }
+
+    #[Test]
+    public function cada_touch_valido_renueva_la_ventana_movil_del_ciclo_activo(): void
+    {
+        $campaign = $this->makeActiveCampaign();
+        $linkA = $this->makeActiveLink($campaign, ['slug' => 'mobile-window-a']);
+        $linkB = $this->makeActiveLink($campaign, ['slug' => 'mobile-window-b']);
+
+        $this->travelTo(now()->startOfSecond());
+        $first = $this->get(route('campaign-links.show', ['slug' => $linkA->slug]));
+        $firstExpiresAt = MarketingCampaignAttribution::query()->firstOrFail()->expires_at;
+        $token = $this->cookieValueFromResponse($first);
+
+        $this->travel(5)->days();
+
+        $this->withUnencryptedCookies([$this->cookieName() => $token])
+            ->get(route('campaign-links.show', ['slug' => $linkB->slug]))
+            ->assertOk();
+
+        $attribution = MarketingCampaignAttribution::query()->firstOrFail();
+
+        $this->assertSame($linkA->id, $attribution->first_link_id);
+        $this->assertSame($linkB->id, $attribution->last_link_id);
+        $this->assertTrue($attribution->expires_at->greaterThan($firstExpiresAt));
+
+        $this->travelBack();
     }
 
     #[Test]
@@ -187,6 +249,22 @@ class MarketingCampaignAttributionTest extends TestCase
             ->assertOk()
             ->assertCookie($this->cookieName());
 
+        $this->assertSame(1, MarketingCampaignAttribution::query()->count());
+    }
+
+    #[Test]
+    public function cookie_con_caracteres_validos_pero_formato_corto_se_rechaza_seguro(): void
+    {
+        $campaign = $this->makeActiveCampaign();
+        $this->makeActiveLink($campaign, ['slug' => 'short-cookie']);
+
+        $response = $this->withCookie($this->cookieName(), 'short-but-valid-chars')
+            ->get(route('campaign-links.show', ['slug' => 'short-cookie']));
+
+        $response->assertOk()->assertCookie($this->cookieName());
+
+        $this->assertNotSame('short-but-valid-chars', $this->cookieValueFromResponse($response));
+        $this->assertSame(1, MarketingCampaignVisitorIdentity::query()->count());
         $this->assertSame(1, MarketingCampaignAttribution::query()->count());
     }
 

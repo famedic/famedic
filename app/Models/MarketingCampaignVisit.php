@@ -44,6 +44,11 @@ class MarketingCampaignVisit extends Model
         return $this->belongsTo(MarketingCampaignAttribution::class, 'marketing_campaign_attribution_id');
     }
 
+    public function visitorIdentity(): BelongsTo
+    {
+        return $this->belongsTo(MarketingCampaignVisitorIdentity::class, 'marketing_campaign_visitor_identity_id');
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

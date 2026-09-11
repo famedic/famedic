@@ -8,7 +8,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | Captura anónima first/last touch para landings /c/{slug}. La cookie sólo
-    | contiene un token opaco; nunca UTMs, IDs internos ni PII.
+    | contiene un token opaco; nunca UTMs, IDs internos ni PII. Cada touch válido
+    | renueva una ventana móvil; los ciclos expirados se conservan como historial.
     |
     */
 

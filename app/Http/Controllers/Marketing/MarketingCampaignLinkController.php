@@ -121,8 +121,9 @@ class MarketingCampaignLinkController extends Controller
                 Log::error('marketing_campaign_visit_capture_failed', [
                     'marketing_campaign_id' => $campaign->id,
                     'marketing_campaign_link_id' => $link->id,
+                    'stage' => 'capture_visit',
                     'exception' => $exception::class,
-                    'message' => $exception->getMessage(),
+                    'message' => 'Marketing campaign visit capture failed.',
                 ]);
             }
         }
