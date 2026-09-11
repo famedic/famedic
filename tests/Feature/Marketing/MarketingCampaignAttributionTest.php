@@ -2,18 +2,22 @@
 
 namespace Tests\Feature\Marketing;
 
+use App\Actions\Marketing\AttachMarketingCampaignAttributionToCustomerAction;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MarketingCampaignLinkStatus;
 use App\Enums\MarketingCampaignStatus;
 use App\Enums\MarketingCampaignTargetType;
+use App\Models\Customer;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignAttribution;
 use App\Models\MarketingCampaignLink;
 use App\Models\MarketingCampaignLinkAlias;
 use App\Models\MarketingCampaignVisitorIdentity;
 use App\Models\MarketingCampaignVisit;
+use App\Models\User;
 use App\Services\Marketing\MarketingCampaignAttributionTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -84,6 +88,67 @@ class MarketingCampaignAttributionTest extends TestCase
     private function cookieValueFromResponse(\Illuminate\Testing\TestResponse $response): string
     {
         return $this->attributionCookieFromResponse($response)->getValue();
+    }
+
+    private function makeMarketingCustomerUser(): User
+    {
+        $user = User::factory()->create();
+
+        Customer::query()->create([
+            'user_id' => $user->id,
+        ]);
+
+        return $user->fresh('customer');
+    }
+
+    private function attributionRequestWithCookie(string $token): Request
+    {
+        $request = Request::create('/');
+        $request->cookies->set($this->cookieName(), $token);
+
+        return $request;
+    }
+
+    /**
+     * @return array{token: string, attribution: MarketingCampaignAttribution, identity: MarketingCampaignVisitorIdentity, visit: MarketingCampaignVisit, campaign: MarketingCampaign, link: MarketingCampaignLink}
+     */
+    private function makeAnonymousAttributionCycle(?\DateTimeInterface $expiresAt = null): array
+    {
+        $campaign = $this->makeActiveCampaign();
+        $link = $this->makeActiveLink($campaign, ['slug' => 'attach-'.strtolower(fake()->bothify('????-####'))]);
+        $tokenService = app(MarketingCampaignAttributionTokenService::class);
+        $token = $tokenService->generate();
+        $tokenHash = $tokenService->hash($token);
+        $identity = MarketingCampaignVisitorIdentity::query()->create([
+            'visitor_token_hash' => $tokenHash,
+        ]);
+        $attribution = MarketingCampaignAttribution::query()->create([
+            'visitor_token_hash' => $tokenHash,
+            'marketing_campaign_visitor_identity_id' => $identity->id,
+            'first_campaign_id' => $campaign->id,
+            'first_link_id' => $link->id,
+            'last_campaign_id' => $campaign->id,
+            'last_link_id' => $link->id,
+            'first_touched_at' => now(),
+            'last_touched_at' => now(),
+            'expires_at' => $expiresAt ?? now()->addDays(30),
+        ]);
+        $visit = MarketingCampaignVisit::query()->create([
+            'marketing_campaign_id' => $campaign->id,
+            'marketing_campaign_link_id' => $link->id,
+            'marketing_campaign_attribution_id' => $attribution->id,
+            'visitor_token_hash' => $tokenHash,
+            'marketing_campaign_visitor_identity_id' => $identity->id,
+            'landing_path' => '/c/'.$link->slug,
+            'visited_at' => now(),
+            'created_at' => now(),
+        ]);
+        $attribution->update([
+            'first_visit_id' => $visit->id,
+            'last_visit_id' => $visit->id,
+        ]);
+
+        return compact('token', 'attribution', 'identity', 'visit', 'campaign', 'link');
     }
 
     private function attributionCookieFromResponse(\Illuminate\Testing\TestResponse $response): \Symfony\Component\HttpFoundation\Cookie
@@ -266,6 +331,168 @@ class MarketingCampaignAttributionTest extends TestCase
         $this->assertNotSame('short-but-valid-chars', $this->cookieValueFromResponse($response));
         $this->assertSame(1, MarketingCampaignVisitorIdentity::query()->count());
         $this->assertSame(1, MarketingCampaignAttribution::query()->count());
+    }
+
+    #[Test]
+    public function attach_de_atribucion_asocia_ciclo_activo_y_sus_visitas_al_customer(): void
+    {
+        $cycle = $this->makeAnonymousAttributionCycle();
+        $user = $this->makeMarketingCustomerUser();
+
+        $status = app(AttachMarketingCampaignAttributionToCustomerAction::class)(
+            $this->attributionRequestWithCookie($cycle['token']),
+            $user,
+            'test_register',
+        );
+
+        $attribution = $cycle['attribution']->fresh();
+        $visit = $cycle['visit']->fresh();
+
+        $this->assertSame(AttachMarketingCampaignAttributionToCustomerAction::STATUS_ATTACHED, $status);
+        $this->assertSame($user->id, $attribution->user_id);
+        $this->assertSame($user->customer->id, $attribution->customer_id);
+        $this->assertSame($user->id, $visit->user_id);
+        $this->assertSame($user->customer->id, $visit->customer_id);
+    }
+
+    #[Test]
+    public function attach_de_atribucion_es_idempotente_para_el_mismo_customer(): void
+    {
+        $cycle = $this->makeAnonymousAttributionCycle();
+        $user = $this->makeMarketingCustomerUser();
+        $request = $this->attributionRequestWithCookie($cycle['token']);
+        $action = app(AttachMarketingCampaignAttributionToCustomerAction::class);
+
+        $this->assertSame(AttachMarketingCampaignAttributionToCustomerAction::STATUS_ATTACHED, $action($request, $user, 'test_register'));
+        $this->assertSame(AttachMarketingCampaignAttributionToCustomerAction::STATUS_ATTACHED, $action($request, $user, 'test_login'));
+
+        $this->assertSame(1, MarketingCampaignAttribution::query()->where('user_id', $user->id)->count());
+        $this->assertSame(1, MarketingCampaignVisit::query()->where('customer_id', $user->customer->id)->count());
+    }
+
+    #[Test]
+    public function attach_de_atribucion_no_reasigna_si_el_ciclo_pertenece_a_otro_customer(): void
+    {
+        $cycle = $this->makeAnonymousAttributionCycle();
+        $existing = $this->makeMarketingCustomerUser();
+        $target = $this->makeMarketingCustomerUser();
+
+        $cycle['attribution']->update([
+            'user_id' => $existing->id,
+            'customer_id' => $existing->customer->id,
+        ]);
+
+        $status = app(AttachMarketingCampaignAttributionToCustomerAction::class)(
+            $this->attributionRequestWithCookie($cycle['token']),
+            $target,
+            'test_login',
+        );
+
+        $attribution = $cycle['attribution']->fresh();
+
+        $this->assertSame(AttachMarketingCampaignAttributionToCustomerAction::STATUS_CONFLICT, $status);
+        $this->assertSame($existing->id, $attribution->user_id);
+        $this->assertSame($existing->customer->id, $attribution->customer_id);
+    }
+
+    #[Test]
+    public function attach_de_atribucion_no_reasigna_si_una_visita_del_ciclo_pertenece_a_otro_customer(): void
+    {
+        $cycle = $this->makeAnonymousAttributionCycle();
+        $existing = $this->makeMarketingCustomerUser();
+        $target = $this->makeMarketingCustomerUser();
+
+        MarketingCampaignVisit::query()
+            ->whereKey($cycle['visit']->id)
+            ->update([
+                'user_id' => $existing->id,
+                'customer_id' => $existing->customer->id,
+            ]);
+
+        $status = app(AttachMarketingCampaignAttributionToCustomerAction::class)(
+            $this->attributionRequestWithCookie($cycle['token']),
+            $target,
+            'test_login',
+        );
+
+        $this->assertSame(AttachMarketingCampaignAttributionToCustomerAction::STATUS_CONFLICT, $status);
+        $this->assertNull($cycle['attribution']->fresh()->user_id);
+        $this->assertSame($existing->id, $cycle['visit']->fresh()->user_id);
+    }
+
+    #[Test]
+    public function attach_de_atribucion_ignora_cookie_invalida_identity_inexistente_y_ciclo_expirado(): void
+    {
+        $cycle = $this->makeAnonymousAttributionCycle();
+        $user = $this->makeMarketingCustomerUser();
+        $action = app(AttachMarketingCampaignAttributionToCustomerAction::class);
+
+        $this->assertSame(
+            AttachMarketingCampaignAttributionToCustomerAction::STATUS_NO_COOKIE,
+            $action($this->attributionRequestWithCookie('short'), $user, 'test_login'),
+        );
+
+        $missingToken = app(MarketingCampaignAttributionTokenService::class)->generate();
+        $this->assertSame(
+            AttachMarketingCampaignAttributionToCustomerAction::STATUS_NO_IDENTITY,
+            $action($this->attributionRequestWithCookie($missingToken), $user, 'test_login'),
+        );
+
+        $cycle['attribution']->update([
+            'expires_at' => now()->subMinute(),
+        ]);
+
+        $this->assertSame(
+            AttachMarketingCampaignAttributionToCustomerAction::STATUS_NO_ACTIVE_ATTRIBUTION,
+            $action($this->attributionRequestWithCookie($cycle['token']), $user, 'test_login'),
+        );
+        $this->assertNull($cycle['attribution']->fresh()->user_id);
+        $this->assertNull($cycle['visit']->fresh()->customer_id);
+    }
+
+    #[Test]
+    public function attach_de_atribucion_solo_identifica_visitas_del_ciclo_activo_actual(): void
+    {
+        $cycle = $this->makeAnonymousAttributionCycle();
+        $campaign = $cycle['campaign'];
+        $linkB = $this->makeActiveLink($campaign, ['slug' => 'attach-historico-b']);
+        $activeAttribution = $cycle['attribution'];
+        $identity = $cycle['identity'];
+        $user = $this->makeMarketingCustomerUser();
+
+        $expiredAttribution = MarketingCampaignAttribution::query()->create([
+            'visitor_token_hash' => $activeAttribution->visitor_token_hash,
+            'marketing_campaign_visitor_identity_id' => $identity->id,
+            'first_campaign_id' => $campaign->id,
+            'first_link_id' => $linkB->id,
+            'last_campaign_id' => $campaign->id,
+            'last_link_id' => $linkB->id,
+            'first_touched_at' => now()->subDays(40),
+            'last_touched_at' => now()->subDays(40),
+            'expires_at' => now()->subDays(10),
+        ]);
+
+        $expiredVisit = MarketingCampaignVisit::query()->create([
+            'marketing_campaign_id' => $campaign->id,
+            'marketing_campaign_link_id' => $linkB->id,
+            'marketing_campaign_attribution_id' => $expiredAttribution->id,
+            'visitor_token_hash' => $activeAttribution->visitor_token_hash,
+            'marketing_campaign_visitor_identity_id' => $identity->id,
+            'landing_path' => '/c/'.$linkB->slug,
+            'visited_at' => now()->subDays(40),
+            'created_at' => now()->subDays(40),
+        ]);
+
+        app(AttachMarketingCampaignAttributionToCustomerAction::class)(
+            $this->attributionRequestWithCookie($cycle['token']),
+            $user,
+            'test_login',
+        );
+
+        $this->assertSame($user->id, $activeAttribution->fresh()->user_id);
+        $this->assertSame($user->id, $activeAttribution->visits()->firstOrFail()->user_id);
+        $this->assertNull($expiredAttribution->fresh()->user_id);
+        $this->assertNull($expiredVisit->fresh()->user_id);
     }
 
     #[Test]

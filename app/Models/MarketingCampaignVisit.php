@@ -29,6 +29,21 @@ class MarketingCampaignVisit extends Model
         static::deleting(static fn () => false);
     }
 
+    public static function identifyForAttribution(
+        MarketingCampaignAttribution $attribution,
+        int $userId,
+        int $customerId,
+    ): int {
+        return static::query()
+            ->where('marketing_campaign_attribution_id', $attribution->id)
+            ->whereNull('user_id')
+            ->whereNull('customer_id')
+            ->update([
+                'user_id' => $userId,
+                'customer_id' => $customerId,
+            ]);
+    }
+
     public function campaign(): BelongsTo
     {
         return $this->belongsTo(MarketingCampaign::class, 'marketing_campaign_id');
