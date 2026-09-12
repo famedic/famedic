@@ -56,7 +56,7 @@ beforeEach(function () {
     ]);
 });
 
-function phase4User(array $attributes = []): User
+function cartAppointmentSignalsPhase4User(array $attributes = []): User
 {
     return User::factory()
         ->withRegularCustomer()
@@ -64,7 +64,7 @@ function phase4User(array $attributes = []): User
         ->create($attributes);
 }
 
-function phase4Cart(User $user): Cart
+function cartAppointmentSignalsPhase4Cart(User $user): Cart
 {
     $test = LaboratoryTest::factory()->create([
         'brand' => LaboratoryBrand::OLAB->value,
@@ -119,7 +119,7 @@ function phase4Admin(): User
 
 it('does not record appointment_pending_5m when appointment is confirmed before threshold', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'confirmed@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'confirmed@example.com']));
     $appointment = phase4PendingAppointment($cart, 2);
     $appointment->update(['confirmed_at' => now()]);
 
@@ -130,7 +130,7 @@ it('does not record appointment_pending_5m when appointment is confirmed before 
 
 it('records appointment_pending_5m after threshold for unconfirmed appointment', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'pending@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'pending@example.com']));
     $appointment = phase4PendingAppointment($cart, 6);
 
     $event = app(AppointmentPendingDetectionService::class)->detectAndRecord($appointment);
@@ -145,7 +145,7 @@ it('records appointment_pending_5m after threshold for unconfirmed appointment',
 
 it('records appointment_pending_5m only once when detector runs twice', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'once@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'once@example.com']));
     $appointment = phase4PendingAppointment($cart, 6);
     $service = app(AppointmentPendingDetectionService::class);
 
@@ -158,7 +158,7 @@ it('records appointment_pending_5m only once when detector runs twice', function
 
 it('reconciles appointment pending dispatches via sync command', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'sync@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'sync@example.com']));
     $appointment = phase4PendingAppointment($cart, 6);
 
     CartEvent::query()->create([
@@ -184,7 +184,7 @@ it('reconciles appointment pending dispatches via sync command', function () {
 
 it('removes pending tag and sends confirmed site event on appointment confirmation', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'confirm@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'confirm@example.com']));
     $appointment = phase4PendingAppointment($cart, 6);
     app(AppointmentPendingDetectionService::class)->detectAndRecord($appointment);
 
@@ -219,7 +219,7 @@ it('removes pending tag and sends confirmed site event on appointment confirmati
 });
 
 it('does not record pending for completed or empty carts', function () {
-    $cart = phase4Cart(phase4User(['email' => 'completed@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'completed@example.com']));
     $appointment = phase4PendingAppointment($cart, 6);
 
     $cart->update([
@@ -232,8 +232,8 @@ it('does not record pending for completed or empty carts', function () {
 });
 
 it('does not contaminate journey with appointment pending from another cart', function () {
-    $user = phase4User();
-    $cartA = phase4Cart($user);
+    $user = cartAppointmentSignalsPhase4User();
+    $cartA = cartAppointmentSignalsPhase4Cart($user);
     $appointmentA = phase4PendingAppointment($cartA, 6);
     app(AppointmentPendingDetectionService::class)->detectAndRecord($appointmentA);
 
@@ -268,7 +268,7 @@ it('does not contaminate journey with appointment pending from another cart', fu
 
 it('records call_requested with tag and site event outbox entries', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'callback@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'callback@example.com']));
     $appointment = phase4PendingAppointment($cart, 1);
 
     $event = app(CartAppointmentContactSignalService::class)->recordCallRequested(
@@ -286,7 +286,7 @@ it('records call_requested with tag and site event outbox entries', function () 
 
 it('records call_attempted with tag and site event outbox entries', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'phone@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'phone@example.com']));
     $appointment = phase4PendingAppointment($cart, 1);
 
     $event = app(CartAppointmentContactSignalService::class)->recordCallAttempted(
@@ -302,7 +302,7 @@ it('records call_attempted with tag and site event outbox entries', function () 
 
 it('allows distinct call events for repeated legitimate interactions', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'repeat@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'repeat@example.com']));
     $appointment = phase4PendingAppointment($cart, 1);
     $service = app(CartAppointmentContactSignalService::class);
 
@@ -314,7 +314,7 @@ it('allows distinct call events for repeated legitimate interactions', function 
 
 it('retries pending dispatch without duplicating rows for same interaction', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'retry@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'retry@example.com']));
     $appointment = phase4PendingAppointment($cart, 1);
     $service = app(CartAppointmentContactSignalService::class);
 
@@ -327,7 +327,7 @@ it('retries pending dispatch without duplicating rows for same interaction', fun
 it('marks call signal dispatches skipped without http when email is missing', function () {
     Queue::fake();
     Http::fake();
-    $cart = phase4Cart(phase4User(['email' => '']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => '']));
     $appointment = phase4PendingAppointment($cart, 1);
 
     app(CartAppointmentContactSignalService::class)->recordCallRequested($appointment, 9301, false);
@@ -344,7 +344,7 @@ it('marks call signal dispatches skipped without http when email is missing', fu
 
 it('processes appointment pending site event job successfully', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'job@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'job@example.com']));
     $appointment = phase4PendingAppointment($cart, 6);
     app(AppointmentPendingDetectionService::class)->detectAndRecord($appointment);
 
@@ -360,7 +360,7 @@ it('processes appointment pending site event job successfully', function () {
 
 it('runs delayed check appointment pending job path', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'delayed@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'delayed@example.com']));
     $appointment = phase4PendingAppointment($cart, 0);
     $appointment->update(['created_at' => now()->subMinutes(6), 'updated_at' => now()->subMinutes(6)]);
 
@@ -371,7 +371,7 @@ it('runs delayed check appointment pending job path', function () {
 
 it('shows appointment and call timeline labels in cart drawer', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'drawer@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'drawer@example.com']));
     $appointment = phase4PendingAppointment($cart, 6);
     app(AppointmentPendingDetectionService::class)->detectAndRecord($appointment);
     app(CartAppointmentContactSignalService::class)->recordCallRequested($appointment, 9401, true);
@@ -394,7 +394,7 @@ it('shows appointment and call timeline labels in cart drawer', function () {
 
 it('detects stale pending appointments via artisan command', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'command@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'command@example.com']));
     phase4PendingAppointment($cart, 8);
 
     Artisan::call('carts:detect-appointment-pending');
@@ -406,7 +406,7 @@ it('does not mark appointment pending at 4 minutes 59 seconds', function () {
     $now = Carbon::parse('2026-03-10 12:00:00');
     Carbon::setTestNow($now);
 
-    $cart = phase4Cart(phase4User(['email' => 'boundary-early@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'boundary-early@example.com']));
     $appointment = phase4PendingAppointment($cart, 0);
     $appointment->update([
         'created_at' => $now->copy()->subMinutes(5)->addSecond(),
@@ -424,7 +424,7 @@ it('marks appointment pending at exactly 5 minutes', function () {
     $now = Carbon::parse('2026-03-10 12:00:00');
     Carbon::setTestNow($now);
 
-    $cart = phase4Cart(phase4User(['email' => 'boundary-exact@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'boundary-exact@example.com']));
     $appointment = phase4PendingAppointment($cart, 0);
     $appointment->update([
         'created_at' => $now->copy()->subMinutes(5),
@@ -441,7 +441,7 @@ it('marks appointment pending at exactly 5 minutes', function () {
 
 it('emits only one confirmed site event when admin confirms twice', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'double-confirm@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'double-confirm@example.com']));
     $appointment = phase4PendingAppointment($cart, 6);
     $store = LaboratoryStore::query()->create([
         'name' => 'Sucursal Test',
@@ -480,7 +480,7 @@ it('emits only one confirmed site event when admin confirms twice', function () 
 
 it('does not record pending when check job runs after confirmation', function () {
     Queue::fake();
-    $cart = phase4Cart(phase4User(['email' => 'race@example.com']));
+    $cart = cartAppointmentSignalsPhase4Cart(cartAppointmentSignalsPhase4User(['email' => 'race@example.com']));
     $appointment = phase4PendingAppointment($cart, 6);
     $appointment->update(['confirmed_at' => now()]);
 
@@ -491,8 +491,8 @@ it('does not record pending when check job runs after confirmation', function ()
 
 it('does not enqueue pending tag remove on cart completion without prior pending signal', function () {
     Queue::fake();
-    $user = phase4User(['email' => 'complete-no-pending@example.com']);
-    $cart = phase4Cart($user);
+    $user = cartAppointmentSignalsPhase4User(['email' => 'complete-no-pending@example.com']);
+    $cart = cartAppointmentSignalsPhase4Cart($user);
     phase4PendingAppointment($cart, 2);
 
     app(SyncMonitoringCartService::class)->markLaboratoryCartCompleted($user->customer, LaboratoryBrand::OLAB);
@@ -504,8 +504,8 @@ it('does not enqueue pending tag remove on cart completion without prior pending
 
 it('does not duplicate call_requested when callback data is unchanged', function () {
     Queue::fake();
-    $user = phase4User(['email' => 'callback-no-dup@example.com']);
-    $cart = phase4Cart($user);
+    $user = cartAppointmentSignalsPhase4User(['email' => 'callback-no-dup@example.com']);
+    $cart = cartAppointmentSignalsPhase4Cart($user);
     $appointment = phase4PendingAppointment($cart, 1);
     $appointment->update([
         'callback_availability_starts_at' => null,
@@ -534,8 +534,8 @@ it('does not duplicate call_requested when callback data is unchanged', function
 
 it('does not duplicate call_attempted on rapid phone intent retry', function () {
     Queue::fake();
-    $user = phase4User(['email' => 'phone-retry@example.com']);
-    $cart = phase4Cart($user);
+    $user = cartAppointmentSignalsPhase4User(['email' => 'phone-retry@example.com']);
+    $cart = cartAppointmentSignalsPhase4Cart($user);
     $appointment = phase4PendingAppointment($cart, 1);
 
     $this->withoutMiddleware([
@@ -560,8 +560,8 @@ it('does not duplicate call_attempted on rapid phone intent retry', function () 
 
 it('does not duplicate appointment_confirmed outbox when confirmation signal runs twice', function () {
     Queue::fake();
-    $user = phase4User(['email' => 'confirm-idempotent@example.com']);
-    $cart = phase4Cart($user);
+    $user = cartAppointmentSignalsPhase4User(['email' => 'confirm-idempotent@example.com']);
+    $cart = cartAppointmentSignalsPhase4Cart($user);
     $appointment = phase4PendingAppointment($cart, 1);
     $appointment->update(['confirmed_at' => now(), 'appointment_date' => now()->addDay()]);
 

@@ -39,7 +39,7 @@ beforeEach(function () {
     Notification::fake();
 });
 
-function phase4User(): User
+function laboratoryCheckoutPhase4User(): User
 {
     return User::factory()
         ->withCompleteProfile()
@@ -48,7 +48,7 @@ function phase4User(): User
         ->fresh(['customer']);
 }
 
-function phase4Cart(User $user, LaboratoryBrand $brand = LaboratoryBrand::OLAB): Cart
+function laboratoryCheckoutPhase4Cart(User $user, LaboratoryBrand $brand = LaboratoryBrand::OLAB): Cart
 {
     $test = LaboratoryTest::factory()->create([
         'brand' => $brand->value,
@@ -154,8 +154,8 @@ function attachStandardFlowPurchase(User $user, LaboratoryBrand $brand = Laborat
 }
 
 test('appointment first payment link uses step payment', function () {
-    $user = phase4User();
-    $cart = phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    $cart = laboratoryCheckoutPhase4Cart($user);
     $contact = Contact::factory()->create(['customer_id' => $user->customer->id]);
 
     LaboratoryCheckoutDraft::query()->create([
@@ -174,8 +174,8 @@ test('appointment first payment link uses step payment', function () {
 });
 
 test('standard flow payment link uses step confirmation', function () {
-    $user = phase4User();
-    $cart = phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    $cart = laboratoryCheckoutPhase4Cart($user);
     attachStandardFlowPurchase($user);
     attachStandardFlowPurchase($user);
     attachStandardFlowPurchase($user);
@@ -188,8 +188,8 @@ test('standard flow payment link uses step confirmation', function () {
 });
 
 test('can send pending payment email only when appointment is payable', function () {
-    $user = phase4User();
-    $cart = phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    $cart = laboratoryCheckoutPhase4Cart($user);
     $appointment = phase4ConfirmedAppointment($user, $cart);
     $action = app(PrepareLaboratoryCheckoutPaymentLinkAction::class);
 
@@ -201,8 +201,8 @@ test('can send pending payment email only when appointment is payable', function
 });
 
 test('paid purchase suppresses pending payment email eligibility', function () {
-    $user = phase4User();
-    $cart = phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    $cart = laboratoryCheckoutPhase4Cart($user);
     $appointment = phase4ConfirmedAppointment($user);
 
     $purchase = LaboratoryPurchase::query()->create([
@@ -242,8 +242,8 @@ test('paid purchase suppresses pending payment email eligibility', function () {
 });
 
 test('appointment first notification uses confirmed subject', function () {
-    $user = phase4User();
-    $cart = phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    $cart = laboratoryCheckoutPhase4Cart($user);
     $appointment = phase4ConfirmedAppointment($user, $cart);
 
     $user->notify(new LaboratoryAppointmentConfirmedPendingPayment(
@@ -264,8 +264,8 @@ test('appointment first notification uses confirmed subject', function () {
 });
 
 test('first confirmation transition is detected only once', function () {
-    $user = phase4User();
-    $cart = phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    $cart = laboratoryCheckoutPhase4Cart($user);
     $store = phase4Store();
     $appointment = phase4ConfirmedAppointment($user, $cart, withConfirmedAt: false);
 
@@ -312,8 +312,8 @@ test('first confirmation transition is detected only once', function () {
 });
 
 test('confirmed more than 24 hours ago but future appointment remains payable', function () {
-    $user = phase4User();
-    phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    laboratoryCheckoutPhase4Cart($user);
 
     $appointment = phase4ConfirmedAppointment(
         $user,
@@ -330,8 +330,8 @@ test('confirmed more than 24 hours ago but future appointment remains payable', 
 });
 
 test('expired scheduled appointment blocks payment', function () {
-    $user = phase4User();
-    $cart = phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    $cart = laboratoryCheckoutPhase4Cart($user);
 
     $appointment = phase4ConfirmedAppointment(
         $user,
@@ -347,8 +347,8 @@ test('expired scheduled appointment blocks payment', function () {
 });
 
 test('soft deleted appointment blocks payment link', function () {
-    $user = phase4User();
-    phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    laboratoryCheckoutPhase4Cart($user);
     $appointment = phase4ConfirmedAppointment($user);
     $appointment->delete();
 
@@ -356,8 +356,8 @@ test('soft deleted appointment blocks payment link', function () {
 });
 
 test('appointment from another cart does not unlock payment', function () {
-    $user = phase4User();
-    $activeCart = phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    $activeCart = laboratoryCheckoutPhase4Cart($user);
 
     $otherCart = Cart::query()->create([
         'user_id' => $user->id,
@@ -379,8 +379,8 @@ test('appointment from another cart does not unlock payment', function () {
 });
 
 test('legacy appointment without cart id remains payable when it is the only candidate', function () {
-    $user = phase4User();
-    phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    laboratoryCheckoutPhase4Cart($user);
     $store = phase4Store();
 
     $appointment = LaboratoryAppointment::query()->create([
@@ -406,8 +406,8 @@ test('legacy appointment without cart id remains payable when it is the only can
 });
 
 test('checkout deep link to payment redirects when appointment cancelled', function () {
-    $user = phase4User();
-    $cart = phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    $cart = laboratoryCheckoutPhase4Cart($user);
     $contact = Contact::factory()->create(['customer_id' => $user->customer->id]);
     $address = Address::factory()->create(['customer_id' => $user->customer->id]);
 
@@ -434,8 +434,8 @@ test('checkout deep link to payment redirects when appointment cancelled', funct
 });
 
 test('confirmed appointment with future date allows checkout payment step', function () {
-    $user = phase4User();
-    phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    laboratoryCheckoutPhase4Cart($user);
     $contact = Contact::factory()->create(['customer_id' => $user->customer->id]);
     $address = Address::factory()->create(['customer_id' => $user->customer->id]);
 
@@ -460,8 +460,8 @@ test('confirmed appointment with future date allows checkout payment step', func
 });
 
 test('reprogramming confirmed appointment does not duplicate appointment_confirmed event', function () {
-    $user = phase4User();
-    $cart = phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    $cart = laboratoryCheckoutPhase4Cart($user);
     $store = phase4Store();
 
     $appointment = phase4ConfirmedAppointment($user, $cart, withConfirmedAt: false);
@@ -502,8 +502,8 @@ test('reprogramming confirmed appointment does not duplicate appointment_confirm
 });
 
 test('uses appointment first flow eligibility unchanged for phase four', function () {
-    $user = phase4User();
-    phase4Cart($user);
+    $user = laboratoryCheckoutPhase4User();
+    laboratoryCheckoutPhase4Cart($user);
 
     expect(app(LaboratoryCheckoutFlowEligibility::class)
         ->usesAppointmentFirstFlow($user->customer, LaboratoryBrand::OLAB))->toBeTrue();

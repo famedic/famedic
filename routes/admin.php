@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\ActiveCampaignController;
 use App\Http\Controllers\Admin\ActiveCampaignOperationsController;
 use App\Http\Controllers\Admin\AdministratorController;
+use App\Http\Controllers\Admin\ArchiveMarketingCampaignController;
 use App\Http\Controllers\Admin\AutomationOperationsController;
 use App\Http\Controllers\Admin\CartController;
 use App\Http\Controllers\Admin\ClinicalInterpreterController;
@@ -43,6 +44,12 @@ use App\Http\Controllers\Admin\LaboratoryResultController;
 use App\Http\Controllers\Admin\LaboratoryStoreController as AdminLaboratoryStoreController;
 use App\Http\Controllers\Admin\LaboratoryTestController;
 use App\Http\Controllers\Admin\LogsGeneralController;
+use App\Http\Controllers\Admin\MarketingCampaignCollectionController;
+use App\Http\Controllers\Admin\MarketingCampaignAttributedUsersExportController;
+use App\Http\Controllers\Admin\MarketingCampaignAiSuggestionController;
+use App\Http\Controllers\Admin\MarketingCampaignController;
+use App\Http\Controllers\Admin\MarketingCampaignLinkController;
+use App\Http\Controllers\Admin\MarketingCampaignProductSearchController;
 use App\Http\Controllers\Admin\MedicalAttentionSubscriptionController;
 use App\Http\Controllers\Admin\MonitoringAiController;
 use App\Http\Controllers\Admin\MurguiaDashboardController;
@@ -161,6 +168,38 @@ Route::prefix('admin')->middleware([
         Route::resource('laboratory-stores', AdminLaboratoryStoreController::class)
             ->only(['index', 'show', 'update', 'destroy'])
             ->withTrashed(['show', 'update', 'destroy']);
+
+        Route::prefix('marketing-campaigns')->name('marketing-campaigns.')->group(function () {
+            Route::get('product-search', MarketingCampaignProductSearchController::class)->name('product-search');
+            Route::post('ai/landing-content', [MarketingCampaignAiSuggestionController::class, 'landingContent'])
+                ->middleware('throttle:marketing-campaign-ai')
+                ->name('ai.landing-content');
+            Route::post('ai/collection', [MarketingCampaignAiSuggestionController::class, 'collection'])
+                ->middleware('throttle:marketing-campaign-ai')
+                ->name('ai.collection');
+
+            Route::get('/', [MarketingCampaignController::class, 'index'])->name('index');
+            Route::get('/create', [MarketingCampaignController::class, 'create'])->name('create');
+            Route::post('/', [MarketingCampaignController::class, 'store'])->name('store');
+            Route::post('/setup', [MarketingCampaignController::class, 'storeSetup'])->name('setup.store');
+            Route::get('/{marketing_campaign}', [MarketingCampaignController::class, 'show'])->name('show');
+            Route::get('/{marketing_campaign}/attributed-users/export', MarketingCampaignAttributedUsersExportController::class)->name('attributed-users.export');
+            Route::get('/{marketing_campaign}/edit', [MarketingCampaignController::class, 'edit'])->name('edit');
+            Route::put('/{marketing_campaign}', [MarketingCampaignController::class, 'update'])->name('update');
+            Route::post('/{marketing_campaign}/archive', ArchiveMarketingCampaignController::class)->name('archive');
+
+            Route::get('/{marketing_campaign}/links/create', [MarketingCampaignLinkController::class, 'create'])->name('links.create');
+            Route::post('/{marketing_campaign}/links', [MarketingCampaignLinkController::class, 'store'])->name('links.store');
+            Route::get('/{marketing_campaign}/links/{marketing_campaign_link}/preview', [MarketingCampaignLinkController::class, 'preview'])->name('links.preview');
+            Route::get('/{marketing_campaign}/links/{marketing_campaign_link}/edit', [MarketingCampaignLinkController::class, 'edit'])->name('links.edit');
+            Route::put('/{marketing_campaign}/links/{marketing_campaign_link}', [MarketingCampaignLinkController::class, 'update'])->name('links.update');
+            Route::post('/{marketing_campaign}/links/{marketing_campaign_link}/duplicate', [MarketingCampaignLinkController::class, 'duplicate'])->name('links.duplicate');
+
+            Route::get('/{marketing_campaign}/collections/create', [MarketingCampaignCollectionController::class, 'create'])->name('collections.create');
+            Route::post('/{marketing_campaign}/collections', [MarketingCampaignCollectionController::class, 'store'])->name('collections.store');
+            Route::get('/{marketing_campaign}/collections/{marketing_campaign_collection}/edit', [MarketingCampaignCollectionController::class, 'edit'])->name('collections.edit');
+            Route::put('/{marketing_campaign}/collections/{marketing_campaign_collection}', [MarketingCampaignCollectionController::class, 'update'])->name('collections.update');
+        });
         Route::get('laboratory-appointments/metrics', LaboratoryAppointmentMetricsController::class)->name('laboratory-appointments.metrics');
         Route::post('laboratory-appointments/{laboratory_appointment}/interactions', [LaboratoryAppointmentController::class, 'storeInteraction'])
             ->name('laboratory-appointments.interactions.store');

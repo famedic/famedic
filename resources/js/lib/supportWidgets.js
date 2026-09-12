@@ -170,6 +170,8 @@ export function initSupportWidgetVisibilityController(win = window) {
 	if (zohoSalesIQConfig(win).enabled) {
 		win.addEventListener("zoho-salesiq-ready", sync);
 	}
+	win.addEventListener("popstate", sync);
+	win.document?.addEventListener?.("inertia:navigate", sync);
 	sync();
 }
 

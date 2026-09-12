@@ -41,6 +41,12 @@ function fakeWindow({ pathname = "/laboratories", zoho = true } = {}) {
 					},
 				},
 			},
+			addEventListener(name, callback) {
+				listeners[name] = callback;
+			},
+			dispatchEvent(event) {
+				listeners[event.type]?.(event);
+			},
 		},
 		location: { pathname },
 		addEventListener(name, callback) {
@@ -77,6 +83,20 @@ test("blocks support widgets on admin routes", () => {
 		}),
 		false,
 	);
+});
+
+test("rechecks support widgets after Inertia navigates into admin", () => {
+	resetSupportWidgetVisibilityForTests();
+	const { win, calls, classList } = fakeWindow({ pathname: "/laboratories" });
+
+	initSupportWidgetVisibilityController(win);
+	assert.equal(classList.has(supportWidgetsHiddenClass()), false);
+
+	win.location.pathname = "/admin/marketing-campaigns/create";
+	win.document.dispatchEvent(new Event("inertia:navigate"));
+
+	assert.equal(classList.has(supportWidgetsHiddenClass()), true);
+	assert.deepEqual(calls.slice(-2), [["button", "hide"], ["window", "hide"]]);
 });
 
 test("shows support widgets on public routes when enabled", () => {
@@ -237,6 +257,13 @@ test("ActiveCampaign wrapper and pseudo-elements cannot draw an extra dark circl
 	);
 });
 
+test("hidden support widget class targets the ActiveCampaign WhatsApp DOM", () => {
+	const css = readFileSync(new URL("../../resources/css/app.css", import.meta.url), "utf8");
+
+	assert.match(css, /:root\.support-widgets-hidden #ac-whatsapp-widget-wrapper/);
+	assert.match(css, /:root\.support-widgets-hidden \[id\*="whatsapp"\]/);
+});
+
 test("checkout removes the legacy WhatsApp launcher with the red badge", () => {
 	const layout = readFileSync(
 		new URL("../../resources/js/Layouts/CheckoutLayout.jsx", import.meta.url),
@@ -256,16 +283,18 @@ test("checkout removes the legacy WhatsApp launcher with the red badge", () => {
 	assert.doesNotMatch(legacyLauncher, /wa\.me/);
 });
 
-test("internal Famedic help bubble does not render when the official widget is active", () => {
+test("internal Famedic help bubble does not render on admin or when the official widget is active", () => {
 	const helpBubble = readFileSync(
 		new URL("../../resources/js/Components/Catalyst/HelpBubble.jsx", import.meta.url),
 		"utf8",
 	);
 
+	assert.match(helpBubble, /isAdminPath/);
+	assert.match(helpBubble, /adminPath/);
 	assert.match(helpBubble, /officialSupportWidgetIsVisible/);
 	assert.match(helpBubble, /shouldShowSupportWidgets/);
 	assert.match(helpBubble, /supportWidgetsConfig/);
-	assert.match(helpBubble, /hidden \|\| officialSupportWidgetIsVisible/);
+	assert.match(helpBubble, /hidden \|\| adminPath \|\| officialSupportWidgetIsVisible/);
 });
 
 test("checkout positions ActiveCampaign above the measured sticky footer", () => {

@@ -1,0 +1,104 @@
+<?php
+
+namespace App\Http\Requests\Admin\MarketingCampaigns;
+
+use App\Enums\LaboratoryBrand;
+use App\Models\LaboratoryTest;
+use App\Models\MarketingCampaign;
+use App\Models\MarketingCampaignCollection;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
+
+class StoreMarketingCampaignCollectionRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        if (! ($this->user()?->can('create', MarketingCampaignCollection::class) ?? false)) {
+            return false;
+        }
+
+        $campaign = $this->route('marketing_campaign');
+
+        return ! ($campaign instanceof MarketingCampaign && $campaign->isArchived());
+    }
+
+    public function rules(): array
+    {
+        return [
+            'marketing_campaign_id' => ['required', 'integer', 'exists:marketing_campaigns,id'],
+            'name' => ['required', 'string', 'max:160'],
+            'public_title' => ['required', 'string', 'max:180'],
+            'public_description' => ['nullable', 'string'],
+            'laboratory_brand' => ['required', Rule::enum(LaboratoryBrand::class)],
+            'is_active' => ['boolean'],
+            // Lista vacía permitida (borrador/configuración). Duplicados se rechazan.
+            'laboratory_test_ids' => ['present', 'array'],
+            'laboratory_test_ids.*' => ['required', 'integer', 'exists:laboratory_tests,id'],
+        ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $campaign = $this->route('marketing_campaign');
+
+        $this->merge([
+            'marketing_campaign_id' => $campaign?->id ?? $this->input('marketing_campaign_id'),
+            'is_active' => $this->boolean('is_active', true),
+            'laboratory_test_ids' => $this->input('laboratory_test_ids', []),
+            ...$this->mergedPublicTitleFromName(),
+        ]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function mergedPublicTitleFromName(): array
+    {
+        $name = trim((string) $this->input('name', ''));
+        $publicTitle = trim((string) $this->input('public_title', ''));
+
+        if ($publicTitle === '' && $name !== '') {
+            return ['public_title' => $name];
+        }
+
+        return [];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            $ids = array_map('intval', $this->input('laboratory_test_ids', []));
+
+            if (count($ids) !== count(array_unique($ids))) {
+                $validator->errors()->add(
+                    'laboratory_test_ids',
+                    'No se permiten estudios duplicados en la colección.'
+                );
+
+                return;
+            }
+
+            if ($ids === []) {
+                return;
+            }
+
+            $brand = LaboratoryBrand::from((string) $this->input('laboratory_brand'));
+            $hasOtherBrand = LaboratoryTest::query()
+                ->whereKey($ids)
+                ->where('brand', '!=', $brand->value)
+                ->exists();
+
+            if ($hasOtherBrand) {
+                $validator->errors()->add(
+                    'laboratory_test_ids',
+                    'Todos los estudios deben pertenecer a la marca de la colección.'
+                );
+            }
+        });
+    }
+}

@@ -13,6 +13,7 @@ import {
 import { Button } from "@/Components/Catalyst/button";
 import clsx from "clsx";
 import {
+	isAdminPath,
 	shouldShowSupportWidgets,
 	supportWidgetsConfig,
 } from "@/lib/supportWidgets";
@@ -28,8 +29,10 @@ export default function HelpBubble({
 			...supportWidgetsConfig(window),
 			pathname: window.location?.pathname,
 		});
+	const adminPath =
+		typeof window !== "undefined" && isAdminPath(window.location?.pathname);
 
-	if (hidden || officialSupportWidgetIsVisible) {
+	if (hidden || adminPath || officialSupportWidgetIsVisible) {
 		return null;
 	}
 
