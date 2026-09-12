@@ -17,6 +17,7 @@ use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignCollection;
 use App\Models\MarketingCampaignLink;
 use App\Services\Marketing\MarketingCampaignCollectionLinkResolver;
+use App\Services\Marketing\MarketingCampaignAttributedUsersPresenter;
 use App\Services\Marketing\MarketingCampaignDashboardPresenter;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -175,8 +176,10 @@ class MarketingCampaignController extends Controller
         ]);
 
         $presenter = app(MarketingCampaignDashboardPresenter::class);
+        $attributedUsersPresenter = app(MarketingCampaignAttributedUsersPresenter::class);
         $links = $marketingCampaign->links;
         $dashboardFilters = $request->dashboardFilters();
+        $attributedUserFilters = $request->attributedUserFilters();
         $linkResolver = app(MarketingCampaignCollectionLinkResolver::class);
         $collectionIds = $marketingCampaign->collections->pluck('id')->all();
         $collectionLinkCounts = $linkResolver->countsForCampaign(
@@ -189,6 +192,7 @@ class MarketingCampaignController extends Controller
         $canArchive = $user->can('archive', $marketingCampaign) && ! $marketingCampaign->isArchived();
         $canCreateChildren = $user->can('create', MarketingCampaignLink::class)
             && ! $marketingCampaign->isArchived();
+        $canViewAttributedUserPii = $user->can('viewAttributedUserPii', $marketingCampaign);
 
         return Inertia::render('Admin/MarketingCampaigns/Show', [
             'campaign' => $this->campaignPayload($marketingCampaign),
@@ -224,12 +228,19 @@ class MarketingCampaignController extends Controller
             'checklist' => $presenter->checklist($marketingCampaign, $links),
             'analytics' => $presenter->analytics($marketingCampaign, $links, $dashboardFilters),
             'analyticsFilters' => $dashboardFilters,
+            'attributedUsers' => $attributedUsersPresenter->paginated(
+                $marketingCampaign,
+                $attributedUserFilters,
+                $canViewAttributedUserPii,
+            ),
+            'attributedUserFilters' => $attributedUserFilters,
             'capabilities' => [
                 'canView' => true,
                 'canEdit' => $canEdit,
                 'canArchive' => $canArchive,
                 'canCreateLink' => $canCreateChildren && $user->can('create', MarketingCampaignLink::class),
                 'canCreateCollection' => $canCreateChildren && $user->can('create', MarketingCampaignCollection::class),
+                'canViewAttributedUserPii' => $canViewAttributedUserPii,
             ],
         ]);
     }

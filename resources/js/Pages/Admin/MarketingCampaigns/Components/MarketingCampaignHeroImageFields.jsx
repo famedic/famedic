@@ -13,6 +13,7 @@ import {
 	formatFileSize,
 	validateMarketingCampaignImageFile,
 } from "./imageFileValidation";
+import MarketingCampaignFieldHelp from "./MarketingCampaignFieldHelp";
 
 const SOURCE_OPTIONS = [
 	{ value: "none", label: "Sin imagen" },
@@ -59,7 +60,12 @@ export default function MarketingCampaignHeroImageFields({
 	return (
 		<div className="space-y-4">
 			<Field>
-				<Label>Imagen principal (hero)</Label>
+				<Label>
+					<MarketingCampaignFieldHelp label="Imagen principal (hero)">
+						{HERO_IMAGE_GUIDANCE} Usa archivos optimizados para que la
+						landing cargue rápido en celular.
+					</MarketingCampaignFieldHelp>
+				</Label>
 				<Listbox
 					value={source}
 					onChange={handleSourceChange}
@@ -74,7 +80,7 @@ export default function MarketingCampaignHeroImageFields({
 				{errors.hero_image_source && (
 					<ErrorMessage>{errors.hero_image_source}</ErrorMessage>
 				)}
-				<Description>{HERO_IMAGE_GUIDANCE}</Description>
+				<Description>JPG, PNG o WebP · Máximo {HERO_MAX_SIZE_LABEL}</Description>
 			</Field>
 
 			{source === "upload" && (
@@ -100,10 +106,7 @@ export default function MarketingCampaignHeroImageFields({
 						}}
 					/>
 					<Description>
-						JPG, PNG o WebP. Máximo {HERO_MAX_SIZE_LABEL}. Para
-						mejor carga, usa WebP o JPG optimizado cerca de{" "}
-						{HERO_RECOMMENDED_SIZE_LABEL}. Si no seleccionas un
-						archivo nuevo, se conserva la imagen actual.
+						Ideal cerca de {HERO_RECOMMENDED_SIZE_LABEL}. Se conserva la imagen actual si no eliges otra.
 					</Description>
 					{heroImageMessage?.message && (
 						<Text
@@ -134,10 +137,7 @@ export default function MarketingCampaignHeroImageFields({
 						}
 						placeholder="https://ejemplo.com/imagen.jpg"
 					/>
-					<Description>
-						Usa una imagen HTTPS en proporción 16:9, idealmente de
-						1920 x 1080 px, sin texto pegado a los bordes.
-					</Description>
+					<Description>HTTPS · 16:9 recomendado · sin texto cerca de los bordes</Description>
 					{errors.hero_image_url && (
 						<ErrorMessage>{errors.hero_image_url}</ErrorMessage>
 					)}

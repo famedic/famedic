@@ -26,6 +26,7 @@ import MarketingCampaignFormSection from "./MarketingCampaignFormSection";
 import MarketingCampaignHeroImageFields from "./MarketingCampaignHeroImageFields";
 import MarketingCampaignGalleryFields from "./MarketingCampaignGalleryFields";
 import MarketingCampaignEditorialFields from "./MarketingCampaignEditorialFields";
+import MarketingCampaignAiContentAssistant from "./MarketingCampaignAiContentAssistant";
 import MarketingCampaignLandingTemplateSelector from "./MarketingCampaignLandingTemplateSelector";
 import MarketingCampaignProductSelector from "./MarketingCampaignProductSelector";
 import MarketingCampaignCategorySelector from "./MarketingCampaignCategorySelector";
@@ -230,6 +231,18 @@ export default function MarketingCampaignLinkForm({
 						onChange={(value) => setData("landing_template", value)}
 						options={landingTemplateOptions}
 						error={errors.landing_template}
+					/>
+
+					<MarketingCampaignAiContentAssistant
+						data={data}
+						onApply={(key, value) => {
+							if (typeof key === "object") {
+								setData({ ...data, ...key });
+								return;
+							}
+
+							setData(key, value);
+						}}
 					/>
 
 					<MarketingCampaignEditorialFields

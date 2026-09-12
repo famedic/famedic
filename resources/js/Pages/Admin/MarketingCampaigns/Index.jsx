@@ -52,6 +52,14 @@ function formatDateTime(value) {
 	}
 }
 
+function formatDateRange(startsAt, endsAt) {
+	if (!startsAt && !endsAt) return "Permanente";
+	if (!endsAt) return `${formatDateTime(startsAt)} — Sin expiración`;
+	if (!startsAt) return `Hasta ${formatDateTime(endsAt)}`;
+
+	return `${formatDateTime(startsAt)} — ${formatDateTime(endsAt)}`;
+}
+
 export default function MarketingCampaignsIndex({
 	campaigns,
 	filters = {},
@@ -300,15 +308,9 @@ export default function MarketingCampaignsIndex({
 													</TableCell>
 													<TableCell
 														className="text-sm"
-														title={`${formatDateTime(campaign.starts_at)} — ${formatDateTime(campaign.ends_at)}`}
+														title={formatDateRange(campaign.starts_at, campaign.ends_at)}
 													>
-														{formatDateTime(
-															campaign.starts_at,
-														)}{" "}
-														—{" "}
-														{formatDateTime(
-															campaign.ends_at,
-														)}
+														{formatDateRange(campaign.starts_at, campaign.ends_at)}
 													</TableCell>
 													<TableCell>
 														{campaign.links_count ??

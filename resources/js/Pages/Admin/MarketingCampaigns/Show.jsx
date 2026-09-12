@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { router, useForm } from "@inertiajs/react";
 import {
 	PlusIcon,
@@ -22,6 +22,7 @@ import MarketingCampaignStatusBadge from "./Components/MarketingCampaignStatusBa
 import MarketingCampaignLinksTable from "./Components/MarketingCampaignLinksTable";
 import MarketingCampaignCollectionsTable from "./Components/MarketingCampaignCollectionsTable";
 import MarketingCampaignChecklist from "./Components/MarketingCampaignChecklist";
+import MarketingCampaignAttributedUsersTable from "./Components/MarketingCampaignAttributedUsersTable";
 
 function normalizeStatus(status) {
 	if (status == null) return "";
@@ -38,6 +39,14 @@ function formatDateTime(value) {
 	} catch {
 		return String(value).slice(0, 16);
 	}
+}
+
+function formatDateRange(startsAt, endsAt) {
+	if (!startsAt && !endsAt) return "Campaña permanente";
+	if (!endsAt) return `Desde ${formatDateTime(startsAt)} · Sin expiración`;
+	if (!startsAt) return `Hasta ${formatDateTime(endsAt)}`;
+
+	return `${formatDateTime(startsAt)} — ${formatDateTime(endsAt)}`;
 }
 
 function formatNumber(value) {
@@ -82,6 +91,44 @@ function RatePill({ label, value }) {
 			<Text className="mt-1 text-sm font-semibold">
 				{formatPercent(value)}
 			</Text>
+		</div>
+	);
+}
+
+const TABS = [
+	{ id: "summary", label: "Resumen" },
+	{ id: "performance", label: "Rendimiento" },
+	{ id: "links", label: "Enlaces" },
+	{ id: "attributed-users", label: "Usuarios atribuidos" },
+	{ id: "collections", label: "Colecciones" },
+];
+
+function activeTabFromLocation() {
+	if (typeof window === "undefined") return "summary";
+	const value = new URLSearchParams(window.location.search).get("tab");
+	return TABS.some((tab) => tab.id === value) ? value : "summary";
+}
+
+function CampaignTabs({ activeTab, onChange }) {
+	return (
+		<div className="border-b border-zinc-200 dark:border-white/10">
+			<div className="flex gap-1 overflow-x-auto">
+				{TABS.map((tab) => (
+					<button
+						key={tab.id}
+						type="button"
+						aria-current={activeTab === tab.id ? "page" : undefined}
+						onClick={() => onChange(tab.id)}
+						className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition ${
+							activeTab === tab.id
+								? "border-famedic-light text-famedic-dark dark:text-lime-300"
+								: "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+						}`}
+					>
+						{tab.label}
+					</button>
+				))}
+			</div>
 		</div>
 	);
 }
@@ -248,11 +295,14 @@ export default function MarketingCampaignsShow({
 	summary = {},
 	analytics = {},
 	analyticsFilters = {},
+	attributedUsers = {},
 	capabilities = {},
 }) {
 	const [archiveOpen, setArchiveOpen] = useState(false);
 	const [archiving, setArchiving] = useState(false);
 	const [copiedPrimary, setCopiedPrimary] = useState(false);
+	const [copySelectorOpen, setCopySelectorOpen] = useState(false);
+	const [activeTab, setActiveTab] = useState(activeTabFromLocation);
 	const {
 		data: filters,
 		setData,
@@ -307,6 +357,26 @@ export default function MarketingCampaignsShow({
 	const totals = analytics.totals ?? {};
 	const firstTouch = analytics.first_touch ?? {};
 
+	useEffect(() => {
+		const syncTab = () => setActiveTab(activeTabFromLocation());
+		window.addEventListener("popstate", syncTab);
+
+		return () => window.removeEventListener("popstate", syncTab);
+	}, []);
+
+	const changeTab = (tab) => {
+		setActiveTab(tab);
+		if (typeof window !== "undefined") {
+			const url = new URL(window.location.href);
+			if (tab === "summary") {
+				url.searchParams.delete("tab");
+			} else {
+				url.searchParams.set("tab", tab);
+			}
+			window.history.pushState({}, "", url);
+		}
+	};
+
 	const confirmArchive = () => {
 		if (archiving) return;
 		setArchiving(true);
@@ -323,11 +393,22 @@ export default function MarketingCampaignsShow({
 		);
 	};
 
-	const copyPrimaryLink = async () => {
-		if (!primaryLink?.public_url) return;
-		await copyText(primaryLink.public_url);
+	const copyFullLink = async (link) => {
+		const url = link?.full_url || link?.public_url;
+		if (!url) return;
+		await copyText(url);
 		setCopiedPrimary(true);
+		setCopySelectorOpen(false);
 		setTimeout(() => setCopiedPrimary(false), 2000);
+	};
+
+	const handlePrimaryCopy = async () => {
+		if (campaignLinks.length > 1) {
+			setCopySelectorOpen((open) => !open);
+			return;
+		}
+
+		await copyFullLink(primaryLink);
 	};
 
 	const submitFilters = (event) => {
@@ -368,8 +449,7 @@ export default function MarketingCampaignsShow({
 								</Badge>
 							)}
 							<Text className="text-sm text-zinc-500">
-								Vigencia: {formatDateTime(campaign.starts_at)} —{" "}
-								{formatDateTime(campaign.ends_at)}
+								Vigencia: {formatDateRange(campaign.starts_at, campaign.ends_at)}
 							</Text>
 						</div>
 					</div>
@@ -396,10 +476,34 @@ export default function MarketingCampaignsShow({
 									<ArrowTopRightOnSquareIcon className="size-4" />
 									Abrir landing
 								</Button>
-								<Button type="button" outline onClick={copyPrimaryLink}>
-									<ClipboardDocumentIcon className="size-4" />
-									{copiedPrimary ? "Copiado" : "Copiar enlace"}
-								</Button>
+								<div className="relative">
+									<Button type="button" outline onClick={handlePrimaryCopy}>
+										<ClipboardDocumentIcon className="size-4" />
+										{copiedPrimary ? "URL completa copiada" : "Copiar URL con UTMs"}
+									</Button>
+									{copySelectorOpen && campaignLinks.length > 1 && (
+										<div className="absolute right-0 z-20 mt-2 w-80 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+											<Text className="text-sm font-semibold">Selecciona un enlace</Text>
+											<div className="mt-3 space-y-2">
+												{campaignLinks.map((link) => (
+													<button
+														key={link.id}
+														type="button"
+														className="block w-full rounded-lg px-3 py-2 text-left hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-famedic-lime dark:hover:bg-zinc-800"
+														onClick={() => copyFullLink(link)}
+													>
+														<span className="block text-sm font-semibold text-zinc-900 dark:text-white">
+															{link.name}
+														</span>
+														<span className="mt-1 block truncate font-mono text-xs text-zinc-500">
+															{link.full_url || link.public_url}
+														</span>
+													</button>
+												))}
+											</div>
+										</div>
+									)}
+								</div>
 							</>
 						)}
 						{canEdit && (
@@ -440,6 +544,32 @@ export default function MarketingCampaignsShow({
 					<MetricCard label="Completitud" value={`${summary.completeness_percent ?? 0}%`} />
 				</div>
 
+				<CampaignTabs activeTab={activeTab} onChange={changeTab} />
+
+				{activeTab === "summary" && (
+					<section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
+						<Card className="space-y-4 p-5">
+							<Subheading>Resumen</Subheading>
+							<div className="grid gap-4 sm:grid-cols-2">
+								<MetricCard label="Visitas" value={formatNumber(totals.visits)} />
+								<MetricCard label="Compras" value={formatNumber(totals.purchases)} />
+								<MetricCard label="Ingresos" value={formatMoney(totals.revenue_cents)} />
+								<MetricCard label="Completitud" value={`${summary.completeness_percent ?? 0}%`} />
+							</div>
+							{primaryLink?.public_url && (
+								<div className="rounded-lg bg-lime-50 p-4 dark:bg-lime-950/30">
+									<Text className="font-medium">Landing principal</Text>
+									<Text className="mt-1 break-all font-mono text-sm text-zinc-600 dark:text-zinc-300">
+										{primaryLink.full_url || primaryLink.public_url}
+									</Text>
+								</div>
+							)}
+						</Card>
+						<MarketingCampaignChecklist items={checklist} />
+					</section>
+				)}
+
+				{activeTab === "performance" && (
 				<section className="space-y-5">
 					<div className="flex flex-wrap items-end justify-between gap-3">
 						<div>
@@ -496,9 +626,9 @@ export default function MarketingCampaignsShow({
 						</Card>
 					</div>
 				</section>
+				)}
 
-				<MarketingCampaignChecklist items={checklist} />
-
+				{activeTab === "links" && (
 				<section className="space-y-4">
 					<div className="flex flex-wrap items-end justify-between gap-3">
 						<Subheading>Enlaces</Subheading>
@@ -516,7 +646,25 @@ export default function MarketingCampaignsShow({
 						createHref={createLinkHref}
 					/>
 				</section>
+				)}
 
+				{activeTab === "attributed-users" && (
+				<section className="space-y-4">
+					<div>
+						<Subheading>Usuarios atribuidos</Subheading>
+						<Text className="mt-1 text-sm text-zinc-500">
+							Relaciona registros identificados con campaign attribution, enlaces y conversiones.
+						</Text>
+					</div>
+					<MarketingCampaignAttributedUsersTable
+						campaignId={campaign.id}
+						links={campaignLinks}
+						attributedUsers={attributedUsers}
+					/>
+				</section>
+				)}
+
+				{activeTab === "collections" && (
 				<section className="space-y-4">
 					<div className="flex flex-wrap items-end justify-between gap-3">
 						<div>
@@ -553,6 +701,7 @@ export default function MarketingCampaignsShow({
 						}
 					/>
 				</section>
+				)}
 			</div>
 
 			<DeleteConfirmationModal

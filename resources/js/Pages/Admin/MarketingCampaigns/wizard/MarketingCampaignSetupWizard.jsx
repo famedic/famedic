@@ -13,8 +13,11 @@ import {
 import Card from "@/Components/Card";
 import MarketingCampaignDateRangeFields from "../Components/MarketingCampaignDateRangeFields";
 import MarketingCampaignHeroImageFields from "../Components/MarketingCampaignHeroImageFields";
-import MarketingCampaignEditorialFields from "../Components/MarketingCampaignEditorialFields";
+import MarketingCampaignEditorialFields, {
+	hasEditorialPlaceholderContent,
+} from "../Components/MarketingCampaignEditorialFields";
 import MarketingCampaignGalleryFields from "../Components/MarketingCampaignGalleryFields";
+import MarketingCampaignAiContentAssistant from "../Components/MarketingCampaignAiContentAssistant";
 import MarketingCampaignLandingTemplateSelector from "../Components/MarketingCampaignLandingTemplateSelector";
 import MarketingCampaignProductSelector from "../Components/MarketingCampaignProductSelector";
 import MarketingCampaignUtmFields from "../Components/MarketingCampaignUtmFields";
@@ -22,6 +25,10 @@ import MarketingCampaignLandingPreview from "../Components/MarketingCampaignLand
 import MarketingCampaignCollectionPreview from "../Components/MarketingCampaignCollectionPreview";
 import MarketingCampaignCollectionInlinePanel from "../Components/MarketingCampaignCollectionInlinePanel";
 import MarketingCampaignCollectionPricingSummary from "../Components/MarketingCampaignCollectionPricingSummary";
+import {
+	marketingCampaignBaseUrl,
+	marketingCampaignFullUrl,
+} from "../Components/marketingCampaignUrl";
 import MarketingCampaignWizardStepper from "./MarketingCampaignWizardStepper";
 import {
 	getSteps,
@@ -82,6 +89,19 @@ function ErrorSummary({ errors }) {
 			</ul>
 		</div>
 	);
+}
+
+async function copyText(text) {
+	if (navigator.clipboard?.writeText) {
+		await navigator.clipboard.writeText(text);
+		return;
+	}
+	const input = document.createElement("textarea");
+	input.value = text;
+	document.body.appendChild(input);
+	input.select();
+	document.execCommand("copy");
+	document.body.removeChild(input);
 }
 
 export default function MarketingCampaignSetupWizard({
@@ -276,9 +296,25 @@ export default function MarketingCampaignSetupWizard({
 				? URL.createObjectURL(prepared.link.hero_image)
 				: prepared.heroPreviewUrl;
 
+	const previewOrigin =
+		typeof window === "undefined" ? "https://example.invalid" : window.location.origin;
 	const publicUrl = prepared.link.slug
-		? `${window.location.origin}/c/${prepared.link.slug}`
+		? marketingCampaignFullUrl(prepared.link, previewOrigin)
 		: "";
+	const basePreviewUrl = prepared.link.slug
+		? marketingCampaignBaseUrl(prepared.link.slug, previewOrigin)
+		: "";
+	const hasEditorialPlaceholders =
+		(prepared.link.landing_template || "conversion") === "editorial" &&
+		hasEditorialPlaceholderContent(prepared.link);
+	const [copiedPreviewUrl, setCopiedPreviewUrl] = useState(false);
+
+	const copyPreviewUrl = async () => {
+		if (!publicUrl) return;
+		await copyText(publicUrl);
+		setCopiedPreviewUrl(true);
+		setTimeout(() => setCopiedPreviewUrl(false), 2000);
+	};
 
 	const applyPreset = (presetValue) => {
 		const preset = utmPresets.find((item) => item.value === presetValue);
@@ -341,47 +377,55 @@ export default function MarketingCampaignSetupWizard({
 	);
 
 	const renderPromotionStep = () => (
-		<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-			{promotionOptions.map((option) => {
-				const disabled =
-					option.value === "existing_collection" &&
-					mode === "campaign" &&
-					!collections.length;
-				const selected = state.promotion === option.value;
+		<div className="space-y-6">
+			<MarketingCampaignLandingTemplateSelector
+				value={state.link.landing_template || "conversion"}
+				onChange={(value) => patchLink("landing_template", value)}
+				options={landingTemplateOptions}
+				error={stepErrors["link.landing_template"] || serverErrors["link.landing_template"]}
+			/>
+			<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+				{promotionOptions.map((option) => {
+					const disabled =
+						option.value === "existing_collection" &&
+						mode === "campaign" &&
+						!collections.length;
+					const selected = state.promotion === option.value;
 
-				return (
-					<button
-						key={option.value}
-						type="button"
-						disabled={disabled}
-						onClick={() =>
-							patchState({
-								promotion: option.value,
-								brand: "",
-								categoryId: "",
-								product: null,
-								collectionId: "",
-							})
-						}
-						className={`rounded-xl border p-4 text-left transition ${
-							selected
-								? "border-famedic-light bg-famedic-light/10 ring-2 ring-famedic-light/40"
-								: "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700"
-						} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
-					>
-						<Text className="font-semibold">{option.label}</Text>
-						<Text className="mt-1 text-sm text-zinc-500">
-							{option.description}
-						</Text>
-						{disabled && (
-							<Text className="mt-2 text-xs text-amber-600">
-								Disponible al crear enlaces en una campaña
-								existente.
+					return (
+						<button
+							key={option.value}
+							type="button"
+							disabled={disabled}
+							onClick={() =>
+								patchState({
+									promotion: option.value,
+									brand: "",
+									categoryId: "",
+									product: null,
+									collectionId: "",
+								})
+							}
+							className={`rounded-xl border p-4 text-left transition ${
+								selected
+									? "border-famedic-light bg-famedic-light/10 ring-2 ring-famedic-light/40"
+									: "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700"
+							} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+						>
+							<Text className="font-semibold">{option.label}</Text>
+							<Text className="mt-1 text-sm text-zinc-500">
+								{option.description}
 							</Text>
-						)}
-					</button>
-				);
-			})}
+							{disabled && (
+								<Text className="mt-2 text-xs text-amber-600">
+									Disponible al crear enlaces en una campaña
+									existente.
+								</Text>
+							)}
+						</button>
+					);
+				})}
+			</div>
 			{stepErrors.promotion && (
 				<ErrorMessage>{stepErrors.promotion}</ErrorMessage>
 			)}
@@ -708,13 +752,22 @@ export default function MarketingCampaignSetupWizard({
 
 	const renderContentStep = () => (
 		<div className="space-y-6">
-			<MarketingCampaignLandingTemplateSelector
-				value={state.link.landing_template || "conversion"}
-				onChange={(value) => patchLink("landing_template", value)}
-				options={landingTemplateOptions}
-				error={stepErrors["link.landing_template"] || serverErrors["link.landing_template"]}
-			/>
+			<MarketingCampaignAiContentAssistant
+				data={state.link}
+				onApply={(key, value) => {
+					if (typeof key === "object") {
+						setState((prev) => ({
+							...prev,
+							contentTouched: true,
+							link: { ...prev.link, ...key },
+						}));
+						return;
+					}
 
+					patchLink(key, value);
+					patchState({ contentTouched: true });
+				}}
+			/>
 			<MarketingCampaignEditorialFields
 				data={state.link}
 				setData={(key, value) => patchLink(key, value)}
@@ -788,6 +841,11 @@ export default function MarketingCampaignSetupWizard({
 				</Field>
 			</div>
 
+		</div>
+	);
+
+	const renderImagesStep = () => (
+		<div className="space-y-8">
 			<MarketingCampaignHeroImageFields
 				data={state.link}
 				setData={(key, value) => {
@@ -804,11 +862,13 @@ export default function MarketingCampaignSetupWizard({
 				previewUrl={heroPreviewUrl}
 			/>
 
-			<MarketingCampaignGalleryFields
-				items={state.galleryItems}
-				onChange={(items) => patchState({ galleryItems: items })}
-				errors={serverErrors}
-			/>
+			<div className="border-t border-zinc-100 pt-6 dark:border-zinc-800">
+				<MarketingCampaignGalleryFields
+					items={state.galleryItems}
+					onChange={(items) => patchState({ galleryItems: items })}
+					errors={serverErrors}
+				/>
+			</div>
 		</div>
 	);
 
@@ -892,8 +952,42 @@ export default function MarketingCampaignSetupWizard({
 						?.label || prepared.promotion}
 				</Text>
 				<Text>Dirección: /c/{prepared.link.slug}</Text>
-				{publicUrl && (
-					<Text className="break-all font-mono text-sm">{publicUrl}</Text>
+				{hasEditorialPlaceholders && (
+					<div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+						Detectamos textos de prueba en el contenido editorial. Reemplázalos antes de activar la campaña.
+					</div>
+				)}
+			</Card>
+
+			<Card className="space-y-3 p-5">
+				<div className="flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<Text className="font-semibold">URL que compartirá Marketing</Text>
+						<Text className="mt-1 text-sm text-zinc-500">
+							{mode === "campaign" || mode === "link"
+								? "Vista previa de la URL. Se publicará cuando guardes el enlace."
+								: "Vista previa de la URL"}
+						</Text>
+					</div>
+					<Button type="button" outline disabled={!publicUrl} onClick={copyPreviewUrl}>
+						{copiedPreviewUrl ? "URL completa copiada" : "Copiar URL completa"}
+					</Button>
+				</div>
+				{basePreviewUrl && (
+					<div className="grid gap-3 md:grid-cols-2">
+						<div className="min-w-0">
+							<Text className="text-xs font-medium uppercase text-zinc-500">URL base</Text>
+							<Text className="mt-1 truncate font-mono text-sm" title={basePreviewUrl}>
+								{basePreviewUrl}
+							</Text>
+						</div>
+						<div className="min-w-0">
+							<Text className="text-xs font-medium uppercase text-zinc-500">URL completa</Text>
+							<Text className="mt-1 truncate font-mono text-sm" title={publicUrl}>
+								{publicUrl}
+							</Text>
+						</div>
+					</div>
 				)}
 			</Card>
 
@@ -977,6 +1071,7 @@ export default function MarketingCampaignSetupWizard({
 		promotion: renderPromotionStep,
 		products: renderProductsStep,
 		content: renderContentStep,
+		images: renderImagesStep,
 		channel: renderChannelStep,
 		preview: renderPreviewStep,
 	}[currentStepDef.id]?.();

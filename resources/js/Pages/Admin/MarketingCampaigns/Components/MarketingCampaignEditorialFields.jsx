@@ -16,8 +16,32 @@ const ICON_OPTIONS = [
 	{ value: "clock", label: "Rapidez" },
 ];
 
+const PLACEHOLDER_PATTERNS = [
+	/t[ií]tulo de prueba/i,
+	/descripci[oó]n de prueba/i,
+	/lorem ipsum/i,
+	/texto de prueba/i,
+	/\bqa\b/i,
+];
+
 function normalizeItems(items = []) {
 	return Array.isArray(items) ? items.slice(0, 4) : [];
+}
+
+export function hasEditorialPlaceholderContent(data = {}) {
+	const values = [
+		data.editorial_eyebrow,
+		data.editorial_title,
+		data.editorial_body,
+		...normalizeItems(data.editorial_items).flatMap((item) => [
+			item?.title,
+			item?.description,
+		]),
+	].filter((value) => typeof value === "string" && value.trim() !== "");
+
+	return values.some((value) =>
+		PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(value)),
+	);
 }
 
 export default function MarketingCampaignEditorialFields({
@@ -26,6 +50,7 @@ export default function MarketingCampaignEditorialFields({
 	errors = {},
 }) {
 	const items = normalizeItems(data.editorial_items);
+	const hasPlaceholders = hasEditorialPlaceholderContent(data);
 
 	const setItem = (index, patch) => {
 		const next = items.map((item, itemIndex) =>
@@ -62,6 +87,12 @@ export default function MarketingCampaignEditorialFields({
 					se permite HTML.
 				</Text>
 			</div>
+
+			{hasPlaceholders && (
+				<div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+					Detectamos textos de prueba en el contenido editorial. Puedes guardar, pero conviene reemplazarlos antes de publicar.
+				</div>
+			)}
 
 			<div className="grid gap-4 sm:grid-cols-2">
 				<Field>

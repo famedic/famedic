@@ -1,11 +1,9 @@
 import { Button } from "@/Components/Catalyst/button";
 import { Text } from "@/Components/Catalyst/text";
 import CampaignHero from "../components/CampaignHero";
-import CampaignTrustStrip from "../components/CampaignTrustStrip";
 import CampaignProductGrid from "../components/CampaignProductGrid";
 import CampaignSteps from "../components/CampaignSteps";
 import CampaignFinalCta from "../components/CampaignFinalCta";
-import CampaignBrandLogo from "../components/CampaignBrandLogo";
 
 export default function ConversionLandingTemplate(props) {
 	const {
@@ -37,51 +35,32 @@ export default function ConversionLandingTemplate(props) {
 				primaryAction={primaryAction}
 				secondaryAction={secondaryAction}
 				actionButtonProps={actionButtonProps}
+				variant="conversion"
 			/>
-			{brand && (
-				<section className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
-					<div className="flex flex-wrap items-center gap-4">
-						<CampaignBrandLogo brand={brand} showLogo={content?.show_brand_logo} />
-						<div>
-							<Text className="font-semibold">{brand.label}</Text>
-							{Array.isArray(brand.states) && brand.states.length > 0 && (
-								<Text className="mt-1 text-sm text-zinc-500">
-									Disponible en: {brand.states.join(", ")}
-								</Text>
-							)}
-						</div>
-					</div>
-					<div className="mt-4 flex flex-wrap gap-3">
-						{catalogUrl && (
-							<Button {...actionButtonProps(catalogUrl, { color: "lime" })}>Ver estudios de la marca</Button>
-						)}
-						{brandStoresUrl && (
-							<Button {...actionButtonProps(brandStoresUrl, { outline: true })}>Consultar sucursales</Button>
-						)}
-					</div>
-				</section>
-			)}
-			<CampaignTrustStrip brand={brand} storesUrl={brandStoresUrl} actionButtonProps={actionButtonProps} />
 			<CampaignProductGrid
-				title="Estudios destacados"
+				title="Estudios recomendados para ti"
+				subtitle={`Conoce los estudios${brand?.label ? ` de ${brand.label}` : ""} disponibles para cuidar tu salud.`}
 				products={products}
-				limit={4}
+				limit={3}
 				emptyMessage={emptyMessage}
 				productCardProps={productCardProps}
 				actionButtonProps={actionButtonProps}
+				variant="conversion"
 			/>
 			<CampaignSteps />
 			{relatedProducts.length > 0 && (
 				<CampaignProductGrid
 					title="También te puede interesar"
 					products={relatedProducts}
+					limit={3}
 					productCardProps={productCardProps}
 					actionButtonProps={actionButtonProps}
+					variant="conversion"
 				/>
 			)}
 			{relatedCategories.length > 0 && (
 				<section className="space-y-4">
-					<Text className="font-semibold">Categorías relacionadas</Text>
+					<Text className="font-semibold text-famedic-darker">Categorías relacionadas</Text>
 					<div className="flex flex-wrap gap-3">
 						{relatedCategories.map((item) => (
 							<Button key={item.url} {...actionButtonProps(item.url, { outline: true })}>{item.name}</Button>
@@ -94,6 +73,8 @@ export default function ConversionLandingTemplate(props) {
 				brandStoresUrl={brandStoresUrl}
 				primaryAction={primaryAction}
 				actionButtonProps={actionButtonProps}
+				brand={brand}
+				variant="conversion"
 			/>
 		</>
 	);

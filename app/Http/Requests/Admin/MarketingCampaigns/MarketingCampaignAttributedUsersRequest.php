@@ -7,29 +7,19 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
-class ShowMarketingCampaignRequest extends FormRequest
+class MarketingCampaignAttributedUsersRequest extends FormRequest
 {
     public function authorize(): bool
     {
         $campaign = $this->route('marketing_campaign');
 
         return $campaign instanceof MarketingCampaign
-            && ($this->user()?->can('view', $campaign) ?? false);
+            && ($this->user()?->can('viewAttributedUsers', $campaign) ?? false);
     }
 
     public function rules(): array
     {
         return [
-            'from' => ['nullable', 'date'],
-            'to' => ['nullable', 'date', 'after_or_equal:from'],
-            'link_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('marketing_campaign_links', 'id')
-                    ->where('marketing_campaign_id', $this->route('marketing_campaign')?->id),
-            ],
-            'utm_source' => ['nullable', 'string', 'max:255'],
-            'utm_medium' => ['nullable', 'string', 'max:255'],
             'attributed_from' => ['nullable', 'date'],
             'attributed_to' => ['nullable', 'date', 'after_or_equal:attributed_from'],
             'attributed_link_id' => [
@@ -49,44 +39,17 @@ class ShowMarketingCampaignRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            $from = $this->input('from');
-            $to = $this->input('to');
+            $from = $this->input('attributed_from');
+            $to = $this->input('attributed_to');
 
-            if ($from && $to
-                && ! $validator->errors()->has('from')
-                && ! $validator->errors()->has('to')
-                && Carbon::parse($from)->diffInDays(Carbon::parse($to)) > 366
-            ) {
-                $validator->errors()->add('to', 'El rango máximo permitido es de 366 días.');
+            if (! $from || ! $to || $validator->errors()->has('attributed_from') || $validator->errors()->has('attributed_to')) {
+                return;
             }
 
-            $attributedFrom = $this->input('attributed_from');
-            $attributedTo = $this->input('attributed_to');
-
-            if ($attributedFrom && $attributedTo
-                && ! $validator->errors()->has('attributed_from')
-                && ! $validator->errors()->has('attributed_to')
-                && Carbon::parse($attributedFrom)->diffInDays(Carbon::parse($attributedTo)) > 366
-            ) {
+            if (Carbon::parse($from)->diffInDays(Carbon::parse($to)) > 366) {
                 $validator->errors()->add('attributed_to', 'El rango máximo permitido es de 366 días.');
             }
         });
-    }
-
-    /**
-     * @return array{from: string, to: string, link_id: string, utm_source: string, utm_medium: string}
-     */
-    public function dashboardFilters(): array
-    {
-        $validated = $this->validated();
-
-        return [
-            'from' => (string) ($validated['from'] ?? ''),
-            'to' => (string) ($validated['to'] ?? ''),
-            'link_id' => (string) ($validated['link_id'] ?? ''),
-            'utm_source' => (string) ($validated['utm_source'] ?? ''),
-            'utm_medium' => (string) ($validated['utm_medium'] ?? ''),
-        ];
     }
 
     /**

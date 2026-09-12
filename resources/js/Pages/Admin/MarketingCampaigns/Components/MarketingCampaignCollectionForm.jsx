@@ -12,6 +12,7 @@ import {
 } from "@/Components/Catalyst/listbox";
 import Card from "@/Components/Card";
 import MarketingCampaignProductSelector from "./MarketingCampaignProductSelector";
+import MarketingCampaignAiCollectionAssistant from "./MarketingCampaignAiCollectionAssistant";
 import MarketingCampaignCollectionBrandChangeModal from "./MarketingCampaignCollectionBrandChangeModal";
 import MarketingCampaignCollectionPricingSummary from "./MarketingCampaignCollectionPricingSummary";
 import MarketingCampaignCollectionHeader from "./MarketingCampaignCollectionHeader";
@@ -37,6 +38,12 @@ function itemBrand(item) {
 function brandLabel(value, brands) {
 	return brandEntries(brands).find(([key]) => key === value)?.[1] || value;
 }
+
+const COLLECTION_STEPS = [
+	{ id: "info", label: "Información" },
+	{ id: "studies", label: "Seleccionar estudios" },
+	{ id: "review", label: "Revisar" },
+];
 
 export default function MarketingCampaignCollectionForm({
 	campaign,
@@ -70,6 +77,7 @@ export default function MarketingCampaignCollectionForm({
 		return Boolean(collection?.public_title);
 	});
 	const [publicTitleBlurred, setPublicTitleBlurred] = useState(false);
+	const [activeStep, setActiveStep] = useState("info");
 
 	const syncItems = (items) => {
 		setSelectedItems(items);
@@ -113,6 +121,21 @@ export default function MarketingCampaignCollectionForm({
 	const confirmBrandChange = () => {
 		if (!pendingBrand) return;
 		applyBrandChange(pendingBrand, []);
+	};
+
+	const applyAiCollection = (suggestion) => {
+		const items = suggestion.items || [];
+		setPublicTitleTouched(true);
+		setData({
+			...data,
+			name: suggestion.name || data.name,
+			public_title: suggestion.public_title || data.public_title,
+			public_description:
+				suggestion.public_description || data.public_description,
+			laboratory_test_ids: items.map((item) => item.id),
+		});
+		setSelectedItems(items);
+		setActiveStep("review");
 	};
 
 	const handleNameChange = (value) => {
@@ -238,6 +261,26 @@ export default function MarketingCampaignCollectionForm({
 				</Card>
 			)}
 
+			<div className="border-b border-zinc-200 dark:border-white/10">
+				<div className="flex gap-1 overflow-x-auto">
+					{COLLECTION_STEPS.map((step) => (
+						<button
+							key={step.id}
+							type="button"
+							onClick={() => setActiveStep(step.id)}
+							className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition ${
+								activeStep === step.id
+									? "border-famedic-light text-famedic-dark dark:text-lime-300"
+									: "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+							}`}
+						>
+							{step.label}
+						</button>
+					))}
+				</div>
+			</div>
+
+			{activeStep === "info" && (
 			<section className="space-y-4">
 				<div>
 					<Text className="font-semibold">
@@ -320,7 +363,9 @@ export default function MarketingCampaignCollectionForm({
 					</CheckboxField>
 				</div>
 			</section>
+			)}
 
+			{activeStep === "studies" && (
 			<section className="space-y-4">
 				<div className="flex flex-wrap items-end justify-between gap-3">
 					<div>
@@ -356,8 +401,46 @@ export default function MarketingCampaignCollectionForm({
 					addLabel="Buscar estudios"
 				/>
 
+				<MarketingCampaignAiCollectionAssistant
+					brand={data.laboratory_brand}
+					selectedItems={selectedItems}
+					onApply={applyAiCollection}
+				/>
+
 				<MarketingCampaignCollectionPricingSummary items={selectedItems} />
 			</section>
+			)}
+
+			{activeStep === "review" && (
+				<section className="space-y-4">
+					<Card className="space-y-4 p-5">
+						<div>
+							<Text className="font-semibold">Revisión de colección</Text>
+							<Text className="mt-1 text-sm text-zinc-500">
+								Confirma nombre, marca y estudios antes de guardar.
+							</Text>
+						</div>
+						<div className="grid gap-3 sm:grid-cols-2">
+							<div>
+								<Text className="text-sm text-zinc-500">Nombre interno</Text>
+								<Text className="font-medium">{data.name || "Sin nombre"}</Text>
+							</div>
+							<div>
+								<Text className="text-sm text-zinc-500">Marca</Text>
+								<Text className="font-medium">{brandLabel(data.laboratory_brand, brands) || "Sin marca"}</Text>
+							</div>
+							<div className="sm:col-span-2">
+								<Text className="text-sm text-zinc-500">Título público</Text>
+								<Text className="font-medium">{data.public_title || data.name || "Sin título"}</Text>
+							</div>
+						</div>
+						<MarketingCampaignCollectionPricingSummary items={selectedItems} />
+						<Button type="button" outline onClick={() => setActiveStep("studies")}>
+							Ajustar estudios
+						</Button>
+					</Card>
+				</section>
+			)}
 
 			{!hideStickyActions && (
 				<MarketingCampaignCollectionStickyActions

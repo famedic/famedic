@@ -10,10 +10,13 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\URL;
 
 class MarketingCampaignDashboardPresenter
 {
+    public function __construct(
+        private readonly MarketingCampaignLinkUrlBuilder $urlBuilder,
+    ) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -104,7 +107,10 @@ class MarketingCampaignDashboardPresenter
             'id' => $link->id,
             'name' => $link->name,
             'slug' => $link->slug,
-            'public_url' => URL::to('/c/'.$link->slug),
+            'public_url' => $this->urlBuilder->baseUrl($link),
+            'base_url' => $this->urlBuilder->baseUrl($link),
+            'full_url' => $this->urlBuilder->fullUrl($link),
+            'utm_parameters' => $this->urlBuilder->utmParameters($link),
         ];
     }
 
@@ -117,7 +123,11 @@ class MarketingCampaignDashboardPresenter
             'id' => $link->id,
             'name' => $link->name,
             'slug' => $link->slug,
-            'public_url' => URL::to('/c/'.$link->slug),
+            'public_url' => $this->urlBuilder->baseUrl($link),
+            'base_url' => $this->urlBuilder->baseUrl($link),
+            'full_url' => $this->urlBuilder->fullUrl($link),
+            'utm_parameters' => $this->urlBuilder->utmParameters($link),
+            'channel_label' => $this->channelLabel($link),
             'status' => $link->status?->value ?? $link->status,
             'status_label' => $link->status?->label(),
             'target_type' => $link->target_type?->value ?? $link->target_type,
@@ -126,6 +136,20 @@ class MarketingCampaignDashboardPresenter
             'ends_at' => $link->ends_at,
             'created_at' => $link->created_at,
         ])->values()->all();
+    }
+
+    private function channelLabel(object $link): string
+    {
+        $source = $link->utm_source;
+        $medium = $link->utm_medium;
+
+        if (($source === null || $source === '') && ($medium === null || $medium === '')) {
+            return 'Sin preset';
+        }
+
+        return collect([$source, $medium])
+            ->reject(fn ($value) => $value === null || $value === '')
+            ->implode(' / ');
     }
 
     /**

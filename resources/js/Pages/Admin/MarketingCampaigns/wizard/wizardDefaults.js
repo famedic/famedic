@@ -3,20 +3,22 @@ import { slugify } from "../Components/MarketingCampaignLinkForm";
 export { slugify };
 
 export const CAMPAIGN_STEPS = [
-	{ id: "general", label: "Información general" },
-	{ id: "promotion", label: "Qué promocionar" },
+	{ id: "general", label: "Objetivo" },
+	{ id: "promotion", label: "Destino" },
 	{ id: "products", label: "Productos" },
 	{ id: "content", label: "Contenido" },
+	{ id: "images", label: "Imágenes" },
 	{ id: "channel", label: "Canal y UTMs" },
-	{ id: "preview", label: "Vista previa" },
+	{ id: "preview", label: "Revisar y publicar" },
 ];
 
 export const LINK_STEPS = [
-	{ id: "promotion", label: "Qué promocionar" },
+	{ id: "promotion", label: "Destino" },
 	{ id: "products", label: "Productos" },
 	{ id: "content", label: "Contenido" },
+	{ id: "images", label: "Imágenes" },
 	{ id: "channel", label: "Canal y UTMs" },
-	{ id: "preview", label: "Vista previa" },
+	{ id: "preview", label: "Revisar y publicar" },
 ];
 
 export function getSteps(mode) {

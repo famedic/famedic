@@ -45,6 +45,8 @@ use App\Http\Controllers\Admin\LaboratoryStoreController as AdminLaboratoryStore
 use App\Http\Controllers\Admin\LaboratoryTestController;
 use App\Http\Controllers\Admin\LogsGeneralController;
 use App\Http\Controllers\Admin\MarketingCampaignCollectionController;
+use App\Http\Controllers\Admin\MarketingCampaignAttributedUsersExportController;
+use App\Http\Controllers\Admin\MarketingCampaignAiSuggestionController;
 use App\Http\Controllers\Admin\MarketingCampaignController;
 use App\Http\Controllers\Admin\MarketingCampaignLinkController;
 use App\Http\Controllers\Admin\MarketingCampaignProductSearchController;
@@ -169,12 +171,19 @@ Route::prefix('admin')->middleware([
 
         Route::prefix('marketing-campaigns')->name('marketing-campaigns.')->group(function () {
             Route::get('product-search', MarketingCampaignProductSearchController::class)->name('product-search');
+            Route::post('ai/landing-content', [MarketingCampaignAiSuggestionController::class, 'landingContent'])
+                ->middleware('throttle:marketing-campaign-ai')
+                ->name('ai.landing-content');
+            Route::post('ai/collection', [MarketingCampaignAiSuggestionController::class, 'collection'])
+                ->middleware('throttle:marketing-campaign-ai')
+                ->name('ai.collection');
 
             Route::get('/', [MarketingCampaignController::class, 'index'])->name('index');
             Route::get('/create', [MarketingCampaignController::class, 'create'])->name('create');
             Route::post('/', [MarketingCampaignController::class, 'store'])->name('store');
             Route::post('/setup', [MarketingCampaignController::class, 'storeSetup'])->name('setup.store');
             Route::get('/{marketing_campaign}', [MarketingCampaignController::class, 'show'])->name('show');
+            Route::get('/{marketing_campaign}/attributed-users/export', MarketingCampaignAttributedUsersExportController::class)->name('attributed-users.export');
             Route::get('/{marketing_campaign}/edit', [MarketingCampaignController::class, 'edit'])->name('edit');
             Route::put('/{marketing_campaign}', [MarketingCampaignController::class, 'update'])->name('update');
             Route::post('/{marketing_campaign}/archive', ArchiveMarketingCampaignController::class)->name('archive');

@@ -18,30 +18,6 @@ function formatDate(value) {
 	}
 }
 
-function GallerySection({ gallery = [] }) {
-	if (!gallery.length) return null;
-
-	return (
-		<section className="space-y-4">
-			<Text className="font-semibold">Galería</Text>
-			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-				{gallery.map((image, index) => (
-					<div
-						key={`${image.url}-${index}`}
-						className="overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800"
-					>
-						<img
-							src={image.url}
-							alt={image.alt || ""}
-							className="aspect-[4/3] w-full object-cover"
-						/>
-					</div>
-				))}
-			</div>
-		</section>
-	);
-}
-
 export default function MarketingCampaignLanding({
 	campaign,
 	content,
@@ -61,6 +37,7 @@ export default function MarketingCampaignLanding({
 	const { props } = usePage();
 	const laboratoryCarts = props.laboratoryCarts || {};
 	const [addingId, setAddingId] = useState(null);
+	const [removingId, setRemovingId] = useState(null);
 	const [cartMessages, setCartMessages] = useState({});
 	const isAdminPreview = Boolean(preview?.admin);
 	const Template = resolveLandingTemplate(content?.landing_template);
@@ -77,12 +54,21 @@ export default function MarketingCampaignLanding({
 		Object.entries(laboratoryCarts).forEach(([brandKey, items]) => {
 			map[brandKey] = new Set(
 				(items || []).map((item) =>
-					String(item.laboratory_test_id ?? item.laboratoryTest?.id),
+					String(item.laboratory_test_id ?? item.laboratory_test?.id ?? item.laboratoryTest?.id),
 				),
 			);
 		});
 		return map;
 	}, [laboratoryCarts]);
+
+	const findProductCartItem = (product) => {
+		const brandKey = product.brand;
+		if (!brandKey) return null;
+
+		return (laboratoryCarts?.[brandKey] || []).find((item) =>
+			String(item.laboratory_test_id ?? item.laboratory_test?.id ?? item.laboratoryTest?.id) === String(product.id),
+		) || null;
+	};
 
 	const isProductInCart = (product) => {
 		const brandKey = product.brand;
@@ -134,6 +120,39 @@ export default function MarketingCampaignLanding({
 		);
 	};
 
+	const handleRemoveFromCart = (product) => {
+		const cartItem = findProductCartItem(product);
+
+		if (isAdminPreview || !cartItem?.id) {
+			return;
+		}
+
+		setRemovingId(product.id);
+		setCartMessages((current) => ({ ...current, [product.id]: null }));
+
+		router.delete(
+			route("laboratory-cart-items.destroy", {
+				laboratory_cart_item: cartItem.id,
+			}),
+			{
+				preserveScroll: true,
+				onSuccess: () => {
+					setCartMessages((current) => ({
+						...current,
+						[product.id]: "Estudio eliminado del carrito.",
+					}));
+				},
+				onError: () => {
+					setCartMessages((current) => ({
+						...current,
+						[product.id]: "No se pudo quitar el estudio del carrito.",
+					}));
+				},
+				onFinish: () => setRemovingId(null),
+			},
+		);
+	};
+
 	const actionButtonProps = (url, extra = {}) =>
 		canUseActions && url
 			? { href: url, ...extra }
@@ -151,13 +170,15 @@ export default function MarketingCampaignLanding({
 		canAddToCart,
 		isInCart: isProductInCart(product),
 		onAdd: handleAddToCart,
+		onRemove: handleRemoveFromCart,
 		adding: addingId === product.id,
+		removing: removingId === product.id,
 		cartMessage: cartMessages[product.id],
 	});
 
 	return (
 		<FamedicLayout title={content?.title || "Campaña"}>
-			<div className="mx-auto max-w-7xl space-y-12 px-4 py-8 sm:px-6 lg:px-8">
+			<div className="mx-auto max-w-[1280px] space-y-16 px-4 py-6 sm:px-6 lg:space-y-20 lg:px-10 lg:py-10">
 				{isAdminPreview && (
 					<section className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-900 dark:bg-sky-950/40">
 						<Text className="text-sm font-medium text-sky-900 dark:text-sky-100">
@@ -179,6 +200,8 @@ export default function MarketingCampaignLanding({
 					category={category}
 					starts={starts}
 					ends={ends}
+					startsAt={campaign?.starts_at}
+					endsAt={campaign?.ends_at}
 					catalogUrl={catalogUrl}
 					brandStoresUrl={brandStoresUrl}
 					primaryAction={primary_action}
@@ -190,8 +213,6 @@ export default function MarketingCampaignLanding({
 					productCardProps={productCardProps}
 					actionButtonProps={actionButtonProps}
 				/>
-
-				<GallerySection gallery={content?.gallery || []} />
 			</div>
 		</FamedicLayout>
 	);

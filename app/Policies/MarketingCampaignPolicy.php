@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\MarketingCampaign;
 use App\Models\User;
+use Spatie\Permission\Exceptions\PermissionDoesNotExist;
 
 class MarketingCampaignPolicy
 {
@@ -15,6 +16,20 @@ class MarketingCampaignPolicy
     public function view(User $user, MarketingCampaign $campaign): bool
     {
         return $this->viewAny($user);
+    }
+
+    public function viewAttributedUsers(User $user, MarketingCampaign $campaign): bool
+    {
+        return $this->view($user, $campaign);
+    }
+
+    public function viewAttributedUserPii(User $user, MarketingCampaign $campaign): bool
+    {
+        try {
+            return $user->administrator?->hasPermissionTo('marketing-campaigns.attributed-users.view-pii') ?? false;
+        } catch (PermissionDoesNotExist) {
+            return false;
+        }
     }
 
     public function create(User $user): bool

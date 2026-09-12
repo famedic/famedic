@@ -27,6 +27,14 @@ return new class extends Migration
             ], fn ($value) => $value !== null)
         );
 
+        Permission::firstOrCreate(
+            ['name' => 'marketing-campaigns.attributed-users.view-pii', 'guard_name' => 'web'],
+            array_filter([
+                'permission_id' => $manage->id,
+                'description' => $descriptionColumnExists ? 'Ver nombre y correo en usuarios atribuidos a campañas' : null,
+            ], fn ($value) => $value !== null)
+        );
+
         // Administrador necesita manage (lectura) y manage.edit (CRUD futuro).
         // Sin edit, create/update/archive quedarían bloqueados por policy.
         $adminRole = Role::query()->where('name', 'Administrador')->first();
@@ -45,6 +53,7 @@ return new class extends Migration
     {
         Permission::query()
             ->whereIn('name', [
+                'marketing-campaigns.attributed-users.view-pii',
                 'marketing-campaigns.manage.edit',
                 'marketing-campaigns.manage',
             ])

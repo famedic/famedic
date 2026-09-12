@@ -14,6 +14,7 @@ import {
 	formatFileSize,
 	validateMarketingCampaignImageFile,
 } from "./imageFileValidation";
+import MarketingCampaignFieldHelp from "./MarketingCampaignFieldHelp";
 
 const MAX_ITEMS = 6;
 const MAX_SIZE_LABEL = formatFileSize(MARKETING_CAMPAIGN_IMAGE_MAX_BYTES);
@@ -97,18 +98,19 @@ export default function MarketingCampaignGalleryFields({
 
 	return (
 		<div className="space-y-4">
-			<Text className="text-sm text-zinc-500">
-				Hasta {MAX_ITEMS} imágenes. Puedes mezclar archivos subidos y
-				URLs HTTPS externas. Recomendado: 1200 x 900 px o 1200 x
-				1200 px, todas con la misma proporción para que la galería se
-				vea uniforme.
-			</Text>
-			<Text className="text-sm text-zinc-500">
-				Usa WebP o JPG optimizado, máximo {MAX_SIZE_LABEL} por archivo.
-				Lo ideal es que cada imagen pese cerca de{" "}
-				{RECOMMENDED_SIZE_LABEL}. Evita texto pequeño dentro de la
-				imagen porque puede perderse en celulares.
-			</Text>
+			<div>
+				<Text className="font-medium">
+					<MarketingCampaignFieldHelp label="Galería">
+						Hasta {MAX_ITEMS} imágenes. Puedes mezclar archivos subidos y URLs HTTPS externas.
+						Recomendado: 1200 x 900 px o 1200 x 1200 px, todas con la misma proporción.
+						Usa WebP o JPG optimizado cerca de {RECOMMENDED_SIZE_LABEL}. El orden define cómo se ve la landing.
+						Evita texto pequeño dentro de la imagen porque puede perderse en celulares.
+					</MarketingCampaignFieldHelp>
+				</Text>
+				<Text className="mt-1 text-sm text-zinc-500">
+					Hasta {MAX_ITEMS} imágenes · máximo {MAX_SIZE_LABEL} por archivo
+				</Text>
+			</div>
 
 			<div className="flex flex-wrap gap-2">
 				<Field>

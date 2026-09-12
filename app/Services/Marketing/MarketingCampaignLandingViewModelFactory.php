@@ -71,6 +71,8 @@ class MarketingCampaignLandingViewModelFactory
         $isAuthenticated = auth()->check();
         $loginUrl = route('campaign-links.require-auth', ['slug' => $link->slug, ...$allowedQuery]);
 
+        $galleryImages = $this->galleryImages($link);
+
         return [
             'campaign' => [
                 'name' => $campaign->name,
@@ -88,7 +90,12 @@ class MarketingCampaignLandingViewModelFactory
                 'description' => $description,
                 'hero_image' => $link->resolvedHeroImageUrl(),
                 'hero_image_alt' => $link->hero_image_alt,
-                'gallery' => $this->galleryImages($link),
+                'gallery' => $galleryImages,
+                'image_roles' => [
+                    'hero' => $link->resolvedHeroImageUrl(),
+                    'editorial_secondary' => $galleryImages[0] ?? null,
+                    'gallery' => array_values(array_slice($galleryImages, 1)),
+                ],
                 'show_prices' => (bool) ($link->show_prices ?? true),
                 'show_brand_logo' => (bool) ($link->show_brand_logo ?? true),
                 'show_campaign_dates' => (bool) ($link->show_campaign_dates ?? false),

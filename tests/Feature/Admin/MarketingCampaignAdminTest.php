@@ -26,6 +26,8 @@ use App\Models\User;
 use App\Support\Workspace\WorkspaceCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
@@ -82,6 +84,7 @@ class MarketingCampaignAdminTest extends TestCase
             'medical-attention-subscriptions.manage',
             'marketing-campaigns.manage',
             'marketing-campaigns.manage.edit',
+            'marketing-campaigns.attributed-users.view-pii',
             'customers.manage',
             'coupons.manage',
             'documentation.manage',
@@ -129,10 +132,15 @@ class MarketingCampaignAdminTest extends TestCase
             ['name' => 'marketing-campaigns.manage.edit', 'guard_name' => 'web'],
             ['permission_id' => $manage->id],
         );
+        $pii = Permission::query()->firstOrCreate(
+            ['name' => 'marketing-campaigns.attributed-users.view-pii', 'guard_name' => 'web'],
+            ['permission_id' => $manage->id],
+        );
 
         $map = [
             'marketing-campaigns.manage' => $manage,
             'marketing-campaigns.manage.edit' => $edit,
+            'marketing-campaigns.attributed-users.view-pii' => $pii,
         ];
 
         foreach ($permissions as $permissionName) {
@@ -1023,6 +1031,9 @@ class MarketingCampaignAdminTest extends TestCase
         MarketingCampaignLink::factory()->for($campaign, 'campaign')->create([
             'slug' => 'dashboard-link',
             'public_title' => 'Landing dashboard',
+            'utm_source' => 'google',
+            'utm_medium' => 'cpc',
+            'utm_campaign' => 'dashboard campaña',
             'target_type' => MarketingCampaignTargetType::Brand,
             'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
         ]);
@@ -1035,7 +1046,15 @@ class MarketingCampaignAdminTest extends TestCase
                 ->has('summary')
                 ->has('checklist', 8)
                 ->where('links.0.public_url', url('/c/dashboard-link'))
+                ->where('links.0.base_url', url('/c/dashboard-link'))
+                ->where('links.0.full_url', url('/c/dashboard-link').'?utm_source=google&utm_medium=cpc&utm_campaign=dashboard%20campa%C3%B1a')
+                ->where('links.0.utm_parameters.utm_source', 'google')
+                ->where('links.0.utm_parameters.utm_medium', 'cpc')
+                ->where('links.0.channel_label', 'google / cpc')
+                ->where('summary.primary_link.full_url', url('/c/dashboard-link').'?utm_source=google&utm_medium=cpc&utm_campaign=dashboard%20campa%C3%B1a')
                 ->where('summary.links_count', 1));
+
+        $this->assertDatabaseCount('marketing_campaign_visits', 0);
     }
 
     #[Test]
@@ -1706,6 +1725,278 @@ class MarketingCampaignAdminTest extends TestCase
     }
 
     #[Test]
+    public function usuarios_atribuidos_oculta_pii_sin_permiso_especifico(): void
+    {
+        $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
+        $campaign = MarketingCampaign::factory()->create(['name' => 'Campaña atribución']);
+        $link = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create(['name' => 'Paid search']);
+
+        $metric = $this->createDashboardMetric($campaign, $link, [
+            'token_hash' => hash('sha256', 'token-privado'),
+            'utm_source' => 'google',
+            'utm_medium' => 'cpc',
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', [
+                $campaign,
+                'tab' => 'attributed-users',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/MarketingCampaigns/Show')
+                ->has('attributedUsers.data', 1)
+                ->where('attributedUsers.can_view_pii', false)
+                ->where('attributedUsers.data.0.user.label', 'Usuario identificado')
+                ->where('attributedUsers.data.0.user.name', null)
+                ->where('attributedUsers.data.0.user.email', null)
+                ->where('attributedUsers.data.0.registration.utm_source', 'google')
+                ->where('attributedUsers.data.0.registration.utm_medium', 'cpc')
+                ->where('attributedUsers.data.0.conversions.is_buyer', true));
+
+        $payload = $response->getContent();
+
+        $this->assertStringNotContainsString($metric['token_hash'], $payload);
+        $this->assertStringNotContainsString($metric['customer']->user->email, $payload);
+        $this->assertStringNotContainsString('gclid-secret', $payload);
+        $this->assertStringNotContainsString('fbclid-secret', $payload);
+        $this->assertStringNotContainsString('visitor_token', $payload);
+    }
+
+    #[Test]
+    public function usuarios_atribuidos_no_falla_si_permiso_pii_aun_no_existe(): void
+    {
+        $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
+        Permission::query()
+            ->where('name', 'marketing-campaigns.attributed-users.view-pii')
+            ->delete();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        $campaign = MarketingCampaign::factory()->create();
+        $link = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create();
+        $metric = $this->createDashboardMetric($campaign, $link);
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', [
+                $campaign,
+                'tab' => 'attributed-users',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('capabilities.canViewAttributedUserPii', false)
+                ->where('attributedUsers.can_view_pii', false)
+                ->where('attributedUsers.data.0.user.email', null));
+
+        $this->assertStringNotContainsString($metric['customer']->user->email, $response->getContent());
+    }
+
+    #[Test]
+    public function usuarios_atribuidos_muestra_pii_solo_con_permiso_especifico(): void
+    {
+        $admin = $this->makeMarketingAdmin([
+            'marketing-campaigns.manage',
+            'marketing-campaigns.attributed-users.view-pii',
+        ]);
+        $campaign = MarketingCampaign::factory()->create();
+        $link = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create();
+
+        $metric = $this->createDashboardMetric($campaign, $link);
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', [
+                $campaign,
+                'tab' => 'attributed-users',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('capabilities.canViewAttributedUserPii', true)
+                ->where('attributedUsers.can_view_pii', true)
+                ->where('attributedUsers.data.0.user.email', $metric['customer']->user->email)
+                ->where('attributedUsers.data.0.user.name', $metric['customer']->user->full_name));
+    }
+
+    #[Test]
+    public function usuarios_atribuidos_filtra_por_fecha_enlace_utm_y_comprador(): void
+    {
+        $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
+        $campaign = MarketingCampaign::factory()->create();
+        $included = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create(['name' => 'Incluido']);
+        $other = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create(['name' => 'Excluido']);
+
+        $this->createDashboardMetric($campaign, $included, [
+            'visited_at' => now()->setDate(2026, 9, 10)->setTime(12, 0),
+            'utm_source' => 'google',
+            'utm_medium' => 'cpc',
+            'amount_cents' => 15_000,
+        ]);
+        $this->createDashboardMetric($campaign, $other, [
+            'visited_at' => now()->setDate(2026, 9, 10)->setTime(12, 0),
+            'utm_source' => 'facebook',
+            'utm_medium' => 'paid_social',
+        ]);
+        $this->createDashboardMetric($campaign, $included, [
+            'visited_at' => now()->setDate(2026, 9, 10)->setTime(12, 0),
+            'utm_source' => 'google',
+            'utm_medium' => 'cpc',
+            'with_conversion' => false,
+        ]);
+        $this->createDashboardMetric($campaign, $included, [
+            'visited_at' => now()->setDate(2026, 8, 1)->setTime(12, 0),
+            'utm_source' => 'google',
+            'utm_medium' => 'cpc',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', [
+                $campaign,
+                'tab' => 'attributed-users',
+                'attributed_from' => '2026-09-01',
+                'attributed_to' => '2026-09-30',
+                'attributed_link_id' => $included->id,
+                'attributed_utm_source' => 'google',
+                'attributed_utm_medium' => 'cpc',
+                'attributed_status' => 'buyer',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('attributedUsers.data', 1)
+                ->where('attributedUsers.filters.from', '2026-09-01')
+                ->where('attributedUsers.filters.to', '2026-09-30')
+                ->where('attributedUsers.filters.link_id', (string) $included->id)
+                ->where('attributedUsers.data.0.registration.link.name', 'Incluido')
+                ->where('attributedUsers.data.0.conversions.revenue_cents', 15_000));
+    }
+
+    #[Test]
+    public function usuarios_atribuidos_pagina_en_servidor_y_conserva_first_last_touch(): void
+    {
+        $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
+        $firstCampaign = MarketingCampaign::factory()->create(['name' => 'First campaign']);
+        $lastCampaign = MarketingCampaign::factory()->create(['name' => 'Last campaign']);
+        $firstLink = MarketingCampaignLink::factory()->for($firstCampaign, 'campaign')->create(['name' => 'First link']);
+        $lastLink = MarketingCampaignLink::factory()->for($lastCampaign, 'campaign')->create(['name' => 'Last link']);
+
+        for ($index = 0; $index < 11; $index++) {
+            $this->createDashboardMetric($lastCampaign, $lastLink, [
+                'first_campaign' => $firstCampaign,
+                'first_link' => $firstLink,
+                'visited_at' => now()->setDate(2026, 9, 1)->setTime(10, 0)->addMinutes($index),
+            ]);
+        }
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', [
+                $lastCampaign,
+                'tab' => 'attributed-users',
+                'attributed_per_page' => 10,
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('attributedUsers.data', 10)
+                ->where('attributedUsers.meta.total', 11)
+                ->where('attributedUsers.meta.per_page', 10)
+                ->where('attributedUsers.data.0.first_touch.campaign', 'First campaign')
+                ->where('attributedUsers.data.0.first_touch.link.name', 'First link')
+                ->where('attributedUsers.data.0.last_touch.campaign', 'Last campaign')
+                ->where('attributedUsers.data.0.last_touch.link.name', 'Last link'));
+    }
+
+    #[Test]
+    public function exportacion_csv_de_usuarios_atribuidos_es_auditada_y_respeta_privacidad(): void
+    {
+        Log::spy();
+
+        $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
+        $campaign = MarketingCampaign::factory()->create();
+        $link = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create();
+        $metric = $this->createDashboardMetric($campaign, $link, [
+            'token_hash' => hash('sha256', 'csv-token-privado'),
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.attributed-users.export', [
+                $campaign,
+                'attributed_status' => 'buyer',
+            ]))
+            ->assertOk()
+            ->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+        $csv = $response->streamedContent();
+
+        $this->assertStringContainsString('referencia_atribucion', $csv);
+        $this->assertStringNotContainsString('nombre', $csv);
+        $this->assertStringNotContainsString('correo', $csv);
+        $this->assertStringNotContainsString($metric['customer']->user->email, $csv);
+        $this->assertStringNotContainsString($metric['token_hash'], $csv);
+        $this->assertStringNotContainsString('gclid-secret', $csv);
+        $this->assertStringNotContainsString('fbclid-secret', $csv);
+
+        Log::shouldHaveReceived('info')
+            ->once()
+            ->with('marketing_campaign_attributed_users_csv_exported', \Mockery::on(
+                fn (array $context) => $context['campaign_id'] === $campaign->id
+                    && $context['user_id'] === $admin->id
+                    && $context['rows_count'] === 1
+                    && $context['includes_pii'] === false
+            ));
+    }
+
+    #[Test]
+    public function exportacion_csv_incluye_pii_solo_con_permiso_especifico(): void
+    {
+        $admin = $this->makeMarketingAdmin([
+            'marketing-campaigns.manage',
+            'marketing-campaigns.attributed-users.view-pii',
+        ]);
+        $campaign = MarketingCampaign::factory()->create();
+        $link = MarketingCampaignLink::factory()->for($campaign, 'campaign')->create();
+        $metric = $this->createDashboardMetric($campaign, $link);
+
+        $csv = $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.attributed-users.export', $campaign))
+            ->assertOk()
+            ->streamedContent();
+
+        $this->assertStringContainsString('nombre,correo', $csv);
+        $this->assertStringContainsString($metric['customer']->user->email, $csv);
+        $this->assertStringNotContainsString($metric['token_hash'], $csv);
+        $this->assertStringNotContainsString('gclid-secret', $csv);
+        $this->assertStringNotContainsString('fbclid-secret', $csv);
+    }
+
+    #[Test]
+    public function usuarios_atribuidos_rechaza_filtros_invalidos_y_export_sin_permiso(): void
+    {
+        $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
+        $plain = User::factory()->create();
+        Administrator::factory()->for($plain)->create();
+        $campaign = MarketingCampaign::factory()->create();
+        $otherCampaign = MarketingCampaign::factory()->create();
+        $foreignLink = MarketingCampaignLink::factory()->for($otherCampaign, 'campaign')->create();
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', [
+                $campaign,
+                'tab' => 'attributed-users',
+                'attributed_from' => '2026-01-01',
+                'attributed_to' => '2027-03-01',
+            ]))
+            ->assertSessionHasErrors('attributed_to');
+
+        $this->actingAs($admin)
+            ->get(route('admin.marketing-campaigns.show', [
+                $campaign,
+                'tab' => 'attributed-users',
+                'attributed_link_id' => $foreignLink->id,
+            ]))
+            ->assertSessionHasErrors('attributed_link_id');
+
+        $this->actingAs($plain)
+            ->get(route('admin.marketing-campaigns.attributed-users.export', $campaign))
+            ->assertForbidden();
+    }
+
+    #[Test]
     public function product_search_valida_consulta_filtra_y_autoriza(): void
     {
         $admin = $this->makeMarketingAdmin(['marketing-campaigns.manage']);
@@ -1776,8 +2067,149 @@ class MarketingCampaignAdminTest extends TestCase
             ->assertForbidden();
     }
 
+    #[Test]
+    public function asistente_ia_de_contenido_exige_permiso_y_no_persiste(): void
+    {
+        config([
+            'services.openai.key' => 'test-key-not-real',
+            'services.openai.model' => 'gpt-4o-mini',
+            'services.openai.timeout' => 5,
+        ]);
+
+        Http::fake([
+            'https://api.openai.com/v1/chat/completions' => Http::response([
+                'choices' => [[
+                    'message' => [
+                        'content' => json_encode([
+                            'eyebrow' => 'Campaña preventiva',
+                            'title' => 'Cuida tu salud hoy',
+                            'subtitle' => 'Estudios disponibles con orientación clara',
+                            'description' => 'Agenda estudios de laboratorio con información sencilla y revisable.',
+                            'primary_cta_label' => 'Ver estudios',
+                            'secondary_cta_label' => 'Conocer más',
+                            'editorial_title' => 'Información para decidir',
+                            'editorial_body' => 'Consulta opciones disponibles sin sustituir la valoración médica.',
+                            'editorial_items' => [[
+                                'title' => 'Sin promesas clínicas',
+                                'description' => 'Contenido informativo para campañas comerciales.',
+                                'icon_key' => 'shield',
+                            ]],
+                            'seo_title' => 'Campaña preventiva',
+                            'seo_description' => 'Estudios de laboratorio disponibles.',
+                        ]),
+                    ],
+                ]],
+            ], 200),
+        ]);
+
+        $plain = User::factory()->create();
+        Administrator::factory()->for($plain)->create();
+
+        $this->actingAs($plain)
+            ->postJson(route('admin.marketing-campaigns.ai.landing-content'), [
+                'context' => 'Campaña de prueba para laboratorios con enfoque preventivo y tono claro.',
+                'objective' => 'promocion',
+                'tone' => 'profesional',
+            ])
+            ->assertForbidden();
+
+        $before = MarketingCampaign::query()->count();
+        $admin = $this->makeMarketingAdmin();
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.marketing-campaigns.ai.landing-content'), [
+                'context' => 'Campaña de prueba para laboratorios con enfoque preventivo y tono claro.',
+                'objective' => 'promocion',
+                'tone' => 'profesional',
+                'audience' => 'Personas adultas interesadas en prevención.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.title', 'Cuida tu salud hoy')
+            ->assertJsonPath('data.editorial_items.0.icon_key', 'shield');
+
+        $this->assertSame($before, MarketingCampaign::query()->count());
+        Http::assertSentCount(1);
+    }
+
+    #[Test]
+    public function asistente_ia_de_colecciones_solo_aplica_ids_candidatos_de_la_marca(): void
+    {
+        config([
+            'services.openai.key' => 'test-key-not-real',
+            'services.openai.model' => 'gpt-4o-mini',
+            'services.openai.timeout' => 5,
+        ]);
+
+        $admin = $this->makeMarketingAdmin();
+        $allowed = LaboratoryTest::factory()->create([
+            'brand' => LaboratoryBrand::OLAB,
+            'name' => 'RMN Cerebro',
+            'public_price_cents' => 420000,
+            'famedic_price_cents' => 310000,
+        ]);
+        $sameBrandNotCandidate = LaboratoryTest::factory()->create(['brand' => LaboratoryBrand::OLAB]);
+        $otherBrand = LaboratoryTest::factory()->create(['brand' => LaboratoryBrand::JENNER]);
+
+        Http::fake([
+            'https://api.openai.com/v1/chat/completions' => Http::response([
+                'choices' => [[
+                    'message' => [
+                        'content' => json_encode([
+                            'collection_name' => 'Colección cerebro',
+                            'public_title' => 'Cuidado cerebral',
+                            'public_description' => 'Selección informativa de estudios disponibles.',
+                            'reasoning_summary' => 'Se eligieron candidatos alineados al objetivo.',
+                            'items' => [
+                                ['laboratory_test_id' => $allowed->id, 'reason' => 'Candidato permitido y de la marca.'],
+                                ['laboratory_test_id' => $sameBrandNotCandidate->id, 'reason' => 'No debe pasar por no ser candidato.'],
+                                ['laboratory_test_id' => $otherBrand->id, 'reason' => 'No debe pasar por marca distinta.'],
+                                ['laboratory_test_id' => 999999, 'reason' => 'No existe.'],
+                            ],
+                        ]),
+                    ],
+                ]],
+            ], 200),
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.marketing-campaigns.ai.collection'), [
+                'brand' => LaboratoryBrand::OLAB->value,
+                'context' => 'Campaña preventiva para seleccionar estudios relacionados con cuidado cerebral.',
+                'desired_count' => 6,
+                'objective' => 'preventiva',
+                'candidate_ids' => [$allowed->id],
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.laboratory_test_id', $allowed->id)
+            ->assertJsonPath('data.items.0.study.famedic_price_cents', 310000);
+
+        Http::assertSentCount(1);
+    }
+
+    #[Test]
+    public function asistente_ia_devuelve_json_amigable_si_falta_configuracion(): void
+    {
+        config(['services.openai.key' => null]);
+
+        $admin = $this->makeMarketingAdmin();
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.marketing-campaigns.ai.landing-content'), [
+                'context' => 'Campaña de prueba para validar que el modal maneje proveedor no configurado.',
+                'objective' => 'promocion',
+                'tone' => 'profesional',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('error.code', 'AI_SUGGESTION_FAILED')
+            ->assertJsonPath('error.message', 'No fue posible generar sugerencias. Revisa la configuración de IA.');
+    }
+
     /**
-     * @return array{token_hash: string, customer: Customer}
+     * @return array{token_hash: string, customer: Customer, attribution: MarketingCampaignAttribution}
      */
     private function createDashboardMetric(MarketingCampaign $lastCampaign, MarketingCampaignLink $lastLink, array $overrides = []): array
     {
@@ -1856,33 +2288,36 @@ class MarketingCampaignAdminTest extends TestCase
             'updated_at' => $visitedAt->copy()->addMinutes(10),
         ]);
 
-        MarketingCampaignConversion::query()->create([
-            'marketing_campaign_attribution_id' => $attribution->id,
-            'marketing_campaign_visitor_identity_id' => $identity->id,
-            'first_campaign_id' => $firstCampaign->id,
-            'first_link_id' => $firstLink->id,
-            'first_visit_id' => $visit->id,
-            'last_campaign_id' => $lastCampaign->id,
-            'last_link_id' => $lastLink->id,
-            'last_visit_id' => $visit->id,
-            'user_id' => $user->id,
-            'customer_id' => $customer->id,
-            'conversion_type' => MarketingCampaignConversion::TYPE_LABORATORY_PURCHASE,
-            'purchase_id' => $purchase->id,
-            'currency' => 'MXN',
-            'amount_cents' => $overrides['amount_cents'] ?? 10_000,
-            'utm_source' => $overrides['utm_source'] ?? 'facebook',
-            'utm_medium' => $overrides['utm_medium'] ?? 'cpc',
-            'utm_campaign' => 'dashboard-test',
-            'gclid' => 'gclid-secret',
-            'fbclid' => 'fbclid-secret',
-            'converted_at' => $visitedAt->copy()->addMinutes(10),
-            'created_at' => $visitedAt->copy()->addMinutes(10),
-        ]);
+        if ($overrides['with_conversion'] ?? true) {
+            MarketingCampaignConversion::query()->create([
+                'marketing_campaign_attribution_id' => $attribution->id,
+                'marketing_campaign_visitor_identity_id' => $identity->id,
+                'first_campaign_id' => $firstCampaign->id,
+                'first_link_id' => $firstLink->id,
+                'first_visit_id' => $visit->id,
+                'last_campaign_id' => $lastCampaign->id,
+                'last_link_id' => $lastLink->id,
+                'last_visit_id' => $visit->id,
+                'user_id' => $user->id,
+                'customer_id' => $customer->id,
+                'conversion_type' => MarketingCampaignConversion::TYPE_LABORATORY_PURCHASE,
+                'purchase_id' => $purchase->id,
+                'currency' => 'MXN',
+                'amount_cents' => $overrides['amount_cents'] ?? 10_000,
+                'utm_source' => $overrides['utm_source'] ?? 'facebook',
+                'utm_medium' => $overrides['utm_medium'] ?? 'cpc',
+                'utm_campaign' => 'dashboard-test',
+                'gclid' => 'gclid-secret',
+                'fbclid' => 'fbclid-secret',
+                'converted_at' => $visitedAt->copy()->addMinutes(10),
+                'created_at' => $visitedAt->copy()->addMinutes(10),
+            ]);
+        }
 
         return [
             'token_hash' => $tokenHash,
             'customer' => $customer->load('user'),
+            'attribution' => $attribution,
         ];
     }
 }
