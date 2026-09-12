@@ -8,7 +8,7 @@ export default function Home() {
 	useTrackingEvents();
 
 	return (
-		<FamedicLayout title="¡Bienvenido!">
+		<FamedicLayout title="Famedic | Salud y tecnología a bajo costo">
 			<div className="space-y-12 lg:-mx-8">
 				<Hero />
 

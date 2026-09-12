@@ -8,7 +8,7 @@ import { initActiveCampaignSiteTracking } from "./lib/activeCampaignSiteTracking
 import { initSupportWidgetVisibilityController } from "./lib/supportWidgets";
 import React from "react";
 
-const appName = import.meta.env.VITE_APP_NAME || "Laravel";
+const appName = import.meta.env.VITE_APP_NAME || "Famedic";
 
 function shouldInitializeZohoSalesIQ() {
 	const config = window.__FAMEDIC_ZOHO_SALESIQ__ || {};
@@ -25,7 +25,11 @@ function initZohoSalesIQIfEnabled() {
 }
 
 createInertiaApp({
-	title: (title) => `${title} - ${appName}`,
+	title: (title) => {
+		if (!title) return appName;
+
+		return title.includes(appName) ? title : `${title} - ${appName}`;
+	},
 	resolve: (name) =>
 		resolvePageComponent(
 			`./Pages/${name}.jsx`,
