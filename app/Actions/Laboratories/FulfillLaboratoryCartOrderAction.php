@@ -2,6 +2,7 @@
 
 namespace App\Actions\Laboratories;
 
+use App\Actions\Marketing\RecordMarketingCampaignConversionAction;
 use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
 use App\Models\Address;
@@ -16,9 +17,9 @@ use App\Models\Transaction;
 use App\Notifications\FewDaysLeftToRequestInvoice;
 use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
 use App\Notifications\LaboratoryPurchaseCreated;
-use App\Services\CouponApplicationService;
 use App\Services\Carts\CartAbandonmentService;
 use App\Services\Carts\CartEventRecorder;
+use App\Services\CouponApplicationService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\Orders\OrderAutomationService;
 use App\Services\PromoCodeService;
@@ -40,6 +41,7 @@ class FulfillLaboratoryCartOrderAction
         private OrderAutomationService $orderAutomationService,
         private CartEventRecorder $cartEventRecorder,
         private CartAbandonmentService $cartAbandonmentService,
+        private RecordMarketingCampaignConversionAction $recordMarketingCampaignConversionAction,
     ) {}
 
     /**
@@ -182,6 +184,7 @@ class FulfillLaboratoryCartOrderAction
         }
 
         // Post-commit only: purchase + transaction are durable. Never rollback checkout on automation failure.
+        ($this->recordMarketingCampaignConversionAction)($laboratoryPurchase);
         $this->dispatchLaboratoryOrderAutomation($laboratoryPurchase);
 
         if (is_string($clinicalOrderUuid) && $clinicalOrderUuid !== '') {

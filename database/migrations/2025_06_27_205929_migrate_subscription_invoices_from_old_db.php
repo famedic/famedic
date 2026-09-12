@@ -15,6 +15,10 @@ return new class extends Migration
             return;
         }
 
+        if (! $this->oldSourceTableExists('subscription_invoices')) {
+            return;
+        }
+
         Log::info('Migrating missing subscription invoices from old database...');
 
         DB::connection('mysqlold')
@@ -94,5 +98,54 @@ return new class extends Migration
     public function down(): void
     {
         // Data migration - no rollback
+    }
+
+    private function oldSourceTableExists(string $table): bool
+    {
+        $connection = config('database.connections.mysqlold');
+
+        if (! is_array($connection) || empty($connection['host']) || empty($connection['database'])) {
+            Log::warning('Skipping subscription invoices migration because the old database connection is not configured.');
+
+            return false;
+        }
+
+        try {
+            DB::connection('mysqlold')->getPdo();
+        } catch (\Throwable $exception) {
+            if (! $this->isLegacyConnectionUnavailable($exception)) {
+                throw $exception;
+            }
+
+            Log::warning('Skipping subscription invoices migration because the old database connection is unavailable.', [
+                'code' => $exception->getCode(),
+            ]);
+
+            return false;
+        }
+
+        if (! DB::connection('mysqlold')->getSchemaBuilder()->hasTable($table)) {
+            Log::warning('Skipping subscription invoices migration because the old source table is unavailable.');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function isLegacyConnectionUnavailable(\Throwable $exception): bool
+    {
+        $code = (int) $exception->getCode();
+
+        if (in_array($code, [1045, 1049, 2002], true)) {
+            return true;
+        }
+
+        $message = $exception->getMessage();
+
+        return str_contains($message, 'php_network_getaddresses')
+            || str_contains($message, 'Connection refused')
+            || str_contains($message, 'Access denied')
+            || str_contains($message, 'Unknown database');
     }
 };

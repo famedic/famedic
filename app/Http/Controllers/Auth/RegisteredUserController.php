@@ -2,16 +2,18 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\Marketing\AttachMarketingCampaignAttributionToCustomerAction;
 use App\Actions\Register\RegisterRegularCustomerAction;
-use App\Services\ActiveCampaign\ActiveCampaignService;
-use App\Enums\Gender;
 use App\Data\StatesMexico;
+use App\Enums\Gender;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Models\User;
+use App\Services\ActiveCampaign\ActiveCampaignService;
 use App\Services\Tracking\CompleteRegistration;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -59,6 +61,7 @@ class RegisteredUserController extends Controller
     public function store(
         RegisterRequest $request,
         RegisterRegularCustomerAction $action,
+        AttachMarketingCampaignAttributionToCustomerAction $attachMarketingAttribution,
         ActiveCampaignService $activeCampaign
     ): RedirectResponse {
         // LOG 1: Inicio del proceso
@@ -107,6 +110,13 @@ class RegisteredUserController extends Controller
             );
 
             Auth::login($regularAccount->customer->user);
+
+            $this->attachMarketingAttribution(
+                $request,
+                $regularAccount->customer->user,
+                $attachMarketingAttribution,
+                'web_register',
+            );
 
             try {
                 $activeCampaign->newRegistration([
@@ -159,6 +169,23 @@ class RegisteredUserController extends Controller
 
             // Re-lanzar la excepción
             throw $e;
+        }
+    }
+
+    private function attachMarketingAttribution(
+        Request $request,
+        User $user,
+        AttachMarketingCampaignAttributionToCustomerAction $attachMarketingAttribution,
+        string $stage,
+    ): void {
+        try {
+            $attachMarketingAttribution($request, $user, $stage);
+        } catch (\Throwable $exception) {
+            Log::warning('marketing_campaign_attribution_attach_failed', [
+                'stage' => $stage,
+                'exception' => $exception::class,
+                'message' => 'Marketing campaign attribution attach failed.',
+            ]);
         }
     }
 }

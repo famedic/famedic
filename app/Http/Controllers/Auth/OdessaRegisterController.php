@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\Marketing\AttachMarketingCampaignAttributionToCustomerAction;
 use App\Actions\Odessa\DecodeOdessaTokenAction;
 use App\Actions\Odessa\RegisterOdessaAfiliateCustomerAction;
 use App\Enums\Gender;
@@ -10,6 +11,7 @@ use App\Exceptions\OdessaAfiliateMemberMismatchException;
 use App\Exceptions\OdessaIdAlreadyLinkedException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\RegisterRequest;
+use App\Models\User;
 use App\Services\Tracking\CompleteRegistration;
 use Carbon\Carbon;
 use Firebase\JWT\ExpiredException;
@@ -103,7 +105,8 @@ class OdessaRegisterController extends Controller
         RegisterRequest $request,
         string $odessaToken,
         DecodeOdessaTokenAction $decodeOdessaTokenAction,
-        RegisterOdessaAfiliateCustomerAction $registerOdessaAfiliateMemberAction
+        RegisterOdessaAfiliateCustomerAction $registerOdessaAfiliateMemberAction,
+        AttachMarketingCampaignAttributionToCustomerAction $attachMarketingAttribution
     ) {
         // LOG 1: Confirmación de que llegó al método store
         Log::info('🔵 [ODESSA_REGISTRO] Inicio del método store()', [
@@ -235,6 +238,13 @@ class OdessaRegisterController extends Controller
                 'total_process_time_ms' => microtime(true) - LARAVEL_START
             ]);
 
+            $this->attachMarketingAttribution(
+                $request,
+                $odessaAfiliateAccount->customer->user,
+                $attachMarketingAttribution,
+                'odessa_register',
+            );
+
             // LOG 13: Resumen final exitoso
             Log::info('🎉 [ODESSA_REGISTRO] Proceso de registro COMPLETADO EXITOSAMENTE', [
                 'user_id' => $odessaAfiliateAccount->customer->user->id,
@@ -340,6 +350,23 @@ class OdessaRegisterController extends Controller
                 'execution_completed_at' => now()->toDateTimeString(),
                 'memory_usage_mb' => round(memory_get_peak_usage(true) / 1024 / 1024, 2),
                 'total_execution_time_ms' => round((microtime(true) - LARAVEL_START) * 1000, 2)
+            ]);
+        }
+    }
+
+    private function attachMarketingAttribution(
+        Request $request,
+        User $user,
+        AttachMarketingCampaignAttributionToCustomerAction $attachMarketingAttribution,
+        string $stage,
+    ): void {
+        try {
+            $attachMarketingAttribution($request, $user, $stage);
+        } catch (\Throwable $exception) {
+            Log::warning('marketing_campaign_attribution_attach_failed', [
+                'stage' => $stage,
+                'exception' => $exception::class,
+                'message' => 'Marketing campaign attribution attach failed.',
             ]);
         }
     }

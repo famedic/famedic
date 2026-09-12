@@ -308,6 +308,12 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
                 ->where('canManageAutomaticReports', false)
                 ->has('adminNavigation'));
 
+        $navigation = collect($response->original->getData()['page']['props']['adminNavigation'] ?? [])
+            ->flatMap(fn ($section) => $section['items'] ?? []);
+        $labs = $navigation->firstWhere('label', 'Laboratorios');
+        $this->assertNotNull($labs);
+        $this->assertTrue(collect($labs['items'] ?? [])->pluck('label')->contains('Facturación'));
+
         $this->actingAs($admin)
             ->get(route('admin.laboratory-billing.requests', [
                 'from' => '2026-08-01',

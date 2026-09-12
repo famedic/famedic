@@ -19,6 +19,7 @@ use App\Services\DocumentInterpretation\Prompts\FilePromptRepository;
 use App\Services\DocumentInterpretation\Prompts\PromptRepositoryInterface;
 use App\Services\ClinicalLearning\LearningSuggestionRecorder;
 use App\Services\ClinicalLearning\LearningSuggestionRecorderInterface;
+use App\Support\Testing\UnsafeDatabaseCommandGuard;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -104,12 +105,27 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        if ($this->app->runningInConsole()) {
+            $connectionName = (string) config('database.default');
+
+            UnsafeDatabaseCommandGuard::assertSafe(
+                $_SERVER['argv'] ?? [],
+                $this->app->environment(),
+                $connectionName,
+                config('database.connections.'.$connectionName, []),
+            );
+        }
+
         RateLimiter::for('tax-profile-extract', function (Request $request) {
             return Limit::perMinute(5)->by((string) ($request->user()?->id ?: $request->ip()));
         });
 
         RateLimiter::for('clinical-interpreter-interpret', function (Request $request) {
             return Limit::perMinute(8)->by((string) ($request->user()?->id ?: $request->ip()));
+        });
+
+        RateLimiter::for('marketing-campaign-ai', function (Request $request) {
+            return Limit::perMinute(6)->by((string) ($request->user()?->id ?: $request->ip()));
         });
 
         RateLimiter::for('odessa-pre-enrollments-preview', function (Request $request) {

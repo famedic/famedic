@@ -30,6 +30,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+RUN { \
+    echo "upload_max_filesize=5M"; \
+    echo "post_max_size=40M"; \
+    echo "max_file_uploads=20"; \
+} > /usr/local/etc/php/conf.d/famedic-uploads.ini
+
 COPY docker/php/docker-entrypoint.sh /usr/local/bin/docker-entrypoint-famedic.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint-famedic.sh
 
