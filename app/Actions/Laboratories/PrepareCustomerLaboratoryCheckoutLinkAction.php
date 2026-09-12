@@ -8,6 +8,10 @@ use App\Models\LaboratoryCheckoutDraft;
 
 class PrepareCustomerLaboratoryCheckoutLinkAction
 {
+    public function __construct(
+        private GenerateLaboratoryCheckoutResumeLinkAction $resumeLinkGenerator,
+    ) {}
+
     public function __invoke(
         Customer $customer,
         LaboratoryBrand $brand,
@@ -27,7 +31,7 @@ class PrepareCustomerLaboratoryCheckoutLinkAction
             $draftAttributes['address_id'] = $addressId;
         }
 
-        $draft = LaboratoryCheckoutDraft::query()->updateOrCreate(
+        LaboratoryCheckoutDraft::query()->updateOrCreate(
             [
                 'customer_id' => $customer->id,
                 'laboratory_brand' => $brand,
@@ -35,15 +39,6 @@ class PrepareCustomerLaboratoryCheckoutLinkAction
             $draftAttributes,
         );
 
-        $query = array_filter([
-            'step' => $checkoutStep,
-            'contact' => $draft->contact_id ?? $contactId,
-            'address' => $draft->address_id ?? $addressId,
-        ], fn ($value) => $value !== null && $value !== '');
-
-        return route('laboratory.checkout', [
-            'laboratory_brand' => $brand,
-            ...$query,
-        ]);
+        return $this->resumeLinkGenerator->forCustomerBrand($customer, $brand);
     }
 }

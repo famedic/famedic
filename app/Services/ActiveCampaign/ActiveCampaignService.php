@@ -4,6 +4,7 @@ namespace App\Services\ActiveCampaign;
 
 use App\DTOs\ActiveCampaign\ActiveCampaignOperationResult;
 use App\Exceptions\ActiveCampaignSyncException;
+use App\Models\LaboratoryPurchase;
 use App\Models\User;
 use App\Services\ActiveCampaign\Concerns\HandlesBeneficiaryEvents;
 use App\Services\ActiveCampaign\Concerns\HandlesCouponCreditEvents;
@@ -238,6 +239,17 @@ class ActiveCampaignService
      */
     public function getTags(): array
     {
+        $result = $this->getTagsResult();
+
+        return $result->success && is_array($result->response)
+            ? ($result->response['tags'] ?? [])
+            : [];
+    }
+
+    public function getTagsResult(): ActiveCampaignOperationResult
+    {
+        $started = hrtime(true);
+
         try {
             $allTags = [];
             $offset = 0;
@@ -251,10 +263,19 @@ class ActiveCampaignService
 
                 if (!$response->successful()) {
                     Log::error('AC: Error obteniendo tags', [
-                        'response' => $response->body(),
+                        'status' => $response->status(),
                         'offset' => $offset
                     ]);
-                    return $allTags; // Retorna lo que se haya obtenido hasta ahora
+
+                    return ActiveCampaignOperationResult::failure([
+                        'operation' => 'list_tags',
+                        'resource' => 'tag',
+                        'http_status' => $response->status(),
+                        'response' => null,
+                        'error' => $this->diagnosticHttpError('tags', $response->status()),
+                        'duration_ms' => $this->elapsedMs($started),
+                        'retryable' => ActiveCampaignOperationResult::isRetryableHttpStatus($response->status()),
+                    ]);
                 }
 
                 $data = $response->json();
@@ -273,12 +294,27 @@ class ActiveCampaignService
                 'total' => count($allTags)
             ]);
 
-            return $allTags;
+            return ActiveCampaignOperationResult::success([
+                'operation' => 'list_tags',
+                'resource' => 'tag',
+                'http_status' => 200,
+                'response' => ['tags' => $allTags],
+                'duration_ms' => $this->elapsedMs($started),
+            ]);
         } catch (\Throwable $e) {
             Log::error('AC: Excepción getTags', [
                 'error' => $e->getMessage()
             ]);
-            return [];
+
+            return ActiveCampaignOperationResult::failure([
+                'operation' => 'list_tags',
+                'resource' => 'tag',
+                'http_status' => null,
+                'response' => null,
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
         }
     }
 
@@ -425,6 +461,17 @@ class ActiveCampaignService
      */
     public function getCustomFields(): array
     {
+        $result = $this->getCustomFieldsResult();
+
+        return $result->success && is_array($result->response)
+            ? ($result->response['fields'] ?? [])
+            : [];
+    }
+
+    public function getCustomFieldsResult(): ActiveCampaignOperationResult
+    {
+        $started = hrtime(true);
+
         try {
             $allFields = [];
             $offset = 0;
@@ -438,9 +485,18 @@ class ActiveCampaignService
 
                 if (!$response->successful()) {
                     Log::error('AC: Error obteniendo fields', [
-                        'response' => $response->body()
+                        'status' => $response->status()
                     ]);
-                    return $allFields;
+
+                    return ActiveCampaignOperationResult::failure([
+                        'operation' => 'list_fields',
+                        'resource' => 'field',
+                        'http_status' => $response->status(),
+                        'response' => null,
+                        'error' => $this->diagnosticHttpError('fields', $response->status()),
+                        'duration_ms' => $this->elapsedMs($started),
+                        'retryable' => ActiveCampaignOperationResult::isRetryableHttpStatus($response->status()),
+                    ]);
                 }
 
                 $data = $response->json();
@@ -453,12 +509,27 @@ class ActiveCampaignService
                 $totalFields = $data['meta']['total'] ?? 0;
             } while ($offset < $totalFields);
 
-            return $allFields;
+            return ActiveCampaignOperationResult::success([
+                'operation' => 'list_fields',
+                'resource' => 'field',
+                'http_status' => 200,
+                'response' => ['fields' => $allFields],
+                'duration_ms' => $this->elapsedMs($started),
+            ]);
         } catch (\Throwable $e) {
             Log::error('AC: Excepción getCustomFields', [
                 'error' => $e->getMessage()
             ]);
-            return [];
+
+            return ActiveCampaignOperationResult::failure([
+                'operation' => 'list_fields',
+                'resource' => 'field',
+                'http_status' => null,
+                'response' => null,
+                'error' => $e->getMessage(),
+                'duration_ms' => $this->elapsedMs($started),
+                'retryable' => true,
+            ]);
         }
     }
 
@@ -1616,6 +1687,101 @@ class ActiveCampaignService
     }
 
     /**
+     * Outbox: completed laboratory purchase.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function handleOutboundLaboratoryPurchaseCompleted(array $payload): void
+    {
+        $purchaseId = (int) ($payload['laboratory_purchase_id'] ?? $payload['purchase_id'] ?? 0);
+
+        if ($purchaseId <= 0) {
+            throw new ActiveCampaignSyncException('AC laboratory purchase completed requiere laboratory_purchase_id.');
+        }
+
+        $purchase = LaboratoryPurchase::query()
+            ->with(['customer.user', 'laboratoryPurchaseItems'])
+            ->find($purchaseId);
+
+        if (! $purchase) {
+            throw new ActiveCampaignSyncException("AC laboratory purchase completed: compra {$purchaseId} no encontrada.");
+        }
+
+        $result = $this->laboratoryPurchase($purchase);
+
+        if (! $result->success) {
+            throw new ActiveCampaignSyncException(
+                'AC laboratoryPurchase falló: '.($result->error ?? 'unknown')
+            );
+        }
+
+        $customFields = is_array($payload['custom_fields'] ?? null) ? $payload['custom_fields'] : [];
+
+        if ($customFields !== []) {
+            $this->handleOutboundLaboratoryCustomFields(array_merge($payload, [
+                'email' => $payload['email'] ?? $purchase->customer?->user?->email,
+                'custom_fields' => $customFields,
+            ]));
+        }
+    }
+
+    /**
+     * Outbox: update laboratory-specific contact custom fields.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function handleOutboundLaboratoryCustomFields(array $payload): void
+    {
+        $email = trim((string) ($payload['email'] ?? ''));
+
+        if ($email === '') {
+            throw new ActiveCampaignSyncException('AC lab custom fields requiere email.');
+        }
+
+        $fields = is_array($payload['custom_fields'] ?? null) ? $payload['custom_fields'] : [];
+
+        if ($fields === []) {
+            Log::info('AC lab custom fields omitido: payload sin campos', [
+                'email' => $email,
+                'event_type' => $payload['event_type'] ?? null,
+            ]);
+
+            return;
+        }
+
+        $contactId = $this->getContactIdByEmail($email);
+
+        if (! $contactId) {
+            $userId = $payload['user_id'] ?? null;
+            if ($userId) {
+                $user = User::query()->find($userId);
+                if ($user) {
+                    $contactId = $this->syncContactForUser($user);
+                }
+            }
+        }
+
+        if (! $contactId && is_array($payload['contact'] ?? null)) {
+            $contactId = $this->syncContact($payload['contact']);
+        }
+
+        if (! $contactId) {
+            $contactId = $this->getContactIdByEmail($email);
+        }
+
+        if (! $contactId) {
+            throw new ActiveCampaignSyncException("AC lab custom fields: contacto no encontrado para {$email}.");
+        }
+
+        $this->applyLaboratoryFieldUpdates($contactId, $fields, [
+            'event_type' => $payload['event_type'] ?? null,
+            'cart_id' => $payload['cart_id'] ?? null,
+            'laboratory_purchase_id' => $payload['laboratory_purchase_id'] ?? null,
+            'appointment_id' => $payload['appointment_id'] ?? null,
+        ]);
+    }
+
+    /**
      * Registrar un producto agregado al carrito
      */
     public function cartAdded(string $email): void
@@ -1710,8 +1876,9 @@ class ActiveCampaignService
             return;
         }
 
-        $this->addTagToContact($contactId, 24);
-        Log::info('AC: resultsAvailable completado', ['contact_id' => $contactId, 'email' => $email]);
+        $tagId = (int) config('services.activecampaign.tag_lab_results_available', 33);
+        $this->addTagToContact($contactId, $tagId);
+        Log::info('AC: resultsAvailable completado', ['contact_id' => $contactId, 'email' => $email, 'tag_id' => $tagId]);
     }
 
     /**
@@ -1734,17 +1901,18 @@ class ActiveCampaignService
 
     public function sampleCollected(string $email): void
     {
-        Log::info('AC: Cita confirmed iniciado', ['email' => $email]);
+        Log::info('AC: sampleCollected iniciado', ['email' => $email]);
 
         $contactId = $this->getContactIdByEmail($email);
 
         if (!$contactId) {
-            Log::warning('AC: Cita confirmed omitido — contacto no encontrado en AC', ['email' => $email]);
+            Log::warning('AC: sampleCollected omitido — contacto no encontrado en AC', ['email' => $email]);
             return;
         }
 
-        $this->addTagToContact($contactId, 24);
-        Log::info('AC: Cita confirmed completado', ['contact_id' => $contactId, 'email' => $email]);
+        $tagId = (int) config('services.activecampaign.tag_lab_sample_collected', 32);
+        $this->addTagToContact($contactId, $tagId);
+        Log::info('AC: sampleCollected completado', ['contact_id' => $contactId, 'email' => $email, 'tag_id' => $tagId]);
     }
 
     public function patientCreated($contact): void
@@ -1978,6 +2146,17 @@ class ActiveCampaignService
     public function couponField(string $key): ?string
     {
         $value = config('services.activecampaign.fields.'.$key);
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (string) $value;
+    }
+
+    public function laboratoryField(string $key): ?string
+    {
+        $value = config('services.activecampaign.fields.lab.'.$key);
 
         if ($value === null || $value === '') {
             return null;
@@ -2397,6 +2576,17 @@ class ActiveCampaignService
         ]);
     }
 
+    protected function diagnosticHttpError(string $resource, ?int $status): string
+    {
+        return match (true) {
+            in_array($status, [401, 403], true) => "{$resource}_auth_or_permission_error",
+            $status === 404 => "{$resource}_endpoint_or_resource_not_found",
+            $status === 429 => "{$resource}_rate_limited",
+            $status !== null && $status >= 500 => "{$resource}_temporary_server_error",
+            default => "{$resource}_api_error",
+        };
+    }
+
     protected function elapsedMs(int $startedHrtime): int
     {
         return (int) round((hrtime(true) - $startedHrtime) / 1_000_000);
@@ -2418,6 +2608,37 @@ class ActiveCampaignService
             }
 
             $this->updateContactFieldValueOrFail($contactId, $fieldId, (string) $value);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $fields
+     * @param  array<string, mixed>  $context
+     */
+    public function applyLaboratoryFieldUpdates(int $contactId, array $fields, array $context = []): void
+    {
+        foreach ($fields as $fieldKey => $value) {
+            if ($value === null) {
+                continue;
+            }
+
+            $fieldId = $this->laboratoryField((string) $fieldKey);
+            if ($fieldId === null || $fieldId === '') {
+                Log::warning('AC lab custom field skipped: field id not configured', array_merge($context, [
+                    'contact_id' => $contactId,
+                    'field_key' => (string) $fieldKey,
+                ]));
+
+                continue;
+            }
+
+            $this->updateContactFieldValueOrFail($contactId, $fieldId, (string) $value);
+
+            Log::info('AC lab custom field updated', array_merge($context, [
+                'contact_id' => $contactId,
+                'field_key' => (string) $fieldKey,
+                'field_id' => $fieldId,
+            ]));
         }
     }
 

@@ -122,7 +122,11 @@ it('creates a single dispatch when cart_abandoned episode 1 is recorded', functi
         ->and($dispatch->payload['operation'])->toBe('tag_add')
         ->and($dispatch->customer_id)->toBe($cart->user->customer->id);
 
-    Queue::assertPushed(DispatchActiveCampaignOutboundJob::class, 1);
+    expect(ActiveCampaignDispatch::query()
+        ->where('idempotency_key', 'cart:'.$cart->id.':abandoned:episode:1:lab_fields')
+        ->exists())->toBeTrue();
+
+    Queue::assertPushed(DispatchActiveCampaignOutboundJob::class, 2);
 });
 
 it('does not duplicate dispatch when outbox enqueue runs twice', function () {
@@ -133,8 +137,8 @@ it('does not duplicate dispatch when outbox enqueue runs twice', function () {
     app(ActiveCampaignOutboundDispatcher::class)->enqueueAbandonedTagFromCartEvent($cart, $event);
     app(ActiveCampaignOutboundDispatcher::class)->enqueueAbandonedTagFromCartEvent($cart, $event);
 
-    expect(ActiveCampaignDispatch::query()->count())->toBe(1);
-    Queue::assertPushed(DispatchActiveCampaignOutboundJob::class, 1);
+    expect(ActiveCampaignDispatch::query()->count())->toBe(2);
+    Queue::assertPushed(DispatchActiveCampaignOutboundJob::class, 2);
 });
 
 it('creates a different dispatch for cart_abandoned episode 2', function () {
@@ -163,10 +167,12 @@ it('creates a different dispatch for cart_abandoned episode 2', function () {
     $second = app(CartAbandonmentService::class)->recordAbandoned($cart->fresh());
     expect($second?->metadata['episode'])->toBe(2);
 
-    expect(ActiveCampaignDispatch::query()->count())->toBe(2)
+    expect(ActiveCampaignDispatch::query()->count())->toBe(4)
         ->and(ActiveCampaignDispatch::query()->pluck('idempotency_key')->all())->toContain(
             'cart:'.$cart->id.':abandoned:episode:1:tag:add',
+            'cart:'.$cart->id.':abandoned:episode:1:lab_fields',
             'cart:'.$cart->id.':abandoned:episode:2:tag:add',
+            'cart:'.$cart->id.':abandoned:episode:2:lab_fields',
         );
 });
 
@@ -203,7 +209,7 @@ it('keeps failed dispatch with last_error and retries using the same row', funct
     expect($failed->status)->toBe(ActiveCampaignDispatch::STATUS_FAILED)
         ->and($failed->attempts)->toBe(1)
         ->and($failed->last_error)->toContain('429')
-        ->and(ActiveCampaignDispatch::query()->count())->toBe(1);
+        ->and(ActiveCampaignDispatch::query()->count())->toBe(2);
 
     Http::fake([
         'https://ac.test/api/3/contacts*' => Http::response([
@@ -216,7 +222,7 @@ it('keeps failed dispatch with last_error and retries using the same row', funct
     (new DispatchActiveCampaignOutboundJob($failed->id))->handle(app(\App\Services\ActiveCampaign\ActiveCampaignService::class));
 
     expect($failed->fresh()->status)->toBe(ActiveCampaignDispatch::STATUS_SYNCED)
-        ->and(ActiveCampaignDispatch::query()->count())->toBe(1);
+        ->and(ActiveCampaignDispatch::query()->count())->toBe(2);
 });
 
 it('skips dispatch when cart user has no eligible email', function () {

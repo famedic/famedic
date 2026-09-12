@@ -21,6 +21,13 @@ class ActiveCampaignDispatchService
     ];
 
     /** @var list<string> */
+    private const LABORATORY_EVENT_TYPES = [
+        'laboratory_purchase_completed',
+        'laboratory_sample_completed',
+        'laboratory_results_completed',
+    ];
+
+    /** @var list<string> */
     private const COUPON_EVENT_PREFIXES = [
         'credit_',
         'promo_',
@@ -42,6 +49,8 @@ class ActiveCampaignDispatchService
         'token',
         'api_token',
         'secret',
+        'url_finalizar_compra',
+        'resume_url',
     ];
 
     public function isEnabled(): bool
@@ -102,6 +111,11 @@ class ActiveCampaignDispatchService
     {
         return in_array($eventType, self::CART_EVENT_TYPES, true)
             || $this->isCartSiteEvent($eventType);
+    }
+
+    public function isLaboratoryEvent(string $eventType): bool
+    {
+        return in_array($eventType, self::LABORATORY_EVENT_TYPES, true);
     }
 
     public function isEnabledForCoupons(): bool

@@ -408,7 +408,8 @@ class GdaNotificationSimulatorService
      */
     protected function formatGateState(LabOrderEventState $state): array
     {
-        $total = max(1, (int) $state->total_studies);
+        $gate = app(LabOrderNotificationGateService::class);
+        $total = $gate->expectedStudiesForState($state);
 
         return [
             'gda_order_id' => $state->gda_order_id,
@@ -417,8 +418,8 @@ class GdaNotificationSimulatorService
             'results_received_count' => $state->results_received_count,
             'sample_email_sent_at' => $state->sample_email_sent_at?->format('d/m/Y H:i'),
             'results_email_sent_at' => $state->results_email_sent_at?->format('d/m/Y H:i'),
-            'sample_ready' => $state->sample_received_count >= $total,
-            'results_ready' => $state->results_received_count >= 1,
+            'sample_ready' => $gate->areSamplesComplete($state),
+            'results_ready' => $gate->areResultsComplete($state),
         ];
     }
 

@@ -9,6 +9,7 @@ use App\Models\LaboratoryPurchase;
 use App\Models\User;
 use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Notifications\LaboratorySampleCollected;
+use App\Services\ActiveCampaign\ActiveCampaignOutboundDispatcher;
 use App\Services\Laboratory\LabOrderNotificationGateService;
 use App\Support\GDA\GdaWebhookPayloadResolver;
 use App\Support\Laboratory\GdaSimulatorSettings;
@@ -69,16 +70,18 @@ class HandleSampleCollectionNotificationAction
                 'notification_id' => $notification->id,
             ]);
         } elseif ($simulator?->bypassGate) {
-            $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase);
+            $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase, $gdaOrderId);
         } elseif ($gateResult['should_send_sample_email']) {
             $wasSent = $this->notificationGateService->sendSampleOnce($gdaOrderId, function () use (
                 $userToNotify,
                 $notification,
                 $data,
                 $quote,
-                $purchase
+                $purchase,
+                $gdaOrderId
             ) {
-                $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase);
+                $this->sendEmailNotification($userToNotify, $notification, $data, $quote, $purchase, $gdaOrderId);
+                $this->enqueueActiveCampaignSampleCompleted($purchase);
             });
 
             if (! $wasSent) {
@@ -93,7 +96,7 @@ class HandleSampleCollectionNotificationAction
                 'notification_id' => $notification->id,
                 'is_new_event' => $gateResult['is_new_event'],
                 'sample_received_count' => $gateResult['state']->sample_received_count,
-                'total_studies' => max(1, (int) $gateResult['state']->total_studies),
+                'total_studies' => $gateResult['expected_studies'],
             ]);
         }
 
@@ -260,7 +263,14 @@ class HandleSampleCollectionNotificationAction
             : null;
     }
 
-    protected function sendEmailNotification(?User $user, LaboratoryNotification $notification, array $data, $quote, $purchase): void
+    protected function sendEmailNotification(
+        ?User $user,
+        LaboratoryNotification $notification,
+        array $data,
+        $quote,
+        $purchase,
+        string $gdaOrderId
+    ): void
     {
         if (!$user) {
             Log::warning('No user found to notify for sample collection', [
@@ -291,10 +301,7 @@ class HandleSampleCollectionNotificationAction
             $user->notify(new LaboratorySampleCollected(
                 laboratoryPurchase: $purchase,
                 laboratoryQuote: $quote,
-                gdaOrderId: $this->payloadResolver->gateOrderId(
-                    $references['gda'] ?? $this->payloadResolver->resolve($data),
-                    $data
-                )
+                gdaOrderId: $gdaOrderId
             ));
 
             Log::info('Sample collection email sent', [
@@ -333,5 +340,15 @@ class HandleSampleCollectionNotificationAction
                 'email_attempted_at' => now(),
             ]);
         }
+    }
+
+    protected function enqueueActiveCampaignSampleCompleted(?LaboratoryPurchase $purchase): void
+    {
+        if (! $purchase?->id) {
+            return;
+        }
+
+        app(ActiveCampaignOutboundDispatcher::class)
+            ->enqueueLaboratorySampleCompleted($purchase->fresh(['customer.user', 'cart']));
     }
 }

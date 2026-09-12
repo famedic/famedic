@@ -11,7 +11,7 @@ class LaboratoryPurchaseItemFactory extends Factory
     {
         return [
             'name' => $this->faker->word(),
-            'gda_id' => $this->numberBetween(100, 100000),
+            'gda_id' => $this->faker->numberBetween(100, 100000),
             'indications' => $this->faker->sentence(),
             'price_cents' => $this->faker->numberBetween(100, 100000),
             'laboratory_purchase_id' => LaboratoryPurchase::factory(),
