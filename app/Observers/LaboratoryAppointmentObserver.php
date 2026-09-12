@@ -2,7 +2,6 @@
 
 namespace App\Observers;
 
-use App\Jobs\SendSampleCollectedToActiveCampaignJob;
 use App\Models\LaboratoryAppointment;
 use App\Services\Carts\LaboratoryAppointmentConfirmationSignalService;
 use Illuminate\Support\Facades\DB;
@@ -14,9 +13,6 @@ class LaboratoryAppointmentObserver
         if (! $this->wasNewlyConfirmed($appointment)) {
             return;
         }
-
-        // Asumimos que cuando se confirma la cita se tomó la muestra
-        SendSampleCollectedToActiveCampaignJob::dispatch($appointment)->afterCommit();
 
         DB::afterCommit(function () use ($appointment): void {
             app(LaboratoryAppointmentConfirmationSignalService::class)
@@ -31,4 +27,3 @@ class LaboratoryAppointmentObserver
             && $appointment->confirmed_at !== null;
     }
 }
-

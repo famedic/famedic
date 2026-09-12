@@ -60,7 +60,7 @@ class DispatchActiveCampaignOutboundJob extends ActiveCampaignQueueJob
 
             return;
         } elseif (! in_array($dispatch->event_type, self::IMPLEMENTED_EVENT_TYPES, true)
-            && ! in_array($operation, ['tag_add', 'tag_remove'], true)
+            && ! in_array($operation, ['tag_add', 'tag_remove', 'laboratory_purchase_completed', 'lab_custom_fields'], true)
             && ! $this->isCartSiteEventDispatch($dispatch)) {
             $this->dispatchService()->markSkipped($dispatch, 'event_not_implemented');
 
@@ -74,6 +74,8 @@ class DispatchActiveCampaignOutboundJob extends ActiveCampaignQueueJob
                 'tag_add' => $activeCampaignService->handleOutboundCartTagAdd($payload),
                 'tag_remove' => $activeCampaignService->handleOutboundCartTagRemove($payload),
                 'site_event' => $activeCampaignService->handleOutboundCartSiteEvent($payload),
+                'laboratory_purchase_completed' => $activeCampaignService->handleOutboundLaboratoryPurchaseCompleted($payload),
+                'lab_custom_fields' => $activeCampaignService->handleOutboundLaboratoryCustomFields($payload),
                 default => match ($dispatch->event_type) {
                     'cart_abandoned' => $activeCampaignService->handleOutboundCartTagAdd(array_merge($payload, [
                         'operation' => 'tag_add',

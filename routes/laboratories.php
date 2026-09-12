@@ -6,6 +6,7 @@ use App\Http\Controllers\Laboratories\LaboratoryTestsController;
 use App\Http\Controllers\LaboratoryAppointmentController;
 use App\Http\Controllers\LaboratoryCartItemController;
 use App\Http\Controllers\LaboratoryCheckoutController;
+use App\Http\Controllers\LaboratoryCheckoutResumeController;
 use App\Http\Controllers\LaboratoryPurchaseController;
 use App\Http\Controllers\LaboratoryQuoteController;
 use App\Http\Controllers\LaboratoryResultController;
@@ -25,6 +26,10 @@ Route::get('/laboratory/{laboratory_brand}/laboratory-tests', [LaboratoryTestsCo
 Route::get('/laboratory-tests/{laboratory_test}', [LaboratoryTestsController::class, 'show'])->name('laboratory-tests.test');
 Route::resource('laboratory-stores', LaboratoryStoreController::class)->only(['index']);
 $labResultsThrottle = 'throttle:'.config('laboratory-results.rate_limit_per_minute', 12).',1';
+
+Route::get('/laboratory/checkout/resume/{token}', LaboratoryCheckoutResumeController::class)
+    ->where('token', '[A-Za-z0-9]+')
+    ->name('laboratory.checkout.resume');
 
 Route::get('/lab-results/{token}', [LabResultsAccessController::class, 'show'])->name('lab-results.show');
 

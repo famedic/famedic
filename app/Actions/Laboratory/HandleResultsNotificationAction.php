@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Jobs\Laboratory\SyncGdaResultPdfToStorageJob;
 use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
 use App\Notifications\LaboratoryResultsAvailable;
+use App\Services\ActiveCampaign\ActiveCampaignOutboundDispatcher;
 use App\Services\Laboratory\LabOrderNotificationGateService;
 use App\Support\GDA\GdaPayloadSanitizer;
 use App\Support\GDA\GdaWebhookPayloadResolver;
@@ -96,6 +97,7 @@ class HandleResultsNotificationAction
                 $data
             ) {
                 $this->sendEmailNotification($userToNotify, $notification, $sanitizedData, $quote, $purchase, $hasResultsInPayload, $resolved, $data);
+                $this->enqueueActiveCampaignResultsCompleted($purchase);
             });
 
             if (! $wasSent) {
@@ -445,5 +447,15 @@ class HandleResultsNotificationAction
                 'email_attempted_at' => now(),
             ]);
         }
+    }
+
+    protected function enqueueActiveCampaignResultsCompleted(?LaboratoryPurchase $purchase): void
+    {
+        if (! $purchase?->id) {
+            return;
+        }
+
+        app(ActiveCampaignOutboundDispatcher::class)
+            ->enqueueLaboratoryResultsCompleted($purchase->fresh(['customer.user', 'cart']));
     }
 }

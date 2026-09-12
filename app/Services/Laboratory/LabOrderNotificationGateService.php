@@ -99,18 +99,34 @@ class LabOrderNotificationGateService
             return $state->fresh();
         });
 
-        $effectiveTotalStudies = max(1, (int) $state->total_studies);
+        $effectiveTotalStudies = $this->expectedStudiesForState($state);
 
         return [
             'state' => $state,
             'is_new_event' => $wasNewEvent,
+            'expected_studies' => $effectiveTotalStudies,
             'should_send_sample_email' =>
-                $state->sample_received_count >= $effectiveTotalStudies
+                $this->areSamplesComplete($state)
                 && is_null($state->sample_email_sent_at),
             'should_send_results_email' =>
-                $state->results_received_count >= 1
+                $this->areResultsComplete($state)
                 && is_null($state->results_email_sent_at),
         ];
+    }
+
+    public function areSamplesComplete(LabOrderEventState $state): bool
+    {
+        return $state->sample_received_count >= $this->expectedStudiesForState($state);
+    }
+
+    public function areResultsComplete(LabOrderEventState $state): bool
+    {
+        return $state->results_received_count >= $this->expectedStudiesForState($state);
+    }
+
+    public function expectedStudiesForState(LabOrderEventState $state): int
+    {
+        return max(1, (int) $state->total_studies);
     }
 
     public function sendSampleOnce(string $gdaOrderId, callable $callback): bool
@@ -136,11 +152,10 @@ class LabOrderNotificationGateService
             }
 
             if ($eventType === self::EVENT_SAMPLE) {
-                $effectiveTotalStudies = max(1, (int) $state->total_studies);
-                $isReady = $state->sample_received_count >= $effectiveTotalStudies;
+                $isReady = $this->areSamplesComplete($state);
                 $alreadySent = ! is_null($state->sample_email_sent_at);
             } else {
-                $isReady = $state->results_received_count >= 1;
+                $isReady = $this->areResultsComplete($state);
                 $alreadySent = ! is_null($state->results_email_sent_at);
             }
 
@@ -169,7 +184,7 @@ class LabOrderNotificationGateService
         $sqlState = $e->errorInfo[0] ?? null;
         $driverCode = $e->errorInfo[1] ?? null;
 
-        // MySQL/MariaDB duplicate key = SQLSTATE 23000, error code 1062.
-        return $sqlState === '23000' || (int) $driverCode === 1062;
+        // MySQL/MariaDB duplicate key = SQLSTATE 23000 / 1062; SQLite uses driver code 19.
+        return $sqlState === '23000' || in_array((int) $driverCode, [19, 1062], true);
     }
 }

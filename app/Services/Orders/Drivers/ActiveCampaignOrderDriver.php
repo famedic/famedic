@@ -7,6 +7,7 @@ use App\DTOs\Orders\OrderAutomationResult;
 use App\Models\LaboratoryPurchase;
 use App\Models\MedicalAttentionSubscription;
 use App\Models\OnlinePharmacyPurchase;
+use App\Services\ActiveCampaign\ActiveCampaignOutboundDispatcher;
 use App\Services\ActiveCampaign\ActiveCampaignService;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -19,6 +20,7 @@ class ActiveCampaignOrderDriver
 {
     public function __construct(
         private ActiveCampaignService $activeCampaign,
+        private ActiveCampaignOutboundDispatcher $outboundDispatcher,
     ) {
     }
 
@@ -47,79 +49,21 @@ class ActiveCampaignOrderDriver
         }
 
         try {
-            $purchase->loadMissing(['customer.user', 'laboratoryPurchaseItems']);
+            $dispatch = $this->outboundDispatcher->enqueueLaboratoryPurchaseCompleted($purchase);
+            $operations[] = [
+                'operation' => 'laboratory_purchase_completed_outbox',
+                'dispatch_id' => $dispatch->id,
+                'event_type' => $dispatch->event_type,
+                'idempotency_key' => $dispatch->idempotency_key,
+                'status' => $dispatch->status,
+            ];
 
-            $labResult = $this->activeCampaign->laboratoryPurchase($purchase);
-            $operations[] = $labResult->toArray();
-
-            Log::info('[ActiveCampaign Order Sync] laboratoryPurchase', $labResult->toArray());
-
-            if (! $labResult->success) {
-                return $this->finish(
-                    handler: 'handleLaboratoryOrder',
-                    context: $context,
-                    started: $started,
-                    operations: $operations,
-                    success: false,
-                    executed: true,
-                    message: 'Laboratory order sync failed on laboratoryPurchase.',
-                    error: $labResult->error,
-                    operation: 'laboratoryPurchase',
-                    retryable: $labResult->retryable,
-                    contactId: $labResult->contactId,
-                );
-            }
-
-            $email = $purchase->customer->user->email ?? null;
-            if (! is_string($email) || trim($email) === '') {
-                return $this->finish(
-                    handler: 'handleLaboratoryOrder',
-                    context: $context,
-                    started: $started,
-                    operations: $operations,
-                    success: false,
-                    executed: true,
-                    message: 'Laboratory order sync incomplete — missing email for completedPurchase.',
-                    error: 'missing_email',
-                    operation: 'completedPurchase',
-                    retryable: false,
-                    contactId: $labResult->contactId,
-                );
-            }
-
-            $products = $purchase->laboratoryPurchaseItems->map(fn ($item) => [
-                'name' => $item->name,
-                'price' => $item->price_cents / 100,
-                'quantity' => 1,
-                'category' => 'Laboratorio',
-            ])->toArray();
-
-            $completedResult = $this->activeCampaign->completedPurchase(
-                email: trim($email),
-                externalId: 'COMPLETE-LAB-'.$purchase->id,
-                total: ((int) $purchase->total_cents) / 100,
-                products: $products,
-                category: 'Laboratorio',
-            );
-            $operations[] = $completedResult->toArray();
-
-            Log::info('[ActiveCampaign Order Sync] completedPurchase', $completedResult->toArray());
-
-            if (! $completedResult->success) {
-                return $this->finish(
-                    handler: 'handleLaboratoryOrder',
-                    context: $context,
-                    started: $started,
-                    operations: $operations,
-                    success: false,
-                    executed: true,
-                    message: 'Laboratory order sync failed on completedPurchase.',
-                    error: $completedResult->error,
-                    operation: 'completedPurchase',
-                    retryable: $completedResult->retryable,
-                    contactId: $labResult->contactId,
-                );
-            }
+            Log::info('[ActiveCampaign Order Sync] laboratoryPurchase dispatch queued', [
+                'laboratory_purchase_id' => $purchase->id,
+                'dispatch_id' => $dispatch->id,
+                'idempotency_key' => $dispatch->idempotency_key,
+                'status' => $dispatch->status,
+            ]);
 
             return $this->finish(
                 handler: 'handleLaboratoryOrder',
@@ -128,11 +72,10 @@ class ActiveCampaignOrderDriver
                 operations: $operations,
                 success: true,
                 executed: true,
-                message: 'Laboratory order synced to ActiveCampaign.',
+                message: 'Laboratory order queued for ActiveCampaign sync.',
                 error: null,
-                operation: 'laboratoryPurchase+completedPurchase',
+                operation: 'laboratory_purchase_completed_outbox',
                 retryable: false,
-                contactId: $labResult->contactId,
             );
         } catch (Throwable $e) {
             Log::error('[ActiveCampaign Order Driver] handleLaboratoryOrder exception', [
@@ -147,9 +90,9 @@ class ActiveCampaignOrderDriver
                 operations: $operations,
                 success: false,
                 executed: true,
-                message: 'Laboratory order sync raised an exception.',
+                message: 'Laboratory order ActiveCampaign dispatch could not be queued.',
                 error: $e->getMessage(),
-                operation: 'laboratoryPurchase',
+                operation: 'laboratory_purchase_completed_outbox',
                 retryable: true,
             );
         }

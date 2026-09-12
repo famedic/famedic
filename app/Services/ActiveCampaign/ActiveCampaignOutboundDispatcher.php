@@ -8,6 +8,8 @@ use App\Jobs\ActiveCampaign\DispatchActiveCampaignOutboundJob;
 use App\Models\ActiveCampaignDispatch;
 use App\Models\Cart;
 use App\Models\CartEvent;
+use App\Models\LaboratoryAppointment;
+use App\Models\LaboratoryPurchase;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -18,6 +20,7 @@ class ActiveCampaignOutboundDispatcher
         private ActiveCampaignDispatchService $dispatchService,
         private ActiveCampaignTagResolver $tagResolver,
         private CartActiveCampaignSiteEventPayloadBuilder $siteEventPayloadBuilder,
+        private LaboratoryActiveCampaignPayloadBuilder $laboratoryPayloadBuilder,
     ) {}
 
     public function isCartOutboxEnabled(): bool
@@ -65,6 +68,11 @@ class ActiveCampaignOutboundDispatcher
         return "cart:{$cartId}:abandoned:episode:{$episode}:site_event";
     }
 
+    public function idempotencyKeyForCartAbandonedLabFields(int $cartId, int $episode): string
+    {
+        return "cart:{$cartId}:abandoned:episode:{$episode}:lab_fields";
+    }
+
     public function idempotencyKeyForCartResumedSiteEvent(int $cartId, int $episode): string
     {
         return "cart:{$cartId}:resumed:episode:{$episode}:site_event";
@@ -95,6 +103,11 @@ class ActiveCampaignOutboundDispatcher
         return "appointment:{$appointmentId}:confirmed:site_event";
     }
 
+    public function idempotencyKeyForAppointmentConfirmedLabFields(int $appointmentId): string
+    {
+        return "appointment:{$appointmentId}:confirmed:lab_fields";
+    }
+
     public function idempotencyKeyForCallRequestedTag(int $interactionId): string
     {
         return "appointment_interaction:{$interactionId}:call_requested:tag:add";
@@ -113,6 +126,86 @@ class ActiveCampaignOutboundDispatcher
     public function idempotencyKeyForCallAttemptedSiteEvent(int $interactionId): string
     {
         return "appointment_interaction:{$interactionId}:call_attempted:site_event";
+    }
+
+    public function idempotencyKeyForLaboratoryPurchaseCompleted(int $purchaseId): string
+    {
+        return "laboratory_purchase:{$purchaseId}:purchase_completed";
+    }
+
+    public function idempotencyKeyForLaboratorySampleCompleted(int $purchaseId): string
+    {
+        return "laboratory_purchase:{$purchaseId}:sample_completed:lab_fields";
+    }
+
+    public function idempotencyKeyForLaboratoryResultsCompleted(int $purchaseId): string
+    {
+        return "laboratory_purchase:{$purchaseId}:results_completed:lab_fields";
+    }
+
+    public function enqueueLaboratoryPurchaseCompleted(LaboratoryPurchase $purchase): ActiveCampaignDispatch
+    {
+        $purchase->loadMissing(['customer.user', 'cart']);
+
+        $user = $purchase->customer?->user;
+        $email = $this->resolveEligibleEmail($user);
+        $idempotencyKey = $this->idempotencyKeyForLaboratoryPurchaseCompleted((int) $purchase->id);
+
+        if ($email === null) {
+            $dispatch = $this->dispatchService->createOrSkipByIdempotencyKey([
+                'event_type' => 'laboratory_purchase_completed',
+                'idempotency_key' => $idempotencyKey,
+                'entity_type' => 'laboratory_purchase',
+                'entity_id' => $purchase->id,
+                'related_entity_type' => $purchase->cart_id ? 'cart' : null,
+                'related_entity_id' => $purchase->cart_id,
+                'user_id' => $user?->id,
+                'customer_id' => $purchase->customer_id,
+                'email' => $user?->email,
+                'payload' => [
+                    'operation' => 'laboratory_purchase_completed',
+                    'laboratory_purchase_id' => $purchase->id,
+                    'gda_order_id' => $purchase->gda_order_id,
+                    'customer_id' => $purchase->customer_id,
+                    'cart_id' => $purchase->cart_id,
+                    'skip_reason' => 'no_eligible_email',
+                ],
+            ]);
+
+            if ($dispatch->wasRecentlyCreated) {
+                $this->dispatchService->markSkipped($dispatch, 'no_eligible_email');
+            }
+
+            return $dispatch->fresh();
+        }
+
+        $dispatch = $this->dispatchService->createOrSkipByIdempotencyKey([
+            'event_type' => 'laboratory_purchase_completed',
+            'idempotency_key' => $idempotencyKey,
+            'entity_type' => 'laboratory_purchase',
+            'entity_id' => $purchase->id,
+            'related_entity_type' => $purchase->cart_id ? 'cart' : null,
+            'related_entity_id' => $purchase->cart_id,
+            'user_id' => $user?->id,
+            'customer_id' => $purchase->customer_id,
+            'email' => $email,
+            'payload' => [
+                'operation' => 'laboratory_purchase_completed',
+                'laboratory_purchase_id' => $purchase->id,
+                'gda_order_id' => $purchase->gda_order_id,
+                'gda_consecutivo' => $purchase->gda_consecutivo,
+                'customer_id' => $purchase->customer_id,
+                'cart_id' => $purchase->cart_id,
+                'brand' => $purchase->brand instanceof \BackedEnum ? $purchase->brand->value : $purchase->brand,
+                'total_cents' => $purchase->total_cents,
+                'email' => $email,
+                'custom_fields' => $this->laboratoryPayloadBuilder->forPurchaseCompleted($purchase),
+            ],
+        ]);
+
+        $this->dispatchJobIfPending($dispatch);
+
+        return $dispatch;
     }
 
     /**
@@ -154,6 +247,11 @@ class ActiveCampaignOutboundDispatcher
         $siteDispatch = $this->enqueueAbandonedSiteEventFromCartEvent($cart, $cartEvent);
         if ($siteDispatch instanceof ActiveCampaignDispatch) {
             $dispatches[] = $siteDispatch;
+        }
+
+        $fieldsDispatch = $this->enqueueAbandonedLabFieldsFromCartEvent($cart, $cartEvent);
+        if ($fieldsDispatch instanceof ActiveCampaignDispatch) {
+            $dispatches[] = $fieldsDispatch;
         }
 
         return $dispatches;
@@ -248,6 +346,11 @@ class ActiveCampaignOutboundDispatcher
         $siteDispatch = $this->enqueueAppointmentConfirmedSiteEventFromCartEvent($cart, $cartEvent, $appointmentId);
         if ($siteDispatch instanceof ActiveCampaignDispatch) {
             $dispatches[] = $siteDispatch;
+        }
+
+        $fieldsDispatch = $this->enqueueAppointmentConfirmedLabFields($cart, $cartEvent, $appointmentId);
+        if ($fieldsDispatch instanceof ActiveCampaignDispatch) {
+            $dispatches[] = $fieldsDispatch;
         }
 
         return $dispatches;
@@ -389,6 +492,89 @@ class ActiveCampaignOutboundDispatcher
             sourceEventType: CartEventType::AppointmentConfirmed->value,
             idempotencyKey: $this->idempotencyKeyForAppointmentConfirmedSiteEvent($appointmentId),
             payloadExtras: $this->appointmentSignalPayloadExtras($cartEvent, $appointmentId),
+        );
+    }
+
+    public function enqueueAppointmentConfirmedLabFields(
+        Cart $cart,
+        CartEvent $cartEvent,
+        int $appointmentId,
+    ): ?ActiveCampaignDispatch {
+        if (! $this->isCartOutboxEnabled()) {
+            return null;
+        }
+
+        $appointment = LaboratoryAppointment::query()
+            ->with(['laboratoryStore', 'customer.user'])
+            ->find($appointmentId);
+
+        if (! $appointment) {
+            return null;
+        }
+
+        $fields = $this->laboratoryPayloadBuilder->forAppointmentConfirmed($appointment);
+
+        if ($fields === []) {
+            return null;
+        }
+
+        return $this->dispatchLaboratoryCustomFields(
+            cart: $cart,
+            eventType: CartEventType::AppointmentConfirmed->value,
+            idempotencyKey: $this->idempotencyKeyForAppointmentConfirmedLabFields($appointmentId),
+            fields: $fields,
+            payloadExtras: $this->appointmentSignalPayloadExtras($cartEvent, $appointmentId),
+            relatedEntityType: 'laboratory_appointment',
+            relatedEntityId: $appointmentId,
+            appointment: $appointment,
+        );
+    }
+
+    public function enqueueLaboratorySampleCompleted(LaboratoryPurchase $purchase): ?ActiveCampaignDispatch
+    {
+        $purchase->loadMissing(['customer.user', 'cart']);
+        $cart = $purchase->cart;
+
+        if (! $cart) {
+            return null;
+        }
+
+        return $this->dispatchLaboratoryCustomFields(
+            cart: $cart,
+            eventType: 'laboratory_sample_completed',
+            idempotencyKey: $this->idempotencyKeyForLaboratorySampleCompleted((int) $purchase->id),
+            fields: $this->laboratoryPayloadBuilder->forSampleCompleted($purchase),
+            payloadExtras: [
+                'laboratory_purchase_id' => $purchase->id,
+                'gda_order_id' => $purchase->gda_order_id,
+            ],
+            relatedEntityType: 'laboratory_purchase',
+            relatedEntityId: $purchase->id,
+            purchase: $purchase,
+        );
+    }
+
+    public function enqueueLaboratoryResultsCompleted(LaboratoryPurchase $purchase): ?ActiveCampaignDispatch
+    {
+        $purchase->loadMissing(['customer.user', 'cart']);
+        $cart = $purchase->cart;
+
+        if (! $cart) {
+            return null;
+        }
+
+        return $this->dispatchLaboratoryCustomFields(
+            cart: $cart,
+            eventType: 'laboratory_results_completed',
+            idempotencyKey: $this->idempotencyKeyForLaboratoryResultsCompleted((int) $purchase->id),
+            fields: $this->laboratoryPayloadBuilder->forResultsCompleted($purchase),
+            payloadExtras: [
+                'laboratory_purchase_id' => $purchase->id,
+                'gda_order_id' => $purchase->gda_order_id,
+            ],
+            relatedEntityType: 'laboratory_purchase',
+            relatedEntityId: $purchase->id,
+            purchase: $purchase,
         );
     }
 
@@ -552,6 +738,36 @@ class ActiveCampaignOutboundDispatcher
             sourceEventType: CartEventType::CartAbandoned->value,
             idempotencyKey: $this->idempotencyKeyForCartAbandonedSiteEvent((int) $cart->id, $episode),
             payloadExtras: $this->baseCartEventPayloadExtras($cartEvent, $metadata, $episode),
+        );
+    }
+
+    public function enqueueAbandonedLabFieldsFromCartEvent(Cart $cart, CartEvent $cartEvent): ?ActiveCampaignDispatch
+    {
+        if (! $this->isCartOutboxEnabled()) {
+            return null;
+        }
+
+        $metadata = is_array($cartEvent->metadata) ? $cartEvent->metadata : [];
+        $episode = (int) ($metadata['episode'] ?? 0);
+
+        if ($episode <= 0) {
+            return null;
+        }
+
+        $fields = $this->laboratoryPayloadBuilder->forAbandonedCart($cart);
+
+        if ($fields === []) {
+            return null;
+        }
+
+        return $this->dispatchLaboratoryCustomFields(
+            cart: $cart,
+            eventType: CartEventType::CartAbandoned->value,
+            idempotencyKey: $this->idempotencyKeyForCartAbandonedLabFields((int) $cart->id, $episode),
+            fields: $fields,
+            payloadExtras: $this->baseCartEventPayloadExtras($cartEvent, $metadata, $episode),
+            relatedEntityType: 'cart_event',
+            relatedEntityId: $cartEvent->id,
         );
     }
 
@@ -832,6 +1048,82 @@ class ActiveCampaignOutboundDispatcher
                 'cart_id' => $cart->id,
                 'email' => $email,
                 'event_data' => $eventData,
+            ], $payloadExtras),
+        ]);
+
+        $this->dispatchJobIfPending($dispatch);
+
+        return $dispatch;
+    }
+
+    /**
+     * @param  array<string, string>  $fields
+     * @param  array<string, mixed>  $payloadExtras
+     */
+    public function dispatchLaboratoryCustomFields(
+        Cart $cart,
+        string $eventType,
+        string $idempotencyKey,
+        array $fields,
+        array $payloadExtras = [],
+        ?string $relatedEntityType = null,
+        ?int $relatedEntityId = null,
+        ?LaboratoryAppointment $appointment = null,
+        ?LaboratoryPurchase $purchase = null,
+    ): ?ActiveCampaignDispatch {
+        if (! $this->isCartOutboxEnabled()) {
+            return null;
+        }
+
+        $cart->loadMissing('user.customer');
+        $user = $purchase?->customer?->user
+            ?? $appointment?->customer?->user
+            ?? $cart->user;
+        $email = $this->resolveEligibleEmail($user);
+
+        if ($email === null) {
+            return $this->createSkippedCartDispatch(
+                cart: $cart,
+                eventType: $eventType,
+                idempotencyKey: $idempotencyKey,
+                reason: 'no_eligible_email',
+                payloadExtras: $payloadExtras,
+                operation: 'lab_custom_fields',
+                tagKey: 'lab.custom_fields',
+            );
+        }
+
+        $dispatch = $this->dispatchService->createOrSkipByIdempotencyKey([
+            'event_type' => $eventType,
+            'idempotency_key' => $idempotencyKey,
+            'entity_type' => $purchase ? 'laboratory_purchase' : ($appointment ? 'laboratory_appointment' : 'cart'),
+            'entity_id' => $purchase?->id ?? $appointment?->id ?? $cart->id,
+            'related_entity_type' => $relatedEntityType,
+            'related_entity_id' => $relatedEntityId,
+            'user_id' => $user?->id,
+            'customer_id' => $user?->customer?->id,
+            'email' => $email,
+            'payload' => array_merge([
+                'operation' => 'lab_custom_fields',
+                'event_type' => $eventType,
+                'cart_id' => $cart->id,
+                'laboratory_purchase_id' => $purchase?->id,
+                'appointment_id' => $appointment?->id,
+                'email' => $email,
+                'user_id' => $user?->id,
+                'customer_id' => $user?->customer?->id,
+                'custom_fields' => $fields,
+                'contact' => $user instanceof User ? [
+                    'email' => $user->email,
+                    'first_name' => $user->name,
+                    'paternal_lastname' => $user->paternal_lastname,
+                    'maternal_lastname' => $user->maternal_lastname,
+                    'phone' => $user->phone,
+                    'gender' => $user->gender == 1 ? 'Masculino' : 'Femenino',
+                    'birth_date' => optional($user->birth_date)?->format('Y-m-d'),
+                    'phone_country' => $user->phone_country,
+                    'state' => $user->state,
+                ] : null,
             ], $payloadExtras),
         ]);
 
