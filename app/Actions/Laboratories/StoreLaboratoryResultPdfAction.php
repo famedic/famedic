@@ -6,6 +6,7 @@ use App\Models\LaboratoryPurchase;
 use App\Support\Laboratory\GdaResultsPdfStatus;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 class StoreLaboratoryResultPdfAction
 {
@@ -46,7 +47,19 @@ class StoreLaboratoryResultPdfAction
             return $path;
         }
 
-        Storage::put($path, $pdfBinary);
+        $stored = Storage::put($path, $pdfBinary);
+
+        if (! $stored || ! Storage::exists($path)) {
+            Log::error('GDA results PDF storage write verification failed', [
+                'purchase_id' => $laboratoryPurchase->id,
+                'notification_id' => $metadata['notification_id'] ?? null,
+                'path' => $path,
+                'disk' => config('filesystems.default'),
+                'source' => $metadata['source'] ?? 'gda',
+            ]);
+
+            throw new RuntimeException('No se pudo confirmar el archivo PDF en storage.');
+        }
 
         $laboratoryPurchase->results = $path;
         $laboratoryPurchase->save();

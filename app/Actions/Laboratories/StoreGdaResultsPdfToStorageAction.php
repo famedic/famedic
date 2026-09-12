@@ -7,6 +7,8 @@ use App\Models\LaboratoryPurchase;
 use App\Support\GDA\GdaPayloadSanitizer;
 use DomainException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 class StoreGdaResultsPdfToStorageAction
 {
@@ -42,6 +44,10 @@ class StoreGdaResultsPdfToStorageAction
             ],
             $overwrite
         );
+
+        if (! Storage::exists($path)) {
+            throw new RuntimeException('No se pudo confirmar el archivo PDF en storage.');
+        }
 
         if ($notification) {
             $notification->update([

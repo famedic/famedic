@@ -48,6 +48,31 @@ function maskStoragePath(path) {
 	return path.substring(0, 12) + "…" + path.substring(path.length - 18);
 }
 
+async function readJsonResponse(response, fallbackMessage) {
+	const contentType = response.headers.get("Content-Type") ?? "";
+
+	if (!contentType.toLowerCase().includes("application/json")) {
+		throw new Error(fallbackMessage);
+	}
+
+	let json;
+	try {
+		json = await response.json();
+	} catch {
+		throw new Error(fallbackMessage);
+	}
+
+	if (!response.ok || !json.success) {
+		const err = new Error(json.message || fallbackMessage);
+		err.gdaNotAvailable = json.gda_not_available || false;
+		err.resultsPdf = json.results_pdf || null;
+		err.lastAttemptAt = json.last_attempt_at || null;
+		throw err;
+	}
+
+	return json;
+}
+
 async function postJson(routeName, orderKey) {
 	const response = await fetch(route(routeName, { orderKey }), {
 		method: "POST",
@@ -60,17 +85,10 @@ async function postJson(routeName, orderKey) {
 		credentials: "same-origin",
 	});
 
-	const json = await response.json();
-
-	if (!response.ok || !json.success) {
-		const err = new Error(json.message || "La operación no se completó.");
-		err.gdaNotAvailable = json.gda_not_available || false;
-		err.resultsPdf = json.results_pdf || null;
-		err.lastAttemptAt = json.last_attempt_at || null;
-		throw err;
-	}
-
-	return json;
+	return readJsonResponse(
+		response,
+		"No se recibió una respuesta JSON válida del servidor.",
+	);
 }
 
 export default function LaboratoryNotificationResultsPdfActions({
@@ -185,7 +203,18 @@ export default function LaboratoryNotificationResultsPdfActions({
 			);
 
 			if (!response.ok) {
+				const contentType = response.headers.get("Content-Type") ?? "";
+				if (contentType.toLowerCase().includes("application/json")) {
+					const json = await response.json().catch(() => null);
+					throw new Error(json?.message || "No se pudo descargar el PDF.");
+				}
+
 				throw new Error("No se pudo descargar el PDF.");
+			}
+
+			const contentType = response.headers.get("Content-Type") ?? "";
+			if (!contentType.toLowerCase().includes("application/pdf")) {
+				throw new Error("El servidor no devolvió un PDF válido.");
 			}
 
 			const blob = await response.blob();

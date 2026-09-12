@@ -28,6 +28,33 @@ function copyTextToClipboard(text) {
 	el.remove();
 }
 
+async function readJsonResponse(response) {
+	const fallback = "No se recibió una respuesta JSON válida del servidor.";
+	const contentType = response.headers.get("Content-Type") ?? "";
+
+	if (!contentType.toLowerCase().includes("application/json")) {
+		return {
+			success: false,
+			message: fallback,
+			error: fallback,
+			http_status: response.status,
+		};
+	}
+
+	const json = await response.json().catch(() => null);
+
+	if (!json) {
+		return {
+			success: false,
+			message: fallback,
+			error: fallback,
+			http_status: response.status,
+		};
+	}
+
+	return json;
+}
+
 function JsonBlock({ value, emptyMessage = "Sin datos.", className = "" }) {
 	const text = prettyJson(value);
 
@@ -181,7 +208,7 @@ export default function LaboratoryGdaConsultConsole({ detail }) {
 				},
 			);
 
-			const json = await response.json();
+			const json = await readJsonResponse(response);
 			setResult(json);
 		} catch (e) {
 			setResult({

@@ -7,7 +7,6 @@ use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use App\Support\Laboratory\GdaResultsPdfAssessment;
 use App\Support\Laboratory\GdaResultsPdfStatus;
-use DomainException;
 use Illuminate\Support\Facades\Log;
 
 class SyncGdaResultPdfToStorageAction
@@ -153,8 +152,15 @@ class SyncGdaResultPdfToStorageAction
                 $notification,
                 overwrite: $overwrite
             );
-        } catch (DomainException $e) {
-            Log::error('GDA results PDF sync failed: invalid PDF payload', $this->syncLogContext(
+        } catch (\Throwable $e) {
+            $notification->update([
+                'gda_message' => array_merge($notification->gda_message ?? [], [
+                    'results_storage_error' => $e->getMessage(),
+                    'results_storage_error_at' => now()->toISOString(),
+                ]),
+            ]);
+
+            Log::error('GDA results PDF sync failed while storing PDF', $this->syncLogContext(
                 $purchase,
                 $notification->id,
                 $assessment,
@@ -162,6 +168,7 @@ class SyncGdaResultPdfToStorageAction
                 force: $force,
             ) + [
                 'error' => $e->getMessage(),
+                'exception_class' => $e::class,
             ]);
 
             throw $e;
@@ -332,6 +339,10 @@ class SyncGdaResultPdfToStorageAction
             'freshness_status' => $assessment->freshnessStatus,
             'pdf_kind' => $assessment->pdfKind,
             'old_path' => $oldPath,
+            'gda_order_id' => $purchase->gda_order_id,
+            'gda_consecutivo' => $purchase->gda_consecutivo,
+            'laboratory_brand' => $purchase->brand?->value,
+            'storage_disk' => config('filesystems.default'),
             'is_automatic_overwrite_candidate' => $assessment->isAutomaticOverwriteCandidate,
         ];
     }

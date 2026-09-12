@@ -70,6 +70,25 @@ function statusBadgeColor(status) {
 	return "slate";
 }
 
+async function readJsonResponse(response, fallbackMessage) {
+	const contentType = response.headers.get("Content-Type") ?? "";
+
+	if (!contentType.toLowerCase().includes("application/json")) {
+		throw new Error(fallbackMessage);
+	}
+
+	const json = await response.json().catch(() => null);
+	if (!json) {
+		throw new Error(fallbackMessage);
+	}
+
+	if (!response.ok) {
+		throw new Error(json.message || fallbackMessage);
+	}
+
+	return json;
+}
+
 export default function LaboratoryNotificationsMonitor({
 	filters,
 	dailyChart,
@@ -123,11 +142,10 @@ export default function LaboratoryNotificationsMonitor({
 				},
 			);
 
-			if (!response.ok) {
-				throw new Error("No se pudo cargar el detalle de la orden.");
-			}
-
-			const json = await response.json();
+			const json = await readJsonResponse(
+				response,
+				"No se pudo cargar el detalle de la orden.",
+			);
 			setOrderDetail(json);
 		} catch (error) {
 			setDetailError(

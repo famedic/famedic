@@ -19,8 +19,10 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class LaboratoryNotificationMonitorController extends Controller
 {
@@ -196,14 +198,28 @@ class LaboratoryNotificationMonitorController extends Controller
 
     public function orderDetails(Request $request, string $orderKey)
     {
-        $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
+        if (! $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor')) {
+            return $this->monitorJsonError('No tienes permiso para consultar este monitor.', 403);
+        }
 
-        return response()->json($this->buildOrderDetail($orderKey));
+        try {
+            return response()->json($this->buildOrderDetail($orderKey));
+        } catch (\Throwable $e) {
+            $this->logMonitorException($request, $orderKey, 'order_details', $e);
+
+            if ($e instanceof HttpExceptionInterface && $e->getStatusCode() === 404) {
+                return $this->monitorJsonError('Orden no encontrada.', 404);
+            }
+
+            return $this->monitorJsonError('No se pudo cargar el detalle de la orden.', 500);
+        }
     }
 
     public function fetchResults(Request $request, string $orderKey): JsonResponse
     {
-        $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
+        if (! $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor')) {
+            return $this->monitorJsonError('No tienes permiso para sincronizar resultados.', 403);
+        }
 
         $resultsNotifications = $this->notificationsForOrder($orderKey)
             ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
@@ -221,6 +237,11 @@ class LaboratoryNotificationMonitorController extends Controller
         try {
             $result = app(ResolveGdaResultsPdfAction::class)($notification);
         } catch (GdaResultsNotAvailableException $e) {
+            $this->logMonitorException($request, $orderKey, 'fetch_results_gda_not_available', $e, [
+                'consult_order_id' => $e->orderId,
+                'gda_message' => $e->gdaMessage,
+            ]);
+
             $resultsNotifications = $this->notificationsForOrder($orderKey)
                 ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
                 ->values();
@@ -240,10 +261,9 @@ class LaboratoryNotificationMonitorController extends Controller
                 'results_pdf' => $resultsPdf,
             ], 422);
         } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error consultando GDA: '.$e->getMessage(),
-            ], 500);
+            $this->logMonitorException($request, $orderKey, 'fetch_results', $e);
+
+            return $this->monitorJsonError('No fue posible sincronizar el resultado desde GDA.', 500);
         }
 
         $resultsNotifications = $this->notificationsForOrder($orderKey)
@@ -266,7 +286,9 @@ class LaboratoryNotificationMonitorController extends Controller
 
     public function forceRefreshResults(Request $request, string $orderKey): JsonResponse
     {
-        $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
+        if (! $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor')) {
+            return $this->monitorJsonError('No tienes permiso para forzar actualización de resultados.', 403);
+        }
 
         $resultsNotifications = $this->notificationsForOrder($orderKey)
             ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
@@ -284,6 +306,11 @@ class LaboratoryNotificationMonitorController extends Controller
         try {
             $result = app(ResolveGdaResultsPdfAction::class)->forceRefresh($notification);
         } catch (GdaResultsNotAvailableException $e) {
+            $this->logMonitorException($request, $orderKey, 'force_refresh_results_gda_not_available', $e, [
+                'consult_order_id' => $e->orderId,
+                'gda_message' => $e->gdaMessage,
+            ]);
+
             $resultsNotifications = $this->notificationsForOrder($orderKey)
                 ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
                 ->values();
@@ -303,10 +330,9 @@ class LaboratoryNotificationMonitorController extends Controller
                 'results_pdf' => $resultsPdf,
             ], 422);
         } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error forzando actualización desde GDA: '.$e->getMessage(),
-            ], 500);
+            $this->logMonitorException($request, $orderKey, 'force_refresh_results', $e);
+
+            return $this->monitorJsonError('No fue posible forzar la actualización desde GDA.', 500);
         }
 
         $resultsNotifications = $this->notificationsForOrder($orderKey)
@@ -343,7 +369,7 @@ class LaboratoryNotificationMonitorController extends Controller
         }
 
         if (! $notification || ! $notification->hasAvailableResults()) {
-            abort(404, 'PDF no disponible.');
+            return $this->downloadError($request, 'PDF no disponible.', 404);
         }
 
         $purchase = $notification->laboratoryPurchase;
@@ -359,7 +385,7 @@ class LaboratoryNotificationMonitorController extends Controller
             $pdfContent = base64_decode($result['pdf_base64'], true);
 
             if ($pdfContent === false || $pdfContent === '') {
-                abort(404, 'PDF no disponible.');
+                return $this->downloadError($request, 'PDF no disponible.', 404);
             }
 
             $filename = 'resultados_'.($notification->gda_consecutivo ?? $notification->gda_order_id ?? $orderKey).'.pdf';
@@ -368,13 +394,17 @@ class LaboratoryNotificationMonitorController extends Controller
                 ->header('Content-Type', 'application/pdf')
                 ->header('Content-Disposition', 'attachment; filename="'.$filename.'"');
         } catch (\Throwable $e) {
-            abort(404, 'PDF no disponible: '.$e->getMessage());
+            $this->logMonitorException($request, $orderKey, 'download_results', $e);
+
+            return $this->downloadError($request, 'PDF no disponible.', 404);
         }
     }
 
     public function testGdaConsult(Request $request, string $orderKey): JsonResponse
     {
-        $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
+        if (! $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor')) {
+            return $this->monitorJsonError('No tienes permiso para probar la consulta GDA.', 403);
+        }
 
         $validated = $request->validate([
             'notification_id' => ['nullable', 'integer'],
@@ -383,7 +413,9 @@ class LaboratoryNotificationMonitorController extends Controller
         ]);
 
         $notifications = $this->notificationsForOrder($orderKey);
-        abort_if($notifications->isEmpty(), 404, 'Orden no encontrada.');
+        if ($notifications->isEmpty()) {
+            return $this->monitorJsonError('Orden no encontrada.', 404);
+        }
 
         $notification = null;
         if (! empty($validated['notification_id'])) {
@@ -411,6 +443,8 @@ class LaboratoryNotificationMonitorController extends Controller
                 $validated['payload']
             );
         } catch (GdaConsultIdNotResolvableException $e) {
+            $this->logMonitorException($request, $orderKey, 'test_gda_consult_id_not_resolvable', $e);
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -427,9 +461,11 @@ class LaboratoryNotificationMonitorController extends Controller
                 'gda_not_available' => false,
             ], 422);
         } catch (\Throwable $e) {
+            $this->logMonitorException($request, $orderKey, 'test_gda_consult', $e);
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'No fue posible ejecutar la consulta de prueba a GDA.',
                 'url' => app(GetGDAResultsAction::class)->resultsConsultUrl(),
                 'http_status' => null,
                 'resolved_id' => null,
@@ -439,7 +475,7 @@ class LaboratoryNotificationMonitorController extends Controller
                 'request_payload' => GdaPayloadSanitizer::sanitizeForDebug($validated['payload']),
                 'response_payload' => null,
                 'has_pdf' => false,
-                'error' => $e->getMessage(),
+                'error' => 'No fue posible ejecutar la consulta de prueba a GDA.',
                 'gda_not_available' => false,
             ], 500);
         }
@@ -1060,5 +1096,33 @@ class LaboratoryNotificationMonitorController extends Controller
         $date = $value instanceof Carbon ? $value : Carbon::parse($value);
 
         return $date->timezone($tz);
+    }
+
+    private function monitorJsonError(string $message, int $status): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $message,
+        ], $status);
+    }
+
+    private function downloadError(Request $request, string $message, int $status)
+    {
+        if ($request->expectsJson() || $request->ajax()) {
+            return $this->monitorJsonError($message, $status);
+        }
+
+        abort($status, $message);
+    }
+
+    private function logMonitorException(Request $request, string $orderKey, string $action, \Throwable $e, array $context = []): void
+    {
+        Log::error('Laboratory notifications monitor action failed', array_merge([
+            'action' => $action,
+            'order_key' => $orderKey,
+            'request_id' => $request->headers->get('X-Request-Id'),
+            'exception_class' => $e::class,
+            'exception_message' => $e->getMessage(),
+        ], $context));
     }
 }

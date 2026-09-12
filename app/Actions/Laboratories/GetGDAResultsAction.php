@@ -187,14 +187,18 @@ class GetGDAResultsAction
     {
         $response = Http::timeout(60)->post($prepared['url'], $prepared['payload']);
         $responseData = $response->json();
+        $contentType = $response->header('Content-Type');
 
         Log::info('GDA results consult response', [
             'status' => $response->status(),
+            'content_type' => $contentType,
             'has_pdf' => ! empty($responseData['infogda_resultado_b64']),
+            'is_json' => is_array($responseData),
+            'body_starts_with_html' => str_starts_with(ltrim($response->body()), '<'),
         ]);
 
         return [
-            'failed' => $response->failed(),
+            'failed' => $response->failed() || ! is_array($responseData),
             'http_status' => $response->status(),
             'response' => is_array($responseData) ? $responseData : null,
             'raw_body' => $response->body(),
@@ -214,7 +218,9 @@ class GetGDAResultsAction
      */
     private function throwForFailedConsult(string $orderId, array $prepared, array $result): void
     {
-        $message = $result['response']['GDA_menssage']['descripcion'] ?? $result['raw_body'] ?? 'Error desconocido';
+        $message = $result['response']['GDA_menssage']['descripcion']
+            ?? $this->summarizeRawBody($result['raw_body'])
+            ?? 'Error desconocido';
 
         if ($this->isInvalidConsultIdFormatMessage((string) $message)) {
             Log::error('GDA results consult id format rejected', [
@@ -248,6 +254,21 @@ class GetGDAResultsAction
     private function isResultsNotAvailableMessage(string $message): bool
     {
         return str_contains(mb_strtolower($message), 'no contiene resultados');
+    }
+
+    private function summarizeRawBody(?string $rawBody): ?string
+    {
+        if ($rawBody === null || trim($rawBody) === '') {
+            return null;
+        }
+
+        $body = trim($rawBody);
+
+        if (str_starts_with(ltrim($body), '<')) {
+            return 'GDA devolvió HTML en lugar de JSON.';
+        }
+
+        return mb_substr($body, 0, 500);
     }
 
     private function isInvalidConsultIdFormatMessage(string $message): bool

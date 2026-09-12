@@ -3,6 +3,7 @@
 namespace Tests\Feature\Laboratory;
 
 use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
+use App\Actions\Laboratories\StoreLaboratoryResultPdfAction;
 use App\Actions\Laboratories\SyncGdaResultPdfToStorageAction;
 use App\Actions\Laboratory\HandleResultsNotificationAction;
 use App\Enums\Gender;
@@ -17,6 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -183,6 +185,142 @@ class GdaResultsQaReviewIsolatedTest extends TestCase
         $this->assertNotEmpty($purchase->results);
         $this->assertTrue(Storage::exists($purchase->results));
         $this->assertNull($notification->results_pdf_base64);
+    }
+
+    #[Test]
+    public function forzar_actualizacion_desde_gda_con_error_http_devuelve_json_controlado_y_no_sincroniza(): void
+    {
+        $purchase = $this->seedPurchase();
+        $this->seedResultsNotificationRecord($purchase);
+
+        $this->mock(\App\Actions\Laboratories\GetGDAResultsAction::class, function ($mock) {
+            $mock->shouldReceive('__invoke')
+                ->once()
+                ->andThrow(new \Exception('Error GDA: HTTP 500'));
+        });
+
+        $user = $this->seedAdminUser();
+
+        $response = $this->actingAs($user)
+            ->postJson(route('admin.laboratory-notifications-monitor.force-refresh-results', [
+                'orderKey' => $purchase->gda_order_id,
+            ]));
+
+        $response->assertStatus(500)
+            ->assertHeader('content-type', 'application/json')
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'No fue posible forzar la actualización desde GDA.');
+
+        $purchase->refresh();
+        $this->assertNull($purchase->results);
+    }
+
+    #[Test]
+    public function forzar_actualizacion_desde_gda_con_html_en_lugar_de_pdf_devuelve_json_y_no_sincroniza(): void
+    {
+        $purchase = $this->seedPurchase();
+        $notification = $this->seedResultsNotificationRecord($purchase);
+
+        $this->mock(\App\Actions\Laboratories\GetGDAResultsAction::class, function ($mock) {
+            $mock->shouldReceive('__invoke')
+                ->once()
+                ->andReturn(['infogda_resultado_b64' => base64_encode('<!DOCTYPE html><html>Error</html>')]);
+        });
+
+        $user = $this->seedAdminUser();
+
+        $response = $this->actingAs($user)
+            ->postJson(route('admin.laboratory-notifications-monitor.force-refresh-results', [
+                'orderKey' => $purchase->gda_order_id,
+            ]));
+
+        $response->assertStatus(500)
+            ->assertHeader('content-type', 'application/json')
+            ->assertJsonPath('success', false);
+
+        $purchase->refresh();
+        $notification->refresh();
+
+        $this->assertNull($purchase->results);
+        $this->assertSame('GDA results payload is not a valid PDF.', data_get($notification->gda_message, 'results_storage_error'));
+    }
+
+    #[Test]
+    public function forzar_actualizacion_desde_gda_con_falla_de_storage_no_marca_sincronizacion_exitosa(): void
+    {
+        $purchase = $this->seedPurchase();
+        $notification = $this->seedResultsNotificationRecord($purchase);
+
+        $this->mock(\App\Actions\Laboratories\GetGDAResultsAction::class, function ($mock) {
+            $mock->shouldReceive('__invoke')
+                ->once()
+                ->andReturn(['infogda_resultado_b64' => $this->samplePdfBase64()]);
+        });
+
+        $this->mock(StoreLaboratoryResultPdfAction::class, function ($mock) {
+            $mock->shouldReceive('execute')
+                ->once()
+                ->andThrow(new RuntimeException('S3 write failed'));
+        });
+
+        $user = $this->seedAdminUser();
+
+        $response = $this->actingAs($user)
+            ->postJson(route('admin.laboratory-notifications-monitor.force-refresh-results', [
+                'orderKey' => $purchase->gda_order_id,
+            ]));
+
+        $response->assertStatus(500)
+            ->assertHeader('content-type', 'application/json')
+            ->assertJsonPath('success', false);
+
+        $purchase->refresh();
+        $notification->refresh();
+
+        $this->assertNull($purchase->results);
+        $this->assertNull(data_get($notification->gda_message, 'results_fetched_at'));
+        $this->assertSame('S3 write failed', data_get($notification->gda_message, 'results_storage_error'));
+    }
+
+    #[Test]
+    public function sincronizar_desde_gda_con_excepcion_interna_devuelve_json_controlado(): void
+    {
+        $purchase = $this->seedPurchase();
+        $this->seedResultsNotificationRecord($purchase);
+
+        $this->mock(ResolveGdaResultsPdfAction::class, function ($mock) {
+            $mock->shouldReceive('__invoke')
+                ->once()
+                ->andThrow(new RuntimeException('Boom interno'));
+        });
+
+        $user = $this->seedAdminUser();
+
+        $response = $this->actingAs($user)
+            ->postJson(route('admin.laboratory-notifications-monitor.fetch-results', [
+                'orderKey' => $purchase->gda_order_id,
+            ]));
+
+        $response->assertStatus(500)
+            ->assertHeader('content-type', 'application/json')
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'No fue posible sincronizar el resultado desde GDA.');
+    }
+
+    #[Test]
+    public function detalle_ajax_para_orden_inexistente_devuelve_json_controlado(): void
+    {
+        $user = $this->seedAdminUser();
+
+        $response = $this->actingAs($user)
+            ->getJson(route('admin.laboratory-notifications-monitor.order-details', [
+                'orderKey' => 'NO-EXISTE',
+            ]));
+
+        $response->assertStatus(404)
+            ->assertHeader('content-type', 'application/json')
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Orden no encontrada.');
     }
 
     // --- Resultado manual no se sobrescribe ---
