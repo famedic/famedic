@@ -10,6 +10,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('laboratory_checkout_resume_links')) {
+            return;
+        }
+
         Schema::create('laboratory_checkout_resume_links', function (Blueprint $table) {
             $table->id();
             $table->foreignIdFor(Customer::class)->constrained()->cascadeOnDelete();
