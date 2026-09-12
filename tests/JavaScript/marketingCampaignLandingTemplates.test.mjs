@@ -295,10 +295,24 @@ test("admin preview uses logical desktop and mobile viewports", () => {
 	assert.match(preview, /<iframe/);
 	assert.match(preview, /createPortal/);
 	assert.match(preview, /copyPreviewStyles/);
+	assert.match(preview, /!targetDocument\?\.head \|\| typeof document === "undefined"/);
+	assert.match(preview, /!frameDocument\?\.documentElement \|\| !frameDocument\.body/);
 	assert.match(preview, /max-w-\[1280px\]/);
 	assert.match(preview, /fullscreenScale/);
 	assert.match(preview, /fullscreenHostRef/);
 	assert.match(preview, /transform:\s*`scale\(\$\{scale\}\)`/);
+});
+
+test("admin sidebar open menu icon uses valid closed path coordinates", () => {
+	const sidebarLayout = readFileSync(
+		"resources/js/Components/Catalyst/sidebar-layout.jsx",
+		"utf8",
+	);
+
+	assert.doesNotMatch(sidebarLayout, /2\.33579 7\.5 2 6\.75Z/);
+	assert.doesNotMatch(sidebarLayout, /2 12\.8358 2 13\.25Z/);
+	assert.match(sidebarLayout, /2 7\.16421 2 6\.75ZM2 13\.25/);
+	assert.match(sidebarLayout, /2 13\.6642 2 13\.25Z/);
 });
 
 test("campaign wizard separates destination, content, images, and final review", () => {

@@ -54,7 +54,7 @@ function formatPreviewProduct(product) {
 }
 
 function copyPreviewStyles(targetDocument) {
-	if (!targetDocument) return;
+	if (!targetDocument?.head || typeof document === "undefined") return;
 
 	targetDocument.head.querySelectorAll("[data-preview-style]").forEach((node) => node.remove());
 
@@ -73,12 +73,12 @@ function PreviewViewportFrame({ children, viewportConfig, scale = 1 }) {
 
 	const attachFrame = () => {
 		const frameDocument = iframeRef.current?.contentDocument;
-		if (!frameDocument) return;
+		if (!frameDocument?.documentElement || !frameDocument.body) return;
 
 		copyPreviewStyles(frameDocument);
 		frameDocument.documentElement.classList.remove("dark");
 		frameDocument.body.className = "m-0 bg-white text-zinc-950";
-		setMountNode(frameDocument.getElementById("preview-root"));
+		setMountNode(frameDocument.getElementById("preview-root") ?? null);
 	};
 
 	useEffect(() => {
