@@ -11,6 +11,7 @@ class FindActiveCampaignTagCommand extends Command
 
     protected $description = 'Busca tags de ActiveCampaign por nombre usando la integracion existente (solo lectura).';
 
+    public function handle(ActiveCampaignService $activeCampaign): int
     {
         $query = trim((string) $this->argument('name'));
 
