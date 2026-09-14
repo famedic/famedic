@@ -9,9 +9,9 @@ use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\LaboratoryAppointment;
 use App\Services\Carts\CartEventRecorder;
+use App\Services\Laboratory\LaboratoryAppointmentCheckoutResolver;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Propaganistas\LaravelPhone\PhoneNumber;
 
 class SyncLaboratoryAppointmentFromContactAction
@@ -19,6 +19,7 @@ class SyncLaboratoryAppointmentFromContactAction
     public function __construct(
         private SyncMonitoringCartService $syncMonitoringCartService,
         private CartEventRecorder $cartEventRecorder,
+        private LaboratoryAppointmentCheckoutResolver $laboratoryAppointmentCheckoutResolver,
     ) {}
 
     /**
@@ -30,14 +31,8 @@ class SyncLaboratoryAppointmentFromContactAction
         Contact $contact,
         ?array $clientContext = null,
     ): LaboratoryAppointment {
-        $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand)
-            ?? $customer->getPendingLaboratoryAppointment($laboratoryBrand);
-
-        if (! $laboratoryAppointment) {
-            $laboratoryAppointment = $customer->laboratoryAppointments()->create([
-                'brand' => $laboratoryBrand,
-            ]);
-        }
+        $laboratoryAppointment = $this->laboratoryAppointmentCheckoutResolver
+            ->firstOrCreateActiveAppointmentForCart($customer, $laboratoryBrand, $clientContext);
 
         $phoneCountry = $contact->phone_country ?? 'MX';
         $formattedPhone = $contact->phone
@@ -54,7 +49,6 @@ class SyncLaboratoryAppointmentFromContactAction
             'patient_phone_country' => $phoneCountry,
         ]);
 
-        $this->syncMonitoringCartService->syncLaboratory($customer, $clientContext);
         $cart = $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
 
         if (! $cart && $customer->user_id && $customer->laboratoryCartItems()->ofBrand($laboratoryBrand)->exists()) {
@@ -64,10 +58,6 @@ class SyncLaboratoryAppointmentFromContactAction
                 'brand' => $laboratoryBrand->value,
                 'laboratory_appointment_id' => $laboratoryAppointment->id,
             ]);
-        }
-
-        if ($cart && Schema::hasColumn('laboratory_appointments', 'cart_id') && ! $laboratoryAppointment->cart_id) {
-            $laboratoryAppointment->forceFill(['cart_id' => $cart->id])->save();
         }
 
         if ($cart) {

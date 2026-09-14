@@ -7,15 +7,16 @@ use App\Enums\LaboratoryBrand;
 use App\Jobs\Carts\CheckAppointmentPendingJob;
 use App\Models\Customer;
 use App\Services\Carts\CartEventRecorder;
+use App\Services\Laboratory\LaboratoryAppointmentCheckoutResolver;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class CreateLaboratoryAppointmentAction
 {
     public function __construct(
         private SyncMonitoringCartService $syncMonitoringCartService,
         private CartEventRecorder $cartEventRecorder,
+        private LaboratoryAppointmentCheckoutResolver $laboratoryAppointmentCheckoutResolver,
     ) {}
 
     /**
@@ -23,10 +24,9 @@ class CreateLaboratoryAppointmentAction
      */
     public function __invoke(Customer $customer, LaboratoryBrand $laboratoryBrand, ?array $clientContext = null)
     {
-        $laboratoryAppointment = $customer->getRecentlyConfirmedUncompletedLaboratoryAppointment($laboratoryBrand)
-            ?? $customer->getPendingLaboratoryAppointment($laboratoryBrand);
+        $laboratoryAppointment = $this->laboratoryAppointmentCheckoutResolver
+            ->firstOrCreateActiveAppointmentForCart($customer, $laboratoryBrand, $clientContext);
 
-        $this->syncMonitoringCartService->syncLaboratory($customer, $clientContext);
         $cart = $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
 
         if (! $cart && $customer->user_id && $customer->laboratoryCartItems()->ofBrand($laboratoryBrand)->exists()) {
@@ -35,14 +35,6 @@ class CreateLaboratoryAppointmentAction
                 'user_id' => $customer->user_id,
                 'brand' => $laboratoryBrand->value,
             ]);
-        }
-
-        $laboratoryAppointment ??= $customer->laboratoryAppointments()->create([
-            'brand' => $laboratoryBrand,
-        ]);
-
-        if ($cart && Schema::hasColumn('laboratory_appointments', 'cart_id') && ! $laboratoryAppointment->cart_id) {
-            $laboratoryAppointment->forceFill(['cart_id' => $cart->id])->save();
         }
 
         if ($cart) {

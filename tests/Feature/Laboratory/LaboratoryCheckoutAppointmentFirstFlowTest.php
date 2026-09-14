@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\Admin\LaboratoryAppointments\BuildLaboratoryAppointmentCheckoutProgressAction;
+use App\Actions\Admin\LaboratoryAppointments\EnrichLaboratoryAppointmentIndexRowAction;
 use App\Actions\Laboratories\SyncLaboratoryAppointmentFromContactAction;
 use App\Enums\Gender;
 use App\Enums\LaboratoryBrand;
@@ -13,7 +15,9 @@ use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\Laboratory\LaboratoryAppointmentPaymentValidity;
 use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
+use App\Services\Monitoring\SyncMonitoringCartService;
 
 beforeEach(function () {
     $this->withoutMiddleware([
@@ -130,6 +134,23 @@ function confirmedLaboratoryAppointment(User $user, LaboratoryBrand $brand = Lab
         'appointment_date' => now()->addDays(2),
         'laboratory_purchase_id' => null,
     ]);
+}
+
+function activeAppointmentFirstCart(User $user, LaboratoryBrand $brand = LaboratoryBrand::OLAB)
+{
+    app(SyncMonitoringCartService::class)->syncLaboratory($user->customer);
+
+    return app(SyncMonitoringCartService::class)
+        ->activeLaboratoryCart($user->customer->fresh(), $brand);
+}
+
+function activeAppointmentCount(User $user, LaboratoryBrand $brand = LaboratoryBrand::OLAB): int
+{
+    return LaboratoryAppointment::query()
+        ->where('customer_id', $user->customer->id)
+        ->where('brand', $brand->value)
+        ->whereNull('laboratory_purchase_id')
+        ->count();
 }
 
 test('appointment first draft sync advances address to appointment', function () {
@@ -380,6 +401,193 @@ test('appointment sync reuses pending appointment instead of creating duplicates
         ->whereNull('confirmed_at')
         ->count())
         ->toBe(1);
+});
+
+test('appointment sync creates exactly one appointment when cart has none', function () {
+    $user = appointmentFirstCheckoutUser();
+    seedAppointmentFirstCart($user);
+    [$contact] = seedAppointmentFirstContactAndAddress($user);
+
+    $appointment = app(SyncLaboratoryAppointmentFromContactAction::class)(
+        $user->customer,
+        LaboratoryBrand::OLAB,
+        $contact,
+    );
+
+    expect(activeAppointmentCount($user))->toBe(1)
+        ->and($appointment->fresh()->cart_id)->not->toBeNull();
+});
+
+test('appointment sync reuses pending active cart appointment', function () {
+    $user = appointmentFirstCheckoutUser();
+    seedAppointmentFirstCart($user);
+    [$contact] = seedAppointmentFirstContactAndAddress($user);
+    $cart = activeAppointmentFirstCart($user);
+
+    $pending = LaboratoryAppointment::factory()->create([
+        'customer_id' => $user->customer->id,
+        'brand' => LaboratoryBrand::OLAB->value,
+        'cart_id' => $cart->id,
+        'confirmed_at' => null,
+        'laboratory_purchase_id' => null,
+    ]);
+
+    $appointment = app(SyncLaboratoryAppointmentFromContactAction::class)(
+        $user->customer,
+        LaboratoryBrand::OLAB,
+        $contact,
+    );
+
+    expect($appointment->id)->toBe($pending->id)
+        ->and(activeAppointmentCount($user))->toBe(1);
+});
+
+test('appointment sync reuses valid confirmed active cart appointment', function () {
+    $user = appointmentFirstCheckoutUser();
+    seedAppointmentFirstCart($user);
+    [$contact] = seedAppointmentFirstContactAndAddress($user);
+    $cart = activeAppointmentFirstCart($user);
+    $confirmed = confirmedLaboratoryAppointment($user)->forceFill([
+        'cart_id' => $cart->id,
+        'appointment_date' => now('America/Monterrey')->addDay(),
+    ]);
+    $confirmed->save();
+
+    $appointment = app(SyncLaboratoryAppointmentFromContactAction::class)(
+        $user->customer,
+        LaboratoryBrand::OLAB,
+        $contact,
+    );
+
+    expect($appointment->id)->toBe($confirmed->id)
+        ->and(activeAppointmentCount($user))->toBe(1)
+        ->and(app(LaboratoryAppointmentPaymentValidity::class)->isValidForPayment($appointment, $cart->id))->toBeTrue();
+});
+
+test('checkout does not create a new appointment when confirmed active appointment is expired', function () {
+    $user = appointmentFirstCheckoutUser();
+    seedAppointmentFirstCart($user);
+    [$contact, $address] = seedAppointmentFirstContactAndAddress($user);
+    $cart = activeAppointmentFirstCart($user);
+    $confirmed = confirmedLaboratoryAppointment($user)->forceFill([
+        'cart_id' => $cart->id,
+        'confirmed_at' => now('America/Monterrey')->subHours(2),
+        'appointment_date' => now('America/Monterrey')->subHour(),
+    ]);
+    $confirmed->save();
+
+    $this->actingAs($user)
+        ->get(route('laboratory.checkout', [
+            'laboratory_brand' => LaboratoryBrand::OLAB,
+            'step' => 'appointment',
+            'contact' => $contact->id,
+            'address' => $address->id,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('laboratoryAppointment.id', $confirmed->id)
+            ->where('laboratoryAppointment.is_payable', false)
+            ->where('pendingLaboratoryAppointment', null)
+        );
+
+    expect(activeAppointmentCount($user))->toBe(1)
+        ->and($confirmed->fresh()->confirmed_at)->not->toBeNull()
+        ->and($this->stepGuard->canInitiatePayment($user->customer, LaboratoryBrand::OLAB))->toBeFalse();
+});
+
+test('repeated checkout get creates no more than one active appointment', function () {
+    $user = appointmentFirstCheckoutUser();
+    seedAppointmentFirstCart($user);
+    [$contact, $address] = seedAppointmentFirstContactAndAddress($user);
+
+    foreach (range(1, 3) as $_) {
+        $this->actingAs($user)
+            ->get(route('laboratory.checkout', [
+                'laboratory_brand' => LaboratoryBrand::OLAB,
+                'step' => 'appointment',
+                'contact' => $contact->id,
+                'address' => $address->id,
+            ]))
+            ->assertOk();
+    }
+
+    expect(activeAppointmentCount($user))->toBe(1);
+});
+
+test('multiple consecutive appointment sync calls do not increase active appointment count', function () {
+    $user = appointmentFirstCheckoutUser();
+    seedAppointmentFirstCart($user);
+    [$contact] = seedAppointmentFirstContactAndAddress($user);
+    $action = app(SyncLaboratoryAppointmentFromContactAction::class);
+
+    foreach (range(1, 4) as $_) {
+        $action($user->customer, LaboratoryBrand::OLAB, $contact);
+    }
+
+    expect(activeAppointmentCount($user))->toBe(1);
+});
+
+test('soft deleted appointment permits exactly one new active appointment', function () {
+    $user = appointmentFirstCheckoutUser();
+    seedAppointmentFirstCart($user);
+    [$contact] = seedAppointmentFirstContactAndAddress($user);
+    $cart = activeAppointmentFirstCart($user);
+
+    LaboratoryAppointment::factory()->create([
+        'customer_id' => $user->customer->id,
+        'brand' => LaboratoryBrand::OLAB->value,
+        'cart_id' => $cart->id,
+        'confirmed_at' => null,
+        'laboratory_purchase_id' => null,
+    ])->delete();
+
+    $action = app(SyncLaboratoryAppointmentFromContactAction::class);
+    $first = $action($user->customer, LaboratoryBrand::OLAB, $contact);
+    $second = $action($user->customer, LaboratoryBrand::OLAB, $contact);
+
+    expect($second->id)->toBe($first->id)
+        ->and(activeAppointmentCount($user))->toBe(1)
+        ->and(LaboratoryAppointment::withTrashed()
+            ->where('customer_id', $user->customer->id)
+            ->where('brand', LaboratoryBrand::OLAB->value)
+            ->whereNull('laboratory_purchase_id')
+            ->count())->toBe(2);
+});
+
+test('expired confirmed appointment progress has appointment but blocks payment', function () {
+    $user = appointmentFirstCheckoutUser();
+    seedAppointmentFirstCart($user);
+    $cart = activeAppointmentFirstCart($user);
+    $appointment = confirmedLaboratoryAppointment($user)->forceFill([
+        'cart_id' => $cart->id,
+        'confirmed_at' => now('America/Monterrey')->subHours(2),
+        'appointment_date' => now('America/Monterrey')->subHour(),
+    ]);
+    $appointment->save();
+
+    $progress = app(BuildLaboratoryAppointmentCheckoutProgressAction::class)($appointment->fresh());
+    $appointmentStep = collect($progress['steps'])->firstWhere('id', 'appointment');
+
+    expect($appointmentStep['status'])->toBe('completed')
+        ->and($progress['payment_blocked_reason'])->toBe('Pago bloqueado: cita vencida');
+});
+
+test('admin row still shows expired appointment payment blocked', function () {
+    $user = appointmentFirstCheckoutUser();
+    seedAppointmentFirstCart($user);
+    $cart = activeAppointmentFirstCart($user);
+    $appointment = confirmedLaboratoryAppointment($user)->forceFill([
+        'cart_id' => $cart->id,
+        'confirmed_at' => now('America/Monterrey')->subHours(2),
+        'appointment_date' => now('America/Monterrey')->subHour(),
+    ]);
+    $appointment->save();
+
+    $row = app(EnrichLaboratoryAppointmentIndexRowAction::class)($appointment->fresh(['cart']));
+
+    expect($row['admin_payment_status_label'])->toBe('Pago bloqueado')
+        ->and($row['admin_payment_blocked'])->toBeTrue()
+        ->and($row['admin_payment_blocked_reason'])->toBe('Pago bloqueado: cita vencida');
 });
 
 test('step guard next draft step uses appointment after address in appointment first flow', function () {

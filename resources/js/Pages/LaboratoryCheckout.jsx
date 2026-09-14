@@ -1503,7 +1503,7 @@ export default function LaboratoryCheckout({
 					/>
 				);
 			case "appointment":
-				if (!pendingLaboratoryAppointment) {
+				if (!wizardLaboratoryAppointment) {
 					const waitingForSync =
 						syncingAppointment ||
 						(!appointmentSyncFailed && !!data.contact);
@@ -1523,7 +1523,7 @@ export default function LaboratoryCheckout({
 				}
 				return (
 					<LaboratoryAppointmentStep
-						laboratoryAppointment={pendingLaboratoryAppointment}
+						laboratoryAppointment={wizardLaboratoryAppointment}
 						callbackPreferenceSavedAtFormatted={
 							callbackPreferenceSavedAtFormatted
 						}

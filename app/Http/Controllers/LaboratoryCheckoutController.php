@@ -3,28 +3,28 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
-use App\Actions\Laboratories\SyncLaboratoryCheckoutDraftAction;
 use App\Actions\Laboratories\SyncLaboratoryAppointmentFromContactAction;
-use App\Http\Requests\LaboratoryCheckout\SyncLaboratoryCheckoutDraftRequest;
-use App\Models\Customer;
-use App\Models\LaboratoryCheckoutDraft;
+use App\Actions\Laboratories\SyncLaboratoryCheckoutDraftAction;
 use App\Enums\Gender;
 use App\Enums\LaboratoryAppointmentInteractionType;
 use App\Enums\LaboratoryBrand;
 use App\Http\Requests\LaboratoryCheckout\SyncLaboratoryAppointmentRequest;
-use App\Services\CouponService;
+use App\Http\Requests\LaboratoryCheckout\SyncLaboratoryCheckoutDraftRequest;
+use App\Models\Customer;
+use App\Models\LaboratoryCheckoutDraft;
 use App\Services\Carts\CartAbandonmentService;
 use App\Services\Carts\CartUserActivityResolver;
+use App\Services\CouponService;
 use App\Services\Laboratory\LaboratoryAppointmentCheckoutResolver;
 use App\Services\Laboratory\LaboratoryAppointmentPaymentValidity;
 use App\Services\Laboratory\LaboratoryCheckoutFlowEligibility;
 use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
 use App\Services\Monitoring\SyncMonitoringCartService;
+use App\Services\Tracking\InitiateCheckout;
 use App\Support\AppEnvironmentLabel;
 use App\Support\ClientContext;
 use App\Support\MockEfevooPaymentSupport;
 use Illuminate\Http\Request;
-use App\Services\Tracking\InitiateCheckout;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -42,8 +42,7 @@ class LaboratoryCheckoutController extends Controller
         CartAbandonmentService $cartAbandonmentService,
         SyncMonitoringCartService $syncMonitoringCartService,
         CartUserActivityResolver $cartUserActivityResolver,
-    )
-    {
+    ) {
         Log::info('Laboratory checkout: request started', [
             'user_id' => $request->user()?->id,
             'brand' => $laboratoryBrand->value,
@@ -131,12 +130,26 @@ class LaboratoryCheckoutController extends Controller
         $laboratoryAppointment = null;
         $pendingLaboratoryAppointment = null;
         $callbackPreferenceSavedAtFormatted = null;
+        $hasPayableConfirmedAppointment = false;
 
         if ($requiresAppointment) {
-            $laboratoryAppointment = $laboratoryAppointmentCheckoutResolver
+            $payableLaboratoryAppointment = $laboratoryAppointmentCheckoutResolver
                 ->payableConfirmedAppointment($customer, $laboratoryBrand);
+            $hasPayableConfirmedAppointment = $payableLaboratoryAppointment !== null;
 
-            if (! $laboratoryAppointment) {
+            $activeLaboratoryAppointment = $laboratoryAppointmentCheckoutResolver
+                ->activeAppointmentForCart($customer, $laboratoryBrand);
+
+            if ($activeLaboratoryAppointment?->confirmed_at !== null) {
+                $laboratoryAppointment = $activeLaboratoryAppointment;
+            } elseif ($activeLaboratoryAppointment !== null) {
+                $pendingLaboratoryAppointment = $activeLaboratoryAppointment;
+                $callbackPreferenceSavedAtFormatted = $this->formatCallbackPreferenceSavedAt(
+                    $pendingLaboratoryAppointment
+                );
+            } elseif ($payableLaboratoryAppointment !== null) {
+                $laboratoryAppointment = $payableLaboratoryAppointment;
+            } else {
                 $pendingLaboratoryAppointment = $laboratoryAppointmentCheckoutResolver
                     ->pendingAppointment($customer, $laboratoryBrand);
                 $callbackPreferenceSavedAtFormatted = $this->formatCallbackPreferenceSavedAt(
@@ -204,7 +217,7 @@ class LaboratoryCheckoutController extends Controller
             $laboratoryBrand,
             $request->query('step'),
             $savedCheckoutForSteps['checkout_step'] ?? (is_array($savedCheckout) ? ($savedCheckout['checkout_step'] ?? null) : null),
-            $laboratoryAppointment !== null,
+            $hasPayableConfirmedAppointment,
             $savedCheckoutForSteps !== [] ? $savedCheckoutForSteps : $savedCheckout,
         );
 
@@ -252,29 +265,29 @@ class LaboratoryCheckoutController extends Controller
 
         try {
             return Inertia::render('LaboratoryCheckout', [
-            'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryBrand),
-            'savedCheckout' => $savedCheckout,
-            'requiresAppointment' => $requiresAppointment,
-            'usesAppointmentFirstFlow' => $usesAppointmentFirstFlow,
-            'checkoutStepNotice' => session('checkout_step_notice'),
-            'laboratoryAppointment' => $this->appointmentForCheckout($laboratoryAppointment),
-            'pendingLaboratoryAppointment' => $this->appointmentForCheckout($pendingLaboratoryAppointment),
-            'callbackPreferenceSavedAtFormatted' => $callbackPreferenceSavedAtFormatted,
-            ...$totals,
-            ...$balancePresentation,
-            'balanceCreditPresentation' => $balancePresentation,
-            'hasPayPal' => (bool) config('services.paypal.client_id'),
-            'paypalClientId' => config('services.paypal.client_id'),
-            'contacts' => $request->user()->customer->contacts,
-            'genders' => Gender::casesWithLabels(),
-            'addresses' => $request->user()->customer->addresses,
-            'paymentMethods' => $paymentMethods,
-            'paymentUsesMock' => MockEfevooPaymentSupport::isMockMode(),
-            'defaultMockPaymentMethodId' => $mockTokens[0]['id'] ?? null,
-            'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
-            'appEnvLabel' => AppEnvironmentLabel::current(),
-            'hasOdessaPay' => $request->user()->customer->has_odessa_afiliate_account,
-            'mexicanStates' => config('mexicanstates'),
+                'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryBrand),
+                'savedCheckout' => $savedCheckout,
+                'requiresAppointment' => $requiresAppointment,
+                'usesAppointmentFirstFlow' => $usesAppointmentFirstFlow,
+                'checkoutStepNotice' => session('checkout_step_notice'),
+                'laboratoryAppointment' => $this->appointmentForCheckout($laboratoryAppointment),
+                'pendingLaboratoryAppointment' => $this->appointmentForCheckout($pendingLaboratoryAppointment),
+                'callbackPreferenceSavedAtFormatted' => $callbackPreferenceSavedAtFormatted,
+                ...$totals,
+                ...$balancePresentation,
+                'balanceCreditPresentation' => $balancePresentation,
+                'hasPayPal' => (bool) config('services.paypal.client_id'),
+                'paypalClientId' => config('services.paypal.client_id'),
+                'contacts' => $request->user()->customer->contacts,
+                'genders' => Gender::casesWithLabels(),
+                'addresses' => $request->user()->customer->addresses,
+                'paymentMethods' => $paymentMethods,
+                'paymentUsesMock' => MockEfevooPaymentSupport::isMockMode(),
+                'defaultMockPaymentMethodId' => $mockTokens[0]['id'] ?? null,
+                'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
+                'appEnvLabel' => AppEnvironmentLabel::current(),
+                'hasOdessaPay' => $request->user()->customer->has_odessa_afiliate_account,
+                'mexicanStates' => config('mexicanstates'),
             ]);
         } catch (\Throwable $e) {
             Log::error('Laboratory checkout: render failed', [
@@ -522,7 +535,7 @@ class LaboratoryCheckoutController extends Controller
             return null;
         }
 
-        if ($laboratoryAppointmentCheckoutResolver->payableConfirmedAppointment($customer, $laboratoryBrand)) {
+        if ($laboratoryAppointmentCheckoutResolver->activeAppointmentForCart($customer, $laboratoryBrand)) {
             return null;
         }
 
