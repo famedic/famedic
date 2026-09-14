@@ -225,6 +225,7 @@ function AppointmentContactActions({
 	phoneDisplay,
 	whatsAppUrl,
 	whatsAppDisplay,
+	onWhatsAppClick,
 	onCallClick,
 	onRequestCall,
 	isFormOpen,
@@ -242,6 +243,7 @@ function AppointmentContactActions({
 					target="_blank"
 					rel="noopener noreferrer"
 					className={whatsappButtonClasses}
+					onClick={onWhatsAppClick}
 					aria-label="Abrir WhatsApp oficial de citas en una nueva pestaña o aplicación"
 				>
 					<WhatsAppIcon className="size-6 shrink-0" />
@@ -587,21 +589,51 @@ export default function LaboratoryAppointmentStep({
 	const whatsAppUrl = appointmentWhatsApp.url;
 	const whatsAppDisplay = appointmentWhatsApp.display;
 
-	const onCallClick = (e) => {
-		e.preventDefault();
-		router.post(
+	const trackContactIntent = (channel) => {
+		if (!laboratoryAppointment?.id || !laboratoryAppointment?.brand) {
+			return;
+		}
+
+		const search = new URLSearchParams(window.location.search);
+		const token = document
+			.querySelector('meta[name="csrf-token"]')
+			?.getAttribute("content");
+
+		fetch(
 			route("laboratory-appointments.phone-intent", {
 				laboratory_brand: laboratoryAppointment.brand,
 				laboratory_appointment: laboratoryAppointment.id,
 			}),
-			{},
 			{
-				preserveScroll: true,
-				onFinish: () => {
-					window.location.href = telHref;
+				method: "POST",
+				credentials: "same-origin",
+				keepalive: true,
+				headers: {
+					Accept: "application/json",
+					"Content-Type": "application/json",
+					"X-Requested-With": "XMLHttpRequest",
+					...(token ? { "X-CSRF-TOKEN": token } : {}),
 				},
+				body: JSON.stringify({
+					channel,
+					context: "laboratory_checkout",
+					step: "appointment",
+					address_id: search.get("address"),
+					contact_id: search.get("contact"),
+					current_url: window.location.href,
+				}),
 			},
-		);
+		).catch(() => {});
+	};
+
+	const onWhatsAppClick = () => {
+		trackContactIntent("whatsapp");
+	};
+
+	const onCallClick = (e) => {
+		e.preventDefault();
+		trackContactIntent("phone");
+		window.location.href = telHref;
 	};
 
 	const minForStart = minNowTick;
@@ -740,6 +772,7 @@ export default function LaboratoryAppointmentStep({
 					phoneDisplay={phoneDisplay}
 					whatsAppUrl={whatsAppUrl}
 					whatsAppDisplay={whatsAppDisplay}
+					onWhatsAppClick={onWhatsAppClick}
 					onCallClick={onCallClick}
 					onRequestCall={openReceiveCallForm}
 					isFormOpen={openPanel === "form"}

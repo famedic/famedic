@@ -11,14 +11,15 @@ const STATUS_RING = {
 export default function CheckoutProgressTimeline({
 	steps = [],
 	draftUpdatedAt = null,
+	compact = false,
 }) {
 	if (!steps.length) {
 		return null;
 	}
 
 	return (
-		<div className="border-t border-sky-300/40 pt-4 dark:border-sky-700/50">
-			<div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+		<div className="border-t border-sky-300/40 pt-2.5 dark:border-sky-700/50">
+			<div className="mb-2 flex flex-wrap items-center justify-between gap-2">
 				<p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
 					Progreso del checkout
 				</p>
@@ -30,7 +31,7 @@ export default function CheckoutProgressTimeline({
 			</div>
 
 			<nav aria-label="Progreso del checkout del paciente">
-				<ol className="grid grid-cols-2 gap-x-2 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
+				<ol className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
 					{steps.map((step, index) => {
 						const isLast = index === steps.length - 1;
 						const connectorDone =
@@ -44,7 +45,7 @@ export default function CheckoutProgressTimeline({
 								className={clsx(
 									"relative flex min-w-0 flex-col items-center px-1 text-center",
 									!isLast &&
-										"lg:after:absolute lg:after:left-[calc(50%+1rem)] lg:after:top-4 lg:after:h-0.5 lg:after:w-[calc(100%-2rem)] lg:after:content-['']",
+										"lg:after:absolute lg:after:left-[calc(50%+0.875rem)] lg:after:top-3.5 lg:after:h-0.5 lg:after:w-[calc(100%-1.75rem)] lg:after:content-['']",
 									!isLast &&
 										(connectorDone
 											? "lg:after:bg-emerald-400 dark:lg:after:bg-emerald-500"
@@ -53,19 +54,24 @@ export default function CheckoutProgressTimeline({
 							>
 								<div
 									className={clsx(
-										"relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-										STATUS_RING[step.status] ?? STATUS_RING.pending,
+										"relative z-10 flex shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+										compact ? "size-6" : "size-7",
+										STATUS_RING[step.status] ??
+											STATUS_RING.pending,
 									)}
 								>
 									{step.status === "completed" ? (
-										<CheckIcon className="size-4" aria-hidden />
+										<CheckIcon
+											className="size-3.5"
+											aria-hidden
+										/>
 									) : (
 										index + 1
 									)}
 								</div>
 								<p
 									className={clsx(
-										"mt-2 text-xs font-medium leading-tight",
+										"mt-1 text-xs font-medium leading-tight",
 										step.status === "current" &&
 											"text-sky-700 dark:text-sky-300",
 										step.status === "completed" &&
@@ -78,7 +84,7 @@ export default function CheckoutProgressTimeline({
 								</p>
 								<p
 									className={clsx(
-										"mt-1 line-clamp-3 text-[10px] leading-snug sm:text-xs",
+										"mt-0.5 line-clamp-1 text-[10px] leading-snug sm:text-[11px]",
 										step.detail
 											? "text-zinc-600 dark:text-zinc-400"
 											: "text-zinc-400 dark:text-zinc-500",

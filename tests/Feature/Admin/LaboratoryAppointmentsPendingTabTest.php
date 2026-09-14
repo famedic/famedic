@@ -10,10 +10,13 @@ use App\Models\Cart;
 use App\Models\CartEvent;
 use App\Models\CartItem;
 use App\Models\LaboratoryAppointment;
+use App\Models\LaboratoryAppointmentInteraction;
 use App\Models\LaboratoryConcierge;
 use App\Models\LaboratoryPurchase;
+use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
 use App\Models\Permission;
+use App\Models\Role;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +41,20 @@ function pendingTabConciergeAdmin(array $permissions = []): User
     }
 
     return $user->fresh(['administrator.laboratoryConcierge']);
+}
+
+function pendingTabPlatformAdministrator(): User
+{
+    $user = pendingTabConciergeAdmin();
+    $role = Role::query()->firstOrCreate([
+        'name' => 'Administrador',
+        'guard_name' => 'web',
+    ]);
+
+    $user->administrator->assignRole($role);
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    return $user->fresh(['administrator.roles', 'administrator.laboratoryConcierge']);
 }
 
 function pendingTabPurchase(int $customerId): LaboratoryPurchase
@@ -79,6 +96,40 @@ function pendingTabAppointmentForCustomer(User $user, array $overrides = []): La
         'laboratory_purchase_id' => null,
         'appointment_date' => null,
     ], $overrides));
+}
+
+function pendingTabStore(array $overrides = []): LaboratoryStore
+{
+    return LaboratoryStore::factory()->create(array_merge([
+        'name' => 'Sucursal Centro',
+        'brand' => LaboratoryBrand::SWISSLAB->value,
+        'state' => 'Nuevo León',
+        'address' => 'Centro 100',
+        'weekly_hours' => 'Lunes a viernes 7:00 a 17:00',
+        'saturday_hours' => 'Sábado 7:00 a 13:00',
+        'sunday_hours' => 'Cerrado',
+        'google_maps_url' => 'https://maps.example.test/sucursal-centro',
+    ], $overrides));
+}
+
+function pendingTabUpdatePayload(
+    LaboratoryAppointment $appointment,
+    LaboratoryStore $store,
+    array $overrides = []
+): array {
+    return array_merge([
+        'appointment_date' => now('America/Monterrey')->addDay()->format('Y-m-d'),
+        'appointment_time' => '10:00',
+        'patient_name' => $appointment->patient_name ?? 'Paciente',
+        'patient_paternal_lastname' => $appointment->patient_paternal_lastname ?? 'Prueba',
+        'patient_maternal_lastname' => $appointment->patient_maternal_lastname ?? 'Test',
+        'patient_phone' => '8112345678',
+        'patient_phone_country' => 'MX',
+        'patient_birth_date' => '1990-01-01',
+        'patient_gender' => Gender::MALE->value,
+        'laboratory_store' => $store->id,
+        'notes' => 'Notas de prueba',
+    ], $overrides);
 }
 
 function pendingTabLabCart(User $user, LaboratoryBrand $brand, array $attributes = []): Cart
@@ -329,6 +380,66 @@ test('concierge puede abrir detalle de cita pendiente', function () {
     $this->actingAs($admin)
         ->get(route('admin.laboratory-appointments.show', $appointment))
         ->assertOk();
+});
+
+test('no permite confirmar cita con fecha y hora pasadas', function () {
+    Carbon::setTestNow(Carbon::parse('2026-09-14 13:02:30', 'America/Monterrey'));
+
+    try {
+        $admin = pendingTabConciergeAdmin();
+        $appointment = pendingTabAppointment([
+            'patient_name' => 'Eulalio',
+            'patient_paternal_lastname' => 'Medina',
+            'patient_maternal_lastname' => 'Barragan',
+        ]);
+        $store = pendingTabStore();
+
+        $this->actingAs($admin)
+            ->from(route('admin.laboratory-appointments.show', $appointment))
+            ->put(route('admin.laboratory-appointments.update', $appointment), pendingTabUpdatePayload(
+                $appointment,
+                $store,
+                [
+                    'appointment_date' => '2026-09-14',
+                    'appointment_time' => '13:02',
+                ],
+            ))
+            ->assertRedirect(route('admin.laboratory-appointments.show', $appointment))
+            ->assertSessionHasErrors([
+                'appointment_time' => 'La fecha y hora seleccionadas ya pasaron. Selecciona una fecha y hora futuras.',
+            ]);
+
+        expect($appointment->fresh()->appointment_date)->toBeNull()
+            ->and($appointment->fresh()->confirmed_at)->toBeNull();
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+test('permite confirmar cita con fecha y hora futuras', function () {
+    Carbon::setTestNow(Carbon::parse('2026-09-14 13:02:30', 'America/Monterrey'));
+
+    try {
+        $admin = pendingTabConciergeAdmin();
+        $appointment = pendingTabAppointment();
+        $store = pendingTabStore();
+
+        $this->actingAs($admin)
+            ->put(route('admin.laboratory-appointments.update', $appointment), pendingTabUpdatePayload(
+                $appointment,
+                $store,
+                [
+                    'appointment_date' => '2026-09-14',
+                    'appointment_time' => '13:03',
+                ],
+            ))
+            ->assertSessionHasNoErrors();
+
+        expect($appointment->fresh()->appointment_date?->format('Y-m-d H:i'))->toBe('2026-09-14 13:03')
+            ->and($appointment->fresh()->confirmed_at)->not->toBeNull();
+    } finally {
+        Carbon::setTestNow();
+    }
 });
 
 test('concierge sin view carts recibe 403 en admin carts', function () {
@@ -968,4 +1079,289 @@ test('pestaña citas permanece intacta con priority como default en pending', fu
         ->assertInertia(fn ($page) => $page
             ->where('filters.pending_sort', 'priority')
             ->where('laboratoryAppointments.data.0.id', $oldPending->id));
+});
+
+test('administrador puede retirar con soft delete una cita pendiente mayor a 30 dias', function () {
+    Carbon::setTestNow(Carbon::parse('2026-09-01 12:00:00', 'America/Monterrey'));
+    $admin = pendingTabPlatformAdministrator();
+    $appointment = pendingTabAppointment([
+        'created_at' => Carbon::parse('2026-08-01 11:59:00', 'America/Monterrey'),
+    ]);
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$appointment->id],
+        ])
+        ->assertOk()
+        ->assertJsonPath('deleted', 1)
+        ->assertJsonPath('skipped', 0);
+
+    expect(LaboratoryAppointment::find($appointment->id))->toBeNull()
+        ->and(LaboratoryAppointment::withTrashed()->find($appointment->id)?->trashed())->toBeTrue()
+        ->and(LaboratoryAppointment::query()->awaitingConcierge()->whereKey($appointment)->exists())->toBeFalse();
+
+    Carbon::setTestNow();
+});
+
+test('cita exactamente de 30 dias no es elegible para limpieza', function () {
+    Carbon::setTestNow(Carbon::parse('2026-09-01 12:00:00', 'America/Monterrey'));
+    $admin = pendingTabPlatformAdministrator();
+    $appointment = pendingTabAppointment([
+        'created_at' => Carbon::parse('2026-08-02 12:00:00', 'America/Monterrey'),
+    ]);
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$appointment->id],
+        ])
+        ->assertOk()
+        ->assertJsonPath('deleted', 0)
+        ->assertJsonPath('skipped', 1);
+
+    expect($appointment->fresh())->not->toBeNull();
+
+    Carbon::setTestNow();
+});
+
+test('cita mayor a 30 dias por un minuto si es elegible', function () {
+    Carbon::setTestNow(Carbon::parse('2026-09-01 12:00:00', 'America/Monterrey'));
+    $admin = pendingTabPlatformAdministrator();
+    $appointment = pendingTabAppointment([
+        'created_at' => Carbon::parse('2026-08-02 11:59:00', 'America/Monterrey'),
+    ]);
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$appointment->id],
+        ])
+        ->assertOk()
+        ->assertJsonPath('deleted', 1);
+
+    expect(LaboratoryAppointment::withTrashed()->find($appointment->id)?->trashed())->toBeTrue();
+
+    Carbon::setTestNow();
+});
+
+test('cita reciente enviada en request manipulado no se elimina', function () {
+    $admin = pendingTabPlatformAdministrator();
+    $appointment = pendingTabAppointment(['created_at' => now()->subDays(3)]);
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$appointment->id],
+        ])
+        ->assertOk()
+        ->assertJsonPath('deleted', 0)
+        ->assertJsonPath('skipped', 1);
+
+    expect($appointment->fresh())->not->toBeNull();
+});
+
+test('usuario no administrador recibe 403 en bulk delete', function () {
+    $user = User::factory()->create();
+    Administrator::factory()->for($user)->create();
+    $appointment = pendingTabAppointment(['created_at' => now()->subDays(40)]);
+
+    $this->actingAs($user)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$appointment->id],
+        ])
+        ->assertForbidden();
+
+    expect($appointment->fresh())->not->toBeNull();
+});
+
+test('concierge sin rol Administrador recibe 403 aunque accede a appointments', function () {
+    $concierge = pendingTabConciergeAdmin();
+    $appointment = pendingTabAppointment(['created_at' => now()->subDays(40)]);
+
+    $this->actingAs($concierge)
+        ->get(route('admin.laboratory-appointments.index', ['view' => 'pending']))
+        ->assertOk();
+
+    $this->actingAs($concierge)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$appointment->id],
+        ])
+        ->assertForbidden();
+
+    expect($appointment->fresh())->not->toBeNull();
+});
+
+test('cita confirmada no se elimina por bulk delete', function () {
+    $admin = pendingTabPlatformAdministrator();
+    $appointment = pendingTabAppointment([
+        'created_at' => now()->subDays(40),
+        'confirmed_at' => now(),
+    ]);
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$appointment->id],
+        ])
+        ->assertOk()
+        ->assertJsonPath('deleted', 0)
+        ->assertJsonPath('skipped', 1);
+
+    expect($appointment->fresh())->not->toBeNull();
+});
+
+test('cita con laboratory purchase id no se elimina por bulk delete', function () {
+    $admin = pendingTabPlatformAdministrator();
+    $user = User::factory()->withRegularCustomer()->create();
+    $purchase = pendingTabPurchase($user->customer->id);
+    $appointment = pendingTabAppointment([
+        'customer_id' => $user->customer->id,
+        'created_at' => now()->subDays(40),
+        'laboratory_purchase_id' => $purchase->id,
+    ]);
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$appointment->id],
+        ])
+        ->assertOk()
+        ->assertJsonPath('deleted', 0)
+        ->assertJsonPath('skipped', 1);
+
+    expect($appointment->fresh())->not->toBeNull();
+});
+
+test('bulk mixto elimina elegibles y reporta skipped', function () {
+    $admin = pendingTabPlatformAdministrator();
+    $eligible = pendingTabAppointment(['created_at' => now()->subDays(40)]);
+    $recent = pendingTabAppointment(['created_at' => now()->subDays(2)]);
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$eligible->id, $recent->id, 999999],
+        ])
+        ->assertOk()
+        ->assertJsonPath('deleted', 1)
+        ->assertJsonPath('skipped', 2);
+
+    expect(LaboratoryAppointment::withTrashed()->find($eligible->id)?->trashed())->toBeTrue()
+        ->and($recent->fresh())->not->toBeNull();
+});
+
+test('relaciones principales continuan existiendo tras soft delete', function () {
+    if (! \Illuminate\Support\Facades\Schema::hasColumn('laboratory_appointments', 'cart_id')) {
+        test()->markTestSkipped('Sin columna cart_id en laboratory_appointments.');
+    }
+
+    $admin = pendingTabPlatformAdministrator();
+    $user = User::factory()->withRegularCustomer()->create();
+    $cart = pendingTabLabCart($user, LaboratoryBrand::SWISSLAB);
+    $appointment = pendingTabAppointmentForCustomer($user, [
+        'cart_id' => $cart->id,
+        'created_at' => now()->subDays(40),
+    ]);
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$appointment->id],
+        ])
+        ->assertOk()
+        ->assertJsonPath('deleted', 1);
+
+    $deleted = LaboratoryAppointment::withTrashed()->find($appointment->id);
+
+    expect($deleted?->customer()->exists())->toBeTrue()
+        ->and($deleted?->cart()->exists())->toBeTrue()
+        ->and(Cart::query()->whereKey($cart)->exists())->toBeTrue();
+});
+
+test('interaccion de auditoria queda registrada con actor correcto', function () {
+    $admin = pendingTabPlatformAdministrator();
+    $appointment = pendingTabAppointment(['created_at' => now()->subDays(40)]);
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$appointment->id],
+        ])
+        ->assertOk()
+        ->assertJsonPath('deleted', 1);
+
+    $interaction = LaboratoryAppointmentInteraction::query()
+        ->where('laboratory_appointment_id', $appointment->id)
+        ->where('type', \App\Enums\LaboratoryAppointmentInteractionType::AdminBulkSoftDelete->value)
+        ->first();
+
+    expect($interaction)->not->toBeNull()
+        ->and($interaction->admin_user_id)->toBe($admin->id)
+        ->and($interaction->metadata['actor_id'])->toBe($admin->id)
+        ->and($interaction->metadata['origin'])->toBe('admin_pending_appointments')
+        ->and($interaction->metadata['reason'])->toBe('old_pending_cleanup')
+        ->and($interaction->metadata['appointment_id'])->toBe($appointment->id);
+});
+
+test('filtros paginacion y pending count siguen funcionando despues de limpiar', function () {
+    $admin = pendingTabPlatformAdministrator();
+    $deleted = pendingTabAppointment([
+        'brand' => LaboratoryBrand::SWISSLAB,
+        'created_at' => now()->subDays(40),
+    ]);
+    $remaining = pendingTabAppointment([
+        'brand' => LaboratoryBrand::SWISSLAB,
+        'created_at' => now()->subDays(2),
+    ]);
+    pendingTabAppointment([
+        'brand' => LaboratoryBrand::OLAB,
+        'created_at' => now()->subDays(2),
+    ]);
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$deleted->id],
+        ])
+        ->assertOk()
+        ->assertJsonPath('deleted', 1);
+
+    $this->actingAs($admin)
+        ->get(route('admin.laboratory-appointments.index', [
+            'view' => 'pending',
+            'brand' => 'swisslab',
+            'page' => 1,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('pendingCount', 2)
+            ->where('laboratoryAppointments.total', 1)
+            ->where('laboratoryAppointments.data.0.id', $remaining->id));
+});
+
+test('bulk delete rechaza array vacio ids duplicados y maximo de ids', function () {
+    $admin = pendingTabPlatformAdministrator();
+    $appointment = pendingTabAppointment(['created_at' => now()->subDays(40)]);
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('appointment_ids');
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => [$appointment->id, $appointment->id],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('appointment_ids.1');
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+            'appointment_ids' => range(1, 101),
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('appointment_ids');
+});
+
+test('usuario no autenticado no puede ejecutar bulk delete', function () {
+    $appointment = pendingTabAppointment(['created_at' => now()->subDays(40)]);
+
+    $this->postJson(route('admin.laboratory-appointments.bulk-delete'), [
+        'appointment_ids' => [$appointment->id],
+    ])->assertUnauthorized();
+
+    expect($appointment->fresh())->not->toBeNull();
 });

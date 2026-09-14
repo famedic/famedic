@@ -206,13 +206,13 @@ class PendingConciergeAppointmentQuery
 
     private function intervalAgoSql(int $amount, string $unit): string
     {
-        $driver = DB::connection()->getDriverName();
-
-        return match ($driver) {
-            'sqlite' => "datetime('now', '-{$amount} {$unit}s')",
-            'pgsql' => "NOW() - INTERVAL '{$amount} {$unit}s'",
-            default => "DATE_SUB(NOW(), INTERVAL {$amount} {$unit})",
+        $timestamp = match ($unit) {
+            'hour' => now('UTC')->subHours($amount)->toDateTimeString(),
+            'day' => now('UTC')->subDays($amount)->toDateTimeString(),
+            default => now('UTC')->toDateTimeString(),
         };
+
+        return DB::connection()->getPdo()->quote($timestamp);
     }
 
     private function hasCartIdColumn(): bool

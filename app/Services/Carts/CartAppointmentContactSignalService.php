@@ -63,6 +63,8 @@ class CartAppointmentContactSignalService
         LaboratoryAppointment $appointment,
         int $interactionId,
         ?CarbonInterface $occurredAt = null,
+        string $channel = 'phone',
+        array $metadata = [],
     ): ?CartEvent {
         $cart = $appointment->cart;
         if ($cart === null) {
@@ -75,15 +77,18 @@ class CartAppointmentContactSignalService
             $cart,
             CartEventType::CallAttempted,
             "appointment_interaction:{$interactionId}:call_attempted",
-            [
+            array_merge($metadata, [
                 'appointment_id' => (int) $appointment->id,
                 'cart_id' => (int) $cart->id,
                 'brand' => $appointment->brand?->value,
                 'occurred_at' => $occurredAt->toIso8601String(),
                 'interaction_id' => $interactionId,
-            ],
+                'channel' => $channel,
+            ]),
             $occurredAt,
-            'laboratory_appointment_phone_intent',
+            $channel === 'whatsapp'
+                ? 'laboratory_appointment_whatsapp_intent'
+                : 'laboratory_appointment_phone_intent',
         );
 
         if ($event instanceof CartEvent) {

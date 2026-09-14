@@ -65,23 +65,42 @@ class LaboratoryAppointmentController extends Controller
         LaboratoryBrand $laboratoryBrand,
         LaboratoryAppointment $laboratoryAppointment
     ) {
-        $recentInteraction = $laboratoryAppointment->interactions()
-            ->where('type', LaboratoryAppointmentInteractionType::PatientPhoneIntent->value)
-            ->where('created_at', '>=', now()->subSeconds(30))
-            ->exists();
-
-        if ($recentInteraction) {
-            $this->syncMonitoringCartService->touchLaboratoryCartActivity($laboratoryAppointment->customer);
-
-            return back();
-        }
+        $validated = $request->validated();
+        $channel = $validated['channel'];
+        $interactionType = $channel === 'whatsapp'
+            ? LaboratoryAppointmentInteractionType::PatientWhatsAppIntent
+            : LaboratoryAppointmentInteractionType::PatientPhoneIntent;
 
         $interactionId = null;
+        $metadata = $this->contactIntentMetadata(
+            $request,
+            $laboratoryAppointment,
+            $validated,
+            $channel,
+        );
 
-        DB::transaction(function () use ($laboratoryAppointment, &$interactionId): void {
-            $laboratoryAppointment->update(['phone_call_intent_at' => now()]);
-            $interaction = $laboratoryAppointment->interactions()->create([
-                'type' => LaboratoryAppointmentInteractionType::PatientPhoneIntent,
+        DB::transaction(function () use ($laboratoryAppointment, $interactionType, $metadata, $channel, &$interactionId): void {
+            $lockedAppointment = LaboratoryAppointment::query()
+                ->whereKey($laboratoryAppointment->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $recentInteraction = $lockedAppointment->interactions()
+                ->where('type', $interactionType->value)
+                ->where('created_at', '>=', now()->subSeconds(30))
+                ->exists();
+
+            if ($recentInteraction) {
+                return;
+            }
+
+            if ($channel === 'phone') {
+                $lockedAppointment->update(['phone_call_intent_at' => now()]);
+            }
+
+            $interaction = $lockedAppointment->interactions()->create([
+                'type' => $interactionType,
+                'metadata' => $metadata,
             ]);
             $interactionId = $interaction->id;
         });
@@ -90,12 +109,14 @@ class LaboratoryAppointmentController extends Controller
             $this->cartAppointmentContactSignalService->recordCallAttempted(
                 $laboratoryAppointment->fresh(['cart']),
                 $interactionId,
+                channel: $channel,
+                metadata: $metadata,
             );
         }
 
         $this->syncMonitoringCartService->touchLaboratoryCartActivity($laboratoryAppointment->customer);
 
-        return back();
+        return $request->expectsJson() ? response()->noContent() : back();
     }
 
     public function updateCallbackAvailability(
@@ -179,6 +200,37 @@ class LaboratoryAppointmentController extends Controller
         return ! $this->sameInstant($appointment->callback_availability_starts_at, $data['callback_availability_starts_at'] ?? null)
             || ! $this->sameInstant($appointment->callback_availability_ends_at, $data['callback_availability_ends_at'] ?? null)
             || (string) ($appointment->patient_callback_comment ?? '') !== (string) ($data['patient_callback_comment'] ?? '');
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function contactIntentMetadata(
+        Request $request,
+        LaboratoryAppointment $laboratoryAppointment,
+        array $validated,
+        string $channel,
+    ): array {
+        $customer = $laboratoryAppointment->customer;
+        $addressId = isset($validated['address_id'])
+            ? $customer?->addresses()->whereKey((int) $validated['address_id'])->value('id')
+            : null;
+        $contactId = isset($validated['contact_id'])
+            ? $customer?->contacts()->whereKey((int) $validated['contact_id'])->value('id')
+            : null;
+
+        return array_filter([
+            'channel' => $channel,
+            'context' => $validated['context'] ?? 'laboratory_checkout',
+            'step' => $validated['step'] ?? 'appointment',
+            'address_id' => $addressId ? (int) $addressId : null,
+            'contact_id' => $contactId ? (int) $contactId : null,
+            'current_url' => $validated['current_url'] ?? $request->headers->get('referer'),
+            'appointment_id' => (int) $laboratoryAppointment->id,
+            'cart_id' => $laboratoryAppointment->cart_id ? (int) $laboratoryAppointment->cart_id : null,
+            'brand' => $laboratoryAppointment->brand?->value,
+        ], static fn ($value) => $value !== null && $value !== '');
     }
 
     private function sameInstant(mixed $left, mixed $right): bool

@@ -6,6 +6,8 @@ import { Button } from "@/Components/Catalyst/button";
 export default function LaboratoryAppointmentEmailActions({
 	appointment,
 	hasPaidLaboratoryPurchase,
+	className = null,
+	compact = false,
 }) {
 	const [busyAction, setBusyAction] = useState(null);
 
@@ -34,6 +36,7 @@ export default function LaboratoryAppointmentEmailActions({
 			{showPaymentSummary && (
 				<Button
 					outline
+					className={className}
 					disabled={busyAction !== null}
 					onClick={() =>
 						postEmail(
@@ -45,12 +48,15 @@ export default function LaboratoryAppointmentEmailActions({
 					<EnvelopeIcon />
 					{busyAction === "payment-summary"
 						? "Enviando…"
-						: "Enviar resumen de pago"}
+						: compact
+							? "Enviar pago"
+							: "Enviar resumen de pago"}
 				</Button>
 			)}
 			{showAppointmentInstructions && (
 				<Button
 					outline
+					className={className}
 					disabled={busyAction !== null}
 					onClick={() =>
 						postEmail(
@@ -62,7 +68,9 @@ export default function LaboratoryAppointmentEmailActions({
 					<EnvelopeIcon />
 					{busyAction === "appointment-instructions"
 						? "Enviando…"
-						: "Enviar indicación y cita"}
+						: compact
+							? "Enviar indicación"
+							: "Enviar indicación y cita"}
 				</Button>
 			)}
 		</>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "@inertiajs/react";
+import { router, useForm } from "@inertiajs/react";
 import {
 	MagnifyingGlassIcon,
 	ClockIcon,
@@ -18,6 +18,14 @@ import { Heading } from "@/Components/Catalyst/heading";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
+import { Checkbox } from "@/Components/Catalyst/checkbox";
+import {
+	Dialog,
+	DialogTitle,
+	DialogDescription,
+	DialogBody,
+	DialogActions,
+} from "@/Components/Catalyst/dialog";
 import { Avatar } from "@/Components/Catalyst/avatar";
 import {
 	ListboxOption,
@@ -84,6 +92,7 @@ export default function LaboratoryAppointments({
 	dashboard,
 	brands,
 	pendingCount = 0,
+	canDeleteOld = false,
 }) {
 	const view = filters.view || "list";
 
@@ -490,6 +499,7 @@ export default function LaboratoryAppointments({
 						laboratoryAppointments={laboratoryAppointments}
 						filters={filters}
 						filterBadges={filterBadges}
+						canDeleteOld={canDeleteOld}
 					/>
 				)}
 			</div>
@@ -886,7 +896,116 @@ function LaboratoryAppointmentsPendingList({
 	laboratoryAppointments,
 	filters,
 	filterBadges,
+	canDeleteOld,
 }) {
+	const [selectedIds, setSelectedIds] = useState([]);
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [bulkDeleteProcessing, setBulkDeleteProcessing] = useState(false);
+	const [bulkDeleteError, setBulkDeleteError] = useState(null);
+
+	const eligibleAppointments = useMemo(
+		() =>
+			canDeleteOld
+				? laboratoryAppointments.data.filter(
+						(appointment) => appointment.is_old_delete_eligible === true,
+					)
+				: [],
+		[canDeleteOld, laboratoryAppointments.data],
+	);
+
+	const eligibleIds = useMemo(
+		() => eligibleAppointments.map((appointment) => appointment.id),
+		[eligibleAppointments],
+	);
+
+	useEffect(() => {
+		setSelectedIds((current) =>
+			current.filter((id) => eligibleIds.includes(id)),
+		);
+	}, [eligibleIds]);
+
+	const selectedCount = selectedIds.length;
+	const allEligibleSelected =
+		eligibleIds.length > 0 && selectedCount === eligibleIds.length;
+	const someEligibleSelected =
+		selectedCount > 0 && selectedCount < eligibleIds.length;
+
+	const csrfToken = () =>
+		document.querySelector('meta[name="csrf-token"]')?.content || "";
+
+	const toggleAppointmentSelection = (appointmentId, checked) => {
+		setSelectedIds((current) => {
+			if (checked) {
+				return current.includes(appointmentId)
+					? current
+					: [...current, appointmentId];
+			}
+
+			return current.filter((id) => id !== appointmentId);
+		});
+	};
+
+	const togglePageSelection = (checked) => {
+		setSelectedIds(checked ? eligibleIds : []);
+	};
+
+	const deleteSelectedAppointments = async () => {
+		if (bulkDeleteProcessing || selectedIds.length === 0) {
+			return;
+		}
+
+		setBulkDeleteProcessing(true);
+		setBulkDeleteError(null);
+
+		try {
+			const response = await fetch(
+				"/admin/laboratory-appointments/bulk-delete",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Accept: "application/json",
+						"X-Requested-With": "XMLHttpRequest",
+						"X-CSRF-TOKEN": csrfToken(),
+					},
+					body: JSON.stringify({ appointment_ids: selectedIds }),
+				},
+			);
+
+			if (!response.ok) {
+				throw new Error("No se pudieron retirar las citas seleccionadas.");
+			}
+
+			const result = await response.json();
+			setSelectedIds([]);
+			setConfirmOpen(false);
+
+			const shouldGoToPreviousPage =
+				result.deleted >= laboratoryAppointments.data.length &&
+				laboratoryAppointments.current_page > 1 &&
+				laboratoryAppointments.prev_page_url;
+
+			if (shouldGoToPreviousPage) {
+				router.get(laboratoryAppointments.prev_page_url, {}, {
+					preserveScroll: true,
+					preserveState: true,
+				});
+			} else {
+				router.reload({
+					only: ["laboratoryAppointments", "pendingCount"],
+					preserveScroll: true,
+					preserveState: true,
+				});
+			}
+		} catch (error) {
+			setBulkDeleteError(
+				error?.message || "No se pudieron retirar las citas seleccionadas.",
+			);
+		} finally {
+			setBulkDeleteProcessing(false);
+		}
+	};
+
 	if (laboratoryAppointments.data.length === 0) {
 		return (
 			<EmptyListCard
@@ -903,17 +1022,58 @@ function LaboratoryAppointmentsPendingList({
 				filterBadges={filterBadges}
 			/>
 
+			{selectedCount > 0 && (
+				<div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-500/30 dark:bg-amber-500/10">
+					<Text className="text-sm font-medium text-amber-950 dark:text-amber-100">
+						{selectedCount}{" "}
+						{selectedCount === 1
+							? "cita seleccionada"
+							: "citas seleccionadas"}
+					</Text>
+					<div className="flex gap-2">
+						<Button
+							outline
+							type="button"
+							onClick={() => setSelectedIds([])}
+						>
+							Limpiar
+						</Button>
+						<Button
+							type="button"
+							color="red"
+							onClick={() => setConfirmOpen(true)}
+						>
+							Eliminar seleccionadas
+						</Button>
+					</div>
+				</div>
+			)}
+
 			<PaginatedTable paginatedData={laboratoryAppointments}>
 				<Table className="[--gutter:theme(spacing.6)]">
 					<TableHead>
 						<TableRow>
+							{canDeleteOld && (
+								<TableHeader className="w-12">
+									<div
+										className="flex items-center"
+										onClick={(event) => event.stopPropagation()}
+									>
+										<Checkbox
+											color="rose"
+											checked={allEligibleSelected}
+											indeterminate={someEligibleSelected}
+											disabled={eligibleIds.length === 0}
+											aria-label="Seleccionar elegibles de esta página"
+											onChange={togglePageSelection}
+										/>
+									</div>
+								</TableHeader>
+							)}
+							<TableHeader>Paciente</TableHeader>
 							<TableHeader>Antigüedad</TableHeader>
 							<TableHeader>Actividad del carrito</TableHeader>
-							<TableHeader>Marca</TableHeader>
-							<TableHeader>Paciente</TableHeader>
 							<TableHeader>Contacto</TableHeader>
-							<TableHeader>Solicitud</TableHeader>
-							<TableHeader>Carrito</TableHeader>
 							<TableHeader className="text-right">
 								Acción
 							</TableHeader>
@@ -923,8 +1083,77 @@ function LaboratoryAppointmentsPendingList({
 						{laboratoryAppointments.data.map((laboratoryAppointment) => (
 							<TableRow
 								key={laboratoryAppointment.id}
+								href={route(
+									"admin.laboratory-appointments.show",
+									laboratoryAppointment.id,
+								)}
+								title={`Gestionar cita #${laboratoryAppointment.id}`}
+								className="cursor-pointer"
 								dusk={`pendingLaboratoryAppointment-${laboratoryAppointment.id}`}
 							>
+								{canDeleteOld && (
+									<TableCell>
+										{laboratoryAppointment.is_old_delete_eligible ? (
+											<div
+												className="relative z-10 flex items-center"
+												onClick={(event) => event.stopPropagation()}
+											>
+												<Checkbox
+													color="rose"
+													checked={selectedIds.includes(
+														laboratoryAppointment.id,
+													)}
+													aria-label={`Seleccionar cita #${laboratoryAppointment.id}`}
+													onChange={(checked) =>
+														toggleAppointmentSelection(
+															laboratoryAppointment.id,
+															checked,
+														)
+													}
+												/>
+											</div>
+										) : (
+											<span className="block size-4" aria-hidden="true" />
+										)}
+									</TableCell>
+								)}
+
+								<TableCell>
+									<div className="flex min-w-64 items-start gap-3">
+										<LaboratoryBrandCard
+											className="w-20 shrink-0 p-2"
+											src={
+												"/images/gda/GDA-" +
+												laboratoryAppointment.brand.toUpperCase() +
+												".png"
+											}
+										/>
+										<div className="min-w-0">
+											<Text>
+												<Strong>
+													{laboratoryAppointment.patient_full_name ||
+														laboratoryAppointment.customer
+															?.user?.full_name ||
+														"—"}
+												</Strong>
+											</Text>
+											<Text className="text-xs text-zinc-500">
+												Solicitud{" "}
+												{laboratoryAppointment.formatted_request_saved_at ||
+													laboratoryAppointment.formatted_created_at ||
+													"—"}
+											</Text>
+											{laboratoryAppointment.admin_cart_status_label && (
+												<Text className="text-xs text-zinc-500">
+													{
+														laboratoryAppointment.admin_cart_status_label
+													}
+												</Text>
+											)}
+										</div>
+									</div>
+								</TableCell>
+
 								<TableCell>
 									<Badge
 										color={
@@ -942,41 +1171,29 @@ function LaboratoryAppointmentsPendingList({
 								</TableCell>
 
 								<TableCell>
-									<Badge
-										color={
-											laboratoryAppointment
-												.concierge_cart_activity_signal
-												?.color || "zinc"
-										}
-									>
-										{
-											laboratoryAppointment
-												.concierge_cart_activity_signal
-												?.label || "Sin actividad reciente"
-										}
-									</Badge>
-								</TableCell>
-
-								<TableCell>
-									<LaboratoryBrandCard
-										className="w-32 p-3"
-										src={
-											"/images/gda/GDA-" +
-											laboratoryAppointment.brand.toUpperCase() +
-											".png"
-										}
-									/>
-								</TableCell>
-
-								<TableCell>
-									<Text>
-										<Strong>
-											{laboratoryAppointment.patient_full_name ||
-												laboratoryAppointment.customer
-													?.user?.full_name ||
-												"—"}
-										</Strong>
-									</Text>
+									<div className="space-y-1">
+										<Badge
+											color={
+												laboratoryAppointment
+													.concierge_cart_activity_signal
+													?.color || "zinc"
+											}
+										>
+											{
+												laboratoryAppointment
+													.concierge_cart_activity_signal
+													?.label || "Sin actividad reciente"
+											}
+										</Badge>
+										{laboratoryAppointment.admin_last_user_activity_human && (
+											<Text className="text-xs text-zinc-500">
+												Última actividad{" "}
+												{
+													laboratoryAppointment.admin_last_user_activity_human
+												}
+											</Text>
+										)}
+									</div>
 								</TableCell>
 
 								<TableCell>
@@ -999,46 +1216,67 @@ function LaboratoryAppointmentsPendingList({
 										)}
 								</TableCell>
 
-								<TableCell>
-									<Text className="text-sm">
-										{
-											laboratoryAppointment.formatted_request_saved_at ||
-												laboratoryAppointment.formatted_created_at
-										}
-									</Text>
-								</TableCell>
-
-								<TableCell>
-									{laboratoryAppointment.admin_cart_status_label ? (
-										<Badge color="zinc">
-											{
-												laboratoryAppointment.admin_cart_status_label
-											}
-										</Badge>
-									) : (
-										<Text className="text-sm text-zinc-400">
-											—
-										</Text>
-									)}
-								</TableCell>
-
 								<TableCell className="text-right">
-									<Button
-										href={route(
-											"admin.laboratory-appointments.show",
-											laboratoryAppointment.id,
-										)}
-										outline
-										className="whitespace-nowrap"
+									<span
+										className="relative z-10 inline-flex"
+										onClick={(event) => event.stopPropagation()}
 									>
-										Gestionar
-									</Button>
+										<Button
+											href={route(
+												"admin.laboratory-appointments.show",
+												laboratoryAppointment.id,
+											)}
+											outline
+											className="whitespace-nowrap"
+										>
+											Gestionar
+										</Button>
+									</span>
 								</TableCell>
 							</TableRow>
 						))}
 					</TableBody>
 				</Table>
 			</PaginatedTable>
+
+			<Dialog open={confirmOpen} onClose={setConfirmOpen} size="lg">
+				<DialogTitle>Retirar citas antiguas</DialogTitle>
+				<DialogDescription>
+					Estás por retirar {selectedCount}{" "}
+					{selectedCount === 1 ? "cita pendiente" : "citas pendientes"} con
+					más de 30 días de antigüedad.
+				</DialogDescription>
+				<DialogBody>
+					<Text>
+						Las citas dejarán de aparecer en Pendientes por atender, pero se
+						conservarán mediante soft delete.
+					</Text>
+					{bulkDeleteError && (
+						<Text className="mt-3 text-sm text-red-600 dark:text-red-400">
+							{bulkDeleteError}
+						</Text>
+					)}
+				</DialogBody>
+				<DialogActions>
+					<Button
+						plain
+						type="button"
+						disabled={bulkDeleteProcessing}
+						onClick={() => setConfirmOpen(false)}
+					>
+						Cancelar
+					</Button>
+					<Button
+						type="button"
+						color="red"
+						disabled={bulkDeleteProcessing || selectedCount === 0}
+						onClick={deleteSelectedAppointments}
+					>
+						Eliminar {selectedCount}{" "}
+						{selectedCount === 1 ? "cita" : "citas"}
+					</Button>
+				</DialogActions>
+			</Dialog>
 		</>
 	);
 }

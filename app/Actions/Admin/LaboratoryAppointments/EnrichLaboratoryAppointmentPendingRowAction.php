@@ -14,6 +14,7 @@ class EnrichLaboratoryAppointmentPendingRowAction
     public function __construct(
         private BuildLaboratoryAppointmentConciergeOperationalAgeAction $operationalAge,
         private BuildLaboratoryAppointmentCartActivitySignalAction $cartActivitySignal,
+        private DetermineOldPendingLaboratoryAppointmentEligibilityAction $oldPendingEligibility,
     ) {}
 
     /**
@@ -42,6 +43,7 @@ class EnrichLaboratoryAppointmentPendingRowAction
             'admin_cart_status_label' => $cartStatusLabel,
             'admin_last_user_activity_human' => $parsedActivityAt?->format('d/m/Y H:i'),
             'pending_priority_tier' => $priorityTier,
+            'is_old_delete_eligible' => ($this->oldPendingEligibility)($appointment),
         ];
     }
 

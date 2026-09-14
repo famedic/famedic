@@ -126,7 +126,7 @@ class BuildLaboratoryAppointmentCheckoutProgressAction
 
         return [
             'steps' => $steps,
-            'draft_updated_at' => $draft?->updated_at?->timezone('America/Monterrey')?->format('d/m/Y H:i'),
+            'draft_updated_at' => $this->formatDraftUpdatedAt($draft?->updated_at),
         ];
     }
 
@@ -149,12 +149,29 @@ class BuildLaboratoryAppointmentCheckoutProgressAction
 
     private function draftUpdatedAt(LaboratoryAppointment $appointment): ?string
     {
-        return LaboratoryCheckoutDraft::query()
+        $updatedAt = LaboratoryCheckoutDraft::query()
             ->where('customer_id', $appointment->customer_id)
             ->where('laboratory_brand', $appointment->brand)
-            ->value('updated_at')
-            ?->timezone('America/Monterrey')
-            ?->format('d/m/Y H:i');
+            ->value('updated_at');
+
+        return $this->formatDraftUpdatedAt($updatedAt);
+    }
+
+    private function formatDraftUpdatedAt(?\Carbon\CarbonInterface $updatedAt): ?string
+    {
+        if ($updatedAt === null) {
+            return null;
+        }
+
+        $date = $updatedAt->copy()->timezone('America/Monterrey')->locale('es');
+
+        return sprintf(
+            '%s/%s/%s %s',
+            $date->format('j'),
+            str_replace('.', '', mb_strtolower($date->isoFormat('MMM'))),
+            $date->format('Y'),
+            $date->format('g:i A'),
+        );
     }
 
     /**

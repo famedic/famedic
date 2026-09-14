@@ -1,48 +1,66 @@
 import { ClockIcon } from "@heroicons/react/16/solid";
-import AppointmentSummary from "./AppointmentSummary";
+import { Badge } from "@/Components/Catalyst/badge";
 
-export default function AppointmentSidebar({ appointment, summary }) {
+export default function AppointmentSidebar({
+	appointment,
+	summary,
+	actions = null,
+}) {
 	return (
-		<div className="space-y-4">
-			<section className="rounded-2xl border border-zinc-200/70 bg-white/80 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
-				<h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-					Confirmacion de cita
-				</h3>
-				<div className="space-y-3 text-sm">
-					<Item label="Fecha" value={appointment.formatted_appointment_date} />
-					<Item label="Sucursal" value={appointment.laboratory_store?.name} />
-					<Item label="Direccion" value={appointment.laboratory_store?.address} />
-					<Item
-						label="Fecha de solicitud"
-						value={
-							<span className="inline-flex items-center gap-2">
-								<ClockIcon className="size-4 fill-zinc-500" />
-								{appointment.formatted_created_at}
-							</span>
-						}
-					/>
+		<section className="rounded-xl border border-zinc-200/70 bg-white/90 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/75">
+			<h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+				Cita
+			</h2>
+
+			<div className="space-y-2 text-sm">
+				<Row label="Estado">
+					<Badge color={summary.statusColor}>
+						{summary.statusLabel}
+					</Badge>
+				</Row>
+				<Row label="Laboratorio">{summary.laboratory}</Row>
+				<Row label="Estudios">{summary.totalStudies}</Row>
+				<Row label="Pago">
+					<Badge color={summary.paymentColor}>
+						{summary.paymentLabel}
+					</Badge>
+				</Row>
+			</div>
+
+			{actions && (
+				<div className="my-3 border-y border-zinc-200/70 py-3 dark:border-zinc-800">
+					{actions}
 				</div>
-			</section>
+			)}
 
-			<section className="rounded-2xl border border-zinc-200/70 bg-white/80 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
-				<h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-					Notas para el cliente
-				</h3>
-				<p className="text-sm text-zinc-700 dark:text-zinc-300">
-					{appointment.notes || "Sin notas para el cliente."}
-				</p>
-			</section>
-
-			<AppointmentSummary summary={summary} />
-		</div>
+			<div className="space-y-2 text-sm">
+				<Row label="Fecha">
+					{appointment.formatted_appointment_date}
+				</Row>
+				<Row label="Sucursal">{appointment.laboratory_store?.name}</Row>
+				<Row label="Direccion">
+					{appointment.laboratory_store?.address}
+				</Row>
+				<Row label="Solicitud">
+					<span className="inline-flex items-center justify-end gap-1.5">
+						<ClockIcon className="size-3.5 fill-zinc-500" />
+						{appointment.formatted_created_at}
+					</span>
+				</Row>
+			</div>
+		</section>
 	);
 }
 
-function Item({ label, value }) {
+function Row({ label, children }) {
 	return (
-		<div className="border-b border-zinc-200/70 pb-2 dark:border-zinc-800">
-			<p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
-			<p className="text-sm text-zinc-900 dark:text-zinc-100">{value || "..."}</p>
+		<div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 border-b border-zinc-200/60 pb-2 last:border-b-0 last:pb-0 dark:border-zinc-800">
+			<span className="text-xs text-zinc-500 dark:text-zinc-400">
+				{label}
+			</span>
+			<span className="min-w-0 text-right text-sm text-zinc-900 dark:text-zinc-100">
+				{children || "---"}
+			</span>
 		</div>
 	);
 }

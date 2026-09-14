@@ -329,6 +329,14 @@ class LaboratoryAppointment extends Model
                     return null;
                 }
                 if ($start && $end) {
+                    if ($start->isSameDay($end)) {
+                        return $start->isoFormat('ddd D MMM YYYY')
+                            .', de '
+                            .$start->isoFormat('h:mm a')
+                            .' — '
+                            .$end->isoFormat('h:mm a');
+                    }
+
                     return $start->isoFormat('ddd D MMM YYYY, h:mm a')
                         .' — '
                         .$end->isoFormat('ddd D MMM YYYY, h:mm a');

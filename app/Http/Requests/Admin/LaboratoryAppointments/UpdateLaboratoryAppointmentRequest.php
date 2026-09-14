@@ -6,6 +6,7 @@ use App\Enums\Gender;
 use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateLaboratoryAppointmentRequest extends FormRequest
 {
@@ -32,6 +33,31 @@ class UpdateLaboratoryAppointmentRequest extends FormRequest
         ];
     }
 
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($validator->errors()->has('appointment_date') || $validator->errors()->has('appointment_time')) {
+                return;
+            }
+
+            $appointmentAt = $this->resolveAppointmentAt(
+                (string) $this->input('appointment_date'),
+                (string) $this->input('appointment_time'),
+            );
+
+            if ($appointmentAt === null) {
+                return;
+            }
+
+            if ($appointmentAt->lessThanOrEqualTo(now('America/Monterrey'))) {
+                $validator->errors()->add(
+                    'appointment_time',
+                    'La fecha y hora seleccionadas ya pasaron. Selecciona una fecha y hora futuras.',
+                );
+            }
+        });
+    }
+
     /**
      * @return \Closure(string, mixed, \Closure): void
      */
@@ -54,5 +80,23 @@ class UpdateLaboratoryAppointmentRequest extends FormRequest
                 $fail(__('validation.date_format', ['attribute' => $attribute, 'format' => 'H:i']));
             }
         };
+    }
+
+    private function resolveAppointmentAt(string $appointmentDate, string $appointmentTime): ?Carbon
+    {
+        $time = trim($appointmentTime);
+        $date = trim($appointmentDate);
+
+        try {
+            if (str_contains($time, 'T') || str_contains($time, 'Z')) {
+                return Carbon::parse($time)->timezone('America/Monterrey');
+            }
+
+            $datePart = Carbon::parse($date)->format('Y-m-d');
+
+            return Carbon::createFromFormat('Y-m-d H:i', "{$datePart} {$time}", 'America/Monterrey');
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

@@ -15,23 +15,28 @@ export default function PurchaseStatusCard({
 	studies = [],
 	paymentUrl = null,
 	checkoutProgress = null,
+	compact = false,
 }) {
 	const isPaid = purchaseStatus === "paid";
-	const completed = studies.filter((study) => study.status === "completed").length;
-	const pending = studies.filter((study) => study.status === "pending").length;
+	const completed = studies.filter(
+		(study) => study.status === "completed",
+	).length;
+	const pending = studies.filter(
+		(study) => study.status === "pending",
+	).length;
 	const total = studies.length;
 
 	return (
-		<div className="space-y-4 rounded-2xl border border-sky-300/30 bg-sky-500/10 p-5 shadow-sm dark:border-sky-700/40 dark:bg-sky-900/20">
-			<div className="flex flex-wrap items-start justify-between gap-4">
-				<div className="space-y-2">
-					<div className="flex items-center gap-3">
+		<div className="space-y-2.5 rounded-xl border border-sky-300/30 bg-sky-500/10 p-3 shadow-sm dark:border-sky-700/40 dark:bg-sky-900/20">
+			<div className="flex flex-wrap items-start justify-between gap-3">
+				<div className="space-y-1">
+					<div className="flex items-center gap-2">
 						{isPaid ? (
-							<CheckCircleIcon className="size-6 text-emerald-400" />
+							<CheckCircleIcon className="size-5 text-emerald-400" />
 						) : (
-							<ShoppingCartIcon className="size-6 text-amber-400" />
+							<ShoppingCartIcon className="size-5 text-amber-400" />
 						)}
-						<h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+						<h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
 							{isPaid ? "Compra concretada" : "Pendiente de pago"}
 						</h2>
 						<Badge color={isPaid ? "emerald" : "amber"}>
@@ -55,10 +60,11 @@ export default function PurchaseStatusCard({
 				<CheckoutProgressTimeline
 					steps={checkoutProgress.steps}
 					draftUpdatedAt={checkoutProgress.draft_updated_at}
+					compact={compact}
 				/>
 			)}
 
-			{isPaid && (
+			{isPaid && !compact && (
 				<div className="grid gap-3 sm:grid-cols-2">
 					<div className="rounded-xl border border-zinc-200/70 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
 						<div className="mb-1 inline-flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
@@ -81,10 +87,14 @@ export default function PurchaseStatusCard({
 				</div>
 			)}
 
-			{total > 1 && (
+			{total > 1 && !compact && (
 				<div className="grid gap-3 sm:grid-cols-3">
 					<Metric label="Total de estudios" value={total} />
-					<Metric label="Completados" value={completed} tone="emerald" />
+					<Metric
+						label="Completados"
+						value={completed}
+						tone="emerald"
+					/>
 					<Metric label="Pendientes" value={pending} tone="amber" />
 				</div>
 			)}

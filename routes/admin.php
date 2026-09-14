@@ -207,6 +207,8 @@ Route::prefix('admin')->middleware([
             ->name('laboratory-appointments.send-payment-summary');
         Route::post('laboratory-appointments/{laboratory_appointment}/send-appointment-instructions', [LaboratoryAppointmentController::class, 'sendAppointmentInstructions'])
             ->name('laboratory-appointments.send-appointment-instructions');
+        Route::post('laboratory-appointments/bulk-delete', [LaboratoryAppointmentController::class, 'bulkDelete'])
+            ->name('laboratory-appointments.bulk-delete');
         Route::resource('laboratory-appointments', LaboratoryAppointmentController::class)->except(['create', 'store', 'edit']);
         Route::resource('laboratory-vendor-payments', LaboratoryVendorPaymentsController::class)->parameters([
             'laboratory-vendor-payments' => 'vendor_payment',

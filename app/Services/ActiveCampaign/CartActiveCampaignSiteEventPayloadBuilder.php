@@ -152,6 +152,12 @@ class CartActiveCampaignSiteEventPayloadBuilder
             'appointment_id' => isset($metadata['appointment_id']) ? (int) $metadata['appointment_id'] : null,
             'brand' => $metadata['brand'] ?? null,
             'occurred_at' => $metadata['occurred_at'] ?? null,
+            'channel' => $metadata['channel'] ?? null,
+            'context' => $metadata['context'] ?? null,
+            'step' => $metadata['step'] ?? null,
+            'address_id' => isset($metadata['address_id']) ? (int) $metadata['address_id'] : null,
+            'contact_id' => isset($metadata['contact_id']) ? (int) $metadata['contact_id'] : null,
+            'current_url' => $metadata['current_url'] ?? null,
         ], static fn ($value) => $value !== null);
     }
 }

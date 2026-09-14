@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Actions\Admin\LaboratoryAppointments\BuildLaboratoryAppointmentCheckoutProgressAction;
 use App\Actions\Admin\LaboratoryAppointments\BuildLaboratoryAppointmentDashboardDataAction;
+use App\Actions\Admin\LaboratoryAppointments\DetermineOldPendingLaboratoryAppointmentEligibilityAction;
 use App\Actions\Admin\LaboratoryAppointments\EnrichLaboratoryAppointmentIndexRowAction;
 use App\Actions\Admin\LaboratoryAppointments\EnrichLaboratoryAppointmentPendingRowAction;
 use App\Actions\Admin\LaboratoryAppointments\UpdateLaboratoryAppointmentAction;
@@ -12,6 +13,7 @@ use App\Enums\Gender;
 use App\Enums\LaboratoryAppointmentInteractionType;
 use App\Enums\LaboratoryBrand;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\LaboratoryAppointments\BulkDeleteOldLaboratoryAppointmentsRequest;
 use App\Http\Requests\Admin\LaboratoryAppointments\DestroyLaboratoryAppointmentRequest;
 use App\Http\Requests\Admin\LaboratoryAppointments\IndexLaboratoryAppointmentRequest;
 use App\Http\Requests\Admin\LaboratoryAppointments\SendLaboratoryAppointmentEmailRequest;
@@ -28,8 +30,10 @@ use App\Services\LaboratoryAppointments\PendingConciergeAppointmentQuery;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class LaboratoryAppointmentController extends Controller
@@ -176,6 +180,7 @@ class LaboratoryAppointmentController extends Controller
             'filters' => $filters,
             'dashboard' => $dashboard,
             'pendingCount' => $pendingCount,
+            'canDeleteOld' => (bool) $request->user()->administrator?->hasRole('Administrador'),
             'brands' => collect(LaboratoryBrand::cases())
                 ->map(fn (LaboratoryBrand $brand) => [
                     'value' => $brand->value,
@@ -202,7 +207,11 @@ class LaboratoryAppointmentController extends Controller
             $studyItems = $purchase->laboratoryPurchaseItems->map(fn ($item) => [
                 'id' => $item->id,
                 'name' => $item->name,
-                'instructions' => ($item->indications !== null && $item->indications !== '') ? $item->indications : null,
+                'gda_id' => $item->gda_id,
+                'description' => filled($item->indications) ? $item->indications : null,
+                'instructions' => filled($item->indications) ? $item->indications : null,
+                'price_cents' => (int) $item->price_cents,
+                'formatted_price' => $item->formatted_price,
                 'requires_appointment' => null,
             ])->values()->all();
             $studyItemsSource = 'purchase';
@@ -213,12 +222,21 @@ class LaboratoryAppointmentController extends Controller
             $cartItems = $laboratoryAppointment->customer?->laboratoryCartItems ?? new Collection;
             $studyItems = $cartItems
                 ->filter(fn ($item) => $item->laboratoryTest?->brand?->value === $laboratoryAppointment->brand->value)
-                ->map(fn ($item) => [
-                    'id' => $item->id,
-                    'name' => $item->laboratoryTest?->name ?? 'Estudio',
-                    'instructions' => ($item->laboratoryTest?->indications !== null && $item->laboratoryTest?->indications !== '') ? $item->laboratoryTest->indications : null,
-                    'requires_appointment' => (bool) ($item->laboratoryTest?->requires_appointment ?? false),
-                ])->values()->all();
+                ->map(function ($item) {
+                    $test = $item->laboratoryTest;
+                    $priceCents = $test?->famedic_price_cents;
+
+                    return [
+                        'id' => $item->id,
+                        'name' => $test?->name ?? 'Estudio',
+                        'gda_id' => $test?->gda_id,
+                        'description' => filled($test?->indications) ? $test->indications : null,
+                        'instructions' => filled($test?->indications) ? $test->indications : null,
+                        'price_cents' => $priceCents !== null ? (int) $priceCents : null,
+                        'formatted_price' => $priceCents !== null ? formattedCentsPrice((int) $priceCents) : null,
+                        'requires_appointment' => (bool) ($test?->requires_appointment ?? false),
+                    ];
+                })->values()->all();
             $studyItemsSource = 'cart';
         }
 
@@ -422,5 +440,68 @@ class LaboratoryAppointmentController extends Controller
 
         return redirect()->route('admin.laboratory-appointments.index')
             ->flashMessage('Cita eliminada exitosamente.');
+    }
+
+    public function bulkDelete(
+        BulkDeleteOldLaboratoryAppointmentsRequest $request,
+        DetermineOldPendingLaboratoryAppointmentEligibilityAction $oldPendingEligibility,
+    ) {
+        $validated = $request->validated();
+        $requestedIds = collect($validated['appointment_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        $operationUuid = (string) Str::uuid();
+        $actorId = $request->user()->id;
+
+        $result = DB::transaction(function () use (
+            $requestedIds,
+            $operationUuid,
+            $actorId,
+            $oldPendingEligibility,
+        ) {
+            $appointments = LaboratoryAppointment::query()
+                ->whereIn('id', $requestedIds)
+                ->lockForUpdate()
+                ->get();
+
+            $eligible = $appointments
+                ->filter(fn (LaboratoryAppointment $appointment) => $oldPendingEligibility($appointment))
+                ->values();
+
+            $eligibleIds = $eligible->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $skippedIds = $requestedIds
+                ->reject(fn (int $id) => in_array($id, $eligibleIds, true))
+                ->values()
+                ->all();
+
+            foreach ($eligible as $appointment) {
+                $appointment->interactions()->create([
+                    'type' => LaboratoryAppointmentInteractionType::AdminBulkSoftDelete,
+                    'body' => 'Retirada de Pendientes por atender por limpieza administrativa de citas antiguas.',
+                    'admin_user_id' => $actorId,
+                    'metadata' => [
+                        'operation_uuid' => $operationUuid,
+                        'actor_id' => $actorId,
+                        'origin' => 'admin_pending_appointments',
+                        'selected_count' => $requestedIds->count(),
+                        'eligible_count' => $eligible->count(),
+                        'appointment_id' => $appointment->id,
+                        'reason' => 'old_pending_cleanup',
+                    ],
+                ]);
+
+                $appointment->delete();
+            }
+
+            return [
+                'deleted' => $eligible->count(),
+                'skipped' => count($skippedIds),
+                'skipped_ids' => $skippedIds,
+                'errors' => [],
+            ];
+        });
+
+        return response()->json($result);
     }
 }

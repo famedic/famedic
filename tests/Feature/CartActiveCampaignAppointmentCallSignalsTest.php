@@ -10,9 +10,11 @@ use App\Enums\MonitoringCartType;
 use App\Jobs\ActiveCampaign\DispatchActiveCampaignOutboundJob;
 use App\Jobs\Carts\CheckAppointmentPendingJob;
 use App\Models\ActiveCampaignDispatch;
+use App\Models\Address;
 use App\Models\Cart;
 use App\Models\CartEvent;
 use App\Models\CartItem;
+use App\Models\Contact;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryStore;
@@ -556,6 +558,141 @@ it('does not duplicate call_attempted on rapid phone intent retry', function () 
 
     expect(CartEvent::query()->where('event', CartEventType::CallAttempted->value)->count())->toBe(1)
         ->and($appointment->interactions()->count())->toBe(1);
+});
+
+it('keeps the thirty second call_attempted dedupe window while allowing later attempts', function () {
+    Queue::fake();
+    $user = cartAppointmentSignalsPhase4User(['email' => 'phone-window@example.com']);
+    $cart = cartAppointmentSignalsPhase4Cart($user);
+    $appointment = phase4PendingAppointment($cart, 1);
+
+    $this->withoutMiddleware([
+        \App\Http\Middleware\EnsurePhoneIsVerified::class,
+        \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+        \App\Http\Middleware\EnsureDocumentationIsAccepted::class,
+        \App\Http\Middleware\RedirectIfUserProfileIsIncomplete::class,
+    ]);
+    $this->actingAs($user);
+
+    $route = route('laboratory-appointments.phone-intent', [
+        'laboratory_brand' => LaboratoryBrand::OLAB,
+        'laboratory_appointment' => $appointment,
+    ]);
+
+    $this->post($route)->assertRedirect();
+    $this->post($route)->assertRedirect();
+
+    try {
+        Carbon::setTestNow(now()->addSeconds(31));
+        $this->post($route)->assertRedirect();
+    } finally {
+        Carbon::setTestNow();
+    }
+
+    expect(CartEvent::query()->where('event', CartEventType::CallAttempted->value)->count())->toBe(2)
+        ->and($appointment->interactions()->count())->toBe(2);
+});
+
+it('records whatsapp contact intent with checkout metadata before external navigation', function () {
+    Queue::fake();
+    $user = cartAppointmentSignalsPhase4User(['email' => 'whatsapp-intent@example.com']);
+    $cart = cartAppointmentSignalsPhase4Cart($user);
+    $appointment = phase4PendingAppointment($cart, 1);
+    $contact = Contact::factory()->create(['customer_id' => $user->customer->id]);
+    $address = Address::factory()->create(['customer_id' => $user->customer->id]);
+
+    $this->withoutMiddleware([
+        \App\Http\Middleware\EnsurePhoneIsVerified::class,
+        \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+        \App\Http\Middleware\EnsureDocumentationIsAccepted::class,
+        \App\Http\Middleware\RedirectIfUserProfileIsIncomplete::class,
+    ]);
+    $this->actingAs($user);
+
+    $route = route('laboratory-appointments.phone-intent', [
+        'laboratory_brand' => LaboratoryBrand::OLAB,
+        'laboratory_appointment' => $appointment,
+    ]);
+
+    $this->postJson($route, [
+        'channel' => 'whatsapp',
+        'context' => 'laboratory_checkout',
+        'step' => 'appointment',
+        'address_id' => $address->id,
+        'contact_id' => $contact->id,
+        'current_url' => route('laboratory.checkout', [
+            'laboratory_brand' => LaboratoryBrand::OLAB,
+            'step' => 'appointment',
+            'address' => $address->id,
+            'contact' => $contact->id,
+        ]),
+    ])->assertNoContent();
+
+    $event = CartEvent::query()
+        ->where('event', CartEventType::CallAttempted->value)
+        ->firstOrFail();
+    $siteEventDispatch = ActiveCampaignDispatch::query()
+        ->where('idempotency_key', "appointment_interaction:{$appointment->interactions()->firstOrFail()->id}:call_attempted:site_event")
+        ->firstOrFail();
+
+    expect($event->metadata)
+        ->toMatchArray([
+            'channel' => 'whatsapp',
+            'context' => 'laboratory_checkout',
+            'step' => 'appointment',
+            'address_id' => $address->id,
+            'contact_id' => $contact->id,
+            'appointment_id' => $appointment->id,
+            'cart_id' => $cart->id,
+            'brand' => LaboratoryBrand::OLAB->value,
+        ])
+        ->and($siteEventDispatch->payload['event_data'])->toMatchArray([
+            'channel' => 'whatsapp',
+            'context' => 'laboratory_checkout',
+            'step' => 'appointment',
+            'address_id' => $address->id,
+            'contact_id' => $contact->id,
+        ])
+        ->and($appointment->fresh()->phone_call_intent_at)->toBeNull()
+        ->and($appointment->interactions()->where('type', \App\Enums\LaboratoryAppointmentInteractionType::PatientWhatsAppIntent->value)->count())->toBe(1);
+});
+
+it('does not trust contact metadata ids from another customer', function () {
+    Queue::fake();
+    $user = cartAppointmentSignalsPhase4User(['email' => 'metadata-owner@example.com']);
+    $otherUser = cartAppointmentSignalsPhase4User(['email' => 'metadata-other@example.com']);
+    $cart = cartAppointmentSignalsPhase4Cart($user);
+    $appointment = phase4PendingAppointment($cart, 1);
+    $otherContact = Contact::factory()->create(['customer_id' => $otherUser->customer->id]);
+    $otherAddress = Address::factory()->create(['customer_id' => $otherUser->customer->id]);
+
+    $this->withoutMiddleware([
+        \App\Http\Middleware\EnsurePhoneIsVerified::class,
+        \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+        \App\Http\Middleware\EnsureDocumentationIsAccepted::class,
+        \App\Http\Middleware\RedirectIfUserProfileIsIncomplete::class,
+    ]);
+    $this->actingAs($user);
+
+    $this->postJson(route('laboratory-appointments.phone-intent', [
+        'laboratory_brand' => LaboratoryBrand::OLAB,
+        'laboratory_appointment' => $appointment,
+    ]), [
+        'channel' => 'phone',
+        'address_id' => $otherAddress->id,
+        'contact_id' => $otherContact->id,
+    ])->assertNoContent();
+
+    $event = CartEvent::query()
+        ->where('event', CartEventType::CallAttempted->value)
+        ->firstOrFail();
+
+    expect($event->metadata)->not->toHaveKeys(['address_id', 'contact_id'])
+        ->and($event->metadata)->toMatchArray([
+            'channel' => 'phone',
+            'context' => 'laboratory_checkout',
+            'step' => 'appointment',
+        ]);
 });
 
 it('does not duplicate appointment_confirmed outbox when confirmation signal runs twice', function () {
