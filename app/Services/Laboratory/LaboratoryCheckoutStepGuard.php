@@ -211,6 +211,9 @@ class LaboratoryCheckoutStepGuard
             );
         }
 
+        $hasContact = filled($savedCheckout['contact_id'] ?? null);
+        $hasAddress = filled($savedCheckout['address_id'] ?? null);
+
         if (! in_array($step, [
             self::STEP_PATIENT,
             self::STEP_ADDRESS,
@@ -220,8 +223,17 @@ class LaboratoryCheckoutStepGuard
             $step = self::STEP_PATIENT;
         }
 
-        $hasContact = filled($savedCheckout['contact_id'] ?? null);
-        $hasAddress = filled($savedCheckout['address_id'] ?? null);
+        if (
+            $step === self::STEP_APPOINTMENT
+            && $hasConfirmedAppointment
+            && $hasContact
+            && $hasAddress
+        ) {
+            return new CheckoutStepResolution(
+                self::STEP_PAYMENT,
+                updateDraft: $draftStep === self::STEP_APPOINTMENT,
+            );
+        }
 
         if ($step === self::STEP_PAYMENT && (! $hasContact || ! $hasAddress)) {
             $step = ! $hasContact ? self::STEP_PATIENT : self::STEP_ADDRESS;

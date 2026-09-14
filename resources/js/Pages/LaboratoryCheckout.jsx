@@ -504,7 +504,10 @@ export default function LaboratoryCheckout({
 	}, [pendingLaboratoryAppointmentProp]);
 
 	const wizardLaboratoryAppointment =
-		pendingLaboratoryAppointment ?? laboratoryAppointment;
+		laboratoryAppointment?.confirmed_at &&
+		laboratoryAppointment?.is_payable !== false
+			? laboratoryAppointment
+			: (pendingLaboratoryAppointment ?? laboratoryAppointment);
 
 	const contactStepIsComplete = useMemo(() => !!data.contact, [data.contact]);
 

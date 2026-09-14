@@ -244,6 +244,40 @@ test('appointment first checkout allows payment after confirmed appointment', fu
         );
 });
 
+test('appointment first checkout advances appointment step to payment after concierge confirms appointment', function () {
+    $user = appointmentFirstCheckoutUser();
+    seedAppointmentFirstCart($user);
+    [$contact, $address] = seedAppointmentFirstContactAndAddress($user);
+    confirmedLaboratoryAppointment($user);
+
+    LaboratoryCheckoutDraft::query()->create([
+        'customer_id' => $user->customer->id,
+        'laboratory_brand' => LaboratoryBrand::OLAB,
+        'contact_id' => $contact->id,
+        'address_id' => $address->id,
+        'checkout_step' => 'appointment',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('laboratory.checkout', [
+            'laboratory_brand' => LaboratoryBrand::OLAB,
+            'step' => 'appointment',
+            'contact' => $contact->id,
+            'address' => $address->id,
+        ]))
+        ->assertRedirect(route('laboratory.checkout', [
+            'laboratory_brand' => LaboratoryBrand::OLAB,
+            'step' => 'payment',
+            'contact' => $contact->id,
+            'address' => $address->id,
+        ]));
+
+    expect(LaboratoryCheckoutDraft::query()
+        ->where('customer_id', $user->customer->id)
+        ->value('checkout_step'))
+        ->toBe('payment');
+});
+
 test('legacy draft at payment without appointment is normalized to appointment', function () {
     $user = appointmentFirstCheckoutUser();
     seedAppointmentFirstCart($user);
