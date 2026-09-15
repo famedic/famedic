@@ -60,6 +60,26 @@ test("public order page keeps study indications behind an accessible accordion",
 	assert.match(source, /Tu cita está programada en esta sucursal/);
 	assert.match(source, /Paciente y titular/);
 	assert.match(source, /Datos de tu orden/);
+	assert.match(source, /ApplicationLogo/);
+	assert.match(source, />\s*FAMEDIC\s*</);
+	assert.match(source, /dark:text-white/);
+	assert.match(source, /icon: Icon = null/);
+	assert.match(source, /icon=\{MapPinIcon\}/);
+	assert.match(source, /bg-\[#171f45\]/);
+	assert.match(source, /bg-lime-300/);
+	assert.match(source, /text-lime-300/);
+	assert.match(source, /border-l-\[#5944b5\]/);
+	assert.match(source, /¿Necesitas ayuda\? Tenemos estos canales de soporte\./);
+	assert.match(source, /href="tel:8128601893"/);
+	assert.match(source, /81 2860 1893/);
+	assert.match(source, /WhatsAppIcon/);
+	assert.match(source, /https:\/\/wa\.me\/528128601893/);
+	assert.match(source, /Hola, necesito ayuda con mi orden de laboratorio Famedic\./);
+	assert.match(source, /Contactar por WhatsApp/);
+	assert.match(
+		source,
+		/\{patientAndOrderCards\}\s+\{appointmentCard\}\s+\{studiesAndSummaryCards\}\s+\{preparationCard\}\s+\{visitGuideCards\}\s+\{noAppointmentStoresCard\}/,
+	);
 	assert.doesNotMatch(source, /Sucursal esta pendiente|Sucursal pendiente/);
 	assert.doesNotMatch(source, /Sin cita/);
 	assert.doesNotMatch(source, /bg-zinc-950 px-4 py-3 text-white/);
