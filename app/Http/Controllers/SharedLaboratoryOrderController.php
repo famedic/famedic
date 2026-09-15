@@ -32,7 +32,9 @@ class SharedLaboratoryOrderController extends Controller
         }
 
         $purchase->load([
-            'laboratoryPurchaseItems:id,laboratory_purchase_id,name,indications,feature_list',
+            'customer:id,user_id',
+            'customer.user:id,name,paternal_lastname,maternal_lastname',
+            'laboratoryPurchaseItems:id,laboratory_purchase_id,gda_id,name,indications,feature_list,price_cents',
             'laboratoryAppointment:id,laboratory_purchase_id,laboratory_store_id,appointment_date,confirmed_at',
             'laboratoryAppointment.laboratoryStore:id,name,address,google_maps_url,phone,weekly_hours,saturday_hours,sunday_hours',
         ]);
