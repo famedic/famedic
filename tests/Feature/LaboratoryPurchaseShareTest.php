@@ -19,6 +19,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\LaboratoryBilling\LaboratoryBillingAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -280,6 +281,32 @@ class LaboratoryPurchaseShareTest extends TestCase
             ->assertDontSee('static.hotjar.com', false)
             ->assertDontSee('diffuser-cdn.app-us1.com', false)
             ->assertDontSee('cdn.usefathom.com', false);
+    }
+
+    public function test_public_share_renders_server_side_preview_meta_tags(): void
+    {
+        [$owner, $purchase] = $this->createPurchaseFixture();
+        $url = (string) $this->actingAs($owner)
+            ->postJson(route('laboratory-purchases.shares.store', $purchase))
+            ->json('url');
+
+        $response = $this->get($url);
+        $html = $response->getContent();
+        $head = Str::between($html, '<head>', '</head>');
+        $title = 'Orden de compra de laboratorio | FAMEDIC';
+        $description = 'Consulta la información de tu orden de laboratorio, estudios solicitados, cita e indicaciones de preparación.';
+        $image = asset('images/og/famedic-og.png');
+
+        $response->assertOk();
+        $this->assertStringContainsString('<title inertia>'.$title.'</title>', $head);
+        $this->assertStringContainsString('<meta name="description" content="'.$description.'">', $head);
+        $this->assertStringContainsString('<meta property="og:title" content="'.$title.'">', $head);
+        $this->assertStringContainsString('<meta property="og:description" content="'.$description.'">', $head);
+        $this->assertStringContainsString('<meta property="og:image" content="'.$image.'">', $head);
+        $this->assertStringContainsString('<meta property="og:url" content="'.$url.'">', $head);
+        $this->assertStringContainsString('<meta name="twitter:card" content="summary_large_image">', $head);
+        $this->assertStringNotContainsString($purchase->full_name, $head);
+        $this->assertStringNotContainsString($purchase->gda_order_id, $head);
     }
 
     public function test_public_share_sanitizes_store_google_maps_url(): void

@@ -47,7 +47,28 @@ class SharedLaboratoryOrderController extends Controller
             'expires_at' => $share->expires_at?->toIso8601String(),
         ]);
 
+        $metaTitle = 'Orden de compra de laboratorio | FAMEDIC';
+        $metaDescription = 'Consulta la información de tu orden de laboratorio, estudios solicitados, cita e indicaciones de preparación.';
+        $metaImage = asset('images/og/famedic-og.png');
+        $currentUrl = $request->url();
+
         return Inertia::render('Shared/LaboratoryOrder', [
+            'meta_title' => $metaTitle,
+            'description' => $metaDescription,
+            'og_type' => 'website',
+            'og_site_name' => 'FAMEDIC',
+            'og_url' => $currentUrl,
+            'og_title' => $metaTitle,
+            'og_description' => $metaDescription,
+            'og_image' => $metaImage,
+            'og_image_width' => '1200',
+            'og_image_height' => '630',
+            'og_image_alt' => 'FAMEDIC, salud al alcance de todos',
+            'twitter_card' => 'summary_large_image',
+            'twitter_url' => $currentUrl,
+            'twitter_title' => $metaTitle,
+            'twitter_description' => $metaDescription,
+            'twitter_image' => $metaImage,
             'auth' => ['user' => null],
             'activeCampaignSiteTracking' => ['enabled' => false, 'email' => null],
             'medicalAttentionSubscriptionIsActive' => null,
