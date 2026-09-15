@@ -467,6 +467,11 @@ class LaboratoryPurchase extends Model
         return $this->hasMany(LaboratoryNotification::class, 'laboratory_purchase_id');
     }
 
+    public function shares()
+    {
+        return $this->hasMany(LaboratoryPurchaseShare::class);
+    }
+
     // Método para obtener notificaciones de resultados
     public function resultNotifications()
     {

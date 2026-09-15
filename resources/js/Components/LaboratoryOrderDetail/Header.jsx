@@ -6,6 +6,7 @@ import {
 	CalendarDaysIcon,
 	ArrowsRightLeftIcon,
 	QrCodeIcon,
+	ShareIcon,
 	ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 
@@ -31,6 +32,7 @@ export default function Header({
 	gdaConsecutivo,
 	onRequestInvoice,
 	onDownload,
+	onShare,
 	isCancelled = false,
 	cancelledAtLabel = null,
 }) {
@@ -122,6 +124,18 @@ export default function Header({
 						<DocumentArrowDownIcon data-slot="icon" className="size-4" aria-hidden />
 						Descargar
 					</Button>
+					{!isCancelled && onShare && (
+						<Button
+							outline
+							type="button"
+							className="w-full shrink-0 justify-center self-start sm:w-auto"
+							onClick={onShare}
+							title="Compartir orden de laboratorio"
+						>
+							<ShareIcon data-slot="icon" className="size-4" aria-hidden />
+							Compartir
+						</Button>
+					)}
 					{canRequestInvoice && !isCancelled && (
 						<div className="flex w-full min-w-0 flex-col gap-1 sm:w-auto">
 							<Button type="button" className="w-full justify-center sm:w-auto" onClick={onRequestInvoice}>

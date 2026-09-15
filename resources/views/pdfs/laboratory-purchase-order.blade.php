@@ -4,47 +4,53 @@
     <meta charset="UTF-8">
     <title>Orden de laboratorio {{ $folio_orden }}</title>
     <style>
-        @page { margin: 24px 32px 28px; }
+        /*
+         * Tipografía: DejaVu Sans (sans-serif nativa de DomPDF).
+         * Inter/Manrope no están registradas en el stack; DejaVu Sans ofrece
+         * renderizado confiable, pesos regular/bold y excelente legibilidad en PDF.
+         */
+        @page { margin: 26px 34px 30px; }
 
         * { box-sizing: border-box; }
 
         body {
             margin: 0;
-            color: #172033;
+            color: #141c2e;
             background: #ffffff;
             font-family: DejaVu Sans, Arial, sans-serif;
-            font-size: 10.8px;
-            line-height: 1.52;
+            font-size: 10.5px;
+            font-weight: 400;
+            line-height: 1.58;
         }
 
         p { margin: 0; }
-        ul, ol { margin: 4px 0 0 15px; padding: 0; }
-        li { margin-bottom: 3px; }
+        ul, ol { margin: 5px 0 0 16px; padding: 0; }
+        li { margin-bottom: 4px; }
         strong {
             font-family: DejaVu Sans, Arial, sans-serif;
             font-weight: 700;
         }
 
-        .muted { color: #4f5e73; }
+        .muted { color: #3a4659; }
         .avoid-break { page-break-inside: avoid; }
 
         .topbar {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 16px;
+            margin-bottom: 18px;
         }
 
         .topbar td { vertical-align: middle; }
-        .logo-img { height: 24px; width: auto; }
-        .lab-logo { max-height: 28px; max-width: 118px; }
-        .brand-name { color: #172033; font-size: 12px; font-weight: 700; }
+        .logo-img { height: 26px; width: auto; }
+        .lab-logo { max-height: 30px; max-width: 120px; }
+        .brand-name { color: #141c2e; font-size: 12px; font-weight: 700; }
 
         .hero {
-            margin-bottom: 16px;
+            margin-bottom: 20px;
             border-top: 4px solid #c8f24a;
             background: #171f45;
             color: #ffffff;
-            padding: 19px 22px 20px;
+            padding: 22px 24px 22px;
         }
 
         .hero-table,
@@ -70,55 +76,59 @@
             vertical-align: top;
         }
 
-        .hero-copy { width: 66%; padding-right: 22px; }
-        .hero-aside { width: 34%; text-align: right; }
+        .hero-copy { width: 62%; padding-right: 24px; }
+        .hero-aside { width: 38%; text-align: right; vertical-align: bottom; }
 
         .eyebrow {
             color: #5140a0;
             font-size: 9px;
             font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        .hero .eyebrow {
+            color: #c8f24a;
+            font-size: 9.5px;
+            font-weight: 700;
             letter-spacing: 0;
         }
 
-        .hero .eyebrow { color: #c8f24a; }
-
         .hero-title {
-            margin: 3px 0 8px;
-            font-size: 30px;
-            line-height: 1.08;
+            margin: 5px 0 10px;
+            font-size: 28px;
+            line-height: 1.12;
             font-weight: 700;
         }
 
         .hero-text {
-            color: #e4e9f5;
+            color: #e8edf7;
             font-size: 11px;
-            line-height: 1.58;
+            line-height: 1.62;
+            font-weight: 400;
         }
 
         .hero-total-label {
-            margin-top: 31px;
-            color: #c8d0e2;
-            font-size: 8.7px;
+            margin-top: 28px;
+            color: #b8c4da;
+            font-size: 9px;
             font-weight: 700;
-            letter-spacing: .06em;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
         }
 
         .hero-total {
-            margin-top: 4px;
+            margin-top: 5px;
             color: #c8f24a;
-            font-size: 26px;
-            line-height: 1.06;
+            font-size: 32px;
+            line-height: 1.04;
             font-weight: 700;
         }
 
         .confirmed {
             display: inline-block;
             color: #e8fbef;
-            font-size: 8.8px;
+            font-size: 9.5px;
             font-weight: 700;
-            letter-spacing: .07em;
-            text-transform: uppercase;
         }
 
         .confirmed-dot {
@@ -131,53 +141,54 @@
         }
 
         .section {
-            margin-top: 15px;
+            margin-top: 20px;
         }
 
         .section-heading {
-            padding-top: 9px;
-            border-top: 1px solid #dce3ee;
+            padding-top: 10px;
+            border-top: 1px solid #d5dde8;
         }
 
         .section-title {
-            margin: 0 0 8px;
-            color: #172033;
-            font-size: 18px;
-            line-height: 1.2;
+            margin: 0 0 10px;
+            color: #141c2e;
+            font-size: 19px;
+            line-height: 1.22;
             font-weight: 700;
         }
 
         .section-copy {
-            color: #4f5e73;
-            font-size: 10.3px;
-            line-height: 1.56;
+            color: #3a4659;
+            font-size: 10.5px;
+            line-height: 1.62;
+            font-weight: 400;
         }
 
         .label {
             display: block;
-            margin-bottom: 2px;
-            color: #5e6b7f;
-            font-size: 8.7px;
+            margin-bottom: 3px;
+            color: #4a5568;
+            font-size: 8.5px;
             font-weight: 700;
-            letter-spacing: .05em;
+            letter-spacing: 0.06em;
             text-transform: uppercase;
         }
 
         .value {
-            color: #172033;
-            font-size: 11.5px;
+            color: #141c2e;
+            font-size: 12px;
             font-weight: 700;
-            line-height: 1.34;
+            line-height: 1.36;
         }
 
         .identity {
-            border-top: 2px solid #182033;
-            border-bottom: 1px solid #dce3ee;
-            padding: 13px 0;
+            border-top: 2px solid #141c2e;
+            border-bottom: 1px solid #d5dde8;
+            padding: 16px 0 15px;
         }
 
-        .identity-main { width: 68%; padding-right: 18px; }
-        .identity-ticket { width: 32%; }
+        .identity-main { width: 64%; padding-right: 20px; }
+        .identity-ticket { width: 36%; }
 
         .identity-grid {
             width: 100%;
@@ -186,98 +197,127 @@
 
         .identity-grid td {
             width: 50%;
-            padding: 0 16px 10px 0;
+            padding: 0 18px 12px 0;
         }
 
         .ticket {
             border-left: 4px solid #5140a0;
             background: #f7f5ff;
-            padding: 11px 0 11px 13px;
+            padding: 14px 0 14px 14px;
+        }
+
+        .ticket .label {
+            color: #5140a0;
+            font-size: 8.5px;
         }
 
         .ticket-number {
-            color: #231a54;
-            font-size: 25px;
+            color: #1a1240;
+            font-size: 30px;
             line-height: 1.05;
             font-weight: 700;
+            letter-spacing: -0.01em;
         }
 
         .ticket-help {
-            margin-top: 4px;
-            color: #4f5e73;
-            font-size: 9.6px;
+            margin-top: 5px;
+            color: #3a4659;
+            font-size: 10px;
             font-weight: 700;
+            line-height: 1.4;
         }
 
         .summary {
-            padding-bottom: 11px;
-            border-bottom: 1px solid #dce3ee;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #d5dde8;
         }
 
-        .summary-details { width: 66%; padding-right: 22px; }
-        .summary-total { width: 34%; text-align: right; }
+        .summary-details { width: 64%; padding-right: 24px; }
+        .summary-total { width: 36%; text-align: right; vertical-align: bottom; }
 
         .summary-row {
-            border-bottom: 1px solid #edf1f6;
+            border-bottom: 1px solid #e8edf4;
         }
 
         .summary-row td {
-            padding: 5px 10px 5px 0;
+            padding: 6px 10px 6px 0;
         }
 
         .summary-row td:first-child {
-            width: 38%;
-            color: #5e6b7f;
-            font-size: 8.8px;
+            width: 36%;
+            color: #4a5568;
+            font-size: 8.5px;
             font-weight: 700;
-            letter-spacing: .05em;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
         }
 
         .summary-row td:last-child {
-            color: #172033;
+            color: #141c2e;
             font-size: 11px;
             font-weight: 700;
         }
 
+        .summary-row-primary td:last-child {
+            font-size: 12.5px;
+            font-weight: 700;
+        }
+
+        .summary-row-secondary td:first-child {
+            color: #5a6578;
+        }
+
+        .summary-row-secondary td:last-child {
+            color: #2a3447;
+            font-size: 10.5px;
+            font-weight: 400;
+        }
+
         .total-rule {
             display: inline-block;
-            width: 86px;
+            width: 92px;
             border-top: 3px solid #c8f24a;
-            margin-bottom: 9px;
+            margin-bottom: 10px;
         }
 
         .total-label {
-            color: #5e6b7f;
-            font-size: 8.8px;
+            color: #4a5568;
+            font-size: 9px;
             font-weight: 700;
-            letter-spacing: .08em;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
         }
 
         .total-value {
-            margin-top: 4px;
+            margin-top: 5px;
             color: #171f45;
-            font-size: 23px;
-            line-height: 1.1;
+            font-size: 27px;
+            line-height: 1.08;
             font-weight: 700;
         }
 
         .credit-note {
-            margin-top: 7px;
+            margin-top: 8px;
             color: #087a4c;
-            font-size: 9.4px;
+            font-size: 10px;
             font-weight: 700;
+            line-height: 1.45;
         }
 
         .appointment {
-            padding: 12px 0 11px;
-            border-top: 1px solid #dce3ee;
-            border-bottom: 1px solid #dce3ee;
+            padding: 14px 0 13px;
+            border-top: 1px solid #d5dde8;
+            border-bottom: 1px solid #d5dde8;
         }
 
-        .appointment-date { width: 28%; padding-right: 18px; }
-        .appointment-place { width: 72%; }
+        .appointment .eyebrow {
+            margin-bottom: 8px;
+            font-size: 9.5px;
+            font-weight: 700;
+        }
+
+        .appointment-date { width: 32%; padding-right: 20px; }
+        .appointment-place { width: 68%; padding-top: 2px; }
 
         .date-card {
             color: #171f45;
@@ -285,106 +325,126 @@
         }
 
         .date-main {
-            font-size: 22px;
-            line-height: 1.12;
+            font-size: 24px;
+            line-height: 1.14;
+            font-weight: 700;
         }
 
         .time-main {
-            margin-top: 3px;
+            margin-top: 4px;
             color: #5140a0;
-            font-size: 17px;
-            line-height: 1.15;
+            font-size: 20px;
+            line-height: 1.18;
+            font-weight: 700;
         }
 
         .place-name {
-            color: #172033;
-            font-size: 13.5px;
-            line-height: 1.2;
+            color: #141c2e;
+            font-size: 12px;
+            line-height: 1.3;
             font-weight: 700;
         }
 
         .place-address {
-            margin-top: 4px;
-            color: #4f5e73;
-            font-size: 10.3px;
-            line-height: 1.5;
+            margin-top: 5px;
+            color: #3a4659;
+            font-size: 10px;
+            line-height: 1.55;
+            font-weight: 400;
         }
 
         .validity {
-            margin-top: 12px;
-            padding: 8px 0 8px 12px;
+            margin-top: 14px;
+            padding: 7px 0 7px 12px;
             border-left: 3px solid #c8f24a;
         }
 
         .validity-days {
-            width: 95px;
+            width: 88px;
             color: #171f45;
-            font-size: 19px;
-            line-height: 1.1;
+            font-size: 18px;
+            line-height: 1.12;
             font-weight: 700;
         }
 
+        .validity-days .label {
+            margin-bottom: 2px;
+        }
+
         .validity-copy {
-            color: #4f5e73;
-            font-size: 10.2px;
-            line-height: 1.48;
+            color: #3a4659;
+            font-size: 10px;
+            line-height: 1.55;
+            font-weight: 400;
         }
 
         .steps {
-            margin-top: 4px;
+            margin-top: 6px;
         }
 
         .step {
             page-break-inside: avoid;
-            padding: 7px 0 8px;
+            padding: 8px 0 9px;
             border-bottom: 1px solid #e3e8f1;
         }
 
         .first-step {
             page-break-inside: avoid;
+            padding-top: 0;
         }
 
         .step-number {
-            width: 42px;
+            width: 40px;
             color: #5140a0;
-            font-size: 14.5px;
+            font-size: 15px;
             font-weight: 700;
+            line-height: 1.2;
         }
 
         .step-title {
-            color: #172033;
-            font-size: 12px;
-            line-height: 1.25;
+            color: #141c2e;
+            font-size: 12.5px;
+            line-height: 1.28;
             font-weight: 700;
         }
 
         .step-copy {
-            margin-top: 3px;
-            color: #4f5e73;
-            font-size: 10.2px;
-            line-height: 1.52;
+            margin-top: 4px;
+            color: #3a4659;
+            font-size: 10.5px;
+            line-height: 1.6;
+            font-weight: 400;
         }
 
         .prep-intro {
             page-break-inside: avoid;
-            margin-top: 14px;
-            padding-top: 10px;
-            border-top: 2px solid #182033;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 2px solid #141c2e;
         }
 
         .prep-title {
-            margin-top: 2px;
-            color: #182033;
-            font-size: 21px;
-            line-height: 1.18;
+            margin-top: 3px;
+            color: #141c2e;
+            font-size: 19px;
+            line-height: 1.2;
             font-weight: 700;
         }
 
         .study {
-            page-break-inside: avoid;
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px solid #dce3ee;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #d5dde8;
+        }
+
+        .study-compact {
+            margin-top: 7px;
+            padding-top: 7px;
+            padding-bottom: 2px;
+        }
+
+        .study-long {
+            page-break-inside: auto;
         }
 
         .first-study {
@@ -396,7 +456,7 @@
         .study-heading {
             page-break-after: avoid;
             page-break-inside: avoid;
-            margin-bottom: 5px;
+            margin-bottom: 6px;
         }
 
         .study-heading-table {
@@ -405,44 +465,57 @@
         }
 
         .study-heading-table td {
-            vertical-align: top;
+            vertical-align: baseline;
         }
 
         .study-number {
-            width: 34px;
+            width: 30px;
+            padding-right: 6px;
             color: #087a4c;
-            font-size: 9px;
+            font-size: 13px;
             font-weight: 700;
-            letter-spacing: .04em;
-            text-transform: uppercase;
+            line-height: 1.3;
+            white-space: nowrap;
         }
 
         .study-name {
-            color: #172033;
-            font-size: 13.7px;
-            line-height: 1.32;
+            color: #141c2e;
+            font-size: 13.5px;
+            line-height: 1.34;
             font-weight: 700;
         }
 
         .prep-label {
-            margin: 1px 0 3px;
+            margin: 2px 0 4px 36px;
             color: #5140a0;
-            font-size: 9.4px;
+            font-size: 9px;
             font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .study-compact .prep-label {
+            margin-left: 36px;
+            margin-bottom: 2px;
         }
 
         .instructions {
-            color: #263244;
-            font-size: 10.5px;
-            line-height: 1.58;
+            margin-left: 36px;
+            color: #1e2838;
+            font-size: 11px;
+            line-height: 1.66;
+            font-weight: 400;
         }
 
-        .instruction-line { margin: 0 0 4px; }
+        .study-compact .instructions {
+            line-height: 1.5;
+        }
+
+        .instruction-line { margin: 0 0 5px; }
 
         .instruction-bullet-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 4px;
+            margin-bottom: 5px;
         }
 
         .instruction-bullet-table td {
@@ -450,77 +523,88 @@
         }
 
         .bullet-mark {
-            width: 13px;
+            width: 12px;
             color: #5140a0;
-            font-size: 10.4px;
-            line-height: 1.55;
+            font-size: 11px;
+            line-height: 1.66;
         }
 
         .package-includes {
             page-break-inside: avoid;
-            margin: 6px 0 5px;
-            padding: 5px 0 4px 9px;
+            margin: 6px 0 6px 36px;
+            padding: 6px 0 5px 10px;
             border-left: 3px solid #f59e0b;
         }
 
         .package-includes-title {
-            margin: 0 0 3px;
+            margin: 0 0 4px;
             color: #9a3412;
-            font-size: 8.6px;
+            font-size: 8.5px;
             font-weight: 700;
-            letter-spacing: .05em;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
         }
 
         .package-includes ul {
             margin-top: 0;
             color: #7c2d12;
-            font-size: 9.4px;
-            line-height: 1.45;
+            font-size: 10px;
+            line-height: 1.5;
         }
 
         .support {
-            margin-top: 14px;
-            padding-top: 10px;
+            margin-top: 18px;
+            padding-top: 12px;
             border-top: 2px solid #5140a0;
         }
 
+        .support .eyebrow {
+            margin-bottom: 4px;
+        }
+
         .support-title {
-            color: #172033;
-            font-size: 17px;
-            line-height: 1.2;
+            color: #141c2e;
+            font-size: 18px;
+            line-height: 1.24;
             font-weight: 700;
         }
 
         .support-copy {
-            margin-top: 4px;
-            color: #4f5e73;
-            font-size: 10.2px;
-            line-height: 1.5;
+            margin-top: 5px;
+            color: #3a4659;
+            font-size: 10.5px;
+            line-height: 1.58;
+            font-weight: 400;
         }
 
         .support-phone {
-            margin-top: 6px;
-            color: #172033;
-            font-size: 10.8px;
+            margin-top: 7px;
+            color: #141c2e;
+            font-size: 11px;
+            line-height: 1.45;
         }
 
         .support-table {
-            margin-top: 9px;
-            border-top: 1px solid #dce3ee;
+            margin-top: 10px;
+            border-top: 1px solid #d5dde8;
         }
 
         .support-table td {
             width: 25%;
-            padding: 7px 10px 0 0;
+            padding: 8px 10px 0 0;
+        }
+
+        .support-table .value {
+            font-size: 10.5px;
         }
 
         .support-footer {
-            margin-top: 7px;
-            padding-top: 6px;
-            border-top: 1px solid #dce3ee;
-            color: #5f6b7c;
-            font-size: 8.8px;
+            margin-top: 8px;
+            padding-top: 7px;
+            border-top: 1px solid #d5dde8;
+            color: #4a5568;
+            font-size: 9px;
+            line-height: 1.45;
         }
 
         .support-footer-table {
@@ -547,7 +631,7 @@
             @if($famedic_logo_url)
                 <img class="logo-img" src="{{ $famedic_logo_url }}" alt="Famedic">
             @else
-                <span class="brand-name">FAMEDIC</span>
+                <span class="brand-name">Famedic</span>
             @endif
         </td>
         <td style="width:50%; text-align:right;">
@@ -568,14 +652,14 @@
                 <div class="hero-title">Orden confirmada</div>
                 <p class="hero-text">Hola {{ $nombre_usuario }},</p>
                 @if ($withAppointment)
-                    <p class="hero-text" style="margin-top:5px;">Tu cita quedó confirmada en {{ $laboratorio_marca }}. Aquí tienes tu comprobante e instrucciones para presentarte sin contratiempos.</p>
+                    <p class="hero-text" style="margin-top:6px;">Tu cita quedó confirmada en {{ $laboratorio_marca }}. Aquí tienes tu comprobante e instrucciones para presentarte sin contratiempos.</p>
                 @else
-                    <p class="hero-text" style="margin-top:5px;">Tu compra quedó confirmada en {{ $laboratorio_marca }}. Aquí tienes tu comprobante e instrucciones para presentarte en sucursal con total tranquilidad.</p>
+                    <p class="hero-text" style="margin-top:6px;">Tu compra quedó confirmada en {{ $laboratorio_marca }}. Aquí tienes tu comprobante e instrucciones para presentarte en sucursal con total tranquilidad.</p>
                 @endif
             </td>
             <td class="hero-aside">
                 <span class="confirmed"><span class="confirmed-dot"></span>Confirmada</span>
-                <div class="hero-total-label">Total pagado</div>
+                <div class="hero-total-label">Total</div>
                 <div class="hero-total">{{ $total }}</div>
             </td>
         </tr>
@@ -626,25 +710,25 @@
         <tr>
             <td class="summary-details">
                 <div class="section-title">Resumen de compra</div>
-                <table class="summary-row">
+                <table class="summary-row summary-row-primary">
                     <tr><td>Laboratorio</td><td>{{ $laboratorio_marca }}</td></tr>
                 </table>
-                <table class="summary-row">
+                <table class="summary-row summary-row-primary">
                     <tr><td>Método</td><td>{{ $metodo_pago }}</td></tr>
                 </table>
-                <table class="summary-row">
+                <table class="summary-row summary-row-primary">
                     <tr><td>Fecha</td><td>{{ $fecha_compra }}</td></tr>
                 </table>
-                <table class="summary-row">
+                <table class="summary-row summary-row-secondary">
                     <tr><td>Estatus</td><td>{{ $estatus_pago }}</td></tr>
                 </table>
-                <table class="summary-row">
+                <table class="summary-row summary-row-secondary">
                     <tr><td>Subtotal</td><td>{{ $subtotal ?? $total_gross ?? $total }}</td></tr>
                 </table>
-                <table class="summary-row">
+                <table class="summary-row summary-row-secondary">
                     <tr><td>Descuento</td><td>{{ $catalog_discount ?? 'No aplica' }}</td></tr>
                 </table>
-                <table class="summary-row">
+                <table class="summary-row summary-row-secondary">
                     <tr><td>Crédito</td><td>{{ $coupon_discount ?? 'No aplica' }}</td></tr>
                 </table>
                 @if (!empty($credit_applied_message))
@@ -672,7 +756,7 @@
                     </div>
                 </td>
                 <td class="appointment-place">
-                    <div class="place-name">{{ $laboratorio_marca }}{{ ($branch_name ?? null) ? ' - '.$branch_name : '' }}</div>
+                    <div class="place-name">{{ $laboratorio_marca }}{{ ($branch_name ?? null) ? ' · '.$branch_name : '' }}</div>
                     <div class="place-address">{{ $branch_address ?? '-' }}</div>
                 </td>
             </tr>
@@ -706,7 +790,7 @@
                         @if ($withAppointment)
                             <p class="step-copy">Acude a la sucursal indicada para tu cita. Si necesitas reprogramar, contacta a FAMEDIC antes de presentarte.</p>
                             @if (($branch_name ?? null) || ($branch_address ?? null))
-                                <p class="step-copy"><strong>{{ $branch_name ?? $laboratorio_marca }}</strong> - {{ $branch_address ?? '-' }}</p>
+                                <p class="step-copy"><strong>{{ $branch_name ?? $laboratorio_marca }}</strong> · {{ $branch_address ?? '-' }}</p>
                             @endif
                         @else
                             <p class="step-copy">Tus estudios no requieren cita. Puedes acudir dentro del horario de atención de la sucursal.</p>
@@ -762,9 +846,12 @@
             if ($instructionLines->isEmpty()) {
                 $instructionLines = collect(['-']);
             }
+            $instructionCharCount = $instructionLines->sum(fn ($line) => mb_strlen($line));
+            $isCompactStudy = $instructionLines->count() === 1 && $instructionCharCount <= 80;
+            $isLongStudy = $instructionLines->count() > 4 || $instructionCharCount > 320;
             $pkg = $study['feature_list'] ?? [];
         @endphp
-        <div class="study {{ $loop->first ? 'first-study' : '' }}">
+        <div class="study {{ $loop->first ? 'first-study' : '' }} {{ $isCompactStudy ? 'study-compact' : '' }} {{ $isLongStudy ? 'study-long' : '' }}">
             @if ($loop->first)
                 <div class="prep-intro">
                     <div class="eyebrow">Preparación de estudios</div>
@@ -856,8 +943,8 @@
         <table class="support-footer-table">
             <tr>
                 <td>
-                    <span>FAMEDIC</span>
-                    <span style="color:#172033; font-weight:700;"> · Equipo FAMEDIC</span>
+                    <span>Famedic</span>
+                    <span style="color:#141c2e; font-weight:700;"> · Equipo Famedic</span>
                 </td>
                 <td class="support-footer-right">
                     Documento generado automáticamente · Folio {{ $folio_orden }}

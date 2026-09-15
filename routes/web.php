@@ -11,6 +11,7 @@ use App\Http\Controllers\Marketing\MarketingCampaignLinkAuthController;
 use App\Http\Controllers\Marketing\MarketingCampaignLinkController;
 use App\Http\Controllers\PrivacyPolicyController;
 use App\Http\Controllers\ResultsController;
+use App\Http\Controllers\SharedLaboratoryOrderController;
 use App\Http\Controllers\TermsOfServiceController;
 use App\Http\Controllers\UserPurchasesController;
 use App\Http\Controllers\VendorPaymentController;
@@ -28,6 +29,11 @@ Route::get('/c/{slug}', MarketingCampaignLinkController::class)
 Route::get('/c/{slug}/auth', MarketingCampaignLinkAuthController::class)
     ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
     ->name('campaign-links.require-auth');
+
+Route::get('/shared/laboratory-orders/{token}', SharedLaboratoryOrderController::class)
+    ->where('token', '[A-Fa-f0-9]{64}')
+    ->middleware('throttle:30,1')
+    ->name('shared.laboratory-orders.show');
 
 // Route::get('/terms-of-service', TermsOfServiceController::class)->name('terms-of-service');
 // Route::get('/privacy-policy', PrivacyPolicyController::class)->name('privacy-policy');

@@ -351,6 +351,7 @@ class LaboratoryPurchaseController extends Controller
         }
 
         $isNewResult = $laboratoryPurchase->hasUnseenResultsForPatient();
+        $activeShare = $laboratoryPurchase->shares()->active()->latest()->first();
 
         return Inertia::render('LaboratoryPurchase', [
             'laboratoryPurchase' => tap($laboratoryPurchase, function (LaboratoryPurchase $purchase) {
@@ -364,6 +365,13 @@ class LaboratoryPurchaseController extends Controller
             'latestResultsAt' => $latestResultsAt,
             'hasResultsPdfCached' => $hasResultsPdfCached,
             'is_new_result' => $isNewResult,
+            'activeLaboratoryPurchaseShare' => $activeShare ? [
+                'id' => $activeShare->id,
+                'expires_at' => $activeShare->expires_at?->toIso8601String(),
+                'formatted_expires_at' => $activeShare->expires_at
+                    ? localizedDate($activeShare->expires_at)->isoFormat('D MMM Y h:mm a')
+                    : null,
+            ] : null,
             'taxProfiles' => \App\Models\TaxProfile::presentCollectionForPatient(
                 auth()->guard()->user()->customer
             ),

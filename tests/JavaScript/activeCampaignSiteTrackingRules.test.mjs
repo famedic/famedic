@@ -25,6 +25,7 @@ test("blocks token, otp, and result URLs", () => {
 	assert.equal(shouldTrack("/checkout/payment?token=abc"), false);
 	assert.equal(shouldTrack("/laboratory/olab/checkout?otp=123456"), false);
 	assert.equal(shouldTrack("/laboratory-purchases/42/results"), false);
+	assert.equal(shouldTrack("/shared/laboratory-orders/abcdef"), false);
 	assert.equal(shouldTrack("/verify-phone/confirmation"), false);
 	assert.equal(shouldTrack("/reset-password/abc"), false);
 });

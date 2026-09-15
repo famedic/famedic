@@ -13,6 +13,7 @@ import InvoiceSection from "@/Components/LaboratoryOrderDetail/InvoiceSection";
 import ResultsSection from "@/Components/LaboratoryOrderDetail/ResultsSection";
 import OrderTimeline from "@/Components/LaboratoryOrderDetail/OrderTimeline";
 import InstructionsContent from "@/Components/LaboratoryOrderDetail/InstructionsContent";
+import ShareDialog from "@/Components/LaboratoryOrderDetail/ShareDialog";
 import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
 import Card from "@/Components/Card";
 import { navigateToLabResults, openLabResultsInNewTabOrSame } from "@/Utils/openLabResultsUrl";
@@ -66,6 +67,7 @@ export default function LaboratoryOrderDetail({
 	const [activeTab, setActiveTab] = useState("patient");
 	const [pendingScrollToPreparation, setPendingScrollToPreparation] = useState(false);
 	const [showOtpModal, setShowOtpModal] = useState(false);
+	const [showShareDialog, setShowShareDialog] = useState(false);
 	const [otpPurchaseId, setOtpPurchaseId] = useState(null);
 	const [isProcessingResults, setIsProcessingResults] = useState(false);
 	const [otpStatus, setOtpStatus] = useState({ verified: false, expiresIn: 0 });
@@ -85,7 +87,12 @@ export default function LaboratoryOrderDetail({
 		setActiveTab(tab);
 		scrollToTabContent();
 	};
-	const { daysLeftToRequestInvoice = 0, errors: pageErrors = {}, ...pageProps } = usePage().props;
+	const {
+		daysLeftToRequestInvoice = 0,
+		errors: pageErrors = {},
+		activeLaboratoryPurchaseShare = null,
+		...pageProps
+	} = usePage().props;
 	const labResultsOtpRequired = isLabResultsOtpRequired(pageProps);
 
 	useEffect(() => {
@@ -404,6 +411,7 @@ export default function LaboratoryOrderDetail({
 			cancelledAtLabel={cancelledAtLabel}
 			onRequestInvoice={() => handleTabChange("invoice")}
 			onDownload={handleDownloadOrder}
+			onShare={() => setShowShareDialog(true)}
 		/>
 	);
 
@@ -580,6 +588,12 @@ export default function LaboratoryOrderDetail({
 					onClose={handleOtpModalClose}
 				/>
 			)}
+			<ShareDialog
+				isOpen={showShareDialog}
+				onClose={() => setShowShareDialog(false)}
+				purchaseId={laboratoryPurchase?.id}
+				activeShare={activeLaboratoryPurchaseShare}
+			/>
 		</SettingsLayout>
 	);
 }

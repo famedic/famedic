@@ -36,6 +36,17 @@ class LaboratoryPurchasePolicy
         return $this->administratorHasPermission($user, 'laboratory-purchases.manage');
     }
 
+    public function createShare(User $user, LaboratoryPurchase $laboratoryPurchase): bool
+    {
+        return ! $laboratoryPurchase->trashed()
+            && $user->customer?->id === $laboratoryPurchase->customer_id;
+    }
+
+    public function revokeShare(User $user, LaboratoryPurchase $laboratoryPurchase): bool
+    {
+        return $user->customer?->id === $laboratoryPurchase->customer_id;
+    }
+
     /**
      * Carga o reemplazo de PDF/XML de factura de laboratorio.
      */

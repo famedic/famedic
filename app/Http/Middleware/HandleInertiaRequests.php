@@ -38,6 +38,20 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        if ($request->is('shared/laboratory-orders/*')) {
+            return [
+                ...parent::share($request),
+                'ziggy' => fn () => [
+                    ...(new Ziggy)->toArray(),
+                    'location' => $request->url(),
+                ],
+                'appEnv' => app()->environment(),
+                'appEnvLabel' => AppEnvironmentLabel::current(),
+                'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
+                'laboratoryBrands' => LaboratoryBrand::brandsData(),
+            ];
+        }
+
         return [
             ...parent::share($request),
             'auth' => [

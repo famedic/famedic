@@ -19,6 +19,7 @@ const BLOCKED_PREFIXES = [
 	"/paypal",
 	"/register/invitation",
 	"/reset-password",
+	"/shared/laboratory-orders",
 	"/solicitud-arco",
 	"/tax-profiles",
 	"/verify-email",

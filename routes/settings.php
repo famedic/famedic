@@ -6,6 +6,7 @@ use App\Http\Controllers\Checkout\ContactController as CheckoutContactController
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\FamilyController;
 use App\Http\Controllers\LaboratoryPurchaseController;
+use App\Http\Controllers\LaboratoryPurchaseShareController;
 use App\Http\Controllers\LaboratoryResultController;
 use App\Http\Controllers\LaboratoryQuoteController;
 use App\Http\Controllers\EfevooWebhookController;
@@ -88,6 +89,10 @@ Route::middleware([
         ->withoutMiddleware(['auth', 'customer']);
 
     Route::resource('laboratory-purchases', LaboratoryPurchaseController::class)->only(['index', 'show']);
+    Route::post('/laboratory-purchases/{laboratory_purchase}/shares', [LaboratoryPurchaseShareController::class, 'store'])
+        ->name('laboratory-purchases.shares.store');
+    Route::delete('/laboratory-purchases/{laboratory_purchase}/shares/{share}', [LaboratoryPurchaseShareController::class, 'destroy'])
+        ->name('laboratory-purchases.shares.destroy');
 
     Route::resource('laboratory-quotes', LaboratoryQuoteController::class)->only(['index', 'show']);
     Route::resource('laboratory-results', LaboratoryResultController::class)->only(['index', 'show']);
