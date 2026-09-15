@@ -63,6 +63,17 @@ test("public order page keeps study indications behind an accessible accordion",
 	assert.match(source, /ApplicationLogo/);
 	assert.match(source, />\s*FAMEDIC\s*</);
 	assert.match(source, /dark:text-white/);
+	assert.match(source, /Head title=\{metaTitle\}/);
+	assert.match(source, /Orden de compra de laboratorio \| FAMEDIC/);
+	assert.match(source, /Consulta la información de tu orden de laboratorio, estudios solicitados, cita e indicaciones de preparación\./);
+	assert.match(source, /og:title/);
+	assert.match(source, /og:description/);
+	assert.match(source, /og:image/);
+	assert.match(source, /og:url/);
+	assert.match(source, /summary_large_image/);
+	assert.match(source, /\/images\/og\/famedic-og\.png/);
+	assert.match(source, /buildAbsoluteUrl/);
+	assert.match(source, /props\?\.ziggy\?\.location/);
 	assert.match(source, /icon: Icon = null/);
 	assert.match(source, /icon=\{MapPinIcon\}/);
 	assert.match(source, /bg-\[#171f45\]/);

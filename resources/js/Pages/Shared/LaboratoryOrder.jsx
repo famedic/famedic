@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Head } from "@inertiajs/react";
+import { Head, usePage } from "@inertiajs/react";
 import ApplicationLogo from "@/Components/ApplicationLogo";
 import { WhatsAppIcon } from "@/Components/Checkout/CheckoutWhatsAppHelp";
 import {
@@ -113,6 +113,13 @@ function normalizePersonName(value) {
 
 function buildSupportWhatsAppUrl() {
 	return `https://wa.me/528128601893?text=${encodeURIComponent("Hola, necesito ayuda con mi orden de laboratorio Famedic.")}`;
+}
+
+function buildAbsoluteUrl(path, currentUrl) {
+	if (!path || /^https?:\/\//iu.test(path)) return path;
+	if (!currentUrl) return path;
+
+	return new URL(path, currentUrl).toString();
 }
 
 function IndicationsAccordion({ studies }) {
@@ -335,6 +342,7 @@ function GuideStep({ number, icon: Icon, title, children }) {
 }
 
 export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
+	const { props } = usePage();
 	const appointment = laboratoryOrder?.appointment || {};
 	const store = laboratoryOrder?.store;
 	const studies = laboratoryOrder?.studies || [];
@@ -507,10 +515,27 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 	const noAppointmentStoresCard = !requiresAppointment ? (
 		<NoAppointmentStores brand={brand} featuredStores={featuredStores} storeDirectoryUrl={storeDirectoryUrl} />
 	) : null;
+	const currentUrl = props?.ziggy?.location || (typeof window !== "undefined" ? window.location.href : "");
+	const metaTitle = "Orden de compra de laboratorio | FAMEDIC";
+	const metaDescription = "Consulta la información de tu orden de laboratorio, estudios solicitados, cita e indicaciones de preparación.";
+	const metaImageUrl = buildAbsoluteUrl("/images/og/famedic-og.png", currentUrl);
 
 	return (
 		<>
-			<Head title="Guía de tu orden de laboratorio" />
+			<Head title={metaTitle}>
+				<meta name="description" content={metaDescription} />
+				<meta property="og:type" content="website" />
+				<meta property="og:site_name" content="FAMEDIC" />
+				<meta property="og:title" content={metaTitle} />
+				<meta property="og:description" content={metaDescription} />
+				<meta property="og:image" content={metaImageUrl} />
+				<meta property="og:image:alt" content="FAMEDIC, salud al alcance de todos" />
+				<meta property="og:url" content={currentUrl} />
+				<meta name="twitter:card" content="summary_large_image" />
+				<meta name="twitter:title" content={metaTitle} />
+				<meta name="twitter:description" content={metaDescription} />
+				<meta name="twitter:image" content={metaImageUrl} />
+			</Head>
 			<main className="min-h-screen bg-zinc-50 text-zinc-950 dark:bg-slate-950">
 				<div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
 					<header className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
