@@ -37,7 +37,7 @@ function Section({ title, icon: Icon, action, children, className = "" }) {
 	);
 }
 
-function Detail({ icon: Icon, label, children }) {
+function Detail({ icon: Icon, label, children, emphasized = false }) {
 	if (children === null || children === undefined || children === "") return null;
 
 	return (
@@ -45,7 +45,13 @@ function Detail({ icon: Icon, label, children }) {
 			<Icon className="mt-0.5 size-5 shrink-0 text-[#005e96]" aria-hidden />
 			<div className="min-w-0">
 				<p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
-				<div className="mt-1 break-words text-sm text-zinc-900">{children}</div>
+				<div
+					className={`mt-1 break-words text-sm ${
+						emphasized ? "text-base font-semibold text-[#171f45]" : "text-zinc-900"
+					}`}
+				>
+					{children}
+				</div>
 			</div>
 		</div>
 	);
@@ -215,36 +221,6 @@ function OperationalDatum({ label, value }) {
 	);
 }
 
-function FeaturedStoreCard({ store }) {
-	return (
-		<article className="flex min-w-0 flex-col gap-3 rounded-lg border border-zinc-200 bg-white p-4">
-			<div className="min-w-0">
-				<h3 className="break-words text-sm font-semibold text-zinc-950">{store.name}</h3>
-				{store.address && <p className="mt-2 break-words text-sm leading-6 text-zinc-700">{store.address}</p>}
-			</div>
-			<div className="space-y-2 text-sm text-zinc-700">
-				{store.hours && (
-					<p className="flex gap-2">
-						<ClockIcon className="mt-0.5 size-4 shrink-0 text-[#005e96]" aria-hidden />
-						<span className="break-words">{store.hours}</span>
-					</p>
-				)}
-				{store.phone && (
-					<p className="flex gap-2 text-zinc-500">
-						<PhoneIcon className="mt-0.5 size-4 shrink-0 text-zinc-400" aria-hidden />
-						<span className="break-all">{store.phone}</span>
-					</p>
-				)}
-			</div>
-			<div className="mt-auto">
-				<PrimaryLink href={store.google_maps_url} external outline icon={MapPinIcon}>
-					Cómo llegar
-				</PrimaryLink>
-			</div>
-		</article>
-	);
-}
-
 function AppointmentBoardingPass({ appointment, brand, store, share, storeDirectoryUrl }) {
 	return (
 		<Section title="Tu cita" icon={CalendarDaysIcon}>
@@ -294,7 +270,7 @@ function AppointmentBoardingPass({ appointment, brand, store, share, storeDirect
 	);
 }
 
-function NoAppointmentStores({ brand, featuredStores, storeDirectoryUrl }) {
+function NoAppointmentStores({ brand, storeDirectoryUrl }) {
 	return (
 		<Section
 			title="Tus estudios no requieren cita previa"
@@ -311,16 +287,8 @@ function NoAppointmentStores({ brand, featuredStores, storeDirectoryUrl }) {
 						<p className="break-words text-sm text-zinc-700">
 							Puedes acudir a cualquiera de las sucursales disponibles de {brand.label || "tu laboratorio"} dentro de su horario de atención.
 						</p>
-						<p className="mt-2 text-sm font-semibold text-zinc-950">{formatStoresCount(brand.stores_count)}</p>
 					</div>
 				</div>
-				{featuredStores.length > 0 && (
-					<div className="grid gap-4 md:grid-cols-2">
-						{featuredStores.map((featuredStore, index) => (
-							<FeaturedStoreCard key={`${featuredStore.name}-${index}`} store={featuredStore} />
-						))}
-					</div>
-				)}
 			</div>
 		</Section>
 	);
@@ -351,7 +319,6 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 	const purchaser = laboratoryOrder?.purchaser || {};
 	const order = laboratoryOrder?.order || {};
 	const pricing = laboratoryOrder?.pricing || {};
-	const featuredStores = brand.featured_stores || [];
 	const hasAppointment = Boolean(appointment.has_appointment);
 	const requiresAppointment = Boolean(appointment.requires_appointment);
 	const hasConsecutive = Boolean(order.consecutive);
@@ -385,7 +352,7 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 		<div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
 			<Section title="Paciente y titular" icon={UserCircleIcon}>
 				<div className="grid gap-4 sm:grid-cols-2">
-					<Detail icon={IdentificationIcon} label="Paciente">
+					<Detail icon={IdentificationIcon} label="Paciente" emphasized>
 						{patient.full_name || "Paciente"}
 					</Detail>
 					<Detail icon={UserCircleIcon} label="Titular de la compra">
@@ -513,7 +480,7 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 		</section>
 	);
 	const noAppointmentStoresCard = !requiresAppointment ? (
-		<NoAppointmentStores brand={brand} featuredStores={featuredStores} storeDirectoryUrl={storeDirectoryUrl} />
+		<NoAppointmentStores brand={brand} storeDirectoryUrl={storeDirectoryUrl} />
 	) : null;
 	const currentUrl = props?.ziggy?.location || (typeof window !== "undefined" ? window.location.href : "");
 	const metaTitle = "Orden de compra de laboratorio | FAMEDIC";

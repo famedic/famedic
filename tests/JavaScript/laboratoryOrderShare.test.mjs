@@ -50,7 +50,6 @@ test("public order page keeps study indications behind an accessible accordion",
 	assert.match(source, /Ver indicaciones/);
 	assert.match(source, /Ocultar indicaciones/);
 	assert.match(source, /Ver todas las \{brand\.stores_count\} sucursales/);
-	assert.match(source, /FeaturedStoreCard/);
 	assert.match(source, /flex-col gap-2 sm:flex-row sm:items-start sm:justify-between/);
 	assert.match(source, /Folio/);
 	assert.match(source, /Consecutivo/);
@@ -92,6 +91,8 @@ test("public order page keeps study indications behind an accessible accordion",
 		/\{patientAndOrderCards\}\s+\{appointmentCard\}\s+\{studiesAndSummaryCards\}\s+\{preparationCard\}\s+\{visitGuideCards\}\s+\{noAppointmentStoresCard\}/,
 	);
 	assert.doesNotMatch(source, /Sucursal esta pendiente|Sucursal pendiente/);
+	assert.doesNotMatch(source, /FeaturedStoreCard/);
+	assert.doesNotMatch(source, /featuredStores/);
 	assert.doesNotMatch(source, /Sin cita/);
 	assert.doesNotMatch(source, /bg-zinc-950 px-4 py-3 text-white/);
 	assert.doesNotMatch(source, /Este enlace permite consultar/);
