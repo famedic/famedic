@@ -11,10 +11,11 @@ import {
 import { Input } from "@/Components/Catalyst/input";
 import { buildEmailShareUrl, buildLaboratoryOrderShareMessage, buildWhatsAppShareUrl } from "@/lib/laboratoryOrderShare";
 import {
-	ArrowPathIcon,
 	ClipboardDocumentIcon,
 	EnvelopeIcon,
+	LinkIcon,
 	ShareIcon,
+	UserGroupIcon,
 	XMarkIcon,
 } from "@heroicons/react/24/outline";
 
@@ -109,12 +110,20 @@ export default function ShareDialog({ isOpen, onClose, purchaseId, activeShare =
 		<Dialog open={isOpen} onClose={onClose} size="lg">
 			<DialogTitle>Compartir orden de laboratorio</DialogTitle>
 			<DialogDescription>
-				Genera un enlace temporal para consultar solo la cita, estudios e instrucciones.
+				Genera un enlace temporal para que un familiar o amigo pueda consultar tu orden de compra.
 			</DialogDescription>
 
 			<DialogBody className="space-y-5">
-				<div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
-					Este enlace no muestra resultados, facturas, datos fiscales, pagos ni datos sensibles completos.
+				<div className="flex gap-3 rounded-xl border border-sky-100 bg-sky-50/80 p-4 dark:border-sky-900/60 dark:bg-sky-950/30">
+					<UserGroupIcon className="mt-0.5 size-5 shrink-0 text-sky-700 dark:text-sky-300" aria-hidden />
+					<div className="min-w-0 space-y-1">
+						<p className="text-sm font-semibold text-sky-950 dark:text-sky-100">
+							Comparte fácilmente tu orden
+						</p>
+						<p className="text-sm text-sky-800 dark:text-sky-200">
+							Ideal para que un familiar, amigo o cuidador pueda acompañarte o ayudarte con el seguimiento.
+						</p>
+					</div>
 				</div>
 
 				{hasActiveShareWithoutUrl && (
@@ -182,9 +191,14 @@ export default function ShareDialog({ isOpen, onClose, purchaseId, activeShare =
 						Desactivar enlace
 					</Button>
 				)}
-				<Button type="button" disabled={processing} onClick={createShare}>
-					<ArrowPathIcon data-slot="icon" className="size-4" />
-					{shareUrl ? "Generar nuevo" : "Generar enlace"}
+				<Button
+					type="button"
+					className="w-full justify-center sm:w-auto"
+					disabled={processing}
+					onClick={createShare}
+				>
+					<LinkIcon data-slot="icon" className="size-4" />
+					Generar enlace
 				</Button>
 			</DialogActions>
 		</Dialog>

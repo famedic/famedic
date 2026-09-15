@@ -66,3 +66,26 @@ test("public order page keeps study indications behind an accessible accordion",
 	assert.doesNotMatch(source, /Este enlace permite consultar/);
 	assert.doesNotMatch(source, /dangerouslySetInnerHTML/);
 });
+
+test("private order detail clarifies download and share actions", () => {
+	const header = readFileSync("resources/js/Components/LaboratoryOrderDetail/Header.jsx", "utf8");
+	const dialog = readFileSync("resources/js/Components/LaboratoryOrderDetail/ShareDialog.jsx", "utf8");
+
+	assert.match(header, /Descargar orden/);
+	assert.match(header, /Descargar orden de compra en PDF/);
+	assert.match(header, /Compartir orden de compra/);
+	assert.match(dialog, /Compartir orden de laboratorio/);
+	assert.match(
+		dialog,
+		/Genera un enlace temporal para que un familiar o amigo pueda consultar tu orden de compra\./,
+	);
+	assert.match(dialog, /Comparte fácilmente tu orden/);
+	assert.match(
+		dialog,
+		/Ideal para que un familiar, amigo o cuidador pueda acompañarte o ayudarte con el seguimiento\./,
+	);
+	assert.match(dialog, /UserGroupIcon/);
+	assert.match(dialog, /LinkIcon/);
+	assert.match(dialog, /Generar enlace/);
+	assert.doesNotMatch(dialog, /Este enlace no muestra resultados/);
+});

@@ -119,10 +119,11 @@ export default function Header({
 						type="button"
 						className="w-full shrink-0 justify-center self-start sm:w-auto"
 						onClick={onDownload}
-						title="Descargar comprobante en PDF"
+						title="Descargar orden de compra en PDF"
+						aria-label="Descargar orden de compra en PDF"
 					>
 						<DocumentArrowDownIcon data-slot="icon" className="size-4" aria-hidden />
-						Descargar
+						Descargar orden
 					</Button>
 					{!isCancelled && onShare && (
 						<Button
@@ -130,7 +131,8 @@ export default function Header({
 							type="button"
 							className="w-full shrink-0 justify-center self-start sm:w-auto"
 							onClick={onShare}
-							title="Compartir orden de laboratorio"
+							title="Compartir orden de compra"
+							aria-label="Compartir orden de compra"
 						>
 							<ShareIcon data-slot="icon" className="size-4" aria-hidden />
 							Compartir
