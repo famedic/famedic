@@ -2,370 +2,869 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Comprobante orden {{ $folio_orden }}</title>
+    <title>Orden de laboratorio {{ $folio_orden }}</title>
     <style>
+        @page { margin: 24px 32px 28px; }
+
         * { box-sizing: border-box; }
-        body { font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #1f2937; line-height: 1.45; margin: 0; padding: 22px; background: #ffffff; }
-        p { margin: 0 0 8px; }
 
-        .muted { color: #6b7280; }
-        .small { font-size: 10px; }
+        body {
+            margin: 0;
+            color: #172033;
+            background: #ffffff;
+            font-family: DejaVu Sans, Arial, sans-serif;
+            font-size: 10.8px;
+            line-height: 1.52;
+        }
 
-        .header { width: 100%; margin-bottom: 14px; }
-        .header td { vertical-align: middle; }
-        .brand { font-size: 16px; font-weight: 700; color: #111827; }
-        .title { font-size: 18px; font-weight: 700; color: #111827; margin-left: 10px; }
-        .pill { display: inline-block; padding: 6px 10px; background: #eef2ff; color: #3730a3; border-radius: 999px; font-weight: 700; font-size: 10px; }
-        .logo-img { height: 22px; width: auto; vertical-align: middle; }
-        .logo-divider { display: inline-block; width: 1px; height: 18px; background: #e5e7eb; margin: 0 10px; vertical-align: middle; }
+        p { margin: 0; }
+        ul, ol { margin: 4px 0 0 15px; padding: 0; }
+        li { margin-bottom: 3px; }
+        strong {
+            font-family: DejaVu Sans, Arial, sans-serif;
+            font-weight: 700;
+        }
 
-        .card { border: 1px solid #e5e7eb; border-radius: 12px; background: #ffffff; padding: 12px 14px; margin: 10px 0; }
-        .card-soft { background: #f8fafc; }
-        .card-title { font-size: 11px; font-weight: 800; color: #111827; text-transform: uppercase; letter-spacing: 0.03em; margin: 0 0 8px; }
-        .badge { display: inline-block; padding: 3px 8px; background: #eef2ff; color: #3730a3; border-radius: 999px; font-weight: 700; font-size: 9px; }
-
-        .grid { width: 100%; border-collapse: separate; border-spacing: 14px; margin: 0 -14px; }
-        .grid td { width: 100%; vertical-align: top; }
-        .grid-card { border: 1px solid #e5e7eb; border-radius: 12px; background: #ffffff; padding: 10px 12px; }
-
-        .step { width: 100%; border-collapse: collapse; margin: 0 0 6px; }
-        .step td { vertical-align: top; }
-        .step-num { width: 26px; }
-        .num { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 999px; background: #111827; color: #ffffff; font-weight: 800; font-size: 10px; }
-        .step-title { font-weight: 800; text-transform: uppercase; font-size: 10px; color: #111827; }
-        .spacer-6 { height: 6px; }
-        .spacer-10 { height: 10px; }
-
-        .kv { width: 100%; border-collapse: collapse; }
-        .kv td { padding: 3px 0; vertical-align: top; }
-        .kv .k { width: 38%; font-weight: 700; color: #374151; }
-        .kv .v { color: #111827; }
-
-        .two-col { width: 100%; border-collapse: collapse; margin-top: 6px; }
-        .two-col td { width: 50%; vertical-align: top; }
-
-        .studies { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 10px; }
-        .studies th, .studies td { border: 1px solid #e5e7eb; padding: 7px; text-align: left; vertical-align: top; }
-        .studies th { background: #f8fafc; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; font-size: 9px; }
-        .package-includes { margin-top: 6px; padding: 6px 0 6px 10px; border-left: 3px solid #f97316; }
-        .package-includes-title { font-size: 9px; font-weight: 800; color: #c2410c; text-transform: uppercase; letter-spacing: 0.03em; margin: 0 0 4px; }
-        .package-includes ul { margin: 0; padding-left: 14px; font-size: 9px; color: #4b5563; line-height: 1.35; }
-        .package-includes li { margin-bottom: 3px; }
-
-        ul, ol { margin: 4px 0 8px 18px; padding: 0; }
-        li { margin-bottom: 4px; }
-
-        .footer { margin-top: 16px; padding-top: 10px; border-top: 1px solid #e5e7eb; font-size: 9px; color: #6b7280; }
-        .footer td { vertical-align: top; }
-        .footer-right { text-align: right; }
-
-        /* DomPDF helpers */
+        .muted { color: #4f5e73; }
         .avoid-break { page-break-inside: avoid; }
+
+        .topbar {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 16px;
+        }
+
+        .topbar td { vertical-align: middle; }
+        .logo-img { height: 24px; width: auto; }
+        .lab-logo { max-height: 28px; max-width: 118px; }
+        .brand-name { color: #172033; font-size: 12px; font-weight: 700; }
+
+        .hero {
+            margin-bottom: 16px;
+            border-top: 4px solid #c8f24a;
+            background: #171f45;
+            color: #ffffff;
+            padding: 19px 22px 20px;
+        }
+
+        .hero-table,
+        .identity-table,
+        .summary-table,
+        .summary-row,
+        .appointment-table,
+        .validity-table,
+        .step-table,
+        .support-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .hero-table td,
+        .identity-table td,
+        .summary-table td,
+        .summary-row td,
+        .appointment-table td,
+        .validity-table td,
+        .step-table td,
+        .support-table td {
+            vertical-align: top;
+        }
+
+        .hero-copy { width: 66%; padding-right: 22px; }
+        .hero-aside { width: 34%; text-align: right; }
+
+        .eyebrow {
+            color: #5140a0;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0;
+        }
+
+        .hero .eyebrow { color: #c8f24a; }
+
+        .hero-title {
+            margin: 3px 0 8px;
+            font-size: 30px;
+            line-height: 1.08;
+            font-weight: 700;
+        }
+
+        .hero-text {
+            color: #e4e9f5;
+            font-size: 11px;
+            line-height: 1.58;
+        }
+
+        .hero-total-label {
+            margin-top: 31px;
+            color: #c8d0e2;
+            font-size: 8.7px;
+            font-weight: 700;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .hero-total {
+            margin-top: 4px;
+            color: #c8f24a;
+            font-size: 26px;
+            line-height: 1.06;
+            font-weight: 700;
+        }
+
+        .confirmed {
+            display: inline-block;
+            color: #e8fbef;
+            font-size: 8.8px;
+            font-weight: 700;
+            letter-spacing: .07em;
+            text-transform: uppercase;
+        }
+
+        .confirmed-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            margin-right: 5px;
+            border-radius: 99px;
+            background: #c8f24a;
+        }
+
+        .section {
+            margin-top: 15px;
+        }
+
+        .section-heading {
+            padding-top: 9px;
+            border-top: 1px solid #dce3ee;
+        }
+
+        .section-title {
+            margin: 0 0 8px;
+            color: #172033;
+            font-size: 18px;
+            line-height: 1.2;
+            font-weight: 700;
+        }
+
+        .section-copy {
+            color: #4f5e73;
+            font-size: 10.3px;
+            line-height: 1.56;
+        }
+
+        .label {
+            display: block;
+            margin-bottom: 2px;
+            color: #5e6b7f;
+            font-size: 8.7px;
+            font-weight: 700;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+        }
+
+        .value {
+            color: #172033;
+            font-size: 11.5px;
+            font-weight: 700;
+            line-height: 1.34;
+        }
+
+        .identity {
+            border-top: 2px solid #182033;
+            border-bottom: 1px solid #dce3ee;
+            padding: 13px 0;
+        }
+
+        .identity-main { width: 68%; padding-right: 18px; }
+        .identity-ticket { width: 32%; }
+
+        .identity-grid {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .identity-grid td {
+            width: 50%;
+            padding: 0 16px 10px 0;
+        }
+
+        .ticket {
+            border-left: 4px solid #5140a0;
+            background: #f7f5ff;
+            padding: 11px 0 11px 13px;
+        }
+
+        .ticket-number {
+            color: #231a54;
+            font-size: 25px;
+            line-height: 1.05;
+            font-weight: 700;
+        }
+
+        .ticket-help {
+            margin-top: 4px;
+            color: #4f5e73;
+            font-size: 9.6px;
+            font-weight: 700;
+        }
+
+        .summary {
+            padding-bottom: 11px;
+            border-bottom: 1px solid #dce3ee;
+        }
+
+        .summary-details { width: 66%; padding-right: 22px; }
+        .summary-total { width: 34%; text-align: right; }
+
+        .summary-row {
+            border-bottom: 1px solid #edf1f6;
+        }
+
+        .summary-row td {
+            padding: 5px 10px 5px 0;
+        }
+
+        .summary-row td:first-child {
+            width: 38%;
+            color: #5e6b7f;
+            font-size: 8.8px;
+            font-weight: 700;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+        }
+
+        .summary-row td:last-child {
+            color: #172033;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .total-rule {
+            display: inline-block;
+            width: 86px;
+            border-top: 3px solid #c8f24a;
+            margin-bottom: 9px;
+        }
+
+        .total-label {
+            color: #5e6b7f;
+            font-size: 8.8px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .total-value {
+            margin-top: 4px;
+            color: #171f45;
+            font-size: 23px;
+            line-height: 1.1;
+            font-weight: 700;
+        }
+
+        .credit-note {
+            margin-top: 7px;
+            color: #087a4c;
+            font-size: 9.4px;
+            font-weight: 700;
+        }
+
+        .appointment {
+            padding: 12px 0 11px;
+            border-top: 1px solid #dce3ee;
+            border-bottom: 1px solid #dce3ee;
+        }
+
+        .appointment-date { width: 28%; padding-right: 18px; }
+        .appointment-place { width: 72%; }
+
+        .date-card {
+            color: #171f45;
+            font-weight: 700;
+        }
+
+        .date-main {
+            font-size: 22px;
+            line-height: 1.12;
+        }
+
+        .time-main {
+            margin-top: 3px;
+            color: #5140a0;
+            font-size: 17px;
+            line-height: 1.15;
+        }
+
+        .place-name {
+            color: #172033;
+            font-size: 13.5px;
+            line-height: 1.2;
+            font-weight: 700;
+        }
+
+        .place-address {
+            margin-top: 4px;
+            color: #4f5e73;
+            font-size: 10.3px;
+            line-height: 1.5;
+        }
+
+        .validity {
+            margin-top: 12px;
+            padding: 8px 0 8px 12px;
+            border-left: 3px solid #c8f24a;
+        }
+
+        .validity-days {
+            width: 95px;
+            color: #171f45;
+            font-size: 19px;
+            line-height: 1.1;
+            font-weight: 700;
+        }
+
+        .validity-copy {
+            color: #4f5e73;
+            font-size: 10.2px;
+            line-height: 1.48;
+        }
+
+        .steps {
+            margin-top: 4px;
+        }
+
+        .step {
+            page-break-inside: avoid;
+            padding: 7px 0 8px;
+            border-bottom: 1px solid #e3e8f1;
+        }
+
+        .first-step {
+            page-break-inside: avoid;
+        }
+
+        .step-number {
+            width: 42px;
+            color: #5140a0;
+            font-size: 14.5px;
+            font-weight: 700;
+        }
+
+        .step-title {
+            color: #172033;
+            font-size: 12px;
+            line-height: 1.25;
+            font-weight: 700;
+        }
+
+        .step-copy {
+            margin-top: 3px;
+            color: #4f5e73;
+            font-size: 10.2px;
+            line-height: 1.52;
+        }
+
+        .prep-intro {
+            page-break-inside: avoid;
+            margin-top: 14px;
+            padding-top: 10px;
+            border-top: 2px solid #182033;
+        }
+
+        .prep-title {
+            margin-top: 2px;
+            color: #182033;
+            font-size: 21px;
+            line-height: 1.18;
+            font-weight: 700;
+        }
+
+        .study {
+            page-break-inside: avoid;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #dce3ee;
+        }
+
+        .first-study {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: 0;
+        }
+
+        .study-heading {
+            page-break-after: avoid;
+            page-break-inside: avoid;
+            margin-bottom: 5px;
+        }
+
+        .study-heading-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .study-heading-table td {
+            vertical-align: top;
+        }
+
+        .study-number {
+            width: 34px;
+            color: #087a4c;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+
+        .study-name {
+            color: #172033;
+            font-size: 13.7px;
+            line-height: 1.32;
+            font-weight: 700;
+        }
+
+        .prep-label {
+            margin: 1px 0 3px;
+            color: #5140a0;
+            font-size: 9.4px;
+            font-weight: 700;
+        }
+
+        .instructions {
+            color: #263244;
+            font-size: 10.5px;
+            line-height: 1.58;
+        }
+
+        .instruction-line { margin: 0 0 4px; }
+
+        .instruction-bullet-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 4px;
+        }
+
+        .instruction-bullet-table td {
+            vertical-align: top;
+        }
+
+        .bullet-mark {
+            width: 13px;
+            color: #5140a0;
+            font-size: 10.4px;
+            line-height: 1.55;
+        }
+
+        .package-includes {
+            page-break-inside: avoid;
+            margin: 6px 0 5px;
+            padding: 5px 0 4px 9px;
+            border-left: 3px solid #f59e0b;
+        }
+
+        .package-includes-title {
+            margin: 0 0 3px;
+            color: #9a3412;
+            font-size: 8.6px;
+            font-weight: 700;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+        }
+
+        .package-includes ul {
+            margin-top: 0;
+            color: #7c2d12;
+            font-size: 9.4px;
+            line-height: 1.45;
+        }
+
+        .support {
+            margin-top: 14px;
+            padding-top: 10px;
+            border-top: 2px solid #5140a0;
+        }
+
+        .support-title {
+            color: #172033;
+            font-size: 17px;
+            line-height: 1.2;
+            font-weight: 700;
+        }
+
+        .support-copy {
+            margin-top: 4px;
+            color: #4f5e73;
+            font-size: 10.2px;
+            line-height: 1.5;
+        }
+
+        .support-phone {
+            margin-top: 6px;
+            color: #172033;
+            font-size: 10.8px;
+        }
+
+        .support-table {
+            margin-top: 9px;
+            border-top: 1px solid #dce3ee;
+        }
+
+        .support-table td {
+            width: 25%;
+            padding: 7px 10px 0 0;
+        }
+
+        .support-footer {
+            margin-top: 7px;
+            padding-top: 6px;
+            border-top: 1px solid #dce3ee;
+            color: #5f6b7c;
+            font-size: 8.8px;
+        }
+
+        .support-footer-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .support-footer-table td {
+            vertical-align: top;
+        }
+
+        .support-footer-right { text-align: right; }
     </style>
 </head>
 <body>
+@php
+    $supportPhone = '812 860 1893';
+    $appointmentHasDetails = $withAppointment && (($appointment_date ?? null) || ($appointment_time ?? null) || ($branch_name ?? null) || ($branch_address ?? null));
+@endphp
 
-<table class="header">
+<table class="topbar">
     <tr>
-        <td style="width:70%;">
+        <td style="width:50%;">
             @if($famedic_logo_url)
                 <img class="logo-img" src="{{ $famedic_logo_url }}" alt="Famedic">
-                <span class="logo-divider"></span>
+            @else
+                <span class="brand-name">FAMEDIC</span>
             @endif
-            <span class="brand">{{ $laboratorio_marca }}</span>
-            <span class="title">Orden de laboratorio</span>
         </td>
-        <td style="width:30%; text-align:right;">
-            <span class="pill">Orden confirmada</span>
+        <td style="width:50%; text-align:right;">
+            @if($laboratorio_logo_url)
+                <img class="lab-logo" src="{{ $laboratorio_logo_url }}" alt="{{ $laboratorio_marca }}">
+            @else
+                <span class="brand-name">{{ $laboratorio_marca }}</span>
+            @endif
         </td>
     </tr>
 </table>
 
-<p style="font-size:12px; font-weight:700; margin-bottom:6px;">Hola {{ $nombre_usuario }},</p>
+<div class="hero avoid-break">
+    <table class="hero-table">
+        <tr>
+            <td class="hero-copy">
+                <div class="eyebrow">Orden de laboratorio</div>
+                <div class="hero-title">Orden confirmada</div>
+                <p class="hero-text">Hola {{ $nombre_usuario }},</p>
+                @if ($withAppointment)
+                    <p class="hero-text" style="margin-top:5px;">Tu cita quedó confirmada en {{ $laboratorio_marca }}. Aquí tienes tu comprobante e instrucciones para presentarte sin contratiempos.</p>
+                @else
+                    <p class="hero-text" style="margin-top:5px;">Tu compra quedó confirmada en {{ $laboratorio_marca }}. Aquí tienes tu comprobante e instrucciones para presentarte en sucursal con total tranquilidad.</p>
+                @endif
+            </td>
+            <td class="hero-aside">
+                <span class="confirmed"><span class="confirmed-dot"></span>Confirmada</span>
+                <div class="hero-total-label">Total pagado</div>
+                <div class="hero-total">{{ $total }}</div>
+            </td>
+        </tr>
+    </table>
+</div>
 
-@if ($withAppointment)
-    <p class="muted">Gracias por confiar en FAMEDIC. <strong>Tu cita quedó confirmada</strong> en {{ $laboratorio_marca }}.</p>
-    <p class="muted">Aquí tienes tu comprobante e instrucciones para presentarte sin contratiempos.</p>
-
-    <div class="card avoid-break">
-        <table style="width:100%; border-collapse:collapse;">
-            <tr>
-                <td style="width:70%;">
-                    <div class="card-title">Tu identificación en sucursal <span class="badge">Muéstrala tal cual</span></div>
-                    <table class="kv">
-                        <tr><td class="k">Consecutivo</td><td class="v"><strong>{{ $consecutivo }}</strong></td></tr>
-                        <tr><td class="k">Folio de orden</td><td class="v"><strong>{{ $folio_orden }}</strong></td></tr>
-                        <tr><td class="k">Paciente</td><td class="v"><strong>{{ $nombre_paciente }}</strong></td></tr>
-                        <tr><td class="k">Fecha de nacimiento</td><td class="v"><strong>{{ $fecha_nacimiento }}</strong></td></tr>
-                    </table>
-                </td>
-                <td style="width:30%; text-align:right;">
-                    @if($laboratorio_logo_url)
-                        <img src="{{ $laboratorio_logo_url }}" alt="{{ $laboratorio_marca }}" style="max-height:44px; max-width:120px;">
-                    @endif
-                </td>
-            </tr>
-        </table>
-    </div>
-
-    <div class="card card-soft avoid-break">
-        <div class="card-title">Datos de tu cita</div>
-        <table class="kv">
-            <tr><td class="k">Laboratorio / Marca</td><td class="v"><strong>{{ $laboratorio_marca }}</strong></td></tr>
-            <tr><td class="k">Fecha de la cita</td><td class="v"><strong>{{ $appointment_date ?? '—' }}</strong></td></tr>
-            <tr><td class="k">Hora de la cita</td><td class="v"><strong>{{ $appointment_time ?? '—' }}</strong></td></tr>
-            <tr><td class="k">Sucursal de la cita</td><td class="v"><strong>{{ $branch_name ?? '—' }}</strong></td></tr>
-            <tr><td class="k">Dirección (si aplica)</td><td class="v">{{ $branch_address ?? '—' }}</td></tr>
-        </table>
-        <div class="spacer-6"></div>
-        <table class="two-col">
-            <tr>
-                <td>
-                    <table class="kv">
-                        <tr><td class="k">Estatus de pago</td><td class="v"><strong>{{ $estatus_pago }}</strong></td></tr>
-                        <tr><td class="k">Método de pago</td><td class="v"><strong>{{ $metodo_pago }}</strong></td></tr>
-                    </table>
-                </td>
-                <td>
-                    <table class="kv">
-                        <tr><td class="k">Total pagado</td><td class="v"><strong>{{ $total }}</strong></td></tr>
-                        <tr><td class="k">Fecha de compra</td><td class="v"><strong>{{ $fecha_compra }}</strong></td></tr>
-                    </table>
-                </td>
-            </tr>
-        </table>
-    </div>
-
-    <div class="card avoid-break">
-        <div class="card-title">1. Antes de ir</div>
-        <ul class="small muted">
-            <li>Llega 10 minutos antes</li>
-            <li>Lleva identificación oficial del paciente</li>
-            <li>Ten a la mano tu folio y los datos del paciente (arriba)</li>
-        </ul>
-    </div>
-
-    <div class="card avoid-break">
-        <div class="card-title">2. Al llegar (paso a paso)</div>
-        <ol class="small muted">
-            <li>Comparte tus identificadores (Consecutivo, Folio y Paciente + Fecha de nacimiento)</li>
-            <li>Confirma tu cita: <strong>{{ $appointment_date ?? '—' }} {{ $appointment_time ?? '' }}</strong> en <strong>{{ $laboratorio_marca }}</strong> sucursal <strong>{{ $branch_name ?? '—' }}</strong></li>
-        </ol>
-    </div>
-
-    <div class="card avoid-break">
-        <div class="card-title">Indicaciones de preparación (por estudio)</div>
-        @if (count($studies) > 0)
-            <table class="studies">
-                <thead>
+<div class="identity avoid-break">
+    <table class="identity-table">
+        <tr>
+            <td class="identity-main">
+                <div class="section-title">Tu identificación</div>
+                <table class="identity-grid">
                     <tr>
-                        <th style="width:45%;">Estudio</th>
-                        <th>Preparación / Indicaciones</th>
+                        <td>
+                            <span class="label">Consecutivo</span>
+                            <span class="value">{{ $consecutivo }}</span>
+                        </td>
+                        <td>
+                            <span class="label">Folio</span>
+                            <span class="value">{{ $folio_orden }}</span>
+                        </td>
                     </tr>
-                </thead>
-                <tbody>
-                    @foreach ($studies as $study)
-                        <tr>
-                            <td>
-                                <strong>{{ $study['name'] ?? '—' }}</strong>
-                                @php $pkg = $study['feature_list'] ?? []; @endphp
-                                @if (is_array($pkg) && count($pkg) > 0)
-                                    <div class="package-includes">
-                                        <p class="package-includes-title">Incluye en este paquete</p>
-                                        <ul>
-                                            @foreach ($pkg as $line)
-                                                <li>{{ $line }}</li>
-                                            @endforeach
-                                        </ul>
-                                    </div>
-                                @endif
-                            </td>
-                            <td>{!! nl2br(e($study['instructions'] ?? '—')) !!}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        @else
-            <p class="muted small">Sin estudios registrados en esta orden.</p>
-        @endif
-    </div>
-
-    <div class="card avoid-break">
-        <div class="card-title">¿Necesitas ayuda? Estamos contigo</div>
-        <p class="muted small">Si necesitas reprogramar, si no pudiste asistir o si requieres cambios/cancelación, contáctanos y lo resolvemos contigo.</p>
-        <p class="small">Atención a clientes FAMEDIC: <strong>812 860 1893</strong></p>
-    </div>
-@else
-    <p class="muted">Gracias por confiar en FAMEDIC. Tu compra quedó confirmada en {{ $laboratorio_marca }}.</p>
-    <p class="muted">Te compartimos tu comprobante e instrucciones para que puedas presentarte en sucursal con total tranquilidad.</p>
-
-    <div class="card avoid-break">
-        <table style="width:100%; border-collapse:collapse;">
-            <tr>
-                <td style="width:70%;">
-                    <div class="card-title">Tu identificación en sucursal <span class="badge">Muéstrala tal cual</span></div>
-                    <table class="kv">
-                        <tr><td class="k">Consecutivo</td><td class="v"><strong>{{ $consecutivo }}</strong></td></tr>
-                        <tr><td class="k">Folio de orden</td><td class="v"><strong>{{ $folio_orden }}</strong></td></tr>
-                        <tr><td class="k">Paciente</td><td class="v"><strong>{{ $nombre_paciente }}</strong></td></tr>
-                        <tr><td class="k">Fecha de nacimiento</td><td class="v"><strong>{{ $fecha_nacimiento }}</strong></td></tr>
-                    </table>
-                </td>
-                <td style="width:30%; text-align:right;">
-                    @if($laboratorio_logo_url)
-                        <img src="{{ $laboratorio_logo_url }}" alt="{{ $laboratorio_marca }}" style="max-height:44px; max-width:120px;">
-                    @endif
-                </td>
-            </tr>
-        </table>
-    </div>
-
-    <div class="card avoid-break">
-        <div class="card-title">Resumen de tu compra</div>
-        <table class="two-col">
-            <tr>
-                <td>
-                    <table class="kv">
-                        <tr><td class="k">Laboratorio / Marca</td><td class="v">{{ $laboratorio_marca }}</td></tr>
-                        <tr><td class="k">Estatus de pago</td><td class="v">{{ $estatus_pago }}</td></tr>
-                        <tr><td class="k">Método de pago</td><td class="v">{{ $metodo_pago }}</td></tr>
-                    </table>
-                </td>
-                <td>
-                    <table class="kv">
-                        <tr><td class="k">Total pagado</td><td class="v"><strong>{{ $total }}</strong></td></tr>
-                        <tr><td class="k">Fecha de compra</td><td class="v">{{ $fecha_compra }}</td></tr>
-                    </table>
-                </td>
-            </tr>
-        </table>
-    </div>
-
-    <div class="card card-soft avoid-break">
-        <div class="card-title">Vigencia importante (30 días)</div>
-        <p class="muted">Tienes 30 días naturales a partir de tu compra para realizar tus estudios. Si no se utilizan dentro de ese periodo, tu orden podrá cancelarse.</p>
-    </div>
-
-    <table class="grid">
-        <tr>
-            <td>
-                <div class="grid-card avoid-break">
-                    <table class="step">
-                        <tr>
-                            <td class="step-num"><span class="num">1</span></td>
-                            <td><div class="step-title">¿A dónde puedes ir?</div></td>
-                        </tr>
-                    </table>
-                    <div class="spacer-6"></div>
-                    <p class="muted small">Tus estudios NO requieren cita. Puedes acudir en cualquier momento dentro del horario de atención de la sucursal.</p>
-                    <div class="spacer-6"></div>
-                    <p class="muted small">Consulta sucursales, dirección, horarios y teléfono:</p>
-                    <p class="small"><strong>{{ $branches_url }}</strong></p>
-                </div>
+                    <tr>
+                        <td>
+                            <span class="label">Paciente</span>
+                            <span class="value">{{ $nombre_paciente }}</span>
+                        </td>
+                        <td>
+                            <span class="label">Nacimiento</span>
+                            <span class="value">{{ $fecha_nacimiento }}</span>
+                        </td>
+                    </tr>
+                </table>
             </td>
-        </tr>
-        <tr>
-            <td>
-                <div class="grid-card avoid-break">
-                    <table class="step">
-                        <tr>
-                            <td class="step-num"><span class="num">2</span></td>
-                            <td><div class="step-title">¿Qué llevar?</div></td>
-                        </tr>
-                    </table>
-                    <div class="spacer-6"></div>
-                    <ul class="small muted">
-                        <li>Tu folio de orden (arriba) o este documento (en tu celular o impreso)</li>
-                        <li>Identificación oficial del paciente</li>
-                    </ul>
-                </div>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <div class="grid-card avoid-break">
-                    <table class="step">
-                        <tr>
-                            <td class="step-num"><span class="num">3</span></td>
-                            <td><div class="step-title">Al llegar a la sucursal (paso a paso)</div></td>
-                        </tr>
-                    </table>
-                    <div class="spacer-6"></div>
-                    <ol class="small muted">
-                        <li>Comparte tus identificadores (Consecutivo, Folio y Paciente + Fecha de nacimiento)</li>
-                        <li>Atiende las indicaciones del personal de la sucursal para realizar tus estudios</li>
-                    </ol>
-                </div>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <div class="grid-card avoid-break">
-                    <table class="step">
-                        <tr>
-                            <td class="step-num"><span class="num">4</span></td>
-                            <td><div class="step-title">Indicaciones de preparación (por estudio)</div></td>
-                        </tr>
-                    </table>
-                    <div class="spacer-6"></div>
-                    <p class="muted small">Lee con atención. Estas indicaciones ayudan a que tus resultados sean correctos y a evitar reprogramaciones.</p>
-                    <div class="spacer-6"></div>
-                    @if (count($studies) > 0)
-                        <table class="studies">
-                            <thead>
-                                <tr>
-                                    <th style="width:45%;">Estudio</th>
-                                    <th>Preparación / Indicaciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($studies as $study)
-                                    <tr>
-                                        <td>
-                                            <strong>{{ $study['name'] ?? '—' }}</strong>
-                                            @php $pkg = $study['feature_list'] ?? []; @endphp
-                                            @if (is_array($pkg) && count($pkg) > 0)
-                                                <div class="package-includes">
-                                                    <p class="package-includes-title">Incluye en este paquete</p>
-                                                    <ul>
-                                                        @foreach ($pkg as $line)
-                                                            <li>{{ $line }}</li>
-                                                        @endforeach
-                                                    </ul>
-                                                </div>
-                                            @endif
-                                        </td>
-                                        <td>{!! nl2br(e($study['instructions'] ?? '—')) !!}</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    @else
-                        <p class="muted small">Sin estudios registrados en esta orden.</p>
-                    @endif
+            <td class="identity-ticket">
+                <div class="ticket">
+                    <span class="label">Identificador</span>
+                    <div class="ticket-number">{{ $consecutivo }}</div>
+                    <div class="ticket-help">Muéstralo tal cual en sucursal</div>
                 </div>
             </td>
         </tr>
     </table>
+</div>
 
-    <div class="card avoid-break" style="margin-top:10px;">
-        <div class="card-title">¿Necesitas ayuda? Estamos contigo</div>
-        <p class="muted small">Si no pudiste asistir, si necesitas cambios o una cancelación, contáctanos y lo resolvemos contigo.</p>
-        <p class="small">Atención a clientes FAMEDIC: <strong>812 860 1893</strong></p>
+<div class="section summary avoid-break">
+    <table class="summary-table">
+        <tr>
+            <td class="summary-details">
+                <div class="section-title">Resumen de compra</div>
+                <table class="summary-row">
+                    <tr><td>Laboratorio</td><td>{{ $laboratorio_marca }}</td></tr>
+                </table>
+                <table class="summary-row">
+                    <tr><td>Método</td><td>{{ $metodo_pago }}</td></tr>
+                </table>
+                <table class="summary-row">
+                    <tr><td>Fecha</td><td>{{ $fecha_compra }}</td></tr>
+                </table>
+                <table class="summary-row">
+                    <tr><td>Estatus</td><td>{{ $estatus_pago }}</td></tr>
+                </table>
+                <table class="summary-row">
+                    <tr><td>Subtotal</td><td>{{ $subtotal ?? $total_gross ?? $total }}</td></tr>
+                </table>
+                <table class="summary-row">
+                    <tr><td>Descuento</td><td>{{ $catalog_discount ?? 'No aplica' }}</td></tr>
+                </table>
+                <table class="summary-row">
+                    <tr><td>Crédito</td><td>{{ $coupon_discount ?? 'No aplica' }}</td></tr>
+                </table>
+                @if (!empty($credit_applied_message))
+                    <p class="credit-note">{{ $credit_applied_message }}</p>
+                @endif
+            </td>
+            <td class="summary-total">
+                <span class="total-rule"></span>
+                <div class="total-label">Total</div>
+                <div class="total-value">{{ $total }}</div>
+            </td>
+        </tr>
+    </table>
+</div>
+
+@if ($appointmentHasDetails)
+    <div class="section appointment avoid-break">
+        <div class="eyebrow">Tu cita</div>
+        <table class="appointment-table">
+            <tr>
+                <td class="appointment-date">
+                    <div class="date-card">
+                        <div class="date-main">{{ $appointment_date ?? '-' }}</div>
+                        <div class="time-main">{{ $appointment_time ?? '-' }}</div>
+                    </div>
+                </td>
+                <td class="appointment-place">
+                    <div class="place-name">{{ $laboratorio_marca }}{{ ($branch_name ?? null) ? ' - '.$branch_name : '' }}</div>
+                    <div class="place-address">{{ $branch_address ?? '-' }}</div>
+                </td>
+            </tr>
+        </table>
     </div>
 @endif
 
-<table class="footer" width="100%">
-    <tr>
-        <td>
-            <p style="margin:0;">Con gusto te acompañamos,</p>
-            <p style="margin:0; font-weight:700;">Equipo FAMEDIC</p>
-        </td>
-        <td class="footer-right">
-            <p style="margin:0;">Documento generado automáticamente por Famedic</p>
-            <p style="margin:0;">Folio {{ $folio_orden }}</p>
-        </td>
-    </tr>
-</table>
+<div class="validity avoid-break">
+    <table class="validity-table">
+        <tr>
+            <td class="validity-days">
+                <span class="label">Vigencia</span>
+                30 días
+            </td>
+            <td class="validity-copy">
+                Utiliza tu orden dentro de los 30 días naturales posteriores a tu compra. Si no se utiliza dentro de ese periodo, tu orden podrá cancelarse.
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="section section-heading">
+    <div class="steps">
+        <div class="step first-step">
+            <div class="section-title">Antes de ir a la sucursal</div>
+            <table class="step-table">
+                <tr>
+                    <td class="step-number">01</td>
+                    <td>
+                        <div class="step-title">A dónde puedes ir</div>
+                        @if ($withAppointment)
+                            <p class="step-copy">Acude a la sucursal indicada para tu cita. Si necesitas reprogramar, contacta a FAMEDIC antes de presentarte.</p>
+                            @if (($branch_name ?? null) || ($branch_address ?? null))
+                                <p class="step-copy"><strong>{{ $branch_name ?? $laboratorio_marca }}</strong> - {{ $branch_address ?? '-' }}</p>
+                            @endif
+                        @else
+                            <p class="step-copy">Tus estudios no requieren cita. Puedes acudir dentro del horario de atención de la sucursal.</p>
+                            <p class="step-copy">Consulta sucursales, dirección, horarios y teléfono: <strong>{{ $branches_url }}</strong></p>
+                        @endif
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div class="step">
+            <table class="step-table">
+                <tr>
+                    <td class="step-number">02</td>
+                    <td>
+                        <div class="step-title">Qué llevar</div>
+                        <ul class="step-copy">
+                            <li>Tu folio de orden o este documento, ya sea en celular o impreso.</li>
+                            <li>Identificación oficial del paciente.</li>
+                        </ul>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div class="step">
+            <table class="step-table">
+                <tr>
+                    <td class="step-number">03</td>
+                    <td>
+                        <div class="step-title">Al llegar a la sucursal</div>
+                        <ol class="step-copy">
+                            <li>Comparte tus identificadores: consecutivo, folio, paciente y fecha de nacimiento.</li>
+                            @if ($withAppointment)
+                                <li>Confirma tu cita: <strong>{{ $appointment_date ?? '-' }} {{ $appointment_time ?? '' }}</strong> en <strong>{{ $laboratorio_marca }}</strong>.</li>
+                            @else
+                                <li>Atiende las indicaciones del personal de la sucursal para realizar tus estudios.</li>
+                            @endif
+                        </ol>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+@if (count($studies) > 0)
+    @foreach ($studies as $study)
+        @php
+            $instructionText = (string) ($study['instructions'] ?? '-');
+            $instructionLines = collect(preg_split('/\R/u', $instructionText) ?: [])
+                ->map(fn ($line) => trim((string) $line))
+                ->filter(fn ($line) => $line !== '')
+                ->values();
+            if ($instructionLines->isEmpty()) {
+                $instructionLines = collect(['-']);
+            }
+            $pkg = $study['feature_list'] ?? [];
+        @endphp
+        <div class="study {{ $loop->first ? 'first-study' : '' }}">
+            @if ($loop->first)
+                <div class="prep-intro">
+                    <div class="eyebrow">Preparación de estudios</div>
+                    <div class="prep-title">Indicaciones de preparación</div>
+                    <p class="section-copy">Lee con atención. Estas indicaciones ayudan a que tus resultados sean correctos y a evitar reprogramaciones.</p>
+                </div>
+            @endif
+
+            <div class="study-heading">
+                <table class="study-heading-table">
+                    <tr>
+                        <td class="study-number">{{ str_pad((string) $loop->iteration, 2, '0', STR_PAD_LEFT) }}</td>
+                        <td class="study-name">{{ $study['name'] ?? '-' }}</td>
+                    </tr>
+                </table>
+            </div>
+
+            @if (is_array($pkg) && count($pkg) > 0)
+                <div class="package-includes">
+                    <p class="package-includes-title">Incluye en este paquete</p>
+                    <ul>
+                        @foreach ($pkg as $line)
+                            <li>{{ $line }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            <div class="prep-label">Preparación</div>
+            <div class="instructions">
+                @foreach ($instructionLines as $line)
+                    @php
+                        $isBullet = str_starts_with($line, '-') || str_starts_with($line, '•');
+                        $cleanLine = $isBullet ? trim(ltrim($line, "-• \t")) : $line;
+                    @endphp
+                    @if ($isBullet)
+                        <table class="instruction-bullet-table">
+                            <tr>
+                                <td class="bullet-mark">•</td>
+                                <td>{{ $cleanLine }}</td>
+                            </tr>
+                        </table>
+                    @else
+                        <p class="instruction-line">{{ $cleanLine }}</p>
+                    @endif
+                @endforeach
+            </div>
+        </div>
+    @endforeach
+@else
+    <div class="study first-study">
+        <div class="prep-intro">
+            <div class="eyebrow">Preparación de estudios</div>
+            <div class="prep-title">Indicaciones de preparación</div>
+            <p class="section-copy">Lee con atención. Estas indicaciones ayudan a que tus resultados sean correctos y a evitar reprogramaciones.</p>
+        </div>
+        <p class="muted">Sin estudios registrados en esta orden.</p>
+    </div>
+@endif
+
+<div class="support">
+    <div class="eyebrow">Necesitas ayuda</div>
+    <div class="support-title">Estamos contigo durante tu proceso.</div>
+    <p class="support-copy">Si no pudiste asistir, si necesitas cambios, reprogramación o cancelación, contáctanos y lo resolvemos contigo.</p>
+    <p class="support-phone">Atención a clientes FAMEDIC: <strong>{{ $supportPhone }}</strong></p>
+
+    <table class="support-table">
+        <tr>
+            <td>
+                <span class="label">Folio</span>
+                <span class="value">{{ $folio_orden }}</span>
+            </td>
+            <td>
+                <span class="label">Paciente</span>
+                <span class="value">{{ $nombre_paciente }}</span>
+            </td>
+            <td>
+                <span class="label">Consecutivo</span>
+                <span class="value">{{ $consecutivo }}</span>
+            </td>
+            <td>
+                <span class="label">Laboratorio</span>
+                <span class="value">{{ $laboratorio_marca }}</span>
+            </td>
+        </tr>
+    </table>
+
+    <div class="support-footer">
+        <table class="support-footer-table">
+            <tr>
+                <td>
+                    <span>FAMEDIC</span>
+                    <span style="color:#172033; font-weight:700;"> · Equipo FAMEDIC</span>
+                </td>
+                <td class="support-footer-right">
+                    Documento generado automáticamente · Folio {{ $folio_orden }}
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
 </body>
 </html>
