@@ -2,16 +2,26 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Laboratories\GetGDAResultsAction;
+use App\Actions\Laboratories\RefreshGdaLaboratoryResultAction;
 use App\Actions\Laboratories\ResolveConsultableGdaId;
 use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
-use App\Actions\Laboratories\GetGDAResultsAction;
 use App\Enums\LaboratoryBrand;
+use App\Enums\LaboratoryResultEventType;
+use App\Enums\LaboratoryResultStatus as LaboratoryResultStatusEnum;
 use App\Exceptions\GdaConsultIdNotResolvableException;
 use App\Exceptions\GdaResultsNotAvailableException;
 use App\Http\Controllers\Controller;
-use App\Models\LabOrderEventState;
+use App\Models\ActiveCampaignDispatch;
 use App\Models\LaboratoryNotification;
+use App\Models\LaboratoryPurchase;
+use App\Models\LaboratoryResultEvent;
+use App\Models\LaboratoryResultStatus;
+use App\Models\LabOrderEventState;
 use App\Models\User;
+use App\Services\Laboratory\LabOrderNotificationGateService;
+use App\Services\LaboratoryResults\LaboratoryPurchaseResultCompletionService;
+use App\Services\LaboratoryResults\LaboratoryResultCompletionGate;
 use App\Support\GDA\GdaPayloadSanitizer;
 use App\Support\Laboratory\GdaResultsPdfStatus;
 use Carbon\Carbon;
@@ -20,7 +30,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -28,7 +40,7 @@ class LaboratoryNotificationMonitorController extends Controller
 {
     public function index(Request $request)
     {
-        $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
+        $this->authorizeMonitorPage($request);
 
         $tz = config('app.timezone', 'UTC');
 
@@ -41,8 +53,16 @@ class LaboratoryNotificationMonitorController extends Controller
             : now($tz)->endOfDay()->utc();
 
         $search = trim((string) $request->get('search', ''));
+        $resultStatusFilter = trim((string) $request->get('result_status', ''));
+        $gateFilter = trim((string) $request->get('gate', ''));
+        $purchaseIdFilter = trim((string) $request->get('purchase_id', ''));
 
-        $baseQuery = $this->baseNotificationsQuery($startDate, $endDate, $search);
+        $baseQuery = $this->baseNotificationsQuery($startDate, $endDate, [
+            'search' => $search,
+            'result_status' => $resultStatusFilter,
+            'gate' => $gateFilter,
+            'purchase_id' => $purchaseIdFilter,
+        ]);
 
         // Serie diaria (notificaciones recibidas por día)
         $dailyRows = (clone $baseQuery)
@@ -125,7 +145,8 @@ class LaboratoryNotificationMonitorController extends Controller
             ->with([
                 'user',
                 'laboratoryPurchase.customer.user',
-                'laboratoryPurchase.laboratoryPurchaseItems',
+                'laboratoryPurchase.laboratoryPurchaseItems.laboratoryResultStatus',
+                'laboratoryPurchase.laboratoryResultStatuses',
             ])
             ->get()
             ->groupBy(fn (LaboratoryNotification $n) => (string) ($n->gda_consecutivo ?? $n->gda_order_id));
@@ -156,9 +177,12 @@ class LaboratoryNotificationMonitorController extends Controller
                         'id' => $item->id,
                         'name' => $item->name,
                         'gda_id' => $item->gda_id,
+                        'status' => $item->laboratoryResultStatus?->status?->value,
                     ])
                     ->values()
                     ->all(),
+                'result_summary' => $this->buildResultSummaryForPurchase($purchase),
+                'completion_gate' => $this->buildCompletionGateSummary($purchase),
             ];
         });
 
@@ -172,6 +196,8 @@ class LaboratoryNotificationMonitorController extends Controller
             $row['folio'] = $purchaseInfo['folio'] ?? $row['gda_order_id'] ?? null;
             $row['purchase_id'] = $purchaseInfo['purchase_id'] ?? null;
             $row['studies'] = $purchaseInfo['studies'] ?? [];
+            $row['result_summary'] = $purchaseInfo['result_summary'] ?? null;
+            $row['completion_gate'] = $purchaseInfo['completion_gate'] ?? null;
 
             return $row;
         });
@@ -181,15 +207,19 @@ class LaboratoryNotificationMonitorController extends Controller
                 'start_date' => $startDate->timezone($tz)->toDateString(),
                 'end_date' => $endDate->timezone($tz)->toDateString(),
                 'search' => $search,
+                'result_status' => $resultStatusFilter,
+                'gate' => $gateFilter,
+                'purchase_id' => $purchaseIdFilter,
             ],
             'dailyChart' => $dailyChart,
+            'operationalMetrics' => $this->buildOperationalMetrics($startDate, $endDate),
             'orders' => $orders,
         ]);
     }
 
     public function show(Request $request, string $gdaOrderId)
     {
-        $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
+        $this->authorizeMonitorPage($request);
 
         $detail = $this->buildOrderDetail($gdaOrderId);
 
@@ -198,7 +228,7 @@ class LaboratoryNotificationMonitorController extends Controller
 
     public function orderDetails(Request $request, string $orderKey)
     {
-        if (! $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor')) {
+        if (! $this->canMonitor($request)) {
             return $this->monitorJsonError('No tienes permiso para consultar este monitor.', 403);
         }
 
@@ -217,7 +247,7 @@ class LaboratoryNotificationMonitorController extends Controller
 
     public function fetchResults(Request $request, string $orderKey): JsonResponse
     {
-        if (! $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor')) {
+        if (! $this->canMonitor($request)) {
             return $this->monitorJsonError('No tienes permiso para sincronizar resultados.', 403);
         }
 
@@ -286,7 +316,7 @@ class LaboratoryNotificationMonitorController extends Controller
 
     public function forceRefreshResults(Request $request, string $orderKey): JsonResponse
     {
-        if (! $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor')) {
+        if (! $this->canMonitor($request)) {
             return $this->monitorJsonError('No tienes permiso para forzar actualización de resultados.', 403);
         }
 
@@ -299,8 +329,53 @@ class LaboratoryNotificationMonitorController extends Controller
         if (! $notification) {
             return response()->json([
                 'success' => false,
+                'ok' => false,
+                'code' => 'results_notification_not_found',
                 'message' => 'No existe notificación de resultados para esta orden.',
             ], 404);
+        }
+
+        $purchase = $notification->laboratoryPurchase;
+        $refreshableStatus = $this->selectAdminRefreshStatus($purchase);
+
+        if ($refreshableStatus) {
+            try {
+                $adminRefresh = app(RefreshGdaLaboratoryResultAction::class)->executeForAdmin($refreshableStatus->id);
+            } catch (\Throwable $e) {
+                $this->logMonitorException($request, $orderKey, 'admin_refresh_results', $e);
+
+                return $this->monitorJsonError('No fue posible actualizar desde GDA.', 500, 'admin_refresh_failed');
+            }
+
+            $resultsNotifications = $this->notificationsForOrder($orderKey)
+                ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
+                ->values();
+
+            $detail = $this->buildOrderDetail($orderKey);
+
+            return response()->json([
+                'success' => $adminRefresh['ok'],
+                'ok' => $adminRefresh['ok'],
+                'code' => $adminRefresh['code'],
+                'cached' => false,
+                'refreshed' => (bool) ($adminRefresh['changed'] ?? false),
+                'forced' => true,
+                'message' => $adminRefresh['message'],
+                'pdf_base64' => null,
+                'results_pdf' => $this->buildResultsPdfSummary($resultsNotifications),
+                'detail' => $detail,
+            ], $adminRefresh['ok'] ? 200 : 409);
+        }
+
+        if ($purchase?->laboratoryResultStatuses()->exists()) {
+            return response()->json([
+                'success' => false,
+                'ok' => false,
+                'code' => 'refresh_not_due',
+                'message' => 'No hay estudios pendientes de actualización o el cooldown sigue activo.',
+                'results_pdf' => $this->buildResultsPdfSummary($resultsNotifications),
+                'detail' => $this->buildOrderDetail($orderKey),
+            ], 409);
         }
 
         try {
@@ -320,6 +395,8 @@ class LaboratoryNotificationMonitorController extends Controller
 
             return response()->json([
                 'success' => false,
+                'ok' => false,
+                'code' => 'gda_not_available',
                 'gda_not_available' => true,
                 'message' => $hasStoredPdf
                     ? 'GDA respondió que el PDF no está disponible ahora en la API de consulta (ID '.$e->orderId.'). El archivo que ya tienes en storage/S3 no se modificó: usa «Descargar PDF» para revisarlo. Puedes reintentar «Forzar actualización» más tarde.'
@@ -341,6 +418,8 @@ class LaboratoryNotificationMonitorController extends Controller
 
         return response()->json([
             'success' => true,
+            'ok' => true,
+            'code' => 'legacy_refresh_processed',
             'cached' => false,
             'refreshed' => true,
             'forced' => true,
@@ -352,7 +431,7 @@ class LaboratoryNotificationMonitorController extends Controller
 
     public function downloadResults(Request $request, string $orderKey)
     {
-        $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') || abort(403);
+        $this->authorizeMonitorPage($request);
 
         $resultsNotifications = $this->notificationsForOrder($orderKey)
             ->where('notification_type', LaboratoryNotification::TYPE_RESULTS)
@@ -402,7 +481,7 @@ class LaboratoryNotificationMonitorController extends Controller
 
     public function testGdaConsult(Request $request, string $orderKey): JsonResponse
     {
-        if (! $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor')) {
+        if (! $this->canMonitor($request)) {
             return $this->monitorJsonError('No tienes permiso para probar la consulta GDA.', 403);
         }
 
@@ -489,8 +568,16 @@ class LaboratoryNotificationMonitorController extends Controller
         ], $debug['success'] ? 200 : 422);
     }
 
-    private function baseNotificationsQuery(Carbon $startDate, Carbon $endDate, string $search = ''): Builder
+    /**
+     * @param  array{search?: string, result_status?: string, gate?: string, purchase_id?: string}  $filters
+     */
+    private function baseNotificationsQuery(Carbon $startDate, Carbon $endDate, array $filters = []): Builder
     {
+        $search = trim((string) ($filters['search'] ?? ''));
+        $resultStatus = trim((string) ($filters['result_status'] ?? ''));
+        $gate = trim((string) ($filters['gate'] ?? ''));
+        $purchaseId = trim((string) ($filters['purchase_id'] ?? ''));
+
         $query = LaboratoryNotification::query()
             ->whereBetween('created_at', [$startDate, $endDate])
             ->where(function (Builder $query) {
@@ -502,12 +589,65 @@ class LaboratoryNotificationMonitorController extends Controller
             $query->where(function (Builder $query) use ($search) {
                 $query->where('gda_order_id', 'like', "%{$search}%")
                     ->orWhere('gda_consecutivo', 'like', "%{$search}%")
+                    ->orWhere('laboratory_purchase_id', $search)
                     ->orWhereHas('user', fn (Builder $userQuery) => $this->applyOwnerSearch($userQuery, $search))
                     ->orWhereHas('laboratoryPurchase.customer.user', fn (Builder $userQuery) => $this->applyOwnerSearch($userQuery, $search));
             });
         }
 
+        if ($purchaseId !== '') {
+            $query->where('laboratory_purchase_id', $purchaseId);
+        }
+
+        if ($resultStatus !== '') {
+            $this->applyResultStatusFilter($query, $resultStatus);
+        }
+
+        if ($gate === 'legacy_ready_semantic_blocked') {
+            $query->whereHas('laboratoryPurchase', function (Builder $purchaseQuery) {
+                $purchaseQuery
+                    ->whereHas('laboratoryResultStatuses', function (Builder $statusQuery) {
+                        $statusQuery->whereIn('status', [
+                            LaboratoryResultStatusEnum::NotAvailable->value,
+                            LaboratoryResultStatusEnum::AvailableUnchecked->value,
+                            LaboratoryResultStatusEnum::PendingInterpretation->value,
+                            LaboratoryResultStatusEnum::ManualReview->value,
+                            LaboratoryResultStatusEnum::Error->value,
+                        ]);
+                    })
+                    ->whereExists(function ($subquery) {
+                        $subquery->selectRaw('1')
+                            ->from('lab_order_event_states')
+                            ->whereColumn('lab_order_event_states.laboratory_purchase_id', 'laboratory_purchases.id')
+                            ->whereRaw('lab_order_event_states.results_received_count >= CASE WHEN lab_order_event_states.total_studies > 1 THEN lab_order_event_states.total_studies ELSE 1 END');
+                    });
+            });
+        }
+
         return $query;
+    }
+
+    private function applyResultStatusFilter(Builder $query, string $status): void
+    {
+        $aliases = [
+            'pending' => [LaboratoryResultStatusEnum::PendingInterpretation->value],
+            'pending_interpretation' => [LaboratoryResultStatusEnum::PendingInterpretation->value],
+            'manual_review' => [LaboratoryResultStatusEnum::ManualReview->value],
+            'error' => [LaboratoryResultStatusEnum::Error->value],
+            'complete' => [LaboratoryResultStatusEnum::Complete->value],
+            'available_unchecked' => [LaboratoryResultStatusEnum::AvailableUnchecked->value],
+            'not_available' => [LaboratoryResultStatusEnum::NotAvailable->value],
+        ];
+
+        $values = $aliases[$status] ?? null;
+
+        if (! $values) {
+            return;
+        }
+
+        $query->whereHas('laboratoryPurchase.laboratoryResultStatuses', function (Builder $statusQuery) use ($values) {
+            $statusQuery->whereIn('status', $values);
+        });
     }
 
     private function applyOwnerSearch(Builder $query, string $search): Builder
@@ -555,6 +695,11 @@ class LaboratoryNotificationMonitorController extends Controller
         $ownerUser = $notifications->first()?->user ?: $notifications->first()?->laboratoryPurchase?->customer?->user;
         $first = $notifications->first();
         $purchase = $notifications->first(fn (LaboratoryNotification $n) => $n->laboratoryPurchase !== null)?->laboratoryPurchase;
+        $purchase?->loadMissing([
+            'laboratoryPurchaseItems.laboratoryResultStatus.versions',
+            'laboratoryResultStatuses.versions',
+            'laboratoryResultStatuses.events.resultVersion',
+        ]);
         $brand = $this->formatBrand($purchase?->brand);
 
         $sampleNotifications = $notifications
@@ -587,9 +732,15 @@ class LaboratoryNotificationMonitorController extends Controller
                 'results_notifications' => $resultsNotifications->count(),
                 'total_notifications' => $notifications->count(),
                 'results_pdf' => $resultsPdf,
+                'result_summary' => $this->buildResultSummaryForPurchase($purchase),
+                'completion_gate' => $this->buildCompletionGateSummary($purchase, $eventState),
                 'emails' => $this->buildEmailSummary($notifications, $eventState, $tz),
                 'sync_logs' => $this->buildSyncLogs($notifications, $tz),
+                'activecampaign' => $this->buildActiveCampaignSummary($purchase, $ownerUser, $tz),
             ],
+            'studies' => $this->buildStudyStatuses($purchase, $tz),
+            'timeline' => $this->buildResultTimeline($purchase, $tz),
+            'versions' => $this->buildResultVersions($purchase, $tz),
             'sampleNotifications' => $sampleNotifications->map(fn (LaboratoryNotification $n) => $this->formatNotification($n, $tz))->values(),
             'resultsNotifications' => $resultsNotifications->map(fn (LaboratoryNotification $n) => $this->formatNotification($n, $tz, includeConsultPreview: true))->values(),
             'notifications' => $notifications->map(fn (LaboratoryNotification $n) => $this->formatNotification($n, $tz))->values(),
@@ -740,6 +891,373 @@ class LaboratoryNotificationMonitorController extends Controller
                 }
             })
             ->first();
+    }
+
+    private function buildResultSummaryForPurchase(?LaboratoryPurchase $purchase): array
+    {
+        $completion = app(LaboratoryPurchaseResultCompletionService::class)->evaluate($purchase);
+
+        return [
+            'total_required' => $completion->totalRequired,
+            'complete' => $completion->complete,
+            'pending_interpretation' => $completion->pending,
+            'manual_review' => $completion->manualReview,
+            'error' => $completion->error,
+            'missing' => $completion->missing,
+            'is_complete' => $completion->isComplete,
+            'reason' => $completion->reason,
+            'reason_label' => $this->completionReasonLabel($completion->reason),
+            'legacy_fallback' => $completion->legacyFallback,
+        ];
+    }
+
+    private function buildCompletionGateSummary(
+        ?LaboratoryPurchase $purchase,
+        ?LabOrderEventState $eventState = null,
+    ): array {
+        $completion = app(LaboratoryPurchaseResultCompletionService::class)->evaluate($purchase);
+        $eventState ??= $purchase?->gda_order_id
+            ? LabOrderEventState::query()->where('gda_order_id', $purchase->gda_order_id)->first()
+            : null;
+
+        $legacyReady = $eventState
+            ? app(LabOrderNotificationGateService::class)->areResultsComplete($eventState)
+            : false;
+
+        $mode = app(LaboratoryResultCompletionGate::class)->mode();
+
+        return [
+            'mode' => $mode,
+            'mode_label' => strtoupper($mode),
+            'legacy_ready' => $legacyReady,
+            'legacy_label' => $legacyReady ? 'Listo para notificar' : 'Aun no listo',
+            'semantic_ready' => $completion->isComplete,
+            'semantic_label' => $completion->isComplete ? 'Listo para notificar' : 'Bloqueado',
+            'reason' => $completion->reason,
+            'reason_label' => $this->completionReasonLabel($completion->reason),
+            'mismatch' => $legacyReady && ! $completion->isComplete,
+            'counts' => $completion->toLogContext(),
+        ];
+    }
+
+    private function buildStudyStatuses(?LaboratoryPurchase $purchase, string $tz): array
+    {
+        if (! $purchase) {
+            return [];
+        }
+
+        $purchase->loadMissing(['laboratoryPurchaseItems.laboratoryResultStatus.versions']);
+
+        return $purchase->laboratoryPurchaseItems
+            ->map(function ($item) use ($tz) {
+                $status = $item->laboratoryResultStatus;
+                $latestVersion = $status?->versions?->sortByDesc('id')->first();
+
+                return [
+                    'id' => $item->id,
+                    'name' => $item->name,
+                    'gda_id' => $item->gda_id,
+                    'status' => $status?->status?->value ?? 'missing',
+                    'status_label' => $this->resultStatusLabel($status?->status),
+                    'classification' => $latestVersion?->classification?->value,
+                    'classification_label' => $this->classificationLabel($latestVersion?->classification?->value),
+                    'last_updated_at' => $this->toTimezone($status?->updated_at, $tz)?->toISOString(),
+                    'last_checked_at' => $this->toTimezone($status?->last_checked_at, $tz)?->toISOString(),
+                    'next_check_at' => $this->toTimezone($status?->next_check_at, $tz)?->toISOString(),
+                    'check_attempts' => (int) ($status?->check_attempts ?? 0),
+                    'can_refresh_now' => $status !== null
+                        && ! in_array($status->status, [
+                            LaboratoryResultStatusEnum::Complete,
+                            LaboratoryResultStatusEnum::ManualReview,
+                            LaboratoryResultStatusEnum::Error,
+                        ], true)
+                        && ($status->next_check_at === null || $status->next_check_at->isPast()),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function buildResultTimeline(?LaboratoryPurchase $purchase, string $tz): array
+    {
+        if (! $purchase) {
+            return [];
+        }
+
+        $purchase->loadMissing(['laboratoryResultStatuses.events.resultVersion', 'laboratoryResultStatuses.laboratoryPurchaseItem']);
+
+        return $purchase->laboratoryResultStatuses
+            ->flatMap(fn (LaboratoryResultStatus $status) => $status->events->map(function (LaboratoryResultEvent $event) use ($status, $tz) {
+                return [
+                    'id' => $event->id,
+                    'created_at' => $this->toTimezone($event->created_at, $tz)?->toISOString(),
+                    'event_type' => $event->event_type?->value,
+                    'event_label' => $this->eventTypeLabel($event->event_type),
+                    'study_name' => $status->laboratoryPurchaseItem?->name,
+                    'gda_id' => $status->laboratoryPurchaseItem?->gda_id,
+                    'from_status' => $event->from_status?->value,
+                    'from_status_label' => $this->resultStatusLabel($event->from_status),
+                    'to_status' => $event->to_status?->value,
+                    'to_status_label' => $this->resultStatusLabel($event->to_status),
+                    'version' => $event->resultVersion ? [
+                        'id' => $event->resultVersion->id,
+                        'sha256_short' => Str::substr($event->resultVersion->sha256, 0, 8),
+                    ] : null,
+                    'metadata' => $this->safeResultEventMetadata($event->metadata ?? []),
+                ];
+            }))
+            ->sortByDesc('created_at')
+            ->take(50)
+            ->values()
+            ->all();
+    }
+
+    private function buildResultVersions(?LaboratoryPurchase $purchase, string $tz): array
+    {
+        if (! $purchase) {
+            return [];
+        }
+
+        $purchase->loadMissing(['laboratoryResultStatuses.versions', 'laboratoryResultStatuses.laboratoryPurchaseItem']);
+
+        return $purchase->laboratoryResultStatuses
+            ->flatMap(fn (LaboratoryResultStatus $status) => $status->versions->map(function ($version) use ($status, $tz) {
+                return [
+                    'id' => $version->id,
+                    'version' => $status->versions->sortBy('id')->values()->search(fn ($candidate) => $candidate->id === $version->id) + 1,
+                    'created_at' => $this->toTimezone($version->created_at, $tz)?->toISOString(),
+                    'study_name' => $status->laboratoryPurchaseItem?->name,
+                    'gda_id' => $status->laboratoryPurchaseItem?->gda_id,
+                    'sha256_short' => Str::substr($version->sha256, 0, 8),
+                    'source' => $version->source,
+                    'classification' => $version->classification?->value,
+                    'classification_label' => $this->classificationLabel($version->classification?->value),
+                    'storage_status' => $version->storage_path && Storage::exists($version->storage_path) ? 'available' : 'missing',
+                    'can_open_pdf' => $version->storage_path && Storage::exists($version->storage_path),
+                ];
+            }))
+            ->sortByDesc('created_at')
+            ->values()
+            ->all();
+    }
+
+    private function buildActiveCampaignSummary(?LaboratoryPurchase $purchase, ?User $ownerUser, string $tz): array
+    {
+        if (! Schema::hasTable('activecampaign_dispatches')) {
+            return ['entries' => []];
+        }
+
+        if (! $purchase?->id && ! $ownerUser?->id && ! $ownerUser?->email) {
+            return ['entries' => []];
+        }
+
+        $dispatches = ActiveCampaignDispatch::query()
+            ->where(function (Builder $query) use ($purchase, $ownerUser) {
+                if ($purchase?->id) {
+                    $query->where(function (Builder $inner) use ($purchase) {
+                        $inner->where('entity_id', $purchase->id)
+                            ->orWhere('related_entity_id', $purchase->id)
+                            ->orWhere('idempotency_key', 'like', 'laboratory_purchase:'.$purchase->id.':%');
+                    });
+                }
+
+                if ($ownerUser?->id) {
+                    $query->orWhere('user_id', $ownerUser->id);
+                }
+
+                if ($ownerUser?->email) {
+                    $query->orWhere('email', $ownerUser->email);
+                }
+            })
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get();
+
+        return [
+            'entries' => $dispatches->map(fn (ActiveCampaignDispatch $dispatch) => [
+                'id' => $dispatch->id,
+                'event_type' => $dispatch->event_type,
+                'status' => $dispatch->status,
+                'status_label' => $this->activeCampaignStatusLabel($dispatch->status),
+                'attempts' => (int) $dispatch->attempts,
+                'synced_at' => $this->toTimezone($dispatch->synced_at, $tz)?->toISOString(),
+                'created_at' => $this->toTimezone($dispatch->created_at, $tz)?->toISOString(),
+                'last_error' => $dispatch->last_error ? Str::limit($dispatch->last_error, 180) : null,
+            ])->values()->all(),
+        ];
+    }
+
+    private function selectAdminRefreshStatus(?LaboratoryPurchase $purchase): ?LaboratoryResultStatus
+    {
+        if (! $purchase) {
+            return null;
+        }
+
+        return $purchase->laboratoryResultStatuses()
+            ->whereIn('status', [
+                LaboratoryResultStatusEnum::NotAvailable->value,
+                LaboratoryResultStatusEnum::AvailableUnchecked->value,
+                LaboratoryResultStatusEnum::PendingInterpretation->value,
+            ])
+            ->where(function (Builder $query) {
+                $query->whereNull('next_check_at')
+                    ->orWhere('next_check_at', '<=', now());
+            })
+            ->orderByRaw('CASE WHEN status = ? THEN 0 WHEN status = ? THEN 1 ELSE 2 END', [
+                LaboratoryResultStatusEnum::PendingInterpretation->value,
+                LaboratoryResultStatusEnum::AvailableUnchecked->value,
+            ])
+            ->oldest('next_check_at')
+            ->first();
+    }
+
+    private function safeResultEventMetadata(array $metadata): array
+    {
+        $allowed = [
+            'reason',
+            'attempt',
+            'next_attempt',
+            'max_attempts',
+            'mode',
+            'legacy_ready',
+            'is_complete',
+            'total_required',
+            'complete',
+            'pending',
+            'manual_review',
+            'error',
+            'missing',
+            'legacy_fallback',
+            'sha256_short',
+            'source',
+        ];
+
+        return collect($metadata)
+            ->only($allowed)
+            ->map(fn ($value) => is_string($value) ? Str::limit($value, 120) : $value)
+            ->all();
+    }
+
+    private function buildOperationalMetrics(Carbon $startDate, Carbon $endDate): array
+    {
+        if (! Schema::hasTable('laboratory_result_statuses')) {
+            return [];
+        }
+
+        $todayStart = now(config('app.timezone', 'UTC'))->startOfDay()->utc();
+
+        return [
+            'pending_interpretation' => LaboratoryResultStatus::query()
+                ->where('status', LaboratoryResultStatusEnum::PendingInterpretation->value)
+                ->count(),
+            'manual_review' => LaboratoryResultStatus::query()
+                ->where('status', LaboratoryResultStatusEnum::ManualReview->value)
+                ->count(),
+            'errors' => LaboratoryResultStatus::query()
+                ->where('status', LaboratoryResultStatusEnum::Error->value)
+                ->count(),
+            'refresh_due' => LaboratoryResultStatus::query()
+                ->whereNotNull('next_check_at')
+                ->where('next_check_at', '<=', now())
+                ->count(),
+            'completed_today' => LaboratoryResultStatus::query()
+                ->where('status', LaboratoryResultStatusEnum::Complete->value)
+                ->where('updated_at', '>=', $todayStart)
+                ->count(),
+            'shadow_mismatches' => LaboratoryResultEvent::query()
+                ->where('event_type', LaboratoryResultEventType::CompletionGateEvaluated->value)
+                ->where('created_at', '>=', $startDate)
+                ->where('created_at', '<=', $endDate)
+                ->where('metadata->mode', LaboratoryResultCompletionGate::MODE_SHADOW)
+                ->where('metadata->legacy_ready', true)
+                ->where('metadata->is_complete', false)
+                ->count(),
+        ];
+    }
+
+    private function completionReasonLabel(string $reason): string
+    {
+        return match ($reason) {
+            'all_required_complete' => 'Todos los estudios requeridos completos',
+            'pending_interpretation' => 'Interpretacion pendiente',
+            'manual_review_required' => 'Requiere revision manual',
+            'error_required' => 'Hay estudios con error',
+            'missing_result_status' => 'Faltan statuses de resultado',
+            'legacy_no_result_statuses' => 'Orden legacy sin statuses nuevos',
+            'purchase_not_found' => 'Compra no encontrada',
+            'no_required_result_items' => 'Sin estudios requeridos',
+            default => 'Incompleto',
+        };
+    }
+
+    private function resultStatusLabel(?LaboratoryResultStatusEnum $status): string
+    {
+        return match ($status) {
+            LaboratoryResultStatusEnum::Complete => 'Resultado completo',
+            LaboratoryResultStatusEnum::PendingInterpretation => 'Interpretacion pendiente',
+            LaboratoryResultStatusEnum::ManualReview => 'Revision manual',
+            LaboratoryResultStatusEnum::Error => 'Error',
+            LaboratoryResultStatusEnum::AvailableUnchecked => 'Pendiente de analisis',
+            LaboratoryResultStatusEnum::NotAvailable => 'No disponible',
+            null => 'Sin status',
+        };
+    }
+
+    private function classificationLabel(?string $classification): string
+    {
+        return match ($classification) {
+            'complete' => 'Completo',
+            'pending_interpretation' => 'Interpretacion pendiente',
+            'manual_review' => 'Revision manual',
+            'error' => 'Error',
+            'unknown' => 'Sin clasificar',
+            default => $classification ?: 'Sin clasificar',
+        };
+    }
+
+    private function eventTypeLabel(?LaboratoryResultEventType $eventType): string
+    {
+        return match ($eventType) {
+            LaboratoryResultEventType::WebhookReceived => 'PDF recibido',
+            LaboratoryResultEventType::PdfFetched => 'PDF consultado',
+            LaboratoryResultEventType::PdfUnchanged => 'PDF sin cambios',
+            LaboratoryResultEventType::PdfChanged => 'PDF cambio',
+            LaboratoryResultEventType::Classified => 'Clasificacion',
+            LaboratoryResultEventType::InterpretationPending => 'Interpretacion pendiente',
+            LaboratoryResultEventType::ResultComplete => 'Resultado completo',
+            LaboratoryResultEventType::ClassificationFailed => 'Error de clasificacion',
+            LaboratoryResultEventType::RefreshScheduled => 'Refresh programado',
+            LaboratoryResultEventType::RefreshChecked => 'Refresh ejecutado',
+            LaboratoryResultEventType::RefreshFailed => 'Refresh con error',
+            LaboratoryResultEventType::RefreshAttemptsExhausted => 'Intentos agotados',
+            LaboratoryResultEventType::CompletionGateEvaluated => 'Completion gate evaluado',
+            LaboratoryResultEventType::NotificationSuppressed => 'Notificacion bloqueada',
+            LaboratoryResultEventType::PatientNotificationRequested => 'Notificacion al paciente solicitada',
+            LaboratoryResultEventType::PurchaseResultsComplete => 'Compra completa',
+            null => 'Evento',
+        };
+    }
+
+    private function activeCampaignStatusLabel(string $status): string
+    {
+        return match ($status) {
+            ActiveCampaignDispatch::STATUS_SYNCED => 'Sincronizado',
+            ActiveCampaignDispatch::STATUS_FAILED => 'Error',
+            ActiveCampaignDispatch::STATUS_PROCESSING => 'Procesando',
+            ActiveCampaignDispatch::STATUS_PENDING => 'Pendiente',
+            ActiveCampaignDispatch::STATUS_SKIPPED => 'Omitido',
+            default => $status,
+        };
+    }
+
+    private function authorizeMonitorPage(Request $request): void
+    {
+        abort_unless($this->canMonitor($request), 403);
+    }
+
+    private function canMonitor(Request $request): bool
+    {
+        return (bool) $request->user()?->administrator?->hasPermissionTo('laboratory-notifications.monitor');
     }
 
     private function buildResultsPdfSummary($resultsNotifications): array
@@ -1098,10 +1616,12 @@ class LaboratoryNotificationMonitorController extends Controller
         return $date->timezone($tz);
     }
 
-    private function monitorJsonError(string $message, int $status): JsonResponse
+    private function monitorJsonError(string $message, int $status, ?string $code = null): JsonResponse
     {
         return response()->json([
             'success' => false,
+            'ok' => false,
+            'code' => $code ?? 'monitor_error',
             'message' => $message,
         ], $status);
     }

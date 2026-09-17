@@ -1,22 +1,22 @@
 <?php
+
 // app/Actions/Laboratory/HandleResultsNotificationAction.php
 
 namespace App\Actions\Laboratory;
 
 use App\Actions\Laboratories\StoreGdaResultsPdfToStorageAction;
-use App\Models\LaboratoryNotification;
-use App\Models\LaboratoryQuote;
-use App\Models\LaboratoryPurchase;
-use App\Models\User;
 use App\Jobs\Laboratory\SyncGdaResultPdfToStorageJob;
-use App\Jobs\TagLaboratoryEmailToActiveCampaignJob;
-use App\Notifications\LaboratoryResultsAvailable;
-use App\Services\ActiveCampaign\ActiveCampaignOutboundDispatcher;
+use App\Models\LaboratoryNotification;
+use App\Models\LaboratoryPurchase;
+use App\Models\LaboratoryQuote;
+use App\Models\User;
+use App\Services\Laboratory\LaboratoryResultsNotificationService;
 use App\Services\Laboratory\LabOrderNotificationGateService;
+use App\Services\LaboratoryResults\LaboratoryResultCompletionGate;
 use App\Support\GDA\GdaPayloadSanitizer;
 use App\Support\GDA\GdaWebhookPayloadResolver;
-use App\Support\Laboratory\GdaSimulatorSettings;
 use App\Support\Laboratory\GdaResultsPdfStatus;
+use App\Support\Laboratory\GdaSimulatorSettings;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -26,8 +26,9 @@ class HandleResultsNotificationAction
         protected LabOrderNotificationGateService $notificationGateService,
         protected GdaWebhookPayloadResolver $payloadResolver,
         protected StoreGdaResultsPdfToStorageAction $storeGdaResultsPdfToStorageAction,
-    ) {
-    }
+        protected LaboratoryResultCompletionGate $resultCompletionGate,
+        protected LaboratoryResultsNotificationService $resultsNotificationService,
+    ) {}
 
     public function execute(LaboratoryNotification $notification, array $data, array $references): void
     {
@@ -35,7 +36,7 @@ class HandleResultsNotificationAction
             'notification_id' => $notification->id,
             'gda_order_id' => $data['id'],
             'purchase_id' => $references['purchase_id'] ?? null,
-            'quote_id' => $references['quote_id'] ?? null
+            'quote_id' => $references['quote_id'] ?? null,
         ]);
 
         $pdfBase64FromPayload = GdaPayloadSanitizer::extractResultsPdfBase64($data);
@@ -85,7 +86,9 @@ class HandleResultsNotificationAction
             ]);
         } elseif ($simulator?->bypassGate) {
             $this->sendEmailNotification($userToNotify, $notification, $sanitizedData, $quote, $purchase, $hasResultsInPayload, $resolved, $data);
-        } elseif ($gateResult['should_send_results_email']) {
+        } elseif ($gateResult['should_send_results_email']
+            && $this->resultCompletionGate->shouldAllowNotification($purchase, legacyReady: true, gdaOrderId: $gdaOrderId)
+        ) {
             $wasSent = $this->notificationGateService->sendResultsOnce($gdaOrderId, function () use (
                 $userToNotify,
                 $notification,
@@ -112,6 +115,7 @@ class HandleResultsNotificationAction
                 'purchase_id' => $purchase?->id,
                 'gda_order_id' => $gdaOrderId,
                 'is_new_event' => $gateResult['is_new_event'],
+                'completion_gate_mode' => $this->resultCompletionGate->mode(),
             ]);
         }
 
@@ -252,7 +256,7 @@ class HandleResultsNotificationAction
 
         Log::info('Notification updated with results', [
             'notification_id' => $notification->id,
-            'has_pdf' => $hasResultsInPayload
+            'has_pdf' => $hasResultsInPayload,
         ]);
     }
 
@@ -263,7 +267,7 @@ class HandleResultsNotificationAction
         }
 
         $quote = LaboratoryQuote::find($references['quote_id']);
-        if (!$quote) {
+        if (! $quote) {
             return null;
         }
 
@@ -303,12 +307,12 @@ class HandleResultsNotificationAction
             }
         }
 
-        if (!empty($updates)) {
+        if (! empty($updates)) {
             $quote->update($updates);
 
             Log::info('Quote updated with results', [
                 'quote_id' => $quote->id,
-                'updates' => array_keys($updates)
+                'updates' => array_keys($updates),
             ]);
         }
 
@@ -322,7 +326,7 @@ class HandleResultsNotificationAction
         }
 
         $purchase = LaboratoryPurchase::find($references['purchase_id']);
-        if (!$purchase) {
+        if (! $purchase) {
             return null;
         }
 
@@ -364,7 +368,7 @@ class HandleResultsNotificationAction
         Log::info('Purchase updated with results', [
             'purchase_id' => $purchase->id,
             'updates' => array_keys($updates),
-            'has_pdf' => $hasResultsInPayload
+            'has_pdf' => $hasResultsInPayload,
         ]);
 
         return $purchase->fresh();
@@ -380,7 +384,7 @@ class HandleResultsNotificationAction
             return $quote->user;
         }
 
-        if (!empty($references['user_id'])) {
+        if (! empty($references['user_id'])) {
             return User::find($references['user_id']);
         }
 
@@ -404,42 +408,27 @@ class HandleResultsNotificationAction
         array $resolved,
         array $originalData
     ): void {
-        if (!$user || empty($user->email)) {
+        if (! $user || empty($user->email)) {
             Log::warning('No user/email found to notify for results', [
-                'gda_order_id' => $originalData['id'] ?? null
+                'gda_order_id' => $originalData['id'] ?? null,
             ]);
+
             return;
         }
 
         try {
-            $user->notify(new LaboratoryResultsAvailable(
-                laboratoryPurchase: $purchase,
-                laboratoryQuote: $quote,
+            $this->resultsNotificationService->notifyPatient(
+                user: $user,
+                notification: $notification,
+                quote: $quote,
+                purchase: $purchase,
                 gdaOrderId: $this->payloadResolver->gateOrderId($resolved, $originalData),
-                hasPdfInPayload: $hasResultsInPayload
-            ));
-
-            $notification->update([
-                'email_sent_at' => now(),
-                'email_recipient_id' => $user->id,
-                'email_recipient_email' => $user->email,
-            ]);
-
-            TagLaboratoryEmailToActiveCampaignJob::dispatch(
-                $user->email,
-                (int) config('services.activecampaign.tag_lab_results_available', 33)
+                hasPdfInPayload: $hasResultsInPayload,
             );
-
-            Log::info('AC: Job de tag (Resultados) despachado', [
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'notification_id' => $notification->id,
-                'gda_order_id' => $originalData['id'] ?? null,
-            ]);
         } catch (\Exception $e) {
             Log::error('Failed to send results email', [
                 'user_id' => $user->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             $notification->update([
@@ -455,7 +444,6 @@ class HandleResultsNotificationAction
             return;
         }
 
-        app(ActiveCampaignOutboundDispatcher::class)
-            ->enqueueLaboratoryResultsCompleted($purchase->fresh(['customer.user', 'cart']));
+        $this->resultsNotificationService->enqueueActiveCampaignResultsCompleted($purchase);
     }
 }

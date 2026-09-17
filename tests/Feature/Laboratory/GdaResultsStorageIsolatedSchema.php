@@ -12,6 +12,10 @@ trait GdaResultsStorageIsolatedSchema
         Schema::disableForeignKeyConstraints();
 
         foreach ([
+            'laboratory_result_events',
+            'laboratory_result_versions',
+            'laboratory_result_statuses',
+            'activecampaign_dispatches',
             'lab_order_event_receipts',
             'lab_order_event_states',
             'laboratory_notifications',
@@ -90,6 +94,25 @@ trait GdaResultsStorageIsolatedSchema
             $table->string('name')->nullable();
             $table->unsignedInteger('price_cents')->default(0);
             $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('laboratory_result_statuses', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('laboratory_purchase_id')->constrained('laboratory_purchases')->cascadeOnDelete();
+            $table->foreignId('laboratory_purchase_item_id')->constrained('laboratory_purchase_items')->cascadeOnDelete();
+            $table->string('status')->default('not_available');
+            $table->timestamp('first_available_at')->nullable();
+            $table->timestamp('interpreted_at')->nullable();
+            $table->timestamp('last_checked_at')->nullable();
+            $table->timestamp('next_check_at')->nullable();
+            $table->unsignedInteger('check_attempts')->default(0);
+            $table->timestamp('completed_notified_at')->nullable();
+            $table->timestamps();
+
+            $table->unique(['laboratory_purchase_id', 'laboratory_purchase_item_id'], 'lab_result_status_purchase_item_unique');
+            $table->index(['status', 'next_check_at'], 'lab_result_status_next_check_index');
+            $table->index('first_available_at', 'lab_result_status_first_available_index');
         });
 
         Schema::create('laboratory_notifications', function (Blueprint $table) {
@@ -120,6 +143,42 @@ trait GdaResultsStorageIsolatedSchema
             $table->softDeletes();
         });
 
+        Schema::create('laboratory_result_versions', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('laboratory_result_status_id')->constrained('laboratory_result_statuses')->cascadeOnDelete();
+            $table->foreignId('laboratory_notification_id')->nullable()->constrained('laboratory_notifications')->nullOnDelete();
+            $table->string('storage_path');
+            $table->string('sha256', 64);
+            $table->string('source', 40)->default('gda');
+            $table->string('classification')->default('unknown');
+            $table->string('classification_reason')->nullable();
+            $table->string('matched_rule')->nullable();
+            $table->string('classifier')->nullable();
+            $table->timestamp('classified_at')->nullable();
+            $table->timestamp('pdf_available_at')->nullable();
+            $table->timestamps();
+
+            $table->unique(['laboratory_result_status_id', 'sha256'], 'lab_result_version_status_sha_unique');
+            $table->index('sha256', 'lab_result_version_sha_index');
+            $table->index(['classification', 'classified_at'], 'lab_result_version_classified_index');
+        });
+
+        Schema::create('laboratory_result_events', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('laboratory_result_status_id')->constrained('laboratory_result_statuses')->cascadeOnDelete();
+            $table->foreignId('laboratory_result_version_id')->nullable()->constrained('laboratory_result_versions')->nullOnDelete();
+            $table->string('event_type');
+            $table->string('from_status')->nullable();
+            $table->string('to_status')->nullable();
+            $table->string('actor_type')->default('system');
+            $table->unsignedBigInteger('actor_id')->nullable();
+            $table->json('metadata')->nullable();
+            $table->timestamp('created_at')->nullable();
+
+            $table->index(['laboratory_result_status_id', 'event_type'], 'lab_result_event_status_type_index');
+            $table->index('created_at', 'lab_result_event_created_at_index');
+        });
+
         Schema::create('lab_order_event_states', function (Blueprint $table) {
             $table->id();
             $table->string('gda_order_id')->unique();
@@ -148,6 +207,32 @@ trait GdaResultsStorageIsolatedSchema
             $table->unique(['lab_order_event_state_id', 'event_type', 'payload_hash'], 'lab_evt_receipt_state_type_hash_unique');
         });
 
+        Schema::create('activecampaign_dispatches', function (Blueprint $table) {
+            $table->id();
+            $table->string('event_type', 64);
+            $table->string('entity_type', 64);
+            $table->unsignedBigInteger('entity_id')->nullable();
+            $table->string('related_entity_type', 64)->nullable();
+            $table->unsignedBigInteger('related_entity_id')->nullable();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('customer_id')->nullable();
+            $table->string('email')->nullable();
+            $table->string('idempotency_key', 191)->unique();
+            $table->string('status', 32)->default('pending');
+            $table->unsignedSmallInteger('attempts')->default(0);
+            $table->text('last_error')->nullable();
+            $table->json('payload')->nullable();
+            $table->timestamp('synced_at')->nullable();
+            $table->timestamps();
+
+            $table->index(['event_type', 'status']);
+            $table->index(['entity_type', 'entity_id']);
+            $table->index('user_id');
+            $table->index('customer_id');
+            $table->index('email');
+            $table->index('synced_at');
+        });
+
         Schema::enableForeignKeyConstraints();
     }
 
@@ -156,6 +241,10 @@ trait GdaResultsStorageIsolatedSchema
         Schema::disableForeignKeyConstraints();
 
         foreach ([
+            'laboratory_result_events',
+            'laboratory_result_versions',
+            'laboratory_result_statuses',
+            'activecampaign_dispatches',
             'lab_order_event_receipts',
             'lab_order_event_states',
             'laboratory_notifications',

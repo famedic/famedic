@@ -77,7 +77,31 @@ export default function StudiesTable({ studies, onOpenPreparationInstructions })
 										{study.formattedPrice}
 									</td>
 									<td className="px-3 py-3 align-top text-right sm:px-4">
-										{study.hasResults || study.resultsUrl ? (
+										{study.resultStatus ? (
+											<div className="inline-flex max-w-44 flex-col items-end gap-1">
+												<Badge color={study.resultStatus.status_color || "slate"} className="inline-flex items-center gap-1">
+													{study.resultStatus.status === "complete" ? (
+														<CheckCircleIcon className="size-3.5" />
+													) : (
+														<ClockIcon className="size-3.5" />
+													)}
+													{study.resultStatus.status_label}
+												</Badge>
+												<span className="text-right text-[11px] leading-snug text-zinc-500 dark:text-slate-400">
+													{study.resultStatus.message}
+												</span>
+												{study.resultStatus.gda_id && (
+													<span className="text-[11px] text-zinc-400 dark:text-slate-500">
+														GDA {study.resultStatus.gda_id}
+													</span>
+												)}
+												{study.resultStatus.result_status_id && (
+													<span className="text-[11px] text-zinc-400 dark:text-slate-500">
+														Checks: {study.resultStatus.check_attempts ?? 0}
+													</span>
+												)}
+											</div>
+										) : study.hasResults || study.resultsUrl ? (
 											<div className="inline-flex flex-col items-end gap-1">
 												<Badge color="green" className="inline-flex items-center gap-1">
 													<CheckCircleIcon className="size-3.5" />

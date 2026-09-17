@@ -21,16 +21,30 @@ export default function ResultsSection({
 	otpVerified = false,
 	otpExpiresIn = 0,
 	isNewResult = false,
+	resultControl = null,
 }) {
+	const statusLabel = resultControl?.label || (hasResults ? "Disponible" : "Pendiente");
+	const statusColor = resultControl?.overall_status === "complete" || resultControl?.overall_status === "legacy_available"
+		? "green"
+		: resultControl?.overall_status === "manual_review" || resultControl?.overall_status === "error"
+			? "red"
+			: hasResults
+				? "amber"
+				: "slate";
+	const buttonLabel = resultControl?.button_label || "Ver resultados";
+
 	return (
 		<div className="space-y-4">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<h3 className="break-words text-base font-semibold text-zinc-900 dark:text-white">Resultados</h3>
 				<div className="flex flex-wrap items-center gap-2">
 					{isNewResult && <NewResultBadge compact />}
-					<Badge color={hasResults ? "green" : "slate"}>{hasResults ? "Disponible" : "Pendiente"}</Badge>
+					<Badge color={statusColor}>{statusLabel}</Badge>
 				</div>
 			</div>
+			{resultControl?.message && (
+				<Text className="text-sm text-zinc-600 dark:text-slate-400">{resultControl.message}</Text>
+			)}
 
 			{hasResults ? (
 				<>
@@ -78,7 +92,7 @@ export default function ResultsSection({
 						) : (
 							<>
 								<EyeIcon className="size-4" />
-								Ver resultados
+								{buttonLabel}
 							</>
 						)}
 					</Button>

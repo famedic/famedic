@@ -64,7 +64,9 @@ class StoreLaboratoryResultPdfAction
         $laboratoryPurchase->results = $path;
         $laboratoryPurchase->save();
 
-        if ($existingResults && $existingResults !== $path && $overwrite) {
+        $preserveExisting = (bool) ($metadata['preserve_existing'] ?? false);
+
+        if ($existingResults && $existingResults !== $path && $overwrite && ! $preserveExisting) {
             dispatch(function () use ($existingResults) {
                 if (Storage::exists($existingResults)) {
                     Storage::delete($existingResults);

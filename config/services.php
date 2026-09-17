@@ -59,7 +59,7 @@ return [
 
     'stripe' => [
         'key' => env('STRIPE_KEY'),
-        'secret' => env('STRIPE_SECRET')
+        'secret' => env('STRIPE_SECRET'),
     ],
 
     'paypal' => [
@@ -96,6 +96,17 @@ return [
          */
         'results_consult_url' => env('GDA_RESULTS_CONSULT_URL'),
         'results_sync_queue' => env('GDA_RESULTS_SYNC_QUEUE', 'default'),
+        'result_refresh' => [
+            'enabled' => filter_var(env('LAB_RESULT_REFRESH_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+            'max_attempts' => (int) env('LAB_RESULT_REFRESH_MAX_ATTEMPTS', 5),
+            'backoff_minutes' => [30, 60, 120, 240, 480],
+            'chunk_size' => (int) env('LAB_RESULT_REFRESH_CHUNK_SIZE', 100),
+            'queue' => env('LAB_RESULT_REFRESH_QUEUE', env('GDA_RESULTS_SYNC_QUEUE', 'default')),
+            'lock_seconds' => (int) env('LAB_RESULT_REFRESH_LOCK_SECONDS', 600),
+        ],
+        'result_completion_gate' => [
+            'mode' => env('LAB_RESULT_COMPLETION_GATE_MODE', 'off'),
+        ],
         'report_emails' => env('GDA_REPORT_EMAILS') ? explode(',', env('GDA_REPORT_EMAILS')) : [],
         'concierge_emails' => env('GDA_CONCIERGE_EMAILS') ? explode(',', env('GDA_CONCIERGE_EMAILS')) : [],
         'brands' => [
@@ -129,7 +140,7 @@ return [
                 'token' => env('GDA_BRANDS_FAMEDIC_TOKEN'),
                 'brand_agreement_id' => env('GDA_BRANDS_FAMEDIC_BRAND_AGREEMENT_ID'),
             ],
-        ]
+        ],
     ],
 
     'odessa' => [

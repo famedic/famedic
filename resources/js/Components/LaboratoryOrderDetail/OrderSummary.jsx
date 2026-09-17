@@ -78,12 +78,6 @@ export default function OrderSummary({ totals }) {
 						</div>
 					</div>
 				)}
-				{totals.paymentMethodKey === "efevoopay" && (
-					<p className="break-words text-xs text-zinc-500 dark:text-slate-400">
-						Pago con tarjeta procesado por Efevoo Pay. Si necesitas comprobante
-						adicional, escríbenos por WhatsApp al concierge (+52 (554) 057 2139).
-					</p>
-				)}
 				{totals.paymentMethodKey === "paypal" && (
 					<p className="break-words text-xs text-zinc-500 dark:text-slate-400">
 						Pago realizado con PayPal.

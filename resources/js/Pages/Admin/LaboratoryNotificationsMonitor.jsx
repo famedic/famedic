@@ -70,6 +70,43 @@ function statusBadgeColor(status) {
 	return "slate";
 }
 
+function resultStatusBadgeColor(status) {
+	switch (status) {
+		case "complete":
+			return "emerald";
+		case "pending_interpretation":
+		case "available_unchecked":
+			return "amber";
+		case "manual_review":
+			return "violet";
+		case "error":
+			return "red";
+		case "not_available":
+			return "slate";
+		default:
+			return "zinc";
+	}
+}
+
+function resultStatusLabel(status) {
+	switch (status) {
+		case "complete":
+			return "Resultado completo";
+		case "pending_interpretation":
+			return "Interpretación pendiente";
+		case "manual_review":
+			return "Revisión manual";
+		case "error":
+			return "Error";
+		case "available_unchecked":
+			return "Pendiente de análisis";
+		case "not_available":
+			return "No disponible";
+		default:
+			return "Sin status";
+	}
+}
+
 async function readJsonResponse(response, fallbackMessage) {
 	const contentType = response.headers.get("Content-Type") ?? "";
 
@@ -92,19 +129,26 @@ async function readJsonResponse(response, fallbackMessage) {
 export default function LaboratoryNotificationsMonitor({
 	filters,
 	dailyChart,
+	operationalMetrics = {},
 	orders,
 }) {
 	const { data, setData, get, processing } = useForm({
 		start_date: filters.start_date,
 		end_date: filters.end_date,
 		search: filters.search || "",
+		result_status: filters.result_status || "",
+		gate: filters.gate || "",
+		purchase_id: filters.purchase_id || "",
 	});
 
 	const showUpdateButton = useMemo(
 		() =>
 			data.start_date !== filters.start_date ||
 			data.end_date !== filters.end_date ||
-			(data.search || "") !== (filters.search || ""),
+			(data.search || "") !== (filters.search || "") ||
+			(data.result_status || "") !== (filters.result_status || "") ||
+			(data.gate || "") !== (filters.gate || "") ||
+			(data.purchase_id || "") !== (filters.purchase_id || ""),
 		[data, filters],
 	);
 
@@ -176,9 +220,54 @@ export default function LaboratoryNotificationsMonitor({
 						<SearchInput
 							value={data.search}
 							onChange={(value) => setData("search", value)}
-							placeholder="Buscar por orden, consecutivo GDA, gda_order_id o propietario..."
+							placeholder="Buscar por compra, orden, consecutivo GDA, paciente o email..."
 						/>
 						<div className="flex flex-wrap gap-2 items-end">
+							<div className="space-y-1">
+								<Text className="text-xs text-zinc-500">Status resultado</Text>
+								<select
+									value={data.result_status}
+									onChange={(e) =>
+										setData("result_status", e.target.value)
+									}
+									className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+								>
+									<option value="">Todos</option>
+									<option value="pending_interpretation">
+										Interpretación pendiente
+									</option>
+									<option value="manual_review">Revisión manual</option>
+									<option value="error">Error</option>
+									<option value="complete">Complete</option>
+									<option value="available_unchecked">
+										Pendiente de análisis
+									</option>
+								</select>
+							</div>
+							<div className="space-y-1">
+								<Text className="text-xs text-zinc-500">Gate</Text>
+								<select
+									value={data.gate}
+									onChange={(e) => setData("gate", e.target.value)}
+									className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+								>
+									<option value="">Todos</option>
+									<option value="legacy_ready_semantic_blocked">
+										Legacy listo / Semántico bloqueado
+									</option>
+								</select>
+							</div>
+							<div className="space-y-1">
+								<Text className="text-xs text-zinc-500">Purchase ID</Text>
+								<input
+									type="text"
+									value={data.purchase_id}
+									onChange={(e) =>
+										setData("purchase_id", e.target.value)
+									}
+									className="w-28 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+								/>
+							</div>
 							<div className="space-y-1">
 								<Text className="text-xs text-zinc-500">Inicio</Text>
 								<input
@@ -210,6 +299,7 @@ export default function LaboratoryNotificationsMonitor({
 				</form>
 
 				<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+					<OperationalMetrics metrics={operationalMetrics} />
 					<div className="flex flex-wrap justify-end gap-x-4 gap-y-2">
 						<div className="flex items-center gap-1">
 							<Text>{dailyChart.averagePerDay}</Text>
@@ -337,6 +427,11 @@ export default function LaboratoryNotificationsMonitor({
 														<Badge color="emerald">
 															R: {o.results_notifications}
 														</Badge>
+														{o.completion_gate?.mismatch && (
+															<Badge color="red">
+																Gate mismatch
+															</Badge>
+														)}
 													</div>
 												</div>
 											</TableCell>
@@ -425,12 +520,25 @@ export default function LaboratoryNotificationsMonitor({
 															<ul className="mt-0.5 space-y-0.5">
 																{o.studies.map((study) => (
 																	<li key={study.id}>
-																		<Text className="text-xs leading-snug">
-																			{study.name}
-																			{study.gda_id
-																				? ` · ${study.gda_id}`
-																				: ""}
-																		</Text>
+																		<div className="flex flex-wrap items-center gap-1">
+																			<Text className="text-xs leading-snug">
+																				{study.name}
+																				{study.gda_id
+																					? ` · ${study.gda_id}`
+																					: ""}
+																			</Text>
+																			{study.status && (
+																				<Badge
+																					color={resultStatusBadgeColor(
+																						study.status,
+																					)}
+																				>
+																					{resultStatusLabel(
+																						study.status,
+																					)}
+																				</Badge>
+																			)}
+																		</div>
 																	</li>
 																))}
 															</ul>
@@ -440,6 +548,9 @@ export default function LaboratoryNotificationsMonitor({
 															</Text>
 														)}
 													</div>
+													<ResultSummaryBadges
+														summary={o.result_summary}
+													/>
 												</div>
 											</TableCell>
 										</TableRow>
@@ -514,12 +625,17 @@ function OrderDetailDialog({ open, onClose, loading, error, detail, onDetailUpda
 					<TabGroup selectedIndex={tabIndex} onChange={setTabIndex}>
 						<TabList className="flex flex-wrap gap-2">
 							<OrderTab label="Resumen" />
+							<OrderTab label={`Estudios (${detail.studies?.length ?? 0})`} />
+							<OrderTab label="Gate" />
+							<OrderTab label={`Timeline (${detail.timeline?.length ?? 0})`} />
+							<OrderTab label={`Versiones (${detail.versions?.length ?? 0})`} />
 							<OrderTab
 								label={`Toma de muestra (${detail.summary.sample_notifications})`}
 							/>
 							<OrderTab
 								label={`Resultados (${detail.summary.results_notifications})`}
 							/>
+							<OrderTab label="Integraciones" />
 							<OrderTab label="Probar GDA" />
 						</TabList>
 
@@ -538,7 +654,20 @@ function OrderDetailDialog({ open, onClose, loading, error, detail, onDetailUpda
 											},
 										})
 									}
+									onDetailUpdated={onDetailUpdated}
 								/>
+							</TabPanel>
+							<TabPanel>
+								<StudyStatusesPanel studies={detail.studies} />
+							</TabPanel>
+							<TabPanel>
+								<GatePanel gate={detail.summary.completion_gate} />
+							</TabPanel>
+							<TabPanel>
+								<TimelinePanel events={detail.timeline} />
+							</TabPanel>
+							<TabPanel>
+								<VersionsPanel versions={detail.versions} />
 							</TabPanel>
 							<TabPanel>
 								<SampleNotificationsPanel
@@ -548,6 +677,12 @@ function OrderDetailDialog({ open, onClose, loading, error, detail, onDetailUpda
 							<TabPanel>
 								<ResultsNotificationsPanel
 									notifications={detail.resultsNotifications}
+								/>
+							</TabPanel>
+							<TabPanel>
+								<IntegrationsPanel
+									emails={detail.summary.emails}
+									activecampaign={detail.summary.activecampaign}
 								/>
 							</TabPanel>
 							<TabPanel>
@@ -577,7 +712,7 @@ function OrderTab({ label }) {
 	);
 }
 
-function OrderSummaryTab({ detail, onResultsPdfUpdated }) {
+function OrderSummaryTab({ detail, onResultsPdfUpdated, onDetailUpdated }) {
 	const emails = detail.summary.emails;
 	const isGabinete = isGabineteOrder(detail.folio || detail.gdaOrderId);
 
@@ -648,6 +783,7 @@ function OrderSummaryTab({ detail, onResultsPdfUpdated }) {
 					orderKey={detail.orderKey}
 					resultsPdf={detail.summary.results_pdf}
 					onResultsPdfUpdated={onResultsPdfUpdated}
+					onDetailUpdated={onDetailUpdated}
 				/>
 			</div>
 
@@ -730,6 +866,265 @@ function OrderSummaryTab({ detail, onResultsPdfUpdated }) {
 				) : (
 					<Text className="text-sm text-zinc-500">
 						No hay registros de envío de email para esta orden.
+					</Text>
+				)}
+			</div>
+		</div>
+	);
+}
+
+function StudyStatusesPanel({ studies }) {
+	if (!studies?.length) {
+		return <Text className="text-sm text-zinc-500">Sin estudios registrados.</Text>;
+	}
+
+	return (
+		<div className="overflow-x-auto">
+			<Table>
+				<TableHead>
+					<TableRow>
+						<TableHeader>Estudio</TableHeader>
+						<TableHeader>Status</TableHeader>
+						<TableHeader>Clasificación</TableHeader>
+						<TableHeader>Última actualización</TableHeader>
+						<TableHeader>Última consulta</TableHeader>
+						<TableHeader>Próxima consulta</TableHeader>
+						<TableHeader>Intentos</TableHeader>
+					</TableRow>
+				</TableHead>
+				<TableBody>
+					{studies.map((study) => (
+						<TableRow key={study.id}>
+							<TableCell>
+								<Text className="text-sm">
+									<Strong>{study.name || "—"}</Strong>
+								</Text>
+								<Text className="text-xs font-mono text-zinc-500">
+									{study.gda_id || "Sin gda_id"}
+								</Text>
+							</TableCell>
+							<TableCell>
+								<Badge color={resultStatusBadgeColor(study.status)}>
+									{study.status_label || resultStatusLabel(study.status)}
+								</Badge>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs">
+									{study.classification_label || "—"}
+								</Text>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs">{formatDateTime(study.last_updated_at)}</Text>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs">{formatDateTime(study.last_checked_at)}</Text>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs">{formatDateTime(study.next_check_at)}</Text>
+							</TableCell>
+							<TableCell>
+								<Badge color={study.can_refresh_now ? "amber" : "slate"}>
+									{study.check_attempts ?? 0}
+								</Badge>
+							</TableCell>
+						</TableRow>
+					))}
+				</TableBody>
+			</Table>
+		</div>
+	);
+}
+
+function GatePanel({ gate }) {
+	if (!gate) {
+		return <Text className="text-sm text-zinc-500">Sin información de gate.</Text>;
+	}
+
+	return (
+		<div className="space-y-4">
+			<div className="flex flex-wrap gap-2">
+				<Badge color="slate">Modo: {gate.mode_label}</Badge>
+				{gate.mismatch && <Badge color="red">Legacy listo / Semántico bloqueado</Badge>}
+			</div>
+			<div className="grid gap-4 sm:grid-cols-2">
+				<SummaryCard
+					title="Legacy"
+					value={gate.legacy_label || (gate.legacy_ready ? "Listo" : "Bloqueado")}
+				/>
+				<SummaryCard
+					title="Semántico"
+					value={gate.semantic_label || (gate.semantic_ready ? "Listo" : "Bloqueado")}
+				/>
+			</div>
+			<SummaryCard title="Razón" value={gate.reason_label || gate.reason || "—"} />
+			<ResultSummaryBadges summary={gate.counts} />
+		</div>
+	);
+}
+
+function TimelinePanel({ events }) {
+	if (!events?.length) {
+		return <Text className="text-sm text-zinc-500">Sin eventos de resultados.</Text>;
+	}
+
+	return (
+		<div className="space-y-3">
+			{events.map((event) => (
+				<div
+					key={event.id}
+					className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700"
+				>
+					<div className="flex flex-wrap items-start justify-between gap-2">
+						<div>
+							<Text className="text-sm">
+								<Strong>{event.event_label}</Strong>
+							</Text>
+							<Text className="text-xs text-zinc-500">
+								{formatDateTime(event.created_at)} · {event.study_name || "Orden"}
+								{event.gda_id ? ` · ${event.gda_id}` : ""}
+							</Text>
+						</div>
+						<div className="flex flex-wrap gap-1">
+							{event.from_status_label && (
+								<Badge color="slate">{event.from_status_label}</Badge>
+							)}
+							{event.to_status_label && (
+								<Badge color={resultStatusBadgeColor(event.to_status)}>
+									{event.to_status_label}
+								</Badge>
+							)}
+						</div>
+					</div>
+					{event.metadata && Object.keys(event.metadata).length > 0 && (
+						<JsonBlock value={event.metadata} emptyMessage="Sin metadata operacional." />
+					)}
+				</div>
+			))}
+		</div>
+	);
+}
+
+function VersionsPanel({ versions }) {
+	if (!versions?.length) {
+		return <Text className="text-sm text-zinc-500">Sin versiones de PDF.</Text>;
+	}
+
+	return (
+		<div className="overflow-x-auto">
+			<Table>
+				<TableHead>
+					<TableRow>
+						<TableHeader>Versión</TableHeader>
+						<TableHeader>Fecha</TableHeader>
+						<TableHeader>Estudio</TableHeader>
+						<TableHeader>SHA</TableHeader>
+						<TableHeader>Source</TableHeader>
+						<TableHeader>Classification</TableHeader>
+						<TableHeader>Storage</TableHeader>
+					</TableRow>
+				</TableHead>
+				<TableBody>
+					{versions.map((version) => (
+						<TableRow key={version.id}>
+							<TableCell>v{version.version}</TableCell>
+							<TableCell>
+								<Text className="text-xs">{formatDateTime(version.created_at)}</Text>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs">{version.study_name || "—"}</Text>
+								<Text className="text-xs font-mono text-zinc-500">{version.gda_id || "—"}</Text>
+							</TableCell>
+							<TableCell>
+								<Text className="text-xs font-mono">{version.sha256_short}</Text>
+							</TableCell>
+							<TableCell>
+								<Badge color="slate">{version.source || "—"}</Badge>
+							</TableCell>
+							<TableCell>
+								<Badge color={resultStatusBadgeColor(version.classification)}>
+									{version.classification_label || "—"}
+								</Badge>
+							</TableCell>
+							<TableCell>
+								<Badge color={version.storage_status === "available" ? "emerald" : "red"}>
+									{version.storage_status === "available" ? "Disponible" : "No disponible"}
+								</Badge>
+							</TableCell>
+						</TableRow>
+					))}
+				</TableBody>
+			</Table>
+		</div>
+	);
+}
+
+function IntegrationsPanel({ emails, activecampaign }) {
+	return (
+		<div className="space-y-6">
+			<div className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+				<Subheading>Email</Subheading>
+				<div className="flex flex-wrap gap-2">
+					<Badge color="sky">
+						Muestra enviados: {emails?.sample_sent_count ?? 0}
+					</Badge>
+					<Badge color="emerald">
+						Resultados enviados: {emails?.results_sent_count ?? 0}
+					</Badge>
+				</div>
+				{emails?.order_state && (
+					<div className="grid gap-2 text-sm sm:grid-cols-2">
+						<Text>
+							Estado orden · muestra:{" "}
+							<Strong>{formatDateTime(emails.order_state.sample_email_sent_at)}</Strong>
+						</Text>
+						<Text>
+							Estado orden · resultados:{" "}
+							<Strong>{formatDateTime(emails.order_state.results_email_sent_at)}</Strong>
+						</Text>
+					</div>
+				)}
+			</div>
+
+			<div className="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+				<Subheading>ActiveCampaign</Subheading>
+				{activecampaign?.entries?.length > 0 ? (
+					<Table>
+						<TableHead>
+							<TableRow>
+								<TableHeader>Tipo</TableHeader>
+								<TableHeader>Status</TableHeader>
+								<TableHeader>Intentos</TableHeader>
+								<TableHeader>Synced at</TableHeader>
+								<TableHeader>Error</TableHeader>
+							</TableRow>
+						</TableHead>
+						<TableBody>
+							{activecampaign.entries.map((entry) => (
+								<TableRow key={entry.id}>
+									<TableCell>
+										<Text className="text-xs">{entry.event_type}</Text>
+									</TableCell>
+									<TableCell>
+										<Badge color={entry.status === "synced" ? "emerald" : entry.status === "failed" ? "red" : "amber"}>
+											{entry.status_label}
+										</Badge>
+									</TableCell>
+									<TableCell>{entry.attempts}</TableCell>
+									<TableCell>
+										<Text className="text-xs">{formatDateTime(entry.synced_at)}</Text>
+									</TableCell>
+									<TableCell>
+										<Text className="text-xs text-red-600 dark:text-red-400">
+											{entry.last_error || "—"}
+										</Text>
+									</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
+				) : (
+					<Text className="text-sm text-zinc-500">
+						Sin dispatches de ActiveCampaign relacionados.
 					</Text>
 				)}
 			</div>
@@ -1065,6 +1460,43 @@ function SummaryCard({ title, value }) {
 			<Text className="mt-1 text-sm">
 				<Strong>{value}</Strong>
 			</Text>
+		</div>
+	);
+}
+
+function OperationalMetrics({ metrics }) {
+	const items = [
+		["Pendientes interpretación", metrics.pending_interpretation, "amber"],
+		["Manual review", metrics.manual_review, "violet"],
+		["Errores", metrics.errors, "red"],
+		["Refresh vencidos", metrics.refresh_due, "sky"],
+		["Completados hoy", metrics.completed_today, "emerald"],
+		["Shadow mismatches", metrics.shadow_mismatches, "red"],
+	];
+
+	return (
+		<div className="mb-4 flex flex-wrap gap-2">
+			{items.map(([label, value, color]) => (
+				<Badge key={label} color={color}>
+					{label}: {value ?? 0}
+				</Badge>
+			))}
+		</div>
+	);
+}
+
+function ResultSummaryBadges({ summary }) {
+	if (!summary) return null;
+
+	return (
+		<div className="flex flex-wrap gap-1.5">
+			<Badge color="emerald">Completos: {summary.complete ?? 0}</Badge>
+			<Badge color="amber">
+				Pendientes: {summary.pending_interpretation ?? summary.pending ?? 0}
+			</Badge>
+			<Badge color="violet">Manual: {summary.manual_review ?? 0}</Badge>
+			<Badge color="red">Error: {summary.error ?? 0}</Badge>
+			{summary.missing ? <Badge color="slate">Sin status: {summary.missing}</Badge> : null}
 		</div>
 	);
 }

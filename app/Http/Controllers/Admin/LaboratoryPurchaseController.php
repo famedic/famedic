@@ -10,6 +10,7 @@ use App\Http\Requests\Admin\LaboratoryPurchases\IndexLaboratoryPurchaseRequest;
 use App\Http\Requests\Admin\LaboratoryPurchases\ResendLaboratoryPurchaseConfirmationRequest;
 use App\Http\Requests\Admin\LaboratoryPurchases\ShowLaboratoryPurchaseRequest;
 use App\Notifications\LaboratoryPurchaseCreated;
+use App\Services\LaboratoryResults\LaboratoryPurchaseResultControlPresenter;
 use Illuminate\Support\Facades\Log;
 use App\Models\LaboratoryPurchase;
 use Carbon\Carbon;
@@ -63,12 +64,17 @@ class LaboratoryPurchaseController extends Controller
         ]);
     }
 
-    public function show(ShowLaboratoryPurchaseRequest $request, LaboratoryPurchase $laboratoryPurchase)
+    public function show(
+        ShowLaboratoryPurchaseRequest $request,
+        LaboratoryPurchase $laboratoryPurchase,
+        LaboratoryPurchaseResultControlPresenter $resultControlPresenter,
+    )
     {
         $laboratoryPurchase->load([
             'transactions',
             'vendorPayments',
-            'laboratoryPurchaseItems',
+            'laboratoryPurchaseItems.laboratoryResultStatus.versions',
+            'laboratoryResultStatuses.versions',
             'customer.user',
             'invoice',
             'invoiceRequest',
@@ -98,6 +104,7 @@ class LaboratoryPurchaseController extends Controller
             'latestResultsAt' => optional(
                 $laboratoryPurchase->latestResultsNotification()?->created_at
             )?->isoFormat('D MMM Y h:mm a'),
+            ...$resultControlPresenter->present($laboratoryPurchase, $request->user()),
         ]);
     }
 

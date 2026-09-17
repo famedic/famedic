@@ -35,4 +35,9 @@ class LaboratoryPurchaseItem extends Model
     {
         return $this->belongsTo(LaboratoryPurchase::class);
     }
+
+    public function laboratoryResultStatus()
+    {
+        return $this->hasOne(LaboratoryResultStatus::class);
+    }
 }

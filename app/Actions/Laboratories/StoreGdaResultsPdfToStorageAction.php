@@ -9,19 +9,21 @@ use DomainException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Throwable;
 
 class StoreGdaResultsPdfToStorageAction
 {
     public function __construct(
         protected StoreLaboratoryResultPdfAction $storeLaboratoryResultPdfAction,
-    ) {
-    }
+        protected RecordGdaResultPdfVersionAction $recordGdaResultPdfVersionAction,
+    ) {}
 
     public function execute(
         LaboratoryPurchase $laboratoryPurchase,
         string $base64,
         ?LaboratoryNotification $notification = null,
-        bool $overwrite = false
+        bool $overwrite = false,
+        bool $preserveExisting = false,
     ): string {
         $normalizedBase64 = GdaPayloadSanitizer::stripDataUriPrefix(trim($base64));
 
@@ -41,12 +43,31 @@ class StoreGdaResultsPdfToStorageAction
             [
                 'source' => 'gda',
                 'notification_id' => $notification?->id,
+                'preserve_existing' => $preserveExisting,
             ],
             $overwrite
         );
 
         if (! Storage::exists($path)) {
             throw new RuntimeException('No se pudo confirmar el archivo PDF en storage.');
+        }
+
+        try {
+            $this->recordGdaResultPdfVersionAction->execute(
+                $laboratoryPurchase->fresh('laboratoryPurchaseItems'),
+                $pdfBinary,
+                $path,
+                $notification,
+                source: 'gda'
+            );
+        } catch (Throwable $exception) {
+            Log::warning('GDA results PDF classification failed after storage', [
+                'purchase_id' => $laboratoryPurchase->id,
+                'notification_id' => $notification?->id,
+                'path' => $path,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
         }
 
         if ($notification) {

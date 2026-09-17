@@ -16,6 +16,7 @@ use App\Models\Contact;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
+use App\Services\LaboratoryResults\LaboratoryPurchaseResultControlPresenter;
 use App\Services\Tracking\Purchase;
 use App\Support\ClientContext;
 use Illuminate\Http\Request;
@@ -305,7 +306,11 @@ class LaboratoryPurchaseController extends Controller
         ]);
     }*/
 
-    public function show(Request $request, LaboratoryPurchase $laboratoryPurchase)
+    public function show(
+        Request $request,
+        LaboratoryPurchase $laboratoryPurchase,
+        LaboratoryPurchaseResultControlPresenter $resultControlPresenter,
+    )
     {
         $this->authorize('view', $laboratoryPurchase);
 
@@ -313,7 +318,8 @@ class LaboratoryPurchaseController extends Controller
         $nowInMonterrey = localizedDate(now());
         $laboratoryPurchase->load([
             'transactions',
-            'laboratoryPurchaseItems',
+            'laboratoryPurchaseItems.laboratoryResultStatus.versions',
+            'laboratoryResultStatuses.versions',
             'laboratoryAppointment.laboratoryStore',
             'invoiceRequest',
             'invoice'
@@ -352,6 +358,7 @@ class LaboratoryPurchaseController extends Controller
 
         $isNewResult = $laboratoryPurchase->hasUnseenResultsForPatient();
         $activeShare = $laboratoryPurchase->shares()->active()->latest()->first();
+        $resultControl = $resultControlPresenter->present($laboratoryPurchase, $request->user());
 
         return Inertia::render('LaboratoryPurchase', [
             'laboratoryPurchase' => tap($laboratoryPurchase, function (LaboratoryPurchase $purchase) {
@@ -364,6 +371,7 @@ class LaboratoryPurchaseController extends Controller
             'latestSampleCollectionAt' => $latestSampleCollectionAt,
             'latestResultsAt' => $latestResultsAt,
             'hasResultsPdfCached' => $hasResultsPdfCached,
+            ...$resultControl,
             'is_new_result' => $isNewResult,
             'activeLaboratoryPurchaseShare' => $activeShare ? [
                 'id' => $activeShare->id,

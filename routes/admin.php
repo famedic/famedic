@@ -34,6 +34,7 @@ use App\Http\Controllers\Admin\LaboratoryNotificationController;
 use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseChartController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseController;
+use App\Http\Controllers\Admin\LaboratoryPurchaseResultControlController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\DevAssistanceRequestController as LaboratoryDevAssistanceRequestController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\InvoiceController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\ResolvedDevAssistanceRequestController as LaboratoryResolvedDevAssistanceRequestController;
@@ -230,6 +231,12 @@ Route::prefix('admin')->middleware([
         )->name('laboratory-purchases.resend-confirmation-email');
         Route::post('laboratory-purchases/{laboratory_purchase}/invoice', InvoiceController::class)->name('laboratory-purchases.invoice');
         Route::post('laboratory-purchases/{laboratory_purchase}/results', ResultsController::class)->name('laboratory-purchases.results');
+        Route::post('laboratory-purchases/{laboratory_purchase}/result-control/refresh', [LaboratoryPurchaseResultControlController::class, 'refresh'])
+            ->name('laboratory-purchases.result-control.refresh');
+        Route::post('laboratory-purchases/{laboratory_purchase}/result-control/notify', [LaboratoryPurchaseResultControlController::class, 'notify'])
+            ->name('laboratory-purchases.result-control.notify');
+        Route::post('laboratory-purchases/{laboratory_purchase}/result-control/analyze-legacy', [LaboratoryPurchaseResultControlController::class, 'analyzeLegacy'])
+            ->name('laboratory-purchases.result-control.analyze-legacy');
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request', LaboratoryDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.store');
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request/{dev_assistance_request}/resolved', LaboratoryResolvedDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.resolved');
         Route::post('laboratory-purchases/{laboratory_purchase}/dev-assistance-request/{dev_assistance_request}/unresolved', LaboratoryUnresolvedDevAssistanceRequestController::class)->name('laboratory-purchases.dev-assistance-request.unresolved');

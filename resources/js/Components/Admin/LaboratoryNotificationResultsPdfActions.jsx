@@ -95,6 +95,7 @@ export default function LaboratoryNotificationResultsPdfActions({
 	orderKey,
 	resultsPdf,
 	onResultsPdfUpdated,
+	onDetailUpdated,
 }) {
 	const [fetching, setFetching] = useState(false);
 	const [forcing, setForcing] = useState(false);
@@ -120,6 +121,9 @@ export default function LaboratoryNotificationResultsPdfActions({
 		setMessage(json.message);
 		setWarning(null);
 		onResultsPdfUpdated?.(json.results_pdf);
+		if (json.detail) {
+			onDetailUpdated?.(json.detail);
+		}
 		if (json.pdf_base64) {
 			openPdfFromBase64(json.pdf_base64);
 		}
@@ -401,7 +405,7 @@ export default function LaboratoryNotificationResultsPdfActions({
 				)}
 				{canForceRefresh && (
 					<Button color="amber" onClick={forceRefreshFromGda} disabled={fetching || forcing}>
-						{forcing ? "Actualizando..." : "Forzar actualización desde GDA"}
+						{forcing ? "Actualizando..." : "Actualizar desde GDA"}
 					</Button>
 				)}
 			</div>

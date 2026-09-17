@@ -216,6 +216,11 @@ class LaboratoryPurchase extends Model
         return $this->hasMany(LaboratoryPurchaseItem::class)->withTrashed();
     }
 
+    public function laboratoryResultStatuses()
+    {
+        return $this->hasMany(LaboratoryResultStatus::class);
+    }
+
     /**
      * Resumen del reverso de saldo a favor, si el pedido tuvo cupón restaurado al cancelarse.
      *

@@ -45,3 +45,9 @@ Schedule::command('laboratory-billing:dispatch-reports')
 Schedule::command('laboratory-billing:prune-report-files')
     ->dailyAt('03:10')
     ->withoutOverlapping(30);
+
+if (config('services.gda.result_refresh.enabled', false)) {
+    Schedule::command('laboratory-results:dispatch-due-refreshes')
+        ->everyFiveMinutes()
+        ->withoutOverlapping(4);
+}
