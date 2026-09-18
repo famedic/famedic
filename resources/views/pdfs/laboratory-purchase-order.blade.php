@@ -41,9 +41,20 @@
         }
 
         .topbar td { vertical-align: middle; }
-        .logo-img { height: 26px; width: auto; }
+        .logo-img { height: 28px; width: auto; display: block; }
         .lab-logo { max-height: 30px; max-width: 120px; }
         .brand-name { color: #141c2e; font-size: 12px; font-weight: 700; }
+        .brand-lockup-table { border-collapse: collapse; }
+        .brand-lockup-table td { vertical-align: middle; }
+        .brand-lockup-icon { padding-right: 8px; }
+        .brand-wordmark {
+            color: #141c2e;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1;
+            text-transform: lowercase;
+        }
 
         .hero {
             margin-bottom: 20px;
@@ -629,9 +640,18 @@
     <tr>
         <td style="width:50%;">
             @if($famedic_logo_url)
-                <img class="logo-img" src="{{ $famedic_logo_url }}" alt="Famedic">
+                <table class="brand-lockup-table">
+                    <tr>
+                        <td class="brand-lockup-icon">
+                            <img class="logo-img" src="{{ $famedic_logo_url }}" alt="">
+                        </td>
+                        <td>
+                            <span class="brand-wordmark">famedic</span>
+                        </td>
+                    </tr>
+                </table>
             @else
-                <span class="brand-name">Famedic</span>
+                <span class="brand-wordmark">famedic</span>
             @endif
         </td>
         <td style="width:50%; text-align:right;">

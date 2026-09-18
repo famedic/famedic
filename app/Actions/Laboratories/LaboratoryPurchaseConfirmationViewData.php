@@ -3,6 +3,7 @@
 namespace App\Actions\Laboratories;
 
 use App\Models\LaboratoryPurchase;
+use App\Models\Transaction;
 use Illuminate\Support\Facades\URL;
 
 /**
@@ -54,7 +55,7 @@ final class LaboratoryPurchaseConfirmationViewData
             'laboratorio_marca' => $purchase->brand->label(),
             'famedic_logo_url' => $famedicLogoUrl,
             'laboratorio_logo_url' => $laboratorioLogoUrl,
-            'estatus_pago' => self::paymentStatusLabel($transaction?->payment_status),
+            'estatus_pago' => self::resolvePaymentStatusLabel($transaction, $purchase),
             'metodo_pago' => self::paymentMethodLabel($transaction?->payment_method ?? $transaction?->gateway),
             'subtotal' => formattedCentsPrice($subtotalCents),
             'catalog_discount' => $catalogDiscountCents > 0
@@ -169,6 +170,19 @@ final class LaboratoryPurchaseConfirmationViewData
         };
 
         return 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($absolute));
+    }
+
+    protected static function resolvePaymentStatusLabel(?Transaction $transaction, LaboratoryPurchase $purchase): string
+    {
+        if ($transaction?->isSuccessfulPayment()) {
+            return 'Pagado';
+        }
+
+        if ($transaction === null && ! $purchase->trashed()) {
+            return 'Pagado';
+        }
+
+        return self::paymentStatusLabel($transaction?->payment_status ?? $transaction?->gateway_status);
     }
 
     protected static function paymentStatusLabel(?string $status): string
