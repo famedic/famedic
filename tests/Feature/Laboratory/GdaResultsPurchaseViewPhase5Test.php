@@ -91,6 +91,19 @@ class GdaResultsPurchaseViewPhase5Test extends TestCase
     }
 
     #[Test]
+    public function orden_sin_pdf_ni_estatus_no_se_marca_completa(): void
+    {
+        [$purchase] = $this->seedPurchaseWithItems(3);
+
+        $payload = app(LaboratoryPurchaseResultControlPresenter::class)
+            ->present($purchase->fresh(), $purchase->customer->user);
+
+        $this->assertSame('pending', $payload['resultControl']['overall_status']);
+        $this->assertFalse($payload['resultControl']['is_complete']);
+        $this->assertFalse($payload['resultControl']['can_view_results']);
+    }
+
+    #[Test]
     public function admin_no_puede_enviar_aviso_si_gate_semantico_no_esta_completo(): void
     {
         [$purchase, $items] = $this->seedPurchaseWithItems(1);

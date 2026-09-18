@@ -3,6 +3,23 @@ import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { BeakerIcon, CheckCircleIcon, ClockIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 
+function patientResultMessage(status) {
+	switch (status) {
+		case "complete":
+			return "Interpretación lista.";
+		case "pending_interpretation":
+			return "En proceso de interpretación.";
+		case "manual_review":
+			return "En revisión por nuestro equipo.";
+		case "error":
+			return "Estamos dando seguimiento.";
+		case "available_unchecked":
+			return "Documento recibido.";
+		default:
+			return "Aún no disponible.";
+	}
+}
+
 function normalizePackageFeatures(raw) {
 	if (raw == null) return [];
 	const list = Array.isArray(raw) ? raw : [];
@@ -17,7 +34,11 @@ function normalizePackageFeatures(raw) {
 		.filter(Boolean);
 }
 
-export default function StudiesTable({ studies, onOpenPreparationInstructions }) {
+export default function StudiesTable({
+	studies,
+	onOpenPreparationInstructions,
+	showAdminMetadata = false,
+}) {
 	return (
 		<Card className="min-w-0 max-w-full overflow-hidden rounded-2xl p-0 shadow-sm">
 			<div className="flex min-w-0 flex-col gap-3 border-b border-zinc-200 px-3 py-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
@@ -88,14 +109,16 @@ export default function StudiesTable({ studies, onOpenPreparationInstructions })
 													{study.resultStatus.status_label}
 												</Badge>
 												<span className="text-right text-[11px] leading-snug text-zinc-500 dark:text-slate-400">
-													{study.resultStatus.message}
+													{showAdminMetadata
+														? study.resultStatus.message
+														: patientResultMessage(study.resultStatus.status)}
 												</span>
-												{study.resultStatus.gda_id && (
+												{showAdminMetadata && study.resultStatus.gda_id && (
 													<span className="text-[11px] text-zinc-400 dark:text-slate-500">
 														GDA {study.resultStatus.gda_id}
 													</span>
 												)}
-												{study.resultStatus.result_status_id && (
+												{showAdminMetadata && study.resultStatus.result_status_id && (
 													<span className="text-[11px] text-zinc-400 dark:text-slate-500">
 														Checks: {study.resultStatus.check_attempts ?? 0}
 													</span>

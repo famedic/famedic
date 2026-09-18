@@ -11,6 +11,11 @@ function formatCountdown(totalSeconds = 0) {
 }
 
 import NewResultBadge from "@/Components/Laboratory/NewResultBadge";
+import {
+	patientResultStatusColor,
+	patientResultStatusLabel,
+	patientResultStatusMessage,
+} from "@/lib/laboratoryPurchaseResultUi";
 
 export default function ResultsSection({
 	hasResults = false,
@@ -23,14 +28,9 @@ export default function ResultsSection({
 	isNewResult = false,
 	resultControl = null,
 }) {
-	const statusLabel = resultControl?.label || (hasResults ? "Disponible" : "Pendiente");
-	const statusColor = resultControl?.overall_status === "complete" || resultControl?.overall_status === "legacy_available"
-		? "green"
-		: resultControl?.overall_status === "manual_review" || resultControl?.overall_status === "error"
-			? "red"
-			: hasResults
-				? "amber"
-				: "slate";
+	const statusLabel = patientResultStatusLabel(resultControl, hasResults);
+	const statusColor = patientResultStatusColor(resultControl, hasResults);
+	const statusMessage = patientResultStatusMessage(resultControl, hasResults);
 	const buttonLabel = resultControl?.button_label || "Ver resultados";
 
 	return (
@@ -42,9 +42,7 @@ export default function ResultsSection({
 					<Badge color={statusColor}>{statusLabel}</Badge>
 				</div>
 			</div>
-			{resultControl?.message && (
-				<Text className="text-sm text-zinc-600 dark:text-slate-400">{resultControl.message}</Text>
-			)}
+			<Text className="text-sm text-zinc-600 dark:text-slate-400">{statusMessage}</Text>
 
 			{hasResults ? (
 				<>

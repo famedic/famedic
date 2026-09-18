@@ -16,12 +16,9 @@ import InstructionsContent from "@/Components/LaboratoryOrderDetail/Instructions
 import ShareDialog from "@/Components/LaboratoryOrderDetail/ShareDialog";
 import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
 import Card from "@/Components/Card";
-import { Button } from "@/Components/Catalyst/button";
-import { Badge } from "@/Components/Catalyst/badge";
 import { navigateToLabResults, openLabResultsInNewTabOrSame } from "@/Utils/openLabResultsUrl";
 import { isLabResultsOtpRequired } from "@/Utils/labResultsOtp";
 import { buildLaboratoryPurchaseTotals } from "@/lib/laboratoryPurchaseTotals";
-import { ArrowPathIcon, BellAlertIcon, DocumentMagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
 function onlyDateLabel(value = "") {
 	const raw = String(value || "").trim();
@@ -58,79 +55,6 @@ async function fetchLabResultsOtpStatus(purchaseId) {
 	}
 }
 
-function AdminResultControlPanel({ resultControl, actionState, onRunAction }) {
-	if (!resultControl?.can_admin_manage || !resultControl?.admin_actions) return null;
-
-	const actions = resultControl.admin_actions;
-	const isBusy = Boolean(actionState?.action);
-	const buttonClass = "w-full justify-center sm:w-auto";
-
-	return (
-		<Card className="rounded-2xl p-4 shadow-sm">
-			<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-				<div className="min-w-0">
-					<div className="flex flex-wrap items-center gap-2">
-						<h2 className="text-base font-semibold text-zinc-900 dark:text-white">Control administrativo</h2>
-						<Badge color={resultControl.is_complete ? "green" : "amber"}>
-							{resultControl.label || "Estado de resultados"}
-						</Badge>
-					</div>
-					<p className="mt-1 text-sm text-zinc-600 dark:text-slate-400">
-						{resultControl.message}
-					</p>
-				</div>
-				<div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-					<Button
-						outline
-						type="button"
-						className={buttonClass}
-						disabled={isBusy || !actions.can_refresh}
-						onClick={() => onRunAction("refresh", actions.refresh_url)}
-					>
-						{actionState?.action === "refresh" ? (
-							<ArrowPathIcon className="size-4 animate-spin" />
-						) : (
-							<ArrowPathIcon className="size-4" />
-						)}
-						Actualizar desde GDA
-					</Button>
-					<Button
-						outline
-						type="button"
-						className={buttonClass}
-						disabled={isBusy || !actions.can_analyze_legacy}
-						onClick={() => onRunAction("analyze", actions.analyze_legacy_url)}
-					>
-						<DocumentMagnifyingGlassIcon className="size-4" />
-						Analizar existente
-					</Button>
-					<Button
-						color="famedic-lime"
-						type="button"
-						className={buttonClass}
-						disabled={isBusy || !actions.can_send_notification}
-						onClick={() => onRunAction("notify", actions.send_notification_url)}
-					>
-						<BellAlertIcon className="size-4" />
-						Reenviar aviso
-					</Button>
-				</div>
-			</div>
-			{actionState?.message && (
-				<p
-					className={`mt-3 rounded-lg px-3 py-2 text-sm ${
-						actionState.ok
-							? "bg-green-50 text-green-800 dark:bg-green-950/30 dark:text-green-200"
-							: "bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
-					}`}
-				>
-					{actionState.message}
-				</p>
-			)}
-		</Card>
-	);
-}
-
 export default function LaboratoryOrderDetail({
 	laboratoryPurchase,
 	isCancelled = false,
@@ -143,9 +67,6 @@ export default function LaboratoryOrderDetail({
 	studyResultStatuses = [],
 }) {
 	const [activeTab, setActiveTab] = useState("patient");
-	const [currentResultControl, setCurrentResultControl] = useState(resultControl);
-	const [currentStudyResultStatuses, setCurrentStudyResultStatuses] = useState(studyResultStatuses);
-	const [adminActionState, setAdminActionState] = useState({ action: null, message: null, ok: null });
 	const [pendingScrollToPreparation, setPendingScrollToPreparation] = useState(false);
 	const [showOtpModal, setShowOtpModal] = useState(false);
 	const [showShareDialog, setShowShareDialog] = useState(false);
@@ -223,7 +144,7 @@ export default function LaboratoryOrderDetail({
 				: null;
 
 		const statusByItemId = new Map(
-			(currentStudyResultStatuses || []).map((status) => [Number(status.id), status]),
+			(studyResultStatuses || []).map((status) => [Number(status.id), status]),
 		);
 
 		return (laboratoryPurchase?.laboratory_purchase_items || []).map((item) => {
@@ -266,7 +187,7 @@ export default function LaboratoryOrderDetail({
 				hasResults: orderHasResults,
 			};
 		});
-	}, [laboratoryPurchase, hasResultsAvailable, currentStudyResultStatuses]);
+	}, [laboratoryPurchase, hasResultsAvailable, studyResultStatuses]);
 
 	const appointmentSummary = useMemo(() => {
 		const totalWithAppointment = studies.filter((study) => study.requiresAppointment).length;
@@ -588,13 +509,13 @@ export default function LaboratoryOrderDetail({
 	const semanticResultsAvailable = Boolean(
 		hasResultsAvailable ||
 			laboratoryPurchase?.results ||
-			currentResultControl?.can_view_results,
+			resultControl?.can_view_results,
 	);
 
 	const resultsSection = (
 		<ResultsSection
 			hasResults={semanticResultsAvailable}
-			resultControl={currentResultControl}
+			resultControl={resultControl}
 			resultsUploadedAt={
 				latestResultsAt ||
 				laboratoryPurchase?.formatted_results_uploaded_at ||
@@ -619,42 +540,6 @@ export default function LaboratoryOrderDetail({
 					<StudiesTable
 						studies={studies}
 						onOpenPreparationInstructions={goToPreparationInstructions}
-					/>
-					<AdminResultControlPanel
-						resultControl={currentResultControl}
-						actionState={adminActionState}
-						onRunAction={async (action, url) => {
-							if (!url || adminActionState.action) return;
-							setAdminActionState({ action, message: null, ok: null });
-							try {
-								const token = document
-									.querySelector('meta[name="csrf-token"]')
-									?.getAttribute("content");
-								const response = await fetch(url, {
-									method: "POST",
-									credentials: "same-origin",
-									headers: {
-										Accept: "application/json",
-										"X-Requested-With": "XMLHttpRequest",
-										...(token ? { "X-CSRF-TOKEN": token } : {}),
-									},
-								});
-								const data = await response.json().catch(() => ({}));
-								if (data.resultControl) setCurrentResultControl(data.resultControl);
-								if (data.studyResultStatuses) setCurrentStudyResultStatuses(data.studyResultStatuses);
-								setAdminActionState({
-									action: null,
-									message: data.message || (response.ok ? "Acción procesada." : "No se pudo procesar la acción."),
-									ok: response.ok && Boolean(data.ok),
-								});
-							} catch {
-								setAdminActionState({
-									action: null,
-									message: "No se pudo contactar el servidor.",
-									ok: false,
-								});
-							}
-						}}
 					/>
 					{laboratoryPurchase?.laboratory_appointment && (
 						<AppointmentSummary

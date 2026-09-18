@@ -47,16 +47,18 @@ class LaboratoryPurchaseResultCompletionService
             ->filter();
 
         if ($statuses->isEmpty()) {
+            $legacyAvailable = filled($purchase->results) || $purchase->hasResultsAvailable();
+
             return new LaboratoryPurchaseResultCompletion(
-                isComplete: true,
-                reason: 'legacy_no_result_statuses',
+                isComplete: $legacyAvailable,
+                reason: $legacyAvailable ? 'legacy_no_result_statuses' : 'awaiting_results',
                 totalRequired: $totalRequired,
                 complete: 0,
-                pending: 0,
+                pending: $legacyAvailable ? 0 : $totalRequired,
                 manualReview: 0,
                 error: 0,
-                missing: $totalRequired,
-                legacyFallback: true,
+                missing: $legacyAvailable ? $totalRequired : 0,
+                legacyFallback: $legacyAvailable,
             );
         }
 
