@@ -19,6 +19,7 @@ use App\Services\Laboratory\LaboratoryAppointmentCheckoutResolver;
 use App\Services\Laboratory\LaboratoryAppointmentPaymentValidity;
 use App\Services\Laboratory\LaboratoryCheckoutFlowEligibility;
 use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
+use App\Services\Laboratory\SelectedLaboratoryStoreDraftService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\Tracking\InitiateCheckout;
 use App\Support\AppEnvironmentLabel;
@@ -39,6 +40,7 @@ class LaboratoryCheckoutController extends Controller
         LaboratoryCheckoutFlowEligibility $laboratoryCheckoutFlowEligibility,
         LaboratoryCheckoutStepGuard $laboratoryCheckoutStepGuard,
         LaboratoryAppointmentCheckoutResolver $laboratoryAppointmentCheckoutResolver,
+        SelectedLaboratoryStoreDraftService $selectedLaboratoryStoreDraftService,
         CartAbandonmentService $cartAbandonmentService,
         SyncMonitoringCartService $syncMonitoringCartService,
         CartUserActivityResolver $cartUserActivityResolver,
@@ -183,6 +185,8 @@ class LaboratoryCheckoutController extends Controller
             }
         }
 
+        $selectedLaboratoryStore = $selectedLaboratoryStoreDraftService->checkoutState($customer, $laboratoryBrand);
+
         $savedCheckoutForSteps = is_array($savedCheckout) ? $savedCheckout : [];
         if ($request->filled('contact')) {
             $savedCheckoutForSteps['contact_id'] = (string) $request->query('contact');
@@ -267,6 +271,7 @@ class LaboratoryCheckoutController extends Controller
             return Inertia::render('LaboratoryCheckout', [
                 'laboratoryBrand' => LaboratoryBrand::brandData($laboratoryBrand),
                 'savedCheckout' => $savedCheckout,
+                'selectedLaboratoryStore' => $selectedLaboratoryStore,
                 'requiresAppointment' => $requiresAppointment,
                 'usesAppointmentFirstFlow' => $usesAppointmentFirstFlow,
                 'checkoutStepNotice' => session('checkout_step_notice'),

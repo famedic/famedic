@@ -9,15 +9,20 @@ use App\Models\Administrator;
 use App\Models\Cart;
 use App\Models\CartEvent;
 use App\Models\CartItem;
+use App\Models\LaboratoryCapability;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryAppointmentInteraction;
+use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryConcierge;
+use App\Models\LaboratoryCheckoutDraft;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
+use App\Models\LaboratoryTestCategory;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Laboratory\SelectedLaboratoryStoreDraftService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\PermissionRegistrar;
@@ -110,6 +115,52 @@ function pendingTabStore(array $overrides = []): LaboratoryStore
         'sunday_hours' => 'Cerrado',
         'google_maps_url' => 'https://maps.example.test/sucursal-centro',
     ], $overrides));
+}
+
+function pendingTabCapability(string $slug = 'laboratorio'): LaboratoryCapability
+{
+    return LaboratoryCapability::query()->firstOrCreate(
+        ['slug' => $slug],
+        [
+            'name' => str_replace('_', ' ', $slug),
+            'is_active' => true,
+        ],
+    );
+}
+
+function pendingTabCompatibleStore(array $overrides = [], array $capabilities = ['laboratorio']): LaboratoryStore
+{
+    $store = pendingTabStore($overrides);
+
+    $store->capabilities()->sync(
+        collect($capabilities)
+            ->map(fn (string $slug) => pendingTabCapability($slug)->id)
+            ->all(),
+    );
+
+    return $store->fresh('capabilities');
+}
+
+function pendingTabLaboratoryCartItem(User $user, LaboratoryBrand $brand = LaboratoryBrand::SWISSLAB): LaboratoryCartItem
+{
+    $category = LaboratoryTestCategory::query()->firstOrCreate(['name' => 'Sanguíneo']);
+    $test = LaboratoryTest::factory()->create([
+        'brand' => $brand->value,
+        'name' => 'GLUCOSA EN SANGRE '.fake()->unique()->numberBetween(1000, 9999),
+        'laboratory_test_category_id' => $category->id,
+        'requires_appointment' => true,
+        'famedic_price_cents' => 10000,
+    ]);
+
+    return LaboratoryCartItem::factory()->create([
+        'customer_id' => $user->customer->id,
+        'laboratory_test_id' => $test->id,
+    ]);
+}
+
+function pendingTabSelectStoreForCustomer(User $user, LaboratoryBrand $brand, LaboratoryStore $store): void
+{
+    app(SelectedLaboratoryStoreDraftService::class)->store($user->customer, $brand, $store);
 }
 
 function pendingTabUpdatePayload(
@@ -436,6 +487,307 @@ test('permite confirmar cita con fecha y hora futuras', function () {
             ->assertSessionHasNoErrors();
 
         expect($appointment->fresh()->appointment_date?->format('Y-m-d H:i'))->toBe('2026-09-14 13:03')
+            ->and($appointment->fresh()->confirmed_at)->not->toBeNull();
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+test('detalle de cita sin selected no muestra recomendacion para concierge', function () {
+    $admin = pendingTabConciergeAdmin();
+    $appointment = pendingTabAppointment();
+
+    $this->actingAs($admin)
+        ->get(route('admin.laboratory-appointments.show', $appointment))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Admin/LaboratoryAppointment')
+            ->where('selectedStoreRecommendation', null));
+});
+
+test('detalle de cita muestra selected valido como sugerencia usable para concierge', function () {
+    pendingTabCapability('laboratorio');
+
+    $admin = pendingTabConciergeAdmin();
+    $user = User::factory()->withRegularCustomer()->create();
+    pendingTabLaboratoryCartItem($user);
+    $store = pendingTabCompatibleStore(['name' => 'Sucursal Recomendada']);
+    pendingTabSelectStoreForCustomer($user, LaboratoryBrand::SWISSLAB, $store);
+    $appointment = pendingTabAppointmentForCustomer($user);
+
+    $this->actingAs($admin)
+        ->get(route('admin.laboratory-appointments.show', $appointment))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('selectedStoreRecommendation.store.id', $store->id)
+            ->where('selectedStoreRecommendation.validation.status', 'valid')
+            ->where('selectedStoreRecommendation.can_use', true));
+});
+
+test('detalle de cita confirmada muestra solo sucursal confirmada aunque selected sea diferente', function () {
+    pendingTabCapability('laboratorio');
+
+    $admin = pendingTabConciergeAdmin();
+    $user = User::factory()->withRegularCustomer()->create();
+    pendingTabLaboratoryCartItem($user);
+    $selected = pendingTabCompatibleStore(['name' => 'Sucursal Selected']);
+    $confirmed = pendingTabCompatibleStore(['name' => 'Sucursal Confirmada']);
+    pendingTabSelectStoreForCustomer($user, LaboratoryBrand::SWISSLAB, $selected);
+    $appointment = pendingTabAppointmentForCustomer($user, [
+        'confirmed_at' => now(),
+        'laboratory_store_id' => $confirmed->id,
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.laboratory-appointments.show', $appointment))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('selectedStoreRecommendation', null)
+            ->where('laboratoryAppointment.laboratory_store.id', $confirmed->id)
+            ->where('laboratoryAppointment.laboratory_store.name', 'Sucursal Confirmada'));
+});
+
+test('selected stale se muestra para revision sin uso directo', function () {
+    pendingTabCapability('laboratorio');
+
+    $admin = pendingTabConciergeAdmin();
+    $user = User::factory()->withRegularCustomer()->create();
+    pendingTabLaboratoryCartItem($user);
+    $store = pendingTabCompatibleStore();
+    pendingTabSelectStoreForCustomer($user, LaboratoryBrand::SWISSLAB, $store);
+    pendingTabLaboratoryCartItem($user);
+    $appointment = pendingTabAppointmentForCustomer($user);
+
+    $this->actingAs($admin)
+        ->get(route('admin.laboratory-appointments.show', $appointment))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('selectedStoreRecommendation.store.id', $store->id)
+            ->where('selectedStoreRecommendation.validation.status', 'stale')
+            ->where('selectedStoreRecommendation.validation.reason', 'cart_hash_changed')
+            ->where('selectedStoreRecommendation.can_use', false));
+});
+
+test('selected incompatible se muestra para revision sin afirmarlo compatible', function () {
+    pendingTabCapability('laboratorio');
+
+    $admin = pendingTabConciergeAdmin();
+    $user = User::factory()->withRegularCustomer()->create();
+    pendingTabLaboratoryCartItem($user);
+    $store = pendingTabCompatibleStore();
+    pendingTabSelectStoreForCustomer($user, LaboratoryBrand::SWISSLAB, $store);
+    $store->capabilities()->detach();
+    $appointment = pendingTabAppointmentForCustomer($user);
+
+    $this->actingAs($admin)
+        ->get(route('admin.laboratory-appointments.show', $appointment))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('selectedStoreRecommendation.store.id', $store->id)
+            ->where('selectedStoreRecommendation.validation.status', 'invalid')
+            ->where('selectedStoreRecommendation.validation.reason', 'branch_not_compatible')
+            ->where('selectedStoreRecommendation.can_use', false));
+});
+
+test('selected de otra marca no se muestra como recomendacion valida', function () {
+    $admin = pendingTabConciergeAdmin();
+    $user = User::factory()->withRegularCustomer()->create();
+    $olabStore = pendingTabStore([
+        'brand' => LaboratoryBrand::OLAB->value,
+        'name' => 'Sucursal OLAB',
+    ]);
+
+    LaboratoryCheckoutDraft::query()->create([
+        'customer_id' => $user->customer->id,
+        'laboratory_brand' => LaboratoryBrand::SWISSLAB,
+        'selected_laboratory_store_id' => $olabStore->id,
+        'selected_laboratory_store_cart_hash' => 'manual-test-hash',
+        'selected_laboratory_store_validated_at' => now(),
+    ]);
+
+    $appointment = pendingTabAppointmentForCustomer($user);
+
+    $this->actingAs($admin)
+        ->get(route('admin.laboratory-appointments.show', $appointment))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('selectedStoreRecommendation.store.id', $olabStore->id)
+            ->where('selectedStoreRecommendation.validation.status', 'unknown')
+            ->where('selectedStoreRecommendation.can_use', false));
+});
+
+test('concierge puede usar selected y confirmar esa sucursal', function () {
+    Carbon::setTestNow(Carbon::parse('2026-09-14 13:02:30', 'America/Monterrey'));
+
+    try {
+        pendingTabCapability('laboratorio');
+
+        $admin = pendingTabConciergeAdmin();
+        $user = User::factory()->withRegularCustomer()->create();
+        pendingTabLaboratoryCartItem($user);
+        $selected = pendingTabCompatibleStore(['name' => 'Sucursal A']);
+        pendingTabSelectStoreForCustomer($user, LaboratoryBrand::SWISSLAB, $selected);
+        $appointment = pendingTabAppointmentForCustomer($user);
+
+        $this->actingAs($admin)
+            ->put(route('admin.laboratory-appointments.update', $appointment), pendingTabUpdatePayload(
+                $appointment,
+                $selected,
+                [
+                    'appointment_date' => '2026-09-14',
+                    'appointment_time' => '13:03',
+                ],
+            ))
+            ->assertSessionHasNoErrors();
+
+        expect($appointment->fresh()->laboratory_store_id)->toBe($selected->id)
+            ->and($appointment->fresh()->confirmed_at)->not->toBeNull();
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+test('concierge puede cambiar selected y confirmar otra sucursal', function () {
+    Carbon::setTestNow(Carbon::parse('2026-09-14 13:02:30', 'America/Monterrey'));
+
+    try {
+        pendingTabCapability('laboratorio');
+
+        $admin = pendingTabConciergeAdmin();
+        $user = User::factory()->withRegularCustomer()->create();
+        pendingTabLaboratoryCartItem($user);
+        $selected = pendingTabCompatibleStore(['name' => 'Sucursal A']);
+        $chosen = pendingTabCompatibleStore(['name' => 'Sucursal B']);
+        pendingTabSelectStoreForCustomer($user, LaboratoryBrand::SWISSLAB, $selected);
+        $appointment = pendingTabAppointmentForCustomer($user);
+
+        $this->actingAs($admin)
+            ->put(route('admin.laboratory-appointments.update', $appointment), pendingTabUpdatePayload(
+                $appointment,
+                $chosen,
+                [
+                    'appointment_date' => '2026-09-14',
+                    'appointment_time' => '13:03',
+                ],
+            ))
+            ->assertSessionHasNoErrors();
+
+        expect($appointment->fresh()->laboratory_store_id)->toBe($chosen->id);
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+test('backend rechaza confirmar cita con sucursal de otra marca', function () {
+    $admin = pendingTabConciergeAdmin();
+    $appointment = pendingTabAppointment(['brand' => LaboratoryBrand::SWISSLAB]);
+    $store = pendingTabStore(['brand' => LaboratoryBrand::OLAB->value]);
+
+    $this->actingAs($admin)
+        ->from(route('admin.laboratory-appointments.show', $appointment))
+        ->put(route('admin.laboratory-appointments.update', $appointment), pendingTabUpdatePayload($appointment, $store))
+        ->assertRedirect(route('admin.laboratory-appointments.show', $appointment))
+        ->assertSessionHasErrors('laboratory_store');
+
+    expect($appointment->fresh()->laboratory_store_id)->toBeNull()
+        ->and($appointment->fresh()->confirmed_at)->toBeNull();
+});
+
+test('backend rechaza confirmar cita con sucursal inactiva o eliminada', function () {
+    $admin = pendingTabConciergeAdmin();
+    $appointment = pendingTabAppointment();
+    $inactive = pendingTabStore(['is_active' => false]);
+
+    $this->actingAs($admin)
+        ->from(route('admin.laboratory-appointments.show', $appointment))
+        ->put(route('admin.laboratory-appointments.update', $appointment), pendingTabUpdatePayload($appointment, $inactive))
+        ->assertRedirect(route('admin.laboratory-appointments.show', $appointment))
+        ->assertSessionHasErrors('laboratory_store');
+
+    $deleted = pendingTabStore();
+    $deleted->delete();
+
+    $this->actingAs($admin)
+        ->from(route('admin.laboratory-appointments.show', $appointment))
+        ->put(route('admin.laboratory-appointments.update', $appointment), pendingTabUpdatePayload($appointment, $deleted))
+        ->assertRedirect(route('admin.laboratory-appointments.show', $appointment))
+        ->assertSessionHasErrors('laboratory_store');
+
+    expect($appointment->fresh()->laboratory_store_id)->toBeNull()
+        ->and($appointment->fresh()->confirmed_at)->toBeNull();
+});
+
+test('backend rechaza confirmar cita sin sucursal', function () {
+    $admin = pendingTabConciergeAdmin();
+    $appointment = pendingTabAppointment();
+    $store = pendingTabStore();
+
+    $this->actingAs($admin)
+        ->from(route('admin.laboratory-appointments.show', $appointment))
+        ->put(route('admin.laboratory-appointments.update', $appointment), pendingTabUpdatePayload($appointment, $store, [
+            'laboratory_store' => null,
+        ]))
+        ->assertRedirect(route('admin.laboratory-appointments.show', $appointment))
+        ->assertSessionHasErrors('laboratory_store');
+
+    expect($appointment->fresh()->laboratory_store_id)->toBeNull()
+        ->and($appointment->fresh()->confirmed_at)->toBeNull();
+});
+
+test('validacion backend rechaza sucursal incompatible cuando el carrito es resoluble', function () {
+    pendingTabCapability('laboratorio');
+
+    $admin = pendingTabConciergeAdmin();
+    $user = User::factory()->withRegularCustomer()->create();
+    pendingTabLaboratoryCartItem($user);
+    $appointment = pendingTabAppointmentForCustomer($user);
+    $incompatible = pendingTabCompatibleStore(['name' => 'Sin capacidades'], []);
+
+    $this->actingAs($admin)
+        ->from(route('admin.laboratory-appointments.show', $appointment))
+        ->put(route('admin.laboratory-appointments.update', $appointment), pendingTabUpdatePayload($appointment, $incompatible))
+        ->assertRedirect(route('admin.laboratory-appointments.show', $appointment))
+        ->assertSessionHasErrors('laboratory_store');
+
+    expect($appointment->fresh()->laboratory_store_id)->toBeNull();
+});
+
+test('cita confirmada no se sobrescribe por cambios posteriores del draft', function () {
+    Carbon::setTestNow(Carbon::parse('2026-09-14 13:02:30', 'America/Monterrey'));
+
+    try {
+        pendingTabCapability('laboratorio');
+
+        $admin = pendingTabConciergeAdmin();
+        $user = User::factory()->withRegularCustomer()->create();
+        pendingTabLaboratoryCartItem($user);
+        $selected = pendingTabCompatibleStore(['name' => 'Sucursal A']);
+        $confirmed = pendingTabCompatibleStore(['name' => 'Sucursal B']);
+        $laterSelected = pendingTabCompatibleStore(['name' => 'Sucursal C']);
+        pendingTabSelectStoreForCustomer($user, LaboratoryBrand::SWISSLAB, $selected);
+        $appointment = pendingTabAppointmentForCustomer($user);
+
+        $this->actingAs($admin)
+            ->put(route('admin.laboratory-appointments.update', $appointment), pendingTabUpdatePayload(
+                $appointment,
+                $confirmed,
+                [
+                    'appointment_date' => '2026-09-14',
+                    'appointment_time' => '13:03',
+                ],
+            ))
+            ->assertSessionHasNoErrors();
+
+        pendingTabSelectStoreForCustomer($user, LaboratoryBrand::SWISSLAB, $laterSelected);
+
+        $this->actingAs($admin)
+            ->get(route('admin.laboratory-appointments.show', $appointment))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('selectedStoreRecommendation', null)
+                ->where('laboratoryAppointment.laboratory_store.id', $confirmed->id));
+
+        expect($appointment->fresh()->laboratory_store_id)->toBe($confirmed->id)
             ->and($appointment->fresh()->confirmed_at)->not->toBeNull();
     } finally {
         Carbon::setTestNow();

@@ -3,6 +3,11 @@
 namespace App\Http\Requests\Admin\LaboratoryAppointments;
 
 use App\Enums\Gender;
+use App\Models\LaboratoryAppointment;
+use App\Models\LaboratoryStore;
+use App\Services\LaboratoryRequirements\BranchResolver;
+use App\Services\LaboratoryRequirements\CartRequirementAggregator;
+use App\Support\LaboratoryRequirements\BranchMatchResult;
 use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -27,7 +32,20 @@ class UpdateLaboratoryAppointmentRequest extends FormRequest
             'patient_phone_country' => 'required|string',
             'patient_birth_date' => 'required|date|before:today',
             'patient_gender' => ['required', Rule::enum(Gender::class)],
-            'laboratory_store' => ['required', 'exists:laboratory_stores,id'],
+            'laboratory_store' => [
+                'required',
+                Rule::exists('laboratory_stores', 'id')->where(function ($query) {
+                    $appointment = $this->laboratoryAppointment();
+
+                    $query
+                        ->where('is_active', true)
+                        ->whereNull('deleted_at');
+
+                    if ($appointment instanceof LaboratoryAppointment) {
+                        $query->where('brand', $appointment->brand->value);
+                    }
+                }),
+            ],
             'notes' => ['nullable', 'string', 'max:255'],
             'send_notification_email' => ['nullable', 'boolean'],
         ];
@@ -54,6 +72,10 @@ class UpdateLaboratoryAppointmentRequest extends FormRequest
                     'appointment_time',
                     'La fecha y hora seleccionadas ya pasaron. Selecciona una fecha y hora futuras.',
                 );
+            }
+
+            if (! $validator->errors()->has('laboratory_store')) {
+                $this->validateStoreCompatibility($validator);
             }
         });
     }
@@ -98,5 +120,62 @@ class UpdateLaboratoryAppointmentRequest extends FormRequest
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function validateStoreCompatibility(Validator $validator): void
+    {
+        $appointment = $this->laboratoryAppointment();
+        if (! $appointment instanceof LaboratoryAppointment) {
+            return;
+        }
+
+        $store = LaboratoryStore::query()
+            ->whereKey((int) $this->input('laboratory_store'))
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->where('brand', $appointment->brand->value)
+            ->first();
+
+        if (! $store) {
+            return;
+        }
+
+        $customer = $appointment->customer;
+        if (! $customer) {
+            return;
+        }
+
+        $items = $customer
+            ->laboratoryCartItems()
+            ->ofBrand($appointment->brand)
+            ->with('laboratoryTest.laboratoryTestCategory')
+            ->get();
+
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $requirements = app(CartRequirementAggregator::class)->aggregateItems($items, (string) $customer->id);
+        if (! $requirements->isResolvable) {
+            return;
+        }
+
+        $resolution = app(BranchResolver::class)->resolve($requirements);
+        $branch = collect($resolution->brands[$appointment->brand->value] ?? $resolution->branches)
+            ->first(fn (BranchMatchResult $branch) => (int) $branch->branch->id === (int) $store->id);
+
+        if ($branch !== null && ! $branch->isCompatible) {
+            $validator->errors()->add(
+                'laboratory_store',
+                'La sucursal seleccionada no coincide con los requisitos conocidos de los estudios actuales.',
+            );
+        }
+    }
+
+    private function laboratoryAppointment(): ?LaboratoryAppointment
+    {
+        $appointment = $this->route('laboratory_appointment');
+
+        return $appointment instanceof LaboratoryAppointment ? $appointment : null;
     }
 }

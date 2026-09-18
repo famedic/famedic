@@ -44,6 +44,7 @@ import {
 	isCouponApplicableForCheckout,
 	isCouponWithinValidity,
 } from "@/lib/couponEligibilityUi";
+import { checkoutSelectedStorePresentation } from "@/lib/laboratoryCompatibleStores";
 import BalanceCreditCard from "@/Components/Coupons/BalanceCreditCard";
 import PromoCodeField from "@/Components/Checkout/PromoCodeField";
 
@@ -51,20 +52,20 @@ const BASE_WIZARD_STEPS = [
 	{
 		id: "patient",
 		number: 1,
-		label: "Selecciona paciente",
-		ariaLabel: "Selecciona paciente",
+		label: "Paciente",
+		ariaLabel: "Paciente",
 	},
 	{
 		id: "address",
 		number: 2,
-		label: "Selecciona dirección",
-		ariaLabel: "Selecciona dirección",
+		label: "Sucursal",
+		ariaLabel: "Sucursal",
 	},
 	{
 		id: "payment",
 		number: 3,
-		label: "Elige cómo pagar",
-		ariaLabel: "Elige cómo pagar",
+		label: "Pago",
+		ariaLabel: "Pago",
 	},
 ];
 
@@ -77,26 +78,26 @@ function buildWizardSteps(
 			{
 				id: "patient",
 				number: 1,
-				label: "Selecciona paciente",
-				ariaLabel: "Selecciona paciente",
+				label: "Paciente",
+				ariaLabel: "Paciente",
 			},
 			{
 				id: "address",
 				number: 2,
-				label: "Selecciona dirección",
-				ariaLabel: "Selecciona dirección",
+				label: "Sucursal",
+				ariaLabel: "Sucursal",
 			},
 			{
 				id: "appointment",
 				number: 3,
-				label: "Confirma tu cita",
-				ariaLabel: "Confirma tu cita",
+				label: "Cita",
+				ariaLabel: "Cita",
 			},
 			{
 				id: "payment",
 				number: 4,
-				label: "Revisa y paga",
-				ariaLabel: "Revisa y paga",
+				label: "Pago",
+				ariaLabel: "Pago",
 			},
 		];
 	}
@@ -107,14 +108,14 @@ function buildWizardSteps(
 			{
 				id: "appointment",
 				number: 4,
-				label: "Confirma tu cita",
-				ariaLabel: "Confirma tu cita",
+				label: "Cita",
+				ariaLabel: "Cita",
 			},
 			{
 				id: "confirmation",
 				number: 5,
-				label: "Revisa y confirma",
-				ariaLabel: "Revisa y confirma",
+				label: "Revisar y confirmar",
+				ariaLabel: "Revisar y confirmar",
 			},
 		];
 	}
@@ -124,8 +125,8 @@ function buildWizardSteps(
 		{
 			id: "confirmation",
 			number: 4,
-			label: "Revisa y confirma",
-			ariaLabel: "Revisa y confirma",
+			label: "Revisar y confirmar",
+			ariaLabel: "Revisar y confirmar",
 		},
 	];
 }
@@ -286,6 +287,64 @@ function resolveInitialCheckoutData(savedCheckout = null) {
 	};
 }
 
+function SelectedLaboratoryStoreSummaryCard({
+	selection,
+	laboratoryBrand,
+	error = null,
+}) {
+	const presentation = checkoutSelectedStorePresentation(selection);
+	const isValid = presentation.state === "valid";
+	const isInformational = presentation.state === "missing";
+	const cartUrl = route("laboratory.shopping-cart", {
+		laboratory_brand: laboratoryBrand.value,
+	});
+
+	return (
+		<div
+			className={clsx(
+				"rounded-lg border px-3 py-3",
+				isValid
+					? "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-100"
+					: isInformational
+						? "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900/70 dark:bg-sky-950/30 dark:text-sky-100"
+						: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100",
+			)}
+		>
+			<div className="space-y-3">
+				<div className="flex flex-wrap items-center gap-2">
+					<Badge
+						color={
+							isValid
+								? "green"
+								: isInformational
+									? "sky"
+									: "amber"
+						}
+					>
+						Sucursal preferida
+					</Badge>
+					{presentation.storeName && (
+						<Text className="font-medium text-inherit">
+							{presentation.storeName}
+						</Text>
+					)}
+				</div>
+				<Text className="text-sm text-inherit/80">
+					{error || presentation.message}
+				</Text>
+				<Button
+					type="button"
+					plain={isValid}
+					className="w-full justify-center"
+					onClick={() => router.visit(cartUrl)}
+				>
+					{isValid ? "Cambiar" : presentation.actionLabel}
+				</Button>
+			</div>
+		</div>
+	);
+}
+
 export default function LaboratoryCheckout({
 	requiresAppointment = false,
 	usesAppointmentFirstFlow = false,
@@ -294,6 +353,7 @@ export default function LaboratoryCheckout({
 	pendingLaboratoryAppointment: pendingLaboratoryAppointmentProp = null,
 	callbackPreferenceSavedAtFormatted,
 	savedCheckout = null,
+	selectedLaboratoryStore = null,
 	laboratoryCarts,
 	laboratoryBrand,
 	total,
@@ -1568,7 +1628,7 @@ export default function LaboratoryCheckout({
 	return (
 		<>
 			<CheckoutLayout
-				title="Completar compra"
+				title="¿Para quién son los estudios?"
 				header={
 					<div className="flex flex-col gap-8 sm:flex-row sm:items-center">
 						<LaboratoryBrandCard
@@ -1579,7 +1639,7 @@ export default function LaboratoryCheckout({
 						<div className="flex flex-col gap-3">
 							<div className="flex flex-wrap items-center gap-2">
 								<GradientHeading noDivider>
-									Completar compra
+									¿Para quién son los estudios?
 								</GradientHeading>
 								<EnvironmentBadge />
 							</div>
@@ -1591,7 +1651,8 @@ export default function LaboratoryCheckout({
 							)}
 							<Subheading>
 								<span className="text-base lg:text-lg">
-									Completa tu compra en unos sencillos pasos.
+									Selecciona al paciente que realizará los
+									estudios.
 								</span>
 							</Subheading>
 						</div>
@@ -1649,6 +1710,13 @@ export default function LaboratoryCheckout({
 					usesAppointmentFirstFlow && currentStep.id !== "payment"
 						? null
 						: couponSection
+				}
+				summaryExtra={
+					<SelectedLaboratoryStoreSummaryCard
+						selection={selectedLaboratoryStore}
+						laboratoryBrand={laboratoryBrand}
+						error={errors.selected_laboratory_store}
+					/>
 				}
 				hideDefaultSubmit
 				stepContentRef={stepContentRef}

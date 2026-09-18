@@ -77,6 +77,8 @@ export default function CheckoutLayout({
 	floatingWizardFooter = false,
 	/** Acciones debajo de los totales del resumen (p. ej. confirmar pago) */
 	summaryActions = null,
+	/** Bloque independiente dentro del resumen lateral (p. ej. sucursal preferida) */
+	summaryExtra = null,
 }) {
 	const [isOnlineProcessing, setIsOnlineProcessing] = useState(false);
 	const [isBranchProcessing, setIsBranchProcessing] = useState(false);
@@ -148,6 +150,7 @@ export default function CheckoutLayout({
 									summaryDetails={summaryDetails}
 									couponSection={couponSection}
 									summaryActions={summaryActions}
+									summaryExtra={summaryExtra}
 								/>
 							</CheckoutSummaryCard>
 						</div>
@@ -269,6 +272,7 @@ export default function CheckoutLayout({
 					items={items}
 					couponSection={couponSection}
 					summaryActions={summaryActions}
+					summaryExtra={summaryExtra}
 				/>
 			</form>
 
@@ -282,6 +286,7 @@ function CheckoutSummary({
 	items,
 	couponSection = null,
 	summaryActions = null,
+	summaryExtra = null,
 }) {
 	const splitMobileCheckout = Boolean(summaryActions);
 
@@ -292,6 +297,7 @@ function CheckoutSummary({
 			summaryDetails={summaryDetails}
 			couponSection={couponSection}
 			summaryActions={summaryActions}
+			summaryExtra={summaryExtra}
 		/>
 	);
 
@@ -326,7 +332,7 @@ function CheckoutSummaryCard({ children, sticky = false }) {
 	return (
 		<section
 			className={clsx(
-				"space-y-6 overflow-hidden rounded-lg bg-white px-4 py-6 shadow sm:p-6 lg:p-8 dark:bg-slate-900",
+				"space-y-5 overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6 dark:bg-slate-900",
 				sticky && "sticky top-8",
 			)}
 		>
@@ -343,9 +349,14 @@ function CheckoutOrderItems({ items }) {
 				<Text>Pago 100% seguro</Text>
 			</div>
 
-			<Subheading>Resumen del pedido</Subheading>
+			<div>
+				<Subheading>Resumen del pedido</Subheading>
+				<Text className="mt-1 text-sm">
+					{items.length} {items.length === 1 ? "estudio" : "estudios"}
+				</Text>
+			</div>
 
-			<div className="flow-root max-h-64 overflow-y-auto overflow-x-hidden lg:max-h-80">
+			<div className="flow-root max-h-52 overflow-y-auto overflow-x-hidden lg:max-h-64">
 				<ul role="list" className="[&>*:last-child]:hidden">
 					{items.length > 0 ? (
 						items.map((item, index) => (
@@ -378,9 +389,12 @@ function CheckoutTotalsPanel({
 	summaryDetails,
 	couponSection = null,
 	summaryActions = null,
+	summaryExtra = null,
 }) {
 	return (
 		<>
+			{summaryExtra}
+
 			{couponSection}
 
 			<div
@@ -415,7 +429,7 @@ function CheckoutTotalsPanel({
 function CartDetail({ label, value, totalRow = false }) {
 	return (
 		<>
-			<div className="flex min-w-0 items-center justify-between gap-2 py-6">
+			<div className="flex min-w-0 items-center justify-between gap-2 py-3">
 				<dt className="min-w-0 shrink">
 					{totalRow ? (
 						<Subheading
@@ -466,7 +480,7 @@ function CartItem({
 }) {
 	return (
 		<>
-			<li className="flex min-w-0 pb-6">
+			<li className="flex min-w-0 pb-4">
 				{(showDefaultImage || imgSrc) && (
 					<div className="flex-shrink-0">
 						{imgSrc ? (
@@ -482,13 +496,11 @@ function CartItem({
 						)}
 					</div>
 				)}
-				<div
-					className={`w-full min-w-0 ${imgSrc || showDefaultImage ? "ml-4 sm:ml-6" : ""}`}
-				>
+				<div className={`w-full min-w-0 ${imgSrc || showDefaultImage ? "ml-4" : ""}`}>
 					<div className="relative flex min-w-0 sm:gap-x-6">
 						<div className="w-full min-w-0">
 							<div className="pr-9">
-								<Subheading className="mb-3 break-words">
+								<Subheading className="mb-1 break-words text-sm">
 									{quantity && (
 										<Badge color="slate">{quantity}</Badge>
 									)}{" "}
@@ -505,39 +517,39 @@ function CartItem({
 									</Badge>
 								)}
 
-								{description && (
-									<Text className="break-words">
-										<span className="text-xs">
-											{description}
-										</span>
-									</Text>
-								)}
-
-								{indications && (
-									<Text className="break-words">
-										<span className="text-xs">
-											{indications}
-										</span>
-									</Text>
-								)}
-
-								{/* Features list */}
-								{features.length > 0 && (
-									<ul className="mt-2 space-y-1">
-										{features.map((feature, idx) => (
-											<li
-												key={idx}
-												className="flex gap-2 text-sm text-zinc-700 dark:text-slate-200"
-											>
-												<CheckIcon className="mt-1 size-4 flex-shrink-0 text-famedic-light" />
-												<Text>
-													<span className="text-xs">
-														{feature}
-													</span>
+								{(description || indications || features.length > 0) && (
+									<details className="mt-1 text-xs">
+										<summary className="cursor-pointer font-medium text-famedic-dark hover:underline dark:text-famedic-lime">
+											Ver detalles
+										</summary>
+										<div className="mt-2 space-y-1">
+											{description && (
+												<Text className="break-words">
+													<span className="text-xs">{description}</span>
 												</Text>
-											</li>
-										))}
-									</ul>
+											)}
+											{indications && (
+												<Text className="break-words">
+													<span className="text-xs">{indications}</span>
+												</Text>
+											)}
+											{features.length > 0 && (
+												<ul className="mt-2 space-y-1">
+													{features.map((feature, idx) => (
+														<li
+															key={idx}
+															className="flex gap-2 text-sm text-zinc-700 dark:text-slate-200"
+														>
+															<CheckIcon className="mt-1 size-4 flex-shrink-0 text-famedic-light" />
+															<Text>
+																<span className="text-xs">{feature}</span>
+															</Text>
+														</li>
+													))}
+												</ul>
+											)}
+										</div>
+									</details>
 								)}
 							</div>
 							{discountedPrice && discountPercentage > 0 && (
@@ -553,7 +565,7 @@ function CartItem({
 								</div>
 							)}
 
-							<Text className="mt-4 break-words text-right">
+							<Text className="mt-2 break-words text-right">
 								<Strong>
 									<span className="text-famedic-dark dark:text-white">
 										{price}
@@ -576,7 +588,7 @@ function CartItem({
 					</div>
 				</div>
 			</li>
-			<Divider className="mb-6" />
+			<Divider className="mb-4" />
 		</>
 	);
 }

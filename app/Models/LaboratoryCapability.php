@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LaboratoryCapability extends Model
 {
@@ -17,5 +18,10 @@ class LaboratoryCapability extends Model
     {
         return $this->belongsToMany(LaboratoryStore::class, 'laboratory_store_capability')
             ->withTimestamps();
+    }
+
+    public function studyRequirements(): HasMany
+    {
+        return $this->hasMany(LaboratoryStudyRequirement::class);
     }
 }

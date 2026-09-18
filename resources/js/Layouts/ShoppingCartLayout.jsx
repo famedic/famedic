@@ -7,7 +7,7 @@ import { Badge } from "@/Components/Catalyst/badge";
 import { Text, Strong } from "@/Components/Catalyst/text";
 import { Heading, Subheading } from "@/Components/Catalyst/heading";
 import { InformationCircleIcon } from "@heroicons/react/20/solid";
-import { ChevronDoubleRightIcon } from "@heroicons/react/16/solid";
+import { ChevronDoubleRightIcon, PlusIcon } from "@heroicons/react/16/solid";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { CheckIcon, PhotoIcon } from "@heroicons/react/24/solid";
 import Card from "@/Components/Card";
@@ -275,6 +275,15 @@ export default function ShoppingCartLayout({
 			>
 				{header}
 
+				{addMoreHref && addMoreLabel && items.length > 0 && (
+					<div className="mb-6 mt-4 flex justify-start">
+						<Button href={addMoreHref} outline>
+							<PlusIcon className="size-4" />
+							{addMoreLabel}
+						</Button>
+					</div>
+				)}
+
 				<div className="lg:grid lg:grid-cols-12 lg:items-start lg:gap-x-12 xl:gap-x-16">
 					<section className="lg:col-span-7">
 						<ul role="list">
@@ -319,8 +328,6 @@ export default function ShoppingCartLayout({
 							totalValue={calculateTotalValue()}
 							currency={currency}
 							summaryExtra={summaryExtra}
-							addMoreHref={addMoreHref}
-							addMoreLabel={addMoreLabel}
 						/>
 					)}
 				</div>
@@ -406,17 +413,17 @@ function CartItem({
 	return (
 		<>
 			<Divider />
-			<li className="flex py-6 sm:py-10">
+			<li className="flex py-4 sm:py-5">
 				{(showDefaultImage || imgSrc) && (
 					<div className="flex-shrink-0">
 						{imgSrc ? (
 							<img
 								src={imgSrc}
-								className="size-24 rounded-md object-cover object-center sm:size-48"
+								className="size-16 rounded-md object-cover object-center sm:size-20"
 								alt={heading}
 							/>
 						) : (
-							<div className="flex size-24 items-center justify-center rounded-lg bg-zinc-100 sm:size-48 dark:bg-slate-800">
+							<div className="flex size-16 items-center justify-center rounded-lg bg-zinc-100 sm:size-20 dark:bg-slate-800">
 								<PhotoIcon className="h-full fill-zinc-200 dark:fill-slate-700" />
 							</div>
 						)}
@@ -428,17 +435,46 @@ function CartItem({
 					<div className="relative flex sm:gap-x-6">
 						<div className="w-full">
 							<div className="pr-9">
-								<Subheading className="mb-3">
-									{quantity && (
-										<Badge color="slate">{quantity}</Badge>
-									)}{" "}
-									{heading}
-									{process.env.NODE_ENV === 'testing' && itemIndex !== null && (
-										<Badge color="amber" className="ml-2">
-											#{itemIndex}
-										</Badge>
-									)}
-								</Subheading>
+								<div className="flex flex-wrap items-start justify-between gap-3 pr-1">
+									<Subheading className="mb-1 max-w-[70%] break-words text-base">
+										{quantity && (
+											<Badge color="slate">
+												{quantity}
+											</Badge>
+										)}{" "}
+										{heading}
+										{process.env.NODE_ENV === "testing" &&
+											itemIndex !== null && (
+												<Badge
+													color="amber"
+													className="ml-2"
+												>
+													#{itemIndex}
+												</Badge>
+											)}
+									</Subheading>
+									<div className="text-right">
+										<Text>
+											<Strong>
+												<span className="text-lg text-famedic-dark dark:text-white">
+													{price}
+												</span>
+											</Strong>
+										</Text>
+										{discountedPrice && discountPercentage > 0 && (
+											<Text className="mt-1 space-x-2 text-xs">
+												{discountPercentage && (
+													<Badge color="famedic-lime">
+														{discountPercentage}%
+													</Badge>
+												)}
+												<span className="line-through">
+													{discountedPrice}
+												</span>
+											</Text>
+										)}
+									</div>
+								</div>
 
 								{infoMessage && (
 									<Badge color="sky" className="mb-3">
@@ -450,64 +486,55 @@ function CartItem({
 									</Badge>
 								)}
 
-								{description && (
-									<Text className="sm:max-w-[80%]">
-										{description}
-									</Text>
-								)}
-
-								{indications && (
-									<Text className="sm:max-w-[80%]">
-										{indications}
-									</Text>
-								)}
-
-								{/* Features list */}
-								{features.length > 0 && (
-									<ul className="mt-2 space-y-1">
-										{features.map((feature, idx) => (
-											<li
-												key={idx}
-												className="flex gap-2 text-sm text-zinc-700 dark:text-slate-200"
-											>
-												<CheckIcon className="mt-1 size-4 flex-shrink-0 text-famedic-light" />
-												<Text>{feature}</Text>
-											</li>
-										))}
-									</ul>
-								)}
-								
-								{/* Debug info solo en desarrollo */}
-								{process.env.NODE_ENV === 'testing' && productData && (
-									<div className="mt-2 rounded bg-gray-100 p-2 text-xs">
-										<strong>GA4 Data:</strong> ID: {productData.id}, Brand: {productData.brand}
-									</div>
-								)}
-							</div>
-							{discountedPrice && discountPercentage > 0 && (
-								<Text className="mt-3 space-x-2 text-right">
-									{discountPercentage && (
-										<Badge color="famedic-lime">
-											{discountPercentage}%
-										</Badge>
-									)}
-									<span className="line-through">
-										{discountedPrice}
-									</span>
+								<Text className="text-sm text-zinc-600 dark:text-slate-400">
+									Estudio de laboratorio
 								</Text>
-							)}
-							<Text className="mt-4 text-right">
-								<Strong>
-									<span className="text-2xl text-famedic-dark dark:text-white">
-										{price}
-									</span>
-									{process.env.NODE_ENV === 'testing' && (
-										<span className="ml-2 text-sm text-gray-500">
-											(≈${extractPriceValue(price).toFixed(2)})
-										</span>
+
+								{(description ||
+									indications ||
+									features.length > 0) && (
+									<details className="mt-2 text-sm">
+										<summary className="cursor-pointer font-medium text-famedic-dark hover:underline dark:text-famedic-lime">
+											Ver detalles
+										</summary>
+										<div className="mt-2 space-y-2">
+											{description && (
+												<Text>{description}</Text>
+											)}
+											{indications && (
+												<Text>{indications}</Text>
+											)}
+											{features.length > 0 && (
+												<ul className="space-y-1">
+													{features.map(
+														(feature, idx) => (
+															<li
+																key={idx}
+																className="flex gap-2 text-sm text-zinc-700 dark:text-slate-200"
+															>
+																<CheckIcon className="mt-1 size-4 flex-shrink-0 text-famedic-light" />
+																<Text>
+																	{feature}
+																</Text>
+															</li>
+														),
+													)}
+												</ul>
+											)}
+										</div>
+									</details>
+								)}
+
+								{/* Debug info solo en desarrollo */}
+								{process.env.NODE_ENV === "testing" &&
+									productData && (
+										<div className="mt-2 rounded bg-gray-100 p-2 text-xs">
+											<strong>GA4 Data:</strong> ID:{" "}
+											{productData.id}, Brand:{" "}
+											{productData.brand}
+										</div>
 									)}
-								</Strong>
-							</Text>
+							</div>
 						</div>
 						<div className="absolute right-0 top-0">
 							<button
@@ -549,8 +576,6 @@ function CartSummary({
 	totalValue = 0,
 	currency = 'MXN',
 	summaryExtra = null,
-	addMoreHref = null,
-	addMoreLabel = null,
 	// ====================================
 }) {
 	
@@ -612,16 +637,6 @@ function CartSummary({
 					/>
 				))}
 			</dl>
-
-			{addMoreHref && addMoreLabel && (
-				<Button
-					href={addMoreHref}
-					outline
-					className="w-full !py-3"
-				>
-					{addMoreLabel}
-				</Button>
-			)}
 
 			<Button
 				href={checkoutUrl}

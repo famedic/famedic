@@ -5,7 +5,6 @@ import { Text } from "@/Components/Catalyst/text";
 import { Input } from "@/Components/Catalyst/input";
 import { Field, Label, ErrorMessage } from "@/Components/Catalyst/fieldset";
 import { Select } from "@/Components/Catalyst/select";
-import { Badge } from "@/Components/Catalyst/badge";
 import { useClose } from "@headlessui/react";
 import CountryListbox from "@/Components/CountryListbox";
 import {
@@ -13,7 +12,6 @@ import {
 	UserCircleIcon,
 	ChevronLeftIcon,
 	PhoneIcon,
-	CalendarDaysIcon,
 	ArrowPathIcon,
 } from "@heroicons/react/16/solid";
 import CheckoutStep from "@/Components/Checkout/CheckoutStep";
@@ -29,7 +27,7 @@ export default function ContactStep({
 	setData,
 	errors,
 	clearErrors,
-	description = "Es indispensable que la orden se genere con la información de la persona que se realizará los estudios.",
+	description = "Selecciona al paciente que realizará los estudios. La orden se generará con su información.",
 	contacts,
 	toggleContactForm,
 	showContactForm,
@@ -56,7 +54,7 @@ export default function ContactStep({
 		if (saveSuccessMessage || data.contact) {
 			return "Paciente seleccionado";
 		}
-		return "Selecciona el paciente";
+		return "¿Para quién son los estudios?";
 	}, [showContactForm, data.contact, saveSuccessMessage]);
 
 	const isWizard = variant === "wizard";
@@ -187,7 +185,12 @@ function ContactSelectionInner({
 	};
 
 	return (
-		<ul className={clsx("mt-3 grid gap-4", showRadio ? "grid-cols-1" : "gap-8 sm:grid-cols-2")}>
+		<ul
+			className={clsx(
+				"mt-3 grid gap-3",
+				showRadio ? "grid-cols-1" : "gap-8 sm:grid-cols-2",
+			)}
+		>
 			{contacts.map((contact) => (
 				<CheckoutSelectionCard
 					key={contact.id}
@@ -196,18 +199,24 @@ function ContactSelectionInner({
 					IconComponent={showRadio ? null : UserCircleIcon}
 					selected={selectedId == contact.id}
 					showRadio={showRadio}
+					compact={showRadio}
 				>
-					<Badge color="slate" className="mb-2">
-						{contact.formatted_gender}
-					</Badge>
-					<span className="flex items-center gap-1">
-						<PhoneIcon className="size-5 fill-zinc-300 dark:fill-slate-600" />
-						<Text>{contact.phone}</Text>
-					</span>
-					<span className="flex items-center gap-1">
-						<CalendarDaysIcon className="size-5 fill-zinc-300 dark:fill-slate-600" />
-						<Text>{contact.formatted_birth_date}</Text>
-					</span>
+					<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-600 dark:text-slate-400">
+						<span>
+							{[
+								contact.formatted_gender,
+								contact.formatted_birth_date,
+							]
+								.filter(Boolean)
+								.join(" · ")}
+						</span>
+						{contact.phone && (
+							<span className="flex items-center gap-1">
+								<PhoneIcon className="size-4 fill-zinc-300 dark:fill-slate-600" />
+								<Text>{contact.phone}</Text>
+							</span>
+						)}
+					</div>
 				</CheckoutSelectionCard>
 			))}
 			<CheckoutSelectionCard
@@ -216,6 +225,7 @@ function ContactSelectionInner({
 				IconComponent={showRadio ? null : PlusIcon}
 				greenIcon={!showRadio}
 				showRadio={showRadio}
+				compact={showRadio}
 			>
 				<Text className="line-clamp-3 max-w-64">
 					Puedes agregar un nuevo paciente y guardarlo para futuras

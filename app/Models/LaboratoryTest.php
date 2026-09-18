@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Laravel\Scout\Searchable;
@@ -88,6 +89,11 @@ class LaboratoryTest extends Model
     public function laboratoryTestCategory(): BelongsTo
     {
         return $this->belongsTo(LaboratoryTestCategory::class);
+    }
+
+    public function studyRequirementGroups(): HasMany
+    {
+        return $this->hasMany(LaboratoryStudyRequirementGroup::class);
     }
 
     public function scopeOfBrand(Builder $query, LaboratoryBrand $brand): void

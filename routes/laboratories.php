@@ -7,16 +7,18 @@ use App\Http\Controllers\LaboratoryAppointmentController;
 use App\Http\Controllers\LaboratoryCartItemController;
 use App\Http\Controllers\LaboratoryCheckoutController;
 use App\Http\Controllers\LaboratoryCheckoutResumeController;
+use App\Http\Controllers\LaboratoryCheckoutSelectedStoreController;
+use App\Http\Controllers\LaboratoryCompatibleStoresController;
 use App\Http\Controllers\LaboratoryPurchaseController;
 use App\Http\Controllers\LaboratoryQuoteController;
 use App\Http\Controllers\LaboratoryResultController;
 use App\Http\Controllers\LaboratoryResultsController;
+use App\Http\Controllers\LaboratoryResultsOtpController;
 use App\Http\Controllers\LaboratoryShoppingCartController;
 use App\Http\Controllers\LaboratoryStoreController;
+use App\Http\Controllers\LabResultsAccessController;
 use App\Http\Controllers\PayPalController;
 use App\Http\Controllers\PromoCodeCheckoutController;
-use App\Http\Controllers\LabResultsAccessController;
-use App\Http\Controllers\LaboratoryResultsOtpController;
 use App\Http\Middleware\EnsureLabResultsOtpVerified;
 use Illuminate\Support\Facades\Route;
 
@@ -69,6 +71,8 @@ Route::middleware([
 
     // Shopping Cart & Checkout
     Route::resource('laboratory-cart-items', LaboratoryCartItemController::class)->only(['store', 'destroy']);
+    Route::get('/laboratory/cart/compatible-stores', LaboratoryCompatibleStoresController::class)
+        ->name('laboratory.cart.compatible-stores');
     Route::get('/laboratory/{laboratory_brand}/shopping-cart', LaboratoryShoppingCartController::class)->name('laboratory.shopping-cart');
 
     Route::get('/laboratory/{laboratory_brand}/checkout', LaboratoryCheckoutController::class)
@@ -78,6 +82,15 @@ Route::middleware([
     Route::post('/laboratory/{laboratory_brand}/checkout/draft', [LaboratoryCheckoutController::class, 'syncDraft'])
         ->name('laboratory.checkout.draft.sync')
         ->middleware('redirect-if-empty-laboratory-cart-items');
+
+    Route::get('/laboratory/{laboratory_brand}/checkout/selected-store', [LaboratoryCheckoutSelectedStoreController::class, 'show'])
+        ->name('laboratory.checkout.selected-store.show');
+
+    Route::post('/laboratory/{laboratory_brand}/checkout/selected-store', [LaboratoryCheckoutSelectedStoreController::class, 'store'])
+        ->name('laboratory.checkout.selected-store.store');
+
+    Route::delete('/laboratory/{laboratory_brand}/checkout/selected-store', [LaboratoryCheckoutSelectedStoreController::class, 'destroy'])
+        ->name('laboratory.checkout.selected-store.destroy');
 
     Route::post('/laboratory/{laboratory_brand}/checkout/appointment', [LaboratoryCheckoutController::class, 'syncAppointment'])
         ->name('laboratory.checkout.appointment.sync')

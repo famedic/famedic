@@ -7,10 +7,15 @@ use App\Enums\LaboratoryBrand;
 use App\Models\Address;
 use App\Models\CartEvent;
 use App\Models\Contact;
+use App\Models\LaboratoryCapability;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Models\LaboratoryPurchase;
+use App\Models\LaboratoryStore;
+use App\Models\LaboratoryStudyRequirement;
+use App\Models\LaboratoryStudyRequirementGroup;
 use App\Models\Transaction;
 use App\Enums\Gender;
+use App\Services\Laboratory\SelectedLaboratoryStoreDraftService;
 
 beforeEach(function () {
     configureCartActiveCampaignTestEnvironment();
@@ -51,9 +56,66 @@ function attachThreeStandardPurchases($user): void
     }
 }
 
+function selectCompatibleCheckoutStoreForPaymentTest($user, LaboratoryBrand $brand = LaboratoryBrand::OLAB): LaboratoryStore
+{
+    $capability = LaboratoryCapability::query()->firstOrCreate(
+        ['slug' => 'laboratorio'],
+        ['name' => 'Laboratorio', 'is_active' => true],
+    );
+
+    $store = LaboratoryStore::factory()->create([
+        'brand' => $brand->value,
+        'name' => 'Sucursal compatible',
+        'address' => 'Calle Test 123',
+        'state' => 'NL',
+        'weekly_hours' => '9-18',
+        'saturday_hours' => '9-14',
+        'sunday_hours' => 'Cerrado',
+        'google_maps_url' => 'https://maps.example.com',
+        'is_active' => true,
+    ]);
+
+    $store->capabilities()->attach($capability->id);
+
+    $user->customer
+        ->laboratoryCartItems()
+        ->ofBrand($brand)
+        ->with('laboratoryTest')
+        ->get()
+        ->each(function ($cartItem) use ($capability): void {
+            $group = LaboratoryStudyRequirementGroup::query()->create([
+                'laboratory_test_id' => $cartItem->laboratoryTest->id,
+                'group_key' => 'fixture_laboratorio',
+                'operator' => 'all',
+                'is_required' => true,
+                'source' => 'manual',
+                'confidence' => 'MAPPED',
+                'evidence' => ['fixture' => 'payment_method_selected'],
+                'is_active' => true,
+            ]);
+
+            LaboratoryStudyRequirement::query()->create([
+                'laboratory_study_requirement_group_id' => $group->id,
+                'laboratory_capability_id' => $capability->id,
+                'capability_slug' => $capability->slug,
+                'requirement_type' => 'capability',
+                'is_required' => true,
+                'source' => 'manual',
+                'confidence' => 'MAPPED',
+                'evidence' => ['fixture' => 'payment_method_selected'],
+                'is_active' => true,
+            ]);
+        });
+
+    app(SelectedLaboratoryStoreDraftService::class)->store($user->customer->fresh(), $brand, $store);
+
+    return $store;
+}
+
 test('appointment-first before confirmed appointment does not emit payment_method_selected', function () {
     $user = cartMonitoringUser();
     cartMonitoringActiveLabCart($user);
+    selectCompatibleCheckoutStoreForPaymentTest($user);
     $contact = Contact::factory()->create(['customer_id' => $user->customer->id]);
     $address = Address::factory()->create(['customer_id' => $user->customer->id]);
 
@@ -72,6 +134,7 @@ test('appointment-first before confirmed appointment does not emit payment_metho
 test('appointment-first after confirmed appointment records one payment_method_selected', function () {
     $user = cartMonitoringUser();
     cartMonitoringActiveLabCart($user);
+    selectCompatibleCheckoutStoreForPaymentTest($user);
     $contact = Contact::factory()->create(['customer_id' => $user->customer->id]);
     $address = Address::factory()->create(['customer_id' => $user->customer->id]);
     cartMonitoringAppointment($user->customer, confirmedAt: now(), appointmentAt: now()->addDay());
@@ -91,6 +154,7 @@ test('appointment-first after confirmed appointment records one payment_method_s
 test('second sync with same payment method does not duplicate payment_method_selected', function () {
     $user = cartMonitoringUser();
     cartMonitoringActiveLabCart($user);
+    selectCompatibleCheckoutStoreForPaymentTest($user);
     $contact = Contact::factory()->create(['customer_id' => $user->customer->id]);
     $address = Address::factory()->create(['customer_id' => $user->customer->id]);
     cartMonitoringAppointment($user->customer, confirmedAt: now(), appointmentAt: now()->addDay());
@@ -111,6 +175,7 @@ test('second sync with same payment method does not duplicate payment_method_sel
 test('changing payment method from paypal to token creates a new payment_method_selected event', function () {
     $user = cartMonitoringUser();
     cartMonitoringActiveLabCart($user);
+    selectCompatibleCheckoutStoreForPaymentTest($user);
     $contact = Contact::factory()->create(['customer_id' => $user->customer->id]);
     $address = Address::factory()->create(['customer_id' => $user->customer->id]);
     cartMonitoringAppointment($user->customer, confirmedAt: now(), appointmentAt: now()->addDay());
@@ -135,6 +200,7 @@ test('changing payment method from paypal to token creates a new payment_method_
 test('standard flow still records payment_method_selected on payment step before appointment', function () {
     $user = cartMonitoringUser();
     cartMonitoringActiveLabCart($user);
+    selectCompatibleCheckoutStoreForPaymentTest($user);
     attachThreeStandardPurchases($user);
     $contact = Contact::factory()->create(['customer_id' => $user->customer->id]);
     $address = Address::factory()->create(['customer_id' => $user->customer->id]);

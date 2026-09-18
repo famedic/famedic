@@ -26,6 +26,7 @@ use App\Models\LaboratoryStore;
 use App\Notifications\LaboratoryAppointmentConfirmedPendingPayment;
 use App\Notifications\LaboratoryAppointmentUpdatedByConcierge;
 use App\Services\Laboratory\LaboratoryCheckoutFlowEligibility;
+use App\Services\Laboratory\SelectedLaboratoryStoreDraftService;
 use App\Services\LaboratoryAppointments\PendingConciergeAppointmentQuery;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -193,6 +194,7 @@ class LaboratoryAppointmentController extends Controller
         ShowLaboratoryAppointmentRequest $request,
         LaboratoryAppointment $laboratoryAppointment,
         BuildLaboratoryAppointmentCheckoutProgressAction $buildCheckoutProgress,
+        SelectedLaboratoryStoreDraftService $selectedLaboratoryStoreDraftService,
     ) {
         $laboratoryAppointment->load([
             'customer.user',
@@ -255,10 +257,21 @@ class LaboratoryAppointmentController extends Controller
 
         $checkoutProgress = $buildCheckoutProgress($laboratoryAppointment);
         $prepareCheckoutPaymentLink = app(PrepareLaboratoryCheckoutPaymentLinkAction::class);
+        $selectedStoreRecommendation = null;
+
+        if ($laboratoryAppointment->confirmed_at === null) {
+            $selectedStoreRecommendation = $this->selectedStoreRecommendationPayload(
+                $selectedLaboratoryStoreDraftService->conciergeRecommendation(
+                    $laboratoryAppointment->customer,
+                    $laboratoryAppointment->brand,
+                )
+            );
+        }
 
         return Inertia::render('Admin/LaboratoryAppointment', [
             'laboratoryAppointment' => $laboratoryAppointment,
             'laboratoryStores' => LaboratoryStore::ofBrand($laboratoryAppointment->brand)->orderBy('name')->get(),
+            'selectedStoreRecommendation' => $selectedStoreRecommendation,
             'studyItems' => $studyItems,
             'studyItemsSource' => $studyItemsSource,
             'genders' => Gender::casesWithLabels(),
@@ -272,6 +285,40 @@ class LaboratoryAppointmentController extends Controller
                 : ($checkoutProgress['payment_blocked_reason'] ?? 'La cita no está disponible para completar el checkout.'),
             'resumeCheckoutStep' => $checkoutProgress['resume_step'] ?? 'confirmation',
         ]);
+    }
+
+    /**
+     * @param  array{selected: bool, store: LaboratoryStore|null, validation: array<string, string>|null}  $recommendation
+     * @return array<string, mixed>|null
+     */
+    private function selectedStoreRecommendationPayload(array $recommendation): ?array
+    {
+        if (! $recommendation['selected'] || ! $recommendation['store']) {
+            return null;
+        }
+
+        $store = $recommendation['store'];
+        $validation = $recommendation['validation'] ?? null;
+        $status = $validation['status'] ?? 'unknown';
+        $reason = $validation['reason'] ?? null;
+        $canUse = $status === 'valid'
+            && $store->is_active
+            && ! $store->trashed();
+
+        return [
+            'store' => [
+                'id' => $store->id,
+                'name' => $store->name,
+                'brand' => $store->brand?->value ?? $store->brand,
+                'brand_label' => $store->brand?->label() ?? strtoupper((string) $store->brand),
+                'address' => $store->address,
+            ],
+            'validation' => [
+                'status' => $status,
+                'reason' => $reason,
+            ],
+            'can_use' => $canUse,
+        ];
     }
 
     public function storeInteraction(

@@ -49,6 +49,7 @@ import ContactInfoCard from "@/Pages/Admin/LaboratoryAppointment/ContactInfoCard
 import StudiesTable from "@/Pages/Admin/LaboratoryAppointment/StudiesTable";
 import AppointmentSidebar from "@/Pages/Admin/LaboratoryAppointment/AppointmentSidebar";
 import LaboratoryAppointmentEmailActions from "@/Pages/Admin/LaboratoryAppointment/LaboratoryAppointmentEmailActions";
+import { appointmentStoreRecommendationPresentation } from "@/lib/laboratoryAppointmentRecommendation";
 
 const TABS = [
 	{ id: "overview", label: "Vista general" },
@@ -183,6 +184,7 @@ export default function LaboratoryAppointment({
 	hasPaidLaboratoryPurchase,
 	callbackPreferenceSavedAtFormatted = null,
 	checkoutProgress = null,
+	selectedStoreRecommendation = null,
 }) {
 	const [openDeleteConfirmation, setOpenDeleteConfirmation] = useState(false);
 	const [openConfirmation, setOpenConfirmation] = useState(false);
@@ -416,6 +418,7 @@ export default function LaboratoryAppointment({
 				studyItems={studyItems}
 				studies={studies}
 				hasPaidLaboratoryPurchase={hasPaidLaboratoryPurchase}
+				selectedStoreRecommendation={selectedStoreRecommendation}
 				setOpenConfirmation={setOpenConfirmation}
 				openConfirmation={openConfirmation}
 			/>
@@ -769,6 +772,7 @@ function LaboratoryAppointmentConfirmationDialog({
 	studyItems,
 	studies,
 	hasPaidLaboratoryPurchase,
+	selectedStoreRecommendation,
 	setOpenConfirmation,
 	openConfirmation,
 }) {
@@ -887,6 +891,9 @@ function LaboratoryAppointmentConfirmationDialog({
 	const selectedStore = laboratoryStores.find(
 		(store) => String(store.id) === String(data.laboratory_store),
 	);
+	const isAppointmentConfirmed = Boolean(laboratoryAppointment.confirmed_at);
+	const recommendationPresentation =
+		appointmentStoreRecommendationPresentation(selectedStoreRecommendation);
 	const patientFullName =
 		laboratoryAppointment.patient_full_name ||
 		[
@@ -1328,6 +1335,31 @@ function LaboratoryAppointmentConfirmationDialog({
 
 					{currentStep === 2 && (
 						<section className="space-y-4">
+							{isAppointmentConfirmed ? (
+								<ConfirmedLaboratoryStoreCard
+									store={laboratoryAppointment.laboratory_store}
+								/>
+							) : (
+								<SelectedStoreRecommendationCard
+									recommendation={selectedStoreRecommendation}
+									presentation={recommendationPresentation}
+									onUse={() => {
+										if (
+											selectedStoreRecommendation?.store
+												?.id
+										) {
+											setData(
+												"laboratory_store",
+												String(
+													selectedStoreRecommendation
+														.store.id,
+												),
+											);
+										}
+									}}
+								/>
+							)}
+
 							<Field>
 								<Label className="inline-flex items-center gap-2">
 									<BuildingOffice2Icon className="size-4 text-zinc-400" />
@@ -1626,6 +1658,111 @@ function LaboratoryAppointmentConfirmationDialog({
 				</DialogActions>
 			</form>
 		</Dialog>
+	);
+}
+
+function ConfirmedLaboratoryStoreCard({ store }) {
+	if (!store) {
+		return null;
+	}
+
+	return (
+		<div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">
+			<div className="flex min-w-0 gap-3">
+				<span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-500/30">
+					<CheckCircleIcon className="size-5" />
+				</span>
+				<div className="min-w-0">
+					<p className="text-sm font-semibold">
+						Sucursal confirmada
+					</p>
+					<p className="mt-1 text-sm leading-6">
+						Esta es la sucursal definida para la cita.
+					</p>
+					<div className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-sm text-zinc-800 ring-1 ring-black/5 dark:bg-zinc-950/40 dark:text-zinc-100 dark:ring-white/10">
+						<p className="font-semibold">{store.name}</p>
+						<p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+							{store.brand_label ?? store.brand}
+						</p>
+						{store.address && (
+							<p className="mt-1 line-clamp-2 text-xs text-zinc-600 dark:text-zinc-300">
+								{store.address}
+							</p>
+						)}
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function SelectedStoreRecommendationCard({
+	recommendation,
+	presentation,
+	onUse,
+}) {
+	if (!recommendation?.store || !presentation) {
+		return null;
+	}
+
+	const store = recommendation.store;
+	const isSuccess = presentation.tone === "success";
+	const containerClass = isSuccess
+		? "border-emerald-200 bg-emerald-50/70 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100"
+		: "border-amber-200 bg-amber-50/70 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100";
+	const iconClass = isSuccess
+		? "bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-500/30"
+		: "bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/20 dark:text-amber-200 dark:ring-amber-500/30";
+
+	return (
+		<div className={clsx("rounded-xl border p-4", containerClass)}>
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+				<div className="flex min-w-0 gap-3">
+					<span
+						className={clsx(
+							"flex size-9 shrink-0 items-center justify-center rounded-full ring-1",
+							iconClass,
+						)}
+					>
+						<BuildingOffice2Icon className="size-5" />
+					</span>
+					<div className="min-w-0">
+						<p className="text-sm font-semibold">
+							{presentation.title}
+						</p>
+						<p className="mt-1 text-sm leading-6">
+							{presentation.message}
+						</p>
+						<div className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-sm text-zinc-800 ring-1 ring-black/5 dark:bg-zinc-950/40 dark:text-zinc-100 dark:ring-white/10">
+							<p className="font-semibold">{store.name}</p>
+							<p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+								{store.brand_label ?? store.brand}
+							</p>
+							{store.address && (
+								<p className="mt-1 line-clamp-2 text-xs text-zinc-600 dark:text-zinc-300">
+									{store.address}
+								</p>
+							)}
+						</div>
+						<p className="mt-2 text-xs leading-5">
+							{presentation.detail}
+						</p>
+					</div>
+				</div>
+
+				{presentation.canUse && (
+					<Button
+						type="button"
+						outline
+						className="shrink-0 justify-center"
+						onClick={onUse}
+					>
+						<CheckCircleIcon />
+						{presentation.actionLabel}
+					</Button>
+				)}
+			</div>
+		</div>
 	);
 }
 
