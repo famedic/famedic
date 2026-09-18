@@ -5,16 +5,9 @@ import { Text, Strong } from "@/Components/Catalyst/text";
 import { Divider } from "@/Components/Catalyst/divider";
 import { InformationCircleIcon } from "@heroicons/react/20/solid";
 import { ChevronDoubleRightIcon } from "@heroicons/react/16/solid";
-
-function hasDiscountValue(formattedDiscount) {
-	if (!formattedDiscount) {
-		return false;
-	}
-
-	const normalized = String(formattedDiscount).replace(/[^0-9]/g, "");
-
-	return normalized !== "" && Number(normalized) > 0;
-}
+import { MapPinIcon } from "@heroicons/react/20/solid";
+import { preferredStoreSummaryPresentation } from "@/lib/laboratoryCartPreferredStoreUi";
+import { hasDiscountValue } from "@/lib/laboratoryCheckoutOrderSummaryUi";
 
 export default function OrderSummary({
 	formattedSubtotal,
@@ -25,8 +18,10 @@ export default function OrderSummary({
 	summaryExtra = null,
 	appointmentNotice = null,
 	itemsCount = 0,
+	preferredStore = null,
 }) {
 	const showDiscount = hasDiscountValue(formattedDiscount);
+	const storeSummary = preferredStoreSummaryPresentation(preferredStore);
 
 	return (
 		<Card className="sticky top-6 space-y-5 px-4 py-6 sm:p-6 lg:top-24">
@@ -46,6 +41,25 @@ export default function OrderSummary({
 					</div>
 				</div>
 			)}
+
+			<div className="rounded-lg border border-zinc-200 bg-zinc-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+				<Text className="text-sm text-zinc-600 dark:text-slate-400">
+					{storeSummary.title}
+				</Text>
+				<div className="mt-1 flex items-start gap-2">
+					{storeSummary.hasSelection && (
+						<MapPinIcon className="mt-0.5 size-4 shrink-0 text-famedic-light" />
+					)}
+					<div>
+						<Text className="text-sm font-medium text-zinc-900 dark:text-white">
+							{storeSummary.primary}
+						</Text>
+						<Text className="text-sm text-zinc-600 dark:text-slate-400">
+							{storeSummary.secondary}
+						</Text>
+					</div>
+				</div>
+			</div>
 
 			{summaryExtra}
 

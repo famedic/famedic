@@ -1,6 +1,11 @@
 import Card from "@/Components/Card";
 import { Button } from "@/Components/Catalyst/button";
 import { MapPinIcon } from "@heroicons/react/24/outline";
+import {
+	formatStoreHours,
+	formatStoreLocationLines,
+	hasConfirmedLaboratoryStore,
+} from "@/lib/laboratoryOrderStoreUi";
 
 const BRAND_LABELS = {
 	swisslab: "Swisslab",
@@ -44,9 +49,10 @@ export default function InstructionsContent({
 	hasAppointment,
 	appointment,
 	studiesWithIndications,
+	hasConfirmedStore = hasConfirmedLaboratoryStore(appointment),
 }) {
 	const brand = brandLabel(purchase?.brand);
-	const store = appointment?.laboratory_store;
+	const store = hasConfirmedStore ? appointment?.laboratory_store : null;
 	const appointmentDate =
 		appointment?.formatted_appointment_date || appointment?.appointment_date || "—";
 	const appointmentHour = appointment?.formatted_appointment_hour || null;
@@ -56,44 +62,11 @@ export default function InstructionsContent({
 	const patient = patientDisplayName(purchase);
 	const showSinCita = orderType === "without_appointment" || orderType === "mixed";
 	const showConCita = (orderType === "with_appointment" || orderType === "mixed") && hasAppointment;
-
-	const preparationCard = (
-		<InstructionCard
-			id="indicaciones-preparacion-estudios"
-			title="Indicaciones de preparación (por estudio)"
-			emoji="🧪"
-		>
-			{studiesWithIndications.length > 0 ? (
-				<div className="space-y-6">
-					{studiesWithIndications.map((study) => (
-						<div
-							key={study.id}
-							className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/50"
-						>
-							<p className="mb-2 flex items-center gap-2 font-semibold text-zinc-900 dark:text-white">
-								<span>🔬</span> {study.name}
-							</p>
-							<p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-slate-400">
-								Preparación / indicaciones
-							</p>
-							<div className="mt-2 whitespace-pre-wrap text-zinc-700 dark:text-slate-200">
-								{study.indications?.trim() ? study.indications : "Sin indicaciones registradas."}
-							</div>
-						</div>
-					))}
-				</div>
-			) : (
-				<p className="text-sm text-zinc-500 dark:text-slate-400">
-					No hay estudios con indicaciones de preparación para esta orden.
-				</p>
-			)}
-		</InstructionCard>
-	);
+	const storeLocationLines = formatStoreLocationLines(store);
+	const storeHours = formatStoreHours(store);
 
 	return (
 		<div className="min-w-0 max-w-full space-y-6">
-			{preparationCard}
-
 			<InstructionCard title="Qué hacer en sucursal" emoji="🪪">
 				<p className="font-medium text-zinc-900 dark:text-white">
 					Presenta tu identificación en sucursal (muéstrala tal cual).
@@ -126,24 +99,48 @@ export default function InstructionsContent({
 				</ul>
 			</InstructionCard>
 
-			{showSinCita && (
-				<InstructionCard title="Sin cita" emoji="🔎">
-					<p className="font-medium">1. ¿A dónde puedes ir?</p>
-					<p>
-						Tus estudios no requieren cita. Puedes acudir en cualquier momento dentro del horario de
-						atención de la sucursal.
+			{hasConfirmedStore && store && (
+				<InstructionCard title="Información de tu sucursal" emoji="📍">
+					<ul className="space-y-2">
+						{store.name && (
+							<li>
+								<strong>{store.name}</strong>
+							</li>
+						)}
+						{storeLocationLines.map((line) => (
+							<li key={line}>{line}</li>
+						))}
+						{storeHours && (
+							<li>
+								<span className="font-medium">Horarios: </span>
+								{storeHours}
+							</li>
+						)}
+					</ul>
+					{store.google_maps_url && (
+						<Button
+							outline
+							href={store.google_maps_url}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="mt-3 w-full max-w-full justify-center sm:w-auto"
+						>
+							<MapPinIcon className="size-4" />
+							Ver ubicación
+						</Button>
+					)}
+				</InstructionCard>
+			)}
+
+			{!hasConfirmedStore && hasAppointment && (
+				<InstructionCard title="Sucursal de tu cita" emoji="📍">
+					<p className="font-medium text-zinc-900 dark:text-white">
+						Tu sucursal todavía no está confirmada.
 					</p>
 					<p className="text-zinc-600 dark:text-slate-400">
-						Consulta sucursales, dirección, horarios (incluyendo domingos u horarios extraordinarios) y
-						teléfono:
+						Nuestro equipo de Concierge puede confirmar la sucursal y el horario de tu cita
+						contigo.
 					</p>
-					<Button
-						outline
-						href={route("laboratory-stores.index", { brand: purchase?.brand })}
-					>
-						<MapPinIcon className="size-4" />
-						Consultar sucursales, horarios y teléfono
-					</Button>
 				</InstructionCard>
 			)}
 
@@ -170,23 +167,28 @@ export default function InstructionsContent({
 								</span>
 							</li>
 						)}
-						{store?.name && (
-							<li className="flex gap-2">
-								<span>📍</span>
-								<span>
-									<strong>Sucursal de la cita:</strong> {store.name}
-								</span>
-							</li>
-						)}
-						{store?.address && (
-							<li className="flex gap-2">
-								<span>📌</span>
-								<span>
-									<strong>Dirección (si aplica):</strong> {store.address}
-								</span>
-							</li>
-						)}
 					</ul>
+				</InstructionCard>
+			)}
+
+			{showSinCita && !hasConfirmedStore && (
+				<InstructionCard title="Sin cita" emoji="🔎">
+					<p className="font-medium">¿A dónde puedes ir?</p>
+					<p>
+						Tus estudios no requieren cita. Puedes acudir en cualquier momento dentro del horario de
+						atención de la sucursal que elijas.
+					</p>
+					<p className="text-zinc-600 dark:text-slate-400">
+						Consulta direcciones, horarios y teléfono en la pestaña Sucursales.
+					</p>
+					<Button
+						outline
+						href={route("laboratory-stores.index", { brand: purchase?.brand })}
+						className="mt-2 w-full max-w-full justify-center sm:w-auto"
+					>
+						<MapPinIcon className="size-4" />
+						Consultar sucursales
+					</Button>
 				</InstructionCard>
 			)}
 
@@ -228,6 +230,37 @@ export default function InstructionsContent({
 						)}
 					</li>
 				</ol>
+			</InstructionCard>
+
+			<InstructionCard
+				id="indicaciones-preparacion-estudios"
+				title="Preparación para tus estudios"
+				emoji="🧪"
+			>
+				{studiesWithIndications.length > 0 ? (
+					<div className="space-y-6">
+						{studiesWithIndications.map((study) => (
+							<div
+								key={study.id}
+								className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/50"
+							>
+								<p className="mb-2 flex items-center gap-2 font-semibold text-zinc-900 dark:text-white">
+									<span>🔬</span> {study.name}
+								</p>
+								<p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-slate-400">
+									Preparación / indicaciones
+								</p>
+								<div className="mt-2 whitespace-pre-wrap text-zinc-700 dark:text-slate-200">
+									{study.indications?.trim() ? study.indications : "Sin indicaciones registradas."}
+								</div>
+							</div>
+						))}
+					</div>
+				) : (
+					<p className="text-sm text-zinc-500 dark:text-slate-400">
+						No hay estudios con indicaciones de preparación para esta orden.
+					</p>
+				)}
 			</InstructionCard>
 		</div>
 	);

@@ -320,7 +320,8 @@ class LaboratoryPurchaseController extends Controller
             'transactions',
             'laboratoryPurchaseItems.laboratoryResultStatus.versions',
             'laboratoryResultStatuses.versions',
-            'laboratoryAppointment.laboratoryStore',
+            'preferredLaboratoryStore' => fn ($query) => $query->withTrashed(),
+            'laboratoryAppointment.laboratoryStore' => fn ($query) => $query->withTrashed(),
             'invoiceRequest',
             'invoice'
         ]);

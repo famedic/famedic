@@ -57,6 +57,7 @@ export default function LaboratoryShoppingCartLayout({
 	addMoreLabel = "+ Agregar más estudios",
 	currency = "MXN",
 	productDataList = [],
+	preferredStore = null,
 	children,
 }) {
 	const hasItems = studyItems.length > 0;
@@ -92,37 +93,7 @@ export default function LaboratoryShoppingCartLayout({
 
 	const handleCheckout = (event) => {
 		event.preventDefault();
-
-		const totalValue = studyItems.reduce((sum, item, index) => {
-			return sum + extractPriceValue(item.formattedPrice);
-		}, 0);
-
-		const ga4Items = studyItems.map((item, index) => ({
-			item_id: productDataList[index]?.id?.toString() || `item_${index}`,
-			item_name: item.name || "Estudio de laboratorio",
-			affiliation: "Famedic Store",
-			discount: 0,
-			index,
-			item_brand: productDataList[index]?.brand || "Famedic",
-			item_category: "Laboratory Tests",
-			price: extractPriceValue(item.formattedPrice),
-			quantity: 1,
-			item_list_id: "shopping_cart",
-			item_list_name: "Carrito de compras",
-		}));
-
-		sendGA4Event(
-			"begin_checkout",
-			{
-				currency,
-				value: totalValue,
-				items: ga4Items,
-			},
-			{ step: "checkout_from_layout", itemCount: studyItems.length },
-		);
-
 		onCheckoutClick?.(event);
-		window.location.href = checkoutUrl;
 	};
 
 	return (
@@ -195,6 +166,7 @@ export default function LaboratoryShoppingCartLayout({
 								summaryExtra={summaryExtra}
 								appointmentNotice={appointmentNotice}
 								itemsCount={studyItems.length}
+								preferredStore={preferredStore}
 							/>
 						</aside>
 					)}

@@ -13,7 +13,16 @@ import InvoiceSection from "@/Components/LaboratoryOrderDetail/InvoiceSection";
 import ResultsSection from "@/Components/LaboratoryOrderDetail/ResultsSection";
 import OrderTimeline from "@/Components/LaboratoryOrderDetail/OrderTimeline";
 import InstructionsContent from "@/Components/LaboratoryOrderDetail/InstructionsContent";
+import ConfirmedStoreCard from "@/Components/LaboratoryOrderDetail/ConfirmedStoreCard";
+import PreferredStoreCard from "@/Components/LaboratoryOrderDetail/PreferredStoreCard";
+import StoresDirectoryPrompt from "@/Components/LaboratoryOrderDetail/StoresDirectoryPrompt";
 import ShareDialog from "@/Components/LaboratoryOrderDetail/ShareDialog";
+import {
+	hasConfirmedLaboratoryStore,
+	hasLaboratoryStoreTabContext,
+	hasPreferredLaboratoryStore,
+	normalizeLaboratoryOrderTab,
+} from "@/lib/laboratoryOrderStoreUi";
 import SecurityVerificationModal from "@/Components/SecurityVerificationModal";
 import Card from "@/Components/Card";
 import { Button } from "@/Components/Catalyst/button";
@@ -142,7 +151,7 @@ export default function LaboratoryOrderDetail({
 	resultControl = null,
 	studyResultStatuses = [],
 }) {
-	const [activeTab, setActiveTab] = useState("patient");
+	const [activeTab, setActiveTab] = useState("summary");
 	const [currentResultControl, setCurrentResultControl] = useState(resultControl);
 	const [currentStudyResultStatuses, setCurrentStudyResultStatuses] = useState(studyResultStatuses);
 	const [adminActionState, setAdminActionState] = useState({ action: null, message: null, ok: null });
@@ -186,16 +195,30 @@ export default function LaboratoryOrderDetail({
 		setPendingScrollToPreparation(false);
 	}, [activeTab, pendingScrollToPreparation]);
 
+	const hasConfirmedStore = useMemo(
+		() => hasConfirmedLaboratoryStore(laboratoryPurchase?.laboratory_appointment),
+		[laboratoryPurchase?.laboratory_appointment],
+	);
+
+	const hasPreferredStore = useMemo(
+		() => hasPreferredLaboratoryStore(laboratoryPurchase),
+		[laboratoryPurchase],
+	);
+
+	const hasStoreTabContext = useMemo(
+		() =>
+			hasLaboratoryStoreTabContext(
+				laboratoryPurchase,
+				laboratoryPurchase?.laboratory_appointment,
+			),
+		[laboratoryPurchase],
+	);
+
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
 		const tab = params.get("tab");
 		if (!tab) return;
-		if (tab === "facturas" || tab === "invoice") {
-			setActiveTab("invoice");
-		}
-		if (tab === "instrucciones" || tab === "instructions") {
-			setActiveTab("instructions");
-		}
+		setActiveTab(normalizeLaboratoryOrderTab(tab));
 	}, []);
 
 	const goToPreparationInstructions = () => {
@@ -501,7 +524,13 @@ export default function LaboratoryOrderDetail({
 		/>
 	);
 
-	const tabs = <Tabs activeTab={activeTab} onChange={handleTabChange} />;
+	const tabs = (
+		<Tabs
+			activeTab={activeTab === "invoice" ? "summary" : activeTab}
+			onChange={handleTabChange}
+			hasStoreContext={hasStoreTabContext}
+		/>
+	);
 
 	if (!laboratoryPurchase) {
 		return (
@@ -613,7 +642,7 @@ export default function LaboratoryOrderDetail({
 
 	const main = (
 		<>
-			{activeTab === "patient" && (
+			{activeTab === "summary" && (
 				<>
 					<PatientCard purchase={laboratoryPurchase} />
 					<StudiesTable
@@ -666,6 +695,28 @@ export default function LaboratoryOrderDetail({
 				</>
 			)}
 
+			{activeTab === "store" &&
+				(hasStoreTabContext ? (
+					<div className="space-y-6">
+						{hasPreferredStore && (
+							<PreferredStoreCard
+								store={laboratoryPurchase.preferred_laboratory_store}
+							/>
+						)}
+						{hasConfirmedStore && (
+							<ConfirmedStoreCard
+								store={laboratoryPurchase.laboratory_appointment.laboratory_store}
+								appointment={laboratoryPurchase.laboratory_appointment}
+							/>
+						)}
+					</div>
+				) : (
+					<StoresDirectoryPrompt
+						purchase={laboratoryPurchase}
+						hasPendingAppointment={Boolean(laboratoryPurchase?.laboratory_appointment)}
+					/>
+				))}
+
 			{activeTab === "instructions" && (
 				<InstructionsContent
 					purchase={laboratoryPurchase}
@@ -673,6 +724,7 @@ export default function LaboratoryOrderDetail({
 					hasAppointment={Boolean(laboratoryPurchase?.laboratory_appointment)}
 					appointment={laboratoryPurchase?.laboratory_appointment}
 					studiesWithIndications={studiesWithIndications}
+					hasConfirmedStore={hasConfirmedStore}
 				/>
 			)}
 

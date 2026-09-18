@@ -1,10 +1,15 @@
 import { Subheading } from "@/Components/Catalyst/heading";
+import { Text } from "@/Components/Catalyst/text";
+import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { WhatsAppIcon } from "@/Components/Checkout/CheckoutWhatsAppHelp";
+import { checkoutSelectedStorePresentation } from "@/lib/laboratoryCompatibleStores";
 import {
+	CalendarDaysIcon,
 	CheckIcon,
 	InformationCircleIcon,
 	LockClosedIcon,
+	MapPinIcon,
 	PhoneIcon,
 } from "@heroicons/react/20/solid";
 import Card from "@/Components/Card";
@@ -94,13 +99,16 @@ function getAppointmentVisualState({
 	hasSavedAvailability,
 	appointmentConfirmed,
 	appointmentUnavailable,
+	appointmentFirstFlow,
 }) {
 	if (appointmentConfirmed) {
 		return {
 			title: "Tu cita está confirmada",
-			description:
-				"Tu cita quedó agendada. Ya puedes continuar con el pago.",
-			indicator: "Continuar al pago",
+			description: appointmentFirstFlow
+				? "Tu cita quedó agendada. Ya puedes continuar con el pago."
+				: "Tu cita quedó agendada. Revisa y confirma tu compra en el siguiente paso.",
+			badge: "Confirmada",
+			badgeTone: "success",
 		};
 	}
 
@@ -109,53 +117,255 @@ function getAppointmentVisualState({
 			title: "Cita no disponible",
 			description:
 				"Necesitamos actualizar tu disponibilidad para gestionar una nueva cita por teléfono.",
-			indicator: "Requiere atención",
+			badge: "Requiere atención",
+			badgeTone: "warning",
 		};
 	}
 
 	if (hasSavedAvailability) {
 		return {
-			title: "Crea tu cita para continuar",
+			title: "Cita pendiente de coordinación",
 			description:
-				"Tu solicitud de cita ya fue precargada. Para agendarla necesitamos definir con nuestro equipo de concierge la sucursal, el paciente, la fecha y la hora.",
-			indicator: "Esperando llamada",
+				"Nuestro equipo de Concierge te ayudará a coordinar la sucursal, la fecha y el horario.",
+			badge: "Esperando coordinación",
+			badgeTone: "pending",
 		};
 	}
 
 	return {
-		title: "Crea tu cita para continuar",
+		title: "Cita pendiente de coordinación",
 		description:
-			"Tu solicitud de cita ya fue precargada. Para agendarla necesitamos definir con nuestro equipo de concierge la sucursal, el paciente, la fecha y la hora.",
-		indicator: "Contacto pendiente",
+			"Nuestro equipo de Concierge te ayudará a coordinar la sucursal, la fecha y el horario.",
+		badge: "Contacto pendiente",
+		badgeTone: "pending",
 	};
+}
+
+const BADGE_TONE_CLASSES = {
+	success:
+		"bg-emerald-50 text-emerald-800 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-100 dark:ring-emerald-800/70",
+	warning:
+		"bg-amber-50 text-amber-900 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800/70",
+	pending:
+		"bg-sky-50 text-sky-900 ring-sky-200 dark:bg-sky-950/30 dark:text-sky-100 dark:ring-sky-800/70",
+};
+
+function AppointmentStepHeader() {
+	return (
+		<div className="space-y-2">
+			<Subheading className="text-lg dark:!text-famedic-lime">
+				¿Cómo será tu cita?
+			</Subheading>
+			<Text className="text-sm text-zinc-600 dark:text-zinc-400">
+				Algunos estudios requieren una cita previa. Coordinaremos contigo
+				la sucursal, la fecha y el horario.
+			</Text>
+		</div>
+	);
+}
+
+function AppointmentStudiesNotice({ studyItems = [] }) {
+	if (!studyItems.length) {
+		return null;
+	}
+
+	return (
+		<div className="rounded-lg border border-sky-200/80 bg-sky-50/60 px-4 py-3 dark:border-sky-900/50 dark:bg-sky-950/20">
+			<Text className="text-sm font-medium text-sky-950 dark:text-sky-100">
+				Estos estudios requieren una cita previa
+			</Text>
+			<ul className="mt-2 space-y-1.5" role="list">
+				{studyItems.map((item, index) => (
+					<li
+						key={`${item.heading}-${index}`}
+						className="flex items-start gap-2 text-sm text-sky-900/90 dark:text-sky-100/90"
+					>
+						<span
+							className="mt-2 size-1.5 shrink-0 rounded-full bg-sky-600 dark:bg-sky-300"
+							aria-hidden="true"
+						/>
+						<span className="min-w-0 break-words">{item.heading}</span>
+					</li>
+				))}
+			</ul>
+		</div>
+	);
 }
 
 function AppointmentStatusSummary({
 	hasSavedAvailability,
 	appointmentConfirmed,
 	appointmentUnavailable,
+	appointmentFirstFlow,
 }) {
 	const visualState = getAppointmentVisualState({
 		hasSavedAvailability,
 		appointmentConfirmed,
 		appointmentUnavailable,
+		appointmentFirstFlow,
 	});
 
 	return (
-		<div className="text-center">
-			<h3 className="text-2xl font-semibold tracking-normal text-famedic-dark sm:text-[1.7rem] dark:text-white">
-				{visualState.title}
-			</h3>
-			{!appointmentConfirmed && !appointmentUnavailable && (
-				<div className="mt-4">
-					<span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-100 dark:ring-emerald-800/70">
-						Solicitud precargada
-					</span>
+		<div className="rounded-lg border border-zinc-200 bg-zinc-50/60 px-4 py-4 dark:border-zinc-700 dark:bg-zinc-800/40">
+			<div className="flex flex-wrap items-start justify-between gap-3">
+				<div className="min-w-0 flex-1 space-y-2">
+					<h3 className="text-lg font-semibold text-famedic-dark dark:text-white">
+						{visualState.title}
+					</h3>
+					<p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+						{visualState.description}
+					</p>
 				</div>
-			)}
-			<p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-				{visualState.description}
-			</p>
+				{visualState.badge && (
+					<span
+						className={clsx(
+							"inline-flex shrink-0 items-center rounded-full px-3 py-1 text-xs font-semibold ring-1",
+							BADGE_TONE_CLASSES[visualState.badgeTone],
+						)}
+					>
+						{visualState.badge}
+					</span>
+				)}
+			</div>
+		</div>
+	);
+}
+
+function AppointmentConfirmedStorePanel({ store }) {
+	if (!store?.name) {
+		return null;
+	}
+
+	return (
+		<div className="rounded-lg border border-emerald-200 bg-emerald-50/50 px-4 py-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+			<div className="flex items-start gap-3">
+				<MapPinIcon
+					className="mt-0.5 size-5 shrink-0 text-emerald-700 dark:text-emerald-300"
+					aria-hidden="true"
+				/>
+				<div className="min-w-0 space-y-1">
+					<Badge color="green">Sucursal confirmada</Badge>
+					<p className="text-base font-semibold uppercase tracking-wide text-emerald-950 dark:text-emerald-50">
+						{store.name}
+					</p>
+					{store.address && (
+						<Text className="text-sm text-emerald-900/80 dark:text-emerald-100/80">
+							{store.address}
+						</Text>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function AppointmentPreferredStorePanel({ selection }) {
+	const presentation = checkoutSelectedStorePresentation(selection);
+
+	if (presentation.state !== "valid" || !presentation.storeName) {
+		return null;
+	}
+
+	return (
+		<div className="rounded-lg border border-zinc-200 bg-white px-4 py-4 dark:border-zinc-700 dark:bg-slate-900/60">
+			<div className="flex items-start gap-3">
+				<MapPinIcon
+					className="mt-0.5 size-5 shrink-0 text-zinc-500 dark:text-zinc-400"
+					aria-hidden="true"
+				/>
+				<div className="min-w-0 space-y-1">
+					<Badge color="zinc">Sucursal preferida</Badge>
+					<p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+						{presentation.storeName}
+					</p>
+					{presentation.message && (
+						<Text className="text-sm text-zinc-600 dark:text-zinc-400">
+							{presentation.message}
+						</Text>
+					)}
+					<Text className="text-xs text-zinc-500 dark:text-zinc-500">
+						Es una preferencia opcional. La sucursal confirmada puede
+						ser diferente.
+					</Text>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function AppointmentSchedulePanel({
+	appointmentConfirmed,
+	formattedAppointmentDate,
+	formattedCallbackAvailabilityRange,
+	hasSavedAvailability,
+}) {
+	const isConfirmed = Boolean(
+		appointmentConfirmed && formattedAppointmentDate,
+	);
+
+	return (
+		<div className="rounded-lg border border-zinc-200 px-4 py-4 dark:border-zinc-700">
+			<div className="flex items-start gap-3">
+				<CalendarDaysIcon
+					className="mt-0.5 size-5 shrink-0 text-famedic-dark dark:text-famedic-lime"
+					aria-hidden="true"
+				/>
+				<div className="min-w-0 space-y-2">
+					<Subheading className="text-base">
+						Fecha y horario
+					</Subheading>
+					{isConfirmed ? (
+						<>
+							<Badge color="green">Confirmados</Badge>
+							<Text className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+								{formattedAppointmentDate}
+							</Text>
+						</>
+					) : (
+						<>
+							<Badge color="sky">Por confirmar</Badge>
+							<Text className="text-sm text-zinc-600 dark:text-zinc-400">
+								Fecha y horario por confirmar. Nuestro equipo te
+								contactará para acordarlos.
+							</Text>
+							{hasSavedAvailability &&
+								formattedCallbackAvailabilityRange && (
+									<div className="rounded-md bg-zinc-50 px-3 py-2 dark:bg-zinc-800/60">
+										<Text className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+											Disponibilidad indicada
+										</Text>
+										<Text className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+											{formattedCallbackAvailabilityRange}
+										</Text>
+									</div>
+								)}
+						</>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function AppointmentPendingCard({ children }) {
+	return (
+		<div className="rounded-lg border border-sky-200/80 bg-sky-50/40 px-4 py-5 dark:border-sky-900/50 dark:bg-sky-950/15">
+			<div className="mb-4 flex items-start gap-3">
+				<CalendarDaysIcon
+					className="size-5 shrink-0 text-sky-700 dark:text-sky-300"
+					aria-hidden="true"
+				/>
+				<div className="space-y-1">
+					<Subheading className="text-base">
+						Coordina tu cita con Concierge
+					</Subheading>
+					<Text className="text-sm text-zinc-600 dark:text-zinc-400">
+						Puedes comunicarte con nuestro equipo para acordar la
+						fecha y el horario.
+					</Text>
+				</div>
+			</div>
+			{children}
 		</div>
 	);
 }
@@ -418,6 +628,8 @@ export default function LaboratoryAppointmentStep({
 	appointmentFirstFlow = false,
 	appointmentConfirmed = false,
 	appointmentUnavailable = false,
+	studyItemsRequiringAppointment = [],
+	selectedLaboratoryStore = null,
 }) {
 	const { famedicConcierge } = usePage().props;
 	const [openPanel, setOpenPanel] = useState(null);
@@ -748,35 +960,84 @@ export default function LaboratoryAppointmentStep({
 			? "Tu cita ya no está disponible para completar el pago. Puedes actualizar tu disponibilidad o solicitar que te llamemos para gestionar una nueva cita."
 			: null;
 
+	const confirmedStore =
+		appointmentConfirmed && laboratoryAppointment.laboratory_store
+			? laboratoryAppointment.laboratory_store
+			: null;
+
+	const showPendingCoordination =
+		!appointmentConfirmed && !appointmentUnavailable;
+
 	return (
-		<Card className="bg-white p-6 sm:p-8 dark:bg-slate-900">
-			<div className="space-y-6">
+		<Card className="bg-white p-5 sm:p-8 dark:bg-slate-900">
+			<div className="space-y-5">
 				{appointmentFirstUnavailableMessage && (
 					<p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">
 						{appointmentFirstUnavailableMessage}
 					</p>
 				)}
 
+				<AppointmentStepHeader />
+
+				<AppointmentStudiesNotice
+					studyItems={studyItemsRequiringAppointment}
+				/>
+
 				<AppointmentStatusSummary
 					hasSavedAvailability={hasSavedAvailability}
 					appointmentConfirmed={appointmentConfirmed}
 					appointmentUnavailable={appointmentUnavailable}
+					appointmentFirstFlow={appointmentFirstFlow}
 				/>
 
-				{!appointmentConfirmed && !appointmentUnavailable && (
+				{confirmedStore && (
+					<AppointmentConfirmedStorePanel store={confirmedStore} />
+				)}
+
+				<AppointmentPreferredStorePanel
+					selection={selectedLaboratoryStore}
+				/>
+
+				<AppointmentSchedulePanel
+					appointmentConfirmed={appointmentConfirmed}
+					formattedAppointmentDate={
+						laboratoryAppointment.formatted_appointment_date
+					}
+					formattedCallbackAvailabilityRange={
+						laboratoryAppointment.formatted_callback_availability_range
+					}
+					hasSavedAvailability={hasSavedAvailability}
+				/>
+
+				{showPendingCoordination && appointmentFirstFlow && (
 					<AppointmentPaymentSafetyNotice />
 				)}
 
-				<AppointmentContactActions
-					telHref={telHref}
-					phoneDisplay={phoneDisplay}
-					whatsAppUrl={whatsAppUrl}
-					whatsAppDisplay={whatsAppDisplay}
-					onWhatsAppClick={onWhatsAppClick}
-					onCallClick={onCallClick}
-					onRequestCall={openReceiveCallForm}
-					isFormOpen={openPanel === "form"}
-				/>
+				{showPendingCoordination ? (
+					<AppointmentPendingCard>
+						<AppointmentContactActions
+							telHref={telHref}
+							phoneDisplay={phoneDisplay}
+							whatsAppUrl={whatsAppUrl}
+							whatsAppDisplay={whatsAppDisplay}
+							onWhatsAppClick={onWhatsAppClick}
+							onCallClick={onCallClick}
+							onRequestCall={openReceiveCallForm}
+							isFormOpen={openPanel === "form"}
+						/>
+					</AppointmentPendingCard>
+				) : (
+					<AppointmentContactActions
+						telHref={telHref}
+						phoneDisplay={phoneDisplay}
+						whatsAppUrl={whatsAppUrl}
+						whatsAppDisplay={whatsAppDisplay}
+						onWhatsAppClick={onWhatsAppClick}
+						onCallClick={onCallClick}
+						onRequestCall={openReceiveCallForm}
+						isFormOpen={openPanel === "form"}
+					/>
+				)}
 
 				{openPanel === "form" && (
 					<ReceiveCallPanel
@@ -801,20 +1062,21 @@ export default function LaboratoryAppointmentStep({
 					/>
 				)}
 
-				{!appointmentConfirmed && !appointmentUnavailable && (
+				{showPendingCoordination && (
 					<AppointmentPaymentAuthorizationNote />
 				)}
 			</div>
 
 			{appointmentConfirmed || appointmentUnavailable ? (
-				<p className="mt-4 flex items-center justify-center gap-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
+				<p className="mt-5 flex items-center justify-center gap-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
 					<LockClosedIcon
 						className="size-4 shrink-0"
 						aria-hidden="true"
 					/>
 					<span>
-						Tus datos están guardados. No realizaremos ningún cargo
-						todavía.
+						{appointmentFirstFlow
+							? "Tus datos están guardados. No realizaremos ningún cargo todavía."
+							: "Tus datos están guardados de forma segura."}
 					</span>
 				</p>
 			) : null}

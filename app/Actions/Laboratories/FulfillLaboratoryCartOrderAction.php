@@ -169,10 +169,18 @@ class FulfillLaboratoryCartOrderAction
 
             $this->syncMonitoringCartService->markLaboratoryCartCompleted($customer, $laboratoryBrand, $clientContext);
 
-            $clinicalOrderUuid = LaboratoryCheckoutDraft::query()
+            $checkoutDraft = LaboratoryCheckoutDraft::query()
                 ->where('customer_id', $customer->id)
                 ->where('laboratory_brand', $laboratoryBrand)
-                ->value('clinical_order_uuid');
+                ->first(['clinical_order_uuid', 'selected_laboratory_store_id']);
+
+            $clinicalOrderUuid = $checkoutDraft?->clinical_order_uuid;
+
+            if ($checkoutDraft?->selected_laboratory_store_id !== null) {
+                $laboratoryPurchase->update([
+                    'preferred_laboratory_store_id' => $checkoutDraft->selected_laboratory_store_id,
+                ]);
+            }
 
             $this->syncLaboratoryCheckoutDraftAction->clearForCustomer($customer, $laboratoryBrand);
             $this->clearCart($customer, $laboratoryBrand);

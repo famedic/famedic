@@ -6,8 +6,10 @@ import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import BalanceCreditCard from "@/Components/Coupons/BalanceCreditCard";
 import LaboratoryCompatibleStoresSection from "@/Components/LaboratoryCompatibleStoresSection";
+import PreferredStorePromptDialog from "@/Components/LaboratoryCart/PreferredStorePromptDialog";
 import { Badge } from "@/Components/Catalyst/badge";
-import { useEffect, useState } from "react";
+import { shouldPromptForPreferredStore } from "@/lib/laboratoryCartPreferredStoreUi";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const sendGA4Event = (eventName, ecommerceData, debugInfo = {}) => {
 	if (typeof window === "undefined") {
@@ -101,6 +103,13 @@ export default function LaboratoryShoppingCart({
 		last_remove_event: null,
 		last_checkout_event: null,
 	});
+	const [selectedStore, setSelectedStore] = useState(null);
+	const [showPreferredStorePrompt, setShowPreferredStorePrompt] =
+		useState(false);
+	const openPreferredStoreSelectorRef = useRef(null);
+	const registerOpenPreferredStoreSelector = useCallback((openSelector) => {
+		openPreferredStoreSelectorRef.current = openSelector;
+	}, []);
 
 	const extractPriceValue = (priceString) => {
 		if (!priceString || priceString === "$0.00") return 0;
@@ -234,17 +243,10 @@ export default function LaboratoryShoppingCart({
 		setLaboratoryCartItemToDelete(laboratoryCartItem);
 	};
 
-	const handleCheckoutClick = (e) => {
-		if (e) {
-			e.preventDefault();
-		}
-
+	const proceedToCheckout = useCallback(() => {
 		const cartItems = laboratoryCarts?.[laboratoryBrand.value] || [];
 
 		if (cartItems.length === 0) {
-			if (e) {
-				e.stopPropagation();
-			}
 			return;
 		}
 
@@ -306,13 +308,39 @@ export default function LaboratoryShoppingCart({
 
 		setEventLog((prev) => ({ ...prev, last_checkout_event: now }));
 
-		setTimeout(() => {
-			window.location.href = route("laboratory.checkout", {
-				laboratory_brand: laboratoryBrand.value,
-				step: "patient",
-			});
-		}, 300);
-	};
+		window.location.href = route("laboratory.checkout", {
+			laboratory_brand: laboratoryBrand.value,
+			step: "patient",
+		});
+	}, [
+		eventLog.last_checkout_event,
+		formattedDiscount,
+		formattedTotal,
+		laboratoryBrand.name,
+		laboratoryBrand.value,
+		laboratoryCarts,
+	]);
+
+	const handleCheckoutClick = useCallback(
+		(event) => {
+			event?.preventDefault?.();
+
+			const cartItems = laboratoryCarts?.[laboratoryBrand.value] || [];
+
+			if (cartItems.length === 0) {
+				event?.stopPropagation?.();
+				return;
+			}
+
+			if (shouldPromptForPreferredStore(selectedStore)) {
+				setShowPreferredStorePrompt(true);
+				return;
+			}
+
+			proceedToCheckout();
+		},
+		[laboratoryBrand.value, laboratoryCarts, proceedToCheckout, selectedStore],
+	);
 
 	const cartItems = laboratoryCarts?.[laboratoryBrand.value] || [];
 	const hasAppointmentItems = cartItems.some(
@@ -420,10 +448,14 @@ export default function LaboratoryShoppingCart({
 				}
 				currency="MXN"
 				productDataList={productDataList}
+				preferredStore={selectedStore}
 			>
 				<LaboratoryCompatibleStoresSection
 					cartItemsCount={cartItems.length}
 					laboratoryBrand={laboratoryBrand}
+					selectedStore={selectedStore}
+					onSelectedStoreChange={setSelectedStore}
+					onRegisterOpenSelector={registerOpenPreferredStoreSelector}
 				/>
 
 				{process.env.NODE_ENV === "testing" && (
@@ -437,6 +469,19 @@ export default function LaboratoryShoppingCart({
 					</div>
 				)}
 			</LaboratoryShoppingCartLayout>
+
+			<PreferredStorePromptDialog
+				open={showPreferredStorePrompt}
+				onClose={() => setShowPreferredStorePrompt(false)}
+				onChooseStore={() => {
+					setShowPreferredStorePrompt(false);
+					openPreferredStoreSelectorRef.current?.();
+				}}
+				onContinueWithoutStore={() => {
+					setShowPreferredStorePrompt(false);
+					proceedToCheckout();
+				}}
+			/>
 
 			<DeleteConfirmationModal
 				isOpen={!!laboratoryCartItemToDelete}

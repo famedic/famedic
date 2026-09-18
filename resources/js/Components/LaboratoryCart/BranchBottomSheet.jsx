@@ -4,7 +4,7 @@ import { XMarkIcon } from "@heroicons/react/20/solid";
 export default function BranchBottomSheet({
 	open,
 	onClose,
-	title = "Encuentra una sucursal",
+	title = "Sucursal de preferencia",
 	children,
 }) {
 	return (

@@ -486,10 +486,6 @@ function CartItem({
 									</Badge>
 								)}
 
-								<Text className="text-sm text-zinc-600 dark:text-slate-400">
-									Estudio de laboratorio
-								</Text>
-
 								{(description ||
 									indications ||
 									features.length > 0) && (

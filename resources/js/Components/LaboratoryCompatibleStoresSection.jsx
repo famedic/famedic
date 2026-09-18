@@ -1,5 +1,6 @@
 import Card from "@/Components/Card";
 import BranchBottomSheet from "@/Components/LaboratoryCart/BranchBottomSheet";
+import PreferredStoreCard from "@/Components/LaboratoryCart/PreferredStoreCard";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Subheading } from "@/Components/Catalyst/heading";
@@ -7,8 +8,6 @@ import { Input } from "@/Components/Catalyst/input";
 import { Text } from "@/Components/Catalyst/text";
 import {
 	ArrowPathIcon,
-	ChevronDownIcon,
-	ChevronRightIcon,
 	ClockIcon,
 	ExclamationTriangleIcon,
 	MapPinIcon,
@@ -19,7 +18,6 @@ import {
 	brandSections,
 	compatibleBranches,
 	compatibleStoresUiState,
-	deleteSelectedLaboratoryStore,
 	fetchCompatibleLaboratoryStores,
 	fetchSelectedLaboratoryStore,
 	filterBranchesBySearch,
@@ -61,12 +59,15 @@ function sectionIntroCopy(state, locationStatus) {
 export default function LaboratoryCompatibleStoresSection({
 	cartItemsCount = 0,
 	laboratoryBrand,
+	selectedStore = null,
+	onSelectedStoreChange,
+	onRegisterOpenSelector,
 }) {
 	const [data, setData] = useState(null);
-	const [loading, setLoading] = useState(true);
+	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(false);
 	const [selectedBranchId, setSelectedBranchId] = useState(null);
-	const [selectedStore, setSelectedStore] = useState(null);
+	const [selectionLoading, setSelectionLoading] = useState(true);
 	const [savingBranchId, setSavingBranchId] = useState(null);
 	const [selectionError, setSelectionError] = useState(null);
 	const [search, setSearch] = useState("");
@@ -74,6 +75,7 @@ export default function LaboratoryCompatibleStoresSection({
 	const [postalCodeToSearch, setPostalCodeToSearch] = useState("");
 	const [reloadToken, setReloadToken] = useState(0);
 	const clearPostalCodeOnNextLoadRef = useRef(false);
+	const compatibleStoresLoadedRef = useRef(false);
 	const [postalCodeError, setPostalCodeError] = useState(null);
 	const [desktopExpanded, setDesktopExpanded] = useState(false);
 	const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
@@ -81,7 +83,37 @@ export default function LaboratoryCompatibleStoresSection({
 	const [showAllMunicipalityGroups, setShowAllMunicipalityGroups] =
 		useState(false);
 
-	const loadStores = useCallback(async () => {
+	const syncSelectedStore = useCallback(
+		(store) => {
+			setSelectedBranchId(store ? Number(store.id) : null);
+			onSelectedStoreChange?.(store);
+		},
+		[onSelectedStoreChange],
+	);
+
+	const loadSelectedStore = useCallback(async () => {
+		if (!laboratoryBrand?.value) {
+			return;
+		}
+
+		setSelectionLoading(true);
+
+		try {
+			const selectionResponse = await fetchSelectedLaboratoryStore({
+				brand: laboratoryBrand.value,
+			});
+			const store = selectionResponse?.selected
+				? selectionResponse.store
+				: null;
+			syncSelectedStore(store);
+		} catch {
+			syncSelectedStore(null);
+		} finally {
+			setSelectionLoading(false);
+		}
+	}, [laboratoryBrand?.value, syncSelectedStore]);
+
+	const loadCompatibleStores = useCallback(async () => {
 		if (!laboratoryBrand?.value) {
 			return;
 		}
@@ -93,20 +125,17 @@ export default function LaboratoryCompatibleStoresSection({
 		const shouldClearPostalCode = clearPostalCodeOnNextLoadRef.current;
 
 		try {
-			const [storesResponse, selectionResponse] = await Promise.all([
-				fetchCompatibleLaboratoryStores({
-					params: {
-						brand: laboratoryBrand.value,
-						postal_code: postalCodeToSearch,
-						clear_postal_code: shouldClearPostalCode,
-					},
-				}),
-				fetchSelectedLaboratoryStore({
+			const storesResponse = await fetchCompatibleLaboratoryStores({
+				params: {
 					brand: laboratoryBrand.value,
-				}),
-			]);
+					postal_code: postalCodeToSearch,
+					clear_postal_code: shouldClearPostalCode,
+				},
+			});
 
 			setData(storesResponse);
+			compatibleStoresLoadedRef.current = true;
+
 			if (
 				!postalCodeToSearch &&
 				!shouldClearPostalCode &&
@@ -115,14 +144,6 @@ export default function LaboratoryCompatibleStoresSection({
 				setPostalCode(storesResponse.meta.postal_code);
 				setPostalCodeToSearch(storesResponse.meta.postal_code);
 			}
-			setSelectedBranchId(
-				selectionResponse?.selected
-					? Number(selectionResponse.store?.id)
-					: null,
-			);
-			setSelectedStore(
-				selectionResponse?.selected ? selectionResponse.store : null,
-			);
 		} catch {
 			setError(true);
 		} finally {
@@ -131,11 +152,50 @@ export default function LaboratoryCompatibleStoresSection({
 		}
 	}, [laboratoryBrand?.value, postalCodeToSearch, reloadToken]);
 
+	const openSelector = useCallback(() => {
+		const isMobile =
+			typeof window !== "undefined" &&
+			window.matchMedia("(max-width: 1023px)").matches;
+
+		if (isMobile) {
+			setMobileSheetOpen(true);
+		} else {
+			setDesktopExpanded(true);
+		}
+
+		if (!compatibleStoresLoadedRef.current) {
+			void loadCompatibleStores();
+		}
+	}, [loadCompatibleStores]);
+
+	const closeSelector = useCallback(() => {
+		setDesktopExpanded(false);
+		setMobileSheetOpen(false);
+	}, []);
+
 	useEffect(() => {
-		setSelectedBranchId(null);
-		setSelectedStore(null);
-		loadStores();
-	}, [cartItemsCount, loadStores]);
+		onRegisterOpenSelector?.(openSelector);
+	}, [onRegisterOpenSelector, openSelector]);
+
+	useEffect(() => {
+		setSelectedBranchId(selectedStore ? Number(selectedStore.id) : null);
+	}, [selectedStore]);
+
+	useEffect(() => {
+		compatibleStoresLoadedRef.current = false;
+		setData(null);
+		setDesktopExpanded(false);
+		setMobileSheetOpen(false);
+		void loadSelectedStore();
+	}, [cartItemsCount, loadSelectedStore]);
+
+	useEffect(() => {
+		if (!compatibleStoresLoadedRef.current) {
+			return;
+		}
+
+		void loadCompatibleStores();
+	}, [postalCodeToSearch, reloadToken, loadCompatibleStores]);
 
 	const handlePostalCodeChange = useCallback((value) => {
 		const digits = sanitizePostalCodeInput(value);
@@ -177,8 +237,13 @@ export default function LaboratoryCompatibleStoresSection({
 	}, []);
 
 	const handleSelect = useCallback(
-		async (branch, { closeMobileSheet = false } = {}) => {
+		async (branch) => {
 			if (!laboratoryBrand?.value || savingBranchId !== null) {
+				return;
+			}
+
+			if (selectedBranchId === branch.id) {
+				closeSelector();
 				return;
 			}
 
@@ -186,38 +251,22 @@ export default function LaboratoryCompatibleStoresSection({
 			setSavingBranchId(branch.id);
 
 			try {
-				if (selectedBranchId === branch.id) {
-					await deleteSelectedLaboratoryStore({
-						brand: laboratoryBrand.value,
-					});
-					setSelectedBranchId(null);
-					setSelectedStore(null);
-					if (closeMobileSheet) {
-						setMobileSheetOpen(false);
-					}
-					return;
-				}
-
 				const response = await saveSelectedLaboratoryStore({
 					brand: laboratoryBrand.value,
 					laboratoryStoreId: branch.id,
 				});
 
-				setSelectedBranchId(
-					response.selected ? Number(response.store?.id) : null,
+				syncSelectedStore(
+					response.selected ? response.store : null,
 				);
-				setSelectedStore(response.selected ? response.store : null);
-
-				if (closeMobileSheet) {
-					setMobileSheetOpen(false);
-				}
+				closeSelector();
 			} catch (err) {
 				const message = selectedStoreErrorMessage(err);
-				setSelectedBranchId(null);
-				setSelectedStore(null);
+				syncSelectedStore(null);
 
 				if (err?.response?.status === 422) {
-					await loadStores();
+					compatibleStoresLoadedRef.current = false;
+					await loadCompatibleStores();
 				}
 
 				setSelectionError(message);
@@ -226,10 +275,12 @@ export default function LaboratoryCompatibleStoresSection({
 			}
 		},
 		[
+			closeSelector,
 			laboratoryBrand?.value,
-			loadStores,
+			loadCompatibleStores,
 			savingBranchId,
 			selectedBranchId,
+			syncSelectedStore,
 		],
 	);
 
@@ -248,7 +299,7 @@ export default function LaboratoryCompatibleStoresSection({
 			onPostalCodeClear={handlePostalCodeClear}
 			postalCodeError={postalCodeError}
 			loading={loading}
-			onRetry={loadStores}
+			onRetry={loadCompatibleStores}
 			activeTab={activeTab}
 			onTabChange={setActiveTab}
 			selectedBranchId={selectedBranchId}
@@ -271,141 +322,36 @@ export default function LaboratoryCompatibleStoresSection({
 
 	return (
 		<section
-			className="mt-10 lg:mt-12"
+			className="mt-8 lg:mt-10"
 			aria-labelledby="compatible-stores-heading"
 			aria-live="polite"
 		>
-			<PreferredStoreChip
-				store={selectedStore}
-				onClear={() => {
-					if (!laboratoryBrand?.value || savingBranchId !== null) {
-						return;
-					}
-
-					setSavingBranchId(selectedBranchId);
-					deleteSelectedLaboratoryStore({
-						brand: laboratoryBrand.value,
-					})
-						.then(() => {
-							setSelectedBranchId(null);
-							setSelectedStore(null);
-						})
-						.catch((err) => {
-							setSelectionError(selectedStoreErrorMessage(err));
-						})
-						.finally(() => setSavingBranchId(null));
-				}}
-				clearing={savingBranchId === selectedBranchId}
+			<PreferredStoreCard
+				selectedStore={selectedStore}
+				loading={selectionLoading}
+				onChoose={openSelector}
+				onChange={openSelector}
 			/>
 
 			<div className="lg:hidden">
-				<button
-					type="button"
-					onClick={() => setMobileSheetOpen(true)}
-					className="flex w-full items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-4 text-left transition hover:border-famedic-light/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-famedic-light dark:border-slate-800 dark:bg-slate-900"
-				>
-					<span className="flex min-w-0 items-start gap-3">
-						<MapPinIcon className="mt-0.5 size-5 shrink-0 text-famedic-light" />
-						<span>
-							<span
-								id="compatible-stores-heading-mobile"
-								className="block font-medium text-zinc-950 dark:text-white"
-							>
-								Encontrar sucursal compatible
-							</span>
-							<span className="mt-0.5 block text-sm text-zinc-600 dark:text-slate-400">
-								Opcional · Por código postal
-							</span>
-						</span>
-					</span>
-					<ChevronRightIcon className="size-5 shrink-0 text-zinc-400" />
-				</button>
-
 				<BranchBottomSheet
 					open={mobileSheetOpen}
-					onClose={() => setMobileSheetOpen(false)}
+					onClose={closeSelector}
+					title="Sucursal de preferencia"
 				>
 					{storesPanel}
 				</BranchBottomSheet>
 			</div>
 
-			<div className="hidden lg:block">
-				<button
-					type="button"
-					onClick={() => setDesktopExpanded((current) => !current)}
-					className="flex w-full items-start justify-between gap-4 rounded-xl border border-zinc-200 bg-zinc-50/80 p-5 text-left transition hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-famedic-light dark:border-slate-800 dark:bg-slate-900/50 dark:hover:bg-slate-900"
-					aria-expanded={desktopExpanded}
-					aria-controls="compatible-stores-panel"
+			{desktopExpanded && (
+				<div
+					id="compatible-stores-panel"
+					className="mt-4 hidden rounded-xl border border-zinc-200 bg-white p-5 lg:block dark:border-slate-800 dark:bg-slate-900"
 				>
-					<span className="flex gap-3">
-						<MapPinIcon className="mt-0.5 size-5 shrink-0 text-famedic-light" />
-						<span>
-							<Subheading
-								id="compatible-stores-heading"
-								className="text-base"
-							>
-								¿Quieres encontrar una sucursal?
-							</Subheading>
-							<Text className="mt-1 text-sm">
-								Busca sucursales compatibles por código postal.
-							</Text>
-						</span>
-					</span>
-					<ChevronDownIcon
-						className={clsx(
-							"size-5 shrink-0 text-zinc-500 transition",
-							desktopExpanded && "rotate-180",
-						)}
-					/>
-				</button>
-
-				{desktopExpanded && (
-					<div
-						id="compatible-stores-panel"
-						className="mt-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"
-					>
-						{storesPanel}
-					</div>
-				)}
-			</div>
-		</section>
-	);
-}
-
-function PreferredStoreChip({ store, onClear, clearing = false }) {
-	if (!store) {
-		return null;
-	}
-
-	return (
-		<Card className="mb-4 border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-			<div className="flex items-start justify-between gap-3">
-				<div>
-					<Text className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
-						📍 Sucursal preferida
-					</Text>
-					<Subheading className="mt-1 text-base">{store.name}</Subheading>
-					<Text className="mt-0.5 text-sm text-zinc-700 dark:text-slate-300">
-						{store.municipality ||
-							store.city ||
-							store.address ||
-							""}
-					</Text>
-					<Text className="mt-2 text-sm text-zinc-600 dark:text-slate-400">
-						La cita y horario se confirman contigo después.
-					</Text>
+					{storesPanel}
 				</div>
-				<Button
-					type="button"
-					outline
-					className="!py-2 text-sm"
-					onClick={onClear}
-					disabled={clearing}
-				>
-					{clearing ? "Quitando..." : "Quitar"}
-				</Button>
-			</div>
-		</Card>
+			)}
+		</section>
 	);
 }
 

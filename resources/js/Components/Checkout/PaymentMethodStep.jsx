@@ -9,6 +9,7 @@ import { PlusIcon, CreditCardIcon } from "@heroicons/react/24/solid";
 import CheckoutStep from "@/Components/Checkout/CheckoutStep";
 import CheckoutWizardStep from "@/Components/Checkout/CheckoutWizardStep";
 import CheckoutSelectionCard from "@/Components/Checkout/CheckoutSelectionCard";
+import CheckoutInlineTotals from "@/Components/Checkout/CheckoutInlineTotals";
 import CreditCardBrand from "@/Components/CreditCardBrand";
 import { getPayPalSelectedOptionLabels } from "@/lib/paypal/paypalSelectorCopy";
 
@@ -198,6 +199,7 @@ export default function PaymentMethodStep({
     paymentUsesMock = false,
     variant = "accordion",
     onSelected,
+    paymentSummaryDetails = null,
     ...props
 }) {
     const selectedPaymentMethod = useMemo(() => {
@@ -220,10 +222,16 @@ export default function PaymentMethodStep({
     }, [data.payment_method, paymentMethods]);
 
     const stepHeading = useMemo(() => {
+        if (variant === "wizard") {
+            return data.payment_method
+                ? "Método de pago"
+                : "¿Cómo quieres pagar?";
+        }
+
         return data.payment_method
             ? "Método de pago"
             : "Selecciona el método de pago";
-    }, [data.payment_method]);
+    }, [data.payment_method, variant]);
 
     const isWizard = variant === "wizard";
 
@@ -254,6 +262,12 @@ export default function PaymentMethodStep({
                     showRadio
                     onSelected={onSelected}
                 />
+                {paymentSummaryDetails?.length > 0 && (
+                    <CheckoutInlineTotals
+                        details={paymentSummaryDetails}
+                        className="mt-6"
+                    />
+                )}
             </CheckoutWizardStep>
         );
     }
@@ -433,9 +447,12 @@ function PaymentMethodSelectionInner({
     return (
         <ul
             className={clsx(
-                "mt-3 grid gap-3",
+                "grid gap-3",
+                showRadio ? "mt-1 gap-4" : "mt-3",
                 showRadio || forceMobile ? "grid-cols-1" : "sm:grid-cols-2",
             )}
+            role="list"
+            aria-label="Métodos de pago disponibles"
         >
             {hasPayPal && (
                 <PayPalSelectionCard
@@ -454,17 +471,12 @@ function PaymentMethodSelectionInner({
                     showRadio={showRadio}
                     compact={isCompact}
                     className={clsx(
-                        isCompact ? "min-h-0" : "relative min-h-[11rem] overflow-hidden",
-                        "border-orange-200/80 bg-gradient-to-br from-orange-50 via-amber-50/90 to-orange-100/50",
-                        "ring-1 ring-orange-200/70",
-                        "dark:border-orange-800/50 dark:from-orange-950/40 dark:via-slate-900 dark:to-amber-950/30 dark:ring-orange-800/40",
+                        isCompact ? "min-h-0" : "min-h-[11rem]",
+                        "border-orange-200/80 bg-orange-50/70 ring-1 ring-orange-200/70",
+                        "dark:border-orange-800/50 dark:bg-orange-950/25 dark:ring-orange-800/40",
                     )}
                 >
-                    <div
-                        className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-bl-full bg-orange-400/20"
-                        aria-hidden
-                    />
-                    <div className={clsx("relative flex flex-col", isCompact ? "gap-2" : "h-full justify-between")}>
+                    <div className={clsx("flex flex-col", isCompact ? "gap-2" : "h-full justify-between")}>
                         <div className="flex items-start justify-between gap-2">
                             <span className="inline-flex items-center gap-2 rounded-lg bg-white p-2 shadow-sm ring-1 ring-orange-200/80 dark:bg-slate-800 dark:ring-orange-800/50">
                                 <img

@@ -314,6 +314,16 @@ class LaboratoryPurchase extends Model
         return $this->hasOne(LaboratoryAppointment::class)->withTrashed();
     }
 
+    /**
+     * Preferred laboratory store selected by the patient during checkout.
+     * This is a historical patient preference and is independent from the
+     * appointment's confirmed store assigned by Concierge/Admin.
+     */
+    public function preferredLaboratoryStore(): BelongsTo
+    {
+        return $this->belongsTo(LaboratoryStore::class, 'preferred_laboratory_store_id')->withTrashed();
+    }
+
     public function devAssistanceRequests()
     {
         return $this->morphMany(DevAssistanceRequest::class, 'dev_assistance_requestable');

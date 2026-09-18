@@ -1,10 +1,8 @@
-const tabs = [
-	{ key: "patient", label: "Paciente" },
-	{ key: "instructions", label: "Instrucciones" },
-	{ key: "invoice", label: "Facturas" },
-];
+import { buildLaboratoryOrderTabs } from "@/lib/laboratoryOrderStoreUi";
 
-export default function Tabs({ activeTab, onChange }) {
+export default function Tabs({ activeTab, onChange, hasStoreContext = false }) {
+	const tabs = buildLaboratoryOrderTabs(hasStoreContext);
+
 	return (
 		<nav
 			className="-mx-0.5 flex min-w-0 gap-2 overflow-x-auto overscroll-x-contain px-0.5 pb-0.5 [-webkit-overflow-scrolling:touch] sm:flex-wrap sm:overflow-x-visible sm:pb-0"
