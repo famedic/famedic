@@ -40,6 +40,12 @@ Gracias por confiar en FAMEDIC.<br>
 </p>
 
 
+@if(!empty($has_preferred_store))
+<p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
+
+@include('emails.laboratory.components.preferred-store')
+@endif
+
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border-collapse:separate;">

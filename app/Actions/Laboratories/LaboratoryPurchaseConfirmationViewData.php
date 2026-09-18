@@ -3,6 +3,7 @@
 namespace App\Actions\Laboratories;
 
 use App\Models\LaboratoryPurchase;
+use App\Models\LaboratoryStore;
 use Illuminate\Support\Facades\URL;
 
 /**
@@ -19,6 +20,7 @@ final class LaboratoryPurchaseConfirmationViewData
         $purchase->loadMissing([
             'laboratoryPurchaseItems',
             'laboratoryAppointment.laboratoryStore',
+            'preferredLaboratoryStore',
             'transactions',
         ]);
 
@@ -72,6 +74,7 @@ final class LaboratoryPurchaseConfirmationViewData
             'fecha_compra' => $purchase->formatted_created_at ?? '—',
             'studies' => $studies,
             'branches_url' => URL::route('laboratory-stores.index', ['brand' => $purchase->brand->value]),
+            ...self::preferredStorePayload($purchase->preferredLaboratoryStore),
         ];
 
         if ($appointment?->appointment_date) {
@@ -131,6 +134,58 @@ final class LaboratoryPurchaseConfirmationViewData
         }
 
         return array_values(array_unique($labels));
+    }
+
+    /**
+     * @return array{
+     *     has_preferred_store: bool,
+     *     preferred_store_name?: string,
+     *     preferred_store_address?: string|null,
+     *     preferred_store_phone?: string|null,
+     *     preferred_store_hours?: string|null,
+     *     preferred_store_google_maps_url?: string|null,
+     * }
+     */
+    protected static function preferredStorePayload(?LaboratoryStore $store): array
+    {
+        if ($store === null) {
+            return [
+                'has_preferred_store' => false,
+            ];
+        }
+
+        return [
+            'has_preferred_store' => true,
+            'preferred_store_name' => $store->name,
+            'preferred_store_address' => filled($store->address) ? $store->address : null,
+            'preferred_store_phone' => filled($store->phone) ? $store->phone : null,
+            'preferred_store_hours' => self::storeSummaryHours($store),
+            'preferred_store_google_maps_url' => self::safePublicUrl($store->google_maps_url),
+        ];
+    }
+
+    protected static function storeSummaryHours(LaboratoryStore $store): ?string
+    {
+        $hours = collect([
+            filled($store->weekly_hours) ? 'Lun-vie: '.$store->weekly_hours : null,
+            filled($store->saturday_hours) ? 'Sáb: '.$store->saturday_hours : null,
+            filled($store->sunday_hours) ? 'Dom: '.$store->sunday_hours : null,
+        ])->filter()->implode(' · ');
+
+        return filled($hours) ? $hours : null;
+    }
+
+    protected static function safePublicUrl(?string $url): ?string
+    {
+        $url = trim((string) $url);
+
+        if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+
+        return in_array($scheme, ['http', 'https'], true) ? $url : null;
     }
 
     protected static function assetUrl(string $path, bool $forPdf): string

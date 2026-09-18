@@ -320,12 +320,15 @@ function CheckoutSummary({
 		/>
 	);
 
-	if (separateOrderAndPaymentCards && summaryActions) {
+	if (separateOrderAndPaymentCards) {
 		return (
-			<div className="mx-auto w-full lg:col-span-2">
+			<div className="order-first mx-auto w-full lg:order-last lg:col-span-2">
 				<div className="space-y-4 lg:sticky lg:top-8">
 					<CheckoutSummaryCard>{orderItems}</CheckoutSummaryCard>
 					<CheckoutSummaryCard>{totalsPanel}</CheckoutSummaryCard>
+					{summaryExtra && (
+						<CheckoutSummaryCard>{summaryExtra}</CheckoutSummaryCard>
+					)}
 				</div>
 			</div>
 		);

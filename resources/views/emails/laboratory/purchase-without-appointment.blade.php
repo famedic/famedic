@@ -70,13 +70,7 @@ Si no se utilizan dentro de ese periodo, tu orden podrá cancelarse.
 Tus estudios NO requieren cita. Puedes acudir en cualquier momento dentro del horario de atención de la sucursal.
 </p>
 
-<p style="margin:0 0 8px;color:#3d4852;font-size:16px;line-height:1.5;">
-Consulta aquí sucursales, dirección, horarios (incluyendo domingos/horarios extraordinarios) y teléfono:
-</p>
-
-<x-mail::button :url="$branches_url" color="primary">
-Consultar sucursales, horarios y teléfono
-</x-mail::button>
+@include('emails.laboratory.components.preferred-store')
 
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 

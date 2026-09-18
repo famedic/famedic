@@ -2,7 +2,7 @@
 import { useDeleteLaboratoryCartItem } from "@/Hooks/useDeleteLaboratoryCartItem";
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import { Badge } from "@/Components/Catalyst/badge";
-import { MapPinIcon, PhoneIcon } from "@heroicons/react/16/solid";
+import { PhoneIcon } from "@heroicons/react/16/solid";
 import { CheckCircleIcon } from "@heroicons/react/24/solid";
 import {
 	ErrorMessage,
@@ -45,7 +45,6 @@ import {
 	isCouponApplicableForCheckout,
 	isCouponWithinValidity,
 } from "@/lib/couponEligibilityUi";
-import { checkoutSelectedStorePresentation } from "@/lib/laboratoryCompatibleStores";
 import BalanceCreditCard from "@/Components/Coupons/BalanceCreditCard";
 import PromoCodeField from "@/Components/Checkout/PromoCodeField";
 
@@ -286,102 +285,6 @@ function resolveInitialCheckoutData(savedCheckout = null) {
 		coupon_id: fromParams.coupon_id ?? savedCheckout.coupon_id ?? null,
 		promo_validation_token: savedCheckout?.promo_validation_token ?? null,
 	};
-}
-
-function SelectedLaboratoryStoreSummaryCard({
-	selection,
-	laboratoryBrand,
-	error = null,
-}) {
-	const presentation = checkoutSelectedStorePresentation(selection);
-	const cartUrl = route("laboratory.shopping-cart", {
-		laboratory_brand: laboratoryBrand.value,
-	});
-
-	if (presentation.state === "missing") {
-		return (
-			<div className="rounded-lg border border-zinc-200 bg-zinc-50/50 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-800/30">
-				<Text className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-slate-400">
-					Sucursal preferida
-				</Text>
-				<Text className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-					No seleccionada · Opcional
-				</Text>
-				<Text className="mt-1 text-xs text-zinc-600 dark:text-slate-400">
-					Puedes continuar sin seleccionar una sucursal.
-				</Text>
-				<Button
-					type="button"
-					plain
-					className="mt-2 self-start px-0 text-sm"
-					onClick={() => router.visit(cartUrl)}
-				>
-					Elegir sucursal
-				</Button>
-			</div>
-		);
-	}
-
-	const isValid = presentation.state === "valid";
-
-	return (
-		<div
-			className={clsx(
-				"rounded-lg border px-3 py-3",
-				isValid
-					? "border-zinc-200 bg-zinc-50/50 dark:border-zinc-700 dark:bg-zinc-800/30"
-					: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100",
-			)}
-		>
-			<div className="flex items-start gap-2.5">
-				<MapPinIcon
-					className="mt-0.5 size-5 shrink-0 text-zinc-500 dark:text-zinc-400"
-					aria-hidden="true"
-				/>
-				<div className="min-w-0 flex-1 space-y-1.5">
-					<Text className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-slate-400">
-						Sucursal preferida
-					</Text>
-					{isValid && presentation.storeName && (
-						<p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-							{presentation.storeName}
-						</p>
-					)}
-					{!isValid && (
-						<Text className="text-sm font-medium text-inherit">
-							{presentation.title}
-						</Text>
-					)}
-					{(error || presentation.message) && (
-						<Text className="text-sm text-zinc-600 dark:text-slate-400">
-							{error || presentation.message}
-						</Text>
-					)}
-					{isValid && (
-						<>
-							<Text className="text-xs text-zinc-500 dark:text-slate-500">
-								Preferencia opcional
-							</Text>
-							<Text className="text-xs text-zinc-600 dark:text-slate-400">
-								Puedes cambiarla
-							</Text>
-						</>
-					)}
-					<Button
-						type="button"
-						plain
-						className={clsx(
-							"self-start px-0 text-sm",
-							!isValid && "w-full justify-center",
-						)}
-						onClick={() => router.visit(cartUrl)}
-					>
-						{isValid ? "Cambiar" : presentation.actionLabel}
-					</Button>
-				</div>
-			</div>
-		</div>
-	);
 }
 
 export default function LaboratoryCheckout({
@@ -1817,20 +1720,11 @@ export default function LaboratoryCheckout({
 				}
 				footerActions={wizardFooterActions}
 				summaryActions={confirmationPaymentActions}
-				separateOrderAndPaymentCards={currentStep.id === "confirmation"}
+				separateOrderAndPaymentCards
 				couponSection={
 					usesAppointmentFirstFlow && currentStep.id !== "payment"
 						? null
 						: couponSection
-				}
-				summaryExtra={
-					currentStep.id === "confirmation" ? null : (
-						<SelectedLaboratoryStoreSummaryCard
-							selection={selectedLaboratoryStore}
-							laboratoryBrand={laboratoryBrand}
-							error={errors.selected_laboratory_store}
-						/>
-					)
 				}
 				hideDefaultSubmit
 				stepContentRef={stepContentRef}

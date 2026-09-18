@@ -54,6 +54,7 @@ class LaboratoryPurchaseCreated extends Notification
         $purchase = $this->laboratoryPurchase->loadMissing([
             'laboratoryPurchaseItems',
             'laboratoryAppointment.laboratoryStore',
+            'preferredLaboratoryStore',
             'transactions',
         ]);
 
@@ -87,6 +88,7 @@ class LaboratoryPurchaseCreated extends Notification
         $purchase = $this->laboratoryPurchase->loadMissing([
             'laboratoryPurchaseItems',
             'laboratoryAppointment.laboratoryStore',
+            'preferredLaboratoryStore',
             'transactions',
         ]);
 
