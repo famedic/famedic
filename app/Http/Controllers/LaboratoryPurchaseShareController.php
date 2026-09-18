@@ -31,7 +31,9 @@ class LaboratoryPurchaseShareController extends Controller
         return response()->json([
             'share' => $this->presentShare($share),
             'url' => $result['url'],
-        ], 201);
+            'created' => $result['created'],
+            'ttl_hours' => config('famedic.laboratory_purchase_share.ttl_hours', 72),
+        ], $result['created'] ? 201 : 200);
     }
 
     public function destroy(

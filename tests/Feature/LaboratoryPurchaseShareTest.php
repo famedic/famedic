@@ -108,7 +108,46 @@ class LaboratoryPurchaseShareTest extends TestCase
         $this->assertDatabaseCount('laboratory_purchase_shares', 0);
     }
 
-    public function test_creating_second_share_revokes_first_token(): void
+    public function test_opening_share_twice_reuses_token_and_renews_expiration(): void
+    {
+        [$owner, $purchase] = $this->createPurchaseFixture();
+
+        $this->travelTo(now()->startOfMinute());
+
+        $firstResponse = $this->actingAs($owner)
+            ->postJson(route('laboratory-purchases.shares.store', $purchase));
+        $firstUrl = (string) $firstResponse->json('url');
+        $firstShare = LaboratoryPurchaseShare::query()->firstOrFail();
+        $firstExpiresAt = $firstShare->expires_at?->copy();
+
+        $this->assertSame(201, $firstResponse->status());
+        $this->assertTrue($firstResponse->json('created'));
+
+        $this->travel(6)->hours();
+
+        $secondResponse = $this->actingAs($owner)
+            ->postJson(route('laboratory-purchases.shares.store', $purchase));
+        $secondUrl = (string) $secondResponse->json('url');
+
+        $this->assertSame(200, $secondResponse->status());
+        $this->assertFalse($secondResponse->json('created'));
+        $this->assertSame($firstUrl, $secondUrl);
+        $this->assertSame($firstShare->id, $firstShare->refresh()->id);
+        $this->assertNull($firstShare->revoked_at);
+        $this->assertTrue($firstShare->expires_at->gt($firstExpiresAt));
+        $this->assertSame(
+            now()->addHours(72)->toDateTimeString(),
+            $firstShare->expires_at->toDateTimeString(),
+        );
+        $this->assertSame(1, LaboratoryPurchaseShare::query()
+            ->where('laboratory_purchase_id', $purchase->id)
+            ->whereNull('revoked_at')
+            ->count());
+
+        $this->get($firstUrl)->assertOk();
+    }
+
+    public function test_share_renewal_keeps_only_one_active_share_record(): void
     {
         [$owner, $purchase] = $this->createPurchaseFixture();
 
@@ -121,18 +160,18 @@ class LaboratoryPurchaseShareTest extends TestCase
             ->postJson(route('laboratory-purchases.shares.store', $purchase))
             ->json('url');
 
-        $this->assertNotSame($firstUrl, $secondUrl);
-        $this->assertNotNull($firstShare->refresh()->revoked_at);
+        $this->assertSame($firstUrl, $secondUrl);
+        $this->assertSame($firstShare->id, $firstShare->refresh()->id);
+        $this->assertNull($firstShare->revoked_at);
         $this->assertSame(1, LaboratoryPurchaseShare::query()
             ->where('laboratory_purchase_id', $purchase->id)
             ->whereNull('revoked_at')
             ->count());
 
-        $this->get($firstUrl)->assertNotFound();
-        $this->get($secondUrl)->assertOk();
+        $this->get($firstUrl)->assertOk();
     }
 
-    public function test_share_regeneration_leaves_only_latest_share_active(): void
+    public function test_revoked_share_is_replaced_with_a_new_token_on_next_open(): void
     {
         [$owner, $purchase] = $this->createPurchaseFixture();
 
@@ -140,19 +179,23 @@ class LaboratoryPurchaseShareTest extends TestCase
             ->postJson(route('laboratory-purchases.shares.store', $purchase))
             ->json('url');
         $firstShare = LaboratoryPurchaseShare::query()->firstOrFail();
+
+        $this->actingAs($owner)
+            ->deleteJson(route('laboratory-purchases.shares.destroy', [
+                'laboratory_purchase' => $purchase,
+                'share' => $firstShare,
+            ]))
+            ->assertOk();
 
         $secondUrl = (string) $this->actingAs($owner)
             ->postJson(route('laboratory-purchases.shares.store', $purchase))
             ->json('url');
         $secondShare = LaboratoryPurchaseShare::query()->latest('id')->firstOrFail();
 
+        $this->assertNotSame($firstUrl, $secondUrl);
         $this->assertNotSame($firstShare->id, $secondShare->id);
         $this->assertNotNull($firstShare->refresh()->revoked_at);
-        $this->assertNull($secondShare->refresh()->revoked_at);
-        $this->assertSame(1, LaboratoryPurchaseShare::query()
-            ->where('laboratory_purchase_id', $purchase->id)
-            ->whereNull('revoked_at')
-            ->count());
+        $this->assertNull($secondShare->revoked_at);
 
         $this->get($firstUrl)->assertNotFound();
         $this->get($secondUrl)->assertOk();

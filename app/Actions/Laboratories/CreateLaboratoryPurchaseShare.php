@@ -5,33 +5,27 @@ namespace App\Actions\Laboratories;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryPurchaseShare;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class CreateLaboratoryPurchaseShare
 {
-    /**
-     * The public link expires 48 hours after the appointment, capped at 30 days
-     * after creation so a distant appointment cannot leave a link active too long.
-     */
-    public function expiresAt(LaboratoryPurchase $purchase, ?\Illuminate\Support\Carbon $createdAt = null): \Illuminate\Support\Carbon
+    public function ttlHours(): int
     {
-        $createdAt ??= now();
-        $maxExpiresAt = $createdAt->copy()->addDays(30);
-        $appointmentExpiresAt = $purchase->laboratoryAppointment?->appointment_date
-            ? localizedDate($purchase->laboratoryAppointment->appointment_date)->addHours(48)
-            : $createdAt->copy()->addHours(48);
+        return max(1, (int) config('famedic.laboratory_purchase_share.ttl_hours', 72));
+    }
 
-        if ($appointmentExpiresAt->lte($createdAt)) {
-            $appointmentExpiresAt = $createdAt->copy()->addHours(48);
-        }
-
-        return $appointmentExpiresAt->gt($maxExpiresAt) ? $maxExpiresAt : $appointmentExpiresAt;
+    public function expiresAt(?Carbon $from = null): Carbon
+    {
+        return ($from ?? now())->copy()->addHours($this->ttlHours());
     }
 
     /**
-     * @return array{share: LaboratoryPurchaseShare, plain_token: string, url: string}
+     * Ensures a reusable share exists for the purchase and renews its expiration window.
+     *
+     * @return array{share: LaboratoryPurchaseShare, plain_token: string, url: string, created: bool}
      */
     public function __invoke(LaboratoryPurchase $purchase, User $creator): array
     {
@@ -39,12 +33,10 @@ class CreateLaboratoryPurchaseShare
             throw new RuntimeException('No se puede compartir una orden cancelada.');
         }
 
-        $plainToken = bin2hex(random_bytes(32));
-        $tokenHash = hash('sha256', $plainToken);
-        $expiresAt = null;
+        $plainToken = null;
+        $created = false;
 
-        $share = DB::transaction(function () use ($purchase, $creator, $tokenHash, &$expiresAt) {
-            // The purchase row is the mutex: concurrent regenerations for the same order serialize here.
+        $share = DB::transaction(function () use ($purchase, $creator, &$plainToken, &$created) {
             $lockedPurchase = LaboratoryPurchase::query()
                 ->whereKey($purchase->getKey())
                 ->lockForUpdate()
@@ -54,34 +46,51 @@ class CreateLaboratoryPurchaseShare
                 throw new RuntimeException('No se puede compartir una orden cancelada.');
             }
 
-            $lockedPurchase->loadMissing('laboratoryAppointment');
-            $createdAt = now();
-            $expiresAt = $this->expiresAt($lockedPurchase, $createdAt);
+            $expiresAt = $this->expiresAt();
+
+            $reusableShare = LaboratoryPurchaseShare::query()
+                ->where('laboratory_purchase_id', $lockedPurchase->id)
+                ->whereNull('revoked_at')
+                ->whereNotNull('token_encrypted')
+                ->latest('id')
+                ->first();
+
+            if ($reusableShare) {
+                $plainToken = $reusableShare->token_encrypted;
+                $reusableShare->forceFill(['expires_at' => $expiresAt])->save();
+
+                return $reusableShare;
+            }
 
             LaboratoryPurchaseShare::query()
                 ->where('laboratory_purchase_id', $lockedPurchase->id)
                 ->whereNull('revoked_at')
                 ->update(['revoked_at' => now()]);
 
+            $plainToken = bin2hex(random_bytes(32));
+            $created = true;
+
             return LaboratoryPurchaseShare::query()->create([
                 'laboratory_purchase_id' => $lockedPurchase->id,
                 'created_by' => $creator->id,
-                'token_hash' => $tokenHash,
+                'token_hash' => hash('sha256', $plainToken),
+                'token_encrypted' => $plainToken,
                 'expires_at' => $expiresAt,
             ]);
         });
 
-        Log::info('laboratory_purchase_share_created', [
+        Log::info($created ? 'laboratory_purchase_share_created' : 'laboratory_purchase_share_renewed', [
             'share_id' => $share->id,
             'laboratory_purchase_id' => $purchase->id,
             'actor_user_id' => $creator->id,
-            'expires_at' => $expiresAt->toIso8601String(),
+            'expires_at' => $share->expires_at?->toIso8601String(),
         ]);
 
         return [
             'share' => $share,
             'plain_token' => $plainToken,
             'url' => route('shared.laboratory-orders.show', ['token' => $plainToken]),
+            'created' => $created,
         ];
     }
 }

@@ -196,6 +196,10 @@ return [
      * Se excluyen sábados y domingos; no se consideran festivos en esta versión.
      * Las solicitudes completas (PDF+XML) nunca se consideran atrasadas.
      */
+    'laboratory_purchase_share' => [
+        'ttl_hours' => (int) env('LABORATORY_PURCHASE_SHARE_TTL_HOURS', 72),
+    ],
+
     'laboratory_billing' => [
         'invoice_delay_threshold_business_days' => (int) env('INVOICE_DELAY_THRESHOLD_BUSINESS_DAYS', env('INVOICE_DELAY_THRESHOLD_DAYS', 3)),
         'report_max_attachment_bytes' => (int) env('LABORATORY_BILLING_REPORT_MAX_ATTACHMENT_BYTES', 8 * 1024 * 1024),

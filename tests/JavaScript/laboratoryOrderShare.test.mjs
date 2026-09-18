@@ -111,13 +111,11 @@ test("private order detail clarifies download and share actions", () => {
 		dialog,
 		/Genera un enlace temporal para que un familiar o amigo pueda consultar tu orden de compra\./,
 	);
-	assert.match(dialog, /Comparte fácilmente tu orden/);
-	assert.match(
-		dialog,
-		/Ideal para que un familiar, amigo o cuidador pueda acompañarte o ayudarte con el seguimiento\./,
-	);
-	assert.match(dialog, /UserGroupIcon/);
-	assert.match(dialog, /LinkIcon/);
-	assert.match(dialog, /Generar enlace/);
+	assert.doesNotMatch(dialog, /Comparte fácilmente tu orden/);
+	assert.doesNotMatch(dialog, /UserGroupIcon/);
+	assert.doesNotMatch(dialog, /Generar enlace/);
+	assert.match(dialog, /Este enlace estara disponible durante \{ttlHours\} horas\./);
+	assert.match(dialog, /Valido hasta:/);
+	assert.match(dialog, /Preparando enlace para compartir/);
 	assert.doesNotMatch(dialog, /Este enlace no muestra resultados/);
 });

@@ -125,7 +125,7 @@ class ResolveLaboratoryPurchasePdfPath
     protected function calculateContentHash(LaboratoryPurchase $laboratoryPurchase): string
     {
         $contentData = [
-            'pdf_engine' => 'dompdf-v2',
+            'pdf_engine' => 'dompdf-v3-font-scale',
             'purchase' => [
                 'id' => $laboratoryPurchase->id,
                 'gda_order_id' => $laboratoryPurchase->gda_order_id,

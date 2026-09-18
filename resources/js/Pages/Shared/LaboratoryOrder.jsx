@@ -28,7 +28,7 @@ function Section({ title, icon: Icon, action, children, className = "" }) {
 							<Icon className="size-5" aria-hidden />
 						</span>
 					)}
-					<h2 className="min-w-0 break-words text-base font-semibold text-[#171f45]">{title}</h2>
+					<h2 className="min-w-0 break-words text-lg font-semibold text-[#171f45]">{title}</h2>
 				</div>
 				{action}
 			</div>
@@ -44,10 +44,10 @@ function Detail({ icon: Icon, label, children, emphasized = false }) {
 		<div className="flex min-w-0 gap-3">
 			<Icon className="mt-0.5 size-5 shrink-0 text-[#005e96]" aria-hidden />
 			<div className="min-w-0">
-				<p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
+				<p className="text-sm font-semibold uppercase text-zinc-500">{label}</p>
 				<div
-					className={`mt-1 break-words text-sm ${
-						emphasized ? "text-base font-semibold text-[#171f45]" : "text-zinc-900"
+					className={`mt-1 break-words text-base ${
+						emphasized ? "text-lg font-semibold text-[#171f45]" : "text-zinc-900"
 					}`}
 				>
 					{children}
@@ -61,7 +61,7 @@ function Row({ label, value, strong = false, negative = false }) {
 	if (!value) return null;
 
 	return (
-		<div className="flex min-w-0 items-baseline justify-between gap-4 py-2 text-sm">
+		<div className="flex min-w-0 items-baseline justify-between gap-4 py-2 text-base">
 			<span className={strong ? "font-semibold text-[#171f45]" : "text-zinc-600"}>{label}</span>
 			<span
 				className={`min-w-0 text-right tabular-nums ${
@@ -85,15 +85,15 @@ function StatusBadge({ appointment }) {
 			? "bg-amber-100 text-amber-900"
 			: "bg-emerald-100 text-emerald-900";
 
-	return <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${tone}`}>{text}</span>;
+	return <span className={`inline-flex rounded-md px-2.5 py-1 text-sm font-semibold ${tone}`}>{text}</span>;
 }
 
 function PrimaryLink({ href, children, outline = false, external = false, icon: Icon = null }) {
 	if (!href) return null;
 
 	const className = outline
-		? "inline-flex min-h-11 w-full items-center justify-center rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold text-[#171f45] transition hover:border-[#005e96] hover:bg-sky-50 sm:w-auto"
-		: "inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[#005e96] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#004d7c] sm:w-auto";
+		? "inline-flex min-h-11 w-full items-center justify-center rounded-md border border-zinc-300 px-4 py-2 text-base font-semibold text-[#171f45] transition hover:border-[#005e96] hover:bg-sky-50 sm:w-auto"
+		: "inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[#005e96] px-4 py-2 text-base font-semibold text-white transition hover:bg-[#004d7c] sm:w-auto";
 
 	return (
 		<a href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer noopener" : undefined} className={className}>
@@ -150,14 +150,14 @@ function IndicationsAccordion({ studies }) {
 				<div className="flex flex-wrap justify-end gap-2">
 					<button
 						type="button"
-						className="min-h-10 rounded-md border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-100"
+						className="min-h-10 rounded-md border border-zinc-300 px-3 py-2 text-base font-semibold text-zinc-900 hover:bg-zinc-100"
 						onClick={() => setOpenIndexes(indicationIndexes)}
 					>
 						Expandir todas
 					</button>
 					<button
 						type="button"
-						className="min-h-10 rounded-md border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-100"
+						className="min-h-10 rounded-md border border-zinc-300 px-3 py-2 text-base font-semibold text-zinc-900 hover:bg-zinc-100"
 						onClick={() => setOpenIndexes([])}
 					>
 						Contraer todas
@@ -178,8 +178,8 @@ function IndicationsAccordion({ studies }) {
 								aria-controls={panelId}
 								onClick={() => toggleIndex(index)}
 							>
-								<span className="min-w-0 break-words text-sm font-semibold text-zinc-950">{study.name}</span>
-								<span className="inline-flex shrink-0 items-center gap-2 text-sm font-semibold text-sky-700">
+								<span className="min-w-0 break-words text-base font-semibold text-zinc-950">{study.name}</span>
+								<span className="inline-flex shrink-0 items-center gap-2 text-base font-semibold text-sky-700">
 									{isOpen ? "Ocultar indicaciones" : "Ver indicaciones"}
 									<ChevronDownIcon className={`size-5 text-zinc-500 transition ${isOpen ? "rotate-180" : ""}`} aria-hidden />
 								</span>
@@ -187,9 +187,9 @@ function IndicationsAccordion({ studies }) {
 							{isOpen && (
 								<div id={panelId} className="border-t border-zinc-100 px-4 py-4">
 									{study.indications ? (
-										<p className="whitespace-pre-line break-words text-sm leading-6 text-zinc-800">{study.indications}</p>
+										<p className="whitespace-pre-line break-words text-base leading-7 text-zinc-800">{study.indications}</p>
 									) : (
-										<p className="text-sm text-zinc-600">Sin indicaciones registradas para este estudio.</p>
+										<p className="text-base text-zinc-600">Sin indicaciones registradas para este estudio.</p>
 									)}
 								</div>
 							)}
@@ -215,8 +215,8 @@ function OperationalDatum({ label, value }) {
 
 	return (
 		<div className="rounded-md bg-zinc-50 px-3 py-2">
-			<p className="text-[11px] font-semibold uppercase text-zinc-500">{label}</p>
-			<p className={`mt-1 break-words font-semibold text-zinc-950 ${["Folio", "Consecutivo"].includes(label) ? "text-lg" : "text-base"}`}>{value}</p>
+			<p className="text-sm font-semibold uppercase text-zinc-500">{label}</p>
+			<p className={`mt-1 break-words font-semibold text-zinc-950 ${["Folio", "Consecutivo"].includes(label) ? "text-xl" : "text-lg"}`}>{value}</p>
 		</div>
 	);
 }
@@ -226,7 +226,7 @@ function AppointmentBoardingPass({ appointment, brand, store, share, storeDirect
 		<Section title="Tu cita" icon={CalendarDaysIcon}>
 			<div className="grid gap-5 lg:grid-cols-[0.7fr_1.3fr]">
 				<div className="rounded-lg border border-[#e6e1f7] border-l-4 border-l-[#5944b5] bg-[#f7f5ff] p-4">
-					<p className="text-xs font-semibold uppercase text-[#5944b5]">Tu cita está programada en esta sucursal</p>
+					<p className="text-sm font-semibold uppercase text-[#5944b5]">Tu cita está programada en esta sucursal</p>
 					<p className="mt-3 break-words text-2xl font-semibold text-[#171f45]">{appointment.formatted_date}</p>
 					{appointment.formatted_time && (
 						<p className="mt-2 flex items-center gap-2 text-xl font-semibold text-[#5944b5]">
@@ -235,22 +235,22 @@ function AppointmentBoardingPass({ appointment, brand, store, share, storeDirect
 						</p>
 					)}
 					{share?.formatted_expires_at && (
-						<p className="mt-4 text-xs leading-5 text-zinc-600">Enlace válido hasta {share.formatted_expires_at}.</p>
+						<p className="mt-4 text-sm leading-6 text-zinc-600">Enlace válido hasta {share.formatted_expires_at}.</p>
 					)}
 				</div>
 				<div className="space-y-4">
 					<div>
-						<p className="text-xs font-semibold uppercase text-zinc-500">{brand.label || "Laboratorio"}</p>
+						<p className="text-sm font-semibold uppercase text-zinc-500">{brand.label || "Laboratorio"}</p>
 						<h3 className="mt-1 break-words text-xl font-semibold text-[#171f45]">{store?.name}</h3>
-						{store?.address && <p className="mt-2 break-words text-sm leading-6 text-zinc-700">{store.address}</p>}
+						{store?.address && <p className="mt-2 break-words text-base leading-7 text-zinc-700">{store.address}</p>}
 					</div>
-					<div className="grid gap-3 text-sm text-zinc-700 sm:grid-cols-3">
+					<div className="grid gap-3 text-base text-zinc-700 sm:grid-cols-3">
 						{store?.weekly_hours && <p>Lun-vie: {store.weekly_hours}</p>}
 						{store?.saturday_hours && <p>Sábado: {store.saturday_hours}</p>}
 						{store?.sunday_hours && <p>Domingo: {store.sunday_hours}</p>}
 					</div>
 					{store?.phone && (
-						<p className="flex gap-2 text-sm text-zinc-500">
+						<p className="flex gap-2 text-base text-zinc-500">
 							<PhoneIcon className="mt-0.5 size-4 shrink-0 text-zinc-400" aria-hidden />
 							<span className="break-all">{store.phone}</span>
 						</p>
@@ -263,7 +263,7 @@ function AppointmentBoardingPass({ appointment, brand, store, share, storeDirect
 							Ver otras sucursales
 						</PrimaryLink>
 					</div>
-					<p className="text-xs leading-5 text-zinc-500">Para acudir a otra sucursal, confirma primero el cambio de cita.</p>
+					<p className="text-sm leading-6 text-zinc-500">Para acudir a otra sucursal, confirma primero el cambio de cita.</p>
 				</div>
 			</div>
 		</Section>
@@ -284,7 +284,7 @@ function NoAppointmentStores({ brand, storeDirectoryUrl }) {
 			<div className="space-y-5">
 				<div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 					<div className="min-w-0">
-						<p className="break-words text-sm text-zinc-700">
+						<p className="break-words text-base text-zinc-700">
 							Puedes acudir a cualquiera de las sucursales disponibles de {brand.label || "tu laboratorio"} dentro de su horario de atención.
 						</p>
 					</div>
@@ -297,13 +297,13 @@ function NoAppointmentStores({ brand, storeDirectoryUrl }) {
 function GuideStep({ number, icon: Icon, title, children }) {
 	return (
 		<div className="flex min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4">
-			<span className="grid size-8 shrink-0 place-items-center rounded-md bg-zinc-950 text-sm font-semibold text-white">{number}</span>
+			<span className="grid size-8 shrink-0 place-items-center rounded-md bg-zinc-950 text-base font-semibold text-white">{number}</span>
 			<div className="min-w-0">
 				<div className="flex min-w-0 items-center gap-2">
 					<Icon className="size-5 shrink-0 text-sky-700" aria-hidden />
-					<h3 className="min-w-0 break-words text-sm font-semibold text-zinc-950">{title}</h3>
+					<h3 className="min-w-0 break-words text-base font-semibold text-zinc-950">{title}</h3>
 				</div>
-				<div className="mt-2 break-words text-sm leading-6 text-zinc-700">{children}</div>
+				<div className="mt-2 break-words text-base leading-7 text-zinc-700">{children}</div>
 			</div>
 		</div>
 	);
@@ -339,10 +339,10 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 		<Section title="Cita pendiente" icon={BuildingStorefrontIcon}>
 			<div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 				<div className="min-w-0">
-					<p className="break-words text-sm text-zinc-700">
+					<p className="break-words text-base text-zinc-700">
 						Tus estudios requieren cita. Revisa las sucursales de {brand.label || "tu laboratorio"} para continuar.
 					</p>
-					<p className="mt-2 text-sm font-semibold text-zinc-950">{formatStoresCount(brand.stores_count)}</p>
+					<p className="mt-2 text-base font-semibold text-zinc-950">{formatStoresCount(brand.stores_count)}</p>
 				</div>
 				<PrimaryLink href={storeDirectoryUrl}>Ver sucursales</PrimaryLink>
 			</div>
@@ -395,9 +395,9 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 						<article key={`${study.name}-${index}`} className="py-4 first:pt-0 last:pb-0">
 							<div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
 								<div className="min-w-0">
-									<h3 className="break-words text-sm font-semibold text-zinc-950">{study.name}</h3>
+									<h3 className="break-words text-base font-semibold text-zinc-950">{study.name}</h3>
 									{study.feature_list?.length > 0 && (
-										<ul className="mt-3 flex min-w-0 flex-wrap gap-2 text-xs text-zinc-700">
+										<ul className="mt-3 flex min-w-0 flex-wrap gap-2 text-sm text-zinc-700">
 											{study.feature_list.map((feature) => (
 												<li key={feature} className="rounded-md bg-zinc-100 px-3 py-2">
 													{feature}
@@ -407,7 +407,7 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 									)}
 								</div>
 								{study.price && (
-									<p className="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums text-zinc-950">
+									<p className="shrink-0 whitespace-nowrap text-base font-semibold tabular-nums text-zinc-950">
 										{compactMoney(study.price)}
 									</p>
 								)}
@@ -527,18 +527,18 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 						<div className="bg-[#171f45] px-5 py-7 text-white">
 							<div className="flex min-w-0 flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
 								<div className="min-w-0">
-									<p className="text-sm font-semibold uppercase text-lime-300">Orden de compra de laboratorio</p>
+									<p className="text-base font-semibold uppercase text-lime-300">Orden de compra de laboratorio</p>
 									<h1 className="mt-3 break-words text-3xl font-semibold tracking-normal text-white sm:text-4xl">
 										{patient.full_name || "Paciente"}
 									</h1>
 									<div className="mt-5 flex min-w-0 flex-wrap items-center gap-2">
 										{brand.label && (
-											<span className="inline-flex min-h-8 items-center rounded-md bg-white/10 px-3 text-sm font-medium text-white ring-1 ring-white/15">
+											<span className="inline-flex min-h-8 items-center rounded-md bg-white/10 px-3 text-base font-medium text-white ring-1 ring-white/15">
 												{brand.label}
 											</span>
 										)}
 										{order.folio && (
-											<span className="inline-flex min-h-8 items-center rounded-md bg-white/10 px-3 text-sm font-medium text-white ring-1 ring-white/15">
+											<span className="inline-flex min-h-8 items-center rounded-md bg-white/10 px-3 text-base font-medium text-white ring-1 ring-white/15">
 												Folio {order.folio}
 											</span>
 										)}
@@ -547,7 +547,7 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 								</div>
 								{pricing.total && (
 									<div className="min-w-0 text-left lg:text-right">
-										<p className="text-xs font-semibold uppercase text-white/70">Total</p>
+										<p className="text-sm font-semibold uppercase text-white/70">Total</p>
 										<p className="mt-2 break-words text-4xl font-bold tracking-normal text-lime-300 sm:text-5xl">
 											{pricing.total}
 										</p>
@@ -565,7 +565,7 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 					{noAppointmentStoresCard}
 
 					<footer className="border-t border-zinc-200 pt-5">
-						<div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-4 text-sm text-zinc-700">
+						<div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-4 text-base text-zinc-700">
 							<div className="flex min-w-0 flex-col items-center justify-center gap-4 text-center sm:flex-row sm:text-left">
 								<p className="font-medium text-zinc-800">¿Necesitas ayuda? Tenemos estos canales de soporte.</p>
 								<div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row">

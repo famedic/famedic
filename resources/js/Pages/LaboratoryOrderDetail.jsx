@@ -721,7 +721,6 @@ export default function LaboratoryOrderDetail({
 				isOpen={showShareDialog}
 				onClose={() => setShowShareDialog(false)}
 				purchaseId={laboratoryPurchase?.id}
-				activeShare={activeLaboratoryPurchaseShare}
 			/>
 		</SettingsLayout>
 	);

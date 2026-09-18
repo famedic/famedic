@@ -19,6 +19,7 @@ class LaboratoryPurchaseShare extends Model
             'expires_at' => 'datetime',
             'revoked_at' => 'datetime',
             'last_viewed_at' => 'datetime',
+            'token_encrypted' => 'encrypted',
         ];
     }
 
