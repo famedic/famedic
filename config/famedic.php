@@ -251,6 +251,8 @@ return [
         'customer_service' => [
             'title' => 'Atención a clientes',
             'contact_name' => 'Lydia',
+            'phone_display' => env('FAMEDIC_SUPPORT_LYDIA_PHONE_DISPLAY', '81 2860 1893'),
+            'phone_tel' => env('FAMEDIC_SUPPORT_LYDIA_PHONE_TEL', '8128601893'),
             'whatsapp_display' => env('FAMEDIC_SUPPORT_LYDIA_DISPLAY', '+52 1 81 2860 1893'),
             'whatsapp_e164' => env('FAMEDIC_SUPPORT_LYDIA_WHATSAPP_E164', '528128601893'),
             'whatsapp_default_message' => 'Hola, necesito ayuda con mi cuenta o una compra en Famedic.',

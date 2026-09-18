@@ -18,7 +18,7 @@
             color: #141c2e;
             background: #ffffff;
             font-family: DejaVu Sans, Arial, sans-serif;
-            font-size: 11.5px;
+            font-size: 12.5px;
             font-weight: 400;
             line-height: 1.58;
         }
@@ -92,14 +92,14 @@
 
         .eyebrow {
             color: #5140a0;
-            font-size: 10px;
+            font-size: 11.5px;
             font-weight: 700;
             letter-spacing: 0.04em;
         }
 
         .hero .eyebrow {
             color: #c8f24a;
-            font-size: 10.5px;
+            font-size: 12px;
             font-weight: 700;
             letter-spacing: 0;
         }
@@ -121,7 +121,7 @@
         .hero-total-label {
             margin-top: 28px;
             color: #b8c4da;
-            font-size: 10px;
+            font-size: 11.5px;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -138,7 +138,7 @@
         .confirmed {
             display: inline-block;
             color: #e8fbef;
-            font-size: 10.5px;
+            font-size: 12px;
             font-weight: 700;
         }
 
@@ -170,7 +170,7 @@
 
         .section-copy {
             color: #3a4659;
-            font-size: 11.5px;
+            font-size: 12.5px;
             line-height: 1.62;
             font-weight: 400;
         }
@@ -179,7 +179,7 @@
             display: block;
             margin-bottom: 3px;
             color: #4a5568;
-            font-size: 9.5px;
+            font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.06em;
             text-transform: uppercase;
@@ -219,7 +219,7 @@
 
         .ticket .label {
             color: #5140a0;
-            font-size: 9.5px;
+            font-size: 11px;
         }
 
         .ticket-number {
@@ -233,7 +233,7 @@
         .ticket-help {
             margin-top: 5px;
             color: #3a4659;
-            font-size: 11px;
+            font-size: 12.5px;
             font-weight: 700;
             line-height: 1.4;
         }
@@ -257,7 +257,7 @@
         .summary-row td:first-child {
             width: 36%;
             color: #4a5568;
-            font-size: 9.5px;
+            font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.05em;
             text-transform: uppercase;
@@ -280,7 +280,7 @@
 
         .summary-row-secondary td:last-child {
             color: #2a3447;
-            font-size: 11.5px;
+            font-size: 12.5px;
             font-weight: 400;
         }
 
@@ -293,7 +293,7 @@
 
         .total-label {
             color: #4a5568;
-            font-size: 10px;
+            font-size: 11.5px;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -310,7 +310,7 @@
         .credit-note {
             margin-top: 8px;
             color: #087a4c;
-            font-size: 11px;
+            font-size: 12.5px;
             font-weight: 700;
             line-height: 1.45;
         }
@@ -323,7 +323,7 @@
 
         .appointment .eyebrow {
             margin-bottom: 8px;
-            font-size: 10.5px;
+            font-size: 12px;
             font-weight: 700;
         }
 
@@ -359,7 +359,7 @@
         .place-address {
             margin-top: 5px;
             color: #3a4659;
-            font-size: 11px;
+            font-size: 12.5px;
             line-height: 1.55;
             font-weight: 400;
         }
@@ -384,7 +384,7 @@
 
         .validity-copy {
             color: #3a4659;
-            font-size: 11px;
+            font-size: 12.5px;
             line-height: 1.55;
             font-weight: 400;
         }
@@ -422,7 +422,7 @@
         .step-copy {
             margin-top: 4px;
             color: #3a4659;
-            font-size: 11.5px;
+            font-size: 12.5px;
             line-height: 1.6;
             font-weight: 400;
         }
@@ -499,7 +499,7 @@
         .prep-label {
             margin: 2px 0 4px 36px;
             color: #5140a0;
-            font-size: 10px;
+            font-size: 11.5px;
             font-weight: 700;
             letter-spacing: 0.02em;
         }
@@ -512,7 +512,7 @@
         .instructions {
             margin-left: 36px;
             color: #1e2838;
-            font-size: 12px;
+            font-size: 13px;
             line-height: 1.66;
             font-weight: 400;
         }
@@ -536,7 +536,7 @@
         .bullet-mark {
             width: 12px;
             color: #5140a0;
-            font-size: 12px;
+            font-size: 13px;
             line-height: 1.66;
         }
 
@@ -550,7 +550,7 @@
         .package-includes-title {
             margin: 0 0 4px;
             color: #9a3412;
-            font-size: 9.5px;
+            font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.05em;
             text-transform: uppercase;
@@ -559,7 +559,7 @@
         .package-includes ul {
             margin-top: 0;
             color: #7c2d12;
-            font-size: 11px;
+            font-size: 12.5px;
             line-height: 1.5;
         }
 
@@ -583,16 +583,55 @@
         .support-copy {
             margin-top: 5px;
             color: #3a4659;
-            font-size: 11.5px;
+            font-size: 12.5px;
             line-height: 1.58;
             font-weight: 400;
         }
 
-        .support-phone {
-            margin-top: 7px;
+        .support-channels {
+            margin-top: 10px;
+        }
+
+        .support-channel {
+            margin-top: 10px;
+        }
+
+        .support-channel:first-child {
+            margin-top: 0;
+        }
+
+        .support-contact-title {
             color: #141c2e;
-            font-size: 12px;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        .support-contact-description {
+            margin-top: 2px;
+            color: #3a4659;
+            font-size: 12.5px;
             line-height: 1.45;
+            font-weight: 400;
+        }
+
+        .support-contact-number {
+            display: block;
+            margin-top: 3px;
+            color: #141c2e;
+            font-size: 12.5px;
+            font-weight: 700;
+            line-height: 1.45;
+            text-decoration: none;
+        }
+
+        a.support-contact-whatsapp {
+            color: #128c4a;
+        }
+
+        a.support-contact-phone {
+            color: #0f766e;
+            text-decoration: underline;
         }
 
         .support-table {
@@ -606,7 +645,7 @@
         }
 
         .support-table .value {
-            font-size: 11.5px;
+            font-size: 12.5px;
         }
 
         .support-footer {
@@ -614,7 +653,7 @@
             padding-top: 7px;
             border-top: 1px solid #d5dde8;
             color: #4a5568;
-            font-size: 10px;
+            font-size: 11.5px;
             line-height: 1.45;
         }
 
@@ -632,7 +671,6 @@
 </head>
 <body>
 @php
-    $supportPhone = '812 860 1893';
     $appointmentHasDetails = $withAppointment && (($appointment_date ?? null) || ($appointment_time ?? null) || ($branch_name ?? null) || ($branch_address ?? null));
 @endphp
 
@@ -936,7 +974,28 @@
     <div class="eyebrow">Necesitas ayuda</div>
     <div class="support-title">Estamos contigo durante tu proceso.</div>
     <p class="support-copy">Si no pudiste asistir, si necesitas cambios, reprogramación o cancelación, contáctanos y lo resolvemos contigo.</p>
-    <p class="support-phone">Atención a clientes FAMEDIC: <strong>{{ $supportPhone }}</strong></p>
+    <div class="support-channels">
+        <div class="support-channel">
+            <div class="support-contact-title">{{ $support_title }}</div>
+            <div class="support-contact-description">{{ $support_channel_description }}</div>
+            @if (!empty($support_whatsapp_url))
+                <a class="support-contact-number support-contact-whatsapp" href="{{ $support_whatsapp_url }}">{{ $support_whatsapp_display }}</a>
+            @elseif (!empty($support_whatsapp_display))
+                <span class="support-contact-number">{{ $support_whatsapp_display }}</span>
+            @endif
+        </div>
+
+        @if (!empty($support_phone_display))
+            <div class="support-channel">
+                <div class="support-contact-description">También puedes contactarnos por teléfono al</div>
+                @if (!empty($support_phone_url))
+                    <a class="support-contact-number support-contact-phone" href="{{ $support_phone_url }}">{{ $support_phone_display }}</a>
+                @else
+                    <span class="support-contact-number">{{ $support_phone_display }}</span>
+                @endif
+            </div>
+        @endif
+    </div>
 
     <table class="support-table">
         <tr>

@@ -4,6 +4,7 @@ namespace App\Actions\Laboratories;
 
 use App\Models\LaboratoryPurchase;
 use App\Models\Transaction;
+use App\Support\FamedicPublicContactConfig;
 use Illuminate\Support\Facades\URL;
 
 /**
@@ -73,6 +74,7 @@ final class LaboratoryPurchaseConfirmationViewData
             'fecha_compra' => $purchase->formatted_created_at ?? '—',
             'studies' => $studies,
             'branches_url' => URL::route('laboratory-stores.index', ['brand' => $purchase->brand->value]),
+            ...self::supportContactData(),
         ];
 
         if ($appointment?->appointment_date) {
@@ -86,6 +88,35 @@ final class LaboratoryPurchaseConfirmationViewData
         }
 
         return $data;
+    }
+
+    /**
+     * @return array{
+     *     support_title: string,
+     *     support_channel_description: string,
+     *     support_whatsapp_display: string,
+     *     support_whatsapp_url: string|null,
+     *     support_phone_display: string,
+     *     support_phone_url: string|null,
+     * }
+     */
+    public static function supportContactData(): array
+    {
+        $customerService = config('famedic.support.customer_service', []);
+        $whatsappE164 = (string) ($customerService['whatsapp_e164'] ?? '');
+        $phoneTel = (string) ($customerService['phone_tel'] ?? '');
+
+        return [
+            'support_title' => (string) ($customerService['title'] ?? 'Atención a clientes'),
+            'support_channel_description' => 'Atención directa por WhatsApp.',
+            'support_whatsapp_display' => (string) ($customerService['whatsapp_display'] ?? ''),
+            'support_whatsapp_url' => FamedicPublicContactConfig::whatsappUrl(
+                $whatsappE164,
+                'Hola, necesito ayuda con mi orden de laboratorio Famedic.',
+            ),
+            'support_phone_display' => (string) ($customerService['phone_display'] ?? ''),
+            'support_phone_url' => FamedicPublicContactConfig::telUrl($phoneTel),
+        ];
     }
 
     public static function hasAppointmentForConfirmation(LaboratoryPurchase $purchase): bool
