@@ -42,7 +42,6 @@ export default function FocusedLayout({
 									}}
 									dropdownMenuProps={{
 										anchor: "bottom end",
-										className: "min-w-64",
 									}}
 								/>
 							</NavbarSection>

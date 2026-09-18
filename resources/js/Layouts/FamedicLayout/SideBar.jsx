@@ -30,7 +30,6 @@ export default function SideBar() {
 							dusk: "userNavigation",
 						}}
 						dropdownMenuProps={{
-							className: "min-w-80 lg:min-w-64",
 							anchor: "bottom start",
 						}}
 					>

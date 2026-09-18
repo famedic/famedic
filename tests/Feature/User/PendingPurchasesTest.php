@@ -100,6 +100,26 @@ test('single laboratory brand with payment draft is checkout in progress', funct
         );
 });
 
+test('shared pending purchases summary is exposed for account menu badge', function () {
+    $user = pendingPurchasesUser();
+    $brand = LaboratoryBrand::SWISSLAB;
+
+    addLaboratoryCartItem($user, $brand);
+    draftForPendingPurchase($user, $brand, 'payment');
+
+    $this->actingAs($user)
+        ->get(route('laboratory-purchases.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('pendingPurchasesSummary.total', 1));
+
+    $this->actingAs($user)
+        ->get(route('user.purchases.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('summary.total', 1));
+});
+
 test('laboratory brands are independent pending purchases', function () {
     $user = pendingPurchasesUser();
 

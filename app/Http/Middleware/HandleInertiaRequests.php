@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Enums\LaboratoryBrand;
 use App\Services\NotificationService;
 use App\Services\Tracking\Tracking;
+use App\Services\UserPurchases\PendingPurchasesQuery;
 use App\Support\AppEnvironmentLabel;
 use App\Support\FamedicPublicContactConfig;
 use App\Support\MockEfevooPaymentSupport;
@@ -99,6 +100,9 @@ class HandleInertiaRequests extends Middleware
                 ],*/
             ],
             'userNavigation' => $request->user() ? $this->getUserNavigation((bool) $request->user()->administrator, (bool) $request->user()?->customer?->medical_attention_subscription_is_active) : [],
+            'pendingPurchasesSummary' => fn () => $request->user()?->customer
+                ? app(PendingPurchasesQuery::class)->forCustomer($request->user()->customer)['summary']
+                : ['total' => 0, 'carts' => 0, 'checkouts' => 0, 'items' => 0],
             'famedicConcierge' => fn () => FamedicPublicContactConfig::conciergeForFrontend(),
             'flashMessage' => session('flashMessage'),
             'appEnv' => app()->environment(),

@@ -171,7 +171,6 @@ export default function NavBar() {
 							}}
 							dropdownMenuProps={{
 								anchor: "bottom end",
-								className: "min-w-64",
 							}}
 						/>
 					</>
