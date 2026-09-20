@@ -4,11 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Actions\Laboratories\OrderAction;
 use App\Enums\LaboratoryBrand;
-use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\CouponApplicationException;
-use App\Exceptions\PromoCodeException;
-use App\Exceptions\OdessaInsufficientFundsException;
 use App\Exceptions\EfevooPaymentException;
+use App\Exceptions\MissingLaboratoryAppointmentException;
+use App\Exceptions\OdessaInsufficientFundsException;
+use App\Exceptions\PromoCodeException;
 use App\Http\Requests\Laboratories\LaboratoryPurchases\StoreLaboratoryPurchaseRequest;
 use App\Http\Resources\PatientLaboratoryPurchaseCardResource;
 use App\Models\Address;
@@ -16,6 +16,7 @@ use App\Models\Contact;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationPresenter;
 use App\Services\LaboratoryResults\LaboratoryPurchaseResultControlPresenter;
 use App\Services\Tracking\Purchase;
 use App\Support\ClientContext;
@@ -309,9 +310,9 @@ class LaboratoryPurchaseController extends Controller
     public function show(
         Request $request,
         LaboratoryPurchase $laboratoryPurchase,
+        LaboratoryPreparationPresenter $preparationPresenter,
         LaboratoryPurchaseResultControlPresenter $resultControlPresenter,
-    )
-    {
+    ) {
         $this->authorize('view', $laboratoryPurchase);
 
         $lastDayOfPurchaseMonth = localizedDate($laboratoryPurchase->created_at)->endOfMonth();
@@ -322,7 +323,7 @@ class LaboratoryPurchaseController extends Controller
             'laboratoryResultStatuses.versions',
             'laboratoryAppointment.laboratoryStore',
             'invoiceRequest',
-            'invoice'
+            'invoice',
         ]);
 
         $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
@@ -372,6 +373,7 @@ class LaboratoryPurchaseController extends Controller
             'latestResultsAt' => $latestResultsAt,
             'hasResultsPdfCached' => $hasResultsPdfCached,
             ...$resultControl,
+            'preparation' => $preparationPresenter->present($laboratoryPurchase),
             'is_new_result' => $isNewResult,
             'activeLaboratoryPurchaseShare' => $activeShare ? [
                 'id' => $activeShare->id,
@@ -384,7 +386,7 @@ class LaboratoryPurchaseController extends Controller
                 auth()->guard()->user()->customer
             ),
             'daysLeftToRequestInvoice' => $nowInMonterrey->lt($lastDayOfPurchaseMonth)
-                ? (int)ceil($nowInMonterrey->diffInDays($lastDayOfPurchaseMonth, false))
+                ? (int) ceil($nowInMonterrey->diffInDays($lastDayOfPurchaseMonth, false))
                 : 0,
             ...session()->get('confetti') ? ['confetti' => true] : [],
         ]);

@@ -12,6 +12,15 @@ trait GdaResultsStorageIsolatedSchema
         Schema::disableForeignKeyConstraints();
 
         foreach ([
+            'laboratory_result_ai_explanations',
+            'customer_laboratory_ai_explanation_consents',
+            'laboratory_result_observations',
+            'laboratory_result_reports',
+            'laboratory_result_extraction_qa_metrics',
+            'laboratory_analyte_aliases',
+            'laboratory_analytes',
+            'ai_executions',
+            'ai_prompts',
             'laboratory_result_events',
             'laboratory_result_versions',
             'laboratory_result_statuses',
@@ -241,6 +250,15 @@ trait GdaResultsStorageIsolatedSchema
         Schema::disableForeignKeyConstraints();
 
         foreach ([
+            'laboratory_result_ai_explanations',
+            'customer_laboratory_ai_explanation_consents',
+            'laboratory_result_observations',
+            'laboratory_result_reports',
+            'laboratory_result_extraction_qa_metrics',
+            'laboratory_analyte_aliases',
+            'laboratory_analytes',
+            'ai_executions',
+            'ai_prompts',
             'laboratory_result_events',
             'laboratory_result_versions',
             'laboratory_result_statuses',

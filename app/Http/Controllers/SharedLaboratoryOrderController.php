@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\SharedLaboratoryPurchaseResource;
-use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryPurchaseShare;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -31,13 +31,20 @@ class SharedLaboratoryOrderController extends Controller
             abort(404);
         }
 
-        $purchase->load([
+        $relations = [
             'customer:id,user_id',
             'customer.user:id,name,paternal_lastname,maternal_lastname',
             'laboratoryPurchaseItems:id,laboratory_purchase_id,gda_id,name,indications,feature_list,price_cents',
             'laboratoryAppointment:id,laboratory_purchase_id,laboratory_store_id,appointment_date,confirmed_at',
             'laboratoryAppointment.laboratoryStore:id,name,address,google_maps_url,phone,weekly_hours,saturday_hours,sunday_hours',
-        ]);
+        ];
+
+        if (Schema::hasTable('laboratory_purchase_preparation_summaries')) {
+            $relations[] = 'preparationSummary:id,laboratory_purchase_id,ai_execution_id,source_hash,status,summary_text,summary_json,generated_at,invalidated_at';
+            $relations[] = 'preparationSummary.aiExecution:id,status,prompt_version';
+        }
+
+        $purchase->load($relations);
 
         $share->increment('views_count', 1, ['last_viewed_at' => now()]);
 

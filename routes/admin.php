@@ -349,6 +349,15 @@ Route::prefix('admin')->middleware([
         Route::resource('payment-attempts', AdminPaymentAttemptController::class)->only(['index', 'show']);
 
         // Monitoreo de notificaciones de laboratorio (toma de muestra vs resultados)
+        Route::get('laboratory-results/shadow-qa', \App\Http\Controllers\Admin\LaboratoryResults\StructuredQaDashboardController::class)
+            ->name('laboratory-results.shadow-qa');
+        Route::post('laboratory-results/shadow-qa/reports/{report}/approve', [\App\Http\Controllers\Admin\LaboratoryResults\StructuredQaApprovalController::class, 'approve'])
+            ->name('laboratory-results.shadow-qa.approve');
+        Route::post('laboratory-results/shadow-qa/reports/{report}/reject', [\App\Http\Controllers\Admin\LaboratoryResults\StructuredQaApprovalController::class, 'reject'])
+            ->name('laboratory-results.shadow-qa.reject');
+        Route::post('laboratory-results/shadow-qa/reports/{report}/publish', [\App\Http\Controllers\Admin\LaboratoryResults\StructuredQaPublicationController::class, 'publish'])
+            ->name('laboratory-results.shadow-qa.publish');
+
         Route::get('laboratory-notifications-monitor', [LaboratoryNotificationMonitorController::class, 'index'])
             ->name('laboratory-notifications-monitor.index');
         Route::get('laboratory-notifications-monitor/order/{orderKey}/details', [LaboratoryNotificationMonitorController::class, 'orderDetails'])

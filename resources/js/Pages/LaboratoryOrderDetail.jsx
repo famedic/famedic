@@ -19,6 +19,7 @@ import Card from "@/Components/Card";
 import { navigateToLabResults, openLabResultsInNewTabOrSame } from "@/Utils/openLabResultsUrl";
 import { isLabResultsOtpRequired } from "@/Utils/labResultsOtp";
 import { buildLaboratoryPurchaseTotals } from "@/lib/laboratoryPurchaseTotals";
+import { useLaboratoryStructuredResults } from "@/hooks/useLaboratoryStructuredResults";
 
 function onlyDateLabel(value = "") {
 	const raw = String(value || "").trim();
@@ -65,6 +66,7 @@ export default function LaboratoryOrderDetail({
 	isNewResult = false,
 	resultControl = null,
 	studyResultStatuses = [],
+	preparation = null,
 }) {
 	const [activeTab, setActiveTab] = useState("patient");
 	const [pendingScrollToPreparation, setPendingScrollToPreparation] = useState(false);
@@ -201,13 +203,8 @@ export default function LaboratoryOrderDetail({
 	}, [studies]);
 
 	const studiesWithIndications = useMemo(
-		() =>
-			(laboratoryPurchase?.laboratory_purchase_items || []).map((item) => ({
-				id: item.id,
-				name: item.name,
-				indications: item.indications || "",
-			})),
-		[laboratoryPurchase],
+		() => preparation?.studies || [],
+		[preparation],
 	);
 
 	const orderType = useMemo(() => {
@@ -386,6 +383,22 @@ export default function LaboratoryOrderDetail({
 		return () => clearInterval(timer);
 	}, [otpStatus.verified, otpStatus.expiresIn]);
 
+	const semanticResultsAvailable = useMemo(
+		() =>
+			Boolean(
+				hasResultsAvailable ||
+					laboratoryPurchase?.results ||
+					resultControl?.can_view_results,
+			),
+		[hasResultsAvailable, laboratoryPurchase?.results, resultControl?.can_view_results],
+	);
+
+	const structuredResults = useLaboratoryStructuredResults(laboratoryPurchase?.id, {
+		enabled: semanticResultsAvailable,
+		otpRequired: labResultsOtpRequired,
+		otpVerified: otpStatus.verified,
+	});
+
 	const cancelledAtLabel = orderIsCancelled && laboratoryPurchase?.deleted_at
 		? onlyDateLabel(laboratoryPurchase.deleted_at)
 		: null;
@@ -461,6 +474,9 @@ export default function LaboratoryOrderDetail({
 			setOtpStatus(status);
 		}
 		if (typeof next === "function") next();
+		if (semanticResultsAvailable) {
+			void structuredResults.reload();
+		}
 	};
 
 	const handleOtpModalClose = () => {
@@ -506,12 +522,6 @@ export default function LaboratoryOrderDetail({
 		})();
 	};
 
-	const semanticResultsAvailable = Boolean(
-		hasResultsAvailable ||
-			laboratoryPurchase?.results ||
-			resultControl?.can_view_results,
-	);
-
 	const resultsSection = (
 		<ResultsSection
 			hasResults={semanticResultsAvailable}
@@ -527,6 +537,10 @@ export default function LaboratoryOrderDetail({
 			otpVerified={otpStatus.verified}
 			otpExpiresIn={otpStatus.expiresIn}
 			isNewResult={isNewResult}
+			structuredResultsStatus={structuredResults.status}
+			structuredResultsData={structuredResults.data}
+			onRetryStructuredResults={structuredResults.reload}
+			purchaseId={laboratoryPurchase?.id}
 		/>
 	);
 
@@ -557,6 +571,7 @@ export default function LaboratoryOrderDetail({
 					orderType={orderType}
 					hasAppointment={Boolean(laboratoryPurchase?.laboratory_appointment)}
 					appointment={laboratoryPurchase?.laboratory_appointment}
+					preparation={preparation}
 					studiesWithIndications={studiesWithIndications}
 				/>
 			)}

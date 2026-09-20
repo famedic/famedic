@@ -1,6 +1,14 @@
+import NewResultBadge from "@/Components/Laboratory/NewResultBadge";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Text, Strong } from "@/Components/Catalyst/text";
+import StructuredResultsPanel from "@/Components/LaboratoryOrderDetail/StructuredResultsPanel";
+import {
+	patientResultStatusColor,
+	patientResultStatusLabel,
+	patientResultStatusMessage,
+} from "@/lib/laboratoryPurchaseResultUi";
+import { STRUCTURED_RESULTS_FETCH_STATE } from "@/lib/laboratoryStructuredPatientResults";
 import { ArrowPathIcon, ClockIcon, EyeIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 
 function formatCountdown(totalSeconds = 0) {
@@ -9,13 +17,6 @@ function formatCountdown(totalSeconds = 0) {
 	const secs = safe % 60;
 	return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
-
-import NewResultBadge from "@/Components/Laboratory/NewResultBadge";
-import {
-	patientResultStatusColor,
-	patientResultStatusLabel,
-	patientResultStatusMessage,
-} from "@/lib/laboratoryPurchaseResultUi";
 
 export default function ResultsSection({
 	hasResults = false,
@@ -27,11 +28,19 @@ export default function ResultsSection({
 	otpExpiresIn = 0,
 	isNewResult = false,
 	resultControl = null,
+	structuredResultsStatus = null,
+	structuredResultsData = null,
+	onRetryStructuredResults = null,
+	purchaseId = null,
 }) {
 	const statusLabel = patientResultStatusLabel(resultControl, hasResults);
 	const statusColor = patientResultStatusColor(resultControl, hasResults);
 	const statusMessage = patientResultStatusMessage(resultControl, hasResults);
-	const buttonLabel = resultControl?.button_label || "Ver resultados";
+	const defaultButtonLabel = resultControl?.button_label || "Ver resultados";
+	const hasStructuredResults =
+		structuredResultsStatus === STRUCTURED_RESULTS_FETCH_STATE.AVAILABLE &&
+		Boolean(structuredResultsData);
+	const pdfButtonLabel = hasStructuredResults ? "Ver resultado original" : defaultButtonLabel;
 
 	return (
 		<div className="space-y-4">
@@ -76,6 +85,21 @@ export default function ResultsSection({
 						)}
 					</div>
 
+					{structuredResultsStatus && (
+						<StructuredResultsPanel
+							status={structuredResultsStatus}
+							data={structuredResultsData}
+							onRetry={onRetryStructuredResults}
+							purchaseId={purchaseId}
+						/>
+					)}
+
+					{hasStructuredResults && (
+						<div className="border-t border-zinc-200 pt-4 dark:border-slate-700">
+							<Text className="text-sm font-medium text-zinc-900 dark:text-white">Documento original</Text>
+						</div>
+					)}
+
 					<Button
 						onClick={onViewResults}
 						disabled={isProcessing}
@@ -90,7 +114,7 @@ export default function ResultsSection({
 						) : (
 							<>
 								<EyeIcon className="size-4" />
-								{buttonLabel}
+								{pdfButtonLabel}
 							</>
 						)}
 					</Button>

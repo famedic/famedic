@@ -11,6 +11,7 @@ export default function LaboratoryPurchase({
 	is_new_result = false,
 	resultControl = null,
 	studyResultStatuses = [],
+	preparation = null,
 }) {
 	useEffect(() => {
 		if (laboratoryPurchase && !window.ga4PurchaseSent) {
@@ -54,6 +55,7 @@ export default function LaboratoryPurchase({
 			isNewResult={is_new_result}
 			resultControl={resultControl}
 			studyResultStatuses={studyResultStatuses}
+			preparation={preparation}
 		/>
 	);
 }

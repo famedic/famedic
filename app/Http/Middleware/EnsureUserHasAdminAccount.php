@@ -340,6 +340,11 @@ class EnsureUserHasAdminAccount
                         'current' => Route::currentRouteName() === 'admin.laboratory-notifications-monitor.index'
                             || Route::currentRouteName() === 'admin.laboratory-notifications-monitor.show',
                     ] : null,
+                    $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') ? [
+                        'label' => 'Shadow QA resultados',
+                        'url' => route('admin.laboratory-results.shadow-qa'),
+                        'current' => Route::currentRouteName() === 'admin.laboratory-results.shadow-qa',
+                    ] : null,
                     $request->user()->administrator->hasPermissionTo('view_config_monitor') ? [
                         'label' => 'Config Monitor',
                         'url' => route('admin.config-monitor.index'),

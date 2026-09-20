@@ -523,6 +523,115 @@
 
         .instruction-line { margin: 0 0 5px; }
 
+        .ai-prep-intro {
+            page-break-inside: avoid;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 2px solid #141c2e;
+        }
+
+        .ai-prep-lead {
+            margin-top: 6px;
+            color: #3a4659;
+            font-size: 12.5px;
+            line-height: 1.6;
+            font-weight: 400;
+        }
+
+        .ai-section {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border: 1px solid #d5dde8;
+            background: #f8fafc;
+            page-break-inside: avoid;
+        }
+
+        .ai-section-title {
+            margin: 0 0 6px;
+            color: #141c2e;
+            font-size: 13.5px;
+            line-height: 1.34;
+            font-weight: 700;
+        }
+
+        .ai-section-content {
+            margin: 0;
+            color: #1e2838;
+            font-size: 13px;
+            line-height: 1.66;
+            font-weight: 400;
+        }
+
+        .ai-special-block {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border: 1px solid #fcd34d;
+            background: #fffbeb;
+            page-break-inside: avoid;
+        }
+
+        .ai-special-label {
+            margin: 0 0 6px;
+            color: #92400e;
+            font-size: 11.5px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        .ai-special-content {
+            margin: 0 0 6px;
+            color: #78350f;
+            font-size: 13px;
+            line-height: 1.66;
+            font-weight: 400;
+        }
+
+        .ai-individual-block {
+            margin-top: 10px;
+            page-break-inside: avoid;
+        }
+
+        .ai-individual-heading {
+            margin: 0 0 8px;
+            color: #141c2e;
+            font-size: 13px;
+            line-height: 1.34;
+            font-weight: 700;
+        }
+
+        .ai-individual-item {
+            margin-top: 8px;
+            padding: 8px 10px;
+            border: 1px solid #d5dde8;
+            background: #ffffff;
+        }
+
+        .ai-individual-study {
+            margin: 0 0 4px;
+            color: #5140a0;
+            font-size: 11.5px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        .ai-individual-name {
+            margin: 0 0 6px;
+            color: #141c2e;
+            font-size: 13.5px;
+            line-height: 1.34;
+            font-weight: 700;
+        }
+
+        .ai-pending-note {
+            margin-top: 10px;
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.5;
+            font-weight: 400;
+        }
+
         .instruction-bullet-table {
             width: 100%;
             border-collapse: collapse;
@@ -672,6 +781,14 @@
 <body>
 @php
     $appointmentHasDetails = $withAppointment && (($appointment_date ?? null) || ($appointment_time ?? null) || ($branch_name ?? null) || ($branch_address ?? null));
+    $studies = is_array($preparation ?? null) ? ($preparation['studies'] ?? []) : ($studies ?? []);
+    $aiStatus = is_array($preparation ?? null) ? ($preparation['ai_status'] ?? null) : null;
+    $summary = is_array($preparation ?? null) ? ($preparation['summary'] ?? []) : [];
+    $isAiReady = $aiStatus === 'AI_READY';
+    $isPending = $aiStatus === 'AI_PENDING';
+    $sections = array_values($summary['sections'] ?? []);
+    $specialInstructions = array_values($summary['special_instructions'] ?? []);
+    $individualInstructions = array_values($summary['individual_instructions'] ?? []);
 @endphp
 
 <table class="topbar">
@@ -893,7 +1010,48 @@
     </div>
 </div>
 
-@if (count($studies) > 0)
+@if ($isAiReady && (count($sections) > 0 || count($specialInstructions) > 0 || count($individualInstructions) > 0))
+    <div class="ai-prep-intro">
+        <div class="eyebrow">Preparación de estudios</div>
+        <div class="prep-title">Preparación para tus estudios</div>
+        <p class="ai-prep-lead">Hemos simplificado las indicaciones para que sea más fácil prepararte.</p>
+    </div>
+
+    @foreach ($sections as $section)
+        <div class="ai-section">
+            <p class="ai-section-title">{{ $section['title'] ?? 'Preparación' }}</p>
+            <div class="ai-section-content">
+                @include('laboratory.preparation.pdf-formatted-content', ['content' => $section['content'] ?? ''])
+            </div>
+        </div>
+    @endforeach
+
+    @if (count($specialInstructions) > 0)
+        <div class="ai-special-block">
+            <p class="ai-special-label">Importante</p>
+            @foreach ($specialInstructions as $instruction)
+                <div class="ai-special-content">
+                    @include('laboratory.preparation.pdf-formatted-content', ['content' => $instruction['content'] ?? ''])
+                </div>
+            @endforeach
+        </div>
+    @endif
+
+    @if (count($individualInstructions) > 0)
+        <div class="ai-individual-block">
+            <p class="ai-individual-heading">Indicaciones específicas</p>
+            @foreach ($individualInstructions as $instruction)
+                <div class="ai-individual-item">
+                    <p class="ai-individual-study">Estudio</p>
+                    <p class="ai-individual-name">{{ $instruction['study_name'] ?? '—' }}</p>
+                    <div class="ai-section-content">
+                        @include('laboratory.preparation.pdf-formatted-content', ['content' => $instruction['content'] ?? ''])
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    @endif
+@elseif (count($studies) > 0)
     @foreach ($studies as $study)
         @php
             $instructionText = (string) ($study['instructions'] ?? '-');
@@ -959,6 +1117,10 @@
             </div>
         </div>
     @endforeach
+
+    @if ($isPending)
+        <p class="ai-pending-note">Estamos preparando un resumen más sencillo de estas indicaciones.</p>
+    @endif
 @else
     <div class="study first-study">
         <div class="prep-intro">

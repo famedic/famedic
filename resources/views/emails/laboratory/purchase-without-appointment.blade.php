@@ -105,7 +105,7 @@ Consultar sucursales, horarios y teléfono
 
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 
-@include('emails.laboratory.components.preparation', ['studies' => $studies, 'showIntro' => true])
+@include('emails.laboratory.components.preparation', ['preparation' => $preparation ?? null, 'studies' => $studies, 'showIntro' => true])
 
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 

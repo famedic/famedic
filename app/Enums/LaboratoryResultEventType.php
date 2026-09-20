@@ -25,4 +25,14 @@ enum LaboratoryResultEventType: string
     case AdminNotificationSent = 'ADMIN_NOTIFICATION_SENT';
     case AdminNotificationFailed = 'ADMIN_NOTIFICATION_FAILED';
     case LegacyAnalysisRequested = 'LEGACY_ANALYSIS_REQUESTED';
+    case ExtractionRequested = 'EXTRACTION_REQUESTED';
+    case ExtractionSucceeded = 'EXTRACTION_SUCCEEDED';
+    case ExtractionPartial = 'EXTRACTION_PARTIAL';
+    case ExtractionFailed = 'EXTRACTION_FAILED';
+    case StructurePublished = 'STRUCTURE_PUBLISHED';
+    case StructureSuperseded = 'STRUCTURE_SUPERSEDED';
+    case ManualCorrectionApplied = 'MANUAL_CORRECTION_APPLIED';
+    case StructuredResultApproved = 'STRUCTURED_RESULT_APPROVED';
+    case StructuredResultApprovalRejected = 'STRUCTURED_RESULT_APPROVAL_REJECTED';
+    case StructuredResultControlledPublished = 'STRUCTURED_RESULT_CONTROLLED_PUBLISHED';
 }

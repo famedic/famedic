@@ -5,6 +5,7 @@ namespace App\Actions\Laboratories;
 use App\Actions\Marketing\RecordMarketingCampaignConversionAction;
 use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
+use App\Jobs\GenerateLaboratoryPurchasePreparationSummaryJob;
 use App\Models\Address;
 use App\Models\Cart;
 use App\Models\Contact;
@@ -20,6 +21,7 @@ use App\Notifications\LaboratoryPurchaseCreated;
 use App\Services\Carts\CartAbandonmentService;
 use App\Services\Carts\CartEventRecorder;
 use App\Services\CouponApplicationService;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationSummaryService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\Orders\OrderAutomationService;
 use App\Services\PromoCodeService;
@@ -42,6 +44,7 @@ class FulfillLaboratoryCartOrderAction
         private CartEventRecorder $cartEventRecorder,
         private CartAbandonmentService $cartAbandonmentService,
         private RecordMarketingCampaignConversionAction $recordMarketingCampaignConversionAction,
+        private LaboratoryPreparationSummaryService $laboratoryPreparationSummaryService,
     ) {}
 
     /**
@@ -184,6 +187,7 @@ class FulfillLaboratoryCartOrderAction
         }
 
         // Post-commit only: purchase + transaction are durable. Never rollback checkout on automation failure.
+        $this->dispatchLaboratoryPreparationSummaryGeneration($laboratoryPurchase);
         ($this->recordMarketingCampaignConversionAction)($laboratoryPurchase);
         $this->dispatchLaboratoryOrderAutomation($laboratoryPurchase);
 
@@ -225,6 +229,39 @@ class FulfillLaboratoryCartOrderAction
         $this->checkAndSendInvoiceDeadlineNotification($laboratoryPurchase);
 
         return $laboratoryPurchase;
+    }
+
+    private function dispatchLaboratoryPreparationSummaryGeneration(LaboratoryPurchase $laboratoryPurchase): void
+    {
+        try {
+            $laboratoryPurchase->refresh();
+            $laboratoryPurchase->loadMissing('laboratoryPurchaseItems');
+
+            if ($laboratoryPurchase->laboratoryPurchaseItems->isEmpty()) {
+                Log::warning('[Laboratory Preparation AI] Skipped queueing because purchase has no items', [
+                    'purchase_id' => $laboratoryPurchase->id,
+                ]);
+
+                return;
+            }
+
+            $execution = $this->laboratoryPreparationSummaryService->queueExecution($laboratoryPurchase);
+
+            if (! $execution) {
+                return;
+            }
+
+            GenerateLaboratoryPurchasePreparationSummaryJob::dispatch(
+                $laboratoryPurchase->id,
+                $execution->id,
+            )->afterCommit();
+        } catch (Throwable $e) {
+            Log::warning('[Laboratory Preparation AI] Failed to queue summary generation', [
+                'purchase_id' => $laboratoryPurchase->id,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Actions\Laboratories;
 
 use App\Models\LaboratoryPurchase;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationPresenter;
 use Illuminate\Support\Facades\Storage;
 
 class ResolveLaboratoryPurchasePdfPath
@@ -13,8 +14,7 @@ class ResolveLaboratoryPurchasePdfPath
 
     public function __construct(
         private GenerateLaboratoryPurchaseConfirmationPdf $generatePdf,
-    ) {
-    }
+    ) {}
 
     public function __invoke(LaboratoryPurchase $laboratoryPurchase): string
     {
@@ -144,6 +144,7 @@ class ResolveLaboratoryPurchasePdfPath
                 'indications' => $item->indications,
                 'feature_list' => LaboratoryPurchaseConfirmationViewData::normalizePackageFeatureList($item->feature_list),
             ])->toArray(),
+            'preparation' => app(LaboratoryPreparationPresenter::class)->present($laboratoryPurchase),
             'appointment' => $laboratoryPurchase->laboratoryAppointment ? [
                 'appointment_date' => $laboratoryPurchase->laboratoryAppointment->appointment_date?->format('Y-m-d H:i:s'),
                 'store_name' => $laboratoryPurchase->laboratoryAppointment->laboratoryStore?->name,

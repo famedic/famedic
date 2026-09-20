@@ -5,6 +5,7 @@ namespace App\Actions\Laboratories;
 use App\Enums\LaboratoryResultEventType;
 use App\Enums\LaboratoryResultPdfClassification;
 use App\Enums\LaboratoryResultStatus as LaboratoryResultStatusEnum;
+use App\Jobs\ExtractLaboratoryResultReportJob;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryPurchaseItem;
@@ -51,8 +52,9 @@ class RecordGdaResultPdfVersionAction
         $classification = $this->classifier->classifyBinary($pdfBinary);
         $now = now();
         $shouldAttemptRelease = false;
+        $versionIdsForStructuredExtraction = [];
 
-        DB::transaction(function () use ($purchase, $notification, $storagePath, $source, $sha256, $classification, $now, &$shouldAttemptRelease): void {
+        DB::transaction(function () use ($purchase, $notification, $storagePath, $source, $sha256, $classification, $now, &$shouldAttemptRelease, &$versionIdsForStructuredExtraction): void {
             /** @var LaboratoryPurchaseItem $item */
             foreach ($purchase->laboratoryPurchaseItems as $item) {
                 $status = $this->resolveStatus($purchase, $item, $now);
@@ -143,6 +145,10 @@ class RecordGdaResultPdfVersionAction
                     $shouldAttemptRelease = true;
                 }
 
+                if ($createdVersion && $targetStatus === LaboratoryResultStatusEnum::Complete) {
+                    $versionIdsForStructuredExtraction[] = $version->id;
+                }
+
                 Log::info('laboratory_result_classified', [
                     'purchase_id' => $purchase->id,
                     'purchase_item_id' => $item->id,
@@ -157,6 +163,12 @@ class RecordGdaResultPdfVersionAction
 
         if ($shouldAttemptRelease && $attemptRelease) {
             $this->attemptReleaseResultsNotificationAction->execute($purchase->fresh(), source: 'result_status_complete');
+        }
+
+        if (config('laboratory-results.structured_extraction.enabled', false)) {
+            foreach (array_unique($versionIdsForStructuredExtraction) as $versionId) {
+                ExtractLaboratoryResultReportJob::dispatch($versionId);
+            }
         }
     }
 

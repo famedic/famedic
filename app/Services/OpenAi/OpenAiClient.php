@@ -12,7 +12,7 @@ class OpenAiClient
     /**
      * Chat Completions with optional Structured Outputs (json_schema).
      *
-     * @param  list<array{role: string, content: string}>  $messages
+     * @param  list<array{role: string, content: string|list<array<string, mixed>>}>  $messages
      * @param  array<string, mixed>|null  $jsonSchema
      * @return array<string, mixed>
      */
@@ -22,6 +22,37 @@ class OpenAiClient
         ?array $jsonSchema = null,
         ?string $schemaName = null,
         float $temperature = 0,
+        ?int $timeoutSeconds = null,
+    ): array {
+        return $this->chatCompletionWithMetadata(
+            messages: $messages,
+            model: $model,
+            jsonSchema: $jsonSchema,
+            schemaName: $schemaName,
+            temperature: $temperature,
+            timeoutSeconds: $timeoutSeconds,
+        )['content'];
+    }
+
+    /**
+     * Chat Completions with decoded content plus provider metadata.
+     *
+     * @param  list<array{role: string, content: string|list<array<string, mixed>>}>  $messages
+     * @param  array<string, mixed>|null  $jsonSchema
+     * @return array{
+     *     content: array<string, mixed>,
+     *     model: string,
+     *     usage: array<string, mixed>,
+     *     raw: array<string, mixed>
+     * }
+     */
+    public function chatCompletionWithMetadata(
+        array $messages,
+        ?string $model = null,
+        ?array $jsonSchema = null,
+        ?string $schemaName = null,
+        float $temperature = 0,
+        ?int $timeoutSeconds = null,
     ): array {
         $apiKey = config('services.openai.key');
         if (! is_string($apiKey) || trim($apiKey) === '') {
@@ -49,7 +80,7 @@ class OpenAiClient
             ];
         }
 
-        $timeout = (int) config('services.openai.timeout', 60);
+        $timeout = $timeoutSeconds ?? (int) config('services.openai.timeout', 60);
 
         try {
             $response = Http::timeout($timeout)
@@ -78,6 +109,11 @@ class OpenAiClient
             throw new RuntimeException('OpenAI returned non-JSON structured content.');
         }
 
-        return $decoded;
+        return [
+            'content' => $decoded,
+            'model' => (string) ($response->json('model') ?: $resolvedModel),
+            'usage' => $response->json('usage') ?? [],
+            'raw' => $response->json() ?? [],
+        ];
     }
 }
