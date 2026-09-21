@@ -23,10 +23,10 @@ use App\Http\Controllers\Admin\FailedJobsController;
 use App\Http\Controllers\Admin\GdaNotificationSimulatorController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
+use App\Http\Controllers\Admin\LaboratoryBilling\AutomaticReportsController as LaboratoryBillingAutomaticReportsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\DashboardController;
 use App\Http\Controllers\Admin\LaboratoryBilling\ExportController as LaboratoryBillingExportController;
 use App\Http\Controllers\Admin\LaboratoryBilling\InvoicesController;
-use App\Http\Controllers\Admin\LaboratoryBilling\AutomaticReportsController as LaboratoryBillingAutomaticReportsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\ReportsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\RequestsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\TaxProfilesController as TaxProfilesBillingController;
@@ -42,12 +42,13 @@ use App\Http\Controllers\Admin\LaboratoryPurchases\ResultsController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\UnresolvedDevAssistanceRequestController as LaboratoryUnresolvedDevAssistanceRequestController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\VendorPaymentsController as LaboratoryVendorPaymentsController;
 use App\Http\Controllers\Admin\LaboratoryResultController;
+use App\Http\Controllers\Admin\LaboratoryResults\LaboratoryResultsCenterController;
 use App\Http\Controllers\Admin\LaboratoryStoreController as AdminLaboratoryStoreController;
 use App\Http\Controllers\Admin\LaboratoryTestController;
 use App\Http\Controllers\Admin\LogsGeneralController;
-use App\Http\Controllers\Admin\MarketingCampaignCollectionController;
-use App\Http\Controllers\Admin\MarketingCampaignAttributedUsersExportController;
 use App\Http\Controllers\Admin\MarketingCampaignAiSuggestionController;
+use App\Http\Controllers\Admin\MarketingCampaignAttributedUsersExportController;
+use App\Http\Controllers\Admin\MarketingCampaignCollectionController;
 use App\Http\Controllers\Admin\MarketingCampaignController;
 use App\Http\Controllers\Admin\MarketingCampaignLinkController;
 use App\Http\Controllers\Admin\MarketingCampaignProductSearchController;
@@ -357,6 +358,11 @@ Route::prefix('admin')->middleware([
             ->name('laboratory-results.shadow-qa.reject');
         Route::post('laboratory-results/shadow-qa/reports/{report}/publish', [\App\Http\Controllers\Admin\LaboratoryResults\StructuredQaPublicationController::class, 'publish'])
             ->name('laboratory-results.shadow-qa.publish');
+
+        Route::get('laboratory-results-center', [LaboratoryResultsCenterController::class, 'index'])
+            ->name('laboratory-results-center.index');
+        Route::get('laboratory-results-center/{laboratory_purchase}', [LaboratoryResultsCenterController::class, 'show'])
+            ->name('laboratory-results-center.show');
 
         Route::get('laboratory-notifications-monitor', [LaboratoryNotificationMonitorController::class, 'index'])
             ->name('laboratory-notifications-monitor.index');

@@ -335,6 +335,11 @@ class EnsureUserHasAdminAccount
                             || Route::currentRouteName() === 'admin.payment-attempts.show',
                     ] : null,
                     $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') ? [
+                        'label' => 'Centro de resultados',
+                        'url' => route('admin.laboratory-results-center.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-results-center'),
+                    ] : null,
+                    $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') ? [
                         'label' => 'Monitor notificaciones lab',
                         'url' => route('admin.laboratory-notifications-monitor.index'),
                         'current' => Route::currentRouteName() === 'admin.laboratory-notifications-monitor.index'
