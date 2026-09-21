@@ -12,6 +12,7 @@ use App\Models\LaboratoryPurchaseItem;
 use App\Models\LaboratoryResultEvent;
 use App\Models\LaboratoryResultStatus;
 use App\Models\LaboratoryResultVersion;
+use App\Services\LaboratoryResults\LaboratoryResultItemExtractionEligibility;
 use App\Services\LaboratoryResults\LaboratoryResultPdfClassifier;
 use App\Services\LaboratoryResults\LaboratoryResultRefreshPolicy;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,7 @@ class RecordGdaResultPdfVersionAction
         private LaboratoryResultPdfClassifier $classifier,
         private LaboratoryResultRefreshPolicy $refreshPolicy,
         private AttemptReleaseLaboratoryResultsNotificationAction $attemptReleaseResultsNotificationAction,
+        private LaboratoryResultItemExtractionEligibility $extractionEligibility,
     ) {}
 
     /**
@@ -55,6 +57,8 @@ class RecordGdaResultPdfVersionAction
         $versionIdsForStructuredExtraction = [];
 
         DB::transaction(function () use ($purchase, $notification, $storagePath, $source, $sha256, $classification, $now, &$shouldAttemptRelease, &$versionIdsForStructuredExtraction): void {
+            $purchaseBrand = $purchase->brand;
+
             /** @var LaboratoryPurchaseItem $item */
             foreach ($purchase->laboratoryPurchaseItems as $item) {
                 $status = $this->resolveStatus($purchase, $item, $now);
@@ -146,7 +150,33 @@ class RecordGdaResultPdfVersionAction
                 }
 
                 if ($createdVersion && $targetStatus === LaboratoryResultStatusEnum::Complete) {
-                    $versionIdsForStructuredExtraction[] = $version->id;
+                    $eligibility = $this->extractionEligibility->evaluate($item, $purchaseBrand);
+
+                    if ($eligibility->eligible) {
+                        $versionIdsForStructuredExtraction[] = $version->id;
+                    } else {
+                        $this->recordEvent(
+                            $status,
+                            $version,
+                            LaboratoryResultEventType::ExtractionSuppressed,
+                            metadata: [
+                                'purchase_item_id' => $item->id,
+                                'purchase_item_name' => $item->name,
+                                'gda_id' => $item->gda_id,
+                                'reason' => $eligibility->reason,
+                                'source' => $eligibility->source,
+                                'classification' => $classification->classification->value,
+                            ],
+                        );
+
+                        Log::info('laboratory_result_extraction_suppressed', [
+                            'purchase_id' => $purchase->id,
+                            'purchase_item_id' => $item->id,
+                            'result_version_id' => $version->id,
+                            'reason' => $eligibility->reason,
+                            'source' => $eligibility->source,
+                        ]);
+                    }
                 }
 
                 Log::info('laboratory_result_classified', [

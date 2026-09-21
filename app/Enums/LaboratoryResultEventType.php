@@ -9,6 +9,7 @@ enum LaboratoryResultEventType: string
     case PdfUnchanged = 'PDF_UNCHANGED';
     case PdfChanged = 'PDF_CHANGED';
     case Classified = 'CLASSIFIED';
+    case Reclassified = 'RECLASSIFIED';
     case InterpretationPending = 'INTERPRETATION_PENDING';
     case ResultComplete = 'RESULT_COMPLETE';
     case ClassificationFailed = 'CLASSIFICATION_FAILED';
@@ -26,6 +27,7 @@ enum LaboratoryResultEventType: string
     case AdminNotificationFailed = 'ADMIN_NOTIFICATION_FAILED';
     case LegacyAnalysisRequested = 'LEGACY_ANALYSIS_REQUESTED';
     case ExtractionRequested = 'EXTRACTION_REQUESTED';
+    case ExtractionSuppressed = 'EXTRACTION_SUPPRESSED';
     case ExtractionSucceeded = 'EXTRACTION_SUCCEEDED';
     case ExtractionPartial = 'EXTRACTION_PARTIAL';
     case ExtractionFailed = 'EXTRACTION_FAILED';

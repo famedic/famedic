@@ -40,6 +40,17 @@ return [
      * Extracción estructurada determinística desde PDF (FASE 8C-2).
      * Desactivado por defecto: no altera el flujo GDA existente.
      */
+    /**
+     * Reclasificación local de versiones existentes (FASE 3 diagnóstico GDA).
+     * Solo entornos listados; no altera fetch GDA ni reprocesa PDFs nuevos.
+     */
+    'reclassification' => [
+        'allowed_environments' => array_values(array_filter(array_map(
+            trim(...),
+            explode(',', (string) env('LAB_RESULTS_RECLASSIFICATION_ALLOWED_ENVIRONMENTS', 'local,testing'))
+        ))),
+    ],
+
     'structured_extraction' => [
         'enabled' => (bool) env('LAB_RESULTS_STRUCTURED_EXTRACTION_ENABLED', false),
         'extractor_version' => env('LAB_RESULTS_TEXT_EXTRACTOR_VERSION', 'RESULT_TEXT_EXTRACTOR_V1'),

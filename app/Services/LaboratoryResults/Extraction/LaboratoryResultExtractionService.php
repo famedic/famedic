@@ -225,7 +225,10 @@ class LaboratoryResultExtractionService
             ]);
 
             if ($hasPublishable) {
-                $report = $this->publisher->publish($report->fresh(['observations']));
+                if ($this->structuredPublicationEnabled()) {
+                    $report = $this->publisher->publish($report->fresh(['observations']));
+                }
+
                 $this->recordEvent($version, LaboratoryResultEventType::ExtractionSucceeded, [
                     'report_id' => $report->id,
                     'version_id' => $version->id,
@@ -277,6 +280,11 @@ class LaboratoryResultExtractionService
         );
 
         return $textReport;
+    }
+
+    private function structuredPublicationEnabled(): bool
+    {
+        return (bool) config('laboratory-results.structured_publication.enabled', false);
     }
 
     private function visionEnabled(): bool

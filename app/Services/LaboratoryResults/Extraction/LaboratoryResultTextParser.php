@@ -82,7 +82,10 @@ class LaboratoryResultTextParser
             return true;
         }
 
-        if (preg_match('/^\+?\d{10,}$/u', preg_replace('/\D/u', '', $line) ?? '')) {
+        if (
+            ! $this->looksLikeGdaValueFirstResultLine($line)
+            && preg_match('/^\+?\d{10,}$/u', preg_replace('/\D/u', '', $line) ?? '')
+        ) {
             return true;
         }
 
@@ -99,6 +102,10 @@ class LaboratoryResultTextParser
         }
 
         if (preg_match('/^riesgo\s+(bajo|moderado|alto)\b/ui', $lower)) {
+            return true;
+        }
+
+        if (preg_match('/^(reporte\s+radiolog|ecograf|ultrasonid)\b/ui', $lower)) {
             return true;
         }
 
@@ -470,6 +477,12 @@ class LaboratoryResultTextParser
             $name = trim($matches[1]);
             $unit = trim($matches[2]);
             $referencePart = trim($matches[3]);
+
+            if ($this->isGdaReferenceCategoryToken($unit)) {
+                $referencePart = trim($unit.' '.$referencePart);
+                $unit = null;
+            }
+
             [$referenceLow, $referenceHigh, $referenceText, $fusedValue] = $this->parseReferenceWithOptionalFusedValue($referencePart);
 
             if (! $this->looksLikeAnalyteName($name)) {
@@ -897,6 +910,39 @@ class LaboratoryResultTextParser
         return $normalized === 'trigliceridos' || str_contains($normalized, 'triglicerido');
     }
 
+    private function looksLikeGdaValueFirstResultLine(string $line): bool
+    {
+        if (! preg_match('/^[\d]+(?:[.,]\d+)?\s*\([A-Za-z]\)\s+.+/u', $line)) {
+            return false;
+        }
+
+        if (preg_match(
+            '/\b(mg\/dL|g\/dL|mmol\/L|U\/L|mEq\/L|mg\/dl|g\/dl|mmol\/l|u\/l)\b/ui',
+            $line,
+        )) {
+            return true;
+        }
+
+        if (preg_match(
+            '/[\d]+(?:[.,]\d+)?\s*[-–—]\s*[\d]+(?:[.,]\d+)?|<\s*[\d]+(?:[.,]\d+)?|>\s*[\d]+(?:[.,]\d+)?/u',
+            $line,
+        )) {
+            return true;
+        }
+
+        return preg_match('/\b(DESEABLE|LIMITROFE|LIM[IÍ]TROFE|RIESGO)\b/ui', $line) === 1;
+    }
+
+    private function isGdaReferenceCategoryToken(string $token): bool
+    {
+        $normalized = mb_strtolower(trim($token), 'UTF-8');
+
+        return preg_match(
+            '/^(deseable|lim[ií]trofe|limitrofe|alto|bajo|riesgo)$/u',
+            $normalized,
+        ) === 1;
+    }
+
     private function isGdaCompatibleUnit(?string $unit): bool
     {
         if ($unit === null) {
@@ -936,6 +982,16 @@ class LaboratoryResultTextParser
         }
 
         if (preg_match('/^riesgo\s+(bajo|moderado|alto)/u', $normalized)) {
+            return true;
+        }
+
+        $normalizedAnalyte = LaboratoryAnalyteNameNormalizer::normalize($name);
+
+        if (preg_match('/^rinon\s+(derecho|izquierdo)\b/u', $normalizedAnalyte)) {
+            return true;
+        }
+
+        if (preg_match('/\b(ecograf|radiolog|hepatomeg|esplenomeg|vesicula\s+biliar)\b/u', $normalized)) {
             return true;
         }
 

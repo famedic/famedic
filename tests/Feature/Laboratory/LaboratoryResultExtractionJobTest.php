@@ -20,9 +20,11 @@ use App\Models\LaboratoryResultStatus;
 use App\Models\LaboratoryResultVersion;
 use App\Models\User;
 use App\Services\LaboratoryResults\Extraction\LaboratoryResultExtractionService;
+use App\Services\LaboratoryResults\Extraction\LaboratoryResultReportPublisher;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Storage;
+use Mockery;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\LaboratoryResultsPdfFixture;
 use Tests\TestCase;
@@ -45,6 +47,7 @@ class LaboratoryResultExtractionJobTest extends TestCase
 
     protected function tearDown(): void
     {
+        Mockery::close();
         $this->tearDownStructuredResultsSchema();
         $this->tearDownIsolatedSchema();
         parent::tearDown();
@@ -56,8 +59,43 @@ class LaboratoryResultExtractionJobTest extends TestCase
     }
 
     #[Test]
+    public function extraccion_con_publicacion_apagada_persiste_observations_sin_publicar(): void
+    {
+        Config::set('laboratory-results.structured_publication.enabled', false);
+
+        $this->mock(LaboratoryResultReportPublisher::class, function ($mock): void {
+            $mock->shouldNotReceive('publish');
+        });
+
+        $version = $this->seedVersionWithPdf(LaboratoryResultsPdfFixture::binary(
+            LaboratoryResultsPdfFixture::standardResultsLines()
+        ));
+
+        $report = app(LaboratoryResultExtractionService::class)->extractForVersion($version->id);
+
+        $this->assertNotNull($report);
+        $this->assertSame(LaboratoryResultStructuredStatus::Validated, $report->structured_status);
+        $this->assertSame(LaboratoryResultExtractionStatus::Partial, $report->extraction_status);
+        $this->assertGreaterThanOrEqual(1, $report->observations()->count());
+        $this->assertNull($report->published_at);
+        $this->assertNull($report->published_version_slot);
+        $this->assertTrue(
+            LaboratoryResultEvent::query()
+                ->where('event_type', LaboratoryResultEventType::ExtractionSucceeded->value)
+                ->exists()
+        );
+        $this->assertFalse(
+            LaboratoryResultEvent::query()
+                ->where('event_type', LaboratoryResultEventType::StructurePublished->value)
+                ->exists()
+        );
+    }
+
+    #[Test]
     public function pdf_valido_genera_report_publicado_con_observations(): void
     {
+        Config::set('laboratory-results.structured_publication.enabled', true);
+
         $version = $this->seedVersionWithPdf(LaboratoryResultsPdfFixture::binary(
             LaboratoryResultsPdfFixture::standardResultsLines()
         ));

@@ -422,6 +422,82 @@ class LaboratoryResultTextParserTest extends TestCase
         $this->assertSame(3.1415, $candidates[0]->numericValue);
     }
 
+    #[Test]
+    public function no_descarta_urea_serica_gda_por_falso_positivo_de_digitos(): void
+    {
+        $candidates = $this->parseLines([
+            '12.6(A) UREA SERICA mg/dL 19.26-49.22',
+        ]);
+
+        $this->assertCount(1, $candidates);
+        $this->assertSame('UREA SERICA', $candidates[0]->analyteNameRaw);
+        $this->assertSame(12.6, $candidates[0]->numericValue);
+        $this->assertSame('mg/dL', $candidates[0]->unit);
+    }
+
+    #[Test]
+    public function sigue_descartando_linea_telefonica_real(): void
+    {
+        $candidates = $this->parseLines([
+            '811234567890',
+            'Tel 8112345678',
+        ]);
+
+        $this->assertSame([], $candidates);
+    }
+
+    #[Test]
+    public function sigue_descartando_linea_larga_de_identificadores(): void
+    {
+        $candidates = $this->parseLines([
+            'RFC XAXX010101000',
+            'CURP XEXX010101HNEXXXA4',
+        ]);
+
+        $this->assertSame([], $candidates);
+    }
+
+    #[Test]
+    public function parsea_colesterol_total_sin_asignar_deseable_como_unidad(): void
+    {
+        $candidates = $this->parseLines([
+            '185.00(A) COLESTEROL TOTAL DESEABLE < 200',
+        ]);
+
+        $this->assertCount(1, $candidates);
+        $this->assertSame('COLESTEROL TOTAL', $candidates[0]->analyteNameRaw);
+        $this->assertSame(185.0, $candidates[0]->numericValue);
+        $this->assertNull($candidates[0]->unit);
+        $this->assertSame(200.0, $candidates[0]->referenceHigh);
+        $this->assertContains($candidates[0]->referenceText, ['< 200', '<200']);
+    }
+
+    #[Test]
+    public function parsea_trigliceridos_sin_asignar_deseable_como_unidad(): void
+    {
+        $candidates = $this->parseLines([
+            '239.00(A) TRIGLICERIDOS DESEABLE < 150',
+        ]);
+
+        $this->assertCount(1, $candidates);
+        $this->assertSame('TRIGLICERIDOS', $candidates[0]->analyteNameRaw);
+        $this->assertSame(239.0, $candidates[0]->numericValue);
+        $this->assertNull($candidates[0]->unit);
+        $this->assertSame(150.0, $candidates[0]->referenceHigh);
+    }
+
+    #[Test]
+    public function no_crea_candidatos_para_lineas_radiologicas_de_rinon(): void
+    {
+        $candidates = $this->parseLines([
+            '10.6 Riñón derecho de 10.6 x 5.2 cm',
+            '9.8 Riñón izquierdo de 9.8 x 4.8 cm',
+            'REPORTE RADIOLOGICO',
+        ]);
+
+        $this->assertSame([], $candidates);
+    }
+
     /**
      * @param  list<string>  $lines
      * @return list<\App\Services\LaboratoryResults\Extraction\LaboratoryResultObservationCandidate>

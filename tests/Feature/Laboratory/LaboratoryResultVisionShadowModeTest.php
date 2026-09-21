@@ -43,6 +43,7 @@ class LaboratoryResultVisionShadowModeTest extends TestCase
         parent::setUp();
         Storage::fake();
         Config::set('laboratory-results.structured_extraction.enabled', true);
+        Config::set('laboratory-results.structured_publication.enabled', true);
         Config::set('laboratory-results.vision_extraction.enabled', true);
         Config::set('laboratory-results.vision_extraction.shadow_mode', true);
         Config::set('laboratory-results.vision_extraction.fallback.min_observations', 99);
