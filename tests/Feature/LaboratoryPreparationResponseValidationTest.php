@@ -544,6 +544,123 @@ it('rejects responses that source items with null indications', function () {
         ->and(AiExecution::query()->where('status', AiExecution::STATUS_FAILED)->count())->toBe(1);
 });
 
+it('accepts a feature that appears only as study_name for an indicated item', function () {
+    $purchase = preparationValidationPurchase();
+    $withIndications = preparationValidationItem($purchase, [
+        'name' => 'Quimica sanguinea',
+        'indications' => 'Ayuno de 8 horas.',
+    ]);
+    preparationValidationItem($purchase, [
+        'name' => 'Paquete metabolico',
+        'indications' => null,
+        'feature_list' => ['EXAMEN GENERAL DE ORINA'],
+    ]);
+
+    bindPreparationValidationOpenAi([
+        'summary' => 'Se requiere ayuno de 8 horas.',
+        'sections' => [
+            [
+                'key' => 'ayuno',
+                'title' => 'Ayuno',
+                'content' => 'Ayuno de 8 horas.',
+                'source_item_ids' => [$withIndications->id],
+            ],
+        ],
+        'special_instructions' => [],
+        'individual_instructions' => [
+            [
+                'study_name' => 'EXAMEN GENERAL DE ORINA',
+                'content' => 'Ayuno de 8 horas.',
+                'source_item_id' => $withIndications->id,
+            ],
+        ],
+    ]);
+
+    $summary = app(LaboratoryPreparationSummaryService::class)->generate($purchase);
+
+    expect($summary)->toBeInstanceOf(LaboratoryPurchasePreparationSummary::class);
+});
+
+it('accepts a feature mentioned in instructions when backed by another item indications', function () {
+    $purchase = preparationValidationPurchase();
+    $withoutIndications = preparationValidationItem($purchase, [
+        'name' => 'Paquete orina',
+        'indications' => null,
+        'feature_list' => ['EXAMEN GENERAL DE ORINA'],
+    ]);
+    $withIndications = preparationValidationItem($purchase, [
+        'name' => 'Examen general de orina',
+        'indications' => 'Para EXAMEN GENERAL DE ORINA, recolectar chorro medio.',
+    ]);
+
+    bindPreparationValidationOpenAi([
+        'summary' => 'El EXAMEN GENERAL DE ORINA requiere recolectar chorro medio.',
+        'sections' => [
+            [
+                'key' => 'orina',
+                'title' => 'Recoleccion',
+                'content' => 'Para EXAMEN GENERAL DE ORINA, recolectar chorro medio.',
+                'source_item_ids' => [$withIndications->id],
+            ],
+        ],
+        'special_instructions' => [],
+        'individual_instructions' => [],
+    ]);
+
+    $summary = app(LaboratoryPreparationSummaryService::class)->generate($purchase);
+
+    $sourcedIds = collect($summary->summary_json['sections'])
+        ->flatMap(fn (array $section) => $section['source_item_ids'])
+        ->map(fn ($id) => (int) $id)
+        ->all();
+
+    expect($summary)->toBeInstanceOf(LaboratoryPurchasePreparationSummary::class)
+        ->and($sourcedIds)->toBe([$withIndications->id])
+        ->and($sourcedIds)->not->toContain($withoutIndications->id);
+});
+
+it('rejects a preparation instruction based only on feature_list content', function () {
+    $purchase = preparationValidationPurchase();
+    $withIndications = preparationValidationItem($purchase, [
+        'name' => 'Quimica sanguinea',
+        'indications' => 'Ayuno de 8 horas.',
+    ]);
+    $withoutIndications = preparationValidationItem($purchase, [
+        'name' => 'Paquete orina',
+        'indications' => null,
+        'feature_list' => ['EXAMEN GENERAL DE ORINA'],
+    ]);
+
+    bindPreparationValidationOpenAi([
+        'summary' => 'Se requiere ayuno de 8 horas.',
+        'sections' => [
+            [
+                'key' => 'ayuno',
+                'title' => 'Ayuno',
+                'content' => 'Ayuno de 8 horas.',
+                'source_item_ids' => [$withIndications->id],
+            ],
+            [
+                'key' => 'orina',
+                'title' => 'Recoleccion',
+                'content' => 'EXAMEN GENERAL DE ORINA: recolectar muestra en recipiente esteril.',
+                'source_item_ids' => [$withIndications->id],
+            ],
+        ],
+        'special_instructions' => [],
+        'individual_instructions' => [],
+    ]);
+
+    $summary = app(LaboratoryPreparationSummaryService::class)->generate($purchase);
+    $execution = AiExecution::query()->latest('id')->first();
+
+    expect($summary)->toBeNull()
+        ->and($execution->status)->toBe(AiExecution::STATUS_FAILED)
+        ->and($execution->error)->toContain("Item [{$withoutIndications->id}]")
+        ->and($execution->error)->toContain('feature_hash')
+        ->and($execution->error)->toContain('sections.1.content');
+});
+
 it('rejects responses that invent preparation instructions from feature_list without indications', function () {
     $purchase = preparationValidationPurchase();
     preparationValidationItem($purchase, [

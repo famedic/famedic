@@ -13,6 +13,7 @@ use App\Models\LaboratoryPurchasePreparationSummary;
 use App\Models\LaboratoryTest;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationFidelityValidationException;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationSource;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationSummaryService;
 use App\Services\OpenAi\OpenAiClient;
@@ -235,6 +236,65 @@ it('the preparation job supports bounded retries and records failed executions w
     expect($job->tries)->toBe(3)
         ->and($job->backoff)->toBe([60, 300, 900])
         ->and($job->afterCommit)->toBeTrue();
+
+    expect(fn () => $job->handle(app(LaboratoryPreparationSummaryService::class)))
+        ->toThrow(RuntimeException::class);
+
+    expect($execution->refresh()->status)->toBe(AiExecution::STATUS_FAILED)
+        ->and($execution->error)->toContain('Proveedor temporalmente no disponible');
+});
+
+it('the preparation job does not retry fidelity validation failures', function () {
+    $purchase = preparationDispatchPurchase();
+    $item = preparationDispatchItem($purchase, [
+        'indications' => 'Ayuno de 8 horas.',
+    ]);
+    preparationDispatchItem($purchase, [
+        'name' => 'Paquete orina',
+        'indications' => null,
+        'feature_list' => ['EXAMEN GENERAL DE ORINA'],
+    ]);
+    $execution = app(LaboratoryPreparationSummaryService::class)->queueExecution($purchase);
+
+    bindPreparationDispatchOpenAiFake([
+        'summary' => 'Ayuno de 8 horas.',
+        'sections' => [
+            [
+                'key' => 'ayuno',
+                'title' => 'Ayuno',
+                'content' => 'Ayuno de 8 horas.',
+                'source_item_ids' => [$item->id],
+            ],
+            [
+                'key' => 'orina',
+                'title' => 'Recoleccion',
+                'content' => 'EXAMEN GENERAL DE ORINA: recolectar muestra en recipiente esteril.',
+                'source_item_ids' => [$item->id],
+            ],
+        ],
+        'special_instructions' => [],
+        'individual_instructions' => [],
+    ]);
+
+    $job = new GenerateLaboratoryPurchasePreparationSummaryJob($purchase->id, $execution->id);
+
+    expect(fn () => $job->handle(app(LaboratoryPreparationSummaryService::class)))
+        ->not->toThrow(LaboratoryPreparationFidelityValidationException::class);
+
+    expect($execution->refresh()->status)->toBe(AiExecution::STATUS_FAILED)
+        ->and($execution->error)->toContain('feature_list_used_as_instruction');
+});
+
+it('the preparation job keeps retry behavior for transient provider errors', function () {
+    bindPreparationDispatchOpenAiFake(fail: true);
+    $purchase = preparationDispatchPurchase();
+    preparationDispatchItem($purchase, ['indications' => 'Ayuno de 8 horas.']);
+    $execution = app(LaboratoryPreparationSummaryService::class)->queueExecution($purchase);
+
+    $job = new GenerateLaboratoryPurchasePreparationSummaryJob($purchase->id, $execution->id);
+
+    expect($job->tries)->toBe(3)
+        ->and($job->backoff)->toBe([60, 300, 900]);
 
     expect(fn () => $job->handle(app(LaboratoryPreparationSummaryService::class)))
         ->toThrow(RuntimeException::class);

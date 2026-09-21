@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\AiExecution;
 use App\Models\LaboratoryPurchase;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationFidelityValidationException;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationSummaryService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -43,6 +44,10 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
             ? AiExecution::query()->find($this->aiExecutionId)
             : $service->queueExecution($purchase);
 
-        $service->generate($purchase, $execution, throwOnFailure: true);
+        try {
+            $service->generate($purchase, $execution, throwOnFailure: true);
+        } catch (LaboratoryPreparationFidelityValidationException $exception) {
+            $this->fail($exception);
+        }
     }
 }
