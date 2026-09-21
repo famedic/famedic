@@ -181,7 +181,9 @@ class LaboratoryPreparationSummaryService
                 execution: $execution,
             );
 
-            report($exception);
+            if (! $throwOnFailure) {
+                report($exception);
+            }
 
             if ($throwOnFailure) {
                 throw $exception;

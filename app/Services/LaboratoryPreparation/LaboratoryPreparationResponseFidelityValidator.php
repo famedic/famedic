@@ -133,10 +133,11 @@ class LaboratoryPreparationResponseFidelityValidator
      */
     private function assertNoInventedInstructions(array $response, array $input): void
     {
-        $responseText = $this->normalizeText($this->collectAntiInventionResponseText($response));
+        $responseTexts = $this->antiInventionResponseTexts($response);
+        $combinedResponseText = $this->normalizeText(implode("\n", array_column($responseTexts, 'text')));
 
         foreach (self::INVENTED_INSTRUCTION_PATTERNS as $pattern) {
-            if (preg_match($pattern, $responseText)) {
+            if (preg_match($pattern, $combinedResponseText)) {
                 $this->fail(
                     'OpenAI response contains invented generic preparation instructions.',
                     $response,
@@ -145,6 +146,8 @@ class LaboratoryPreparationResponseFidelityValidator
                 );
             }
         }
+
+        $supportedIndicationText = $this->normalizeText($this->collectSourceIndicationsText($input));
 
         foreach ($input['items'] ?? [] as $item) {
             if (filled($item['indications'] ?? null)) {
@@ -157,12 +160,26 @@ class LaboratoryPreparationResponseFidelityValidator
                     continue;
                 }
 
-                if (str_contains($responseText, $normalizedFeature)) {
+                if (str_contains($supportedIndicationText, $normalizedFeature)) {
+                    continue;
+                }
+
+                $matches = $this->matchingAntiInventionLocations($responseTexts, $normalizedFeature);
+                if ($matches !== []) {
+                    $featureHash = substr(hash('sha256', $normalizedFeature), 0, 12);
+                    $locations = implode(',', $matches);
+
                     $this->fail(
-                        'OpenAI response appears to derive preparation instructions from feature_list.',
+                        'OpenAI response appears to derive preparation instructions from feature_list. '
+                        ."Item [".((int) ($item['id'] ?? 0))."], feature_hash [{$featureHash}], "
+                        ."locations [{$locations}], reason [feature_list_used_as_instruction].",
                         $response,
                         (int) ($item['id'] ?? 0) ?: null,
-                        ['feature_list_used_as_instruction'],
+                        [
+                            'feature_list_used_as_instruction',
+                            "feature_hash:{$featureHash}",
+                            "locations:{$locations}",
+                        ],
                     );
                 }
             }
@@ -395,16 +412,55 @@ class LaboratoryPreparationResponseFidelityValidator
     }
 
     /**
-     * Summary plus structured content. Used only to detect invented or feature_list-derived instructions.
+     * Summary plus instructional content only. Titles and study names are identifiers.
      *
      * @param  array<string, mixed>  $response
+     * @return list<array{location: string, text: string}>
      */
-    private function collectAntiInventionResponseText(array $response): string
+    private function antiInventionResponseTexts(array $response): array
     {
-        $parts = [trim((string) ($response['summary'] ?? ''))];
-        $parts[] = $this->collectStructuredResponseText($response);
+        $parts = [];
 
-        return trim(implode("\n", array_filter($parts)));
+        $summary = trim((string) ($response['summary'] ?? ''));
+        if ($summary !== '') {
+            $parts[] = ['location' => 'summary', 'text' => $summary];
+        }
+
+        foreach (Arr::wrap($response['sections'] ?? []) as $index => $section) {
+            $content = trim((string) ($section['content'] ?? ''));
+            if ($content !== '') {
+                $parts[] = ['location' => "sections.{$index}.content", 'text' => $content];
+            }
+        }
+
+        foreach (Arr::wrap($response['special_instructions'] ?? []) as $index => $instruction) {
+            $content = trim((string) ($instruction['content'] ?? ''));
+            if ($content !== '') {
+                $parts[] = ['location' => "special_instructions.{$index}.content", 'text' => $content];
+            }
+        }
+
+        foreach (Arr::wrap($response['individual_instructions'] ?? []) as $index => $instruction) {
+            $content = trim((string) ($instruction['content'] ?? ''));
+            if ($content !== '') {
+                $parts[] = ['location' => "individual_instructions.{$index}.content", 'text' => $content];
+            }
+        }
+
+        return $parts;
+    }
+
+    /**
+     * @param  list<array{location: string, text: string}>  $responseTexts
+     * @return list<string>
+     */
+    private function matchingAntiInventionLocations(array $responseTexts, string $normalizedNeedle): array
+    {
+        return collect($responseTexts)
+            ->filter(fn (array $part) => str_contains($this->normalizeText($part['text']), $normalizedNeedle))
+            ->pluck('location')
+            ->values()
+            ->all();
     }
 
     /**
@@ -431,6 +487,18 @@ class LaboratoryPreparationResponseFidelityValidator
         }
 
         return trim(implode("\n", array_filter($parts)));
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    private function collectSourceIndicationsText(array $input): string
+    {
+        return collect($input['items'] ?? [])
+            ->pluck('indications')
+            ->filter(fn ($value) => filled($value))
+            ->map(fn ($value) => trim((string) $value))
+            ->implode("\n");
     }
 
     private function responseContainsUnit(string $unitStem, string $responseText): bool

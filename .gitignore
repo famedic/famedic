@@ -46,3 +46,4 @@ refund_logs.txt
 database/famedic_jun_23
 /storage/tmp/*
 !/storage/tmp/.gitignore
+/tmp/*
