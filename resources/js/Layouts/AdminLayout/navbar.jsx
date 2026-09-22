@@ -25,6 +25,7 @@ import {
 	BanknotesIcon,
 	BeakerIcon,
 	BellIcon,
+	BuildingStorefrontIcon,
 	BoltIcon,
 	BookOpenIcon,
 	ChartBarSquareIcon,
@@ -45,6 +46,7 @@ const iconMap = {
 	BanknotesIcon,
 	BeakerIcon,
 	BoltIcon,
+	BuildingStorefrontIcon,
 	BookOpenIcon,
 	ChartBarSquareIcon,
 	ClipboardDocumentListIcon,
@@ -148,6 +150,7 @@ export default function NavBar() {
 	} = usePage().props;
 	const { user } = auth;
 	const integrations = adminTopNavigation.integrations || [];
+	const laboratory = adminTopNavigation.laboratory || [];
 	const monitoring = adminTopNavigation.monitoring || [];
 	const personal = adminTopNavigation.personal;
 	const configuration = adminTopNavigation.configuration || [];
@@ -173,6 +176,13 @@ export default function NavBar() {
 					icon={Squares2X2Icon}
 					items={integrations}
 					current={integrations.some((item) => itemIsCurrent(item))}
+					iconOnly
+				/>
+				<TopDropdown
+					label="Laboratorio"
+					icon={BeakerIcon}
+					items={laboratory}
+					current={laboratory.some((item) => itemIsCurrent(item))}
 					iconOnly
 				/>
 				<TopDropdown

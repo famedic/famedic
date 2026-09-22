@@ -36,7 +36,9 @@ class LaboratoryPurchaseController extends Controller
 
         // Sin fechas en la petición: últimos 3 meses (evita escanear toda la tabla y timeouts/502).
         // Si el usuario elige fechas en los filtros, se respetan tal cual.
-        if (empty($filters['start_date']) && empty($filters['end_date'])) {
+        $filters['using_default_date_range'] = empty($filters['start_date']) && empty($filters['end_date']);
+
+        if ($filters['using_default_date_range']) {
             $filters['start_date'] = Carbon::now('America/Monterrey')->subMonths(3)->startOfDay()->toDateString();
             $filters['end_date'] = Carbon::now('America/Monterrey')->endOfDay()->toDateString();
         }

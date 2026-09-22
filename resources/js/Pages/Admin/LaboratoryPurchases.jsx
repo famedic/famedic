@@ -29,7 +29,6 @@ import LaboratoryPurchaseTableRow from "@/Components/LaboratoryPurchaseTableRow"
 import FilterCountBadge from "@/Components/Admin/FilterCountBadge";
 import ListboxFilter from "@/Components/Filters/ListboxFilter";
 import DateFilter from "@/Components/Filters/DateFilter";
-import ReloadListButton from "@/Components/Admin/ReloadListButton";
 import UpdateButton from "@/Components/Admin/UpdateButton";
 import PaginatedTable from "@/Components/Admin/PaginatedTable";
 import { buildLaboratoryPurchaseQueryParams } from "@/Pages/Admin/laboratoryPurchaseQueryParams";
@@ -65,25 +64,6 @@ export default function LaboratoryPurchases({
 	});
 
 	const [showFilters, setShowFilters] = useState(false);
-	const [reloading, setReloading] = useState(false);
-
-	const appliedFilterParams = useMemo(
-		() =>
-			buildLaboratoryPurchaseQueryParams({
-				search: filters.search || "",
-				deleted: filters.deleted || "",
-				start_date: filters.start_date || "",
-				end_date: filters.end_date || "",
-				invoice_requested: filters.invoice_requested || "",
-				results_uploaded: filters.results_uploaded || "",
-				invoice_uploaded: filters.invoice_uploaded || "",
-				payment_method: filters.payment_method || "",
-				payment_status: filters.payment_status || "",
-				brand: filters.brand || "",
-				dev_assistance: filters.dev_assistance || "",
-			}),
-		[filters],
-	);
 
 	const chartHref = route(
 		"admin.laboratory-purchases.chart",
@@ -92,28 +72,19 @@ export default function LaboratoryPurchases({
 
 	const updateResults = (e) => {
 		e.preventDefault();
-		if (!processing && !reloading && showUpdateButton) {
+		if (!processing && showUpdateButton) {
 			get(route("admin.laboratory-purchases.index"), {
 				preserveState: true,
 			});
 		}
 	};
 
-	const reloadList = () => {
-		if (processing || reloading) {
+	const clearFilters = () => {
+		if (processing) {
 			return;
 		}
 
-		router.get(
-			route("admin.laboratory-purchases.index"),
-			appliedFilterParams,
-			{
-				preserveState: true,
-				replace: true,
-				onStart: () => setReloading(true),
-				onFinish: () => setReloading(false),
-			},
-		);
+		router.get(route("admin.laboratory-purchases.index"));
 	};
 
 	const showUpdateButton = useMemo(
@@ -159,7 +130,7 @@ export default function LaboratoryPurchases({
 			);
 		}
 
-		if (filters.start_date) {
+		if (filters.start_date && !filters.using_default_date_range) {
 			badges.push(
 				<Badge color="slate">
 					<CalendarDateRangeIcon className="size-4" />
@@ -168,7 +139,7 @@ export default function LaboratoryPurchases({
 			);
 		}
 
-		if (filters.end_date) {
+		if (filters.end_date && !filters.using_default_date_range) {
 			badges.push(
 				<Badge color="slate">
 					<CalendarDateRangeIcon className="size-4" />
@@ -285,7 +256,10 @@ export default function LaboratoryPurchases({
 		}
 
 		return badges;
-	}, [filters]);
+	}, [filters, brands]);
+
+	const hasActiveFilters = filterBadges.length > 0;
+	const usingDefaultDateRange = Boolean(filters.using_default_date_range);
 
 	return (
 		<AdminLayout title="Pedidos de laboratorio">
@@ -299,24 +273,30 @@ export default function LaboratoryPurchases({
 						placeholder="Buscar por paciente, folio o estudio"
 					/>
 					<div className="flex flex-wrap items-center justify-end gap-2">
-						<ReloadListButton
-							type="button"
-							processing={reloading}
-							onClick={reloadList}
-						/>
 						<Button
 							outline
-							className="w-full"
+							className="w-full sm:w-auto"
 							onClick={() => setShowFilters(!showFilters)}
 						>
-							{filterBadges.length ? (
+							{hasActiveFilters ? (
 								<FilterCountBadge count={filterBadges.length} />
 							) : (
 								<FunnelIcon />
 							)}
 							Filtros
 						</Button>
-						<Button outline className="w-full" href={chartHref}>
+						{hasActiveFilters ? (
+							<Button
+								type="button"
+								outline
+								className="w-full sm:w-auto"
+								onClick={clearFilters}
+								disabled={processing}
+							>
+								Limpiar filtros
+							</Button>
+						) : null}
+						<Button outline className="w-full sm:w-auto" href={chartHref}>
 							<PresentationChartLineIcon />
 							Gráfica
 						</Button>
@@ -334,27 +314,69 @@ export default function LaboratoryPurchases({
 
 				{showUpdateButton && (
 					<div className="flex justify-center">
-						<UpdateButton
-							type="submit"
-							processing={processing || reloading}
-						/>
+						<UpdateButton type="submit" processing={processing} />
 					</div>
 				)}
 			</form>
 
-			<p className="-mt-4 text-sm text-zinc-500">
-				Usa &quot;Recargar lista&quot; para actualizar los datos. Evita
-				recargar el navegador (F5) mientras investigamos un problema
-				temporal.
-			</p>
+			{usingDefaultDateRange ? (
+				<DefaultDateRangeNotice filters={filters} />
+			) : null}
 
 			<LaboratoryPurchasesList
 				laboratoryPurchases={laboratoryPurchases}
 				filters={filters}
 				filterBadges={filterBadges}
+				hasActiveFilters={hasActiveFilters}
+				onClearFilters={clearFilters}
 				canExport={canExport}
 			/>
 		</AdminLayout>
+	);
+}
+
+function DefaultDateRangeNotice({ filters }) {
+	return (
+		<div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300">
+			<CalendarDateRangeIcon className="size-4 shrink-0 text-zinc-500" />
+			<span>
+				Periodo por defecto:{" "}
+				<strong className="font-medium text-zinc-950 dark:text-white">
+					últimos 90 días
+				</strong>
+				{filters.formatted_start_date && filters.formatted_end_date ? (
+					<>
+						{" "}
+						(
+						{filters.formatted_start_date} – {filters.formatted_end_date})
+					</>
+				) : null}
+				. Usa los filtros de fecha para cambiar el rango.
+			</span>
+		</div>
+	);
+}
+
+function ActiveFiltersBar({ filterBadges, onClearFilters }) {
+	return (
+		<div className="mb-4 rounded-xl border border-sky-200 bg-sky-50/80 p-4 dark:border-sky-900/50 dark:bg-sky-950/30">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div className="space-y-2">
+					<p className="text-sm font-medium text-sky-950 dark:text-sky-100">
+						Filtros activos
+					</p>
+					<div className="flex flex-wrap gap-2">{filterBadges}</div>
+				</div>
+				<Button
+					type="button"
+					outline
+					className="shrink-0 self-start sm:self-center"
+					onClick={onClearFilters}
+				>
+					Limpiar filtros
+				</Button>
+			</div>
+		</div>
 	);
 }
 
@@ -547,15 +569,36 @@ function LaboratoryPurchasesList({
 	laboratoryPurchases,
 	filterBadges,
 	filters,
+	hasActiveFilters,
+	onClearFilters,
 	canExport,
 }) {
-	if (laboratoryPurchases.data.length === 0) return <EmptyListCard />;
+	if (laboratoryPurchases.data.length === 0) {
+		return (
+			<>
+				{hasActiveFilters ? (
+					<ActiveFiltersBar
+						filterBadges={filterBadges}
+						onClearFilters={onClearFilters}
+					/>
+				) : null}
+				<EmptyListCard />
+			</>
+		);
+	}
 
 	return (
 		<>
+			{hasActiveFilters ? (
+				<ActiveFiltersBar
+					filterBadges={filterBadges}
+					onClearFilters={onClearFilters}
+				/>
+			) : null}
 			<ResultsAndExport
 				paginatedData={laboratoryPurchases}
 				filterBadges={filterBadges}
+				hideAppliedFilters
 				canExport={canExport}
 				filters={filters}
 				exportUrl={route("admin.laboratory-purchases.export")}

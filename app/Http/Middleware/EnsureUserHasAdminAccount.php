@@ -60,18 +60,6 @@ class EnsureUserHasAdminAccount
                             Route::currentRouteName() === 'admin.laboratory-purchases.chart' ||
                             Route::currentRouteName() === 'admin.laboratory-purchases.show',
                     ] : null,
-                    $request->user()->administrator->hasPermissionTo('laboratory-tests.manage') ? [
-                        'label' => 'Catálogo de estudios',
-                        'url' => route('admin.laboratory-tests.index'),
-                        'current' => Route::currentRouteName() === 'admin.laboratory-tests.index' ||
-                            Route::currentRouteName() === 'admin.laboratory-tests.create' ||
-                            Route::currentRouteName() === 'admin.laboratory-tests.edit',
-                    ] : null,
-                    $this->adminHasPermission($administrator, 'laboratory-stores.manage') ? [
-                        'label' => 'Sucursales',
-                        'url' => route('admin.laboratory-stores.index'),
-                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-stores.'),
-                    ] : null,
                     $request->user()->administrator->laboratoryConcierge ? [
                         'label' => 'Citas',
                         'url' => route('admin.laboratory-appointments.index'),
@@ -418,6 +406,23 @@ class EnsureUserHasAdminAccount
             ] : null,
         ]));
 
+        $laboratoryTopItems = array_values(array_filter([
+            $request->user()->administrator->hasPermissionTo('laboratory-tests.manage') ? [
+                'label' => 'Catálogo de estudios',
+                'url' => route('admin.laboratory-tests.index'),
+                'icon' => 'ClipboardDocumentListIcon',
+                'current' => Route::currentRouteName() === 'admin.laboratory-tests.index' ||
+                    Route::currentRouteName() === 'admin.laboratory-tests.create' ||
+                    Route::currentRouteName() === 'admin.laboratory-tests.edit',
+            ] : null,
+            $this->adminHasPermission($administrator, 'laboratory-stores.manage') ? [
+                'label' => 'Sucursales',
+                'url' => route('admin.laboratory-stores.index'),
+                'icon' => 'BuildingStorefrontIcon',
+                'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-stores.'),
+            ] : null,
+        ]));
+
         $sections = array_values(array_filter([
             [
                 'type' => 'section',
@@ -452,6 +457,7 @@ class EnsureUserHasAdminAccount
                     $workspaceNavItem,
                     ...$integrationsItems,
                 ])),
+                'laboratory' => $laboratoryTopItems,
                 'personal' => $personalNavItem,
                 'configuration' => array_values(array_filter([
                     $legalDocumentationNavItem,
