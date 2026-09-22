@@ -31,17 +31,16 @@ export default function BasicInfoForm() {
 	};
 
 	return (
-		<form onSubmit={submit} className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
+		<form id="datos-personales" onSubmit={submit}>
 			<div className="space-y-1">
 				<Subheading>Información básica</Subheading>
 				<Text>
-					La información proporcionada será utilizada únicamente para
-					cumplir con sus pedidos y será compartida solo con los
-					proveedores necesarios para este fin.
+					Se usa para cumplir tus pedidos y solo se comparte con los
+					proveedores necesarios.
 				</Text>
 			</div>
 
-			<div className="space-y-6">
+			<div className="mt-6 grid gap-x-4 gap-y-6 sm:grid-cols-2">
 				<Field>
 					<Label>Nombre</Label>
 					<Input
@@ -100,7 +99,7 @@ export default function BasicInfoForm() {
 						<ErrorMessage>{errors.birth_date}</ErrorMessage>
 					)}
 				</Field>
-				<Field>
+				<Field className="sm:col-span-2 sm:max-w-[calc(50%-0.5rem)]">
 					<Label>Sexo</Label>
 					<Select
 						dusk="gender"
@@ -123,7 +122,7 @@ export default function BasicInfoForm() {
 				</Field>
 			</div>
 
-			<div className="flex justify-end sm:col-span-2">
+			<div className="mt-6 flex justify-end border-t border-slate-200 pt-5 dark:border-slate-600">
 				<Button
 					dusk="updateBasicInfo"
 					disabled={processing}

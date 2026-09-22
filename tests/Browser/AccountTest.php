@@ -100,6 +100,7 @@ test('user can request verification email', function () {
     $this->browse(function (Browser $browser) use ($user) {
         $browser->loginAs($user)
             ->visit(new Account)
+            ->click('@accountTab-contacto')
             ->waitForText('Tu correo electrónico debe verificarse.')
             ->click('@emailVerify')
             ->waitForText('Se ha enviado un enlace de verificación a tu dirección de correo electrónico.');

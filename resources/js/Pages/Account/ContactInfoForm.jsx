@@ -18,17 +18,16 @@ export default function ContactInfoForm() {
 	};
 
 	return (
-		<form onSubmit={submit} className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
+		<form id="contacto" onSubmit={submit}>
 			<div className="space-y-1">
 				<Subheading>Información de contacto</Subheading>
 				<Text>
-					Utilizaremos su teléfono y correo para comunicarnos y
-					gestionar sus pedidos, compartiéndolos solo con los
-					proveedores necesarios.
+					Tu teléfono y correo sirven para avisarte del estado de tus
+					pedidos. Solo se comparten con los proveedores necesarios.
 				</Text>
 			</div>
 
-			<div className="space-y-6">
+			<div className="mt-6 space-y-6">
 				<Field>
 					<Label>Correo electrónico</Label>
 					{mustVerifyEmail && (
@@ -136,7 +135,7 @@ export default function ContactInfoForm() {
 				</Field>
 			</div>
 
-			<div className="flex justify-end sm:col-span-2">
+			<div className="mt-6 flex justify-end border-t border-slate-200 pt-5 dark:border-slate-600">
 				<Button
 					dusk="updateContactInfo"
 					disabled={processing}

@@ -35,16 +35,16 @@ export default function UpdatePasswordForm() {
 	};
 
 	return (
-		<form onSubmit={submit} className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
+		<form id="seguridad" onSubmit={submit}>
 			<div className="space-y-1">
 				<Subheading>Actualizar contraseña</Subheading>
 				<Text>
-					Utiliza una contraseña larga y aleatoria para mantener tu
-					cuenta segura.
+					Usa una contraseña larga y aleatoria. Si no la recuerdas,
+					puedes restablecerla sin salir de tu cuenta.
 				</Text>
 			</div>
 
-			<div className="space-y-6">
+			<div className="mt-6 max-w-xl space-y-6">
 				<Field>
 					<Label>Contraseña actual</Label>
 					<Input
@@ -99,7 +99,7 @@ export default function UpdatePasswordForm() {
 				<ForgotPasswordLink />
 			</div>
 
-			<div className="flex justify-end sm:col-span-2">
+			<div className="mt-6 flex justify-end border-t border-slate-200 pt-5 dark:border-slate-600">
 				<Button
 					dusk="updatePassword"
 					disabled={processing}
