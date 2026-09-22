@@ -7,6 +7,7 @@ use App\Actions\PayPal\CreatePayPalOrderAction;
 use App\Actions\PayPal\HandlePayPalWebhookAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\CouponApplicationException;
+use App\Exceptions\LaboratoryPaymentAlreadyReceivedException;
 use App\Exceptions\PromoCodeException;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\UnmatchingTotalPriceException;
@@ -105,6 +106,12 @@ class PayPalController extends Controller
             throw ValidationException::withMessages(['coupon_id' => $e->getMessage()]);
         } catch (PromoCodeException $e) {
             throw ValidationException::withMessages(['promo_validation_token' => $e->getMessage()]);
+        } catch (LaboratoryPaymentAlreadyReceivedException $e) {
+            return response()->json([
+                'status' => 'gda_uncertain',
+                'laboratory_purchase_id' => $e->purchase()->id,
+                'message' => $e->getMessage(),
+            ]);
         } catch (PayPalPaymentException $e) {
             Log::warning('[PayPal] create-order rechazado por API', ['message' => $e->getMessage()]);
 
@@ -151,11 +158,14 @@ class PayPalController extends Controller
             ], 422);
         }
 
-        session()->flash('confetti', true);
+        if ($status !== 'gda_uncertain') {
+            session()->flash('confetti', true);
+        }
 
         return response()->json([
             'status' => $status,
             'laboratory_purchase_id' => $purchase?->id,
+            'message' => $result['message'] ?? null,
         ]);
     }
 

@@ -72,6 +72,20 @@ function normalizePackageFeatureLabels(raw) {
 		.filter(Boolean);
 }
 
+const GDA_STATUS_BADGES = {
+	legacy: { label: "GDA histórico", color: "zinc" },
+	pending: { label: "GDA pendiente", color: "slate" },
+	confirmed: { label: "GDA confirmado", color: "emerald" },
+	failed: { label: "GDA fallido", color: "red" },
+	uncertain: { label: "GDA por validar", color: "amber" },
+};
+
+function GdaStatusBadge({ status }) {
+	const badge = GDA_STATUS_BADGES[status] ?? GDA_STATUS_BADGES.legacy;
+
+	return <Badge color={badge.color}>{badge.label}</Badge>;
+}
+
 
 export default function LaboratoryPurchase({
 	laboratoryPurchase,
@@ -224,6 +238,8 @@ function Header({
 					<div className="flex flex-wrap items-center gap-4">
 
 						<Heading>Pedido de laboratorio</Heading>
+
+						<GdaStatusBadge status={laboratoryPurchase.gda_status} />
 
 						<Badge color="sky">
 							<QrCodeIcon className="size-5" />

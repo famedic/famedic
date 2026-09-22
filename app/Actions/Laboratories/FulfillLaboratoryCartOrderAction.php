@@ -4,7 +4,9 @@ namespace App\Actions\Laboratories;
 
 use App\Actions\Marketing\RecordMarketingCampaignConversionAction;
 use App\Enums\CartEventType;
+use App\Enums\GdaOrderStatus;
 use App\Enums\LaboratoryBrand;
+use App\Exceptions\GdaOrderResultUncertainException;
 use App\Models\Address;
 use App\Models\Cart;
 use App\Models\Contact;
@@ -74,9 +76,11 @@ class FulfillLaboratoryCartOrderAction
             ]);
         }
 
-        DB::beginTransaction();
-
+        $initialTransactionLevel = DB::transactionLevel();
         $clinicalOrderUuid = null;
+        $laboratoryPurchase = null;
+
+        DB::beginTransaction();
 
         try {
             $laboratoryPurchase = $this->createLaboratoryPurchase(
@@ -123,21 +127,40 @@ class FulfillLaboratoryCartOrderAction
             logger('GDA brand value: '.$gdaBrandValue);
 
             if (app()->environment('local')) {
-                $gdaQuotation = ['id' => rand(100000, 999999)];
+                $gdaQuotation = [
+                    'id' => strtoupper(uniqid('LOCAL')),
+                    'infogda_consecutivo' => random_int(10000000, 99999999),
+                ];
             } else {
-                $gdaQuotation = ($this->createGDAQuotationAction)(
-                    $customer,
-                    $address,
-                    $contact,
-                    $gdaBrandValue,
-                    $laboratoryCartItems,
-                    $laboratoryPurchase->id
-                );
+                try {
+                    $gdaQuotation = ($this->createGDAQuotationAction)(
+                        $customer,
+                        $address,
+                        $contact,
+                        $gdaBrandValue,
+                        $laboratoryCartItems,
+                        $laboratoryPurchase->id
+                    );
+                } catch (GdaOrderResultUncertainException $e) {
+                    $this->markGdaUncertain($laboratoryPurchase, $e);
+
+                    DB::commit();
+
+                    $laboratoryPurchase->refresh();
+                    $laboratoryPurchase->load([
+                        'transactions',
+                        'laboratoryPurchaseItems',
+                        'customer.user',
+                    ]);
+
+                    throw $e->withPurchase($laboratoryPurchase);
+                }
             }
 
             $laboratoryPurchase->update([
                 'gda_order_id' => $gdaQuotation['id'],
                 'gda_consecutivo' => $gdaQuotation['infogda_consecutivo'] ?? null,
+                'gda_status' => GdaOrderStatus::Confirmed,
                 'gda_acuse' => $gdaQuotation['gda_acuse'] ?? null,
                 'gda_response' => $gdaQuotation['gda_response'] ?? null,
                 'gda_code_http' => $gdaQuotation['gda_code_http'] ?? null,
@@ -145,6 +168,8 @@ class FulfillLaboratoryCartOrderAction
                 'gda_description' => $gdaQuotation['gda_description'] ?? null,
                 'pdf_base64' => $gdaQuotation['pdf_base64'] ?? null,
             ]);
+
+            $this->assertGdaConfirmedBeforeCompletingCart($laboratoryPurchase);
 
             if ($promoValidationToken !== null) {
                 $resolvedCartHash = $cartHash ?? $this->promoCodeService->buildLaboratoryCartHash(
@@ -178,8 +203,19 @@ class FulfillLaboratoryCartOrderAction
             $this->clearCart($customer, $laboratoryBrand);
 
             DB::commit();
+        } catch (GdaOrderResultUncertainException $th) {
+            if (DB::transactionLevel() > $initialTransactionLevel) {
+                DB::rollBack();
+            } elseif (! $th->purchase() && $laboratoryPurchase instanceof LaboratoryPurchase) {
+                $th->withPurchase($laboratoryPurchase->fresh() ?? $laboratoryPurchase);
+            }
+
+            throw $th;
         } catch (\Throwable $th) {
-            DB::rollBack();
+            if (DB::transactionLevel() > $initialTransactionLevel) {
+                DB::rollBack();
+            }
+
             throw $th;
         }
 
@@ -346,6 +382,7 @@ class FulfillLaboratoryCartOrderAction
 
         $payload = [
             'gda_order_id' => 0,
+            'gda_status' => GdaOrderStatus::Pending,
             'brand' => $laboratoryBrand->value,
             'name' => $contact->name,
             'paternal_lastname' => $contact->paternal_lastname,
@@ -386,6 +423,41 @@ class FulfillLaboratoryCartOrderAction
         }
 
         return $laboratoryPurchase;
+    }
+
+    private function assertGdaConfirmedBeforeCompletingCart(LaboratoryPurchase $laboratoryPurchase): void
+    {
+        $laboratoryPurchase->refresh();
+
+        if (
+            $laboratoryPurchase->gda_status !== GdaOrderStatus::Confirmed
+            || blank($laboratoryPurchase->gda_order_id)
+            || trim((string) $laboratoryPurchase->gda_order_id) === '0'
+            || blank($laboratoryPurchase->gda_consecutivo)
+        ) {
+            throw GdaOrderResultUncertainException::forInvariant(
+                'gda_completion_invariant_failed',
+                $laboratoryPurchase,
+            );
+        }
+    }
+
+    private function markGdaUncertain(
+        LaboratoryPurchase $laboratoryPurchase,
+        GdaOrderResultUncertainException $exception,
+    ): void {
+        $laboratoryPurchase->update([
+            'gda_status' => GdaOrderStatus::Uncertain,
+            'has_gda_warning' => true,
+            'gda_warning_message' => $exception->getMessage(),
+            'gda_code_http' => $exception->httpStatus(),
+            'gda_mensaje' => 'uncertain',
+            'gda_description' => $exception->reason(),
+        ]);
+
+        Log::warning('[GDA P0] Laboratory purchase persisted with uncertain GDA result', $exception->context() + [
+            'purchase_id' => $laboratoryPurchase->id,
+        ]);
     }
 
     private function checkAndSendInvoiceDeadlineNotification(LaboratoryPurchase $laboratoryPurchase): void

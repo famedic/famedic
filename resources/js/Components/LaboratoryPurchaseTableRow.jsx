@@ -17,6 +17,20 @@ import PaymentMethodBadge from "@/Components/PaymentMethodBadge";
 import EfevooPayBadge from "@/Components/EfevooPayBadge";
 import OdessaBadge from "@/Components/OdessaBadge";
 
+const GDA_STATUS_BADGES = {
+	legacy: { label: "GDA histórico", color: "zinc" },
+	pending: { label: "GDA pendiente", color: "slate" },
+	confirmed: { label: "GDA confirmado", color: "emerald" },
+	failed: { label: "GDA fallido", color: "red" },
+	uncertain: { label: "GDA por validar", color: "amber" },
+};
+
+function GdaStatusBadge({ status }) {
+	const badge = GDA_STATUS_BADGES[status] ?? GDA_STATUS_BADGES.legacy;
+
+	return <Badge color={badge.color}>{badge.label}</Badge>;
+}
+
 function NotificationStatusTags({ laboratoryPurchase }) {
 	const hasSample = Boolean(laboratoryPurchase.has_sample_collected);
 	const hasResults = Boolean(laboratoryPurchase.has_results_available);
@@ -80,6 +94,7 @@ export default function LaboratoryPurchaseTableRow({
 									<QrCodeIcon className="size-4" />
 									{laboratoryPurchase.gda_order_id}
 								</Badge>
+								<GdaStatusBadge status={laboratoryPurchase.gda_status} />
 								{laboratoryPurchase.gda_consecutivo != null && (
 									<Badge color="zinc">
 										Consecutivo: {laboratoryPurchase.gda_consecutivo}

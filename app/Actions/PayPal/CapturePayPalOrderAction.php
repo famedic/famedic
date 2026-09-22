@@ -5,7 +5,10 @@ namespace App\Actions\PayPal;
 use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\Transaction;
+use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\PayPalService;
+use App\Services\Laboratory\UncertainGdaPaymentGuard;
+use App\Exceptions\LaboratoryPaymentAlreadyReceivedException;
 use Illuminate\Support\Facades\Log;
 
 class CapturePayPalOrderAction
@@ -13,6 +16,8 @@ class CapturePayPalOrderAction
     public function __construct(
         private PayPalService $payPalService,
         private FinalizeLaboratoryPayPalPaymentAction $finalizeLaboratoryPayPalPaymentAction,
+        private SyncMonitoringCartService $syncMonitoringCartService,
+        private UncertainGdaPaymentGuard $uncertainGdaPaymentGuard,
     ) {
     }
 
@@ -58,6 +63,22 @@ class CapturePayPalOrderAction
         }
 
         try {
+            $brandValue = $details['laboratory_brand'] ?? null;
+            if (is_string($brandValue) && $brandValue !== '') {
+                $brand = \App\Enums\LaboratoryBrand::from($brandValue);
+                $this->syncMonitoringCartService->syncLaboratory($customer, $clientContext);
+                $cart = $this->syncMonitoringCartService->activeLaboratoryCart($customer, $brand);
+                $this->uncertainGdaPaymentGuard->withCartLock($cart, fn () => null);
+            }
+        } catch (LaboratoryPaymentAlreadyReceivedException $e) {
+            return [
+                'purchase' => $e->purchase(),
+                'status' => 'gda_uncertain',
+                'message' => $e->getMessage(),
+            ];
+        }
+
+        try {
             $capturePayload = $this->payPalService->captureOrder($paypalOrderId);
         } catch (\Throwable $e) {
             Log::warning('[PayPal] captureOrder error, intentando getOrder', [
@@ -87,7 +108,10 @@ class CapturePayPalOrderAction
 
         return [
             'purchase' => $purchase,
-            'status' => $purchase ? 'captured' : 'error',
+            'status' => $purchase?->gda_status?->value === 'uncertain' ? 'gda_uncertain' : ($purchase ? 'captured' : 'error'),
+            'message' => $purchase?->gda_status?->value === 'uncertain'
+                ? 'Pago recibido; estamos validando la creación de tu orden de laboratorio.'
+                : null,
         ];
     }
 }

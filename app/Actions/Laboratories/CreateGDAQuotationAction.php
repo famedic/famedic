@@ -2,12 +2,15 @@
 
 namespace App\Actions\Laboratories;
 
+use App\Exceptions\GdaOrderResultUncertainException;
 use App\Models\Address;
 use App\Models\Contact;
 use App\Models\Customer;
-use Exception;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class CreateGDAQuotationAction
 {
@@ -35,13 +38,21 @@ class CreateGDAQuotationAction
         $nonProductionEnvs = ['local', 'staging', 'testing'];
         $currentEnv = strtolower((string) config('app.env'));
         if (in_array($currentEnv, $nonProductionEnvs, true)) {
-            Log::warning('CreateGDAQuotationAction: Entorno no productivo, retornando ID simulado', [
+            $generatedId = strtoupper(uniqid('GDA'));
+            $generatedConsecutive = random_int(10000000, 99999999);
+
+            Log::warning('CreateGDAQuotationAction: Entorno no productivo, retornando orden simulada', [
                 'app_env' => config('app.env'),
                 'normalized_env' => $currentEnv,
-                'generated_id' => uniqid(),
+                'generated_id' => $generatedId,
+                'generated_consecutive' => $generatedConsecutive,
             ]);
 
-            return ['id' => uniqid()];
+            return [
+                'id' => $generatedId,
+                'infogda_consecutivo' => $generatedConsecutive,
+                'gda_mensaje' => 'simulated',
+            ];
         }
 
         $url = config('services.gda.url') . 'infogda-fullV3/service-request';
@@ -93,43 +104,136 @@ class CreateGDAQuotationAction
         try {
             Log::info('CreateGDAQuotationAction: Enviando petición a API GDA');
             $response = Http::post($url, $payload);
-            
-            // Log de la respuesta completa
-            $responseData = $response->json();
-            
+
+            $responseData = $this->decodeJsonResponse($response, (int) $laboratoryPurchaseId);
+            $responseSummary = $this->summarizeResponse($responseData);
+
             Log::info('CreateGDAQuotationAction: Respuesta recibida de API GDA', [
                 'status_code' => $response->status(),
                 'success' => $response->successful(),
                 'failed' => $response->failed(),
-                'response_body' => $responseData,
-                'response_headers' => $response->headers()
+                'response_summary' => $responseSummary,
             ]);
 
-            // Log específico si hay errores
             if ($response->failed()) {
-                Log::error('CreateGDAQuotationAction: La API respondió con error', [
+                Log::warning('CreateGDAQuotationAction: La API GDA respondió sin confirmación confiable', [
                     'status' => $response->status(),
-                    'body' => $responseData,
-                    'laboratoryPurchaseId' => $laboratoryPurchaseId
+                    'response_summary' => $responseSummary,
+                    'laboratoryPurchaseId' => $laboratoryPurchaseId,
                 ]);
-                throw new Exception('Error en API GDA: ' . ($responseData['message'] ?? 'Error desconocido'));
+
+                throw GdaOrderResultUncertainException::forResponse(
+                    reason: 'gda_http_failed',
+                    laboratoryPurchaseId: (int) $laboratoryPurchaseId,
+                    httpStatus: $response->status(),
+                    responseSummary: $responseSummary,
+                );
             }
+
+            $this->assertSemanticSuccess($responseData, (int) $laboratoryPurchaseId, $response->status());
 
             Log::info('CreateGDAQuotationAction: Proceso completado exitosamente', [
                 'response_id' => $responseData['id'] ?? null,
+                'infogda_consecutivo' => $responseData['infogda_consecutivo'] ?? null,
                 'laboratoryPurchaseId' => $laboratoryPurchaseId
             ]);
 
             return $responseData;
 
-        } catch (Exception $e) {
-            Log::error('CreateGDAQuotationAction: Excepción capturada', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'laboratoryPurchaseId' => $laboratoryPurchaseId
-            ]);
+        } catch (GdaOrderResultUncertainException $e) {
+            Log::warning('CreateGDAQuotationAction: Resultado GDA incierto', $e->context());
             throw $e;
+        } catch (ConnectionException $e) {
+            Log::warning('CreateGDAQuotationAction: Error de conexión con GDA', [
+                'message' => $e->getMessage(),
+                'laboratoryPurchaseId' => $laboratoryPurchaseId,
+            ]);
+
+            throw GdaOrderResultUncertainException::forResponse(
+                reason: 'gda_connection_error',
+                laboratoryPurchaseId: (int) $laboratoryPurchaseId,
+                previous: $e,
+            );
+        } catch (Throwable $e) {
+            Log::warning('CreateGDAQuotationAction: Excepción inesperada durante creación GDA', [
+                'message' => $e->getMessage(),
+                'exception' => $e::class,
+                'laboratoryPurchaseId' => $laboratoryPurchaseId,
+            ]);
+
+            throw GdaOrderResultUncertainException::forResponse(
+                reason: 'gda_unexpected_exception',
+                laboratoryPurchaseId: (int) $laboratoryPurchaseId,
+                previous: $e,
+            );
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeJsonResponse(Response $response, int $laboratoryPurchaseId): array
+    {
+        $responseData = $response->json();
+
+        if (! is_array($responseData) || $responseData === []) {
+            throw GdaOrderResultUncertainException::forResponse(
+                reason: 'gda_empty_or_malformed_json',
+                laboratoryPurchaseId: $laboratoryPurchaseId,
+                httpStatus: $response->status(),
+                responseSummary: [
+                    'has_body' => trim($response->body()) !== '',
+                    'body_length' => strlen($response->body()),
+                ],
+            );
+        }
+
+        return $responseData;
+    }
+
+    /**
+     * @param  array<string, mixed>  $responseData
+     */
+    private function assertSemanticSuccess(array $responseData, int $laboratoryPurchaseId, int $httpStatus): void
+    {
+        $folio = $this->normalizeRequiredValue($responseData['id'] ?? null);
+        $consecutive = $this->normalizeRequiredValue($responseData['infogda_consecutivo'] ?? null);
+
+        if ($folio === null || $folio === '0' || $consecutive === null) {
+            throw GdaOrderResultUncertainException::forResponse(
+                reason: 'gda_missing_required_identifiers',
+                laboratoryPurchaseId: $laboratoryPurchaseId,
+                httpStatus: $httpStatus,
+                responseSummary: $this->summarizeResponse($responseData),
+            );
+        }
+    }
+
+    private function normalizeRequiredValue(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = trim((string) $value);
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    /**
+     * @param  array<string, mixed>  $responseData
+     * @return array<string, mixed>
+     */
+    private function summarizeResponse(array $responseData): array
+    {
+        return [
+            'id' => $responseData['id'] ?? null,
+            'infogda_consecutivo' => $responseData['infogda_consecutivo'] ?? null,
+            'gda_code_http' => $responseData['gda_code_http'] ?? data_get($responseData, 'GDA_menssage.codeHttp'),
+            'gda_mensaje' => $responseData['gda_mensaje'] ?? data_get($responseData, 'GDA_menssage.mensaje'),
+            'gda_status' => $responseData['status'] ?? null,
+            'has_pdf_base64' => filled($responseData['pdf_base64'] ?? null),
+        ];
     }
 
     private function buildCoding(array $laboratoryTestsDetail)

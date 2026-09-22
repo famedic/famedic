@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Laboratories\OrderAction;
+use App\Enums\GdaOrderStatus;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\CouponApplicationException;
@@ -81,6 +82,15 @@ class LaboratoryPurchaseController extends Controller
         } catch (OdessaInsufficientFundsException $e) {
             return redirect()->back()
                 ->withErrors(['payment_method' => 'No cuentas con suficiente Saldo a la Vista en tu caja de ahorro para realizar el pago.']);
+        }
+
+        if ($laboratoryPurchase->gda_status === GdaOrderStatus::Uncertain) {
+            return redirect()->route('laboratory-purchases.show', [
+                'laboratory_purchase' => $laboratoryPurchase,
+            ])->flashMessage(
+                'Tu pago fue recibido. Estamos validando la creación de tu orden de laboratorio.',
+                'warning',
+            );
         }
 
         session()->flash('confetti', true);

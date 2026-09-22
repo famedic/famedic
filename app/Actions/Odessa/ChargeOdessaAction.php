@@ -49,6 +49,11 @@ class ChargeOdessaAction
 
         $transaction->update([
             'reference_id' => $referenceId,
+            'payment_status' => 'completed',
+            'gateway' => 'odessa',
+            'gateway_status' => 'completed',
+            'gateway_transaction_id' => $referenceId,
+            'gateway_processed_at' => now(),
         ]);
 
         return $transaction;

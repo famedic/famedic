@@ -5,6 +5,7 @@ namespace App\Actions\PayPal;
 use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
 use App\Actions\Laboratories\FulfillLaboratoryCartOrderAction;
 use App\Enums\LaboratoryBrand;
+use App\Exceptions\GdaOrderResultUncertainException;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\UnmatchingTotalPriceException;
 use App\Models\Address;
@@ -81,6 +82,19 @@ class FinalizeLaboratoryPayPalPaymentAction
 
         try {
             return $this->runFulfillment($transaction, $clientContext);
+        } catch (GdaOrderResultUncertainException $e) {
+            Log::warning('[PayPal] GDA incierto tras captura; no se reembolsa automáticamente', $e->context() + [
+                'transaction_id' => $transaction->id,
+                'capture_id' => $info['capture_id'],
+            ]);
+
+            $purchase = $e->purchase();
+
+            if ($purchase instanceof LaboratoryPurchase) {
+                return $purchase;
+            }
+
+            throw $e;
         } catch (Throwable $e) {
             Log::error('[PayPal] Fallo al generar pedido tras captura; intentando reembolso', [
                 'transaction_id' => $transaction->id,
