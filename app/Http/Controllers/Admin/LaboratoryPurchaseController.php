@@ -3,6 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Actions\Laboratories\DeleteLaboratoryPurchaseAction;
+use App\Actions\Laboratories\RecoverUncertainGdaLaboratoryPurchaseAction;
+use App\Exceptions\CouponApplicationException;
+use App\Exceptions\GdaOrderResultUncertainException;
+use App\Exceptions\RecoverGdaLaboratoryPurchaseException;
+use App\Http\Requests\Admin\LaboratoryPurchases\RecoverUncertainGdaLaboratoryPurchaseRequest;
 use App\Enums\LaboratoryBrand;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LaboratoryPurchases\DestroyLaboratoryPurchaseRequest;
@@ -70,6 +75,7 @@ class LaboratoryPurchaseController extends Controller
         ShowLaboratoryPurchaseRequest $request,
         LaboratoryPurchase $laboratoryPurchase,
         LaboratoryPurchaseResultControlPresenter $resultControlPresenter,
+        RecoverUncertainGdaLaboratoryPurchaseAction $recoverUncertainGdaLaboratoryPurchaseAction,
     )
     {
         $laboratoryPurchase->load([
@@ -88,6 +94,8 @@ class LaboratoryPurchaseController extends Controller
 
         $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
 
+        $canRecoverGda = $request->user()->can('recoverGda', $laboratoryPurchase);
+
         return Inertia::render('Admin/LaboratoryPurchase', [
             'laboratoryPurchase' => $laboratoryPurchase,
             'isCancelled' => $laboratoryPurchase->trashed(),
@@ -95,6 +103,10 @@ class LaboratoryPurchaseController extends Controller
             'showDeleteButton' => $request->user()->can('delete', $laboratoryPurchase),
             'canResendConfirmationEmail' => $request->user()->administrator?->hasPermissionTo('laboratory-purchases.manage') ?? false,
             'canUploadInvoice' => $request->user()->can('uploadInvoice', $laboratoryPurchase),
+            'canRecoverGda' => $canRecoverGda,
+            'gdaRecoverPreview' => $canRecoverGda
+                ? $recoverUncertainGdaLaboratoryPurchaseAction->preview($laboratoryPurchase)
+                : null,
 
             'hasSampleCollected' => $laboratoryPurchase->hasSampleCollected(),
             'hasResultsAvailable' => $laboratoryPurchase->hasResultsAvailable(),
@@ -142,6 +154,41 @@ class LaboratoryPurchaseController extends Controller
             return back()->flashMessage(
                 'No se pudo cancelar el pedido: ' . $e->getMessage(),
                 'error'
+            );
+        }
+    }
+
+    public function recoverGda(
+        RecoverUncertainGdaLaboratoryPurchaseRequest $request,
+        LaboratoryPurchase $laboratoryPurchase,
+        RecoverUncertainGdaLaboratoryPurchaseAction $recoverUncertainGdaLaboratoryPurchaseAction,
+    ) {
+        try {
+            $recoverUncertainGdaLaboratoryPurchaseAction(
+                $laboratoryPurchase,
+                (int) $request->validated('coupon_id'),
+                $request->user(),
+            );
+
+            return redirect()
+                ->route('admin.laboratory-purchases.show', $laboratoryPurchase)
+                ->flashMessage('Pedido recuperado en GDA con saldo a favor. No se envió correo al cliente.');
+        } catch (GdaOrderResultUncertainException $e) {
+            return back()->flashMessage(
+                'GDA volvió a responder de forma incierta: '.$e->getMessage(),
+                'error',
+            );
+        } catch (CouponApplicationException|RecoverGdaLaboratoryPurchaseException $e) {
+            return back()->flashMessage($e->getMessage(), 'error');
+        } catch (\Throwable $e) {
+            Log::error('[GDA Recover] Unexpected failure', [
+                'purchase_id' => $laboratoryPurchase->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->flashMessage(
+                'No se pudo recuperar el pedido: '.$e->getMessage(),
+                'error',
             );
         }
     }

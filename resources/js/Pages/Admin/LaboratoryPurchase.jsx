@@ -13,6 +13,7 @@ import {
 	CalendarDaysIcon,
 	EnvelopeIcon,
 	ExclamationTriangleIcon,
+	ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 
 import AdminLayout from "@/Layouts/AdminLayout";
@@ -44,6 +45,7 @@ import DevAssistanceDropdown from "@/Components/DevAssistance/DevAssistanceDropd
 import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import PaymentDetails from "@/Components/PaymentDetails";
 import CouponReversalNotice from "@/Components/Admin/CouponReversalNotice";
+import RecoverGdaModal from "@/Components/Admin/RecoverGdaModal";
 import { buildLaboratoryPurchaseTotals } from "@/lib/laboratoryPurchaseTotals";
 
 function normalizePackageFeatureLabels(raw) {
@@ -94,6 +96,8 @@ export default function LaboratoryPurchase({
 	showDeleteButton,
 	canResendConfirmationEmail,
 	canUploadInvoice = false,
+	canRecoverGda = false,
+	gdaRecoverPreview = null,
 	hasSampleCollected,
 	hasResultsAvailable,
 	hasManualResults = false,
@@ -110,6 +114,8 @@ export default function LaboratoryPurchase({
 				showDeleteButton={showDeleteButton}
 				canResendConfirmationEmail={canResendConfirmationEmail}
 				canUploadInvoice={canUploadInvoice}
+				canRecoverGda={canRecoverGda}
+				gdaRecoverPreview={gdaRecoverPreview}
 				hasSampleCollected={hasSampleCollected}
 				hasResultsAvailable={hasResultsAvailable}
 				hasManualResults={hasManualResults}
@@ -143,6 +149,8 @@ function Header({
 	showDeleteButton,
 	canResendConfirmationEmail,
 	canUploadInvoice = false,
+	canRecoverGda = false,
+	gdaRecoverPreview = null,
 	hasSampleCollected,
 	hasResultsAvailable,
 	hasManualResults,
@@ -151,6 +159,7 @@ function Header({
 }) {
 
 	const resendForm = useForm({});
+	const [recoverGdaOpen, setRecoverGdaOpen] = useState(false);
 
 	const [loadingResults, setLoadingResults] = useState(false);
 
@@ -322,6 +331,25 @@ function Header({
 				>
 					{laboratoryPurchase.customer.user.full_name}
 				</CustomerLink>
+
+				{canRecoverGda && gdaRecoverPreview && (
+					<>
+						<Button
+							color="amber"
+							type="button"
+							onClick={() => setRecoverGdaOpen(true)}
+						>
+							<ArrowPathIcon className="size-5" />
+							Recuperar en GDA
+						</Button>
+						<RecoverGdaModal
+							open={recoverGdaOpen}
+							onClose={() => setRecoverGdaOpen(false)}
+							laboratoryPurchase={laboratoryPurchase}
+							preview={gdaRecoverPreview}
+						/>
+					</>
+				)}
 
 				{canResendConfirmationEmail && (
 					<div className="flex flex-col gap-1">

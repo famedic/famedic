@@ -229,6 +229,10 @@ Route::prefix('admin')->middleware([
             'laboratory-purchases/{laboratory_purchase}/resend-confirmation-email',
             [LaboratoryPurchaseController::class, 'resendConfirmationEmail']
         )->name('laboratory-purchases.resend-confirmation-email');
+        Route::post(
+            'laboratory-purchases/{laboratory_purchase}/recover-gda',
+            [LaboratoryPurchaseController::class, 'recoverGda']
+        )->name('laboratory-purchases.recover-gda');
         Route::post('laboratory-purchases/{laboratory_purchase}/invoice', InvoiceController::class)->name('laboratory-purchases.invoice');
         Route::post('laboratory-purchases/{laboratory_purchase}/results', ResultsController::class)->name('laboratory-purchases.results');
         Route::post('laboratory-purchases/{laboratory_purchase}/result-control/refresh', [LaboratoryPurchaseResultControlController::class, 'refresh'])

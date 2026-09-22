@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Actions\Laboratories\RecoverUncertainGdaLaboratoryPurchaseAction;
 use App\Models\LaboratoryPurchase;
 use App\Models\User;
 use App\Services\LaboratoryBilling\LaboratoryBillingAccess;
@@ -65,6 +66,16 @@ class LaboratoryPurchasePolicy
     {
         return $this->administratorHasPermission($user, 'laboratory-purchases.manage.cancel')
             && ! $laboratoryPurchase->trashed();
+    }
+
+    public function recoverGda(User $user, LaboratoryPurchase $laboratoryPurchase): bool
+    {
+        if (! $this->administratorHasPermission($user, 'laboratory-purchases.manage.recover-gda')
+            && ! $this->isSuperAdmin($user)) {
+            return false;
+        }
+
+        return app(RecoverUncertainGdaLaboratoryPurchaseAction::class)->needsGdaRecovery($laboratoryPurchase);
     }
 
     private function administratorHasPermission(User $user, string $permission): bool
