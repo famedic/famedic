@@ -17,6 +17,7 @@ use App\Models\EfevooTransaction;
 use App\Models\LaboratoryNotification;
 use App\Models\User;
 use App\Services\CouponBeneficiaryService;
+use App\Support\Database\PersonNameSearch;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -41,13 +42,7 @@ class UserController extends Controller
 
         $query = User::query()
             ->when($filters['search'] ?? null, function ($query, string $search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('name', 'like', '%'.$search.'%')
-                        ->orWhere('paternal_lastname', 'like', '%'.$search.'%')
-                        ->orWhere('maternal_lastname', 'like', '%'.$search.'%')
-                        ->orWhere('email', 'like', '%'.$search.'%')
-                        ->orWhere('phone', 'like', '%'.$search.'%');
-                });
+                PersonNameSearch::apply($query, $search, 'users', ['email', 'phone']);
             })
             ->when($filters['verified'] ?? null, function ($query, string $verified) {
                 if ($verified === 'verified') {

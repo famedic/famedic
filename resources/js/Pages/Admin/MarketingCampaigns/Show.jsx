@@ -430,30 +430,65 @@ export default function MarketingCampaignsShow({
 	return (
 		<AdminLayout title={campaign.name}>
 			<div className="space-y-10">
-				<div className="flex flex-wrap items-start justify-between gap-4">
-					<div className="space-y-3">
-						<Heading>{campaign.name}</Heading>
-						{campaign.description && (
-							<Text className="max-w-2xl text-zinc-600 dark:text-zinc-400">
-								{campaign.description}
-							</Text>
-						)}
-						<div className="flex flex-wrap items-center gap-3">
-							<MarketingCampaignStatusBadge
-								status={campaign.status}
-								label={campaign.status_label}
-							/>
-							{isArchived && (
-								<Badge color="zinc">
-									Campaña archivada · Solo lectura
-								</Badge>
-							)}
+				<div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+					<div className="grid lg:grid-cols-[minmax(0,1fr)_25rem]">
+						<div className="space-y-4 p-6">
+							<div className="flex flex-wrap items-center gap-2">
+								<Badge color="famedic">Campaña madre</Badge>
+								<MarketingCampaignStatusBadge
+									status={campaign.status}
+									label={campaign.status_label}
+								/>
+								{isArchived && (
+									<Badge color="zinc">
+										Archivada · Solo lectura
+									</Badge>
+								)}
+							</div>
+							<div>
+								<Heading>{campaign.name}</Heading>
+								{campaign.description && (
+									<Text className="mt-3 max-w-3xl text-zinc-600 dark:text-zinc-400">
+										{campaign.description}
+									</Text>
+								)}
+							</div>
 							<Text className="text-sm text-zinc-500">
 								Vigencia: {formatDateRange(campaign.starts_at, campaign.ends_at)}
 							</Text>
+							{primaryLink && (
+								<div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/70">
+									<Text className="text-xs font-semibold uppercase text-zinc-500">
+										Enlace principal de la campaña
+									</Text>
+									<Text className="mt-1 truncate font-mono text-sm text-zinc-700 dark:text-zinc-300">
+										{primaryLink.full_url || primaryLink.public_url}
+									</Text>
+								</div>
+							)}
+						</div>
+						<div className="relative min-h-64 bg-zinc-100 dark:bg-zinc-800">
+							{primaryLink?.hero_image ? (
+								<img
+									src={primaryLink.hero_image}
+									alt={primaryLink.public_title || campaign.name}
+									className="absolute inset-0 h-full w-full object-cover"
+								/>
+							) : (
+								<div className="flex h-full min-h-64 items-center justify-center bg-lime-50 text-center dark:bg-lime-950/30">
+									<div>
+										<Text className="font-semibold text-lime-900 dark:text-lime-200">
+											Sin hero principal
+										</Text>
+										<Text className="mt-1 text-sm text-lime-800 dark:text-lime-300">
+											Agrega imagen en el enlace principal para destacar la campaña.
+										</Text>
+									</div>
+								</div>
+							)}
 						</div>
 					</div>
-					<div className="flex flex-wrap gap-2">
+					<div className="flex flex-wrap gap-2 border-t border-zinc-200 p-4 dark:border-zinc-700">
 						<Button
 							href={route("admin.marketing-campaigns.index")}
 							outline
@@ -631,7 +666,12 @@ export default function MarketingCampaignsShow({
 				{activeTab === "links" && (
 				<section className="space-y-4">
 					<div className="flex flex-wrap items-end justify-between gap-3">
-						<Subheading>Enlaces</Subheading>
+						<div>
+							<Subheading>Enlaces hijos</Subheading>
+							<Text className="mt-1 text-sm text-zinc-500">
+								Cada enlace hereda la campaña y cambia canal, UTMs o ajustes puntuales.
+							</Text>
+						</div>
 						{canCreateLink && (
 							<Button href={createLinkHref} color="lime">
 								<PlusIcon />

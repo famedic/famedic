@@ -32,6 +32,16 @@ import MarketingCampaignProductSelector from "./MarketingCampaignProductSelector
 import MarketingCampaignCategorySelector from "./MarketingCampaignCategorySelector";
 import { resolveLinkBrandValue } from "./marketingCampaignLinkBrand";
 
+const FORM_TABS = [
+	{ id: "summary", label: "Resumen" },
+	{ id: "target", label: "Destino" },
+	{ id: "products", label: "Productos" },
+	{ id: "content", label: "Contenido" },
+	{ id: "images", label: "Imágenes" },
+	{ id: "related", label: "Relacionados" },
+	{ id: "utm", label: "Canal y UTMs" },
+];
+
 function optionEntries(options) {
 	if (!options) return [];
 	if (Array.isArray(options)) {
@@ -92,6 +102,7 @@ export default function MarketingCampaignLinkForm({
 	const [slugTouched, setSlugTouched] = useState(
 		() => Boolean(data.slug && String(data.slug).trim()),
 	);
+	const [activeTab, setActiveTab] = useState("summary");
 
 	const brandValue = resolveLinkBrandValue(data, collections);
 	const primaryIds = primaryProducts.map((item) => Number(item.id));
@@ -114,7 +125,27 @@ export default function MarketingCampaignLinkForm({
 
 	return (
 		<form onSubmit={onSubmit} className="space-y-6">
-			<MarketingCampaignFormSection
+			<div className="sticky top-0 z-10 -mx-1 overflow-x-auto border-b border-zinc-200 bg-white/95 px-1 py-2 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+				<div className="flex min-w-max gap-2">
+					{FORM_TABS.map((tab) => (
+						<button
+							key={tab.id}
+							type="button"
+							onClick={() => setActiveTab(tab.id)}
+							className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+								activeTab === tab.id
+									? "bg-famedic-dark text-white shadow-sm dark:bg-lime-300 dark:text-zinc-950"
+									: "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
+							}`}
+						>
+							{tab.label}
+						</button>
+					))}
+				</div>
+			</div>
+
+			{activeTab === "summary" && (
+				<MarketingCampaignFormSection
 				title="Resumen"
 				description="Identidad del enlace, estado y vigencia."
 				defaultOpen
@@ -178,11 +209,14 @@ export default function MarketingCampaignLinkForm({
 						errors={errors}
 					/>
 				</div>
-			</MarketingCampaignFormSection>
+				</MarketingCampaignFormSection>
+			)}
 
-			<MarketingCampaignFormSection
+			{activeTab === "target" && (
+				<MarketingCampaignFormSection
 				title="Destino y productos"
 				description="Define qué se promocionará y los estudios visibles en la landing."
+				defaultOpen
 			>
 				<MarketingCampaignTargetFields
 					data={data}
@@ -193,11 +227,14 @@ export default function MarketingCampaignLinkForm({
 					collections={collections}
 					productSearchUrl={productSearchUrl}
 				/>
-			</MarketingCampaignFormSection>
+				</MarketingCampaignFormSection>
+			)}
 
-			<MarketingCampaignFormSection
+			{activeTab === "products" && (
+				<MarketingCampaignFormSection
 				title="Productos principales"
-				description="Estudios destacados. Si queda vacío, se usa el fallback del destino."
+				description="Estudios destacados e imagen promocional de cada tarjeta."
+				defaultOpen
 			>
 				{!brandValue ? (
 					<Text className="text-sm text-zinc-500">
@@ -213,17 +250,23 @@ export default function MarketingCampaignLinkForm({
 						maxItems={20}
 						error={
 							errors.primary_laboratory_test_ids ||
-							errors["primary_laboratory_test_ids.0"]
+							errors["primary_laboratory_test_ids.0"] ||
+							errors.primary_product_images ||
+							errors.primary_product_image_uploads
 						}
 						emptyMessage="Sin estudios destacados. Se usará el fallback del destino."
 						addLabel="Buscar estudios destacados"
+						allowProductImages
 					/>
 				)}
-			</MarketingCampaignFormSection>
+				</MarketingCampaignFormSection>
+			)}
 
-			<MarketingCampaignFormSection
+			{activeTab === "content" && (
+				<MarketingCampaignFormSection
 				title="Contenido de la landing"
 				description="Textos públicos, CTAs y opciones de visualización."
+				defaultOpen
 			>
 				<div className="space-y-4">
 					<MarketingCampaignLandingTemplateSelector
@@ -374,11 +417,14 @@ export default function MarketingCampaignLinkForm({
 						</CheckboxField>
 					</div>
 				</div>
-			</MarketingCampaignFormSection>
+				</MarketingCampaignFormSection>
+			)}
 
-			<MarketingCampaignFormSection
+			{activeTab === "images" && (
+				<MarketingCampaignFormSection
 				title="Imágenes"
 				description="Hero principal y galería opcional."
+				defaultOpen
 			>
 				<div className="space-y-8">
 					<MarketingCampaignHeroImageFields
@@ -396,11 +442,14 @@ export default function MarketingCampaignLinkForm({
 						/>
 					</div>
 				</div>
-			</MarketingCampaignFormSection>
+				</MarketingCampaignFormSection>
+			)}
 
-			<MarketingCampaignFormSection
+			{activeTab === "related" && (
+				<MarketingCampaignFormSection
 				title="Relacionados"
 				description="Estudios y categorías adicionales para la landing comercial."
+				defaultOpen
 			>
 				<div className="space-y-8">
 					<div>
@@ -421,10 +470,13 @@ export default function MarketingCampaignLinkForm({
 								excludeIds={primaryIds}
 								error={
 									errors.related_laboratory_test_ids ||
-									errors["related_laboratory_test_ids.0"]
+									errors["related_laboratory_test_ids.0"] ||
+									errors.related_product_images ||
+									errors.related_product_image_uploads
 								}
 								emptyMessage="Sin estudios relacionados."
 								addLabel="Buscar estudios relacionados"
+								allowProductImages
 							/>
 						)}
 					</div>
@@ -441,11 +493,14 @@ export default function MarketingCampaignLinkForm({
 						/>
 					</div>
 				</div>
-			</MarketingCampaignFormSection>
+				</MarketingCampaignFormSection>
+			)}
 
-			<MarketingCampaignFormSection
+			{activeTab === "utm" && (
+				<MarketingCampaignFormSection
 				title="Marketing y UTMs"
 				description="Parámetros UTM opcionales para atribución futura."
+				defaultOpen
 			>
 				<MarketingCampaignUtmFields
 					data={data}
@@ -453,7 +508,8 @@ export default function MarketingCampaignLinkForm({
 					errors={errors}
 					friendlyLabels
 				/>
-			</MarketingCampaignFormSection>
+				</MarketingCampaignFormSection>
+			)}
 
 			{isEdit && aliases?.length > 0 && (
 				<MarketingCampaignFormSection

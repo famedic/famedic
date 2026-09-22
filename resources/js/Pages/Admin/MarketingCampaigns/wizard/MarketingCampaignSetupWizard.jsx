@@ -118,6 +118,7 @@ export default function MarketingCampaignSetupWizard({
 	promotionOptions = [],
 	maxCollectionItems = 50,
 	resetDraftOnMount = false,
+	sourceLink = null,
 }) {
 	const campaignId = campaign?.id ?? null;
 	const steps = useMemo(() => getSteps(mode), [mode]);
@@ -141,7 +142,7 @@ export default function MarketingCampaignSetupWizard({
 		}
 
 		const draft = resetDraftOnMount ? null : loadDraft(mode, campaignId);
-		return initialWizardState(mode, { campaign, initialDraft: draft });
+		return initialWizardState(mode, { campaign, initialDraft: draft, sourceLink });
 	});
 	const [stepErrors, setStepErrors] = useState({});
 	const [processing, setProcessing] = useState(false);
@@ -279,22 +280,38 @@ export default function MarketingCampaignSetupWizard({
 		price_label: formatPrice(product),
 	}));
 
-	const previewGallery = (prepared.galleryItems || [])
-		.map((item) => ({
-			key: item.key || item.id,
-			url:
-				item.url ||
-				(item.file instanceof File ? URL.createObjectURL(item.file) : null),
-			alt: item.alt,
-		}))
-		.filter((item) => item.url);
+	const sourceGallery =
+		prepared.link.reuse_source_media && sourceLink?.gallery_images?.length
+			? sourceLink.gallery_images
+			: [];
+	const previewGallery = (
+		sourceGallery.length
+			? sourceGallery.map((item) => ({
+					key: `source-${item.id}`,
+					url: item.url,
+					alt: item.alt,
+				}))
+			: (prepared.galleryItems || []).map((item) => ({
+					key: item.key || item.id,
+					url:
+						item.url ||
+						(item.file instanceof File ? URL.createObjectURL(item.file) : null),
+					alt: item.alt,
+				}))
+	).filter((item) => item.url);
 
-	const heroPreviewUrl =
-		prepared.link.hero_image_source === "external"
-			? prepared.link.hero_image_url
-			: prepared.link.hero_image instanceof File
-				? URL.createObjectURL(prepared.link.hero_image)
-				: prepared.heroPreviewUrl;
+	const heroPreviewUrl = (() => {
+		if (prepared.link.reuse_source_media && sourceLink?.hero_image_preview_url) {
+			return sourceLink.hero_image_preview_url;
+		}
+		if (prepared.link.hero_image_source === "external") {
+			return prepared.link.hero_image_url;
+		}
+		if (prepared.link.hero_image instanceof File) {
+			return URL.createObjectURL(prepared.link.hero_image);
+		}
+		return prepared.heroPreviewUrl;
+	})();
 
 	const previewOrigin =
 		typeof window === "undefined" ? "https://example.invalid" : window.location.origin;
@@ -427,7 +444,12 @@ export default function MarketingCampaignSetupWizard({
 				})}
 			</div>
 			{stepErrors.promotion && (
-				<ErrorMessage>{stepErrors.promotion}</ErrorMessage>
+				<p
+					role="alert"
+					className="text-base/6 text-red-600 sm:text-sm/6 dark:text-red-500"
+				>
+					{stepErrors.promotion}
+				</p>
 			)}
 		</div>
 	);
@@ -664,6 +686,7 @@ export default function MarketingCampaignSetupWizard({
 						}
 						emptyMessage="Busca y selecciona un estudio."
 						addLabel="Estudio seleccionado"
+						allowProductImages
 					/>
 				)}
 
@@ -743,6 +766,7 @@ export default function MarketingCampaignSetupWizard({
 								onChange={(items) =>
 									patchState({ primaryProducts: items })
 								}
+								allowProductImages
 							/>
 						</div>
 					)}
@@ -846,17 +870,29 @@ export default function MarketingCampaignSetupWizard({
 
 	const renderImagesStep = () => (
 		<div className="space-y-8">
+			{prepared.link.reuse_source_media && (
+				<div className="rounded-lg border border-lime-200 bg-lime-50 px-4 py-3 text-sm text-lime-900 dark:border-lime-900 dark:bg-lime-950/30 dark:text-lime-200">
+					Se reutilizarán la imagen principal y galería del enlace base. Si cambias algo aquí, este enlace usará sus propias imágenes.
+				</div>
+			)}
 			<MarketingCampaignHeroImageFields
 				data={state.link}
 				setData={(key, value) => {
 					if (typeof key === "object") {
 						setState((prev) => ({
 							...prev,
-							link: { ...prev.link, ...key },
+							link: { ...prev.link, ...key, reuse_source_media: false },
 						}));
 						return;
 					}
-					patchLink(key, value);
+					setState((prev) => ({
+						...prev,
+						link: {
+							...prev.link,
+							[key]: value,
+							reuse_source_media: false,
+						},
+					}));
 				}}
 				errors={{ ...stepErrors, ...serverErrors }}
 				previewUrl={heroPreviewUrl}
@@ -865,7 +901,13 @@ export default function MarketingCampaignSetupWizard({
 			<div className="border-t border-zinc-100 pt-6 dark:border-zinc-800">
 				<MarketingCampaignGalleryFields
 					items={state.galleryItems}
-					onChange={(items) => patchState({ galleryItems: items })}
+					onChange={(items) =>
+						setState((prev) => ({
+							...prev,
+							galleryItems: items,
+							link: { ...prev.link, reuse_source_media: false },
+						}))
+					}
 					errors={serverErrors}
 				/>
 			</div>
@@ -874,6 +916,11 @@ export default function MarketingCampaignSetupWizard({
 
 	const renderChannelStep = () => (
 		<div className="space-y-6">
+			{mode === "link" && sourceLink && (
+				<div className="rounded-lg border border-lime-200 bg-lime-50 px-4 py-3 text-sm text-lime-900 dark:border-lime-900 dark:bg-lime-950/30 dark:text-lime-200">
+					Usamos “{sourceLink.name}” como base para destino, productos, contenido e imágenes. Ajusta canal y UTMs; los pasos anteriores siguen disponibles si necesitas cambiar algo para este enlace.
+				</div>
+			)}
 			<div className="grid gap-4 sm:grid-cols-2">
 				<Field>
 					<Label>Nombre interno del enlace</Label>

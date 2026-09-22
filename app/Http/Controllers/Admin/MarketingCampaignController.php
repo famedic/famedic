@@ -44,6 +44,12 @@ class MarketingCampaignController extends Controller
 
         $campaigns = MarketingCampaign::query()
             ->withCount(['links', 'collections'])
+            ->with([
+                'links' => fn ($query) => $query
+                    ->withCount('primaryLandingProducts')
+                    ->orderByDesc('primary_landing_products_count')
+                    ->orderBy('id'),
+            ])
             ->when($filters['search'] ?? null, function ($query, string $search) {
                 $query->where('name', 'like', '%'.$search.'%');
             })
@@ -62,16 +68,28 @@ class MarketingCampaignController extends Controller
             ->through(function (MarketingCampaign $campaign) use ($user) {
                 $canEdit = $user->can('update', $campaign);
                 $canArchive = $user->can('archive', $campaign) && ! $campaign->isArchived();
+                $primaryLink = $campaign->links->first();
 
                 return [
                     'id' => $campaign->id,
                     'name' => $campaign->name,
+                    'description' => $campaign->description,
                     'status' => $campaign->status?->value ?? $campaign->status,
                     'status_label' => $campaign->status?->label(),
                     'starts_at' => $campaign->starts_at,
                     'ends_at' => $campaign->ends_at,
                     'links_count' => $campaign->links_count,
                     'collections_count' => $campaign->collections_count,
+                    'primary_link' => $primaryLink ? [
+                        'id' => $primaryLink->id,
+                        'name' => $primaryLink->name,
+                        'slug' => $primaryLink->slug,
+                        'public_title' => $primaryLink->public_title,
+                        'public_subtitle' => $primaryLink->public_subtitle,
+                        'hero_image' => $primaryLink->resolvedHeroImageUrl(),
+                        'utm_source' => $primaryLink->utm_source,
+                        'utm_medium' => $primaryLink->utm_medium,
+                    ] : null,
                     'updated_at' => $campaign->updated_at,
                     'created_at' => $campaign->created_at,
                     'can_edit' => $canEdit,

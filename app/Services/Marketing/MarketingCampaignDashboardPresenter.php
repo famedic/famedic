@@ -111,6 +111,12 @@ class MarketingCampaignDashboardPresenter
             'base_url' => $this->urlBuilder->baseUrl($link),
             'full_url' => $this->urlBuilder->fullUrl($link),
             'utm_parameters' => $this->urlBuilder->utmParameters($link),
+            'channel_label' => $this->channelLabel($link),
+            'target_type' => $link->target_type?->value ?? $link->target_type,
+            'target_type_label' => $link->target_type?->label(),
+            'hero_image' => $link->resolvedHeroImageUrl(),
+            'public_title' => $link->public_title,
+            'public_subtitle' => $link->public_subtitle,
         ];
     }
 
@@ -132,6 +138,9 @@ class MarketingCampaignDashboardPresenter
             'status_label' => $link->status?->label(),
             'target_type' => $link->target_type?->value ?? $link->target_type,
             'target_type_label' => $link->target_type?->label(),
+            'hero_image' => $link->resolvedHeroImageUrl(),
+            'public_title' => $link->public_title,
+            'public_subtitle' => $link->public_subtitle,
             'starts_at' => $link->starts_at,
             'ends_at' => $link->ends_at,
             'created_at' => $link->created_at,

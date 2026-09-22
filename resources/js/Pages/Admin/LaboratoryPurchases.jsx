@@ -296,6 +296,7 @@ export default function LaboratoryPurchases({
 					<SearchInput
 						value={data.search}
 						onChange={(value) => setData("search", value)}
+						placeholder="Buscar por paciente, folio o estudio"
 					/>
 					<div className="flex flex-wrap items-center justify-end gap-2">
 						<ReloadListButton

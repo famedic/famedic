@@ -50,6 +50,20 @@ trait MarketingCampaignLinkLandingRules
             'primary_laboratory_test_ids.*' => ['integer'],
             'related_laboratory_test_ids' => ['nullable', 'array'],
             'related_laboratory_test_ids.*' => ['integer'],
+            'primary_product_images' => ['nullable', 'array'],
+            'primary_product_images.*.laboratory_test_id' => ['required', 'integer'],
+            'primary_product_images.*.upload_index' => ['nullable', 'integer', 'min:0'],
+            'primary_product_images.*.clear' => ['sometimes', 'boolean'],
+            'primary_product_images.*.alt' => ['nullable', 'string', 'max:180'],
+            'primary_product_image_uploads' => ['nullable', 'array', 'max:20'],
+            'primary_product_image_uploads.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'related_product_images' => ['nullable', 'array'],
+            'related_product_images.*.laboratory_test_id' => ['required', 'integer'],
+            'related_product_images.*.upload_index' => ['nullable', 'integer', 'min:0'],
+            'related_product_images.*.clear' => ['sometimes', 'boolean'],
+            'related_product_images.*.alt' => ['nullable', 'string', 'max:180'],
+            'related_product_image_uploads' => ['nullable', 'array', 'max:8'],
+            'related_product_image_uploads.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'related_category_ids' => ['nullable', 'array'],
             'related_category_ids.*' => ['integer'],
 
@@ -88,6 +102,19 @@ trait MarketingCampaignLinkLandingRules
 
         if (! is_array($this->input('editorial_items'))) {
             $this->merge(['editorial_items' => []]);
+        }
+
+        foreach (['primary_product_images', 'related_product_images'] as $field) {
+            if (is_string($this->input($field))) {
+                $decoded = json_decode($this->input($field), true);
+                $this->merge([
+                    $field => is_array($decoded) ? $decoded : [],
+                ]);
+            }
+
+            if (! is_array($this->input($field))) {
+                $this->merge([$field => []]);
+            }
         }
     }
 

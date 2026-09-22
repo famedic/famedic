@@ -5,6 +5,8 @@ import {
 	MagnifyingGlassIcon,
 	ArchiveBoxIcon,
 	CalendarDateRangeIcon,
+	ArrowTopRightOnSquareIcon,
+	LinkIcon,
 } from "@heroicons/react/16/solid";
 import { FunnelIcon } from "@heroicons/react/24/outline";
 import AdminLayout from "@/Layouts/AdminLayout";
@@ -13,14 +15,6 @@ import { Text } from "@/Components/Catalyst/text";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Input, InputGroup } from "@/Components/Catalyst/input";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/Components/Catalyst/table";
 import { ListboxOption, ListboxLabel } from "@/Components/Catalyst/listbox";
 import EmptyListCard from "@/Components/EmptyListCard";
 import ListboxFilter from "@/Components/Filters/ListboxFilter";
@@ -58,6 +52,151 @@ function formatDateRange(startsAt, endsAt) {
 	if (!startsAt) return `Hasta ${formatDateTime(endsAt)}`;
 
 	return `${formatDateTime(startsAt)} — ${formatDateTime(endsAt)}`;
+}
+
+function channelMeta(link) {
+	const source = String(link?.utm_source || "").toLowerCase();
+	const medium = String(link?.utm_medium || "").toLowerCase();
+
+	if (source.includes("whatsapp") || medium.includes("whatsapp")) {
+		return { icon: "WA", label: "WhatsApp", color: "green" };
+	}
+	if (source.includes("facebook") || source.includes("instagram") || medium.includes("social")) {
+		return { icon: "f", label: "Meta / Social", color: "blue" };
+	}
+	if (source.includes("google") || medium.includes("cpc")) {
+		return { icon: "G", label: "Google Ads", color: "sky" };
+	}
+	if (source.includes("email") || medium.includes("email")) {
+		return { icon: "@", label: "Email", color: "violet" };
+	}
+	if (source.includes("qr") || medium.includes("offline")) {
+		return { icon: "QR", label: "QR / Offline", color: "amber" };
+	}
+
+	return { icon: "UTM", label: "Canal pendiente", color: "zinc" };
+}
+
+function CampaignCard({ campaign, onArchive }) {
+	const canEdit = Boolean(campaign.can_edit);
+	const canArchive = Boolean(campaign.can_archive);
+	const primaryLink = campaign.primary_link;
+	const meta = channelMeta(primaryLink);
+
+	return (
+		<article className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900">
+			<div className="grid gap-0 lg:grid-cols-[18rem_minmax(0,1fr)]">
+				<div className="relative min-h-44 bg-zinc-100 dark:bg-zinc-800">
+					{primaryLink?.hero_image ? (
+						<img
+							src={primaryLink.hero_image}
+							alt={primaryLink.public_title || campaign.name}
+							className="absolute inset-0 h-full w-full object-cover"
+						/>
+					) : (
+						<div className="flex h-full min-h-44 items-center justify-center bg-lime-50 text-lime-900 dark:bg-lime-950/30 dark:text-lime-200">
+							<div className="text-center">
+								<LinkIcon className="mx-auto size-8" />
+								<Text className="mt-2 text-sm font-semibold">
+									Sin hero principal
+								</Text>
+							</div>
+						</div>
+					)}
+					<div className="absolute left-3 top-3">
+						<Badge color="famedic">Campaña</Badge>
+					</div>
+				</div>
+
+				<div className="space-y-5 p-5">
+					<div className="flex flex-wrap items-start justify-between gap-4">
+						<div className="min-w-0 space-y-2">
+							<div className="flex flex-wrap items-center gap-2">
+								<Heading className="text-lg">{campaign.name}</Heading>
+								<MarketingCampaignStatusBadge
+									status={campaign.status}
+									label={campaign.status_label}
+								/>
+							</div>
+							{campaign.description && (
+								<Text className="max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">
+									{campaign.description}
+								</Text>
+							)}
+							<Text className="text-sm text-zinc-500">
+								Vigencia: {formatDateRange(campaign.starts_at, campaign.ends_at)}
+							</Text>
+						</div>
+						<Text className="text-xs text-zinc-500">
+							Actualizada {formatDateTime(campaign.updated_at || campaign.created_at)}
+						</Text>
+					</div>
+
+					<div className="grid gap-3 sm:grid-cols-3">
+						<div className="rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700">
+							<Text className="text-xs text-zinc-500">Enlaces hijos</Text>
+							<Text className="mt-1 text-lg font-semibold">{campaign.links_count ?? 0}</Text>
+						</div>
+						<div className="rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700">
+							<Text className="text-xs text-zinc-500">Colecciones</Text>
+							<Text className="mt-1 text-lg font-semibold">{campaign.collections_count ?? 0}</Text>
+						</div>
+						<div className="rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700">
+							<Text className="text-xs text-zinc-500">Enlace principal</Text>
+							<div className="mt-1 flex items-center gap-2">
+								<Badge color={meta.color}>
+									<span className="font-mono">{meta.icon}</span>
+									{meta.label}
+								</Badge>
+							</div>
+						</div>
+					</div>
+
+					{primaryLink && (
+						<div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/70">
+							<Text className="text-xs font-semibold uppercase text-zinc-500">
+								Hijo destacado
+							</Text>
+							<div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+								<div className="min-w-0">
+									<Text className="font-medium">
+										{primaryLink.public_title || primaryLink.name}
+									</Text>
+									<Text className="mt-1 truncate font-mono text-sm text-zinc-500">
+										/c/{primaryLink.slug}
+									</Text>
+								</div>
+								<Badge color="slate">Enlace</Badge>
+							</div>
+						</div>
+					)}
+
+					<div className="flex flex-wrap justify-end gap-2">
+						<Button
+							href={route("admin.marketing-campaigns.show", campaign.id)}
+							outline
+						>
+							<ArrowTopRightOnSquareIcon className="size-4" />
+							Ver campaña
+						</Button>
+						{canEdit && (
+							<Button
+								href={route("admin.marketing-campaigns.edit", campaign.id)}
+								outline
+							>
+								Editar
+							</Button>
+						)}
+						{canArchive && (
+							<Button type="button" color="red" onClick={() => onArchive(campaign)}>
+								Archivar
+							</Button>
+						)}
+					</div>
+				</div>
+			</div>
+		</article>
+	);
 }
 
 export default function MarketingCampaignsIndex({
@@ -266,178 +405,14 @@ export default function MarketingCampaignsIndex({
 							</div>
 						)}
 						<PaginatedTable paginatedData={campaigns}>
-							<div className="hidden lg:block">
-								<Table className="[--gutter:theme(spacing.6)]">
-									<TableHead>
-										<TableRow>
-											<TableHeader>Campaña</TableHeader>
-											<TableHeader>Estado</TableHeader>
-											<TableHeader>Vigencia</TableHeader>
-											<TableHeader>Enlaces</TableHeader>
-											<TableHeader>
-												Última actualización
-											</TableHeader>
-											<TableHeader className="text-right">
-												Acciones
-											</TableHeader>
-										</TableRow>
-									</TableHead>
-									<TableBody>
-										{campaigns.data.map((campaign) => {
-											const canEdit = Boolean(
-												campaign.can_edit,
-											);
-											const canArchive = Boolean(
-												campaign.can_archive,
-											);
-
-											return (
-												<TableRow key={campaign.id}>
-													<TableCell className="font-medium">
-														{campaign.name}
-													</TableCell>
-													<TableCell>
-														<MarketingCampaignStatusBadge
-															status={
-																campaign.status
-															}
-															label={
-																campaign.status_label
-															}
-														/>
-													</TableCell>
-													<TableCell
-														className="text-sm"
-														title={formatDateRange(campaign.starts_at, campaign.ends_at)}
-													>
-														{formatDateRange(campaign.starts_at, campaign.ends_at)}
-													</TableCell>
-													<TableCell>
-														{campaign.links_count ??
-															0}
-													</TableCell>
-													<TableCell className="text-sm">
-														{formatDateTime(
-															campaign.updated_at ||
-																campaign.created_at,
-														)}
-													</TableCell>
-													<TableCell className="text-right">
-														<div className="flex justify-end gap-2">
-															<Button
-																href={route(
-																	"admin.marketing-campaigns.show",
-																	campaign.id,
-																)}
-																outline
-															>
-																Ver
-															</Button>
-															{canEdit && (
-																<Button
-																	href={route(
-																		"admin.marketing-campaigns.edit",
-																		campaign.id,
-																	)}
-																	outline
-																>
-																	Editar
-																</Button>
-															)}
-															{canArchive && (
-																<Button
-																	type="button"
-																	color="red"
-																	onClick={() =>
-																		setArchiveTarget(
-																			campaign,
-																		)
-																	}
-																>
-																	Archivar
-																</Button>
-															)}
-														</div>
-													</TableCell>
-												</TableRow>
-											);
-										})}
-									</TableBody>
-								</Table>
-							</div>
-
-							<div className="space-y-3 lg:hidden">
-								{campaigns.data.map((campaign) => {
-									const canEdit = Boolean(campaign.can_edit);
-									const canArchive = Boolean(
-										campaign.can_archive,
-									);
-
-									return (
-										<div
-											key={campaign.id}
-											className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
-										>
-											<div className="flex items-start justify-between gap-3">
-												<div>
-													<Text className="font-semibold">
-														{campaign.name}
-													</Text>
-													<Text className="mt-1 text-sm text-zinc-500">
-														{campaign.links_count ??
-															0}{" "}
-														enlaces ·{" "}
-														{formatDateTime(
-															campaign.updated_at ||
-																campaign.created_at,
-														)}
-													</Text>
-												</div>
-												<MarketingCampaignStatusBadge
-													status={campaign.status}
-													label={
-														campaign.status_label
-													}
-												/>
-											</div>
-											<div className="mt-4 flex flex-wrap gap-2">
-												<Button
-													href={route(
-														"admin.marketing-campaigns.show",
-														campaign.id,
-													)}
-													outline
-												>
-													Ver
-												</Button>
-												{canEdit && (
-													<Button
-														href={route(
-															"admin.marketing-campaigns.edit",
-															campaign.id,
-														)}
-														outline
-													>
-														Editar
-													</Button>
-												)}
-												{canArchive && (
-													<Button
-														type="button"
-														color="red"
-														onClick={() =>
-															setArchiveTarget(
-																campaign,
-															)
-														}
-													>
-														Archivar
-													</Button>
-												)}
-											</div>
-										</div>
-									);
-								})}
+							<div className="space-y-4">
+								{campaigns.data.map((campaign) => (
+									<CampaignCard
+										key={campaign.id}
+										campaign={campaign}
+										onArchive={setArchiveTarget}
+									/>
+								))}
 							</div>
 						</PaginatedTable>
 					</>

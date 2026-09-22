@@ -44,6 +44,8 @@ class StoreMarketingCampaignLinkRequest extends FormRequest
             'utm_content' => ['nullable', 'string', 'max:160'],
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
+            'source_link_id' => ['nullable', 'integer', 'exists:marketing_campaign_links,id'],
+            'reuse_source_media' => ['sometimes', 'boolean'],
             ...$this->landingContentRules(),
         ];
     }
@@ -65,6 +67,10 @@ class StoreMarketingCampaignLinkRequest extends FormRequest
             $this->merge($merge);
         }
 
+        if ($this->has('reuse_source_media')) {
+            $this->merge(['reuse_source_media' => $this->boolean('reuse_source_media')]);
+        }
+
         $this->prepareLandingPayload();
     }
 
@@ -82,6 +88,17 @@ class StoreMarketingCampaignLinkRequest extends FormRequest
                     $this->input('target_payload'),
                     $this->integer('marketing_campaign_id'),
                 );
+
+                if ($this->filled('source_link_id')) {
+                    $belongsToCampaign = MarketingCampaignLink::query()
+                        ->whereKey($this->integer('source_link_id'))
+                        ->where('marketing_campaign_id', $this->integer('marketing_campaign_id'))
+                        ->exists();
+
+                    if (! $belongsToCampaign) {
+                        $validator->errors()->add('source_link_id', 'El enlace base no pertenece a esta campaña.');
+                    }
+                }
             } catch (ValidationException $exception) {
                 foreach ($exception->errors() as $field => $messages) {
                     foreach ($messages as $message) {

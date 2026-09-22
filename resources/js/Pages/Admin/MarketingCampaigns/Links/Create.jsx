@@ -16,6 +16,7 @@ export default function MarketingCampaignLinksCreate({
 	utmPresets = [],
 	promotionOptions = [],
 	maxCollectionItems = 50,
+	sourceLink = null,
 }) {
 	return (
 		<AdminLayout title={`Nuevo enlace · ${campaign.name}`}>
@@ -51,6 +52,8 @@ export default function MarketingCampaignLinksCreate({
 					utmPresets={utmPresets}
 					promotionOptions={promotionOptions}
 					maxCollectionItems={maxCollectionItems ?? 50}
+					sourceLink={sourceLink}
+					resetDraftOnMount={Boolean(sourceLink)}
 				/>
 			</div>
 		</AdminLayout>

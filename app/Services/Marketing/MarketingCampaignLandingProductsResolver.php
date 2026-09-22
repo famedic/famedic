@@ -62,9 +62,17 @@ class MarketingCampaignLandingProductsResolver
     private function mapRecords($records, array $allowedQuery): array
     {
         return $records
-            ->map(fn ($record) => $record->laboratoryTest)
-            ->filter()
-            ->map(fn ($test) => $this->productMapper->map($test, $allowedQuery))
+            ->filter(fn ($record) => $record->laboratoryTest)
+            ->map(function ($record) use ($allowedQuery) {
+                $product = $this->productMapper->map($record->laboratoryTest, $allowedQuery);
+
+                if ($record->resolvedImageUrl()) {
+                    $product['image_url'] = $record->resolvedImageUrl();
+                    $product['image_alt'] = $record->image_alt ?: $product['name'];
+                }
+
+                return $product;
+            })
             ->values()
             ->all();
     }

@@ -7,6 +7,7 @@ import { Input, InputGroup } from "@/Components/Catalyst/input";
 import { Text } from "@/Components/Catalyst/text";
 import {
 	MagnifyingGlassIcon,
+	PhotoIcon,
 	ChevronUpIcon,
 	ChevronDownIcon,
 	XMarkIcon,
@@ -50,6 +51,7 @@ export default function MarketingCampaignProductSelector({
 	addHint,
 	variant = "default",
 	showSelectedCount = true,
+	allowProductImages = false,
 }) {
 	const resolvedSelectedItems = selectedItems ?? EMPTY_ID_LIST;
 	const resolvedExcludeIds = excludeIds ?? EMPTY_ID_LIST;
@@ -138,6 +140,35 @@ export default function MarketingCampaignProductSelector({
 		if (target < 0 || target >= next.length) return;
 		[next[index], next[target]] = [next[target], next[index]];
 		onChange(next);
+	};
+
+	const updateItem = (id, patch) => {
+		onChange(
+			resolvedSelectedItems.map((item) =>
+				Number(item.id) === Number(id) ? { ...item, ...patch } : item,
+			),
+		);
+	};
+
+	const handleImageFile = (item, file) => {
+		if (!file) return;
+
+		updateItem(item.id, {
+			image_file: file,
+			image_preview_url: URL.createObjectURL(file),
+			image_cleared: false,
+			image_alt: item.image_alt || item.name || "",
+		});
+	};
+
+	const clearImage = (item) => {
+		updateItem(item.id, {
+			image_file: null,
+			image_preview_url: null,
+			image_url: null,
+			image: null,
+			image_cleared: true,
+		});
 	};
 
 	const renderMeta = (product, { selected = false } = {}) => {
@@ -240,28 +271,81 @@ export default function MarketingCampaignProductSelector({
 				<Text className="text-sm text-zinc-500">{emptyMessage}</Text>
 			) : (
 				<ul className="space-y-2">
-					{resolvedSelectedItems.map((item, index) => (
+					{resolvedSelectedItems.map((item, index) => {
+						const imageUrl =
+							item.image_preview_url || item.image_url || item.image || null;
+						const imageInputId = `product-image-${variant}-${item.id}`;
+
+						return (
 						<li
 							key={item.id}
 							className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700"
 						>
-							<div className="min-w-0 flex-1">
-								<div className="flex flex-wrap items-center gap-2">
-									<Badge color="zinc">#{index + 1}</Badge>
-									<div className="font-medium">{item.name}</div>
-								</div>
-								<div className="mt-1 text-sm text-zinc-500">
-									{[
-										item.other_name,
-										categoryLabel(item),
-										formatCents(item.famedic_price_cents),
-									]
-										.filter(Boolean)
-										.join(" · ")}
-									{item.requires_appointment && (
-										<Badge color="sky" className="ml-2">
-											Requiere cita
-										</Badge>
+							<div className="flex min-w-0 flex-1 gap-3">
+								{allowProductImages && (
+									<div className="w-20 shrink-0 space-y-2">
+										<div className="flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500">
+											{imageUrl ? (
+												<img
+													src={imageUrl}
+													alt={item.image_alt || item.name || ""}
+													className="h-full w-full object-cover"
+												/>
+											) : (
+												<PhotoIcon className="size-7" />
+											)}
+										</div>
+										<input
+											id={imageInputId}
+											type="file"
+											accept="image/jpeg,image/png,image/webp"
+											className="sr-only"
+											onChange={(event) =>
+												handleImageFile(item, event.target.files?.[0])
+											}
+										/>
+									</div>
+								)}
+								<div className="min-w-0 flex-1">
+									<div className="flex flex-wrap items-center gap-2">
+										<Badge color="zinc">#{index + 1}</Badge>
+										<div className="font-medium">{item.name}</div>
+									</div>
+									<div className="mt-1 text-sm text-zinc-500">
+										{[
+											item.other_name,
+											categoryLabel(item),
+											formatCents(item.famedic_price_cents),
+										]
+											.filter(Boolean)
+											.join(" · ")}
+										{item.requires_appointment && (
+											<Badge color="sky" className="ml-2">
+												Requiere cita
+											</Badge>
+										)}
+									</div>
+									{allowProductImages && (
+										<div className="mt-3 flex flex-wrap items-center gap-2">
+											<Button
+												type="button"
+												outline
+												onClick={() =>
+													document.getElementById(imageInputId)?.click()
+												}
+											>
+												{imageUrl ? "Cambiar imagen" : "Subir imagen"}
+											</Button>
+											{imageUrl && (
+												<Button
+													type="button"
+													plain
+													onClick={() => clearImage(item)}
+												>
+													Quitar
+												</Button>
+											)}
+										</div>
 									)}
 								</div>
 							</div>
@@ -296,7 +380,8 @@ export default function MarketingCampaignProductSelector({
 								</Button>
 							</div>
 						</li>
-					))}
+						);
+					})}
 				</ul>
 			)}
 		</div>

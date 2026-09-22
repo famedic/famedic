@@ -51,3 +51,24 @@ export function buildGalleryPayload(items = []) {
 
 	return { gallery_items: payload, gallery_uploads: uploads };
 }
+
+export function buildProductImagePayload(items = []) {
+	const uploads = [];
+	const payload = items.map((item) => {
+		const imageFile = item.image_file instanceof File ? item.image_file : null;
+		const uploadIndex = imageFile ? uploads.length : null;
+
+		if (imageFile) {
+			uploads.push(imageFile);
+		}
+
+		return {
+			laboratory_test_id: item.id,
+			upload_index: uploadIndex,
+			clear: Boolean(item.image_cleared),
+			alt: item.image_alt || item.name || null,
+		};
+	});
+
+	return { product_images: payload, product_image_uploads: uploads };
+}

@@ -73,6 +73,10 @@ class DuplicateMarketingCampaignLinkAction
                     'section' => $item->section,
                     'position' => $item->position,
                     'is_featured' => $item->is_featured,
+                    'image_source' => $item->image_source,
+                    'image_disk' => $item->image_disk,
+                    'image_path' => $item->image_path,
+                    'image_alt' => $item->image_alt,
                 ]);
             }
 

@@ -49,7 +49,7 @@ function ProductVisual({ product, className = "" }) {
 		return (
 			<img
 				src={imageUrl}
-				alt={product.name || ""}
+				alt={product.image_alt || product.name || ""}
 				className={`h-full w-full object-cover ${className}`}
 				onError={() => setFailed(true)}
 			/>
@@ -58,11 +58,11 @@ function ProductVisual({ product, className = "" }) {
 
 	return (
 		<div
-			className={`flex h-full w-full items-center justify-center bg-gradient-to-br from-sky-50 via-white to-slate-50 text-center ${className}`}
+			className={`flex h-full w-full items-center justify-center bg-zinc-50 text-center dark:bg-zinc-800/70 ${className}`}
 			aria-hidden="true"
 		>
-			<div className="flex size-20 items-center justify-center rounded-3xl bg-white/90 text-sky-800 shadow-sm ring-1 ring-sky-100">
-				<Icon className="size-10" />
+			<div className="flex size-16 items-center justify-center rounded-2xl bg-white text-famedic-dark shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-lime-300 dark:ring-white/10">
+				<Icon className="size-8" />
 			</div>
 		</div>
 	);
@@ -88,6 +88,17 @@ function ProductBadges({ product }) {
 	);
 }
 
+const cardSurface =
+	"bg-white text-famedic-darker shadow-sm ring-1 ring-zinc-200 dark:bg-slate-900/90 dark:text-white dark:ring-white/10";
+const cardSurfaceCompact =
+	"bg-white text-famedic-darker ring-1 ring-zinc-200 dark:bg-slate-900/90 dark:text-white dark:ring-white/10";
+const titleClasses =
+	"font-poppins font-semibold text-famedic-darker dark:text-white";
+const descriptionClasses =
+	"text-zinc-600 dark:text-zinc-300";
+const mutedClasses =
+	"text-zinc-500 dark:text-zinc-400";
+
 function PriceBlock({ product, showPrices }) {
 	const discount = discountPercent(product);
 
@@ -96,11 +107,11 @@ function PriceBlock({ product, showPrices }) {
 	return (
 		<div className="space-y-1">
 			<Text>
-				<Strong className="text-lg text-famedic-darker">{product.formatted_famedic_price}</Strong>
+				<Strong className="text-lg text-famedic-darker dark:text-white">{product.formatted_famedic_price}</Strong>
 			</Text>
 			{product.public_price_cents > product.famedic_price_cents && (
 				<div className="flex flex-wrap items-center gap-2">
-					<Text className="text-sm text-zinc-500 line-through">{product.formatted_public_price}</Text>
+					<Text className="text-sm text-zinc-500 line-through dark:text-zinc-400">{product.formatted_public_price}</Text>
 					{discount && <Badge color="lime">{discount}% menos</Badge>}
 				</div>
 			)}
@@ -169,7 +180,7 @@ function DetailsLink({ product, actionButtonProps, className = "" }) {
 	return (
 		<a
 			{...getActionButtonProps(product.detail_url)}
-			className={`text-sm font-semibold text-famedic-dark underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-famedic-lime ${className}`}
+			className={`text-sm font-semibold text-famedic-dark underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-famedic-lime dark:text-lime-300 ${className}`}
 		>
 			Ver detalles
 		</a>
@@ -196,18 +207,18 @@ export default function CampaignProductCard({
 
 	if (variant === "editorial") {
 		return (
-			<article className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200">
-				<div className="aspect-[4/3]">
+			<article className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl ${cardSurface}`}>
+				<div className="aspect-[4/3] border-b border-zinc-100 dark:border-white/10">
 					<ProductVisual product={product} />
 				</div>
 				<div className="flex flex-1 min-w-0 flex-col gap-4 p-5">
 					<div className="min-w-0 space-y-2">
 						<ProductBadges product={product} />
-						<h3 className="line-clamp-3 font-poppins text-lg font-semibold leading-7 text-famedic-darker">
+						<h3 className={`line-clamp-3 text-lg leading-7 ${titleClasses}`}>
 							{product.name}
 						</h3>
 						{description && (
-							<Text className="line-clamp-3 text-sm leading-6 text-zinc-600">{description}</Text>
+							<Text className={`line-clamp-3 text-sm leading-6 ${descriptionClasses}`}>{description}</Text>
 						)}
 					</div>
 					<div className="mt-auto space-y-3">
@@ -226,7 +237,7 @@ export default function CampaignProductCard({
 						/>
 						<div className="flex items-center justify-between gap-3">
 							<DetailsLink product={product} actionButtonProps={actionButtonProps} />
-							{cartMessage && <Text className="text-xs text-zinc-600">{cartMessage}</Text>}
+							{cartMessage && <Text className={`text-xs ${descriptionClasses}`}>{cartMessage}</Text>}
 						</div>
 					</div>
 				</div>
@@ -237,26 +248,26 @@ export default function CampaignProductCard({
 	if (variant === "conversion") {
 		return (
 			<article
-				className={`flex h-full min-h-0 flex-col rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 ${
-					compact ? "shadow-none" : ""
+				className={`flex h-full min-h-0 flex-col rounded-2xl p-5 ${
+					compact ? cardSurfaceCompact : cardSurface
 				}`}
 			>
 				<div className="flex items-start justify-between gap-4">
 					<Badge color={position === 0 ? "sky" : "lime"}>
 						{CONVERSION_HIGHLIGHTS[position % CONVERSION_HIGHLIGHTS.length]}
 					</Badge>
-					<div className="size-20 shrink-0 overflow-hidden rounded-2xl bg-sky-50 ring-1 ring-sky-100">
+					<div className="size-16 shrink-0 overflow-hidden rounded-2xl bg-zinc-50 ring-1 ring-zinc-200 dark:bg-zinc-800/70 dark:ring-white/10">
 						<ProductVisual product={product} />
 					</div>
 				</div>
 				<div className="mt-4 flex flex-1 flex-col gap-4">
 					<div className="min-w-0 space-y-3">
-						<h3 className="line-clamp-3 font-poppins text-lg font-semibold leading-7 text-famedic-darker">
+						<h3 className={`line-clamp-3 text-lg leading-7 ${titleClasses}`}>
 							{product.name}
 						</h3>
-						{product.other_name && <Text className="text-sm text-zinc-500">{product.other_name}</Text>}
+						{product.other_name && <Text className={`text-sm ${mutedClasses}`}>{product.other_name}</Text>}
 						{description && (
-							<Text className="line-clamp-3 text-sm leading-6 text-slate-600">{description}</Text>
+							<Text className={`line-clamp-3 text-sm leading-6 ${descriptionClasses}`}>{description}</Text>
 						)}
 						<ProductBadges product={product} />
 					</div>
@@ -274,7 +285,7 @@ export default function CampaignProductCard({
 							actionButtonProps={actionButtonProps}
 							label="Agregar"
 						/>
-						{cartMessage && <Text className="text-sm text-zinc-600">{cartMessage}</Text>}
+						{cartMessage && <Text className={`text-sm ${descriptionClasses}`}>{cartMessage}</Text>}
 						<DetailsLink product={product} actionButtonProps={actionButtonProps} className="inline-flex" />
 					</div>
 				</div>
@@ -285,21 +296,21 @@ export default function CampaignProductCard({
 	if (variant === "catalog") {
 		return (
 			<article
-				className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 ${
-					compact ? "shadow-none" : ""
+				className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl ${
+					compact ? cardSurfaceCompact : cardSurface
 				}`}
 			>
-				<div className="aspect-[16/9]">
+				<div className="aspect-[16/9] border-b border-zinc-100 dark:border-white/10">
 					<ProductVisual product={product} />
 				</div>
 				<div className="flex flex-1 flex-col gap-3 p-4">
 					<div className="min-w-0 space-y-2">
-						<h3 className="line-clamp-2 font-poppins text-base font-semibold leading-6 text-famedic-darker">
+						<h3 className={`line-clamp-2 text-base leading-6 ${titleClasses}`}>
 							{product.name}
 						</h3>
-						{product.other_name && <Text className="line-clamp-1 text-sm text-zinc-500">{product.other_name}</Text>}
+						{product.other_name && <Text className={`line-clamp-1 text-sm ${mutedClasses}`}>{product.other_name}</Text>}
 						{description && (
-							<Text className="line-clamp-2 text-sm leading-6 text-slate-600">{description}</Text>
+							<Text className={`line-clamp-2 text-sm leading-6 ${descriptionClasses}`}>{description}</Text>
 						)}
 						<ProductBadges product={product} />
 					</div>
@@ -317,7 +328,7 @@ export default function CampaignProductCard({
 							actionButtonProps={actionButtonProps}
 							label="Agregar"
 						/>
-						{cartMessage && <Text className="text-sm text-zinc-600">{cartMessage}</Text>}
+						{cartMessage && <Text className={`text-sm ${descriptionClasses}`}>{cartMessage}</Text>}
 						<DetailsLink product={product} actionButtonProps={actionButtonProps} className="inline-flex" />
 					</div>
 				</div>
@@ -329,22 +340,22 @@ export default function CampaignProductCard({
 
 	return (
 		<article
-			className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 ${
-				compact ? "shadow-none" : ""
+			className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl ${
+				compact ? cardSurfaceCompact : cardSurface
 			}`}
 		>
-			<div className={visualHeight}>
+			<div className={`${visualHeight} border-b border-zinc-100 dark:border-white/10`}>
 				<ProductVisual product={product} />
 			</div>
 			<div className="flex flex-1 flex-col gap-4 p-5">
 				<div className="min-w-0 space-y-3">
 					<ProductBadges product={product} />
-					<h3 className="line-clamp-3 font-poppins text-lg font-semibold leading-7 text-famedic-darker">
+					<h3 className={`line-clamp-3 text-lg leading-7 ${titleClasses}`}>
 						{product.name}
 					</h3>
-					{product.other_name && <Text className="text-sm text-zinc-500">{product.other_name}</Text>}
+					{product.other_name && <Text className={`text-sm ${mutedClasses}`}>{product.other_name}</Text>}
 					{description && (
-						<Text className="line-clamp-3 text-sm leading-6 text-zinc-600">{description}</Text>
+						<Text className={`line-clamp-3 text-sm leading-6 ${descriptionClasses}`}>{description}</Text>
 					)}
 				</div>
 				<div className="mt-auto space-y-3">
@@ -361,7 +372,7 @@ export default function CampaignProductCard({
 						actionButtonProps={actionButtonProps}
 						label="Agregar"
 					/>
-					{cartMessage && <Text className="text-sm text-zinc-600">{cartMessage}</Text>}
+					{cartMessage && <Text className={`text-sm ${descriptionClasses}`}>{cartMessage}</Text>}
 					<DetailsLink product={product} actionButtonProps={actionButtonProps} className="inline-flex" />
 				</div>
 			</div>
