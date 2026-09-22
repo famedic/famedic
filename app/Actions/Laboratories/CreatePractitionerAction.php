@@ -2,6 +2,7 @@
 
 namespace App\Actions\Laboratories;
 
+use App\Support\GDA\GdaApiUrl;
 use Exception;
 use Illuminate\Support\Facades\Http;
 
@@ -9,7 +10,7 @@ class CreatePractitionerAction
 {
     public function __invoke(string $brand): int
     {
-        $url = config('services.gda.url') . 'infogda-fullV3/practitioner';
+        $url = GdaApiUrl::endpoint('practitioner');
 
         $payload = [
             "header" => [

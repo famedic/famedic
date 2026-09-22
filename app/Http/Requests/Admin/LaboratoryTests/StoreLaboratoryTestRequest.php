@@ -28,6 +28,8 @@ class StoreLaboratoryTestRequest extends FormRequest
             'elements' => ['nullable', 'string'],
             'common_use' => ['nullable', 'string'],
             'requires_appointment' => ['boolean'],
+            'needs_gda_review' => ['boolean'],
+            'gda_review_note' => ['nullable', 'string', 'max:1000'],
             'public_price' => ['required', 'numeric', 'min:0'],
             'famedic_price' => ['required', 'numeric', 'min:0'],
             'laboratory_test_category_id' => ['required', 'exists:laboratory_test_categories,id'],
@@ -38,6 +40,7 @@ class StoreLaboratoryTestRequest extends FormRequest
     {
         $this->merge([
             'requires_appointment' => $this->boolean('requires_appointment'),
+            'needs_gda_review' => $this->boolean('needs_gda_review'),
         ]);
     }
 }

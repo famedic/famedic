@@ -22,8 +22,8 @@ class MarketingCampaignLinkProductService
     /**
      * @param  list<int|string>  $primaryIds
      * @param  list<int|string>  $relatedIds
-     * @param  list<array<string, mixed>>  $primaryImages
-     * @param  list<array<string, mixed>>  $relatedImages
+     * @param  list<array<string, mixed>>|string  $primaryImages
+     * @param  list<array<string, mixed>>|string  $relatedImages
      * @param  list<UploadedFile|null>  $primaryUploads
      * @param  list<UploadedFile|null>  $relatedUploads
      */
@@ -32,11 +32,13 @@ class MarketingCampaignLinkProductService
         array $primaryIds,
         array $relatedIds,
         LaboratoryBrand $brand,
-        array $primaryImages = [],
-        array $relatedImages = [],
+        array|string $primaryImages = [],
+        array|string $relatedImages = [],
         array $primaryUploads = [],
         array $relatedUploads = [],
     ): void {
+        $primaryImages = $this->normalizeImageItems($primaryImages);
+        $relatedImages = $this->normalizeImageItems($relatedImages);
         $primary = $this->normalizeIds($primaryIds, 'primary_laboratory_test_ids', self::MAX_PRIMARY);
         $related = $this->normalizeIds($relatedIds, 'related_laboratory_test_ids', self::MAX_RELATED);
 
@@ -77,6 +79,20 @@ class MarketingCampaignLinkProductService
                 $existing,
             );
         });
+    }
+
+    /**
+     * @param  list<array<string, mixed>>|string  $items
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeImageItems(array|string $items): array
+    {
+        if (is_string($items)) {
+            $decoded = json_decode($items, true);
+            $items = is_array($decoded) ? $decoded : [];
+        }
+
+        return array_values(array_filter($items, static fn ($item) => is_array($item)));
     }
 
     /**

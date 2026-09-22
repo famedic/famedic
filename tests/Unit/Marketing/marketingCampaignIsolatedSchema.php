@@ -258,5 +258,8 @@ function bootstrapIsolatedMarketingCampaignSchema(): void
     $editorialFieldsMigration = require database_path('migrations/2026_09_11_101000_add_editorial_fields_to_marketing_campaign_links.php');
     $editorialFieldsMigration->up();
 
+    $productImagesMigration = require database_path('migrations/2026_09_22_120000_add_product_images_to_marketing_campaign_link_products.php');
+    $productImagesMigration->up();
+
     app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
 }

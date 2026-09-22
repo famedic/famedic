@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Actions\Laboratories\CreateReplacementGdaLaboratoryPurchaseAction;
 use App\Actions\Laboratories\RecoverUncertainGdaLaboratoryPurchaseAction;
 use App\Models\LaboratoryPurchase;
 use App\Models\User;
@@ -76,6 +77,16 @@ class LaboratoryPurchasePolicy
         }
 
         return app(RecoverUncertainGdaLaboratoryPurchaseAction::class)->needsGdaRecovery($laboratoryPurchase);
+    }
+
+    public function replaceGda(User $user, LaboratoryPurchase $laboratoryPurchase): bool
+    {
+        if (! $this->administratorHasPermission($user, 'laboratory-purchases.manage.recover-gda')
+            && ! $this->isSuperAdmin($user)) {
+            return false;
+        }
+
+        return app(CreateReplacementGdaLaboratoryPurchaseAction::class)->canReplace($laboratoryPurchase);
     }
 
     private function administratorHasPermission(User $user, string $permission): bool

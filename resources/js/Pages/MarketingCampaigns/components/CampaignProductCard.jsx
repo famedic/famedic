@@ -42,7 +42,8 @@ function productCategoryIcon(category) {
 
 function ProductVisual({ product, className = "" }) {
 	const [failed, setFailed] = useState(false);
-	const imageUrl = product.image_url || product.image || null;
+	const imageUrl =
+		product.image_preview_url || product.image_url || product.image || null;
 	const Icon = productCategoryIcon(product.category);
 
 	if (imageUrl && !failed) {

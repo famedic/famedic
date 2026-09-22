@@ -95,11 +95,7 @@ export default function ResultsSection({
 						)}
 					</Button>
 				</>
-			) : (
-				<Text className="text-sm text-zinc-500 dark:text-slate-400">
-					Aún no hay resultados disponibles para esta orden.
-				</Text>
-			)}
+			) : null}
 		</div>
 	);
 }

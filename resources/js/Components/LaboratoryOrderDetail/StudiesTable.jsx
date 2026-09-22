@@ -3,7 +3,7 @@ import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { BeakerIcon, CheckCircleIcon, ClockIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 
-function patientResultMessage(status) {
+function patientResultMessage(status, hasSampleCollected = false) {
 	switch (status) {
 		case "complete":
 			return "Interpretación lista.";
@@ -16,7 +16,9 @@ function patientResultMessage(status) {
 		case "available_unchecked":
 			return "Documento recibido.";
 		default:
-			return "Aún no disponible.";
+			return hasSampleCollected
+				? "El laboratorio está procesando este estudio."
+				: "Pendiente de toma de muestra.";
 	}
 }
 
@@ -38,6 +40,7 @@ export default function StudiesTable({
 	studies,
 	onOpenPreparationInstructions,
 	showAdminMetadata = false,
+	hasSampleCollected = false,
 }) {
 	return (
 		<Card className="min-w-0 max-w-full overflow-hidden rounded-2xl p-0 shadow-sm">
@@ -111,7 +114,10 @@ export default function StudiesTable({
 												<span className="text-right text-[11px] leading-snug text-zinc-500 dark:text-slate-400">
 													{showAdminMetadata
 														? study.resultStatus.message
-														: patientResultMessage(study.resultStatus.status)}
+														: patientResultMessage(
+																study.resultStatus.status,
+																hasSampleCollected,
+															)}
 												</span>
 												{showAdminMetadata && study.resultStatus.gda_id && (
 													<span className="text-[11px] text-zinc-400 dark:text-slate-500">

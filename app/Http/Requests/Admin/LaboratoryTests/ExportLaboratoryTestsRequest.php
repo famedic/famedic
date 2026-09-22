@@ -19,6 +19,7 @@ class ExportLaboratoryTestsRequest extends FormRequest
             'brand' => ['nullable', 'string'],
             'category' => ['nullable', 'string'],
             'requires_appointment' => ['nullable', 'string', 'in:required,not_required'],
+            'needs_gda_review' => ['nullable', 'string', 'in:flagged,not_flagged'],
         ];
     }
 }

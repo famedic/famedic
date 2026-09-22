@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { useForm } from "@inertiajs/react";
+import { useForm, Link } from "@inertiajs/react";
 
 import {
 	DocumentTextIcon,
@@ -14,6 +14,7 @@ import {
 	EnvelopeIcon,
 	ExclamationTriangleIcon,
 	ArrowPathIcon,
+	DocumentDuplicateIcon,
 } from "@heroicons/react/24/outline";
 
 import AdminLayout from "@/Layouts/AdminLayout";
@@ -46,6 +47,7 @@ import DeleteConfirmationModal from "@/Components/DeleteConfirmationModal";
 import PaymentDetails from "@/Components/PaymentDetails";
 import CouponReversalNotice from "@/Components/Admin/CouponReversalNotice";
 import RecoverGdaModal from "@/Components/Admin/RecoverGdaModal";
+import ReplaceGdaModal from "@/Components/Admin/ReplaceGdaModal";
 import { buildLaboratoryPurchaseTotals } from "@/lib/laboratoryPurchaseTotals";
 
 function normalizePackageFeatureLabels(raw) {
@@ -98,6 +100,8 @@ export default function LaboratoryPurchase({
 	canUploadInvoice = false,
 	canRecoverGda = false,
 	gdaRecoverPreview = null,
+	canReplaceGda = false,
+	gdaReplacePreview = null,
 	hasSampleCollected,
 	hasResultsAvailable,
 	hasManualResults = false,
@@ -116,6 +120,8 @@ export default function LaboratoryPurchase({
 				canUploadInvoice={canUploadInvoice}
 				canRecoverGda={canRecoverGda}
 				gdaRecoverPreview={gdaRecoverPreview}
+				canReplaceGda={canReplaceGda}
+				gdaReplacePreview={gdaReplacePreview}
 				hasSampleCollected={hasSampleCollected}
 				hasResultsAvailable={hasResultsAvailable}
 				hasManualResults={hasManualResults}
@@ -151,6 +157,8 @@ function Header({
 	canUploadInvoice = false,
 	canRecoverGda = false,
 	gdaRecoverPreview = null,
+	canReplaceGda = false,
+	gdaReplacePreview = null,
 	hasSampleCollected,
 	hasResultsAvailable,
 	hasManualResults,
@@ -160,6 +168,7 @@ function Header({
 
 	const resendForm = useForm({});
 	const [recoverGdaOpen, setRecoverGdaOpen] = useState(false);
+	const [replaceGdaOpen, setReplaceGdaOpen] = useState(false);
 
 	const [loadingResults, setLoadingResults] = useState(false);
 
@@ -321,6 +330,84 @@ function Header({
 				</div>
 			)}
 
+			{laboratoryPurchase.replacement_laboratory_purchase && (
+				<div className="flex w-full items-start gap-3 rounded-lg border border-violet-300 bg-violet-50 px-4 py-3 text-violet-950 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100">
+					<DocumentDuplicateIcon className="mt-0.5 size-6 shrink-0" />
+					<div className="text-sm">
+						<p className="font-semibold">Pedido reemplazado</p>
+						<p>
+							La orden operativa en GDA continúa en el pedido{" "}
+							<Link
+								href={route(
+									"admin.laboratory-purchases.show",
+									laboratoryPurchase.replacement_laboratory_purchase.id,
+								)}
+								className="font-medium underline"
+							>
+								#{laboratoryPurchase.replacement_laboratory_purchase.id}
+							</Link>
+							.
+						</p>
+					</div>
+				</div>
+			)}
+
+			{laboratoryPurchase.replaced_laboratory_purchase && (
+				<div className="flex w-full items-start gap-3 rounded-lg border border-violet-300 bg-violet-50 px-4 py-3 text-violet-950 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100">
+					<DocumentDuplicateIcon className="mt-0.5 size-6 shrink-0" />
+					<div className="text-sm">
+						<p className="font-semibold">Pedido de reemplazo</p>
+						<p>
+							Reemplaza al pedido original{" "}
+							<Link
+								href={route(
+									"admin.laboratory-purchases.show",
+									laboratoryPurchase.replaced_laboratory_purchase.id,
+								)}
+								className="font-medium underline"
+							>
+								#{laboratoryPurchase.replaced_laboratory_purchase.id}
+							</Link>
+							. El cobro original permanece en el pedido anterior.
+						</p>
+					</div>
+				</div>
+			)}
+
+			{(laboratoryPurchase.has_gda_warning ||
+				laboratoryPurchase.gda_status === "uncertain") &&
+				!laboratoryPurchase.replacement_laboratory_purchase && (
+				<div
+					role="alert"
+					className="flex w-full items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 shadow-sm dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+				>
+					<ExclamationTriangleIcon className="mt-0.5 size-6 shrink-0 text-amber-600 dark:text-amber-400" />
+					<div className="space-y-1 text-sm">
+						<p className="font-semibold">GDA no confirmó la orden</p>
+						{laboratoryPurchase.gda_warning_message && (
+							<p>{laboratoryPurchase.gda_warning_message}</p>
+						)}
+						{laboratoryPurchase.gda_description &&
+							laboratoryPurchase.gda_description !==
+								laboratoryPurchase.gda_warning_message && (
+								<p>
+									<strong>Detalle GDA:</strong>{" "}
+									{laboratoryPurchase.gda_description}
+								</p>
+							)}
+						{(laboratoryPurchase.gda_mensaje ||
+							laboratoryPurchase.gda_code_http) && (
+							<p className="text-amber-800 dark:text-amber-200">
+								{laboratoryPurchase.gda_mensaje &&
+									`mensaje: ${laboratoryPurchase.gda_mensaje}`}
+								{laboratoryPurchase.gda_code_http != null &&
+									` · codeHttp: ${laboratoryPurchase.gda_code_http}`}
+							</p>
+						)}
+					</div>
+				</div>
+			)}
+
 			<div className="flex flex-wrap gap-4">
 
 				<CustomerLink
@@ -332,15 +419,34 @@ function Header({
 					{laboratoryPurchase.customer.user.full_name}
 				</CustomerLink>
 
+				{canReplaceGda && gdaReplacePreview && (
+					<>
+						<Button
+							color="violet"
+							type="button"
+							onClick={() => setReplaceGdaOpen(true)}
+						>
+							<DocumentDuplicateIcon className="size-5" />
+							Crear pedido de reemplazo
+						</Button>
+						<ReplaceGdaModal
+							open={replaceGdaOpen}
+							onClose={() => setReplaceGdaOpen(false)}
+							laboratoryPurchase={laboratoryPurchase}
+							preview={gdaReplacePreview}
+						/>
+					</>
+				)}
+
 				{canRecoverGda && gdaRecoverPreview && (
 					<>
 						<Button
-							color="amber"
+							outline
 							type="button"
 							onClick={() => setRecoverGdaOpen(true)}
 						>
 							<ArrowPathIcon className="size-5" />
-							Recuperar en GDA
+							Recuperar mismo pedido
 						</Button>
 						<RecoverGdaModal
 							open={recoverGdaOpen}

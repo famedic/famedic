@@ -54,10 +54,10 @@ class LaboratoryPurchaseResultCompletionService
                 reason: $legacyAvailable ? 'legacy_no_result_statuses' : 'awaiting_results',
                 totalRequired: $totalRequired,
                 complete: 0,
-                pending: $legacyAvailable ? 0 : $totalRequired,
+                pending: 0,
                 manualReview: 0,
                 error: 0,
-                missing: $legacyAvailable ? $totalRequired : 0,
+                missing: $totalRequired,
                 legacyFallback: $legacyAvailable,
             );
         }
@@ -89,8 +89,20 @@ class LaboratoryPurchaseResultCompletionService
                 continue;
             }
 
-            if ($status === null) {
+            if (
+                $status === null
+                || $status === LaboratoryResultStatusEnum::NotAvailable
+            ) {
                 $missing++;
+
+                continue;
+            }
+
+            if (
+                $status === LaboratoryResultStatusEnum::PendingInterpretation
+                || $status === LaboratoryResultStatusEnum::AvailableUnchecked
+            ) {
+                $pending++;
 
                 continue;
             }

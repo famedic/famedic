@@ -161,6 +161,15 @@ export default function RecoverGdaModal({
 										<span>
 											{coupon.concept ?? "Saldo a favor"} ·{" "}
 											{coupon.formatted_remaining}
+											{coupon.formatted_applicable_amount &&
+												coupon.formatted_applicable_amount !==
+													coupon.formatted_remaining && (
+													<span className="text-zinc-500">
+														{" "}
+														(se aplicarán{" "}
+														{coupon.formatted_applicable_amount})
+													</span>
+												)}
 										</span>
 										{coupon.code && (
 											<span className="text-xs text-zinc-500">

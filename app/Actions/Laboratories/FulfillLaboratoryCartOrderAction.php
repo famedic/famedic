@@ -6,6 +6,7 @@ use App\Actions\Marketing\RecordMarketingCampaignConversionAction;
 use App\Enums\CartEventType;
 use App\Enums\GdaOrderStatus;
 use App\Enums\LaboratoryBrand;
+use App\Enums\LaboratoryGdaFailureOperation;
 use App\Exceptions\GdaOrderResultUncertainException;
 use App\Models\Address;
 use App\Models\Cart;
@@ -22,6 +23,7 @@ use App\Notifications\LaboratoryPurchaseCreated;
 use App\Services\Carts\CartAbandonmentService;
 use App\Services\Carts\CartEventRecorder;
 use App\Services\CouponApplicationService;
+use App\Services\Laboratory\LaboratoryGdaFailureLogService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\Orders\OrderAutomationService;
 use App\Services\PromoCodeService;
@@ -44,6 +46,7 @@ class FulfillLaboratoryCartOrderAction
         private CartEventRecorder $cartEventRecorder,
         private CartAbandonmentService $cartAbandonmentService,
         private RecordMarketingCampaignConversionAction $recordMarketingCampaignConversionAction,
+        private LaboratoryGdaFailureLogService $laboratoryGdaFailureLogService,
     ) {}
 
     /**
@@ -458,6 +461,12 @@ class FulfillLaboratoryCartOrderAction
         Log::warning('[GDA P0] Laboratory purchase persisted with uncertain GDA result', $exception->context() + [
             'purchase_id' => $laboratoryPurchase->id,
         ]);
+
+        $this->laboratoryGdaFailureLogService->recordUncertain(
+            $exception,
+            LaboratoryGdaFailureOperation::Checkout,
+            purchase: $laboratoryPurchase,
+        );
     }
 
     private function checkAndSendInvoiceDeadlineNotification(LaboratoryPurchase $laboratoryPurchase): void

@@ -277,7 +277,22 @@ export default function MarketingCampaignSetupWizard({
 			: []
 	).map((product) => ({
 		...product,
+		image_url:
+			product.image_preview_url ||
+			product.image_url ||
+			product.image ||
+			null,
+		image_alt: product.image_alt || product.name || "",
 		price_label: formatPrice(product),
+	}));
+	const previewRelatedProducts = (prepared.relatedProducts || []).map((product) => ({
+		...product,
+		image_url:
+			product.image_preview_url ||
+			product.image_url ||
+			product.image ||
+			null,
+		image_alt: product.image_alt || product.name || "",
 	}));
 
 	const sourceGallery =
@@ -1063,7 +1078,7 @@ export default function MarketingCampaignSetupWizard({
 						: null
 				}
 				products={previewProducts}
-				relatedProducts={prepared.relatedProducts}
+				relatedProducts={previewRelatedProducts}
 				gallery={previewGallery}
 				showPrices={prepared.link.show_prices}
 				showLogo={prepared.link.show_brand_logo}
@@ -1102,7 +1117,7 @@ export default function MarketingCampaignSetupWizard({
 						: null
 				}
 				products={previewProducts}
-				relatedProducts={prepared.relatedProducts}
+				relatedProducts={previewRelatedProducts}
 				gallery={previewGallery}
 				showPrices={prepared.link.show_prices}
 				showLogo={prepared.link.show_brand_logo}

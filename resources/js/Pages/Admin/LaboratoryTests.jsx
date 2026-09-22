@@ -9,6 +9,7 @@ import {
 	CheckCircleIcon,
 	XCircleIcon,
 	ArchiveBoxIcon,
+	ExclamationTriangleIcon,
 } from "@heroicons/react/16/solid";
 import { FunnelIcon } from "@heroicons/react/24/outline";
 import AdminLayout from "@/Layouts/AdminLayout";
@@ -52,6 +53,7 @@ export default function LaboratoryTests({
 		brand: filters.brand || "",
 		category: filters.category || "",
 		requires_appointment: filters.requires_appointment || "",
+		needs_gda_review: filters.needs_gda_review || "",
 	});
 
 	const [showFilters, setShowFilters] = useState(false);
@@ -72,7 +74,9 @@ export default function LaboratoryTests({
 			(data.brand || "") !== (filters.brand || "") ||
 			(data.category || "") !== (filters.category || "") ||
 			(data.requires_appointment || "") !==
-				(filters.requires_appointment || ""),
+				(filters.requires_appointment || "") ||
+			(data.needs_gda_review || "") !==
+				(filters.needs_gda_review || ""),
 		[data, filters],
 	);
 
@@ -126,6 +130,24 @@ export default function LaboratoryTests({
 				<Badge color="zinc">
 					<XMarkIcon className="size-4" />
 					no requiere cita
+				</Badge>,
+			);
+		}
+
+		if (filters.needs_gda_review === "flagged") {
+			badges.push(
+				<Badge color="amber">
+					<ExclamationTriangleIcon className="size-4" />
+					revisar con GDA
+				</Badge>,
+			);
+		}
+
+		if (filters.needs_gda_review === "not_flagged") {
+			badges.push(
+				<Badge color="zinc">
+					<CheckCircleIcon className="size-4" />
+					sin revisión GDA
 				</Badge>,
 			);
 		}
@@ -203,7 +225,7 @@ export default function LaboratoryTests({
 
 function Filters({ data, setData, brands, categories }) {
 	return (
-		<div className="grid gap-4 md:grid-cols-3">
+		<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 			<ListboxFilter
 				label="Marca"
 				placeholder="Marca"
@@ -261,6 +283,24 @@ function Filters({ data, setData, brands, categories }) {
 				<ListboxOption value="not_required" className="group">
 					<XMarkIcon />
 					<ListboxLabel>No requiere cita</ListboxLabel>
+				</ListboxOption>
+			</ListboxFilter>
+			<ListboxFilter
+				label="Revisión GDA"
+				value={data.needs_gda_review}
+				onChange={(value) => setData("needs_gda_review", value)}
+			>
+				<ListboxOption value="" className="group">
+					<ArchiveBoxIcon />
+					<ListboxLabel>Todas</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="flagged" className="group">
+					<ExclamationTriangleIcon />
+					<ListboxLabel>Revisar con GDA</ListboxLabel>
+				</ListboxOption>
+				<ListboxOption value="not_flagged" className="group">
+					<CheckCircleIcon />
+					<ListboxLabel>Sin revisión GDA</ListboxLabel>
 				</ListboxOption>
 			</ListboxFilter>
 		</div>
@@ -367,7 +407,7 @@ function LaboratoryTestsList({
 												.laboratory_test_category
 												?.name ?? "Sin categoría"}
 										</Text>
-										<div>
+										<div className="flex flex-wrap justify-end gap-1">
 											<Badge
 												color={
 													laboratoryTest.requires_appointment
@@ -381,9 +421,15 @@ function LaboratoryTestsList({
 													<XCircleIcon className="size-4" />
 												)}
 												{laboratoryTest.requires_appointment
-													? "Sí"
-													: "No"}
+													? "Cita"
+													: "Sin cita"}
 											</Badge>
+											{laboratoryTest.needs_gda_review && (
+												<Badge color="amber">
+													<ExclamationTriangleIcon className="size-4" />
+													Revisar GDA
+												</Badge>
+											)}
 										</div>
 									</div>
 								</TableCell>

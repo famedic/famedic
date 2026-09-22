@@ -65,18 +65,18 @@ export default function CampaignTrustStrip({ brand, variant = "editorial" }) {
 	}
 
 	return (
-		<section className={`grid gap-4 rounded-2xl bg-slate-950 p-5 ring-1 ring-sky-900/60 ${
+		<section className={`grid gap-3 rounded-2xl bg-sky-50/80 p-4 ring-1 ring-sky-100 sm:p-5 ${
 			items.length === 4 ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3"
 		}`}>
 			{items.map((item) => {
 				const Icon = item.icon;
 				return (
-					<div key={item.title} className="rounded-xl bg-slate-900 p-5 ring-1 ring-white/10">
-						<span className="flex size-12 items-center justify-center rounded-full bg-sky-400/15 text-sky-200">
+					<div key={item.title} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-sky-100/80">
+						<span className="flex size-12 items-center justify-center rounded-full bg-sky-50 text-sky-800 ring-1 ring-sky-100">
 							<Icon className="size-7" />
 						</span>
-						<Text className="mt-3 font-semibold text-white">{item.title}</Text>
-						<Text className="mt-1 text-sm leading-6 text-slate-300">{item.description}</Text>
+						<Text className="mt-3 font-semibold text-famedic-darker">{item.title}</Text>
+						<Text className="mt-1 text-sm leading-6 text-slate-600">{item.description}</Text>
 					</div>
 				);
 			})}

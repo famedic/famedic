@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Actions\Laboratories\DeleteLaboratoryPurchaseAction;
+use App\Actions\Laboratories\CreateReplacementGdaLaboratoryPurchaseAction;
 use App\Actions\Laboratories\RecoverUncertainGdaLaboratoryPurchaseAction;
+use App\Http\Requests\Admin\LaboratoryPurchases\ReplaceGdaLaboratoryPurchaseRequest;
 use App\Exceptions\CouponApplicationException;
 use App\Exceptions\GdaOrderResultUncertainException;
 use App\Exceptions\RecoverGdaLaboratoryPurchaseException;
@@ -76,6 +78,7 @@ class LaboratoryPurchaseController extends Controller
         LaboratoryPurchase $laboratoryPurchase,
         LaboratoryPurchaseResultControlPresenter $resultControlPresenter,
         RecoverUncertainGdaLaboratoryPurchaseAction $recoverUncertainGdaLaboratoryPurchaseAction,
+        CreateReplacementGdaLaboratoryPurchaseAction $createReplacementGdaLaboratoryPurchaseAction,
     )
     {
         $laboratoryPurchase->load([
@@ -87,6 +90,8 @@ class LaboratoryPurchaseController extends Controller
             'invoice',
             'invoiceRequest',
             'laboratoryAppointment.laboratoryStore',
+            'replacementLaboratoryPurchase',
+            'replacedLaboratoryPurchase',
             'devAssistanceRequests.administrator.user',
             'devAssistanceRequests.comments.administrator.user',
             'laboratoryNotifications',
@@ -94,7 +99,9 @@ class LaboratoryPurchaseController extends Controller
 
         $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
 
-        $canRecoverGda = $request->user()->can('recoverGda', $laboratoryPurchase);
+        $canReplaceGda = $request->user()->can('replaceGda', $laboratoryPurchase);
+        $canRecoverGda = ! $laboratoryPurchase->replacement_laboratory_purchase_id
+            && $request->user()->can('recoverGda', $laboratoryPurchase);
 
         return Inertia::render('Admin/LaboratoryPurchase', [
             'laboratoryPurchase' => $laboratoryPurchase,
@@ -106,6 +113,10 @@ class LaboratoryPurchaseController extends Controller
             'canRecoverGda' => $canRecoverGda,
             'gdaRecoverPreview' => $canRecoverGda
                 ? $recoverUncertainGdaLaboratoryPurchaseAction->preview($laboratoryPurchase)
+                : null,
+            'canReplaceGda' => $canReplaceGda,
+            'gdaReplacePreview' => $canReplaceGda
+                ? $createReplacementGdaLaboratoryPurchaseAction->preview($laboratoryPurchase)
                 : null,
 
             'hasSampleCollected' => $laboratoryPurchase->hasSampleCollected(),
@@ -158,6 +169,55 @@ class LaboratoryPurchaseController extends Controller
         }
     }
 
+    public function replaceGda(
+        ReplaceGdaLaboratoryPurchaseRequest $request,
+        LaboratoryPurchase $laboratoryPurchase,
+        CreateReplacementGdaLaboratoryPurchaseAction $createReplacementGdaLaboratoryPurchaseAction,
+    ) {
+        try {
+            $replacement = $createReplacementGdaLaboratoryPurchaseAction(
+                $laboratoryPurchase,
+                (int) $request->validated('coupon_id'),
+                $request->user(),
+            );
+
+            return redirect()
+                ->route('admin.laboratory-purchases.show', $replacement)
+                ->flashMessage(
+                    'Pedido de reemplazo #'.$replacement->id.' creado y confirmado en GDA. '
+                    .'El pedido original #'.$laboratoryPurchase->id.' quedó referenciado.'
+                );
+        } catch (GdaOrderResultUncertainException $e) {
+            $summary = $e->context()['response_summary'] ?? [];
+            $gdaDetail = $summary['gda_description'] ?? null;
+            $gdaMensaje = $summary['gda_mensaje'] ?? null;
+            $gdaCodeHttp = $summary['gda_code_http'] ?? $e->httpStatus();
+
+            $message = 'GDA rechazó el pedido de reemplazo.';
+            if (filled($gdaDetail)) {
+                $message .= ' Detalle GDA: '.$gdaDetail;
+            } elseif (filled($gdaMensaje)) {
+                $message .= ' Respuesta GDA: '.$gdaMensaje.' (codeHttp '.$gdaCodeHttp.').';
+            } else {
+                $message .= ' '.$e->getMessage();
+            }
+
+            return back()->flashMessage($message, 'error');
+        } catch (CouponApplicationException|RecoverGdaLaboratoryPurchaseException $e) {
+            return back()->flashMessage($e->getMessage(), 'error');
+        } catch (\Throwable $e) {
+            Log::error('[GDA Replace] Unexpected failure', [
+                'source_purchase_id' => $laboratoryPurchase->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->flashMessage(
+                'No se pudo crear el pedido de reemplazo: '.$e->getMessage(),
+                'error',
+            );
+        }
+    }
+
     public function recoverGda(
         RecoverUncertainGdaLaboratoryPurchaseRequest $request,
         LaboratoryPurchase $laboratoryPurchase,
@@ -174,10 +234,21 @@ class LaboratoryPurchaseController extends Controller
                 ->route('admin.laboratory-purchases.show', $laboratoryPurchase)
                 ->flashMessage('Pedido recuperado en GDA con saldo a favor. No se envió correo al cliente.');
         } catch (GdaOrderResultUncertainException $e) {
-            return back()->flashMessage(
-                'GDA volvió a responder de forma incierta: '.$e->getMessage(),
-                'error',
-            );
+            $summary = $e->context()['response_summary'] ?? [];
+            $gdaDetail = $summary['gda_description'] ?? null;
+            $gdaMensaje = $summary['gda_mensaje'] ?? null;
+            $gdaCodeHttp = $summary['gda_code_http'] ?? $e->httpStatus();
+
+            $message = 'GDA volvió a responder de forma incierta.';
+            if (filled($gdaDetail)) {
+                $message .= ' Detalle GDA: '.$gdaDetail;
+            } elseif (filled($gdaMensaje)) {
+                $message .= ' Respuesta GDA: '.$gdaMensaje.' (codeHttp '.$gdaCodeHttp.').';
+            } else {
+                $message .= ' '.$e->getMessage();
+            }
+
+            return back()->flashMessage($message, 'error');
         } catch (CouponApplicationException|RecoverGdaLaboratoryPurchaseException $e) {
             return back()->flashMessage($e->getMessage(), 'error');
         } catch (\Throwable $e) {

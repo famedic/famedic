@@ -21,3 +21,28 @@ test("marketing campaign gallery uploads are stored with public visibility", () 
 	assert.match(service, /uploadDisk\(\)/);
 	assert.match(service, /'visibility' => 'public'/);
 });
+
+test("admin live preview uses selected product image preview urls", () => {
+	const preview = readFileSync(
+		"resources/js/Pages/Admin/MarketingCampaigns/Components/MarketingCampaignLandingPreview.jsx",
+		"utf8",
+	);
+	const wizard = readFileSync(
+		"resources/js/Pages/Admin/MarketingCampaigns/wizard/MarketingCampaignSetupWizard.jsx",
+		"utf8",
+	);
+	const card = readFileSync(
+		"resources/js/Pages/MarketingCampaigns/components/CampaignProductCard.jsx",
+		"utf8",
+	);
+	const setupRequest = readFileSync(
+		"app/Http/Requests/Admin/MarketingCampaigns/StoreMarketingCampaignSetupRequest.php",
+		"utf8",
+	);
+
+	assert.match(preview, /product\.image_preview_url/);
+	assert.match(wizard, /product\.image_preview_url/);
+	assert.match(card, /product\.image_preview_url/);
+	assert.match(setupRequest, /primary_product_image_uploads/);
+	assert.match(setupRequest, /decodeJsonArray\(\$link\[\$field\]/);
+});

@@ -82,40 +82,22 @@ trait MarketingCampaignLinkLandingRules
     {
         $this->prepareLandingBooleans();
 
-        if (is_string($this->input('gallery_items'))) {
-            $decoded = json_decode($this->input('gallery_items'), true);
+        foreach (['gallery_items', 'editorial_items', 'primary_product_images', 'related_product_images'] as $field) {
             $this->merge([
-                'gallery_items' => is_array($decoded) ? $decoded : [],
+                $field => $this->decodeJsonArray($this->input($field)),
             ]);
         }
+    }
 
-        if (! is_array($this->input('gallery_items'))) {
-            $this->merge(['gallery_items' => []]);
+    protected function decodeJsonArray(mixed $value): array
+    {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+
+            return is_array($decoded) ? $decoded : [];
         }
 
-        if (is_string($this->input('editorial_items'))) {
-            $decoded = json_decode($this->input('editorial_items'), true);
-            $this->merge([
-                'editorial_items' => is_array($decoded) ? $decoded : [],
-            ]);
-        }
-
-        if (! is_array($this->input('editorial_items'))) {
-            $this->merge(['editorial_items' => []]);
-        }
-
-        foreach (['primary_product_images', 'related_product_images'] as $field) {
-            if (is_string($this->input($field))) {
-                $decoded = json_decode($this->input($field), true);
-                $this->merge([
-                    $field => is_array($decoded) ? $decoded : [],
-                ]);
-            }
-
-            if (! is_array($this->input($field))) {
-                $this->merge([$field => []]);
-            }
-        }
+        return is_array($value) ? $value : [];
     }
 
     protected function prepareLandingBooleans(): void

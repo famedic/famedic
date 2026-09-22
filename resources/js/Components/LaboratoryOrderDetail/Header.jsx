@@ -1,7 +1,6 @@
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import {
-	DocumentArrowDownIcon,
 	BeakerIcon,
 	CalendarDaysIcon,
 	ArrowsRightLeftIcon,
@@ -9,6 +8,37 @@ import {
 	ShareIcon,
 	ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
+
+function PdfFileIcon(props) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+			<path
+				d="M7 3.75h6.4L18.25 8.6v11.65A1.5 1.5 0 0 1 16.75 21.75h-9.5A1.5 1.5 0 0 1 5.75 20.25V5.25A1.5 1.5 0 0 1 7.25 3.75H7Z"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinejoin="round"
+			/>
+			<path
+				d="M13.35 3.75v4.85h4.9"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinejoin="round"
+			/>
+			<rect x="7.15" y="13.15" width="9.7" height="5.2" rx="1" fill="currentColor" />
+			<text
+				x="12"
+				y="16.95"
+				textAnchor="middle"
+				fill="white"
+				fontSize="4.4"
+				fontWeight="700"
+				fontFamily="ui-sans-serif, system-ui, sans-serif"
+			>
+				PDF
+			</text>
+		</svg>
+	);
+}
 
 const typeConfig = {
 	without_appointment: { label: "Sin cita", icon: BeakerIcon, color: "blue" },
@@ -122,7 +152,7 @@ export default function Header({
 						title="Descargar orden de compra en PDF"
 						aria-label="Descargar orden de compra en PDF"
 					>
-						<DocumentArrowDownIcon data-slot="icon" className="size-4" aria-hidden />
+						<PdfFileIcon data-slot="icon" className="size-4" />
 						Descargar orden
 					</Button>
 					{!isCancelled && onShare && (

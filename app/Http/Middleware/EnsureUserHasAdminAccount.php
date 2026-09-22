@@ -421,6 +421,12 @@ class EnsureUserHasAdminAccount
                 'icon' => 'BuildingStorefrontIcon',
                 'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-stores.'),
             ] : null,
+            $request->user()->administrator->hasPermissionTo('laboratory-purchases.manage') ? [
+                'label' => 'Errores GDA',
+                'url' => route('admin.laboratory-gda-failure-logs.index'),
+                'icon' => 'ExclamationTriangleIcon',
+                'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-gda-failure-logs.'),
+            ] : null,
         ]));
 
         $sections = array_values(array_filter([

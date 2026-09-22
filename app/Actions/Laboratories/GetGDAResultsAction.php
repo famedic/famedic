@@ -335,6 +335,6 @@ class GetGDAResultsAction
             return trim($configured);
         }
 
-        return rtrim((string) config('services.gda.url'), '/').'/infogda-fullV3/consult';
+        return \App\Support\GDA\GdaApiUrl::endpoint('consult');
     }
 }

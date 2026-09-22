@@ -989,6 +989,67 @@ class MarketingCampaignAdminTest extends TestCase
     }
 
     #[Test]
+    public function setup_guarda_imagenes_de_producto_aunque_lleguen_como_json(): void
+    {
+        Storage::fake('public');
+        $admin = $this->makeMarketingAdmin();
+        $test = LaboratoryTest::factory()->create(['brand' => LaboratoryBrand::OLAB]);
+        $upload = UploadedFile::fake()->image('producto.jpg');
+
+        $this->actingAs($admin)
+            ->post(route('admin.marketing-campaigns.setup.store'), [
+                'activate' => false,
+                'campaign' => [
+                    'name' => 'Campaña con fotos',
+                    'description' => null,
+                    'status' => MarketingCampaignStatus::Draft->value,
+                    'starts_at' => null,
+                    'ends_at' => null,
+                ],
+                'link' => [
+                    'name' => 'Enlace con fotos',
+                    'slug' => 'campana-con-fotos',
+                    'status' => MarketingCampaignLinkStatus::Draft->value,
+                    'target_type' => MarketingCampaignTargetType::Brand->value,
+                    'target_payload' => ['brand' => LaboratoryBrand::OLAB->value],
+                    'public_title' => 'Fotos de producto',
+                    'show_prices' => true,
+                    'show_brand_logo' => true,
+                    'show_campaign_dates' => false,
+                    'landing_layout' => 'default',
+                    'hero_image_source' => MarketingCampaignHeroImageSource::None->value,
+                    'primary_laboratory_test_ids' => [$test->id],
+                    'related_laboratory_test_ids' => [],
+                    'related_category_ids' => [],
+                    'gallery_items' => '[]',
+                    'primary_product_images' => json_encode([
+                        [
+                            'laboratory_test_id' => $test->id,
+                            'upload_index' => 0,
+                            'clear' => false,
+                            'alt' => 'Imagen de estudio',
+                        ],
+                    ]),
+                    'primary_product_image_uploads' => [$upload],
+                ],
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('flashMessage.message', 'Campaña y enlace creados.')
+            ->assertSessionDoesntHaveErrors();
+
+        $link = MarketingCampaignLink::query()->where('slug', 'campana-con-fotos')->first();
+        $this->assertNotNull($link);
+
+        $product = $link->primaryLandingProducts()->first();
+        $this->assertNotNull($product);
+        $this->assertSame($test->id, (int) $product->laboratory_test_id);
+        $this->assertSame('upload', $product->image_source);
+        $this->assertSame('Imagen de estudio', $product->image_alt);
+        $this->assertNotEmpty($product->image_path);
+        Storage::disk('public')->assertExists($product->image_path);
+    }
+
+    #[Test]
     public function puede_duplicar_enlace_como_borrador_con_slug_unico(): void
     {
         $admin = $this->makeMarketingAdmin();

@@ -241,7 +241,7 @@ class LaboratoryPurchaseController extends Controller
             'filterOptions' => [
                 'study_statuses' => [
                     ['value' => 'all', 'label' => 'Todos los estados'],
-                    ['value' => 'in_progress', 'label' => 'En proceso'],
+                    ['value' => 'in_progress', 'label' => 'Pendiente de toma de muestra'],
                     ['value' => 'sample_taken', 'label' => 'Muestra tomada'],
                     ['value' => 'results_ready', 'label' => 'Resultados listos'],
                     ['value' => 'cancelled', 'label' => 'Cancelados'],
@@ -338,23 +338,20 @@ class LaboratoryPurchaseController extends Controller
         $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
 
         $hasStoredResults = ! empty($laboratoryPurchase->results);
-        $hasSampleCollected = false;
+        $hasSampleCollected = $laboratoryPurchase->hasSampleCollected();
         $hasResultsAvailable = false;
         $latestSampleCollectionAt = null;
         $latestResultsAt = null;
         $hasResultsPdfCached = false;
 
+        $latestSampleCollection = $laboratoryPurchase->latestSampleCollection();
+        $latestSampleCollectionAt = $latestSampleCollection?->created_at
+            ? localizedDate($latestSampleCollection->created_at)->isoFormat('D MMM Y h:mm a')
+            : null;
+
         if (! $hasStoredResults) {
-            $hasSampleCollected = $laboratoryPurchase->hasSampleCollected();
             $hasResultsAvailable = $laboratoryPurchase->hasResultsAvailable();
-
-            $latestSampleCollection = $laboratoryPurchase->latestSampleCollection();
             $latestResultsNotification = $laboratoryPurchase->latestResultsNotification();
-
-            $latestSampleCollectionAt = $latestSampleCollection?->created_at
-                ? localizedDate($latestSampleCollection->created_at)->isoFormat('D MMM Y h:mm a')
-                : null;
-
             $hasResultsPdfCached = (bool) $latestResultsNotification?->hasResults();
         }
 

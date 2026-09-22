@@ -90,6 +90,17 @@ return [
     'gda' => [
         'url' => env('GDA_URL'),
         /*
+         * Prefijo de ruta API bajo GDA_URL (sin barras).
+         * Producción: infogda-fullV3
+         * QA GDA: intfhir-v3b  →  {GDA_URL}/intfhir-v3b/service-request
+         */
+        'api_path' => env('GDA_API_PATH', 'infogda-fullV3'),
+        /*
+         * true = llamar API GDA real aunque APP_ENV sea local/staging/testing.
+         * Útil para probar recuperación contra https://intfhirapiq.gda.mx
+         */
+        'force_real_api' => filter_var(env('GDA_FORCE_REAL_API', false), FILTER_VALIDATE_BOOLEAN),
+        /*
          * URL completa del endpoint de consulta de PDF de resultados.
          * GDA indicó una URL distinta a GDA_URL solo para este endpoint.
          * Si está vacío, se usa el path legacy: {GDA_URL}infogda-fullV3/consult

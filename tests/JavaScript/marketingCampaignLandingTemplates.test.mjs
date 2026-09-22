@@ -272,9 +272,11 @@ test("editorial landing visual QA rules remain explicit", () => {
 	assert.match(editorialSection, /text-center/);
 	assert.match(editorialSection, /bg-white\/94/);
 	assert.match(editorialSection, /bg-sky-50/);
-	assert.match(trustStrip, /bg-slate-950/);
-	assert.match(trustStrip, /text-sky-200/);
+	assert.match(trustStrip, /bg-sky-50\/80/);
+	assert.match(trustStrip, /text-sky-800/);
+	assert.match(trustStrip, /text-famedic-darker/);
 	assert.match(trustStrip, /size-12/);
+	assert.doesNotMatch(trustStrip, /bg-slate-950/);
 	assert.match(fields, /hasEditorialPlaceholderContent/);
 	assert.match(fields, /t\[ií\]tulo de prueba/);
 	assert.match(dates, /Sin expiración/);

@@ -98,8 +98,35 @@ class GdaResultsPurchaseViewPhase5Test extends TestCase
         $payload = app(LaboratoryPurchaseResultControlPresenter::class)
             ->present($purchase->fresh(), $purchase->customer->user);
 
-        $this->assertSame('pending', $payload['resultControl']['overall_status']);
+        $this->assertSame('awaiting_sample', $payload['resultControl']['overall_status']);
+        $this->assertFalse($payload['resultControl']['has_sample_collected']);
         $this->assertFalse($payload['resultControl']['is_complete']);
+        $this->assertFalse($payload['resultControl']['can_view_results']);
+    }
+
+    #[Test]
+    public function despues_de_toma_de_muestra_la_tarjeta_pasa_a_resultados_en_proceso(): void
+    {
+        [$purchase] = $this->seedPurchaseWithItems(1);
+        LaboratoryNotification::query()->create([
+            'laboratory_purchase_id' => $purchase->id,
+            'notification_type' => LaboratoryNotification::TYPE_SAMPLE_COLLECTION,
+            'lineanegocio' => LaboratoryNotification::LINEA_NEGOCIO_SAMPLE,
+            'gda_order_id' => $purchase->gda_order_id,
+            'gda_consecutivo' => $purchase->gda_consecutivo,
+            'status' => LaboratoryNotification::STATUS_RECEIVED,
+            'payload' => [],
+        ]);
+
+        $payload = app(LaboratoryPurchaseResultControlPresenter::class)
+            ->present($purchase->fresh(), $purchase->customer->user);
+
+        $this->assertSame('pending', $payload['resultControl']['overall_status']);
+        $this->assertTrue($payload['resultControl']['has_sample_collected']);
+        $this->assertSame(
+            'Ya registramos tu toma de muestra. El laboratorio está procesando tus resultados.',
+            $payload['resultControl']['message']
+        );
         $this->assertFalse($payload['resultControl']['can_view_results']);
     }
 

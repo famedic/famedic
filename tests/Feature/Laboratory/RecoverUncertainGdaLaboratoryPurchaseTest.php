@@ -220,6 +220,25 @@ test('recover action clones previous appointment automatically', function () {
         ->and($purchase->laboratoryAppointment->laboratory_store_id)->toBe($store->id);
 });
 
+test('balance greater than order total is eligible for gda recovery', function () {
+    $customer = recoverGdaCustomer();
+    $test = LaboratoryTest::factory()->create([
+        'brand' => LaboratoryBrand::OLAB->value,
+        'famedic_price_cents' => 291323,
+        'gda_id' => 'LAB-RECOVER-OVER',
+    ]);
+    $purchase = recoverGdaUncertainPurchase($customer, $test, 291323);
+    $coupon = recoverGdaBalanceCoupon($customer->user, 291500);
+
+    expect(app(RecoverUncertainGdaLaboratoryPurchaseAction::class)->canRecover($purchase->fresh()))->toBeTrue();
+
+    app(\App\Services\CouponApplicationService::class)->validateApplicationForGdaRecovery(
+        $customer->user,
+        $coupon->id,
+        291323,
+    );
+});
+
 test('legacy purchase without gda folio is eligible for recovery', function () {
     $customer = recoverGdaCustomer();
     $test = LaboratoryTest::factory()->create([

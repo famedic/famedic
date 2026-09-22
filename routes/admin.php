@@ -169,6 +169,9 @@ Route::prefix('admin')->middleware([
         Route::resource('laboratory-stores', AdminLaboratoryStoreController::class)
             ->only(['index', 'show', 'update', 'destroy'])
             ->withTrashed(['show', 'update', 'destroy']);
+        Route::resource('laboratory-gda-failure-logs', \App\Http\Controllers\Admin\LaboratoryGdaFailureLogController::class)
+            ->only(['index', 'show'])
+            ->parameters(['laboratory-gda-failure-logs' => 'laboratoryGdaFailureLog']);
 
         Route::prefix('marketing-campaigns')->name('marketing-campaigns.')->group(function () {
             Route::get('product-search', MarketingCampaignProductSearchController::class)->name('product-search');
@@ -233,6 +236,10 @@ Route::prefix('admin')->middleware([
             'laboratory-purchases/{laboratory_purchase}/recover-gda',
             [LaboratoryPurchaseController::class, 'recoverGda']
         )->name('laboratory-purchases.recover-gda');
+        Route::post(
+            'laboratory-purchases/{laboratory_purchase}/replace-gda',
+            [LaboratoryPurchaseController::class, 'replaceGda']
+        )->name('laboratory-purchases.replace-gda');
         Route::post('laboratory-purchases/{laboratory_purchase}/invoice', InvoiceController::class)->name('laboratory-purchases.invoice');
         Route::post('laboratory-purchases/{laboratory_purchase}/results', ResultsController::class)->name('laboratory-purchases.results');
         Route::post('laboratory-purchases/{laboratory_purchase}/result-control/refresh', [LaboratoryPurchaseResultControlController::class, 'refresh'])

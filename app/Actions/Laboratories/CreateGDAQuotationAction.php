@@ -6,6 +6,7 @@ use App\Exceptions\GdaOrderResultUncertainException;
 use App\Models\Address;
 use App\Models\Contact;
 use App\Models\Customer;
+use App\Support\GDA\GdaApiUrl;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -35,9 +36,8 @@ class CreateGDAQuotationAction
             'environment' => app()->environment()
         ]);
 
-        $nonProductionEnvs = ['local', 'staging', 'testing'];
-        $currentEnv = strtolower((string) config('app.env'));
-        if (in_array($currentEnv, $nonProductionEnvs, true)) {
+        if (GdaApiUrl::shouldSimulateOrders()) {
+            $currentEnv = strtolower((string) config('app.env'));
             $generatedId = strtoupper(uniqid('GDA'));
             $generatedConsecutive = random_int(10000000, 99999999);
 
@@ -55,7 +55,7 @@ class CreateGDAQuotationAction
             ];
         }
 
-        $url = config('services.gda.url') . 'infogda-fullV3/service-request';
+        $url = GdaApiUrl::endpoint('service-request');
         
         Log::info('CreateGDAQuotationAction: URL configurada', ['url' => $url]);
 
@@ -231,6 +231,8 @@ class CreateGDAQuotationAction
             'infogda_consecutivo' => $responseData['infogda_consecutivo'] ?? null,
             'gda_code_http' => $responseData['gda_code_http'] ?? data_get($responseData, 'GDA_menssage.codeHttp'),
             'gda_mensaje' => $responseData['gda_mensaje'] ?? data_get($responseData, 'GDA_menssage.mensaje'),
+            'gda_description' => $responseData['gda_description']
+                ?? data_get($responseData, 'GDA_menssage.descripcion'),
             'gda_status' => $responseData['status'] ?? null,
             'has_pdf_base64' => filled($responseData['pdf_base64'] ?? null),
         ];

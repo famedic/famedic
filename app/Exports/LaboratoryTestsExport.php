@@ -36,6 +36,8 @@ class LaboratoryTestsExport implements FromQuery, ShouldAutoSize, WithColumnForm
             'Precio público',
             'Precio Famedic',
             'Requiere cita',
+            'Revisar con GDA',
+            'Nota revisión GDA',
             'Indicaciones',
         ];
     }
@@ -51,6 +53,8 @@ class LaboratoryTestsExport implements FromQuery, ShouldAutoSize, WithColumnForm
             numberCents($laboratoryTest->public_price_cents),
             numberCents($laboratoryTest->famedic_price_cents),
             $laboratoryTest->requires_appointment ? 'Sí' : 'No',
+            $laboratoryTest->needs_gda_review ? 'Sí' : 'No',
+            $laboratoryTest->gda_review_note,
             $laboratoryTest->indications,
         ];
     }

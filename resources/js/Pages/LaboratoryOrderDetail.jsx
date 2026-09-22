@@ -540,6 +540,9 @@ export default function LaboratoryOrderDetail({
 					<StudiesTable
 						studies={studies}
 						onOpenPreparationInstructions={goToPreparationInstructions}
+						hasSampleCollected={Boolean(
+							hasSampleCollected || resultControl?.has_sample_collected,
+						)}
 					/>
 					{laboratoryPurchase?.laboratory_appointment && (
 						<AppointmentSummary

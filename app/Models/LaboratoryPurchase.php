@@ -323,6 +323,16 @@ class LaboratoryPurchase extends Model
         return $this->hasOne(LaboratoryAppointment::class)->withTrashed();
     }
 
+    public function replacedLaboratoryPurchase()
+    {
+        return $this->belongsTo(self::class, 'replaces_laboratory_purchase_id')->withTrashed();
+    }
+
+    public function replacementLaboratoryPurchase()
+    {
+        return $this->belongsTo(self::class, 'replacement_laboratory_purchase_id')->withTrashed();
+    }
+
     public function devAssistanceRequests()
     {
         return $this->morphMany(DevAssistanceRequest::class, 'dev_assistance_requestable');

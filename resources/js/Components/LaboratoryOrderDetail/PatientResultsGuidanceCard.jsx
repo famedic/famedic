@@ -37,13 +37,25 @@ function patientGuidance(resultControl, hasResults) {
 		pending_interpretation: {
 			title: "Estamos preparando tus resultados",
 			description:
-				"Recibimos información del laboratorio y estamos terminando la interpretación de cada estudio.",
+				"El laboratorio ya está procesando tus estudios. Te avisaremos cuando la interpretación esté lista.",
 			badge: "En proceso",
 			badgeColor: "amber",
 			icon: ClockIcon,
 			tips: [
 				"Te avisaremos por correo en cuanto estén listos.",
 				"Mientras tanto, revisa la pestaña Instrucciones.",
+			],
+		},
+		awaiting_sample: {
+			title: "Primero acude a tu toma de muestra",
+			description:
+				"Tus resultados aparecerán aquí después de que el laboratorio confirme la toma de muestra. Hasta entonces, el siguiente paso es presentarte en sucursal o a tu cita.",
+			badge: "Toma de muestra",
+			badgeColor: "sky",
+			icon: ClockIcon,
+			tips: [
+				"Revisa Instrucciones para preparación y datos de sucursal.",
+				"Cuando confirmen la toma de muestra, esta tarjeta cambiará a resultados en proceso.",
 			],
 		},
 		manual_review: {
@@ -65,13 +77,13 @@ function patientGuidance(resultControl, hasResults) {
 			tips: ["No necesitas hacer nada por ahora.", "Te avisaremos cuando haya actualización."],
 		},
 		pending: {
-			title: "Tus estudios siguen en proceso",
+			title: "Tus resultados están en proceso",
 			description:
-				"El laboratorio aún no libera los resultados. Cuando estén disponibles, te avisaremos y podrás verlos aquí.",
-			badge: "Pendiente",
-			badgeColor: "slate",
+				"Ya registramos tu toma de muestra. El laboratorio está procesando tus estudios y te avisaremos cuando estén listos.",
+			badge: "En proceso",
+			badgeColor: "amber",
 			icon: ClockIcon,
-			tips: ["Revisa Instrucciones para preparación y datos de sucursal."],
+			tips: ["Te avisaremos por correo en cuanto haya novedades."],
 		},
 	};
 

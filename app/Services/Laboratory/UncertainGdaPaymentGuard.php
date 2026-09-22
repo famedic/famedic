@@ -51,6 +51,7 @@ class UncertainGdaPaymentGuard
         return LaboratoryPurchase::query()
             ->where('cart_id', $cart->id)
             ->where('gda_status', GdaOrderStatus::Uncertain->value)
+            ->whereNull('replacement_laboratory_purchase_id')
             ->whereHas('transactions', fn ($query) => $this->successfulTransactionScope($query))
             ->with(['transactions' => fn ($query) => $this->successfulTransactionScope($query)])
             ->latest('id')

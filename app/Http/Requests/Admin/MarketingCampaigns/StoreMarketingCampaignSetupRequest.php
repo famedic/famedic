@@ -88,6 +88,20 @@ class StoreMarketingCampaignSetupRequest extends FormRequest
             'link.related_laboratory_test_ids.*' => ['integer'],
             'link.related_category_ids' => ['nullable', 'array'],
             'link.related_category_ids.*' => ['integer'],
+            'link.primary_product_images' => ['nullable', 'array'],
+            'link.primary_product_images.*.laboratory_test_id' => ['required', 'integer'],
+            'link.primary_product_images.*.upload_index' => ['nullable', 'integer', 'min:0'],
+            'link.primary_product_images.*.clear' => ['sometimes', 'boolean'],
+            'link.primary_product_images.*.alt' => ['nullable', 'string', 'max:180'],
+            'link.primary_product_image_uploads' => ['nullable', 'array', 'max:20'],
+            'link.primary_product_image_uploads.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'link.related_product_images' => ['nullable', 'array'],
+            'link.related_product_images.*.laboratory_test_id' => ['required', 'integer'],
+            'link.related_product_images.*.upload_index' => ['nullable', 'integer', 'min:0'],
+            'link.related_product_images.*.clear' => ['sometimes', 'boolean'],
+            'link.related_product_images.*.alt' => ['nullable', 'string', 'max:180'],
+            'link.related_product_image_uploads' => ['nullable', 'array', 'max:8'],
+            'link.related_product_image_uploads.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'link.gallery_items' => ['nullable'],
             'link.gallery_uploads' => ['nullable', 'array', 'max:6'],
             'link.gallery_uploads.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
@@ -131,18 +145,8 @@ class StoreMarketingCampaignSetupRequest extends FormRequest
             $link['target_payload'] = [];
         }
 
-        if (is_string($link['editorial_items'] ?? null)) {
-            $decoded = json_decode($link['editorial_items'], true);
-            $link['editorial_items'] = is_array($decoded) ? $decoded : [];
-        }
-
-        if (! is_array($link['editorial_items'] ?? null)) {
-            $link['editorial_items'] = [];
-        }
-
-        if (is_string($link['gallery_items'] ?? null)) {
-            $decoded = json_decode($link['gallery_items'], true);
-            $link['gallery_items'] = is_array($decoded) ? $decoded : [];
+        foreach (['editorial_items', 'gallery_items', 'primary_product_images', 'related_product_images'] as $field) {
+            $link[$field] = $this->decodeJsonArray($link[$field] ?? []);
         }
 
         if (($collection = $this->input('collection')) !== null && is_array($collection)) {
@@ -210,6 +214,10 @@ class StoreMarketingCampaignSetupRequest extends FormRequest
             'link' => array_merge($link, [
                 'gallery_items' => $link['gallery_items'] ?? [],
                 'gallery_uploads' => $this->file('link.gallery_uploads', []),
+                'primary_product_images' => $link['primary_product_images'] ?? [],
+                'related_product_images' => $link['related_product_images'] ?? [],
+                'primary_product_image_uploads' => $this->file('link.primary_product_image_uploads', []),
+                'related_product_image_uploads' => $this->file('link.related_product_image_uploads', []),
             ]),
         ];
     }

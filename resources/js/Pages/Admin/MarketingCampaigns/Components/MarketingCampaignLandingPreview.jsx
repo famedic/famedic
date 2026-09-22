@@ -45,6 +45,12 @@ function formatPreviewProduct(product) {
 
 	return {
 		...product,
+		image_url:
+			product.image_preview_url ||
+			product.image_url ||
+			product.image ||
+			null,
+		image_alt: product.image_alt || product.name || "",
 		formatted_famedic_price: famedicLabel,
 		formatted_public_price: publicLabel,
 		public_price_cents: publicPriceCents,

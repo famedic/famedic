@@ -172,7 +172,7 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
     private function statusLabel(string $status): string
     {
         return match ($status) {
-            'in_progress' => 'En proceso',
+            'in_progress' => 'Pendiente de toma de muestra',
             'sample_taken' => 'Muestra tomada',
             'results_ready' => 'Resultados listos',
             'cancelled' => 'Cancelado',
