@@ -19,6 +19,10 @@ class MarketingCampaignLinkProductService
 
     public const MAX_RELATED = 8;
 
+    public function __construct(
+        private readonly MarketingCampaignHeroImageService $heroImageService,
+    ) {}
+
     /**
      * @param  list<int|string>  $primaryIds
      * @param  list<int|string>  $relatedIds
@@ -199,7 +203,7 @@ class MarketingCampaignLinkProductService
         $upload = is_numeric($uploadIndex) ? ($uploads[(int) $uploadIndex] ?? null) : null;
 
         if ($upload instanceof UploadedFile) {
-            $disk = 'public';
+            $disk = $this->heroImageService->uploadDisk();
             $directory = sprintf(
                 'marketing-campaigns/%d/links/%d/products',
                 (int) $link->marketing_campaign_id,
@@ -209,7 +213,7 @@ class MarketingCampaignLinkProductService
             $filename = Str::uuid()->toString().'.'.$extension;
             $path = $upload->storeAs($directory, $filename, [
                 'disk' => $disk,
-                'visibility' => 'public',
+                'visibility' => $this->heroImageService->uploadVisibility(),
             ]);
 
             if (! is_string($path) || $path === '') {
@@ -229,7 +233,7 @@ class MarketingCampaignLinkProductService
         if ($previous && $previous->image_source === 'upload' && filled($previous->image_path)) {
             return [
                 'image_source' => 'upload',
-                'image_disk' => $previous->image_disk ?: 'public',
+                'image_disk' => $previous->image_disk ?: $this->heroImageService->uploadDisk(),
                 'image_path' => $previous->image_path,
                 'image_alt' => filled($imageItem['alt'] ?? null)
                     ? (string) $imageItem['alt']
@@ -283,7 +287,7 @@ class MarketingCampaignLinkProductService
         }
 
         try {
-            Storage::disk($disk ?: 'public')->delete($path);
+            Storage::disk($disk ?: $this->heroImageService->uploadDisk())->delete($path);
         } catch (\Throwable) {
             // best-effort
         }

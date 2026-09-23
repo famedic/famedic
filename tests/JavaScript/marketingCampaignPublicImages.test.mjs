@@ -2,14 +2,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-test("marketing campaign hero uploads are stored on the public disk", () => {
+test("marketing campaign hero uploads use the configured media disk", () => {
 	const service = readFileSync(
 		"app/Services/Marketing/MarketingCampaignHeroImageService.php",
 		"utf8",
 	);
+	const config = readFileSync("config/marketing-campaigns.php", "utf8");
 
-	assert.match(service, /return 'public';/);
-	assert.match(service, /'visibility' => 'public'/);
+	assert.match(service, /config\('marketing-campaigns\.media\.disk', 'public'\)/);
+	assert.match(service, /config\('marketing-campaigns\.media\.visibility', 'public'\)/);
+	assert.match(config, /MARKETING_CAMPAIGN_MEDIA_DISK/);
+	assert.match(config, /MARKETING_CAMPAIGN_MEDIA_VISIBILITY/);
 });
 
 test("marketing campaign gallery uploads are stored with public visibility", () => {
@@ -19,7 +22,17 @@ test("marketing campaign gallery uploads are stored with public visibility", () 
 	);
 
 	assert.match(service, /uploadDisk\(\)/);
-	assert.match(service, /'visibility' => 'public'/);
+	assert.match(service, /uploadVisibility\(\)/);
+});
+
+test("marketing campaign product uploads use the campaign media disk", () => {
+	const service = readFileSync(
+		"app/Services/Marketing/MarketingCampaignLinkProductService.php",
+		"utf8",
+	);
+
+	assert.match(service, /uploadDisk\(\)/);
+	assert.match(service, /uploadVisibility\(\)/);
 });
 
 test("admin live preview uses selected product image preview urls", () => {

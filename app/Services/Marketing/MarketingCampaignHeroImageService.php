@@ -132,7 +132,7 @@ class MarketingCampaignHeroImageService
         $filename = Str::uuid()->toString().'.'.$extension;
         $path = $upload->storeAs($directory, $filename, [
             'disk' => $disk,
-            'visibility' => 'public',
+            'visibility' => $this->uploadVisibility(),
         ]);
 
         if (! is_string($path) || $path === '') {
@@ -192,7 +192,12 @@ class MarketingCampaignHeroImageService
 
     public function uploadDisk(): string
     {
-        return 'public';
+        return (string) config('marketing-campaigns.media.disk', 'public');
+    }
+
+    public function uploadVisibility(): string
+    {
+        return (string) config('marketing-campaigns.media.visibility', 'public');
     }
 
     public function assertSafeExternalUrl(string $url): void

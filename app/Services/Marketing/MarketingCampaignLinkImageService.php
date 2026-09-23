@@ -173,7 +173,7 @@ class MarketingCampaignLinkImageService
         $filename = Str::uuid()->toString().'.'.$extension;
         $path = $upload->storeAs($directory, $filename, [
             'disk' => $disk,
-            'visibility' => 'public',
+            'visibility' => $this->heroImageService->uploadVisibility(),
         ]);
 
         if (! is_string($path) || $path === '') {
