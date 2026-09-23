@@ -5,6 +5,7 @@ namespace App\Actions\TaxProfiles;
 use App\Exceptions\TaxProfiles\ConstanciaExtractionException;
 use App\Models\TaxProfile;
 use App\Services\TaxProfiles\IndividualTaxpayerValidator;
+use App\Support\TaxProfiles\ConstanciaDateParser;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -96,7 +97,9 @@ class UpdateTaxProfileAction
                 'tipo_persona_detectado_por' => $extractedData['tipo_persona_detectado_por'] ?? 'sistema',
                 'verificado_automaticamente' => true,
                 'fecha_verificacion' => now(),
-                'fecha_inscripcion' => $extractedData['fecha_inscripcion'] ?? $taxProfile->fecha_inscripcion,
+                'fecha_inscripcion' => ConstanciaDateParser::parseForStorage(
+                    $extractedData['fecha_inscripcion'] ?? $taxProfile->fecha_inscripcion
+                ) ?? $taxProfile->fecha_inscripcion,
                 'domicilio_fiscal' => $extractedData['domicilio_fiscal'] ?? $taxProfile->domicilio_fiscal,
                 'actividades_economicas' => $extractedData['actividades_economicas'] ?? $taxProfile->actividades_economicas,
             ]);

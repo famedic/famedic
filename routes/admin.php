@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\CouponConceptController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CouponCreationOtpController;
 use App\Http\Controllers\Admin\CustomerController;
+use App\Http\Controllers\Admin\CustomerTaxProfileController;
 use App\Http\Controllers\Admin\CustomerReferralController;
 use App\Http\Controllers\Admin\DocumentationController;
 use App\Http\Controllers\Admin\EfevooTokenController;
@@ -147,6 +148,12 @@ Route::prefix('admin')->middleware([
         });
         Route::resource('customers', CustomerController::class)->only(['index', 'show', 'destroy']);
         Route::post('customers/export', ExportCustomersController::class)->name('customers.export');
+        Route::post('customers/{customer}/tax-profiles/extract-data', [CustomerTaxProfileController::class, 'extractData'])
+            ->name('customers.tax-profiles.extract-data');
+        Route::post('customers/{customer}/tax-profiles', [CustomerTaxProfileController::class, 'store'])
+            ->name('customers.tax-profiles.store');
+        Route::put('customers/{customer}/tax-profiles/{tax_profile}', [CustomerTaxProfileController::class, 'update'])
+            ->name('customers.tax-profiles.update');
         Route::patch('users/{user}', [UserController::class, 'update'])->name('users.update');
         Route::post('users/{user}/verify-email', [UserController::class, 'verifyEmail'])->name('users.verify-email');
         Route::post('users/{user}/verify-phone', [UserController::class, 'verifyPhone'])->name('users.verify-phone');

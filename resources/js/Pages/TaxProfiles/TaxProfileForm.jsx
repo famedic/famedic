@@ -85,14 +85,32 @@ const EXTRACTION_MESSAGE_INTERVAL_MS = 2600;
 const EXTRACTION_SLOW_NOTICE_MS = 12000;
 const EXTRACTION_TIMEOUT_MS = 45000;
 
-export default function TaxProfileForm({ isOpen }) {
-	const { taxProfile, taxRegimes } = usePage().props;
+export default function TaxProfileForm({
+	isOpen,
+	adminMode = false,
+	taxProfile: taxProfileProp = null,
+	taxRegimes: taxRegimesProp = null,
+	extractUrl = null,
+	storeUrl = null,
+	updateUrl = null,
+	onCreated = null,
+	onClose = null,
+	dialogTitle = null,
+	dialogDescription = null,
+	successMessage = null,
+}) {
+	const pageProps = usePage().props;
+	const { taxProfile: pageTaxProfile, taxRegimes: pageTaxRegimes } = pageProps;
+	const resolvedTaxProfile = taxProfileProp ?? pageTaxProfile ?? null;
+	const resolvedTaxRegimes = taxRegimesProp ?? pageTaxRegimes ?? {};
 
-	const [cachedTaxRegimes, setCachedTaxRegimes] = useState(taxRegimes || {});
+	const [cachedTaxRegimes, setCachedTaxRegimes] = useState(resolvedTaxRegimes);
 	const [cachedEditMode, setCachedEditMode] = useState(
-		route().current("tax-profiles.edit") || false
+		adminMode
+			? Boolean(taxProfileProp)
+			: route().current("tax-profiles.edit") || false
 	);
-	const [cachedTaxProfile, setCachedTaxProfile] = useState(taxProfile || null);
+	const [cachedTaxProfile, setCachedTaxProfile] = useState(resolvedTaxProfile);
 
 	const [activeStep, setActiveStep] = useState(STEPS.UPLOAD);
 	const [entryMode, setEntryMode] = useState(ENTRY_MODES.AUTOMATIC);
@@ -125,7 +143,7 @@ export default function TaxProfileForm({ isOpen }) {
 	});
 
 	const { data, setData, errors, setError, clearErrors } = useForm(
-		resetFormData(taxProfile || {})
+		resetFormData(resolvedTaxProfile || {})
 	);
 
 	// Refs
@@ -212,11 +230,14 @@ export default function TaxProfileForm({ isOpen }) {
 	useEffect(() => {
 		if (!isOpen) return;
 
-		const isEditMode = route().current("tax-profiles.edit") || false;
-		const nextForm = resetFormData(taxProfile || {});
+		const profileSource = taxProfileProp ?? pageTaxProfile ?? null;
+		const isEditMode = adminMode
+			? Boolean(taxProfileProp)
+			: route().current("tax-profiles.edit") || false;
+		const nextForm = resetFormData(profileSource || {});
 
-		setCachedTaxRegimes(taxRegimes || {});
-		setCachedTaxProfile(taxProfile || null);
+		setCachedTaxRegimes(resolvedTaxRegimes);
+		setCachedTaxProfile(profileSource);
 		setCachedEditMode(isEditMode);
 		setData(nextForm);
 		initialFormSnapshotRef.current = isEditMode
@@ -248,7 +269,7 @@ export default function TaxProfileForm({ isOpen }) {
 		stopExtractionMessageCycle();
 		abortReasonRef.current = null;
 
-		if (isEditMode && taxProfile) {
+		if (isEditMode && profileSource) {
 			setEntryMode(ENTRY_MODES.MANUAL);
 			setIsModeSelected(true);
 			setActiveStep(STEPS.REVIEW);
@@ -258,7 +279,7 @@ export default function TaxProfileForm({ isOpen }) {
 			setActiveStep(STEPS.UPLOAD);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [isOpen, taxProfile, taxRegimes, setData]);
+	}, [isOpen, adminMode, taxProfileProp, pageTaxProfile, resolvedTaxRegimes, setData]);
 
 	useEffect(() => {
 		return () => {
@@ -491,7 +512,9 @@ export default function TaxProfileForm({ isOpen }) {
 				?.getAttribute("content");
 			if (csrfToken) formData.append("_token", csrfToken);
 
-			const response = await fetch(route("tax-profiles.extract-data"), {
+			const response = await fetch(
+				extractUrl || route("tax-profiles.extract-data"),
+				{
 				method: "POST",
 				body: formData,
 				credentials: "include",
@@ -501,7 +524,8 @@ export default function TaxProfileForm({ isOpen }) {
 					...(csrfToken ? { "X-CSRF-TOKEN": csrfToken } : {}),
 				},
 				signal: controller.signal,
-			});
+				},
+			);
 
 			if (!isCurrentGeneration()) return;
 
@@ -727,6 +751,11 @@ export default function TaxProfileForm({ isOpen }) {
 		setIsModeSelected(false);
 		initialFormSnapshotRef.current = null;
 
+		if (adminMode && onClose) {
+			onClose();
+			return;
+		}
+
 		router.get(
 			route("tax-profiles.index"),
 			{},
@@ -845,10 +874,13 @@ export default function TaxProfileForm({ isOpen }) {
 				formData.append("_token", csrfToken);
 			}
 
-			let url = route("tax-profiles.store");
+			let url = storeUrl || route("tax-profiles.store");
 			let method = "POST";
 
-			if (cachedEditMode && cachedTaxProfile) {
+			if (adminMode && cachedEditMode && cachedTaxProfile && updateUrl) {
+				formData.append("_method", "PUT");
+				url = updateUrl;
+			} else if (!adminMode && cachedEditMode && cachedTaxProfile) {
 				formData.append("_method", "PUT");
 				url = route("tax-profiles.update", {
 					tax_profile: cachedTaxProfile.id,
@@ -879,16 +911,23 @@ export default function TaxProfileForm({ isOpen }) {
 				const result = JSON.parse(responseText);
 
 				if (response.ok && result.success) {
-					const successMessage = cachedEditMode
-						? "Tu perfil fiscal ha sido actualizado correctamente."
-						: "Tu perfil fiscal ha sido creado correctamente.";
+					const resolvedSuccessMessage =
+						successMessage ||
+						(cachedEditMode
+							? "Tu perfil fiscal ha sido actualizado correctamente."
+							: "Tu perfil fiscal ha sido creado correctamente.");
 
 					setInfoMessage({
 						type: "success",
-						message: successMessage,
+						message: resolvedSuccessMessage,
 					});
 
 					setTimeout(() => {
+						if (adminMode && onCreated) {
+							onCreated(result.data);
+							return;
+						}
+
 						router.visit(route("tax-profiles.index"), {
 							preserveState: true,
 							preserveScroll: true,
@@ -1028,10 +1067,14 @@ export default function TaxProfileForm({ isOpen }) {
 		return (
 			<>
 				<DialogTitle>
-					{cachedEditMode ? "Actualizar perfil fiscal" : "Nuevo perfil fiscal"}
+					{dialogTitle ||
+						(cachedEditMode
+							? "Actualizar perfil fiscal"
+							: "Nuevo perfil fiscal")}
 				</DialogTitle>
 				<DialogDescription>
-					Elige cómo quieres registrar tu información fiscal.
+					{dialogDescription ||
+						"Elige cómo quieres registrar tu información fiscal."}
 				</DialogDescription>
 
 				<DialogBody className="space-y-5 sm:space-y-6">

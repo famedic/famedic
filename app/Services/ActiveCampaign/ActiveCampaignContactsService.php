@@ -3,6 +3,7 @@
 namespace App\Services\ActiveCampaign;
 
 use App\Models\Contact;
+use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\OnlinePharmacyPurchase;
 use Carbon\Carbon;
@@ -188,44 +189,29 @@ class ActiveCampaignContactsService
     }
 
     /**
-     * Espejo AC para el Drawer 360 (Tags, Eventos, Automations + Fase 2).
+     * Espejo AC reutilizable desde Customer 360, Drawer 360 y Customer Journey.
      * Nunca lanza: un fallo de API no debe romper el CRM Famedic.
      *
      * @return array<string, mixed>
      */
-    private function buildMirrorPayload(Contact $contact, ActiveCampaignMirrorService $mirror): array
-    {
-        $empty = [
-            'status' => 'missing',
-            'message' => null,
-            'synced_at' => null,
-            'synced_at_human' => null,
-            'from_cache' => false,
-            'ac_contact_id' => null,
-            'tags' => [],
-            'activities' => [],
-            'automations' => [],
-            'lists' => [],
-            'fields' => [],
-            'lead_score' => null,
-            'engagement' => null,
-            'owner' => null,
-        ];
+    public function buildMirrorPayloadForCustomer(
+        Customer $customer,
+        ActiveCampaignMirrorService $mirror,
+    ): array {
+        $empty = $this->emptyMirrorPayload();
 
-        $customer = $contact->customer;
-        if (! $customer) {
+        if (! app(ActiveCampaignService::class)->enabled()) {
             return [
                 ...$empty,
                 'status' => 'missing',
-                'message' => 'Este contacto no tiene customer asociado en Famedic.',
+                'message' => 'ActiveCampaign no está habilitado en esta instancia.',
             ];
         }
 
         try {
             $snapshot = $mirror->snapshot($customer);
         } catch (\Throwable $e) {
-            Log::warning('AC Mirror Drawer: fallo al obtener snapshot', [
-                'contact_id' => $contact->id,
+            Log::warning('AC Mirror Customer: fallo al obtener snapshot', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
             ]);
@@ -245,6 +231,56 @@ class ActiveCampaignContactsService
             ];
         }
 
+        return $this->formatMirrorSnapshot($snapshot);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildMirrorPayload(Contact $contact, ActiveCampaignMirrorService $mirror): array
+    {
+        $empty = $this->emptyMirrorPayload();
+
+        $customer = $contact->customer;
+        if (! $customer) {
+            return [
+                ...$empty,
+                'status' => 'missing',
+                'message' => 'Este contacto no tiene customer asociado en Famedic.',
+            ];
+        }
+
+        return $this->buildMirrorPayloadForCustomer($customer, $mirror);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyMirrorPayload(): array
+    {
+        return [
+            'status' => 'missing',
+            'message' => null,
+            'synced_at' => null,
+            'synced_at_human' => null,
+            'from_cache' => false,
+            'ac_contact_id' => null,
+            'tags' => [],
+            'activities' => [],
+            'automations' => [],
+            'lists' => [],
+            'fields' => [],
+            'lead_score' => null,
+            'engagement' => null,
+            'owner' => null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatMirrorSnapshot(\App\DataTransferObjects\ActiveCampaign\ActiveCampaignContactSnapshot $snapshot): array
+    {
         $tags = array_map(
             static fn ($tag) => $tag->toArray(),
             $snapshot->tags

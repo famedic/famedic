@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\Auth\RecordUserLoginAction;
 use App\Actions\Marketing\AttachMarketingCampaignAttributionToCustomerAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
@@ -22,11 +23,16 @@ class AuthenticatedSessionController extends Controller
     public function store(
         LoginRequest $request,
         AttachMarketingCampaignAttributionToCustomerAction $attachMarketingAttribution,
+        RecordUserLoginAction $recordUserLogin,
     ): RedirectResponse
     {
         $request->authenticate();
 
         $request->session()->regenerate();
+
+        if ($request->user()) {
+            $recordUserLogin($request->user(), $request);
+        }
 
         $this->attachMarketingAttribution($request, $attachMarketingAttribution, 'web_login');
 

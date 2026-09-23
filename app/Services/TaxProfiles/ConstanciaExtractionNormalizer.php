@@ -3,6 +3,7 @@
 namespace App\Services\TaxProfiles;
 
 use App\DataTransferObjects\TaxProfiles\ConstanciaExtractionResult;
+use App\Support\TaxProfiles\ConstanciaDateParser;
 
 class ConstanciaExtractionNormalizer
 {
@@ -54,7 +55,9 @@ class ConstanciaExtractionNormalizer
             'domicilio_fiscal' => $this->nullableString($merged['domicilio_fiscal'] ?? null),
             'fecha_emision' => $this->nullableString($merged['fecha_emision'] ?? $merged['fecha_emision_constancia'] ?? null),
             'fecha_emision_constancia' => $this->nullableString($merged['fecha_emision'] ?? $merged['fecha_emision_constancia'] ?? null),
-            'fecha_inscripcion' => $this->nullableString($merged['fecha_inscripcion'] ?? null),
+            'fecha_inscripcion' => ConstanciaDateParser::parseForStorage(
+                $this->nullableString($merged['fecha_inscripcion'] ?? null)
+            ),
             'estatus_sat' => $this->nullableString($merged['estatus_sat'] ?? null),
             'actividades_economicas' => $this->nullableString($merged['actividades_economicas'] ?? null),
             'tipo_persona' => $tipoPersona,
