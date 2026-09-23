@@ -193,6 +193,66 @@ class LaboratoryPreparationSummaryService
         }
     }
 
+    public function generateFallbackFromSource(
+        LaboratoryPurchase $purchase,
+        ?AiExecution $execution = null,
+    ): ?LaboratoryPurchasePreparationSummary {
+        $purchase->loadMissing('laboratoryPurchaseItems');
+
+        $input = $this->buildSourceInput($purchase);
+        $sourceHash = $this->sourceHash($input);
+        $itemsWithIndications = collect($input['items'] ?? [])
+            ->filter(fn (array $item) => filled($item['indications'] ?? null))
+            ->values();
+
+        if ($itemsWithIndications->isEmpty()) {
+            return null;
+        }
+
+        $existing = $purchase->preparationSummary()->first();
+        if ($existing && $existing->source_hash !== $sourceHash && $existing->invalidated_at === null) {
+            $existing->update([
+                'status' => LaboratoryPurchasePreparationSummary::STATUS_STALE,
+                'invalidated_at' => now(),
+            ]);
+        }
+
+        $summaryText = $itemsWithIndications->count() === 1
+            ? 'Revisa la indicación de preparación disponible para el estudio solicitado.'
+            : 'Revisa las indicaciones de preparación disponibles para los estudios solicitados.';
+
+        $content = [
+            'summary' => $summaryText,
+            'sections' => $itemsWithIndications
+                ->map(fn (array $item) => [
+                    'key' => 'source_indications_'.$item['id'],
+                    'title' => (string) ($item['name'] ?: 'Indicaciones de preparación'),
+                    'content' => trim((string) $item['indications']),
+                    'source_item_ids' => [(int) $item['id']],
+                ])
+                ->all(),
+            'special_instructions' => [],
+            'individual_instructions' => [],
+            'fallback' => true,
+            'fallback_reason' => 'ai_fidelity_validation_failed',
+        ];
+
+        return DB::transaction(function () use ($purchase, $sourceHash, $content, $execution) {
+            return LaboratoryPurchasePreparationSummary::query()->updateOrCreate(
+                ['laboratory_purchase_id' => $purchase->id],
+                [
+                    'ai_execution_id' => $execution?->id,
+                    'source_hash' => $sourceHash,
+                    'status' => LaboratoryPurchasePreparationSummary::STATUS_GENERATED,
+                    'summary_text' => $content['summary'],
+                    'summary_json' => $content,
+                    'generated_at' => now(),
+                    'invalidated_at' => null,
+                ]
+            );
+        });
+    }
+
     /**
      * @return array{items: list<array{id: int, name: string, gda_id: string|null, indications: string|null, feature_list: list<string>}>}
      */

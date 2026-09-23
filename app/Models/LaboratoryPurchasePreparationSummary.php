@@ -23,6 +23,8 @@ class LaboratoryPurchasePreparationSummary extends Model
         'summary_json',
         'generated_at',
         'invalidated_at',
+        'notified_at',
+        'notification_email_queued_at',
     ];
 
     protected function casts(): array
@@ -31,6 +33,8 @@ class LaboratoryPurchasePreparationSummary extends Model
             'summary_json' => 'array',
             'generated_at' => 'datetime',
             'invalidated_at' => 'datetime',
+            'notified_at' => 'datetime',
+            'notification_email_queued_at' => 'datetime',
         ];
     }
 

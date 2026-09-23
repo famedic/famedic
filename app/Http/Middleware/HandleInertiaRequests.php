@@ -166,8 +166,10 @@ class HandleInertiaRequests extends Middleware
             'unreadCount' => $service->unreadCount($user),
             'items' => $service->recentForUser($user, 20)->map(fn ($n) => [
                 'id' => $n->id,
+                'type' => $n->type,
                 'title' => $n->title,
                 'message' => $n->message,
+                'action_url' => $n->action_url,
                 'is_read' => (bool) $n->is_read,
                 'created_at' => $n->created_at?->toIso8601String(),
             ])->all(),

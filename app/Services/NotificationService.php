@@ -7,13 +7,19 @@ use App\Models\User;
 
 class NotificationService
 {
-    public function createNotification(User $user, string $type, string $title, string $message): InAppNotification
-    {
+    public function createNotification(
+        User $user,
+        string $type,
+        string $title,
+        string $message,
+        ?string $actionUrl = null,
+    ): InAppNotification {
         return InAppNotification::create([
             'user_id' => $user->id,
             'type' => $type,
             'title' => $title,
             'message' => $message,
+            'action_url' => $actionUrl,
             'is_read' => false,
         ]);
     }
