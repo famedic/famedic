@@ -171,10 +171,7 @@ class MarketingCampaignLinkImageService
 
         $extension = strtolower($upload->getClientOriginalExtension() ?: 'jpg');
         $filename = Str::uuid()->toString().'.'.$extension;
-        $path = $upload->storeAs($directory, $filename, [
-            'disk' => $disk,
-            'visibility' => $this->heroImageService->uploadVisibility(),
-        ]);
+        $path = $upload->storeAs($directory, $filename, $this->heroImageService->uploadOptions());
 
         if (! is_string($path) || $path === '') {
             throw ValidationException::withMessages([

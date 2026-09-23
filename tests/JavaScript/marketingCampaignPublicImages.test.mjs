@@ -11,6 +11,8 @@ test("marketing campaign hero uploads use the configured media disk", () => {
 
 	assert.match(service, /config\('marketing-campaigns\.media\.disk', 'public'\)/);
 	assert.match(service, /config\('marketing-campaigns\.media\.visibility', 'public'\)/);
+	assert.match(service, /function uploadOptions\(\): array/);
+	assert.match(service, /if \(\$visibility !== ''\)/);
 	assert.match(config, /MARKETING_CAMPAIGN_MEDIA_DISK/);
 	assert.match(config, /MARKETING_CAMPAIGN_MEDIA_VISIBILITY/);
 });
@@ -22,7 +24,7 @@ test("marketing campaign gallery uploads are stored with public visibility", () 
 	);
 
 	assert.match(service, /uploadDisk\(\)/);
-	assert.match(service, /uploadVisibility\(\)/);
+	assert.match(service, /uploadOptions\(\)/);
 });
 
 test("marketing campaign product uploads use the campaign media disk", () => {
@@ -32,7 +34,7 @@ test("marketing campaign product uploads use the campaign media disk", () => {
 	);
 
 	assert.match(service, /uploadDisk\(\)/);
-	assert.match(service, /uploadVisibility\(\)/);
+	assert.match(service, /uploadOptions\(\)/);
 });
 
 test("admin live preview uses selected product image preview urls", () => {
