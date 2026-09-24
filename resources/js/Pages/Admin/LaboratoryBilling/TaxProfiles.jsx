@@ -30,6 +30,7 @@ export default function TaxProfiles({
 	filters = {},
 	metrics = {},
 	canManageAutomaticReports = false,
+	navCounts = {},
 }) {
 	const [rangeProcessing, setRangeProcessing] = useState(false);
 	const onProcessingChange = useCallback(
@@ -87,6 +88,7 @@ export default function TaxProfiles({
 					active="tax-profiles"
 					query={filters}
 					canManageAutomaticReports={canManageAutomaticReports}
+					navCounts={navCounts}
 				/>
 
 				<section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

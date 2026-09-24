@@ -17,6 +17,7 @@ use App\Http\Requests\Admin\LaboratoryPurchases\IndexLaboratoryPurchaseRequest;
 use App\Http\Requests\Admin\LaboratoryPurchases\ResendLaboratoryPurchaseConfirmationRequest;
 use App\Http\Requests\Admin\LaboratoryPurchases\ShowLaboratoryPurchaseRequest;
 use App\Notifications\LaboratoryPurchaseCreated;
+use App\Services\InvoiceRequests\InvoiceRequestWorkflowPresenter;
 use App\Services\LaboratoryResults\LaboratoryPurchaseResultControlPresenter;
 use Illuminate\Support\Facades\Log;
 use App\Models\LaboratoryPurchase;
@@ -77,6 +78,7 @@ class LaboratoryPurchaseController extends Controller
         ShowLaboratoryPurchaseRequest $request,
         LaboratoryPurchase $laboratoryPurchase,
         LaboratoryPurchaseResultControlPresenter $resultControlPresenter,
+        InvoiceRequestWorkflowPresenter $invoiceRequestWorkflowPresenter,
         RecoverUncertainGdaLaboratoryPurchaseAction $recoverUncertainGdaLaboratoryPurchaseAction,
         CreateReplacementGdaLaboratoryPurchaseAction $createReplacementGdaLaboratoryPurchaseAction,
     )
@@ -130,6 +132,9 @@ class LaboratoryPurchaseController extends Controller
                 $laboratoryPurchase->latestResultsNotification()?->created_at
             )?->isoFormat('D MMM Y h:mm a'),
             ...$resultControlPresenter->present($laboratoryPurchase, $request->user()),
+            'invoiceRequestWorkflow' => $laboratoryPurchase->invoiceRequest
+                ? $invoiceRequestWorkflowPresenter->presentForAdmin($laboratoryPurchase->invoiceRequest)
+                : null,
         ]);
     }
 

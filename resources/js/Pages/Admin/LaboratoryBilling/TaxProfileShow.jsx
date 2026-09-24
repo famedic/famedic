@@ -39,6 +39,7 @@ export default function TaxProfileShow({
 	taxProfile,
 	filters = {},
 	canManageAutomaticReports = false,
+	navCounts = {},
 }) {
 	const [tab, setTab] = useState("info");
 
@@ -73,6 +74,7 @@ export default function TaxProfileShow({
 					active="tax-profiles"
 					query={filters}
 					canManageAutomaticReports={canManageAutomaticReports}
+					navCounts={navCounts}
 				/>
 
 				<nav className="flex flex-wrap gap-2" aria-label="Detalle del perfil">

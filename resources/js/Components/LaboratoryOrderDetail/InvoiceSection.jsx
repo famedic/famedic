@@ -13,6 +13,8 @@ import {
 	ReceiptPercentIcon,
 } from "@heroicons/react/24/outline";
 import { getDefaultTaxProfileId } from "@/lib/taxProfileSelection";
+import InvoiceRequestWorkflowTimeline from "@/Components/LaboratoryOrderDetail/InvoiceRequestWorkflowTimeline";
+import { WorkflowStatusBadge } from "@/Components/Admin/LaboratoryBilling/BillingStatusBadge";
 
 const CFDI_OPTIONS = [
 	{ value: "G03", label: "G03", description: "Gastos en general" },
@@ -47,6 +49,20 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 	const invoiceRequest = purchase?.invoice_request;
 	const invoiceUploadedAt = invoiceRecord?.formatted_created_at || null;
 	const invoiceRequestedAt = invoiceRequest?.formatted_created_at || null;
+	const workflowStatus = invoiceRequest?.workflow_status;
+	const isAwaitingSample = workflowStatus === "awaiting_sample_collection";
+	const isInBilling =
+		Boolean(invoiceRequest) &&
+		!isAwaitingSample &&
+		(workflowStatus === "submitted_to_billing" || !workflowStatus);
+
+	const sectionBadge = hasInvoice
+		? { label: "Disponible", color: "green" }
+		: isAwaitingSample
+			? { label: "Solicitud registrada", color: "sky" }
+			: hasInvoiceRequest
+				? { label: "En facturación", color: "blue" }
+				: { label: "Sin solicitar", color: "slate" };
 
 	const submitInvoiceRequest = (e) => {
 		e.preventDefault();
@@ -65,8 +81,8 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 				<h3 className="min-w-0 flex-1 break-words text-base font-semibold text-zinc-900 dark:text-white">
 					Facturas
 				</h3>
-				<Badge color={hasInvoice ? "green" : hasInvoiceRequest ? "blue" : "slate"} className="shrink-0">
-					{hasInvoice ? "Disponible" : hasInvoiceRequest ? "Solicitada" : "Sin solicitar"}
+				<Badge color={sectionBadge.color} className="shrink-0">
+					{sectionBadge.label}
 				</Badge>
 			</div>
 
@@ -125,7 +141,12 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 							<Text className="text-sm font-medium text-zinc-800 dark:text-slate-200">
 								Datos usados para solicitar la factura
 							</Text>
-							<div className="mt-2 space-y-1 text-sm text-zinc-600 dark:text-slate-300">
+							<div className="mt-2 space-y-3">
+								<InvoiceRequestWorkflowTimeline
+									invoiceRequest={invoiceRequest}
+									hasInvoice={hasInvoice}
+								/>
+								<div className="space-y-1 text-sm text-zinc-600 dark:text-slate-300">
 								<Text>
 									<Strong>Perfil fiscal:</Strong> {invoiceRequest.name} ({invoiceRequest.rfc})
 								</Text>
@@ -137,13 +158,104 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 										<Strong>Solicitud enviada:</Strong> {invoiceRequestedAt}
 									</Text>
 								)}
+								</div>
 							</div>
 						</div>
 					)}
 				</div>
 			)}
 
-			{!hasInvoice && hasInvoiceRequest && (
+			{!hasInvoice && hasInvoiceRequest && isAwaitingSample && (
+				<div className="space-y-3 rounded-xl bg-sky-50/70 p-4 dark:bg-sky-950/20">
+					<div className="flex items-center gap-2">
+						<ClockIcon className="size-5 text-sky-700 dark:text-sky-300" />
+						<Text className="font-medium text-sky-700 dark:text-sky-300">
+							Solicitud registrada
+						</Text>
+					</div>
+					<Text className="break-words text-sm text-sky-800/90 dark:text-sky-200/90">
+						Tu solicitud de factura fue registrada correctamente.
+					</Text>
+					<Text className="break-words text-sm text-sky-800/90 dark:text-sky-200/90">
+						La factura se procesará automáticamente cuando se complete tu estudio.
+					</Text>
+					<Text className="break-words text-sm text-sky-800/90 dark:text-sky-200/90">
+						No necesitas realizar ninguna acción adicional.
+					</Text>
+					<InvoiceRequestWorkflowTimeline
+						invoiceRequest={invoiceRequest}
+						hasInvoice={hasInvoice}
+					/>
+					<div className="rounded-lg border border-sky-200/80 bg-white/70 p-3 dark:border-sky-900/70 dark:bg-sky-950/30">
+						<div className="space-y-1 text-sm text-sky-800 dark:text-sky-200">
+							<Text>
+								<Strong>Perfil fiscal usado:</Strong> {invoiceRequest?.name} ({invoiceRequest?.rfc})
+							</Text>
+							<Text>
+								<Strong>Uso de CFDI:</Strong>{" "}
+								{invoiceRequest?.formatted_cfdi_use || invoiceRequest?.cfdi_use || "No disponible"}
+							</Text>
+							{invoiceRequestedAt && (
+								<Text>
+									<Strong>Solicitada el:</Strong> {invoiceRequestedAt}
+								</Text>
+							)}
+							{invoiceRequest?.formatted_sample_completed_at && (
+								<Text>
+									<Strong>Toma completada:</Strong>{" "}
+									{invoiceRequest.formatted_sample_completed_at}
+								</Text>
+							)}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{!hasInvoice && hasInvoiceRequest && isInBilling && (
+				<div className="space-y-3 rounded-xl bg-blue-50/70 p-4 dark:bg-blue-950/20">
+					<div className="flex items-center gap-2">
+						<ClockIcon className="size-5 text-blue-700 dark:text-blue-300" />
+						<WorkflowStatusBadge status="submitted_to_billing" />
+					</div>
+					<Text className="break-words text-sm text-blue-700/90 dark:text-blue-300/90">
+						Tu solicitud ya fue enviada al área de facturación.
+					</Text>
+					<Text className="break-words text-sm text-blue-700/90 dark:text-blue-300/90">
+						La factura estará disponible una vez que termine el proceso.
+					</Text>
+					<Text className="break-words text-sm text-blue-700/90 dark:text-blue-300/90">
+						Recibirás la factura por correo en 3 a 5 días hábiles.
+					</Text>
+					<InvoiceRequestWorkflowTimeline
+						invoiceRequest={invoiceRequest}
+						hasInvoice={hasInvoice}
+					/>
+					<div className="rounded-lg border border-blue-200/80 bg-white/70 p-3 dark:border-blue-900/70 dark:bg-blue-950/30">
+						<div className="space-y-1 text-sm text-blue-800 dark:text-blue-200">
+							<Text>
+								<Strong>Perfil fiscal usado:</Strong> {invoiceRequest?.name} ({invoiceRequest?.rfc})
+							</Text>
+							<Text>
+								<Strong>Uso de CFDI:</Strong>{" "}
+								{invoiceRequest?.formatted_cfdi_use || invoiceRequest?.cfdi_use || "No disponible"}
+							</Text>
+							{invoiceRequestedAt && (
+								<Text>
+									<Strong>Solicitada el:</Strong> {invoiceRequestedAt}
+								</Text>
+							)}
+							{invoiceRequest?.formatted_submitted_to_billing_at && (
+								<Text>
+									<Strong>Enviada a facturación:</Strong>{" "}
+									{invoiceRequest.formatted_submitted_to_billing_at}
+								</Text>
+							)}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{!hasInvoice && hasInvoiceRequest && !isAwaitingSample && !isInBilling && (
 				<div className="space-y-3 rounded-xl bg-blue-50/70 p-4 dark:bg-blue-950/20">
 					<div className="flex items-center gap-2">
 						<ClockIcon className="size-5 text-blue-700 dark:text-blue-300" />

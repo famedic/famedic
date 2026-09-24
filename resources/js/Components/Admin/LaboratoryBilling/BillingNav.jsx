@@ -8,6 +8,12 @@ const TABS = [
 		route: "admin.laboratory-billing.dashboard",
 	},
 	{
+		key: "awaiting-sample",
+		label: "Esperando toma",
+		route: "admin.laboratory-billing.awaiting-sample",
+		countKey: "awaiting_sample",
+	},
+	{
 		key: "requests",
 		label: "Solicitudes",
 		route: "admin.laboratory-billing.requests",
@@ -39,6 +45,7 @@ export default function BillingNav({
 	active,
 	query = {},
 	canManageAutomaticReports = false,
+	navCounts = {},
 }) {
 	const preserved = Object.fromEntries(
 		Object.entries(query).filter(
@@ -56,6 +63,10 @@ export default function BillingNav({
 		>
 			{tabs.map((tab) => {
 				const isActive = active === tab.key;
+				const count = tab.countKey ? navCounts?.[tab.countKey] : null;
+				const label =
+					count != null && count > 0 ? `${tab.label} (${count})` : tab.label;
+
 				return (
 					<Link
 						key={tab.key}
@@ -68,7 +79,7 @@ export default function BillingNav({
 								: "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/80",
 						)}
 					>
-						{tab.label}
+						{label}
 					</Link>
 				);
 			})}

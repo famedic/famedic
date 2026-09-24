@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Admin\LaboratoryBilling;
 
+use App\Enums\InvoiceRequestWorkflowStatus;
 use App\Models\Administrator;
 use App\Models\Customer;
 use App\Models\InvoiceRequest;
@@ -181,6 +182,49 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
     }
 
     #[Test]
+    public function workflow_tabs_separate_awaiting_sample_from_billing_requests(): void
+    {
+        $awaiting = $this->seedRequest([
+            'workflow_status' => InvoiceRequestWorkflowStatus::AwaitingSampleCollection->value,
+            'submitted_to_billing_at' => null,
+            'gda_order_id' => 'AWAIT-1',
+            'requested_at' => now()->subDay(),
+        ]);
+        $billing = $this->seedRequest([
+            'workflow_status' => InvoiceRequestWorkflowStatus::SubmittedToBilling->value,
+            'gda_order_id' => 'BILL-1',
+            'requested_at' => now()->subDay(),
+        ]);
+        $this->seedRequest([
+            'workflow_status' => InvoiceRequestWorkflowStatus::Cancelled->value,
+            'submitted_to_billing_at' => null,
+            'gda_order_id' => 'CANC-1',
+            'requested_at' => now()->subDay(),
+        ]);
+
+        $admin = $this->makeAdmin(['laboratory-purchases.manage.invoices']);
+        $range = ['from' => '2026-08-01', 'to' => '2026-08-10'];
+
+        $this->actingAs($admin)
+            ->get(route('admin.laboratory-billing.awaiting-sample', $range))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Admin/LaboratoryBilling/AwaitingSample')
+                ->has('requests.data', 1)
+                ->where('requests.data.0.id', $awaiting['request']->id)
+                ->where('navCounts.awaiting_sample', 1));
+
+        $this->actingAs($admin)
+            ->get(route('admin.laboratory-billing.requests', $range))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Admin/LaboratoryBilling/Requests')
+                ->has('requests.data', 1)
+                ->where('requests.data.0.id', $billing['request']->id)
+                ->where('requests.data.0.workflow.status', InvoiceRequestWorkflowStatus::SubmittedToBilling->value));
+    }
+
+    #[Test]
     public function requests_query_searches_by_folio_and_rfc_and_filters_documents(): void
     {
         $this->seedRequest([
@@ -313,6 +357,13 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
         $labs = $navigation->firstWhere('label', 'Laboratorios');
         $this->assertNotNull($labs);
         $this->assertTrue(collect($labs['items'] ?? [])->pluck('label')->contains('Facturación'));
+
+        $this->actingAs($admin)
+            ->get(route('admin.laboratory-billing.awaiting-sample', [
+                'from' => '2026-08-01',
+                'to' => '2026-08-10',
+            ]))
+            ->assertOk();
 
         $this->actingAs($admin)
             ->get(route('admin.laboratory-billing.requests', [
@@ -2024,6 +2075,10 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             ]);
         }
 
+        $workflowStatus = $overrides['workflow_status']
+            ?? InvoiceRequestWorkflowStatus::SubmittedToBilling->value;
+        $requestedAt = $overrides['requested_at'] ?? now();
+
         $request = $purchase->invoiceRequest()->create([
             'tax_profile_id' => $taxProfile->id,
             'name' => $taxProfile->name,
@@ -2031,8 +2086,15 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'zipcode' => '64000',
             'tax_regime' => '612',
             'cfdi_use' => 'D01',
-            'created_at' => $overrides['requested_at'] ?? now(),
-            'updated_at' => $overrides['requested_at'] ?? now(),
+            'workflow_status' => $workflowStatus,
+            'submitted_to_billing_at' => array_key_exists('submitted_to_billing_at', $overrides)
+                ? $overrides['submitted_to_billing_at']
+                : ($workflowStatus === InvoiceRequestWorkflowStatus::AwaitingSampleCollection->value
+                    ? null
+                    : $requestedAt),
+            'activated_by' => $overrides['activated_by'] ?? null,
+            'created_at' => $requestedAt,
+            'updated_at' => $requestedAt,
         ]);
 
         if (! empty($overrides['with_complete_invoice'])) {
@@ -2248,6 +2310,12 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             $table->string('tax_regime')->nullable();
             $table->string('cfdi_use')->nullable();
             $table->string('fiscal_certificate')->nullable();
+            $table->string('workflow_status', 50)
+                ->default(InvoiceRequestWorkflowStatus::SubmittedToBilling->value);
+            $table->timestamp('submitted_to_billing_at')->nullable();
+            $table->timestamp('sample_completed_at')->nullable();
+            $table->timestamp('billing_team_notified_at')->nullable();
+            $table->string('activated_by', 50)->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

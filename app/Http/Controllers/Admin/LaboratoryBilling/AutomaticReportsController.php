@@ -12,6 +12,7 @@ use App\Models\LaboratoryBillingReportRun;
 use App\Models\LaboratoryBillingReportSchedule;
 use App\Models\LaboratoryStore;
 use App\Services\LaboratoryBilling\LaboratoryBillingAccess;
+use App\Services\LaboratoryBilling\LaboratoryBillingNavCounts;
 use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportDataService;
 use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportPeriodResolver;
 use App\Services\LaboratoryBilling\Reports\LaboratoryBillingReportScheduleCalculator;
@@ -29,8 +30,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AutomaticReportsController extends Controller
 {
-    public function index(Request $request, LaboratoryBillingAccess $access): Response
-    {
+    public function index(
+        Request $request,
+        LaboratoryBillingAccess $access,
+        LaboratoryBillingNavCounts $navCounts,
+    ): Response {
         $access->authorizeReports($request->user());
 
         $schedules = LaboratoryBillingReportSchedule::query()
@@ -127,6 +131,7 @@ class AutomaticReportsController extends Controller
                 'retentionDays' => (int) config('famedic.laboratory_billing.report_file_retention_days', 14),
             ],
             'canManageAutomaticReports' => true,
+            'navCounts' => $navCounts->toArray(),
         ]);
     }
 
