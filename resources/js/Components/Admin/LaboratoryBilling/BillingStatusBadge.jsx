@@ -37,3 +37,21 @@ export function BillingDocumentStatus({ status, label, color, hasPdf, hasXml }) 
 		</div>
 	);
 }
+
+const WORKFLOW_BADGES = {
+	awaiting_sample_collection: { label: "Esperando toma", color: "amber" },
+	registered: { label: "Solicitud registrada", color: "sky" },
+	submitted_to_billing: { label: "En facturación", color: "blue" },
+};
+
+export function WorkflowStatusBadge({ status, label }) {
+	const config = WORKFLOW_BADGES[status] || null;
+
+	return (
+		<BillingStatusBadge
+			status={status}
+			label={label || config?.label}
+			color={config?.color}
+		/>
+	);
+}

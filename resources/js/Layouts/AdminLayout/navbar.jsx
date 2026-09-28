@@ -24,6 +24,7 @@ import {
 	ArrowRightStartOnRectangleIcon,
 	BanknotesIcon,
 	BeakerIcon,
+	BellAlertIcon,
 	BellIcon,
 	BuildingStorefrontIcon,
 	BoltIcon,
@@ -33,8 +34,11 @@ import {
 	ClipboardDocumentListIcon,
 	Cog6ToothIcon,
 	CpuChipIcon,
+	EnvelopeIcon,
 	ExclamationTriangleIcon,
 	IdentificationIcon,
+	PlayCircleIcon,
+	ShieldCheckIcon,
 	SignalIcon,
 	Squares2X2Icon,
 	UserCircleIcon,
@@ -46,6 +50,7 @@ const iconMap = {
 	ArrowLeftEndOnRectangleIcon,
 	BanknotesIcon,
 	BeakerIcon,
+	BellAlertIcon,
 	BoltIcon,
 	BuildingStorefrontIcon,
 	BookOpenIcon,
@@ -53,8 +58,11 @@ const iconMap = {
 	ClipboardDocumentListIcon,
 	Cog6ToothIcon,
 	CpuChipIcon,
+	EnvelopeIcon,
 	ExclamationTriangleIcon,
 	IdentificationIcon,
+	PlayCircleIcon,
+	ShieldCheckIcon,
 	SignalIcon,
 	Squares2X2Icon,
 	UserCircleIcon,
@@ -153,6 +161,7 @@ export default function NavBar() {
 	const { user } = auth;
 	const integrations = adminTopNavigation.integrations || [];
 	const laboratory = adminTopNavigation.laboratory || [];
+	const simulators = adminTopNavigation.simulators;
 	const monitoring = adminTopNavigation.monitoring || [];
 	const personal = adminTopNavigation.personal;
 	const configuration = adminTopNavigation.configuration || [];
@@ -185,6 +194,13 @@ export default function NavBar() {
 					icon={BeakerIcon}
 					items={laboratory}
 					current={laboratory.some((item) => itemIsCurrent(item))}
+					iconOnly
+				/>
+				<TopDropdown
+					label="Simuladores"
+					icon={PlayCircleIcon}
+					items={simulators?.items || []}
+					current={itemIsCurrent(simulators)}
 					iconOnly
 				/>
 				<TopDropdown

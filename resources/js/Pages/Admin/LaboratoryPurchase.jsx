@@ -40,6 +40,7 @@ import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import PhoneButton from "@/Components/PhoneButton";
 import CustomerLink from "@/Components/CustomerLink";
 import InvoiceDialog from "@/Components/InvoiceDialog";
+import AdminInvoiceRequestWorkflowPanel from "@/Components/Admin/LaboratoryPurchases/AdminInvoiceRequestWorkflowPanel";
 import ResultsDialog from "@/Components/ResultsDialog";
 import DevAssistanceButton from "@/Components/DevAssistance/DevAssistanceButton";
 import DevAssistanceDropdown from "@/Components/DevAssistance/DevAssistanceDropdown";
@@ -107,6 +108,7 @@ export default function LaboratoryPurchase({
 	hasManualResults = false,
 	latestSampleCollectionAt,
 	latestResultsAt,
+	invoiceRequestWorkflow = null,
 }) {
 
 	return (
@@ -127,6 +129,7 @@ export default function LaboratoryPurchase({
 				hasManualResults={hasManualResults}
 				latestSampleCollectionAt={latestSampleCollectionAt}
 				latestResultsAt={latestResultsAt}
+				invoiceRequestWorkflow={invoiceRequestWorkflow}
 			/>
 
 			<Patient laboratoryPurchase={laboratoryPurchase} />
@@ -164,6 +167,7 @@ function Header({
 	hasManualResults,
 	latestSampleCollectionAt,
 	latestResultsAt,
+	invoiceRequestWorkflow = null,
 }) {
 
 	const resendForm = useForm({});
@@ -511,6 +515,10 @@ function Header({
 					invoiceRequest={laboratoryPurchase.invoice_request}
 					hasInvoice={!!laboratoryPurchase.invoice}
 				/>
+				)}
+
+				{invoiceRequestWorkflow && (
+					<AdminInvoiceRequestWorkflowPanel workflow={invoiceRequestWorkflow} />
 				)}
 
 				<ResultsDialog

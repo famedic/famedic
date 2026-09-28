@@ -24,6 +24,7 @@ use App\Http\Controllers\Admin\FailedJobsController;
 use App\Http\Controllers\Admin\GdaNotificationSimulatorController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
+use App\Http\Controllers\Admin\LaboratoryBilling\AwaitingSampleController;
 use App\Http\Controllers\Admin\LaboratoryBilling\DashboardController;
 use App\Http\Controllers\Admin\LaboratoryBilling\ExportController as LaboratoryBillingExportController;
 use App\Http\Controllers\Admin\LaboratoryBilling\InvoicesController;
@@ -262,6 +263,7 @@ Route::prefix('admin')->middleware([
 
         Route::prefix('laboratory-billing')->name('laboratory-billing.')->group(function () {
             Route::get('/', DashboardController::class)->name('dashboard');
+            Route::get('/awaiting-sample', AwaitingSampleController::class)->name('awaiting-sample');
             Route::get('/requests', RequestsController::class)->name('requests');
             Route::get('/invoices', InvoicesController::class)->name('invoices');
             Route::get('/tax-profiles', [TaxProfilesBillingController::class, 'index'])->name('tax-profiles.index');

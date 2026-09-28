@@ -2,12 +2,15 @@
 
 namespace App\Actions\Laboratories;
 
+use App\Actions\InvoiceRequests\AttemptActivateLaboratoryInvoiceRequestForPurchaseAction;
+use App\Enums\InvoiceRequestStatusLogTrigger;
 use App\Enums\LaboratoryResultEventType;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryResultEvent;
 use App\Services\Laboratory\LaboratoryResultsNotificationService;
 use App\Services\Laboratory\LabOrderNotificationGateService;
+use App\Services\InvoiceRequests\LaboratoryInvoiceRequestActivationEvaluator;
 use App\Services\LaboratoryResults\LaboratoryResultCompletionGate;
 use Illuminate\Support\Facades\Log;
 
@@ -17,6 +20,8 @@ class AttemptReleaseLaboratoryResultsNotificationAction
         private LabOrderNotificationGateService $notificationGateService,
         private LaboratoryResultsNotificationService $notificationService,
         private LaboratoryResultCompletionGate $completionGate,
+        private LaboratoryInvoiceRequestActivationEvaluator $invoiceRequestActivationEvaluator,
+        private AttemptActivateLaboratoryInvoiceRequestForPurchaseAction $attemptActivateLaboratoryInvoiceRequest,
     ) {}
 
     public function execute(LaboratoryPurchase $purchase, string $source = 'semantic_completion'): bool
@@ -57,6 +62,13 @@ class AttemptReleaseLaboratoryResultsNotificationAction
                 'gda_order_id' => $gdaOrderId,
                 'source' => $source,
             ]);
+        }
+
+        if ($this->invoiceRequestActivationEvaluator->shouldActivateByResultAvailable($purchase->fresh())) {
+            $this->attemptActivateLaboratoryInvoiceRequest->execute(
+                $purchase->fresh(['invoiceRequest']),
+                InvoiceRequestStatusLogTrigger::ResultAvailable,
+            );
         }
 
         return $sent;

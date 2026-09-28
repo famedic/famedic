@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Enums\InvoiceRequestWorkflowStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -26,7 +28,19 @@ class InvoiceRequest extends Model
         'formatted_tax_regime',
         'formatted_cfdi_use',
         'formatted_created_at',
+        'formatted_submitted_to_billing_at',
+        'formatted_sample_completed_at',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'workflow_status' => InvoiceRequestWorkflowStatus::class,
+            'submitted_to_billing_at' => 'datetime',
+            'sample_completed_at' => 'datetime',
+            'billing_team_notified_at' => 'datetime',
+        ];
+    }
 
     public function scopeForActiveLaboratoryPurchases(Builder $query): Builder
     {
@@ -46,6 +60,26 @@ class InvoiceRequest extends Model
     public function taxProfile(): BelongsTo
     {
         return $this->belongsTo(TaxProfile::class)->withTrashed();
+    }
+
+    public function statusLogs(): HasMany
+    {
+        return $this->hasMany(InvoiceRequestStatusLog::class);
+    }
+
+    public function isAwaitingSampleCollection(): bool
+    {
+        return $this->workflow_status === InvoiceRequestWorkflowStatus::AwaitingSampleCollection;
+    }
+
+    public function isSubmittedToBilling(): bool
+    {
+        return $this->workflow_status === InvoiceRequestWorkflowStatus::SubmittedToBilling;
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->workflow_status === InvoiceRequestWorkflowStatus::Cancelled;
     }
 
     protected function formattedTaxRegime(): Attribute
@@ -86,6 +120,20 @@ class InvoiceRequest extends Model
     {
         return Attribute::make(
             get: fn () => localizedDate($this->created_at)?->isoFormat('D MMM Y h:mm a')
+        );
+    }
+
+    protected function formattedSubmittedToBillingAt(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => localizedDate($this->submitted_to_billing_at)?->isoFormat('D MMM Y h:mm a')
+        );
+    }
+
+    protected function formattedSampleCompletedAt(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => localizedDate($this->sample_completed_at)?->isoFormat('D MMM Y h:mm a')
         );
     }
 }

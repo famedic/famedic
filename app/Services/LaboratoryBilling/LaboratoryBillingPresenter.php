@@ -2,6 +2,7 @@
 
 namespace App\Services\LaboratoryBilling;
 
+use App\Enums\InvoiceRequestWorkflowStatus;
 use App\Models\Invoice;
 use App\Models\InvoiceRequest;
 use App\Models\LaboratoryPurchase;
@@ -11,6 +12,7 @@ class LaboratoryBillingPresenter
 {
     public function __construct(
         private LaboratoryBillingStatusResolver $resolver,
+        private LaboratoryBillingInvoiceRequestContextPresenter $invoiceRequestContextPresenter,
     ) {}
 
     public function presentRequest(InvoiceRequest $request): array
@@ -68,10 +70,48 @@ class LaboratoryBillingPresenter
             'tax_profile' => $taxProfile ? $this->presentTaxProfileSummary($taxProfile) : null,
             'invoice' => $invoice ? $this->presentInvoice($invoice) : null,
             'billing' => $billing,
+            'workflow' => [
+                'status' => $request->workflow_status?->value,
+                'status_label' => $this->workflowStatusLabel($request->workflow_status),
+                'activated_by' => $request->activated_by,
+            ],
             'detail_url' => $purchase
                 ? route('admin.laboratory-purchases.show', ['laboratory_purchase' => $purchase->id])
                 : null,
         ];
+    }
+
+    public function presentAwaitingSampleRequest(InvoiceRequest $request): array
+    {
+        /** @var LaboratoryPurchase|null $purchase */
+        $purchase = $request->invoiceRequestable;
+        $purchase?->loadMissing(['laboratoryPurchaseItems', 'customer.user']);
+
+        $base = $this->presentRequest($request);
+        $studiesCount = (int) ($purchase?->laboratoryPurchaseItems?->count() ?? 0);
+
+        return array_merge($base, [
+            'studies_count' => $studiesCount,
+            'sample_collection' => $purchase
+                ? $this->invoiceRequestContextPresenter->presentSampleCollectionProgress($purchase)
+                : null,
+            'result_availability' => $purchase
+                ? $this->invoiceRequestContextPresenter->presentResultAvailability($purchase)
+                : null,
+            'last_activity_at' => $purchase
+                ? $this->invoiceRequestContextPresenter->presentLastActivityAt($purchase)
+                : null,
+        ]);
+    }
+
+    private function workflowStatusLabel(?InvoiceRequestWorkflowStatus $status): ?string
+    {
+        return match ($status) {
+            InvoiceRequestWorkflowStatus::AwaitingSampleCollection => 'Esperando toma',
+            InvoiceRequestWorkflowStatus::SubmittedToBilling => 'En facturación',
+            InvoiceRequestWorkflowStatus::Cancelled => 'Cancelada',
+            default => null,
+        };
     }
 
     public function presentInvoice(Invoice $invoice): array

@@ -4,31 +4,26 @@ namespace App\Http\Controllers\Admin\LaboratoryBilling;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LaboratoryBilling\IndexLaboratoryBillingRequestsRequest;
-use App\Services\LaboratoryBilling\LaboratoryBillingDateRange;
 use App\Services\LaboratoryBilling\LaboratoryBillingAccess;
+use App\Services\LaboratoryBilling\LaboratoryBillingAwaitingSampleQuery;
+use App\Services\LaboratoryBilling\LaboratoryBillingDateRange;
 use App\Services\LaboratoryBilling\LaboratoryBillingNavCounts;
 use App\Services\LaboratoryBilling\LaboratoryBillingRequestsQuery;
-use App\Services\LaboratoryBilling\LaboratoryBillingStatusResolver;
 use Inertia\Inertia;
 use Inertia\Response;
 
-class RequestsController extends Controller
+class AwaitingSampleController extends Controller
 {
     public function __invoke(
         IndexLaboratoryBillingRequestsRequest $request,
-        LaboratoryBillingRequestsQuery $query,
-        LaboratoryBillingStatusResolver $resolver,
-        LaboratoryBillingAccess $access,
+        LaboratoryBillingAwaitingSampleQuery $query,
+        LaboratoryBillingRequestsQuery $requestsQuery,
         LaboratoryBillingNavCounts $navCounts,
+        LaboratoryBillingAccess $access,
     ): Response {
         $range = LaboratoryBillingDateRange::fromInput($request->input('from'), $request->input('to'));
         $filters = collect($request->only([
             'search',
-            'status',
-            'overdue',
-            'document',
-            'tax_profile_id',
-            'customer_id',
             'brand',
             'from',
             'to',
@@ -36,14 +31,12 @@ class RequestsController extends Controller
 
         $filters = array_merge($filters, $range->toFilterArray());
 
-        return Inertia::render('Admin/LaboratoryBilling/Requests', [
+        return Inertia::render('Admin/LaboratoryBilling/AwaitingSample', [
             'requests' => $query->paginate($filters, $range),
             'filters' => $filters,
-            'statusCounts' => $query->statusCounts($filters, $range),
-            'brandOptions' => $query->brandOptions(),
-            'thresholdDays' => $resolver->thresholdDays(),
-            'canManageAutomaticReports' => $access->allowsReports($request->user()),
+            'brandOptions' => $requestsQuery->brandOptions(),
             'navCounts' => $navCounts->toArray(),
+            'canManageAutomaticReports' => $access->allowsReports($request->user()),
         ]);
     }
 }
