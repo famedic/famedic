@@ -1014,7 +1014,7 @@ class ActiveCampaignService
         Log::info('AC: laboratoryPurchase iniciado', ['purchase_id' => $purchase->id]);
 
         try {
-            $purchase->loadMissing(['customer.user', 'laboratoryPurchaseItems']);
+            $purchase->loadMissing(['customer.user', 'laboratoryPurchaseItems', 'laboratoryAppointment']);
             $email = $purchase->customer->user->email ?? null;
 
             if (! is_string($email) || trim($email) === '') {
@@ -1069,8 +1069,9 @@ class ActiveCampaignService
             $tagId = (int) config('services.activecampaign.tag_laboratory_purchase_completed', 18);
             $tagResult = null;
             $contactId = null;
+            $modeTagResults = [];
 
-            if ($tagId > 0) {
+            if ($tagId > 0 || $this->hasLaboratoryPurchaseModeTagsConfigured()) {
                 $contactResult = $this->getContactIdByEmailPublic($email);
                 if (! $contactResult->success || ! $contactResult->contactId) {
                     $result = ActiveCampaignOperationResult::failure([
@@ -1091,6 +1092,9 @@ class ActiveCampaignService
                 }
 
                 $contactId = $contactResult->contactId;
+            }
+
+            if ($tagId > 0 && $contactId) {
                 $tagResult = $this->addTagToContact($contactId, $tagId);
 
                 if (! $tagResult->success) {
@@ -1120,6 +1124,10 @@ class ActiveCampaignService
                 ]);
             }
 
+            if ($contactId) {
+                $modeTagResults = $this->syncLaboratoryPurchaseModeTags($contactId, $purchase);
+            }
+
             Log::info('AC: laboratoryPurchase completado', ['purchase_id' => $purchase->id, 'email' => $email]);
 
             $result = ActiveCampaignOperationResult::success([
@@ -1131,6 +1139,7 @@ class ActiveCampaignService
                 'response' => [
                     'create_order' => $orderResult->toArray(),
                     'add_tag' => $tagResult?->toArray(),
+                    'mode_tags' => $modeTagResults,
                 ],
                 'duration_ms' => $this->elapsedMs($started),
             ]);
@@ -1154,6 +1163,93 @@ class ActiveCampaignService
 
             return $result;
         }
+    }
+
+    private function hasLaboratoryPurchaseModeTagsConfigured(): bool
+    {
+        return $this->configuredTagValue('services.activecampaign.tag_laboratory_purchase_with_appointment') !== null
+            || $this->configuredTagValue('services.activecampaign.tag_laboratory_purchase_without_appointment') !== null;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function syncLaboratoryPurchaseModeTags(int $contactId, LaboratoryPurchase $purchase): array
+    {
+        $purchase->loadMissing('laboratoryAppointment');
+
+        $hasAppointment = $purchase->laboratoryAppointment !== null;
+        $addConfig = $hasAppointment
+            ? 'services.activecampaign.tag_laboratory_purchase_with_appointment'
+            : 'services.activecampaign.tag_laboratory_purchase_without_appointment';
+        $removeConfig = $hasAppointment
+            ? 'services.activecampaign.tag_laboratory_purchase_without_appointment'
+            : 'services.activecampaign.tag_laboratory_purchase_with_appointment';
+
+        $addTagId = $this->resolveConfiguredTagIdOrFail($addConfig);
+        $removeTagId = $this->resolveConfiguredTagIdOrFail($removeConfig);
+
+        $addResult = $this->addTagToContact($contactId, $addTagId);
+        if (! $addResult->success) {
+            throw new ActiveCampaignSyncException(
+                "AC addTag compra laboratorio modo falló (contact={$contactId}, tag={$addTagId}): ".($addResult->error ?? 'unknown')
+            );
+        }
+
+        $removeResult = $this->removeTagFromContact($contactId, $removeTagId);
+        if (! $removeResult->success) {
+            throw new ActiveCampaignSyncException(
+                "AC removeTag compra laboratorio modo falló (contact={$contactId}, tag={$removeTagId}): ".($removeResult->error ?? 'unknown')
+            );
+        }
+
+        Log::info('AC: Tags modo compra laboratorio sincronizados', [
+            'contact_id' => $contactId,
+            'purchase_id' => $purchase->id,
+            'has_appointment' => $hasAppointment,
+            'added_tag_id' => $addTagId,
+            'removed_tag_id' => $removeTagId,
+        ]);
+
+        return [
+            array_merge($addResult->toArray(), ['config' => $addConfig]),
+            array_merge($removeResult->toArray(), ['config' => $removeConfig]),
+        ];
+    }
+
+    private function resolveConfiguredTagIdOrFail(string $configKey): int
+    {
+        $configured = $this->configuredTagValue($configKey);
+
+        if ($configured === null) {
+            throw new ActiveCampaignSyncException("AC tag no configurado: {$configKey}.");
+        }
+
+        if (ctype_digit($configured)) {
+            return (int) $configured;
+        }
+
+        $result = $this->getTagIdByName($configured);
+        if ($result->success && $result->tagId) {
+            return $result->tagId;
+        }
+
+        throw new ActiveCampaignSyncException(
+            "AC tag no resuelto ({$configKey}={$configured}): ".($result->error ?? 'tag_not_found')
+        );
+    }
+
+    private function configuredTagValue(string $configKey): ?string
+    {
+        $configured = config($configKey);
+
+        if ($configured === null) {
+            return null;
+        }
+
+        $configured = trim((string) $configured);
+
+        return $configured === '' || $configured === '0' ? null : $configured;
     }
 
     /**
@@ -1700,7 +1796,7 @@ class ActiveCampaignService
         }
 
         $purchase = LaboratoryPurchase::query()
-            ->with(['customer.user', 'laboratoryPurchaseItems'])
+            ->with(['customer.user', 'laboratoryPurchaseItems', 'laboratoryAppointment'])
             ->find($purchaseId);
 
         if (! $purchase) {

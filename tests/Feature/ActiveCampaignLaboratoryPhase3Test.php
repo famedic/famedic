@@ -38,6 +38,8 @@ beforeEach(function () {
         'services.activecampaign.account_id' => '12345',
         'services.activecampaign.event_key' => 'event-key-test',
         'services.activecampaign.tag_laboratory_purchase_completed' => 18,
+        'services.activecampaign.tag_laboratory_purchase_with_appointment' => 34,
+        'services.activecampaign.tag_laboratory_purchase_without_appointment' => 35,
         'services.activecampaign.fields.lab.url_finalizar_compra' => 101,
         'services.activecampaign.fields.lab.paciente_lab' => 102,
         'services.activecampaign.fields.lab.sucursal_lab' => 103,

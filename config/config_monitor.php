@@ -129,6 +129,8 @@ return [
         'ACTIVECAMPAIGN_TAG_ABANDONED_CARTS_ENABLED' => 'services.activecampaign.tag_abandoned_carts_enabled',
         'ACTIVE_CAMPAIGN_TAG_PHARMACY_PURCHASE_COMPLETED' => 'services.activecampaign.tag_pharmacy_purchase_completed',
         'ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_COMPLETED' => 'services.activecampaign.tag_laboratory_purchase_completed',
+        'ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_WITH_APPOINTMENT' => 'services.activecampaign.tag_laboratory_purchase_with_appointment',
+        'ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_WITHOUT_APPOINTMENT' => 'services.activecampaign.tag_laboratory_purchase_without_appointment',
         'ACTIVE_CAMPAIGN_TAG_LAB_SAMPLE_COLLECTED' => 'services.activecampaign.tag_lab_sample_collected',
         'ACTIVE_CAMPAIGN_TAG_LAB_RESULTS_AVAILABLE' => 'services.activecampaign.tag_lab_results_available',
         'ACTIVE_CAMPAIGN_TAG_REGISTRO_NUEVO' => 'services.activecampaign.tag_registro_nuevo',

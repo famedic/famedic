@@ -125,6 +125,16 @@ class LaboratoryActiveCampaignDiagnostics
                 'label' => 'Tag laboratorio compra completada',
                 'expected_name' => null,
             ],
+            'laboratory_purchase_with_appointment' => [
+                'config' => 'services.activecampaign.tag_laboratory_purchase_with_appointment',
+                'label' => 'Tag laboratorio compra con cita',
+                'expected_name' => 'Compra-lab-con-cita',
+            ],
+            'laboratory_purchase_without_appointment' => [
+                'config' => 'services.activecampaign.tag_laboratory_purchase_without_appointment',
+                'label' => 'Tag laboratorio compra sin cita',
+                'expected_name' => 'Compra-lab-sin-cita',
+            ],
             'lab_sample_collected' => [
                 'config' => 'services.activecampaign.tag_lab_sample_collected',
                 'label' => 'Tag toma de muestra',

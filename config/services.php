@@ -204,6 +204,8 @@ return [
         ),
         'tag_pharmacy_purchase_completed' => (int) env('ACTIVE_CAMPAIGN_TAG_PHARMACY_PURCHASE_COMPLETED', 17),
         'tag_laboratory_purchase_completed' => (int) env('ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_COMPLETED', 18),
+        'tag_laboratory_purchase_with_appointment' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_WITH_APPOINTMENT', 'Compra-lab-con-cita'),
+        'tag_laboratory_purchase_without_appointment' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_WITHOUT_APPOINTMENT', 'Compra-lab-sin-cita'),
         // Tags específicos laboratorio
         'tag_registro_nuevo' => (function () {
             $raw = env('ACTIVE_CAMPAIGN_TAG_REGISTRO_NUEVO');

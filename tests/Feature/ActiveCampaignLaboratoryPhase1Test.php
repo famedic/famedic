@@ -32,6 +32,8 @@ beforeEach(function () {
         'services.activecampaign.account_id' => '12345',
         'services.activecampaign.event_key' => 'event-key-test',
         'services.activecampaign.tag_laboratory_purchase_completed' => 18,
+        'services.activecampaign.tag_laboratory_purchase_with_appointment' => 34,
+        'services.activecampaign.tag_laboratory_purchase_without_appointment' => 35,
         'services.activecampaign.tag_lab_sample_collected' => 32,
         'services.activecampaign.tag_lab_results_available' => 33,
     ]);
@@ -324,6 +326,7 @@ it('laboratory purchase dispatch processes the single canonical AC operation', f
 
     Http::fake([
         'https://ac.test/api/3/ecomOrders' => Http::response(['ecomOrder' => ['id' => 100]], 201),
+        'https://ac.test/api/3/contacts/*/contactTags' => Http::response(['contactTags' => []], 200),
         'https://ac.test/api/3/contacts*' => Http::response([
             'contacts' => [['id' => 42, 'email' => 'process@example.com']],
         ], 200),
@@ -347,4 +350,71 @@ it('laboratory purchase dispatch processes the single canonical AC operation', f
     (new DispatchActiveCampaignOutboundJob($dispatch->id))->handle(app(ActiveCampaignService::class));
 
     expect($dispatch->fresh()->status)->toBe(ActiveCampaignDispatch::STATUS_SYNCED);
+});
+
+it('laboratory purchase with appointment adds appointment tag and removes no appointment tag', function () {
+    $purchase = phase1LabPurchase(items: 1, user: phase1LabUser(['email' => 'with-appointment@example.com']));
+    LaboratoryAppointment::factory()->create([
+        'customer_id' => $purchase->customer_id,
+        'laboratory_purchase_id' => $purchase->id,
+        'brand' => LaboratoryBrand::OLAB->value,
+    ]);
+
+    Http::fake([
+        'https://ac.test/api/3/ecomOrders' => Http::response(['ecomOrder' => ['id' => 100]], 201),
+        'https://ac.test/api/3/contacts/*/contactTags' => Http::response([
+            'contactTags' => [['id' => 901, 'tag' => 35]],
+        ], 200),
+        'https://ac.test/api/3/contacts*' => Http::response([
+            'contacts' => [['id' => 42, 'email' => 'with-appointment@example.com']],
+        ], 200),
+        'https://ac.test/api/3/contactTags/901' => Http::response([], 200),
+        'https://ac.test/api/3/contactTags' => Http::response(['contactTag' => ['id' => 1]], 201),
+    ]);
+
+    $result = app(ActiveCampaignService::class)->laboratoryPurchase($purchase->fresh([
+        'customer.user',
+        'laboratoryPurchaseItems',
+        'laboratoryAppointment',
+    ]));
+
+    expect($result->success)->toBeTrue();
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/contactTags')
+        && ($request['contactTag']['tag'] ?? null) === 18);
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/contactTags')
+        && ($request['contactTag']['tag'] ?? null) === 34);
+    Http::assertSent(fn ($request) => $request->method() === 'DELETE'
+        && str_contains($request->url(), '/contactTags/901'));
+});
+
+it('laboratory purchase without appointment adds no appointment tag and removes appointment tag', function () {
+    $purchase = phase1LabPurchase(items: 1, user: phase1LabUser(['email' => 'without-appointment@example.com']));
+
+    Http::fake([
+        'https://ac.test/api/3/ecomOrders' => Http::response(['ecomOrder' => ['id' => 100]], 201),
+        'https://ac.test/api/3/contacts/*/contactTags' => Http::response([
+            'contactTags' => [['id' => 900, 'tag' => 34]],
+        ], 200),
+        'https://ac.test/api/3/contacts*' => Http::response([
+            'contacts' => [['id' => 42, 'email' => 'without-appointment@example.com']],
+        ], 200),
+        'https://ac.test/api/3/contactTags/900' => Http::response([], 200),
+        'https://ac.test/api/3/contactTags' => Http::response(['contactTag' => ['id' => 1]], 201),
+    ]);
+
+    $result = app(ActiveCampaignService::class)->laboratoryPurchase($purchase->fresh([
+        'customer.user',
+        'laboratoryPurchaseItems',
+        'laboratoryAppointment',
+    ]));
+
+    expect($result->success)->toBeTrue();
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/contactTags')
+        && ($request['contactTag']['tag'] ?? null) === 18);
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/contactTags')
+        && ($request['contactTag']['tag'] ?? null) === 35);
+    Http::assertSent(fn ($request) => $request->method() === 'DELETE'
+        && str_contains($request->url(), '/contactTags/900'));
 });

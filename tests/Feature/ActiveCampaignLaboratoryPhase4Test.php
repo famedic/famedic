@@ -138,6 +138,8 @@ it('verifies configured tags and reports invalid ids', function () {
         'services.activecampaign.tags.cart.abandoned' => 20,
         'services.activecampaign.tags.cart.appointment_pending' => 'Cita pendiente',
         'services.activecampaign.tag_laboratory_purchase_completed' => 18,
+        'services.activecampaign.tag_laboratory_purchase_with_appointment' => 'Compra-lab-con-cita',
+        'services.activecampaign.tag_laboratory_purchase_without_appointment' => 'Compra-lab-sin-cita',
         'services.activecampaign.tag_lab_sample_collected' => 999,
         'services.activecampaign.tag_lab_results_available' => 33,
     ]);
@@ -152,9 +154,11 @@ it('verifies configured tags and reports invalid ids', function () {
                 ['id' => '20', 'tag' => 'Carrito abandonado'],
                 ['id' => '21', 'tag' => 'Cita pendiente'],
                 ['id' => '18', 'tag' => 'Compra laboratorio completada'],
+                ['id' => '34', 'tag' => 'Compra-lab-con-cita'],
+                ['id' => '35', 'tag' => 'Compra-lab-sin-cita'],
                 ['id' => '33', 'tag' => 'Resultados disponibles'],
             ],
-            'meta' => ['total' => 4],
+            'meta' => ['total' => 6],
         ], 200),
     ]);
 
