@@ -39,6 +39,16 @@ Gracias por confiar en FAMEDIC.<br>
     🛒 Fecha de compra: <b>{{ $fecha_compra }}</b>
 </p>
 
+<p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
+
+@include('emails.laboratory.components.identification', [
+    'consecutivo' => $consecutivo,
+    'folio_orden' => $folio_orden,
+    'nombre_paciente' => $nombre_paciente,
+    'fecha_nacimiento' => $fecha_nacimiento,
+    'genero_paciente' => $genero_paciente ?? null,
+    'telefono_paciente' => $telefono_paciente ?? null,
+])
 
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 

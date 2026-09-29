@@ -1,7 +1,7 @@
-{{-- Variables: $consecutivo, $folio_orden, $nombre_paciente, $fecha_nacimiento --}}
+{{-- Variables: $consecutivo, $folio_orden, $nombre_paciente, $fecha_nacimiento, $genero_paciente, $telefono_paciente --}}
 
 <p style="margin:0 0 8px;color:#3d4852;font-size:16px;line-height:1.5;">
-<strong>🪪 TU IDENTIFICACIÓN EN SUCURSAL (MUÉSTRALA TAL CUAL)</strong>
+<strong>🪪 DATOS DEL PACIENTE Y ORDEN</strong>
 </p>
 <p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
     🔹 Consecutivo: <strong>{{ $consecutivo }}</strong>
@@ -17,3 +17,15 @@
     🔹 Fecha de nacimiento:
 <strong>{{ $fecha_nacimiento }}</strong>
 </p>
+@if (! empty($genero_paciente))
+<p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
+    🔹 Sexo:
+<strong>{{ $genero_paciente }}</strong>
+</p>
+@endif
+@if (! empty($telefono_paciente))
+<p style="margin:0 0 4px;color:#3d4852;font-size:16px;line-height:1.5;">
+    🔹 Teléfono:
+<strong>{{ $telefono_paciente }}</strong>
+</p>
+@endif

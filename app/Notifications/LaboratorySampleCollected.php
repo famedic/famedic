@@ -8,6 +8,7 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryQuote;
+use App\Support\Laboratory\PatientEmailDetails;
 use Carbon\Carbon;
 
 class LaboratorySampleCollected extends Notification
@@ -58,6 +59,8 @@ class LaboratorySampleCollected extends Notification
             strtolower($dt->isoFormat('hh:mm A')) // formato tipo "09:40 a. m."
         );
 
+        $patientLines = $this->patientLines();
+
         $mailMessage = (new MailMessage)
             ->subject('Confirmación de toma de muestra — Orden ' . $orderId)
             ->greeting('Hola ' . $firstName . ',')
@@ -67,7 +70,13 @@ class LaboratorySampleCollected extends Notification
             ->line('')
             ->line('Detalles de tu estudio')
             ->line('• Número de orden: ' . $orderId)
-            ->line('• Fecha y hora: ' . $formattedCollectionDateTime)
+            ->line('• Fecha y hora: ' . $formattedCollectionDateTime);
+
+        foreach ($patientLines as $line) {
+            $mailMessage->line($line);
+        }
+
+        $mailMessage
             ->line('')
             ->line('¿Qué sigue?')
             ->line('Nuestro laboratorio ya está procesando tus muestras. El tiempo de entrega puede variar según el tipo de estudio solicitado. En cuanto estén listos, recibirás una nueva notificación y podrás verlos en tu cuenta.')
@@ -90,6 +99,28 @@ class LaboratorySampleCollected extends Notification
             ->line('Equipo Famedic');
 
         return $mailMessage;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function patientLines(): array
+    {
+        if ($this->laboratoryPurchase instanceof LaboratoryPurchase) {
+            return PatientEmailDetails::mailLines(
+                PatientEmailDetails::fromPurchase($this->laboratoryPurchase),
+                false
+            );
+        }
+
+        if ($this->laboratoryQuote instanceof LaboratoryQuote) {
+            return PatientEmailDetails::mailLines(
+                PatientEmailDetails::fromQuote($this->laboratoryQuote),
+                false
+            );
+        }
+
+        return [];
     }
 
     public function toArray(object $notifiable): array

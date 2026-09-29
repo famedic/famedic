@@ -19,6 +19,8 @@ use Illuminate\Notifications\Notification;
  *     'folio_orden' => '987654',
  *     'nombre_paciente' => 'Juan Pérez García',
  *     'fecha_nacimiento' => '15 de ene de 1990',
+ *     'genero_paciente' => 'Masculino',
+ *     'telefono_paciente' => '+528100000000',
  *     'laboratorio_marca' => 'Swisslab',
  *     'famedic_logo_url' => 'https://famedic.com.mx/images/logo.png', // config('famedic.email_public_url')
  *     'laboratorio_logo_url' => 'https://famedic.com.mx/images/gda/GDA-SWISSLAB.png',

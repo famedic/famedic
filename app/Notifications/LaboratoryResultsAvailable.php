@@ -10,6 +10,7 @@ use App\Models\LaboratoryQuote;
 use App\Models\User;
 use App\Services\Laboratory\LabResultsAccessTokenService;
 use App\Support\LabResultsOtp;
+use App\Support\Laboratory\PatientEmailDetails;
 use Carbon\Carbon;
 
 class LaboratoryResultsAvailable extends Notification
@@ -62,6 +63,10 @@ class LaboratoryResultsAvailable extends Notification
         
         // Agregar información específica
         $mailMessage->line('**Número de orden:** ' . $orderId);
+
+        foreach ($this->patientLines() as $line) {
+            $mailMessage->line($line);
+        }
         
         // Incluir fecha si está disponible
         if ($this->laboratoryPurchase?->created_at) {
@@ -127,6 +132,28 @@ class LaboratoryResultsAvailable extends Notification
             ->line('📱 (81) 8172-2882');
         
         return $mailMessage;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function patientLines(): array
+    {
+        if ($this->laboratoryPurchase instanceof LaboratoryPurchase) {
+            return PatientEmailDetails::mailLines(
+                PatientEmailDetails::fromPurchase($this->laboratoryPurchase),
+                false
+            );
+        }
+
+        if ($this->laboratoryQuote instanceof LaboratoryQuote) {
+            return PatientEmailDetails::mailLines(
+                PatientEmailDetails::fromQuote($this->laboratoryQuote),
+                false
+            );
+        }
+
+        return [];
     }
 
     public function toArray(object $notifiable): array

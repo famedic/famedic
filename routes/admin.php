@@ -484,6 +484,9 @@ Route::prefix('admin')->middleware([
         Route::get('simulators/emails/preview/{type}', [EmailSimulatorController::class, 'preview'])
             ->where('type', '[a-z0-9_]+')
             ->name('simulators.emails.preview');
+        Route::post('simulators/emails/send/{type}', [EmailSimulatorController::class, 'send'])
+            ->where('type', '[a-z0-9_]+')
+            ->name('simulators.emails.send');
         Route::get('simulators/otp', [OtpSimulatorController::class, 'show'])->name('simulators.otp');
         Route::prefix('simulators/otp/{laboratory_purchase}')->name('simulators.otp.')->group(function () {
             Route::get('status', [OtpSimulatorController::class, 'status'])->name('status');
