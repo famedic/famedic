@@ -56,17 +56,26 @@ class LaboratoryResultsAvailable extends Notification
             }
         }
 
+        $patientDetails = $this->patientDetails();
+        $patientIsNotifiable = PatientEmailDetails::isSameAsNotifiable($patientDetails, $notifiable);
+        $subject = $patientIsNotifiable
+            ? '¡Tus resultados de laboratorio están disponibles! - Famedic'
+            : 'Resultados de laboratorio disponibles - Famedic';
+        $actionLabel = $patientIsNotifiable ? '🔬 Consultar mis resultados' : '🔬 Consultar resultados';
+        $resultsAvailableLine = $patientIsNotifiable
+            ? 'Te confirmamos que los resultados de tus estudios de laboratorio, a nombre de **'.$patientDetails['name'].'**, ya están disponibles en nuestro sistema.'
+            : 'Te confirmamos que los resultados de los estudios de laboratorio del paciente **'.$patientDetails['name'].'** ya están disponibles en nuestro sistema.';
+        $clinicalInterpretationLine = $patientIsNotifiable
+            ? '• Para la interpretación clínica de tus resultados, consulta a tu médico tratante.'
+            : '• Para la interpretación clínica de los resultados, consulta al médico tratante.';
+
         $mailMessage = (new MailMessage)
-            ->subject('¡Tus resultados de laboratorio están disponibles! - Famedic')
+            ->subject($subject)
             ->greeting('Hola ' . $notifiable->name . ',')
-            ->line('Te informamos que los resultados de tu estudio de laboratorio ya están disponibles en nuestro sistema.');
+            ->line($resultsAvailableLine);
         
         // Agregar información específica
         $mailMessage->line('**Número de orden:** ' . $orderId);
-
-        foreach ($this->patientLines() as $line) {
-            $mailMessage->line($line);
-        }
         
         // Incluir fecha si está disponible
         if ($this->laboratoryPurchase?->created_at) {
@@ -90,22 +99,22 @@ class LaboratoryResultsAvailable extends Notification
         // Agregar enlace según lo que tengamos
         if ($resultsAccessUrl) {
             $mailMessage->action(
-                '🔬 Consultar mis resultados', 
+                $actionLabel,
                 $resultsAccessUrl
             );
         } elseif ($this->laboratoryPurchase) {
             $mailMessage->action(
-                '🔬 Consultar mis resultados',
+                $actionLabel,
                 url(route('laboratory-purchases.show', $this->laboratoryPurchase->id))
             );
         } elseif ($this->laboratoryQuote) {
             $mailMessage->action(
-                '🔬 Consultar mis resultados', 
+                $actionLabel,
                 url(route('laboratory.quote.show', $this->laboratoryQuote->id))
             );
         } else {
             $mailMessage->action(
-                '🔬 Consultar mis resultados', 
+                $actionLabel,
                 url(route('user.edit'))
             );
         }
@@ -120,7 +129,7 @@ class LaboratoryResultsAvailable extends Notification
         // Instrucciones importantes
         $mailMessage->line('')
             ->line('**📋 Información importante:**')
-            ->line('• Para la interpretación clínica de tus resultados, consulta a tu médico tratante.')
+            ->line($clinicalInterpretationLine)
             ->line('• Los resultados tienen validez oficial para fines médicos.')
             ->line('• Conserva este correo como comprobante.')
             ->line('')
@@ -135,25 +144,24 @@ class LaboratoryResultsAvailable extends Notification
     }
 
     /**
-     * @return list<string>
+     * @return array{name: string, birth_date: string, gender: string|null, phone: string|null}
      */
-    private function patientLines(): array
+    private function patientDetails(): array
     {
         if ($this->laboratoryPurchase instanceof LaboratoryPurchase) {
-            return PatientEmailDetails::mailLines(
-                PatientEmailDetails::fromPurchase($this->laboratoryPurchase),
-                false
-            );
+            return PatientEmailDetails::fromPurchase($this->laboratoryPurchase);
         }
 
         if ($this->laboratoryQuote instanceof LaboratoryQuote) {
-            return PatientEmailDetails::mailLines(
-                PatientEmailDetails::fromQuote($this->laboratoryQuote),
-                false
-            );
+            return PatientEmailDetails::fromQuote($this->laboratoryQuote);
         }
 
-        return [];
+        return [
+            'name' => 'Paciente',
+            'birth_date' => '—',
+            'gender' => null,
+            'phone' => null,
+        ];
     }
 
     public function toArray(object $notifiable): array

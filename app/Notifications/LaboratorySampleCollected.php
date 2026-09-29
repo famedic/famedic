@@ -59,27 +59,34 @@ class LaboratorySampleCollected extends Notification
             strtolower($dt->isoFormat('hh:mm A')) // formato tipo "09:40 a. m."
         );
 
-        $patientLines = $this->patientLines();
+        $patientDetails = $this->patientDetails();
+        $patientIsNotifiable = PatientEmailDetails::isSameAsNotifiable($patientDetails, $notifiable);
+        $sampleCollectedLine = $patientIsNotifiable
+            ? 'Te confirmamos que tu toma de muestra de tus estudios de laboratorio, a nombre de **'.$patientDetails['name'].'**, se realizó exitosamente.'
+            : 'Te confirmamos que la toma de muestra del paciente **'.$patientDetails['name'].'** para sus estudios de laboratorio se realizó exitosamente.';
+        $resultsFollowUpLine = $patientIsNotifiable
+            ? 'Sabemos que tus resultados son lo más importante para ti. Por eso, te notificaremos automáticamente en cuanto el laboratorio termine de procesar tus estudios, para que puedas consultarlos de inmediato en tu cuenta.'
+            : 'Sabemos que los resultados de sus estudios son muy importantes. Por eso, te notificaremos automáticamente en cuanto el laboratorio termine de procesarlos, para que puedas consultarlos de inmediato en tu cuenta.';
+        $studyDetailsTitle = $patientIsNotifiable ? 'Detalles de tu estudio' : 'Detalles del estudio';
+        $nextStepLine = $patientIsNotifiable
+            ? 'Nuestro laboratorio ya está procesando tus muestras. El tiempo de entrega puede variar según el tipo de estudio solicitado. En cuanto estén listos, recibirás una nueva notificación y podrás verlos en tu cuenta.'
+            : 'Nuestro laboratorio ya está procesando las muestras. El tiempo de entrega puede variar según el tipo de estudio solicitado. En cuanto estén listos, recibirás una nueva notificación y podrás verlos en tu cuenta.';
 
         $mailMessage = (new MailMessage)
             ->subject('Confirmación de toma de muestra — Orden ' . $orderId)
             ->greeting('Hola ' . $firstName . ',')
-            ->line('Te confirmamos que la toma de muestra para tu estudio de laboratorio se realizó exitosamente.')
+            ->line($sampleCollectedLine)
             ->line('')
-            ->line('Sabemos que tus resultados son lo más importante para ti. Por eso, te notificaremos automáticamente en cuanto el laboratorio termine de procesar tus estudios, para que puedas consultarlos de inmediato en tu cuenta.')
+            ->line($resultsFollowUpLine)
             ->line('')
-            ->line('Detalles de tu estudio')
+            ->line($studyDetailsTitle)
             ->line('• Número de orden: ' . $orderId)
             ->line('• Fecha y hora: ' . $formattedCollectionDateTime);
-
-        foreach ($patientLines as $line) {
-            $mailMessage->line($line);
-        }
 
         $mailMessage
             ->line('')
             ->line('¿Qué sigue?')
-            ->line('Nuestro laboratorio ya está procesando tus muestras. El tiempo de entrega puede variar según el tipo de estudio solicitado. En cuanto estén listos, recibirás una nueva notificación y podrás verlos en tu cuenta.')
+            ->line($nextStepLine)
             ->line('')
             ->line('Recuerda: en Famedic cuentas con precios preferenciales en una amplia variedad de estudios de laboratorio. Si necesitas complementar o repetir algún estudio, con gusto te ayudamos.');
 
@@ -102,25 +109,24 @@ class LaboratorySampleCollected extends Notification
     }
 
     /**
-     * @return list<string>
+     * @return array{name: string, birth_date: string, gender: string|null, phone: string|null}
      */
-    private function patientLines(): array
+    private function patientDetails(): array
     {
         if ($this->laboratoryPurchase instanceof LaboratoryPurchase) {
-            return PatientEmailDetails::mailLines(
-                PatientEmailDetails::fromPurchase($this->laboratoryPurchase),
-                false
-            );
+            return PatientEmailDetails::fromPurchase($this->laboratoryPurchase);
         }
 
         if ($this->laboratoryQuote instanceof LaboratoryQuote) {
-            return PatientEmailDetails::mailLines(
-                PatientEmailDetails::fromQuote($this->laboratoryQuote),
-                false
-            );
+            return PatientEmailDetails::fromQuote($this->laboratoryQuote);
         }
 
-        return [];
+        return [
+            'name' => 'Paciente',
+            'birth_date' => '—',
+            'gender' => null,
+            'phone' => null,
+        ];
     }
 
     public function toArray(object $notifiable): array

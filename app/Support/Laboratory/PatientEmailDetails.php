@@ -4,6 +4,7 @@ namespace App\Support\Laboratory;
 
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryQuote;
+use Illuminate\Support\Str;
 
 final class PatientEmailDetails
 {
@@ -54,6 +55,26 @@ final class PatientEmailDetails
         }
 
         return $lines;
+    }
+
+    /**
+     * @param  array{name: string, birth_date: string, gender: string|null, phone: string|null}  $details
+     */
+    public static function isSameAsNotifiable(array $details, object $notifiable): bool
+    {
+        $patientName = self::normalizeName($details['name']);
+        $notifiableName = self::normalizeName((string) ($notifiable->full_name ?? $notifiable->name ?? ''));
+
+        return $patientName !== '' && $patientName === $notifiableName;
+    }
+
+    private static function normalizeName(string $value): string
+    {
+        return Str::of($value)
+            ->ascii()
+            ->squish()
+            ->lower()
+            ->toString();
     }
 
     private static function fallback(?string $value, string $fallback): string
