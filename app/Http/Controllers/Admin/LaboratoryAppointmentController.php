@@ -63,6 +63,7 @@ class LaboratoryAppointmentController extends Controller
         $filters['view'] = $view;
 
         $pendingCount = LaboratoryAppointment::query()->awaitingConcierge()->count();
+        $appointmentSummary = null;
 
         $dashboard = null;
 
@@ -156,14 +157,43 @@ class LaboratoryAppointmentController extends Controller
                 'callback_info',
             ]))->filter()->all();
 
-            $laboratoryAppointments = LaboratoryAppointment::with([
+            if (! $request->filled('date_range')) {
+                $queryFilters['date_range'] = 'last_7_days';
+                $filters['date_range'] = 'last_7_days';
+            }
+
+            if (! $request->filled('completed')) {
+                $queryFilters['completed'] = 'false';
+                $filters['completed'] = 'false';
+            }
+
+            $summaryFilters = collect($queryFilters)->except('completed')->all();
+            $summaryQuery = LaboratoryAppointment::query()->filter($summaryFilters);
+            $appointmentSummary = [
+                'period_label' => $this->dateRangeLabel($queryFilters['date_range'] ?? null),
+                'pending' => $this->applyAppointmentListStatusFilter(clone $summaryQuery, 'false')->count(),
+                'confirmed' => $this->applyAppointmentListStatusFilter(clone $summaryQuery, 'true')->count(),
+                'paid' => $this->paidAppointmentsCount(clone $summaryQuery),
+            ];
+
+            $listFilters = collect($queryFilters)->except('completed')->all();
+            $appointmentsQuery = LaboratoryAppointment::with([
                 'customer.user',
                 'laboratoryStore',
                 'laboratoryPurchase.transactions',
                 'cart.events',
                 'cart.items',
             ])
-                ->filter($queryFilters)
+                ->withExists([
+                    'interactions as admin_has_whatsapp_intent' => function ($query) {
+                        $query->where('type', LaboratoryAppointmentInteractionType::PatientWhatsAppIntent->value);
+                    },
+                ])
+                ->filter($listFilters);
+
+            $this->applyAppointmentListStatusFilter($appointmentsQuery, $queryFilters['completed'] ?? null);
+
+            $laboratoryAppointments = $appointmentsQuery
                 ->latest()
                 ->paginate()
                 ->withQueryString()
@@ -179,6 +209,7 @@ class LaboratoryAppointmentController extends Controller
             'laboratoryAppointments' => $laboratoryAppointments,
             'filters' => $filters,
             'dashboard' => $dashboard,
+            'appointmentSummary' => $appointmentSummary,
             'pendingCount' => $pendingCount,
             'canDeleteOld' => (bool) $request->user()->administrator?->hasRole('Administrador'),
             'brands' => collect(LaboratoryBrand::cases())
@@ -187,6 +218,132 @@ class LaboratoryAppointmentController extends Controller
                     'label' => $brand->label(),
                 ])->values(),
         ]);
+    }
+
+    private function dateRangeLabel(?string $dateRange): string
+    {
+        switch ($dateRange) {
+            case 'today':
+                return 'Hoy';
+            case 'last_7_days':
+                return 'Últimos 7 días';
+            case 'last_15_days':
+                return 'Últimos 15 días';
+            case 'last_30_days':
+                return 'Últimos 30 días';
+            case 'last_60_days':
+                return 'Últimos 60 días';
+            case 'last_6_months':
+                return 'Últimos 6 meses';
+            default:
+                return 'Periodo filtrado';
+        }
+    }
+
+    private function paidAppointmentsCount($query): int
+    {
+        return $this->whereHasPaidLaboratoryPurchase($query)->count();
+    }
+
+    private function applyAppointmentListStatusFilter($query, ?string $completed)
+    {
+        if ($completed === 'true') {
+            return $query->where(function ($query) {
+                $query
+                    ->whereNotNull('confirmed_at')
+                    ->orWhere(function ($query) {
+                        $this->whereHasPaidLaboratoryPurchase($query);
+                    });
+            });
+        }
+
+        if ($completed === 'false') {
+            return $query
+                ->whereNull('confirmed_at')
+                ->where(function ($query) {
+                    $this->whereDoesntHavePaidLaboratoryPurchase($query);
+                });
+        }
+
+        return $query;
+    }
+
+    private function whereHasPaidLaboratoryPurchase($query)
+    {
+        return $query
+            ->whereNotNull('laboratory_purchase_id')
+            ->whereHas('laboratoryPurchase', function ($purchaseQuery) {
+                $purchaseQuery
+                    ->whereDoesntHave('transactions')
+                    ->orWhereHas('transactions', function ($transactionQuery) {
+                        $transactionQuery
+                            ->whereNotIn(DB::raw("LOWER(COALESCE(payment_status, ''))"), [
+                                'failed',
+                                'refunded',
+                                'declined',
+                                'pending',
+                            ])
+                            ->where(function ($query) {
+                                $query
+                                    ->whereIn(DB::raw("LOWER(COALESCE(payment_status, ''))"), [
+                                        'captured',
+                                        'completed',
+                                        'paid',
+                                        'success',
+                                        'succeeded',
+                                        'credit',
+                                    ])
+                                    ->orWhereIn(DB::raw("LOWER(COALESCE(gateway_status, ''))"), [
+                                        'completed',
+                                        'captured',
+                                        'paid',
+                                        'success',
+                                        'succeeded',
+                                    ])
+                                    ->orWhereNotNull('reference_id');
+                            });
+                    });
+            });
+    }
+
+    private function whereDoesntHavePaidLaboratoryPurchase($query)
+    {
+        return $query->where(function ($query) {
+            $query
+                ->whereNull('laboratory_purchase_id')
+                ->orWhereDoesntHave('laboratoryPurchase', function ($purchaseQuery) {
+                    $purchaseQuery
+                        ->whereDoesntHave('transactions')
+                        ->orWhereHas('transactions', function ($transactionQuery) {
+                            $transactionQuery
+                                ->whereNotIn(DB::raw("LOWER(COALESCE(payment_status, ''))"), [
+                                    'failed',
+                                    'refunded',
+                                    'declined',
+                                    'pending',
+                                ])
+                                ->where(function ($query) {
+                                    $query
+                                        ->whereIn(DB::raw("LOWER(COALESCE(payment_status, ''))"), [
+                                            'captured',
+                                            'completed',
+                                            'paid',
+                                            'success',
+                                            'succeeded',
+                                            'credit',
+                                        ])
+                                        ->orWhereIn(DB::raw("LOWER(COALESCE(gateway_status, ''))"), [
+                                            'completed',
+                                            'captured',
+                                            'paid',
+                                            'success',
+                                            'succeeded',
+                                        ])
+                                        ->orWhereNotNull('reference_id');
+                                });
+                        });
+                });
+        });
     }
 
     public function show(
