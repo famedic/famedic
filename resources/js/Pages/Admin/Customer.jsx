@@ -48,7 +48,7 @@ import {
 	OdessaCompanyBadge,
 	OdessaPartnerBadge,
 } from "@/Components/CustomerAccountBadges";
-import { useForm } from "@inertiajs/react";
+import { Deferred, useForm, usePage } from "@inertiajs/react";
 import ManageUserDialog from "@/Components/Admin/ManageUserDialog";
 import {
 	Dialog,
@@ -69,26 +69,7 @@ export default function Customer({
 	canUpdatePassword = false,
 	canViewTaxProfilesAdmin = false,
 	canViewPaymentAttempts = false,
-	efevooTokens = [],
-	efevooTransactions = [],
-	paymentAttempts = [],
-	laboratoryNotifications = [],
-	unreadLabNotificationsCount = 0,
-	monitoringCarts = null,
 	canViewCartDetails = false,
-	laboratoryPurchases,
-	onlinePharmacyPurchases,
-	medicalAttentionSubscriptions,
-	pendingPurchases = [],
-	pendingPurchasesSummary = {},
-	pendingActivity = [],
-	notificationGroups = [],
-	platformAccess = null,
-	interactionSummary = {},
-	recentActivity = [],
-	activeCampaignMirror = null,
-	activeCampaignDispatches = [],
-	activeCampaignContactUrl = null,
 	canViewActiveCampaignHub = false,
 	taxRegimes = {},
 }) {
@@ -128,36 +109,84 @@ export default function Customer({
 
 			<FamilyMembersList familyMembers={customer.family_members} />
 
-			<CustomerMonitorPanel
-				customer={customer}
-				canViewCartDetails={canViewCartDetails}
-				canViewTaxProfilesAdmin={canViewTaxProfilesAdmin}
-				canViewPaymentAttempts={canViewPaymentAttempts}
-				paymentAttempts={paymentAttempts}
-				efevooTokens={efevooTokens}
-				efevooTransactions={efevooTransactions}
-				laboratoryNotifications={laboratoryNotifications}
-				unreadLabNotificationsCount={unreadLabNotificationsCount}
-				pendingActivity={pendingActivity}
-				pendingPurchasesSummary={pendingPurchasesSummary}
-				interactionSummary={interactionSummary}
-				recentActivity={recentActivity}
-				notificationGroups={notificationGroups}
-				platformAccess={platformAccess}
-				activeCampaignMirror={activeCampaignMirror}
-				activeCampaignDispatches={activeCampaignDispatches}
-				activeCampaignContactUrl={activeCampaignContactUrl}
-				canViewActiveCampaignHub={canViewActiveCampaignHub}
-				taxRegimes={taxRegimes}
-				laboratoryPurchases={laboratoryPurchases}
-				onlinePharmacyPurchases={onlinePharmacyPurchases}
-				medicalAttentionSubscriptions={medicalAttentionSubscriptions}
-				PaymentAttemptsCard={PaymentAttemptsCard}
-				EfevooTokensCard={EfevooTokensCard}
-				EfevooTransactionsCard={EfevooTransactionsCard}
-				PurchaseTabs={PurchaseTabs}
-			/>
+			<Deferred data="monitorData" fallback={<CustomerMonitorSkeleton />}>
+				<DeferredCustomerMonitor
+					fallbackCustomer={customer}
+					canViewCartDetails={canViewCartDetails}
+					canViewTaxProfilesAdmin={canViewTaxProfilesAdmin}
+					canViewPaymentAttempts={canViewPaymentAttempts}
+					canViewActiveCampaignHub={canViewActiveCampaignHub}
+					taxRegimes={taxRegimes}
+				/>
+			</Deferred>
 		</AdminLayout>
+	);
+}
+
+function DeferredCustomerMonitor({
+	fallbackCustomer,
+	canViewCartDetails,
+	canViewTaxProfilesAdmin,
+	canViewPaymentAttempts,
+	canViewActiveCampaignHub,
+	taxRegimes,
+}) {
+	const { monitorData = {} } = usePage().props;
+
+	return (
+		<CustomerMonitorPanel
+			customer={monitorData.customer || fallbackCustomer}
+			canViewCartDetails={canViewCartDetails}
+			canViewTaxProfilesAdmin={canViewTaxProfilesAdmin}
+			canViewPaymentAttempts={canViewPaymentAttempts}
+			paymentAttempts={monitorData.paymentAttempts || []}
+			efevooTokens={monitorData.efevooTokens || []}
+			efevooTransactions={monitorData.efevooTransactions || []}
+			laboratoryNotifications={monitorData.laboratoryNotifications || []}
+			unreadLabNotificationsCount={
+				monitorData.unreadLabNotificationsCount || 0
+			}
+			pendingActivity={monitorData.pendingActivity || []}
+			pendingPurchasesSummary={monitorData.pendingPurchasesSummary || {}}
+			interactionSummary={monitorData.interactionSummary || {}}
+			recentActivity={monitorData.recentActivity || []}
+			notificationGroups={monitorData.notificationGroups || []}
+			platformAccess={monitorData.platformAccess || null}
+			activeCampaignMirror={monitorData.activeCampaignMirror || null}
+			activeCampaignDispatches={monitorData.activeCampaignDispatches || []}
+			activeCampaignContactUrl={monitorData.activeCampaignContactUrl || null}
+			canViewActiveCampaignHub={canViewActiveCampaignHub}
+			taxRegimes={taxRegimes}
+			laboratoryPurchases={monitorData.laboratoryPurchases}
+			onlinePharmacyPurchases={monitorData.onlinePharmacyPurchases}
+			medicalAttentionSubscriptions={monitorData.medicalAttentionSubscriptions}
+			PaymentAttemptsCard={PaymentAttemptsCard}
+			EfevooTokensCard={EfevooTokensCard}
+			EfevooTransactionsCard={EfevooTransactionsCard}
+			PurchaseTabs={PurchaseTabs}
+		/>
+	);
+}
+
+function CustomerMonitorSkeleton() {
+	return (
+		<div className="space-y-5">
+			<div>
+				<Subheading>Monitor del cliente</Subheading>
+				<Text className="mt-1 text-sm text-zinc-500">
+					Cargando actividad, compras y pagos…
+				</Text>
+			</div>
+			<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+				{Array.from({ length: 6 }).map((_, index) => (
+					<div
+						key={index}
+						className="h-20 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800"
+					/>
+				))}
+			</div>
+			<div className="h-48 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800" />
+		</div>
 	);
 }
 
@@ -269,7 +298,7 @@ function OnlinePharmacyPurchasesList({ onlinePharmacyPurchases }) {
 							onlinePharmacyPurchases,
 							"pharmacy_page",
 						)}
-						only={["onlinePharmacyPurchases"]}
+						only={["monitorData"]}
 					/>
 				</>
 			)}
@@ -312,7 +341,7 @@ function LaboratoryPurchasesList({ laboratoryPurchases }) {
 							laboratoryPurchases,
 							"lab_page",
 						)}
-						only={["laboratoryPurchases"]}
+						only={["monitorData"]}
 					/>
 				</>
 			)}
@@ -788,7 +817,7 @@ function MedicalAttentionSubscriptionsList({ medicalAttentionSubscriptions }) {
 					medicalAttentionSubscriptions,
 					"medical_attention_subscriptions_page",
 				)}
-				only={["medicalAttentionSubscriptions"]}
+				only={["monitorData"]}
 			/>
 		</div>
 	);

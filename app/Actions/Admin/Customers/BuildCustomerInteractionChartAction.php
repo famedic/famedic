@@ -218,10 +218,11 @@ class BuildCustomerInteractionChartAction
 
                 return $this->makeEvent(
                     category: 'carts',
-                    categoryLabel: 'Carritos',
+                    categoryLabel: 'Carritos con actividad',
                     label: $eventLabel ?: 'Evento de carrito',
                     at: $event->occurred_at ?? $event->created_at,
                     detail: isset($event->cart_id) ? 'Carrito #'.$event->cart_id : null,
+                    entityId: isset($event->cart_id) ? (int) $event->cart_id : null,
                 );
             });
     }
@@ -235,6 +236,7 @@ class BuildCustomerInteractionChartAction
         string $label,
         mixed $at,
         ?string $detail = null,
+        ?int $entityId = null,
     ): array {
         $timestamp = $at instanceof Carbon
             ? $at->copy()->setTimezone(self::TZ)
@@ -246,6 +248,7 @@ class BuildCustomerInteractionChartAction
             'label' => $label,
             'at' => $timestamp?->isoFormat('D MMM Y h:mm a'),
             'detail' => $detail,
+            'entity_id' => $entityId,
             'sort' => $timestamp?->timestamp ?? 0,
             'day' => $timestamp?->toDateString() ?? 'unknown',
         ];
@@ -264,7 +267,7 @@ class BuildCustomerInteractionChartAction
                 return [
                     'purchases' => $dayEvents->where('category', 'purchases')->count(),
                     'payments' => $dayEvents->where('category', 'payments')->count(),
-                    'carts' => $dayEvents->where('category', 'carts')->count(),
+                    'carts' => $this->countDistinctEntities($dayEvents, 'carts'),
                     'appointments' => $dayEvents->where('category', 'appointments')->count(),
                     'marketing' => $dayEvents->where('category', 'marketing')->count(),
                     'notifications' => $dayEvents->where('category', 'notifications')->count(),
@@ -306,7 +309,7 @@ class BuildCustomerInteractionChartAction
         $summary = [
             'purchases' => $events->where('category', 'purchases')->count(),
             'payments' => $events->where('category', 'payments')->count(),
-            'carts' => $events->where('category', 'carts')->count(),
+            'carts' => $this->countDistinctEntities($events, 'carts'),
             'appointments' => $events->where('category', 'appointments')->count(),
             'marketing' => $events->where('category', 'marketing')->count(),
             'notifications' => $events->where('category', 'notifications')->count(),
@@ -315,6 +318,19 @@ class BuildCustomerInteractionChartAction
         $summary['total'] = array_sum($summary);
 
         return $summary;
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $events
+     */
+    private function countDistinctEntities(Collection $events, string $category): int
+    {
+        $categoryEvents = $events->where('category', $category);
+        $entityIds = $categoryEvents->pluck('entity_id')->filter()->unique();
+
+        return $entityIds->isNotEmpty()
+            ? $entityIds->count()
+            : $categoryEvents->count();
     }
 
     private function cartEventLabel(CartEventType $event): string

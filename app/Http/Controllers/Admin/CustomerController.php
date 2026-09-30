@@ -97,8 +97,62 @@ class CustomerController extends Controller
         BuildCustomerInteractionChartAction $buildCustomerInteractionChartAction,
         BuildCustomerMonitorExtrasAction $buildCustomerMonitorExtrasAction,
         ActiveCampaignContactsService $activeCampaignContactsService,
-        ActiveCampaignMirrorService $activeCampaignMirrorService,
+        ActiveCampaignMirrorService $activeCampaignMirrorService
     ) {
+        $customer->load([
+            'user.referrer',
+            'customerable',
+            'familyMembers.customer.user',
+        ]);
+
+        if ($customer->customerable_type === 'App\\Models\\OdessaAfiliateAccount' && $customer->customerable) {
+            $customer->customerable->load('odessaAfiliatedCompany');
+        } elseif ($customer->customerable_type === 'App\\Models\\FamilyAccount' && $customer->customerable) {
+            $customer->customerable->load('parentCustomer.user');
+        }
+
+        $user = $customer->user;
+        $administrator = $request->user()->administrator;
+        $canViewCartDetails = $administrator->hasPermissionTo('view cart details');
+        $canViewPaymentAttempts = $administrator->hasPermissionTo('payment-attempts.manage');
+        $canViewTaxProfilesAdmin = $administrator->hasPermissionTo('tax-profiles.manage');
+        $canViewActiveCampaignHub = $administrator->hasPermissionTo('activecampaign.manage');
+        $canViewCarts = $administrator->hasPermissionTo('view carts');
+
+        return Inertia::render('Admin/Customer', [
+            'customer' => $customer,
+            'genders' => Gender::casesWithLabels(),
+            'states' => StatesMexico::todos(),
+            'canManageUser' => $user && $administrator->hasPermissionTo('users.manage'),
+            'canUpdatePassword' => $administrator && $administrator->hasRole('superadmin'),
+            'canViewTaxProfilesAdmin' => $canViewTaxProfilesAdmin,
+            'canViewPaymentAttempts' => $canViewPaymentAttempts,
+            'canViewCartDetails' => $canViewCartDetails,
+            'canViewActiveCampaignHub' => $canViewActiveCampaignHub,
+            'taxRegimes' => config('taxregimes.regimes'),
+            'monitorData' => Inertia::defer(fn () => $this->buildMonitorData(
+                $customer,
+                $pendingPurchasesQuery,
+                $buildCustomerInteractionChartAction,
+                $buildCustomerMonitorExtrasAction,
+                $activeCampaignContactsService,
+                $activeCampaignMirrorService,
+                $canViewCarts,
+                $canViewActiveCampaignHub,
+            )),
+        ]);
+    }
+
+    private function buildMonitorData(
+        Customer $customer,
+        PendingPurchasesQuery $pendingPurchasesQuery,
+        BuildCustomerInteractionChartAction $buildCustomerInteractionChartAction,
+        BuildCustomerMonitorExtrasAction $buildCustomerMonitorExtrasAction,
+        ActiveCampaignContactsService $activeCampaignContactsService,
+        ActiveCampaignMirrorService $activeCampaignMirrorService,
+        bool $canViewCarts,
+        bool $canViewActiveCampaignHub
+    ): array {
         $customer->load([
             'user.referrer',
             'customerable',
@@ -131,14 +185,12 @@ class CustomerController extends Controller
             },
         ]);
 
-        // Load additional relationships based on account type
         if ($customer->customerable_type === 'App\\Models\\OdessaAfiliateAccount' && $customer->customerable) {
             $customer->customerable->load('odessaAfiliatedCompany');
         } elseif ($customer->customerable_type === 'App\\Models\\FamilyAccount' && $customer->customerable) {
             $customer->customerable->load('parentCustomer.user');
         }
 
-        // Add purchase counts for delete eligibility and statistics
         $customer->loadCount([
             'laboratoryPurchases',
             'onlinePharmacyPurchases',
@@ -184,8 +236,7 @@ class CustomerController extends Controller
         $unreadLabNotificationsCount = (clone $labNotificationsQuery)->whereNull('read_at')->count();
 
         $monitoringCarts = null;
-        $canViewCartDetails = $request->user()->administrator->hasPermissionTo('view cart details');
-        if ($user && $request->user()->administrator->hasPermissionTo('view carts')) {
+        if ($user && $canViewCarts) {
             $monitoringCarts = Cart::query()
                 ->with('items')
                 ->where('user_id', $user->id)
@@ -205,7 +256,7 @@ class CustomerController extends Controller
                         'total_formatted' => formattedPrice((float) $cart->total),
                         'inactive_for_label' => $cart->inactiveForLabel(),
                         'updated_at' => $cart->updated_at,
-                        'last_activity_at' => localizedDate($cart->lastUserActivityAt())?->isoFormat('D MMM Y h:mm a'),
+                        'last_activity_at' => optional(localizedDate($cart->lastUserActivityAt()))->isoFormat('D MMM Y h:mm a'),
                     ];
                 })
                 ->values()
@@ -241,7 +292,6 @@ class CustomerController extends Controller
             ]);
         }
 
-        $canViewActiveCampaignHub = $request->user()->administrator->hasPermissionTo('activecampaign.manage');
         $activeCampaignMirror = $activeCampaignContactsService->buildMirrorPayloadForCustomer(
             $customer,
             $activeCampaignMirrorService,
@@ -260,21 +310,14 @@ class CustomerController extends Controller
             ? route('admin.activecampaign.contacts', ['drawer_contact_id' => $activeCampaignContact->id])
             : null;
 
-        return Inertia::render('Admin/Customer', [
+        return [
             'customer' => $customer,
-            'genders' => Gender::casesWithLabels(),
-            'states' => StatesMexico::todos(),
-            'canManageUser' => $user && $request->user()->administrator->hasPermissionTo('users.manage'),
-            'canUpdatePassword' => (bool) $request->user()->administrator?->hasRole('superadmin'),
-            'canViewTaxProfilesAdmin' => $request->user()->administrator->hasPermissionTo('tax-profiles.manage'),
-            'canViewPaymentAttempts' => $request->user()->administrator->hasPermissionTo('payment-attempts.manage'),
             'efevooTokens' => $efevooTokens,
             'efevooTransactions' => $efevooTransactions,
             'paymentAttempts' => $paymentAttempts,
             'laboratoryNotifications' => $labNotifications,
             'unreadLabNotificationsCount' => $unreadLabNotificationsCount,
             'monitoringCarts' => $monitoringCarts,
-            'canViewCartDetails' => $canViewCartDetails,
             'pendingPurchases' => $pendingPurchasesReadModel['pendingPurchases'],
             'pendingPurchasesSummary' => $pendingPurchasesReadModel['summary'],
             'pendingActivity' => $monitorExtras['pendingActivity'],
@@ -285,8 +328,6 @@ class CustomerController extends Controller
             'activeCampaignMirror' => $activeCampaignMirror,
             'activeCampaignDispatches' => $activeCampaignDispatches,
             'activeCampaignContactUrl' => $activeCampaignContactUrl,
-            'canViewActiveCampaignHub' => $canViewActiveCampaignHub,
-            'taxRegimes' => config('taxregimes.regimes'),
             'laboratoryPurchases' => $customer->laboratoryPurchases()
                 ->with(['transactions', 'vendorPayments', 'laboratoryPurchaseItems', 'invoice', 'invoiceRequest', 'devAssistanceRequests'])
                 ->latest()
@@ -299,6 +340,6 @@ class CustomerController extends Controller
                 ->with(['transactions', 'customer'])
                 ->latest()
                 ->paginate(5, ['*'], 'medical_attention_subscriptions_page'),
-        ]);
+        ];
     }
 }

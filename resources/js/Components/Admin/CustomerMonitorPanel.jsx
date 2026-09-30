@@ -31,7 +31,7 @@ import {
 const INTERACTION_SERIES = [
 	{ key: "purchases", label: "Compras", color: DASHBOARD_COLORS.green },
 	{ key: "payments", label: "Pagos", color: DASHBOARD_COLORS.blue },
-	{ key: "carts", label: "Carritos", color: DASHBOARD_COLORS.purple },
+	{ key: "carts", label: "Carritos con actividad", color: DASHBOARD_COLORS.purple },
 	{ key: "appointments", label: "Citas", color: DASHBOARD_COLORS.orange },
 	{ key: "marketing", label: "Marketing", color: DASHBOARD_COLORS.slate },
 	{ key: "notifications", label: "Notificaciones", color: DASHBOARD_COLORS.red },
@@ -573,12 +573,14 @@ function NotificationSummaryCard({ title, value }) {
 	);
 }
 
-function NotificationGroupHeader({ group }) {
+function NotificationGroupHeader({ group, expanded, onToggle }) {
 	const folio = group.folio || group.gda_order_id;
 	const consecutivo = group.gda_consecutivo;
+	const summary = group.summary ?? {};
+	const emails = summary.emails ?? {};
 
 	return (
-		<div className="space-y-3">
+		<div className="space-y-4">
 			<div className="flex flex-wrap items-start justify-between gap-3">
 				<div className="flex flex-wrap items-center gap-2">
 					{group.brand?.image_src && (
@@ -612,75 +614,56 @@ function NotificationGroupHeader({ group }) {
 							Ver en monitor
 						</Button>
 					)}
+					<Button outline size="sm" type="button" onClick={onToggle}>
+						{expanded ? "Ver menos" : "Ver más"}
+					</Button>
 				</div>
 			</div>
 
-			{group.is_gabinete && (
+			<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+				<NotificationSummaryCard
+					title="Toma de muestra"
+					value={`${summary.sample_notifications ?? 0} notif. · ${summary.sample_at || "sin fecha"}`}
+				/>
+				<NotificationSummaryCard
+					title="Resultados"
+					value={`${summary.results_notifications ?? 0} notif. · ${summary.results_at || "sin fecha"}`}
+				/>
+				<NotificationSummaryCard
+					title="Tiempo muestra → resultados"
+					value={summary.diff_label || "—"}
+				/>
+				<NotificationSummaryCard
+					title="Emails enviados"
+					value={`Muestra ${emails.sample_sent_count ?? 0} · Resultados ${emails.results_sent_count ?? 0}`}
+				/>
+			</div>
+
+			{summary.results_pdf?.label && (
+				<div className="flex flex-wrap items-center gap-2">
+					<Badge
+						color={
+							summary.results_pdf.is_stale
+								? "amber"
+								: summary.results_pdf.has_pdf_in_storage
+									? "famedic-lime"
+									: summary.results_pdf.available_at_gda
+										? "sky"
+										: "zinc"
+						}
+					>
+						{summary.results_pdf.label}
+					</Badge>
+				</div>
+			)}
+
+			{expanded && group.is_gabinete && (
 				<Text className="text-xs text-zinc-400">
 					El consecutivo corto proviene de infogda_orden; el folio completo es la
 					etiqueta GDA (p. ej. GZ0L…).
 				</Text>
 			)}
 
-			{group.summary && (
-				<>
-					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-						<NotificationSummaryCard
-							title="Notificaciones toma de muestra"
-							value={String(group.summary.sample_notifications ?? 0)}
-						/>
-						<NotificationSummaryCard
-							title="Notificaciones resultados"
-							value={String(group.summary.results_notifications ?? 0)}
-						/>
-						<NotificationSummaryCard
-							title="Primera toma de muestra"
-							value={group.summary.sample_at}
-						/>
-						<NotificationSummaryCard
-							title="Primeros resultados"
-							value={group.summary.results_at}
-						/>
-					</div>
-
-					<div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-						<NotificationSummaryCard
-							title="Tiempo muestra → resultados"
-							value={group.summary.diff_label}
-						/>
-						{group.summary.results_pdf?.label && (
-							<div className="flex flex-wrap items-center gap-2">
-								<Badge
-									color={
-										group.summary.results_pdf.is_stale
-											? "amber"
-											: group.summary.results_pdf.has_pdf_in_storage
-												? "famedic-lime"
-												: group.summary.results_pdf.available_at_gda
-													? "sky"
-													: "zinc"
-									}
-								>
-									{group.summary.results_pdf.label}
-								</Badge>
-							</div>
-						)}
-					</div>
-
-					{group.summary.emails && (
-						<div className="flex flex-wrap gap-2">
-							<Badge color="sky">
-								Emails muestra enviados:{" "}
-								{group.summary.emails.sample_sent_count ?? 0}
-							</Badge>
-							<Badge color="famedic-lime">
-								Emails resultados enviados:{" "}
-								{group.summary.emails.results_sent_count ?? 0}
-							</Badge>
-						</div>
-					)}
-				</>
-			)}
 		</div>
 	);
 }
@@ -762,15 +745,17 @@ function NotificationDetailField({ label, value }) {
 
 function NotificationGroupsPanel({ groups = [] }) {
 	const [selected, setSelected] = useState(null);
+	const [expandedGroups, setExpandedGroups] = useState({});
 
 	return (
-		<SectionShell title="Notificaciones por orden" icon={BellAlertIcon}>
+		<SectionShell title="Notificaciones por folio" icon={BellAlertIcon}>
 			{groups.length === 0 ? (
 				<EmptyListCard />
 			) : (
 				<div className="space-y-5">
 					{groups.map((group) => {
 						const groupSelectionKey = `${group.order_key}`;
+						const expanded = Boolean(expandedGroups[groupSelectionKey]);
 						const selectedEvent =
 							selected?.groupKey === groupSelectionKey
 								? group.events.find((e) => e.id === selected.eventId)
@@ -781,78 +766,91 @@ function NotificationGroupsPanel({ groups = [] }) {
 								key={group.order_key}
 								className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
 							>
-								<NotificationGroupHeader group={group} />
+								<NotificationGroupHeader
+									group={group}
+									expanded={expanded}
+									onToggle={() =>
+										setExpandedGroups((current) => ({
+											...current,
+											[groupSelectionKey]: !current[groupSelectionKey],
+										}))
+									}
+								/>
 
-								<div className="relative mx-2 mt-6 h-2 rounded-full bg-zinc-100 dark:bg-zinc-800">
-									{group.events.map((event, index) => {
-										const left =
-											group.events.length <= 1
-												? 50
-												: (index / (group.events.length - 1)) * 100;
-										const isSelected = selectedEvent?.id === event.id;
+								{expanded && (
+									<>
+										<div className="relative mx-2 mt-6 h-2 rounded-full bg-zinc-100 dark:bg-zinc-800">
+											{group.events.map((event, index) => {
+												const left =
+													group.events.length <= 1
+														? 50
+														: (index / (group.events.length - 1)) * 100;
+												const isSelected = selectedEvent?.id === event.id;
 
-										return (
-											<button
-												key={event.id}
-												type="button"
-												title={`${event.type_label || event.type} · ${event.at}`}
-												onClick={() =>
-													setSelected({
-														groupKey: groupSelectionKey,
-														eventId: event.id,
-													})
-												}
-												className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
-													isSelected
-														? "size-4 bg-sky-600 ring-4 ring-sky-200 dark:ring-sky-900"
-														: "size-3 bg-sky-500 ring-2 ring-white hover:size-3.5 hover:bg-sky-600 dark:ring-zinc-900"
-												}`}
-												style={{ left: `${left}%` }}
-												aria-label={`Ver detalle: ${event.type_label || event.type}`}
-												aria-pressed={isSelected}
-											/>
-										);
-									})}
-								</div>
+												return (
+													<button
+														key={event.id}
+														type="button"
+														title={`${event.type_label || event.type} · ${event.at}`}
+														onClick={() =>
+															setSelected({
+																groupKey: groupSelectionKey,
+																eventId: event.id,
+															})
+														}
+														className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+															isSelected
+																? "size-4 bg-sky-600 ring-4 ring-sky-200 dark:ring-sky-900"
+																: "size-3 bg-sky-500 ring-2 ring-white hover:size-3.5 hover:bg-sky-600 dark:ring-zinc-900"
+														}`}
+														style={{ left: `${left}%` }}
+														aria-label={`Ver detalle: ${event.type_label || event.type}`}
+														aria-pressed={isSelected}
+													/>
+												);
+											})}
+										</div>
 
-								<ul className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-800">
-									{group.events.map((event) => {
-										const isSelected = selectedEvent?.id === event.id;
-										const email = event.famedic_email ?? {};
+										<ul className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-800">
+											{group.events.map((event) => {
+												const isSelected = selectedEvent?.id === event.id;
+												const email = event.famedic_email ?? {};
 
-										return (
-											<li key={event.id}>
-												<button
-													type="button"
-													onClick={() =>
-														setSelected({
-															groupKey: groupSelectionKey,
-															eventId: event.id,
-														})
-													}
-													className={`flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left text-xs transition-colors ${
-														isSelected
-															? "bg-sky-50 text-sky-950 dark:bg-sky-950/40 dark:text-sky-100"
-															: "text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-													}`}
-												>
-													<span>
-														<Strong>
-															{event.type_label || event.type || "Notificación"}
-														</Strong>{" "}
-														· {event.at}
-													</span>
-													{email.notified && (
-														<Badge color="famedic-lime">Email enviado</Badge>
-													)}
-												</button>
-											</li>
-										);
-									})}
-								</ul>
+												return (
+													<li key={event.id}>
+														<button
+															type="button"
+															onClick={() =>
+																setSelected({
+																	groupKey: groupSelectionKey,
+																	eventId: event.id,
+																})
+															}
+															className={`flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left text-xs transition-colors ${
+																isSelected
+																	? "bg-sky-50 text-sky-950 dark:bg-sky-950/40 dark:text-sky-100"
+																	: "text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+															}`}
+														>
+															<span>
+																<Strong>
+																	{event.type_label || event.type || "Notificación"}
+																</Strong>{" "}
+																· {event.at}
+															</span>
+															{email.notified && (
+																<Badge color="famedic-lime">Email enviado</Badge>
+															)}
+														</button>
+													</li>
+												);
+											})}
+										</ul>
 
-								{selectedEvent && (
-									<NotificationEventDetail event={selectedEvent} />
+										{selectedEvent && (
+											<NotificationEventDetail event={selectedEvent} />
+										)}
+									</>
 								)}
 							</div>
 						);
