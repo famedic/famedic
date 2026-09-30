@@ -48,6 +48,15 @@ class ActiveCampaignOutboundDispatcher
         return $this->dispatchService->isCartCallSignalsEnabled();
     }
 
+    private function siteTrackingConfigured(): bool
+    {
+        $accountId = config('services.activecampaign.account_id');
+        $eventKey = config('services.activecampaign.event_key');
+
+        return is_string($accountId) && trim($accountId) !== ''
+            && is_string($eventKey) && trim($eventKey) !== '';
+    }
+
     public function idempotencyKeyForCartAbandonedTag(int $cartId, int $episode): string
     {
         return "cart:{$cartId}:abandoned:episode:{$episode}:tag:add";
@@ -1024,6 +1033,17 @@ class ActiveCampaignOutboundDispatcher
                 sourceEventType: $sourceEventType,
                 idempotencyKey: $idempotencyKey,
                 reason: 'no_eligible_email',
+                payloadExtras: $payloadExtras,
+            );
+        }
+
+        if (! $this->siteTrackingConfigured()) {
+            return $this->createSkippedSiteEventDispatch(
+                cart: $cart,
+                siteEvent: $siteEvent,
+                sourceEventType: $sourceEventType,
+                idempotencyKey: $idempotencyKey,
+                reason: 'site_event_not_configured',
                 payloadExtras: $payloadExtras,
             );
         }

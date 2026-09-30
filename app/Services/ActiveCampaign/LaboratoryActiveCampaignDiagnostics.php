@@ -101,6 +101,36 @@ class LaboratoryActiveCampaignDiagnostics
                 'title' => 'Resultados Disponibles',
                 'types' => ['text'],
             ],
+            'estudios_comprados' => [
+                'env' => 'ACTIVECAMPAIGN_FIELD_LAB_ESTUDIOS',
+                'config' => 'services.activecampaign.fields.lab.estudios_comprados',
+                'title' => 'EstudiosComprados',
+                'types' => ['text'],
+            ],
+            'cantidad_estudios' => [
+                'env' => 'ACTIVECAMPAIGN_FIELD_LAB_CANTIDAD_ESTUDIOS',
+                'config' => 'services.activecampaign.fields.lab.cantidad_estudios',
+                'title' => 'Cantidad de Estudios',
+                'types' => ['text', 'number'],
+            ],
+            'fecha_compra' => [
+                'env' => 'ACTIVECAMPAIGN_FIELD_LAB_FECHA_COMPRA',
+                'config' => 'services.activecampaign.fields.lab.fecha_compra',
+                'title' => 'Fecha de Compra',
+                'types' => ['date', 'text'],
+            ],
+            'marca_laboratorio' => [
+                'env' => 'ACTIVECAMPAIGN_FIELD_LAB_MARCA',
+                'config' => 'services.activecampaign.fields.lab.marca_laboratorio',
+                'title' => 'Marca Laboratorio',
+                'types' => ['text'],
+            ],
+            'total_compra' => [
+                'env' => 'ACTIVECAMPAIGN_FIELD_LAB_TOTAL',
+                'config' => 'services.activecampaign.fields.lab.total_compra',
+                'title' => 'Total',
+                'types' => ['text', 'number'],
+            ],
         ];
     }
 

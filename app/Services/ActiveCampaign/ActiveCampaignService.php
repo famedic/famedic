@@ -1050,20 +1050,11 @@ class ActiveCampaignService
             ]);
 
             if (! $orderResult->success) {
-                $result = ActiveCampaignOperationResult::failure([
-                    'operation' => 'laboratoryPurchase',
-                    'resource' => 'ecomOrder',
+                Log::warning('AC: orden ecom de laboratorio no registrada; se continúan etiquetas y campos de la compra', [
+                    'purchase_id' => $purchase->id,
+                    'error' => $orderResult->error,
                     'http_status' => $orderResult->httpStatus,
-                    'response' => [
-                        'create_order' => $orderResult->toArray(),
-                    ],
-                    'error' => $orderResult->error ?? 'laboratory_purchase_order_failed',
-                    'duration_ms' => $this->elapsedMs($started),
-                    'retryable' => $orderResult->retryable,
                 ]);
-                $this->logOperationResult($result);
-
-                return $result;
             }
 
             $tagId = (int) config('services.activecampaign.tag_laboratory_purchase_completed', 18);
@@ -2254,11 +2245,44 @@ class ActiveCampaignService
     {
         $value = config('services.activecampaign.fields.lab.'.$key);
 
-        if ($value === null || $value === '') {
+        if ($value !== null && $value !== '') {
+            return (string) $value;
+        }
+
+        $title = LaboratoryActiveCampaignDiagnostics::fieldDefinitions()[$key]['title'] ?? null;
+
+        if (! is_string($title) || trim($title) === '') {
             return null;
         }
 
-        return (string) $value;
+        return $this->laboratoryFieldIdByTitle($title);
+    }
+
+    private function laboratoryFieldIdByTitle(string $title): ?string
+    {
+        $cacheKey = 'ac.lab_fields_by_title';
+        $map = Cache::get($cacheKey);
+
+        if (! is_array($map)) {
+            $map = [];
+
+            foreach ($this->getCustomFields() as $field) {
+                $fieldTitle = mb_strtolower(trim((string) ($field['title'] ?? '')));
+                $id = trim((string) ($field['id'] ?? ''));
+
+                if ($fieldTitle !== '' && $id !== '') {
+                    $map[$fieldTitle] = $id;
+                }
+            }
+
+            if ($map !== []) {
+                Cache::put($cacheKey, $map, now()->addHour());
+            }
+        }
+
+        $id = $map[mb_strtolower(trim($title))] ?? null;
+
+        return is_string($id) && $id !== '' ? $id : null;
     }
 
     /**
