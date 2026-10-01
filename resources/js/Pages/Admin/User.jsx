@@ -12,6 +12,13 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/Components/Catalyst/table";
+import {
+	Tab,
+	TabGroup,
+	TabList,
+	TabPanel,
+	TabPanels,
+} from "@/Components/Catalyst/tabs";
 import EmptyListCard from "@/Components/EmptyListCard";
 import {
 	CheckCircleIcon,
@@ -25,6 +32,8 @@ import {
 	ShoppingCartIcon,
 	Cog6ToothIcon,
 	KeyIcon,
+	TagIcon,
+	ArrowRightIcon,
 } from "@heroicons/react/16/solid";
 import { router, useForm } from "@inertiajs/react";
 import { useState } from "react";
@@ -52,9 +61,20 @@ export default function UserPage({
 	unreadLabNotificationsCount,
 	monitoringCarts = null,
 	canViewCartDetails = false,
+	activeCampaignTimeline = { available: false, items: [], summary: {} },
 }) {
 	const [manageOpen, setManageOpen] = useState(false);
 	const [passwordOpen, setPasswordOpen] = useState(false);
+	const taxProfiles = customer?.tax_profiles ?? customer?.taxProfiles ?? [];
+	const purchasesCount =
+		(customer?.laboratory_purchases?.length || 0) +
+		(customer?.online_pharmacy_purchases?.length || 0) +
+		(customer?.medical_attention_subscriptions?.length || 0);
+	const cartsCount = monitoringCarts?.length || 0;
+	const activeCampaignCount = activeCampaignTimeline?.items?.length || 0;
+	const paymentsCount =
+		(efevooTokens?.length || 0) + (efevooTransactions?.length || 0);
+	const notificationsCount = laboratoryNotifications?.length || 0;
 
 	return (
 		<AdminLayout title={user.full_name || user.email || "Usuario"}>
@@ -82,41 +102,97 @@ export default function UserPage({
 					/>
 				)}
 
-				<div className="grid gap-4 md:grid-cols-2">
-					<ProfileCard user={user} />
-					<CustomerCard customer={customer} />
-				</div>
+				<TabGroup>
+					<TabList className="gap-1 overflow-x-auto rounded-lg border border-zinc-200 bg-white p-1 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+						<DetailTab label="Resumen" count={customer ? 4 : 1} />
+						<DetailTab label="Fiscal" count={taxProfiles.length} />
+						<DetailTab label="Compras" count={purchasesCount} />
+						<DetailTab label="ActiveCampaign" count={activeCampaignCount} />
+						<DetailTab label="Pagos" count={paymentsCount} />
+						<DetailTab label="Laboratorio" count={notificationsCount} />
+					</TabList>
 
-				<div className="grid gap-4 md:grid-cols-2">
-					<AddressesCard customer={customer} />
-					<ContactsCard customer={customer} />
-				</div>
+					<TabPanels className="mt-4">
+						<TabPanel className="space-y-4">
+							<div className="grid gap-4 md:grid-cols-2">
+								<ProfileCard user={user} />
+								<CustomerCard customer={customer} />
+							</div>
 
-				<TaxProfilesCard
-					customer={customer}
-					canViewTaxProfilesAdmin={canViewTaxProfilesAdmin}
-				/>
+							<div className="grid gap-4 md:grid-cols-2">
+								<AddressesCard customer={customer} />
+								<ContactsCard customer={customer} />
+							</div>
+						</TabPanel>
 
-				<PurchasesCard customer={customer} />
+						<TabPanel className="space-y-4">
+							<TaxProfilesCard
+								customer={customer}
+								canViewTaxProfilesAdmin={canViewTaxProfilesAdmin}
+							/>
+						</TabPanel>
 
-				{monitoringCarts !== null && (
-					<UserCartsSection
-						carts={monitoringCarts}
-						canViewCartDetails={canViewCartDetails}
-					/>
-				)}
+						<TabPanel className="space-y-4">
+							<PurchasesCard customer={customer} />
 
-				<div className="grid gap-4 md:grid-cols-2">
-					<EfevooTokensCard tokens={efevooTokens} />
-					<EfevooTransactionsCard transactions={efevooTransactions} />
-				</div>
+							{monitoringCarts !== null && (
+								<UserCartsSection
+									carts={monitoringCarts}
+									canViewCartDetails={canViewCartDetails}
+								/>
+							)}
+						</TabPanel>
 
-				<NotificationsCard
-					notifications={laboratoryNotifications}
-					unreadCount={unreadLabNotificationsCount}
-				/>
+						<TabPanel className="space-y-4">
+							<ActiveCampaignTimelineSection timeline={activeCampaignTimeline} />
+						</TabPanel>
+
+						<TabPanel className="space-y-4">
+							<div className="grid gap-4 md:grid-cols-2">
+								<EfevooTokensCard tokens={efevooTokens} />
+								<EfevooTransactionsCard transactions={efevooTransactions} />
+							</div>
+						</TabPanel>
+
+						<TabPanel className="space-y-4">
+							<NotificationsCard
+								notifications={laboratoryNotifications}
+								unreadCount={unreadLabNotificationsCount}
+							/>
+						</TabPanel>
+					</TabPanels>
+				</TabGroup>
 			</div>
 		</AdminLayout>
+	);
+}
+
+function DetailTab({ label, count }) {
+	return (
+		<Tab className="shrink-0">
+			{(selected) => (
+				<span
+					className={[
+						"inline-flex min-h-9 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold leading-none transition",
+						selected
+							? "bg-famedic-dark text-white shadow-sm ring-1 ring-famedic-dark/20 dark:bg-famedic-lime dark:text-famedic-darker dark:ring-famedic-lime/30"
+							: "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-white",
+					].join(" ")}
+				>
+					{label}
+					<span
+						className={[
+							"inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold leading-none",
+							selected
+								? "bg-white/20 text-white dark:bg-famedic-darker/15 dark:text-famedic-darker"
+								: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300",
+						].join(" ")}
+					>
+						{count}
+					</span>
+				</span>
+			)}
+		</Tab>
 	);
 }
 
@@ -684,6 +760,155 @@ function UserCartsSection({ carts, canViewCartDetails }) {
 							})}
 						</TableBody>
 					</Table>
+				</div>
+			)}
+		</div>
+	);
+}
+
+function activeCampaignKindMeta(kind) {
+	if (kind === "tag_add") {
+		return {
+			color: "emerald",
+			label: "Agregada",
+			title: "Etiqueta agregada",
+		};
+	}
+	if (kind === "tag_remove") {
+		return {
+			color: "red",
+			label: "Removida",
+			title: "Etiqueta removida",
+		};
+	}
+	if (kind === "site_event") {
+		return {
+			color: "blue",
+			label: "Evento",
+			title: "Evento enviado",
+		};
+	}
+	if (kind === "purchase") {
+		return {
+			color: "famedic",
+			label: "Compra",
+			title: "Compra lab completada",
+		};
+	}
+
+	return {
+		color: "violet",
+		label: "Campos",
+		title: "Campos actualizados",
+	};
+}
+
+function activeCampaignStatusColor(status) {
+	if (status === "synced") return "emerald";
+	if (status === "failed") return "red";
+	if (status === "processing") return "amber";
+	if (status === "skipped") return "zinc";
+	return "sky";
+}
+
+function ActiveCampaignTimelineSection({ timeline }) {
+	if (!timeline?.available) {
+		return (
+			<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+				<div className="flex flex-wrap items-center gap-2">
+					<TagIcon className="size-5 text-zinc-500" />
+					<Subheading>ActiveCampaign · etiquetas y eventos</Subheading>
+				</div>
+				<Text className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+					No se encontró la tabla activecampaign_dispatches en esta base.
+				</Text>
+			</div>
+		);
+	}
+
+	const items = timeline.items || [];
+	const summary = timeline.summary || {};
+
+	return (
+		<div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+			<div className="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<div className="flex flex-wrap items-center gap-2">
+						<TagIcon className="size-5 text-zinc-500" />
+						<Subheading>ActiveCampaign · etiquetas y eventos</Subheading>
+					</div>
+					<Text className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+						Línea de tiempo local basada en dispatches ejecutados o
+						pendientes para este usuario.
+					</Text>
+				</div>
+				<div className="flex flex-wrap gap-2">
+					<Badge color="emerald">+{summary.tag_adds || 0} tags</Badge>
+					<Badge color="red">-{summary.tag_removes || 0} tags</Badge>
+					<Badge color="blue">{summary.events || 0} eventos</Badge>
+					<Badge color="violet">{summary.fields || 0} campos</Badge>
+				</div>
+			</div>
+
+			{items.length === 0 ? (
+				<div className="rounded-lg border border-dashed border-zinc-200 p-4 dark:border-zinc-700">
+					<Text className="text-sm text-zinc-600 dark:text-zinc-400">
+						Todavía no hay dispatches de ActiveCampaign con tags, eventos o
+						campos para este usuario. Al hacer pruebas de carrito, cita o
+						compra, aquí aparecerá lo que se agregó o removió.
+					</Text>
+				</div>
+			) : (
+				<div className="space-y-3">
+					{items.map((item) => {
+						const meta = activeCampaignKindMeta(item.kind);
+
+						return (
+							<div
+								key={item.id}
+								className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+							>
+								<div className="flex flex-wrap items-start justify-between gap-3">
+									<div className="min-w-0">
+										<div className="flex flex-wrap items-center gap-2">
+											<Badge color={meta.color}>{meta.label}</Badge>
+											<Badge color={activeCampaignStatusColor(item.status)}>
+												{item.status_label || item.status}
+											</Badge>
+											<Text className="font-medium text-zinc-950 dark:text-zinc-100">
+												{item.title || meta.title}
+											</Text>
+										</div>
+										<Text className="mt-1 break-words text-sm text-zinc-700 dark:text-zinc-300">
+											<Strong>{item.label}</Strong>
+											{item.description ? ` · ${item.description}` : ""}
+										</Text>
+										<div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-500">
+											<span>Dispatch #{item.dispatch_id}</span>
+											<span>{item.event_type}</span>
+											{item.cart_id ? <span>Carrito #{item.cart_id}</span> : null}
+											{item.purchase_id ? (
+												<span>Compra #{item.purchase_id}</span>
+											) : null}
+											{item.appointment_id ? (
+												<span>Cita #{item.appointment_id}</span>
+											) : null}
+											<span>{formatAdminDateTime(item.synced_at || item.updated_at)}</span>
+										</div>
+										{item.last_error ? (
+											<Text className="mt-2 text-xs text-red-600 dark:text-red-300">
+												<Strong>Error:</Strong> {item.last_error}
+											</Text>
+										) : null}
+									</div>
+									<Button href={item.jobs_url} outline size="sm">
+										Ver dispatch
+										<ArrowRightIcon />
+									</Button>
+								</div>
+							</div>
+						);
+					})}
 				</div>
 			)}
 		</div>

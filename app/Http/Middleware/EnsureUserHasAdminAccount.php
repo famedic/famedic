@@ -293,6 +293,12 @@ class EnsureUserHasAdminAccount
                 'url' => route('admin.failed-jobs.index'),
                 'current' => Route::currentRouteName() === 'admin.failed-jobs.index',
             ] : null,
+            ($this->adminHasPermission($administrator, 'activecampaign.manage')
+                || $this->adminHasPermission($administrator, 'logs-general.manage')) ? [
+                'label' => 'Jobs ActiveCampaign',
+                'url' => route('admin.activecampaign-jobs.index'),
+                'current' => Route::currentRouteName() === 'admin.activecampaign-jobs.index',
+            ] : null,
             $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') ? [
                 'label' => 'Monitor de notificaciones',
                 'url' => route('admin.laboratory-notifications-monitor.index'),

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActiveCampaignController;
+use App\Http\Controllers\Admin\ActiveCampaignJobsController;
 use App\Http\Controllers\Admin\ActiveCampaignOperationsController;
 use App\Http\Controllers\Admin\AdministratorController;
 use App\Http\Controllers\Admin\ArchiveMarketingCampaignController;
@@ -324,6 +325,7 @@ Route::prefix('admin')->middleware([
         Route::get('logs-general/manage', [LogsGeneralController::class, 'index'])->name('logs-general.manage');
         Route::get('logs-general/download', [LogsGeneralController::class, 'download'])->name('logs-general.download');
         Route::get('failed-jobs', [FailedJobsController::class, 'index'])->name('failed-jobs.index');
+        Route::get('activecampaign-jobs', [ActiveCampaignJobsController::class, 'index'])->name('activecampaign-jobs.index');
 
         // Asistente IA de monitoreo
         Route::get('monitoring-ai', [MonitoringAiController::class, 'index'])->name('monitoring-ai.index');
