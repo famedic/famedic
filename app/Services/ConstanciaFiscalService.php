@@ -219,6 +219,27 @@ class ConstanciaFiscalService
 
     protected function extraerNombreCorrecto(string $textoOriginal, string $textoNormalizado, ?string $rfc = null): ?string
     {
+        if ($rfc) {
+            $patronEncabezado = '/'.preg_quote($rfc, '/').'\s+REGISTRO\s+FEDERAL\s+DE\s+CONTRIBUYENTES\s+(.+?)\s+NOMBRE,\s*DENOMINACI[OÓ]N\s*O\s*RAZ[OÓ]N\s*SOCIAL/si';
+            if (preg_match($patronEncabezado, $textoNormalizado, $matches)) {
+                $nombre = $this->limpiarValorFiscal($matches[1] ?? '');
+                if ($nombre !== '' && strlen($nombre) > 5) {
+                    return $nombre;
+                }
+            }
+        }
+
+        if (preg_match('/NOMBRE\s*\(?S\)?\s*:\s*(.*?)\s+PRIMER\s*APELLIDO\s*:\s*(.*?)\s+SEGUNDO\s*APELLIDO\s*:\s*(.*?)(?:\s+FECHA\s*INICIO|\s+ESTATUS|\s+NOMBRE\s*COMERCIAL|$)/siu', $textoNormalizado, $matches)) {
+            $nombre = $this->limpiarValorFiscal($matches[1] ?? '');
+            $primerApellido = $this->limpiarValorFiscal($matches[2] ?? '');
+            $segundoApellido = $this->limpiarValorFiscal($matches[3] ?? '');
+            $nombreCompleto = trim($nombre.' '.$primerApellido.' '.$segundoApellido);
+
+            if ($nombreCompleto !== '' && strlen($nombreCompleto) > 5) {
+                return $nombreCompleto;
+            }
+        }
+
         if (preg_match('/([A-ZÁÉÍÓÚÑ\s]{10,})\s+NOMBRE,\s*DENOMINACION\s*O\s*RAZON\s*SOCIAL/i', $textoNormalizado, $matches)) {
             if (isset($matches[1])) {
                 $nombre = trim(preg_replace('/^(CONSTANCIA|SITUACION|FISCAL|CÉDULA|IDENTIFICACIÓN)\s+/i', '', trim($matches[1])) ?? '');
@@ -275,11 +296,15 @@ class ConstanciaFiscalService
 
     protected function extraerCodigoPostal(string $texto): ?string
     {
-        if (preg_match('/DOMICILIO\s+REGISTRADO(.*?)CODIGO POSTAL\s*:\s*(\d{5})/si', $texto, $matches)) {
+        if (preg_match('/POSTAL\s*:?\s*(\d{5})/iu', $texto, $matches)) {
+            return trim($matches[1]);
+        }
+
+        if (preg_match('/DOMICILIO\s+REGISTRADO(.*?)C[OÓ]DIGO\s*POSTAL\s*:?\s*(\d{5})/siu', $texto, $matches)) {
             return trim($matches[2]);
         }
 
-        if (preg_match('/CODIGO POSTAL\s*:\s*(\d{5})/i', $texto, $matches)) {
+        if (preg_match('/C[OÓ]DIGO\s*POSTAL\s*:?\s*(\d{5})/iu', $texto, $matches)) {
             return trim($matches[1]);
         }
 
@@ -288,10 +313,17 @@ class ConstanciaFiscalService
 
     protected function extraerRegimenFiscal(string $texto): ?string
     {
-        if (preg_match('/REGIMENES:(.*?)R[EÉ]GIMEN\s+DE\s+([A-ZÁÉÍÓÚÑ\s]+)/si', $texto, $matches)) {
-            $regimen = trim($matches[2]);
+        if (preg_match('/REG[ÍI]MENES?:.*?(R[EÉ]GIMEN\s+DE\s+.+?)\s+\d{2}\/\d{2}\/\d{4}/siu', $texto, $matches)) {
+            $regimen = $this->limpiarValorFiscal($matches[1] ?? '');
             if ($regimen !== '') {
-                return $regimen;
+                return $this->normalizarRegimenFiscal($regimen);
+            }
+        }
+
+        if (preg_match('/REG[ÍI]MENES?:.*?R[EÉ]GIMEN\s+DE\s+(.+?)(?:\s+FECHA\s+FIN|\s+\d{2}\/\d{2}\/\d{4}|\s+OBLIGACIONES|$)/siu', $texto, $matches)) {
+            $regimen = $this->limpiarValorFiscal($matches[1] ?? '');
+            if ($regimen !== '') {
+                return $this->normalizarRegimenFiscal('Régimen de '.$regimen);
             }
         }
 
@@ -308,7 +340,7 @@ class ConstanciaFiscalService
 
     protected function extraerFechaEmision(string $texto): ?string
     {
-        if (preg_match('/LUGAR\s+Y\s+FECHA\s+DE\s+EMISION[^,]*,\s*(\d{1,2})\s+DE\s+([A-Z]+)\s+DE\s+(\d{4})/i', $texto, $matches)) {
+        if (preg_match('/LUGAR\s+Y\s+FECHA\s+DE\s+EMISI[OÓ]N.*?(?:,|\s+A\s+)\s*(\d{1,2})\s+DE\s+([A-ZÁÉÍÓÚÑ]+)\s+DE\s+(\d{4})/iu', $texto, $matches)) {
             $meses = [
                 'ENERO' => '01', 'FEBRERO' => '02', 'MARZO' => '03', 'ABRIL' => '04',
                 'MAYO' => '05', 'JUNIO' => '06', 'JULIO' => '07', 'AGOSTO' => '08',
@@ -323,6 +355,22 @@ class ConstanciaFiscalService
         }
 
         return null;
+    }
+
+    private function limpiarValorFiscal(string $value): string
+    {
+        $value = trim(preg_replace('/\s+/', ' ', $value) ?? '');
+        $value = preg_replace('/\b(NULL|N\/A|SIN DATO)\b/i', '', $value) ?? $value;
+
+        return trim($value);
+    }
+
+    private function normalizarRegimenFiscal(string $value): string
+    {
+        $value = $this->limpiarValorFiscal($value);
+        $value = preg_replace('/^R[EÉ]GIMEN\s+DE\s+/i', 'Régimen de ', $value) ?? $value;
+
+        return trim($value);
     }
 
     protected function determinarEstatusSAT(string $texto): string

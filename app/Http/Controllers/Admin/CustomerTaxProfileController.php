@@ -53,6 +53,11 @@ class CustomerTaxProfileController extends Controller
                 'admin_user_id' => $request->user()->id,
                 'customer_id' => $customer->id,
                 'exception_class' => $e::class,
+                'exception_message' => $e->getMessage(),
+                'exception_file' => $e->getFile(),
+                'exception_line' => $e->getLine(),
+                'previous_exception_class' => $e->getPrevious() ? $e->getPrevious()::class : null,
+                'previous_exception_message' => $e->getPrevious()?->getMessage(),
             ]);
 
             return response()->json([

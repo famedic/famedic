@@ -308,6 +308,11 @@ class TaxProfileController extends Controller
                 'customer_id' => $request->user()->customer?->id,
                 'result' => 'exception',
                 'exception_class' => $e::class,
+                'exception_message' => $e->getMessage(),
+                'exception_file' => $e->getFile(),
+                'exception_line' => $e->getLine(),
+                'previous_exception_class' => $e->getPrevious() ? $e->getPrevious()::class : null,
+                'previous_exception_message' => $e->getPrevious()?->getMessage(),
             ]);
 
             return response()->json([
