@@ -24,12 +24,6 @@ import { Text, Strong } from "@/Components/Catalyst/text";
 import { Button } from "@/Components/Catalyst/button";
 
 import {
-	DescriptionList,
-	DescriptionTerm,
-	DescriptionDetails,
-} from "@/Components/Catalyst/description-list";
-
-import {
 	Dropdown,
 	DropdownButton,
 	DropdownItem,
@@ -40,7 +34,6 @@ import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import PhoneButton from "@/Components/PhoneButton";
 import CustomerLink from "@/Components/CustomerLink";
 import InvoiceDialog from "@/Components/InvoiceDialog";
-import AdminInvoiceRequestWorkflowPanel from "@/Components/Admin/LaboratoryPurchases/AdminInvoiceRequestWorkflowPanel";
 import ResultsDialog from "@/Components/ResultsDialog";
 import DevAssistanceButton from "@/Components/DevAssistance/DevAssistanceButton";
 import DevAssistanceDropdown from "@/Components/DevAssistance/DevAssistanceDropdown";
@@ -91,6 +84,28 @@ function GdaStatusBadge({ status }) {
 	return <Badge color={badge.color}>{badge.label}</Badge>;
 }
 
+function SummaryCard({ title, children, className = "" }) {
+	return (
+		<section
+			className={`rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${className}`}
+		>
+			<Subheading>{title}</Subheading>
+			<div className="mt-4 space-y-3">{children}</div>
+		</section>
+	);
+}
+
+function SummaryField({ label, children }) {
+	return (
+		<div className="grid gap-1 text-sm sm:grid-cols-[8rem_minmax(0,1fr)]">
+			<div className="text-zinc-500 dark:text-slate-400">{label}</div>
+			<div className="min-w-0 font-medium text-zinc-950 dark:text-white">
+				{children}
+			</div>
+		</div>
+	);
+}
+
 
 export default function LaboratoryPurchase({
 	laboratoryPurchase,
@@ -108,7 +123,6 @@ export default function LaboratoryPurchase({
 	hasManualResults = false,
 	latestSampleCollectionAt,
 	latestResultsAt,
-	invoiceRequestWorkflow = null,
 }) {
 
 	return (
@@ -129,23 +143,26 @@ export default function LaboratoryPurchase({
 				hasManualResults={hasManualResults}
 				latestSampleCollectionAt={latestSampleCollectionAt}
 				latestResultsAt={latestResultsAt}
-				invoiceRequestWorkflow={invoiceRequestWorkflow}
 			/>
 
-			<Patient laboratoryPurchase={laboratoryPurchase} />
+			<div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)]">
+				<div className="grid gap-4 lg:grid-cols-2">
+					<Patient laboratoryPurchase={laboratoryPurchase} />
+					<Order laboratoryPurchase={laboratoryPurchase} />
+					<LaboratoryAppointment laboratoryPurchase={laboratoryPurchase} />
+				</div>
 
-			<Order laboratoryPurchase={laboratoryPurchase} />
+				<div className="space-y-6">
+					{laboratoryPurchase.transactions.length > 0 && (
+						<PaymentDetails
+							transaction={laboratoryPurchase.transactions[0]}
+							purchase={laboratoryPurchase}
+						/>
+					)}
 
-			<LaboratoryAppointment laboratoryPurchase={laboratoryPurchase} />
-
-			{laboratoryPurchase.transactions.length > 0 && (
-				<PaymentDetails
-					transaction={laboratoryPurchase.transactions[0]}
-					purchase={laboratoryPurchase}
-				/>
-			)}
-
-			<CouponReversalNotice couponReversal={couponReversal} />
+					<CouponReversalNotice couponReversal={couponReversal} />
+				</div>
+			</div>
 
 		</AdminLayout>
 	);
@@ -167,7 +184,6 @@ function Header({
 	hasManualResults,
 	latestSampleCollectionAt,
 	latestResultsAt,
-	invoiceRequestWorkflow = null,
 }) {
 
 	const resendForm = useForm({});
@@ -244,7 +260,7 @@ function Header({
 		<>
 
 			<LaboratoryBrandCard
-				className="w-40"
+				className="w-28"
 				src={"/images/gda/GDA-" + laboratoryPurchase.brand.toUpperCase() + ".png"}
 			/>
 
@@ -412,7 +428,7 @@ function Header({
 				</div>
 			)}
 
-			<div className="flex flex-wrap gap-4">
+			<div className="flex w-full flex-wrap items-start gap-4">
 
 				<CustomerLink
 					href={route(
@@ -494,31 +510,27 @@ function Header({
 				)}
 
 				{canUploadInvoice && (
-				<InvoiceDialog
-					storeRoute={route("admin.laboratory-purchases.invoice", {
-						laboratory_purchase: laboratoryPurchase.id,
-					})}
-					invoiceRoute={
-						laboratoryPurchase.invoice
-							? route("invoice", {
-								invoice: laboratoryPurchase.invoice.id,
-							})
-							: null
-					}
-					invoiceXmlRoute={
-						laboratoryPurchase.invoice?.invoice_xml
-							? route("invoice.xml", {
-								invoice: laboratoryPurchase.invoice.id,
-							})
-							: null
-					}
-					invoiceRequest={laboratoryPurchase.invoice_request}
-					hasInvoice={!!laboratoryPurchase.invoice}
-				/>
-				)}
-
-				{invoiceRequestWorkflow && (
-					<AdminInvoiceRequestWorkflowPanel workflow={invoiceRequestWorkflow} />
+					<InvoiceDialog
+						storeRoute={route("admin.laboratory-purchases.invoice", {
+							laboratory_purchase: laboratoryPurchase.id,
+						})}
+						invoiceRoute={
+							laboratoryPurchase.invoice
+								? route("invoice", {
+									invoice: laboratoryPurchase.invoice.id,
+								})
+								: null
+						}
+						invoiceXmlRoute={
+							laboratoryPurchase.invoice?.invoice_xml
+								? route("invoice.xml", {
+									invoice: laboratoryPurchase.invoice.id,
+								})
+								: null
+						}
+						invoiceRequest={laboratoryPurchase.invoice_request}
+						hasInvoice={!!laboratoryPurchase.invoice}
+					/>
 				)}
 
 				<ResultsDialog
@@ -578,40 +590,40 @@ function Header({
 			</div>
 
 			{isLocal && (
-				<div className="mt-6 p-4 rounded-lg border bg-black text-green-400 text-xs font-mono space-y-4">
-
-					<div className="text-yellow-400">
+				<details className="w-full rounded-lg border border-zinc-800 bg-black px-4 py-3 text-xs font-mono text-green-400">
+					<summary className="cursor-pointer text-yellow-400">
 						GDA DEBUG PANEL
+					</summary>
+
+					<div className="mt-4 space-y-4">
+						{debugRequest && (
+							<div>
+								<div className="text-yellow-300">REQUEST</div>
+								<pre className="overflow-auto">
+									{JSON.stringify(debugRequest, null, 2)}
+								</pre>
+							</div>
+						)}
+
+						{debugResponse && (
+							<div>
+								<div className="text-blue-300">RESPONSE</div>
+								<pre className="overflow-auto">
+									{JSON.stringify(debugResponse, null, 2)}
+								</pre>
+							</div>
+						)}
+
+						{debugError && (
+							<div>
+								<div className="text-red-400">ERROR</div>
+								<pre className="overflow-auto">
+									{JSON.stringify(debugError, null, 2)}
+								</pre>
+							</div>
+						)}
 					</div>
-
-					{debugRequest && (
-						<div>
-							<div className="text-yellow-300">REQUEST</div>
-							<pre>
-								{JSON.stringify(debugRequest, null, 2)}
-							</pre>
-						</div>
-					)}
-
-					{debugResponse && (
-						<div>
-							<div className="text-blue-300">RESPONSE</div>
-							<pre>
-								{JSON.stringify(debugResponse, null, 2)}
-							</pre>
-						</div>
-					)}
-
-					{debugError && (
-						<div>
-							<div className="text-red-400">ERROR</div>
-							<pre>
-								{JSON.stringify(debugError, null, 2)}
-							</pre>
-						</div>
-					)}
-
-				</div>
+				</details>
 			)}
 
 		</>
@@ -623,45 +635,24 @@ function Patient({ laboratoryPurchase }) {
 
 	return (
 
-		<div>
-
-			<Subheading>Paciente</Subheading>
-
-			<DescriptionList>
-
-				<DescriptionTerm>Nombre</DescriptionTerm>
-
-				<DescriptionDetails>
-					{laboratoryPurchase.full_name ?? "..."}
-				</DescriptionDetails>
-
-				<DescriptionTerm>Sexo</DescriptionTerm>
-
-				<DescriptionDetails>
-					{laboratoryPurchase.formatted_gender}
-				</DescriptionDetails>
-
-				<DescriptionTerm>Fecha de nacimiento</DescriptionTerm>
-
-				<DescriptionDetails>
-					{laboratoryPurchase.formatted_birth_date}
-				</DescriptionDetails>
-
-				<DescriptionTerm>Teléfono</DescriptionTerm>
-
-				<DescriptionDetails>
-
-					<PhoneButton
-						phone={laboratoryPurchase.phone}
-						fullPhone={laboratoryPurchase.full_phone}
-						countryCode={laboratoryPurchase.phone_country}
-					/>
-
-				</DescriptionDetails>
-
-			</DescriptionList>
-
-		</div>
+		<SummaryCard title="Paciente">
+			<SummaryField label="Nombre">
+				{laboratoryPurchase.full_name ?? "..."}
+			</SummaryField>
+			<SummaryField label="Sexo">
+				{laboratoryPurchase.formatted_gender}
+			</SummaryField>
+			<SummaryField label="Nacimiento">
+				{laboratoryPurchase.formatted_birth_date}
+			</SummaryField>
+			<SummaryField label="Teléfono">
+				<PhoneButton
+					phone={laboratoryPurchase.phone}
+					fullPhone={laboratoryPurchase.full_phone}
+					countryCode={laboratoryPurchase.phone_country}
+				/>
+			</SummaryField>
+		</SummaryCard>
 
 	);
 
@@ -669,82 +660,72 @@ function Patient({ laboratoryPurchase }) {
 
 
 function Order({ laboratoryPurchase }) {
+	const totals = buildLaboratoryPurchaseTotals(laboratoryPurchase);
+
 	return (
 
-		<div>
+		<SummaryCard title="Pedido" className="lg:col-span-1">
+			<div className="space-y-3">
+				<div className="flex flex-wrap gap-2">
+					{laboratoryPurchase.laboratory_purchase_items.map((item) => (
+						<Badge key={item.id} color="slate">
+							{item.name} ({item.formatted_price})
+						</Badge>
+					))}
+				</div>
 
-			<Subheading>Pedido</Subheading>
+				{laboratoryPurchase.laboratory_purchase_items.some(
+					(item) => normalizePackageFeatureLabels(item.feature_list).length > 0
+				) && (
+					<details className="rounded-md border border-orange-200 bg-orange-50/70 p-3 text-xs dark:border-orange-900/60 dark:bg-orange-950/30">
+						<summary className="cursor-pointer font-semibold text-orange-800 dark:text-orange-200">
+							Ver contenidos de paquetes
+						</summary>
+						<div className="mt-3 space-y-3 text-zinc-700 dark:text-slate-300">
+							{laboratoryPurchase.laboratory_purchase_items.map((item) => {
+								const packageFeatures = normalizePackageFeatureLabels(item.feature_list);
 
-			<DescriptionList>
+								if (packageFeatures.length === 0) {
+									return null;
+								}
 
-				<DescriptionTerm>Estudios</DescriptionTerm>
-
-				<DescriptionDetails>
-
-					<div className="flex flex-col gap-3">
-
-						{laboratoryPurchase.laboratory_purchase_items.map((item) => {
-							const packageFeatures = normalizePackageFeatureLabels(item.feature_list);
-							return (
-								<div key={item.id} className="space-y-1.5">
-									<div>
-										<Badge color="slate">
-											{item.name} ({item.formatted_price})
-										</Badge>
+								return (
+									<div key={item.id}>
+										<p className="font-semibold">{item.name}</p>
+										<ul className="mt-1 list-disc space-y-0.5 pl-4">
+											{packageFeatures.map((label, idx) => (
+												<li key={`${item.id}-f-${idx}`}>{label}</li>
+											))}
+										</ul>
 									</div>
-									{packageFeatures.length > 0 && (
-										<div className="ml-0.5 border-l-2 border-orange-400/80 pl-3 dark:border-orange-500/70">
-											<p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
-												Incluye en el paquete
-											</p>
-											<ul className="list-disc space-y-0.5 pl-4 text-xs leading-snug text-zinc-600 dark:text-slate-400">
-												{packageFeatures.map((label, idx) => (
-													<li key={`${item.id}-f-${idx}`}>{label}</li>
-												))}
-											</ul>
-										</div>
-									)}
-								</div>
-							);
-						})}
-
-					</div>
-
-				</DescriptionDetails>
-
-				<DescriptionTerm>Subtotal</DescriptionTerm>
-
-				<DescriptionDetails>
-					{buildLaboratoryPurchaseTotals(laboratoryPurchase).subtotal}
-				</DescriptionDetails>
-
-				{laboratoryPurchase.coupon_discount_cents > 0 && (
-					<>
-						<DescriptionTerm>Crédito a favor</DescriptionTerm>
-						<DescriptionDetails>
-							−{laboratoryPurchase.formatted_coupon_discount}
-						</DescriptionDetails>
-					</>
+								);
+							})}
+						</div>
+					</details>
 				)}
+			</div>
 
-				<DescriptionTerm>Total pagado</DescriptionTerm>
-
-				<DescriptionDetails>
-					<Strong>
-						{laboratoryPurchase.formatted_net_total ??
-							buildLaboratoryPurchaseTotals(laboratoryPurchase).netTotal}
+			<div className="grid gap-2 border-t border-zinc-950/5 pt-3 text-sm dark:border-white/5">
+				<div className="flex justify-between gap-4">
+					<span className="text-zinc-500 dark:text-slate-400">Subtotal</span>
+					<span className="font-medium tabular-nums">{totals.subtotal}</span>
+				</div>
+				{laboratoryPurchase.coupon_discount_cents > 0 && (
+					<div className="flex justify-between gap-4 text-violet-800 dark:text-violet-200">
+						<span>Crédito a favor</span>
+						<span className="font-medium tabular-nums">
+							−{laboratoryPurchase.formatted_coupon_discount}
+						</span>
+					</div>
+				)}
+				<div className="flex justify-between gap-4 text-base">
+					<span className="font-semibold">Total pagado</span>
+					<Strong className="tabular-nums">
+						{laboratoryPurchase.formatted_net_total ?? totals.netTotal}
 					</Strong>
-					{laboratoryPurchase.coupon_discount_cents > 0 && (
-						<Text className="mt-2 block text-sm text-violet-800 dark:text-violet-200">
-							Se aplicó un crédito a favor de{" "}
-							{laboratoryPurchase.formatted_coupon_discount}.
-						</Text>
-					)}
-				</DescriptionDetails>
-
-			</DescriptionList>
-
-		</div>
+				</div>
+			</div>
+		</SummaryCard>
 
 	);
 
@@ -759,27 +740,14 @@ function LaboratoryAppointment({ laboratoryPurchase }) {
 
 	return (
 
-		<div>
-
-			<Subheading>Confirmación de cita</Subheading>
-
-			<DescriptionList>
-
-				<DescriptionTerm>Fecha de cita</DescriptionTerm>
-
-				<DescriptionDetails>
-					{laboratoryPurchase.laboratory_appointment.formatted_appointment_date ?? "..."}
-				</DescriptionDetails>
-
-				<DescriptionTerm>Sucursal</DescriptionTerm>
-
-				<DescriptionDetails>
-					{laboratoryPurchase.laboratory_appointment.laboratory_store?.name ?? "..."}
-				</DescriptionDetails>
-
-			</DescriptionList>
-
-		</div>
+		<SummaryCard title="Confirmación de cita">
+			<SummaryField label="Fecha">
+				{laboratoryPurchase.laboratory_appointment.formatted_appointment_date ?? "..."}
+			</SummaryField>
+			<SummaryField label="Sucursal">
+				{laboratoryPurchase.laboratory_appointment.laboratory_store?.name ?? "..."}
+			</SummaryField>
+		</SummaryCard>
 
 	);
 
