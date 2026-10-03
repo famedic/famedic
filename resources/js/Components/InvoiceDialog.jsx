@@ -29,9 +29,7 @@ const PDF_MAX_BYTES = 10 * 1024 * 1024;
 const XML_MAX_BYTES = 5 * 1024 * 1024;
 
 function isPdfFile(file) {
-	return (
-		file.type === "application/pdf" || /\.pdf$/i.test(file.name)
-	);
+	return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
 }
 
 function isXmlFile(file) {
@@ -48,11 +46,22 @@ export default function InvoiceDialog({
 	invoiceRequest,
 	hasInvoice,
 	className = "",
+	open,
+	onOpenChange,
+	hideTrigger = false,
 }) {
-	const [isOpen, setIsOpen] = useState(false);
+	const [internalOpen, setInternalOpen] = useState(false);
 	const [showChangeInvoiceButton, setShowChangeInvoiceButton] =
 		useState(!!invoiceRoute);
 	const [selectionError, setSelectionError] = useState(null);
+	const isControlled = open !== undefined;
+	const isOpen = isControlled ? open : internalOpen;
+	const setIsOpen = (value) => {
+		if (!isControlled) {
+			setInternalOpen(value);
+		}
+		onOpenChange?.(value);
+	};
 
 	const {
 		data,
@@ -215,14 +224,16 @@ export default function InvoiceDialog({
 
 	return (
 		<>
-			<Button
-				outline
-				onClick={() => setIsOpen(true)}
-				className={className}
-			>
-				<DocumentTextIcon />
-				{hasInvoice ? "Factura" : "Agregar factura"}
-			</Button>
+			{!hideTrigger && (
+				<Button
+					outline
+					onClick={() => setIsOpen(true)}
+					className={className}
+				>
+					<DocumentTextIcon />
+					{hasInvoice ? "Gestionar factura" : "Subir factura"}
+				</Button>
+			)}
 
 			<Dialog open={isOpen} onClose={() => setIsOpen(false)}>
 				<form onSubmit={submit}>
