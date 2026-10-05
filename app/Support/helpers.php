@@ -144,3 +144,22 @@ if (! function_exists('mask_email')) {
         return $first.$stars.'@'.$domain;
     }
 }
+
+/**
+ * Comprueba si un archivo existe en el disco de almacenamiento sin romper la petición
+ * cuando el backend (p. ej. S3) no responde o lanza excepción.
+ */
+if (! function_exists('storage_path_exists')) {
+    function storage_path_exists(?string $path): bool
+    {
+        if ($path === null || $path === '') {
+            return false;
+        }
+
+        try {
+            return \Illuminate\Support\Facades\Storage::exists($path);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+}
