@@ -33,6 +33,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^11.18.2",
     "install": "^0.13.0",
+    "jsbarcode": "^3.12.3",
     "leaflet": "^1.9.4",
     "puppeteer": "^24.10.2",
     "react-flagpack": "^2.0.6",

@@ -18,6 +18,9 @@ use App\Http\Controllers\InAppNotificationController;
 use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\TaxProfileController;
 use App\Http\Controllers\TaxProfiles\FiscalCertificateController;
+use App\Http\Controllers\User\BenavidesBenefitActivationController;
+use App\Http\Controllers\User\BenavidesBenefitController;
+use App\Http\Controllers\User\BenavidesBenefitPromotionPreferenceController;
 use App\Http\Controllers\UserInvitationController;
 use App\Http\Controllers\UserSupportController;
 use Illuminate\Support\Facades\Route;
@@ -46,6 +49,19 @@ Route::middleware([
 
     Route::get('/user/support', UserSupportController::class)->name('user.support');
     Route::get('/user/invitations', UserInvitationController::class)->name('user.invitations');
+    Route::get('/user/benefits/benavides', BenavidesBenefitController::class)
+        ->name('user.benefits.benavides.show');
+    Route::post('/user/benefits/benavides/activate', BenavidesBenefitActivationController::class)
+        ->middleware('throttle:10,1')
+        ->name('user.benefits.benavides.activate');
+    Route::post('/user/benefits/benavides/promotion/dismiss', BenavidesBenefitPromotionPreferenceController::class)
+        ->defaults('action', 'dismiss')
+        ->middleware('throttle:20,1')
+        ->name('user.benefits.benavides.promotion.dismiss');
+    Route::post('/user/benefits/benavides/promotion/click', BenavidesBenefitPromotionPreferenceController::class)
+        ->defaults('action', 'click')
+        ->middleware('throttle:20,1')
+        ->name('user.benefits.benavides.promotion.click');
 
     // Métodos de pago con EfevooPay        
     Route::resource('payment-methods', PaymentMethodController::class)->only([

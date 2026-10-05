@@ -41,3 +41,29 @@ it('ignores non destructive artisan commands', function () {
 
     expect(true)->toBeTrue();
 });
+
+it('allows only the explicit Benavides demo seeder outside production', function () {
+    UnsafeDatabaseCommandGuard::assertSafe(
+        ['artisan', 'db:seed', '--class=BenavidesDemoSeeder'],
+        'local',
+        'mysql',
+        [
+            'driver' => 'mysql',
+            'database' => 'famedic',
+        ],
+    );
+
+    expect(true)->toBeTrue();
+});
+
+it('does not allow the Benavides demo seeder in production', function () {
+    UnsafeDatabaseCommandGuard::assertSafe(
+        ['artisan', 'db:seed', '--class=BenavidesDemoSeeder'],
+        'production',
+        'mysql',
+        [
+            'driver' => 'mysql',
+            'database' => 'famedic',
+        ],
+    );
+})->throws(RuntimeException::class, 'Comando destructivo bloqueado: db:seed');

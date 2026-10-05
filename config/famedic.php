@@ -38,6 +38,9 @@ return [
             ['manage.export' => 'Descargar ordenes'],
             ['manage.vendor-payments' => 'Gestionar pagos a proveedor'],
         ],
+        'benavides-benefit' => [
+            ['manage' => 'Administrar beneficio Farmacias Benavides'],
+        ],
         'medical-attention-subscriptions' => [
             ['manage' => 'Administrar membresías médicas'],
             ['manage.export' => 'Descargar membresías médicas'],
@@ -131,6 +134,17 @@ return [
         env('MEDICAL_ATTENTION_TRIAL_ENABLED', false),
         FILTER_VALIDATE_BOOLEAN
     ),
+
+    'benavides_benefit' => [
+        'enabled' => filter_var(
+            env('BENAVIDES_BENEFIT_ENABLED', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
+        'promotion_enabled' => filter_var(
+            env('BENAVIDES_BENEFIT_PROMOTION_ENABLED', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
+    ],
 
     /** Licencia institucional Odessa (monitor admin / alta manual) */
     'institutional_odessa_subscription_years' => (int) env('INSTITUTIONAL_ODESSA_SUBSCRIPTION_YEARS', 1),

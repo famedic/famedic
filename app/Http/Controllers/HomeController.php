@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Users\GenerateInvitationUrlAction;
+use App\Models\BenavidesCode;
 use App\Models\EfevooToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,10 +17,38 @@ class HomeController extends Controller
         $user = null;
         $stats = null;
         $recentResults = null;
+        $benavidesBenefit = [
+            'promotionEnabled' => false,
+            'activationEnabled' => false,
+            'hasAssignment' => false,
+            'hasAvailableCodes' => false,
+            'showPromotionModal' => false,
+        ];
 
         if ($request->user()) {
             $invitationUrl = $generateInvitationUrlAction($request->user());
             $user = $request->user();
+            $hasBenavidesAssignment = $user->benavidesCode()->exists();
+            $promotionEnabled = (bool) config('famedic.benavides_benefit.promotion_enabled', false);
+            $activationEnabled = (bool) config('famedic.benavides_benefit.enabled', false);
+            $hasAvailableBenavidesCodes = $hasBenavidesAssignment
+                ? false
+                : BenavidesCode::query()->whereNull('user_id')->exists();
+            $benavidesPreference = $user->benavidesBenefitPreference()->first();
+            $hasBenavidesModalDecision = $benavidesPreference?->promotion_modal_dismissed_at !== null
+                || $benavidesPreference?->promotion_modal_clicked_at !== null;
+
+            $benavidesBenefit = [
+                'promotionEnabled' => $promotionEnabled,
+                'activationEnabled' => $activationEnabled,
+                'hasAssignment' => $hasBenavidesAssignment,
+                'hasAvailableCodes' => $hasAvailableBenavidesCodes,
+                'showPromotionModal' => $promotionEnabled
+                    && $activationEnabled
+                    && ! $hasBenavidesAssignment
+                    && $hasAvailableBenavidesCodes
+                    && ! $hasBenavidesModalDecision,
+            ];
 
             $customer = $user->customer;
 
@@ -183,6 +212,7 @@ class HomeController extends Controller
             'invitationUrl' => $invitationUrl,
             'userStats' => $stats,
             'recentResults' => $recentResults,
+            'benavidesBenefit' => $benavidesBenefit,
         ]);
     }
 }

@@ -71,6 +71,7 @@ const QUICK_ACTION_META = {
 
 const INFO_LABELS = new Set([
 	"Mi cuenta",
+	"Mis beneficios",
 	"Mis perfiles fiscales",
 	"Mis métodos de pago",
 	"Mis direcciones",

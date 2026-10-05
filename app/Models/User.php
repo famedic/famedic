@@ -80,6 +80,16 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
         return $this->hasMany(CouponUser::class);
     }
 
+    public function benavidesCode(): HasOne
+    {
+        return $this->hasOne(BenavidesCode::class);
+    }
+
+    public function benavidesBenefitPreference(): HasOne
+    {
+        return $this->hasOne(BenavidesBenefitPreference::class);
+    }
+
     public function inAppNotifications(): HasMany
     {
         return $this->hasMany(InAppNotification::class);

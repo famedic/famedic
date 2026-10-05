@@ -195,6 +195,12 @@ class HandleInertiaRequests extends Middleware
                 'icon' => 'ShoppingBagIcon',
                 'current' => Route::currentRouteName() === 'user.purchases.index',
             ],
+            [
+                'label' => 'Mis beneficios',
+                'url' => route('user.benefits.benavides.show'),
+                'icon' => 'IdentificationIcon',
+                'current' => Route::currentRouteName() === 'user.benefits.benavides.show',
+            ],
             /*[
                 'label' => 'Mis cotizaciones',
                 'url' => route('laboratory-quotes.index'),

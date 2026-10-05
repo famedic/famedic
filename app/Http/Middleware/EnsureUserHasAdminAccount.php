@@ -106,6 +106,11 @@ class EnsureUserHasAdminAccount
                             Route::currentRouteName() === 'admin.online-pharmacy-purchases.vendor-payments.show' ||
                             Route::currentRouteName() === 'admin.online-pharmacy-purchases.vendor-payments.edit',
                     ] : null,
+                    $this->adminHasPermission($administrator, 'benavides-benefit.manage') ? [
+                        'label' => 'Benavides',
+                        'url' => route('admin.benavides-benefit.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.benavides-benefit.'),
+                    ] : null,
                 ])),
             ],
             $request->user()->administrator->hasPermissionTo('medical-attention-subscriptions.manage') ? [

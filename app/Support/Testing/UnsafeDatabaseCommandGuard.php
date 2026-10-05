@@ -41,6 +41,14 @@ class UnsafeDatabaseCommandGuard
             return;
         }
 
+        if (
+            $command === 'db:seed'
+            && $environment !== 'production'
+            && self::isAllowedNonDestructiveSeeder($argv)
+        ) {
+            return;
+        }
+
         $driver = (string) ($connection['driver'] ?? '');
         $database = (string) ($connection['database'] ?? '');
 
@@ -99,6 +107,37 @@ class UnsafeDatabaseCommandGuard
                     str_contains($basename, 'test')
                     || str_contains($basename, 'testing')
                 );
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<string>  $argv
+     */
+    private static function isAllowedNonDestructiveSeeder(array $argv): bool
+    {
+        foreach ($argv as $index => $argument) {
+            $class = null;
+
+            if (str_starts_with($argument, '--class=')) {
+                $class = substr($argument, strlen('--class='));
+            }
+
+            if ($argument === '--class' && isset($argv[$index + 1])) {
+                $class = $argv[$index + 1];
+            }
+
+            if ($class === null) {
+                continue;
+            }
+
+            $normalizedClass = ltrim(str_replace('/', '\\', $class), '\\');
+
+            return in_array($normalizedClass, [
+                'BenavidesDemoSeeder',
+                'Database\\Seeders\\BenavidesDemoSeeder',
+            ], true);
         }
 
         return false;

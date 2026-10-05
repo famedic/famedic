@@ -3,29 +3,24 @@ import FamedicLayout from "@/Layouts/FamedicLayout";
 import Hero from "@/Pages/Home/Hero";
 import CTA from "@/Pages/Home/CTA";
 import QuickLinks from "@/Pages/Home/QuickLinks";
+import BenavidesBenefitBanner from "@/Components/Benefits/BenavidesBenefitBanner";
+import BenavidesBenefitModal from "@/Components/Benefits/BenavidesBenefitModal";
 import { usePage } from "@inertiajs/react";
-import { useEffect } from "react";
 
 export default function Home() {
     const page = usePage();
-    const { auth, invitationUrl, userStats, recentResults } = page.props;
-
-    useEffect(() => {
-        if (import.meta.env.DEV) {
-            // Debug temporal: validar props en /home (quitar cuando ya no haga falta)
-            console.log("[Home] usePage().props", page.props);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- log único al montar
-    }, []);
+    const { auth, invitationUrl, userStats, recentResults, benavidesBenefit } = page.props;
 
     return (
         <FamedicLayout title="Bienvenido">
+            <BenavidesBenefitModal benefit={benavidesBenefit} />
             <Hero 
                 invitationUrl={invitationUrl} 
                 auth={auth} 
                 userStats={userStats}
                 recentResults={recentResults}
             />
+            <BenavidesBenefitBanner benefit={benavidesBenefit} />
             <CTA />
             <QuickLinks />
         </FamedicLayout>
