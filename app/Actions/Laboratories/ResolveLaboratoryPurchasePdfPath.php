@@ -4,6 +4,7 @@ namespace App\Actions\Laboratories;
 
 use App\Models\LaboratoryPurchase;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class ResolveLaboratoryPurchasePdfPath
 {
@@ -16,41 +17,67 @@ class ResolveLaboratoryPurchasePdfPath
     ) {
     }
 
-    public function __invoke(LaboratoryPurchase $laboratoryPurchase): string
+    /**
+     * Devuelve el PDF de la orden en memoria. Usa caché en almacenamiento si está disponible,
+     * pero no depende de S3 para generar ni entregar el archivo.
+     */
+    public function binary(LaboratoryPurchase $laboratoryPurchase): string
     {
         $this->prepare($laboratoryPurchase);
 
         if ($laboratoryPurchase->pdf_hash === $this->contentHash) {
-            $storagePath = $this->storagePath();
+            $cached = $this->tryGetFromStorage($this->storagePath());
 
-            if (Storage::exists($storagePath)) {
-                return $storagePath;
+            if ($cached !== null) {
+                return $cached;
             }
         }
 
-        if ($gdaPath = $this->resolveFromGdaPdfBase64($laboratoryPurchase)) {
+        if ($gdaBinary = $this->decodeGdaPdfBase64($laboratoryPurchase)) {
+            $gdaPath = $this->gdaStoragePath($laboratoryPurchase);
+            $this->tryPutToStorage($gdaPath, $gdaBinary);
+
+            return $gdaBinary;
+        }
+
+        $this->tryDeleteStaleFile($laboratoryPurchase);
+
+        $binary = $this->generateBinary($laboratoryPurchase);
+        $this->tryPutToStorage($this->storagePath(), $binary);
+        $laboratoryPurchase->updateQuietly(['pdf_hash' => $this->contentHash]);
+
+        return $binary;
+    }
+
+    /**
+     * @deprecated Prefer {@see binary()}. Conservado para compatibilidad con flujos que esperan ruta en disco.
+     */
+    public function __invoke(LaboratoryPurchase $laboratoryPurchase): string
+    {
+        $this->binary($laboratoryPurchase);
+
+        $gdaPath = $this->gdaStoragePath($laboratoryPurchase);
+
+        if ($this->tryStorageExists($gdaPath)) {
             return $gdaPath;
         }
 
-        $this->deleteStaleFile($laboratoryPurchase);
-
-        $storagePath = $this->storagePath();
-
-        $this->generate($laboratoryPurchase, $storagePath);
-
-        $laboratoryPurchase->updateQuietly(['pdf_hash' => $this->contentHash]);
-
-        return $storagePath;
+        return $this->storagePath();
     }
 
     public function content(LaboratoryPurchase $laboratoryPurchase): string
     {
-        return Storage::get($this($laboratoryPurchase));
+        return $this->binary($laboratoryPurchase);
     }
 
     protected function storagePath(): string
     {
         return "{$this->storageDirectory}/{$this->contentHash}.pdf";
+    }
+
+    protected function gdaStoragePath(LaboratoryPurchase $laboratoryPurchase): string
+    {
+        return "{$this->storageDirectory}/gda-order-{$laboratoryPurchase->id}.pdf";
     }
 
     protected function prepare(LaboratoryPurchase $laboratoryPurchase): void
@@ -69,18 +96,17 @@ class ResolveLaboratoryPurchasePdfPath
         $this->contentHash = $this->calculateContentHash($laboratoryPurchase);
     }
 
-    protected function deleteStaleFile(LaboratoryPurchase $laboratoryPurchase): void
+    protected function tryDeleteStaleFile(LaboratoryPurchase $laboratoryPurchase): void
     {
-        if ($laboratoryPurchase->pdf_hash) {
-            $oldPath = "{$this->storageDirectory}/{$laboratoryPurchase->pdf_hash}.pdf";
-
-            if (Storage::exists($oldPath)) {
-                Storage::delete($oldPath);
-            }
+        if (! $laboratoryPurchase->pdf_hash) {
+            return;
         }
+
+        $oldPath = "{$this->storageDirectory}/{$laboratoryPurchase->pdf_hash}.pdf";
+        $this->tryDeleteFromStorage($oldPath);
     }
 
-    protected function generate(LaboratoryPurchase $laboratoryPurchase, string $storagePath): string
+    protected function generateBinary(LaboratoryPurchase $laboratoryPurchase): string
     {
         $notifiable = $laboratoryPurchase->customer?->user ?? (object) [
             'name' => 'Cliente',
@@ -89,17 +115,13 @@ class ResolveLaboratoryPurchasePdfPath
 
         $withAppointment = LaboratoryPurchaseConfirmationViewData::hasAppointmentForConfirmation($laboratoryPurchase);
 
-        $binary = $this->generatePdf->binary($laboratoryPurchase, $notifiable, $withAppointment);
-
-        Storage::disk(config('filesystems.default'))->put($storagePath, $binary);
-
-        return $storagePath;
+        return $this->generatePdf->binary($laboratoryPurchase, $notifiable, $withAppointment);
     }
 
     /**
      * PDF entregado por GDA al crear la orden (base64 en BD).
      */
-    protected function resolveFromGdaPdfBase64(LaboratoryPurchase $laboratoryPurchase): ?string
+    protected function decodeGdaPdfBase64(LaboratoryPurchase $laboratoryPurchase): ?string
     {
         $encoded = $laboratoryPurchase->pdf_base64;
 
@@ -113,13 +135,44 @@ class ResolveLaboratoryPurchasePdfPath
             return null;
         }
 
-        $storagePath = "{$this->storageDirectory}/gda-order-{$laboratoryPurchase->id}.pdf";
+        return $pdfContent;
+    }
 
-        if (! Storage::exists($storagePath)) {
-            Storage::put($storagePath, $pdfContent);
+    protected function tryGetFromStorage(string $path): ?string
+    {
+        if (! $this->tryStorageExists($path)) {
+            return null;
         }
 
-        return $storagePath;
+        try {
+            return Storage::get($path);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    protected function tryPutToStorage(string $path, string $content): void
+    {
+        try {
+            Storage::disk(config('filesystems.default'))->put($path, $content);
+        } catch (Throwable) {
+            // Caché best-effort: la descarga no debe depender del almacenamiento.
+        }
+    }
+
+    protected function tryDeleteFromStorage(string $path): void
+    {
+        try {
+            if ($this->tryStorageExists($path)) {
+                Storage::delete($path);
+            }
+        } catch (Throwable) {
+        }
+    }
+
+    protected function tryStorageExists(string $path): bool
+    {
+        return storage_path_exists($path);
     }
 
     protected function calculateContentHash(LaboratoryPurchase $laboratoryPurchase): string

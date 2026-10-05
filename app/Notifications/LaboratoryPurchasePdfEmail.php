@@ -8,7 +8,6 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use Illuminate\Support\Facades\Storage;
 
 class LaboratoryPurchasePdfEmail extends Notification implements ShouldQueue
 {
@@ -34,8 +33,10 @@ class LaboratoryPurchasePdfEmail extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $storagePath = ($this->resolvePdfPath)($this->laboratoryPurchase);
-        $filename = basename($storagePath);
+        $binary = $this->resolvePdfPath->binary($this->laboratoryPurchase);
+        $filename = 'orden-laboratorio-'.(! empty($this->laboratoryPurchase->gda_order_id)
+            ? $this->laboratoryPurchase->gda_order_id
+            : $this->laboratoryPurchase->id).'.pdf';
 
         $displayOrderId = ! empty($this->laboratoryPurchase->gda_order_id)
             ? $this->laboratoryPurchase->gda_order_id
@@ -51,7 +52,7 @@ class LaboratoryPurchasePdfEmail extends Notification implements ShouldQueue
             ->line('Total pagado: **'.$this->laboratoryPurchase->formatted_net_total.'**')
             ->line('Puedes encontrar el PDF de la orden adjunto a este correo.')
             ->line('Para más información sobre Famedic, visita nuestra página web.')
-            ->attachData(Storage::get($storagePath), $filename, [
+            ->attachData($binary, $filename, [
                 'mime' => 'application/pdf',
             ]);
     }
