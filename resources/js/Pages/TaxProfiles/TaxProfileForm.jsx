@@ -108,17 +108,20 @@ export default function TaxProfileForm({
 	successMessage = null,
 }) {
 	const pageProps = usePage().props;
-	const { taxProfile: pageTaxProfile, taxRegimes: pageTaxRegimes } = pageProps;
+	const { taxProfile: pageTaxProfile, taxRegimes: pageTaxRegimes } =
+		pageProps;
 	const resolvedTaxProfile = taxProfileProp ?? pageTaxProfile ?? null;
 	const resolvedTaxRegimes = taxRegimesProp ?? pageTaxRegimes ?? {};
 
-	const [cachedTaxRegimes, setCachedTaxRegimes] = useState(resolvedTaxRegimes);
+	const [cachedTaxRegimes, setCachedTaxRegimes] =
+		useState(resolvedTaxRegimes);
 	const [cachedEditMode, setCachedEditMode] = useState(
 		adminMode
 			? Boolean(taxProfileProp)
-			: route().current("tax-profiles.edit") || false
+			: route().current("tax-profiles.edit") || false,
 	);
-	const [cachedTaxProfile, setCachedTaxProfile] = useState(resolvedTaxProfile);
+	const [cachedTaxProfile, setCachedTaxProfile] =
+		useState(resolvedTaxProfile);
 
 	const [activeStep, setActiveStep] = useState(STEPS.ELIGIBILITY);
 	const [taxPersonType, setTaxPersonType] = useState(null);
@@ -129,7 +132,9 @@ export default function TaxProfileForm({
 	const [uploadedFile, setUploadedFile] = useState(null);
 	const [isDragging, setIsDragging] = useState(false);
 	const [processingPdf, setProcessingPdf] = useState(false);
-	const [extractionMessage, setExtractionMessage] = useState(EXTRACTION_MESSAGES[0]);
+	const [extractionMessage, setExtractionMessage] = useState(
+		EXTRACTION_MESSAGES[0],
+	);
 	const [showSlowNotice, setShowSlowNotice] = useState(false);
 	const [extractionError, setExtractionError] = useState(null);
 
@@ -153,7 +158,7 @@ export default function TaxProfileForm({
 	});
 
 	const { data, setData, errors, setError, clearErrors } = useForm(
-		resetFormData(resolvedTaxProfile || {})
+		resetFormData(resolvedTaxProfile || {}),
 	);
 
 	// Refs
@@ -226,7 +231,8 @@ export default function TaxProfileForm({
 				null,
 			fecha_inscripcion: extractedData.fecha_inscripcion || null,
 			estatus_sat: extractedData.estatus_sat || null,
-			actividades_economicas: extractedData.actividades_economicas || null,
+			actividades_economicas:
+				extractedData.actividades_economicas || null,
 			tipo_persona: "fisica",
 			tipo_persona_confianza:
 				typeof extractedData.tipo_persona_confianza === "number"
@@ -293,7 +299,14 @@ export default function TaxProfileForm({
 			setActiveStep(STEPS.ELIGIBILITY);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [isOpen, adminMode, taxProfileProp, pageTaxProfile, resolvedTaxRegimes, setData]);
+	}, [
+		isOpen,
+		adminMode,
+		taxProfileProp,
+		pageTaxProfile,
+		resolvedTaxRegimes,
+		setData,
+	]);
 
 	useEffect(() => {
 		return () => {
@@ -343,7 +356,8 @@ export default function TaxProfileForm({
 			const regimenLower = (regimen?.name || "").toLowerCase();
 			if (
 				regimenLower &&
-				(textoLower.includes(regimenLower) || regimenLower.includes(textoLower))
+				(textoLower.includes(regimenLower) ||
+					regimenLower.includes(textoLower))
 			) {
 				return key;
 			}
@@ -456,7 +470,9 @@ export default function TaxProfileForm({
 		setData("tax_regime", null);
 		setData("confirm_data", false);
 		setExtractionError(
-			mapTaxProfileExtractionError(TAX_PROFILE_EXTRACTION_CODES.LEGAL_ENTITY_NOT_ALLOWED)
+			mapTaxProfileExtractionError(
+				TAX_PROFILE_EXTRACTION_CODES.LEGAL_ENTITY_NOT_ALLOWED,
+			),
 		);
 	};
 
@@ -515,7 +531,8 @@ export default function TaxProfileForm({
 			controller.abort();
 		}, EXTRACTION_TIMEOUT_MS);
 
-		const isCurrentGeneration = () => generation === extractionGenerationRef.current;
+		const isCurrentGeneration = () =>
+			generation === extractionGenerationRef.current;
 
 		try {
 			const formData = new FormData();
@@ -529,15 +546,15 @@ export default function TaxProfileForm({
 			const response = await fetch(
 				extractUrl || route("tax-profiles.extract-data"),
 				{
-				method: "POST",
-				body: formData,
-				credentials: "include",
-				headers: {
-					"X-Requested-With": "XMLHttpRequest",
-					Accept: "application/json",
-					...(csrfToken ? { "X-CSRF-TOKEN": csrfToken } : {}),
-				},
-				signal: controller.signal,
+					method: "POST",
+					body: formData,
+					credentials: "include",
+					headers: {
+						"X-Requested-With": "XMLHttpRequest",
+						Accept: "application/json",
+						...(csrfToken ? { "X-CSRF-TOKEN": csrfToken } : {}),
+					},
+					signal: controller.signal,
 				},
 			);
 
@@ -548,14 +565,19 @@ export default function TaxProfileForm({
 				result = await response.json();
 			} catch {
 				if (!isCurrentGeneration()) return;
-				applyExtractionError(mapTaxProfileExtractionError(null, null, response.status));
+				applyExtractionError(
+					mapTaxProfileExtractionError(null, null, response.status),
+				);
 				return;
 			}
 
 			if (!isCurrentGeneration()) return;
 
 			if (response.ok && result?.success) {
-				const mapped = mapExtractionResponseToTaxProfileForm(result.data, encontrarRegimenPorTexto);
+				const mapped = mapExtractionResponseToTaxProfileForm(
+					result.data,
+					encontrarRegimenPorTexto,
+				);
 
 				if (mapped.status === "rejected_legal_entity") {
 					handleBlockedExtraction();
@@ -564,15 +586,19 @@ export default function TaxProfileForm({
 
 				if (!mapped.confirmable) {
 					setExtractionError(
-						mapTaxProfileExtractionError(TAX_PROFILE_EXTRACTION_CODES.EXTRACTION_FAILED)
+						mapTaxProfileExtractionError(
+							TAX_PROFILE_EXTRACTION_CODES.EXTRACTION_FAILED,
+						),
 					);
 					return;
 				}
 
 				if (mapped.form.name) setData("name", mapped.form.name);
 				if (mapped.form.rfc) setData("rfc", mapped.form.rfc);
-				if (mapped.form.zipcode) setData("zipcode", mapped.form.zipcode);
-				if (mapped.form.tax_regime) setData("tax_regime", mapped.form.tax_regime);
+				if (mapped.form.zipcode)
+					setData("zipcode", mapped.form.zipcode);
+				if (mapped.form.tax_regime)
+					setData("tax_regime", mapped.form.tax_regime);
 
 				setExtractedData(mapped.extractedPayload);
 				setMissingFields(mapped.missingFields);
@@ -582,13 +608,20 @@ export default function TaxProfileForm({
 				return;
 			}
 
-			if (result?.code === TAX_PROFILE_EXTRACTION_CODES.LEGAL_ENTITY_NOT_ALLOWED) {
+			if (
+				result?.code ===
+				TAX_PROFILE_EXTRACTION_CODES.LEGAL_ENTITY_NOT_ALLOWED
+			) {
 				handleBlockedExtraction();
 				return;
 			}
 
 			applyExtractionError(
-				mapTaxProfileExtractionError(result?.code, result?.message, response.status)
+				mapTaxProfileExtractionError(
+					result?.code,
+					result?.message,
+					response.status,
+				),
 			);
 		} catch (error) {
 			if (!isCurrentGeneration()) return;
@@ -599,7 +632,9 @@ export default function TaxProfileForm({
 					return;
 				}
 				applyExtractionError(
-					mapTaxProfileExtractionError(TAX_PROFILE_EXTRACTION_CODES.EXTRACTION_TIMEOUT)
+					mapTaxProfileExtractionError(
+						TAX_PROFILE_EXTRACTION_CODES.EXTRACTION_TIMEOUT,
+					),
 				);
 			} else {
 				applyExtractionError(mapTaxProfileExtractionError(null));
@@ -687,7 +722,8 @@ export default function TaxProfileForm({
 			if (taxPersonType !== TAX_PERSON_TYPES.INDIVIDUAL) {
 				setInfoMessage({
 					type: "error",
-					message: "Para continuar, confirma que el perfil fiscal corresponde a una persona física.",
+					message:
+						"Para continuar, confirma que el perfil fiscal corresponde a una persona física.",
 				});
 				return;
 			}
@@ -794,7 +830,7 @@ export default function TaxProfileForm({
 		router.get(
 			route("tax-profiles.index"),
 			{},
-			{ preserveState: true, preserveScroll: true }
+			{ preserveState: true, preserveScroll: true },
 		);
 	};
 
@@ -838,24 +874,36 @@ export default function TaxProfileForm({
 			.map(([key]) => key);
 
 		if (missingRequired.length > 0) {
-			missingRequired.forEach((field) => setError(field, "Este campo es requerido"));
+			missingRequired.forEach((field) =>
+				setError(field, "Este campo es requerido"),
+			);
 			setInfoMessage({
 				type: "error",
-				message: "Completa todos los campos requeridos antes de continuar.",
+				message:
+					"Completa todos los campos requeridos antes de continuar.",
 			});
 			return;
 		}
 
 		const rfcClassification = classifyRfcForIndividualProfile(data.rfc);
 		if (rfcClassification !== "individual") {
-			setError("rfc", rfcHintMessage(data.rfc) || "Formato de RFC inválido.");
-			setInfoMessage({ type: "error", message: "Verifica el formato de tu RFC." });
+			setError(
+				"rfc",
+				rfcHintMessage(data.rfc) || "Formato de RFC inválido.",
+			);
+			setInfoMessage({
+				type: "error",
+				message: "Verifica el formato de tu RFC.",
+			});
 			return;
 		}
 
 		if (!/^\d{5}$/.test(data.zipcode)) {
 			setError("zipcode", "Debe tener 5 dígitos");
-			setInfoMessage({ type: "error", message: "El código postal debe tener 5 dígitos." });
+			setInfoMessage({
+				type: "error",
+				message: "El código postal debe tener 5 dígitos.",
+			});
 			return;
 		}
 
@@ -868,12 +916,18 @@ export default function TaxProfileForm({
 
 		if (!cachedEditMode && !certificateFile) {
 			setError("fiscal_certificate", "Debe subir una constancia fiscal");
-			setInfoMessage({ type: "error", message: "Debe subir una constancia fiscal." });
+			setInfoMessage({
+				type: "error",
+				message: "Debe subir una constancia fiscal.",
+			});
 			return;
 		}
 
 		if (extractedData && !data.confirm_data) {
-			setError("confirm_data", "Debe confirmar que los datos extraídos son correctos");
+			setError(
+				"confirm_data",
+				"Debe confirmar que los datos extraídos son correctos",
+			);
 			return;
 		}
 
@@ -901,10 +955,15 @@ export default function TaxProfileForm({
 
 			const storeExtracted = buildStoreExtractedData();
 			if (storeExtracted) {
-				formData.append("extracted_data", JSON.stringify(storeExtracted));
+				formData.append(
+					"extracted_data",
+					JSON.stringify(storeExtracted),
+				);
 			}
 
-			const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+			const csrfToken = document.querySelector(
+				'meta[name="csrf-token"]',
+			)?.content;
 			if (csrfToken) {
 				formData.append("_token", csrfToken);
 			}
@@ -933,14 +992,7 @@ export default function TaxProfileForm({
 				},
 			});
 
-			const usedProfileLockMessage =
-				"Este perfil ya no se puede modificar porque fue utilizado en una solicitud de factura. Puedes usarlo en nuevas solicitudes o crear otro perfil con datos distintos.";
-
 			const responseText = await response.text();
-
-			const isUsedProfileLockStatus =
-				cachedEditMode &&
-				(response.status === 403 || response.status === 422);
 
 			try {
 				const result = JSON.parse(responseText);
@@ -969,27 +1021,15 @@ export default function TaxProfileForm({
 						});
 					}, 1500);
 				} else {
-					const lockFromBody =
-						isUsedProfileLockStatus ||
-						(cachedEditMode &&
-							typeof result.message === "string" &&
-							(result.message.includes("ya no se puede modificar") ||
-								result.message.includes("ya fue utilizado")));
-
-					if (lockFromBody) {
-						setInfoMessage({
-							type: "error",
-							code: "used_profile_lock",
-							message: usedProfileLockMessage,
-						});
-					} else if (result.errors) {
+					if (result.errors) {
 						Object.keys(result.errors).forEach((key) => {
 							setError(key, result.errors[key][0]);
 						});
 
 						setInfoMessage({
 							type: "error",
-							message: "Por favor corrija los errores en el formulario.",
+							message:
+								"Por favor corrija los errores en el formulario.",
 						});
 					} else if (result.message) {
 						setInfoMessage({
@@ -1015,16 +1055,11 @@ export default function TaxProfileForm({
 							preserveScroll: true,
 						});
 					}, 1500);
-				} else if (isUsedProfileLockStatus) {
-					setInfoMessage({
-						type: "error",
-						code: "used_profile_lock",
-						message: usedProfileLockMessage,
-					});
 				} else {
 					setInfoMessage({
 						type: "error",
-						message: "Ocurrió un error en el servidor. Por favor intente nuevamente.",
+						message:
+							"Ocurrió un error en el servidor. Por favor intente nuevamente.",
 					});
 				}
 			}
@@ -1049,45 +1084,25 @@ export default function TaxProfileForm({
 
 		return (
 			<div
-				className={`rounded-lg p-4 ${infoMessage.type === "success"
-					? "bg-green-50 border border-green-200"
-					: infoMessage.type === "error"
-						? "bg-red-50 border border-red-200"
-						: "bg-yellow-50 border border-yellow-200"
-					}`}
+				className={`rounded-lg p-4 ${
+					infoMessage.type === "success"
+						? "border border-green-200 bg-green-50"
+						: infoMessage.type === "error"
+							? "border border-red-200 bg-red-50"
+							: "border border-yellow-200 bg-yellow-50"
+				}`}
 				role="alert"
 			>
 				<div className="flex items-start">
 					{infoMessage.type === "success" ? (
-						<CheckCircleIcon className="h-5 w-5 text-green-400 mr-2 shrink-0" />
+						<CheckCircleIcon className="mr-2 h-5 w-5 shrink-0 text-green-400" />
 					) : (
-						<ExclamationTriangleIcon className="h-5 w-5 text-red-400 mr-2 shrink-0" />
+						<ExclamationTriangleIcon className="mr-2 h-5 w-5 shrink-0 text-red-400" />
 					)}
 					<div className="min-w-0 space-y-3">
-						<span className="font-medium block">{infoMessage.message}</span>
-						{infoMessage.code === "used_profile_lock" && (
-							<div className="flex flex-col gap-2 sm:flex-row">
-								<Button
-									type="button"
-									outline
-									onClick={() =>
-										router.visit(route("tax-profiles.index"), {
-											preserveScroll: true,
-										})
-									}
-								>
-									Volver al listado
-								</Button>
-								<Button
-									type="button"
-									href={route("tax-profiles.create")}
-									preserveState
-									preserveScroll
-								>
-									Crear otro perfil
-								</Button>
-							</div>
-						)}
+						<span className="block font-medium">
+							{infoMessage.message}
+						</span>
 					</div>
 				</div>
 			</div>
@@ -1131,7 +1146,9 @@ export default function TaxProfileForm({
 							<TaxProfilePersonTypeCard
 								selected={isIndividual}
 								onSelect={() => {
-									setTaxPersonType(TAX_PERSON_TYPES.INDIVIDUAL);
+									setTaxPersonType(
+										TAX_PERSON_TYPES.INDIVIDUAL,
+									);
 									setInfoMessage(null);
 								}}
 								title="Sí, soy persona física"
@@ -1153,15 +1170,22 @@ export default function TaxProfileForm({
 
 					{isCompany && (
 						<TaxProfileCompactAlert tone="blue">
-							En este momento la facturación en Famedic está disponible para
-							personas físicas. Si necesitas facturar como empresa, contáctanos
-							para revisar alternativas.
+							En este momento la facturación en Famedic está
+							disponible para personas físicas. Si necesitas
+							facturar como empresa, contáctanos para revisar
+							alternativas.
 						</TaxProfileCompactAlert>
 					)}
 				</DialogBody>
 
 				<DialogActions>
-					<Button autoFocus dusk="cancel" plain type="button" onClick={requestClose}>
+					<Button
+						autoFocus
+						dusk="cancel"
+						plain
+						type="button"
+						onClick={requestClose}
+					>
 						Cancelar
 					</Button>
 					<Button
@@ -1201,37 +1225,65 @@ export default function TaxProfileForm({
 					{renderInfoMessage()}
 
 					<div
-						className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 sm:items-stretch"
+						className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-stretch sm:gap-4"
 						role="group"
 						aria-label="Método para registrar el perfil fiscal"
 					>
 						<TaxProfileEntryModeCard
-							selected={isModeSelected && entryMode === ENTRY_MODES.AUTOMATIC}
-							onSelect={() => handleEntryModeChange(ENTRY_MODES.AUTOMATIC)}
+							selected={
+								isModeSelected &&
+								entryMode === ENTRY_MODES.AUTOMATIC
+							}
+							onSelect={() =>
+								handleEntryModeChange(ENTRY_MODES.AUTOMATIC)
+							}
 							icon={DocumentArrowUpIcon}
 							title="Subir constancia fiscal"
 							subtitle="La IA leerá tu PDF y extraerá tus datos automáticamente. Podrás revisarlos antes de guardar."
-							features={["Lectura asistida con IA", "Requiere un PDF legible de tu constancia"]}
+							features={[
+								"Lectura asistida con IA",
+								"Requiere un PDF legible de tu constancia",
+							]}
 							ctaLabel="Usar extracción automática"
 							accent="blue"
-							methodBadge={{ label: "Lectura con IA", icon: "chip" }}
+							methodBadge={{
+								label: "Lectura con IA",
+								icon: "chip",
+							}}
 						/>
 						<TaxProfileEntryModeCard
-							selected={isModeSelected && entryMode === ENTRY_MODES.MANUAL}
-							onSelect={() => handleEntryModeChange(ENTRY_MODES.MANUAL)}
+							selected={
+								isModeSelected &&
+								entryMode === ENTRY_MODES.MANUAL
+							}
+							onSelect={() =>
+								handleEntryModeChange(ENTRY_MODES.MANUAL)
+							}
 							icon={PencilSquareIcon}
 							title="Capturar datos manualmente"
 							subtitle="Completa directamente la información de tu perfil fiscal."
-							features={["Captura paso a paso", "Deberás adjuntar tu constancia al guardar"]}
+							features={[
+								"Captura paso a paso",
+								"Deberás adjuntar tu constancia al guardar",
+							]}
 							ctaLabel="Capturar manualmente"
 							accent="emerald"
-							methodBadge={{ label: "Captura manual", icon: "manual" }}
+							methodBadge={{
+								label: "Captura manual",
+								icon: "manual",
+							}}
 						/>
 					</div>
 				</DialogBody>
 
 				<DialogActions>
-					<Button autoFocus dusk="cancel" plain type="button" onClick={requestClose}>
+					<Button
+						autoFocus
+						dusk="cancel"
+						plain
+						type="button"
+						onClick={requestClose}
+					>
 						Cancelar
 					</Button>
 					<Button
@@ -1264,7 +1316,12 @@ export default function TaxProfileForm({
 				</DialogBody>
 
 				<DialogActions>
-					<Button dusk="cancel" plain type="button" onClick={requestClose}>
+					<Button
+						dusk="cancel"
+						plain
+						type="button"
+						onClick={requestClose}
+					>
 						Cancelar
 					</Button>
 					<Button type="button" onClick={handleRetryWithNewFile}>
@@ -1286,16 +1343,17 @@ export default function TaxProfileForm({
 					<button
 						type="button"
 						onClick={handleBackToModeSelection}
-						className="flex items-center text-sm text-gray-500 hover:text-gray-700 mb-2 disabled:opacity-50"
+						className="mb-2 flex items-center text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
 						disabled={processingPdf}
 					>
-						<ArrowLeftIcon className="h-4 w-4 mr-1" />
+						<ArrowLeftIcon className="mr-1 h-4 w-4" />
 						Cambiar método
 					</button>
 					Sube tu constancia fiscal
 				</DialogTitle>
 				<DialogDescription>
-					Sube el PDF de tu Constancia de Situación Fiscal. Después de subirlo, extraeremos tus datos para que los revises.
+					Sube el PDF de tu Constancia de Situación Fiscal. Después de
+					subirlo, extraeremos tus datos para que los revises.
 				</DialogDescription>
 
 				<DialogBody className="space-y-6">
@@ -1315,24 +1373,28 @@ export default function TaxProfileForm({
 									fileInputRef.current?.click();
 								}
 							}}
-							className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${isDragging
-								? "border-blue-400 bg-blue-50"
-								: "border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/40"
-								}`}
+							className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+								isDragging
+									? "border-blue-400 bg-blue-50"
+									: "border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/40"
+							}`}
 						>
 							<div className="mx-auto max-w-sm">
-								<div className="w-12 h-12 mx-auto mb-3 flex items-center justify-center bg-blue-100 rounded-full">
+								<div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
 									<ArrowUpTrayIcon className="h-6 w-6 text-blue-600" />
 								</div>
 								<p className="text-base font-semibold text-slate-900 dark:text-white">
 									Arrastra tu constancia aquí
 								</p>
 								<p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-									o selecciona el archivo PDF desde tu computadora
+									o selecciona el archivo PDF desde tu
+									computadora
 								</p>
 								<Button
 									type="button"
-									onClick={() => fileInputRef.current?.click()}
+									onClick={() =>
+										fileInputRef.current?.click()
+									}
 									className="mt-5 inline-flex items-center gap-2"
 								>
 									<ArrowUpTrayIcon className="h-4 w-4" />
@@ -1346,9 +1408,10 @@ export default function TaxProfileForm({
 									onChange={handleFileInputChange}
 								/>
 							</div>
-							<div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700">
+							<div className="mt-4 border-t border-gray-200 pt-4 dark:border-slate-700">
 								<p className="text-xs text-gray-500 dark:text-slate-400">
-									Solo archivos PDF · Máximo {formatFileSize(MAX_TAX_CERTIFICATE_BYTES)}
+									Solo archivos PDF · Máximo{" "}
+									{formatFileSize(MAX_TAX_CERTIFICATE_BYTES)}
 								</p>
 							</div>
 						</div>
@@ -1362,7 +1425,7 @@ export default function TaxProfileForm({
 						<div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/40">
 							<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 								<div className="flex min-w-0 items-center gap-3">
-									<div className="p-2 bg-blue-100 rounded-lg shrink-0">
+									<div className="shrink-0 rounded-lg bg-blue-100 p-2">
 										<DocumentTextIcon className="h-6 w-6 text-blue-600" />
 									</div>
 									<div className="min-w-0">
@@ -1392,10 +1455,13 @@ export default function TaxProfileForm({
 									<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 										<div className="min-w-0">
 											<p className="text-sm font-semibold text-slate-900 dark:text-white">
-												Lee la constancia automáticamente
+												Lee la constancia
+												automáticamente
 											</p>
 											<p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-												La IA extraerá los datos fiscales del PDF y después podrás revisarlos.
+												La IA extraerá los datos
+												fiscales del PDF y después
+												podrás revisarlos.
 											</p>
 										</div>
 										<Button
@@ -1414,7 +1480,8 @@ export default function TaxProfileForm({
 											onClick={handleSwitchToManual}
 											className="text-sm text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline dark:text-slate-400 dark:hover:text-slate-200"
 										>
-											Prefiero capturar mis datos manualmente
+											Prefiero capturar mis datos
+											manualmente
 										</button>
 									</div>
 								</div>
@@ -1427,7 +1494,11 @@ export default function TaxProfileForm({
 											className="h-5 w-5 shrink-0 animate-spin text-blue-600"
 											aria-hidden
 										/>
-										<span role="status" aria-live="polite" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+										<span
+											role="status"
+											aria-live="polite"
+											className="text-sm font-medium text-slate-700 dark:text-slate-300"
+										>
 											{extractionMessage}
 										</span>
 									</div>
@@ -1435,8 +1506,14 @@ export default function TaxProfileForm({
 										<div className="h-full w-full animate-pulse rounded-full bg-gradient-to-r from-blue-400 via-blue-600 to-blue-400" />
 									</div>
 									{showSlowNotice && (
-										<p className="mt-3 text-xs text-amber-600 dark:text-amber-400" role="status" aria-live="polite">
-											Está tomando más tiempo de lo esperado. Puedes esperar, reintentar o capturar tus datos manualmente.
+										<p
+											className="mt-3 text-xs text-amber-600 dark:text-amber-400"
+											role="status"
+											aria-live="polite"
+										>
+											Está tomando más tiempo de lo
+											esperado. Puedes esperar, reintentar
+											o capturar tus datos manualmente.
 										</p>
 									)}
 								</div>
@@ -1444,26 +1521,37 @@ export default function TaxProfileForm({
 						</div>
 					)}
 
-					{extractionError && extractionError.variant !== "blocked" && (
-						<TaxProfileCompactAlert tone="red">
-							<div className="space-y-2">
-								<p className="font-medium">{extractionError.title}</p>
-								<p>{extractionError.message}</p>
-								<div className="flex flex-wrap gap-2 pt-1">
-									{extractionError.allowRetry && (
-										<Button type="button" outline onClick={startExtraction}>
-											Reintentar
-										</Button>
-									)}
-									{extractionError.allowManual && (
-										<Button type="button" outline onClick={handleSwitchToManual}>
-											Capturar manualmente
-										</Button>
-									)}
+					{extractionError &&
+						extractionError.variant !== "blocked" && (
+							<TaxProfileCompactAlert tone="red">
+								<div className="space-y-2">
+									<p className="font-medium">
+										{extractionError.title}
+									</p>
+									<p>{extractionError.message}</p>
+									<div className="flex flex-wrap gap-2 pt-1">
+										{extractionError.allowRetry && (
+											<Button
+												type="button"
+												outline
+												onClick={startExtraction}
+											>
+												Reintentar
+											</Button>
+										)}
+										{extractionError.allowManual && (
+											<Button
+												type="button"
+												outline
+												onClick={handleSwitchToManual}
+											>
+												Capturar manualmente
+											</Button>
+										)}
+									</div>
 								</div>
-							</div>
-						</TaxProfileCompactAlert>
-					)}
+							</TaxProfileCompactAlert>
+						)}
 				</DialogBody>
 
 				<DialogActions>
@@ -1501,17 +1589,18 @@ export default function TaxProfileForm({
 						<button
 							type="button"
 							onClick={handleBackFromReview}
-							className="flex items-center text-sm text-gray-500 hover:text-gray-700 mb-2"
+							className="mb-2 flex items-center text-sm text-gray-500 hover:text-gray-700"
 							disabled={isSaving}
 						>
-							<ArrowLeftIcon className="h-4 w-4 mr-1" />
+							<ArrowLeftIcon className="mr-1 h-4 w-4" />
 							Volver
 						</button>
 					)}
 					Revisa tus datos fiscales
 				</DialogTitle>
 				<DialogDescription>
-					Revisa que los datos coincidan con tu Constancia de Situación Fiscal antes de guardar el perfil.
+					Revisa que los datos coincidan con tu Constancia de
+					Situación Fiscal antes de guardar el perfil.
 				</DialogDescription>
 
 				<DialogBody className="space-y-6">
@@ -1522,7 +1611,9 @@ export default function TaxProfileForm({
 					{warnings.length > 0 && (
 						<TaxProfileCompactAlert tone="amber">
 							<div className="space-y-1">
-								<p className="font-medium">Revisa estos puntos antes de guardar:</p>
+								<p className="font-medium">
+									Revisa estos puntos antes de guardar:
+								</p>
 								<ul className="list-disc space-y-0.5 pl-4">
 									{warnings.map((warning, index) => (
 										<li key={index}>{warning}</li>
@@ -1536,7 +1627,8 @@ export default function TaxProfileForm({
 						<TaxProfileCompactAlert tone="amber">
 							<div className="space-y-2">
 								<p className="font-medium">
-									No pudimos detectar estos campos automáticamente. Complétalos manualmente:
+									No pudimos detectar estos campos
+									automáticamente. Complétalos manualmente:
 								</p>
 								<div className="flex flex-wrap gap-2">
 									{missingFields.map((field) => (
@@ -1558,7 +1650,7 @@ export default function TaxProfileForm({
 					{uploadedFile ? (
 						<div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40">
 							<div className="flex min-w-0 items-center gap-3">
-								<div className="p-2 bg-blue-100 rounded-lg shrink-0">
+								<div className="shrink-0 rounded-lg bg-blue-100 p-2">
 									<DocumentTextIcon className="h-5 w-5 text-blue-600" />
 								</div>
 								<div className="min-w-0">
@@ -1570,7 +1662,12 @@ export default function TaxProfileForm({
 									</p>
 								</div>
 							</div>
-							<Button type="button" plain onClick={handleReplaceCertificate} disabled={isSaving}>
+							<Button
+								type="button"
+								plain
+								onClick={handleReplaceCertificate}
+								disabled={isSaving}
+							>
 								Reemplazar constancia
 							</Button>
 							<input
@@ -1592,7 +1689,9 @@ export default function TaxProfileForm({
 								</p>
 								<Button
 									type="button"
-									onClick={() => manualFileInputRef.current?.click()}
+									onClick={() =>
+										manualFileInputRef.current?.click()
+									}
 									className="inline-flex items-center gap-2"
 									disabled={isSaving}
 								>
@@ -1608,7 +1707,9 @@ export default function TaxProfileForm({
 								/>
 							</div>
 							{errors.fiscal_certificate && (
-								<ErrorMessage>{errors.fiscal_certificate}</ErrorMessage>
+								<ErrorMessage>
+									{errors.fiscal_certificate}
+								</ErrorMessage>
 							)}
 						</div>
 					)}
@@ -1629,7 +1730,9 @@ export default function TaxProfileForm({
 							disabled={isSaving}
 							placeholder="Ej: Juan Pérez García"
 						/>
-						{errors.name && <ErrorMessage>{errors.name}</ErrorMessage>}
+						{errors.name && (
+							<ErrorMessage>{errors.name}</ErrorMessage>
+						)}
 					</Field>
 
 					<Field>
@@ -1640,16 +1743,23 @@ export default function TaxProfileForm({
 							invalid={!!errors.rfc}
 							value={data.rfc}
 							onChange={(e) => {
-								setData("rfc", normalizeRfcInput(e.target.value));
+								setData(
+									"rfc",
+									normalizeRfcInput(e.target.value),
+								);
 								clearErrors("rfc");
 							}}
 							type="text"
 							disabled={isSaving}
 							placeholder="Ej: MEBE931209BI2"
 						/>
-						{errors.rfc && <ErrorMessage>{errors.rfc}</ErrorMessage>}
+						{errors.rfc && (
+							<ErrorMessage>{errors.rfc}</ErrorMessage>
+						)}
 						{rfcHint && (
-							<p className={`mt-1 text-xs ${rfcHintTone}`}>{rfcHint}</p>
+							<p className={`mt-1 text-xs ${rfcHintTone}`}>
+								{rfcHint}
+							</p>
 						)}
 					</Field>
 
@@ -1663,14 +1773,18 @@ export default function TaxProfileForm({
 							autoComplete="postal-code"
 							value={data.zipcode}
 							onChange={(e) => {
-								const value = e.target.value.replace(/\D/g, "").slice(0, 5);
+								const value = e.target.value
+									.replace(/\D/g, "")
+									.slice(0, 5);
 								setData("zipcode", value);
 								clearErrors("zipcode");
 							}}
 							disabled={isSaving}
 							placeholder="Ej: 64000"
 						/>
-						{errors.zipcode && <ErrorMessage>{errors.zipcode}</ErrorMessage>}
+						{errors.zipcode && (
+							<ErrorMessage>{errors.zipcode}</ErrorMessage>
+						)}
 					</Field>
 
 					<Field>
@@ -1686,18 +1800,24 @@ export default function TaxProfileForm({
 							disabled={isSaving}
 						>
 							{Object.keys(cachedTaxRegimes || {}).length > 0 ? (
-								Object.entries(cachedTaxRegimes).map(([key, regimen]) => (
-									<ListboxOption key={key} value={key}>
-										<ListboxLabel>{`${key} - ${regimen?.name || "Desconocido"}`}</ListboxLabel>
-									</ListboxOption>
-								))
+								Object.entries(cachedTaxRegimes).map(
+									([key, regimen]) => (
+										<ListboxOption key={key} value={key}>
+											<ListboxLabel>{`${key} - ${regimen?.name || "Desconocido"}`}</ListboxLabel>
+										</ListboxOption>
+									),
+								)
 							) : (
 								<ListboxOption value="" disabled>
-									<ListboxLabel>Cargando regímenes...</ListboxLabel>
+									<ListboxLabel>
+										Cargando regímenes...
+									</ListboxLabel>
 								</ListboxOption>
 							)}
 						</Listbox>
-						{errors.tax_regime && <ErrorMessage>{errors.tax_regime}</ErrorMessage>}
+						{errors.tax_regime && (
+							<ErrorMessage>{errors.tax_regime}</ErrorMessage>
+						)}
 					</Field>
 
 					{extractedData && (
@@ -1707,7 +1827,10 @@ export default function TaxProfileForm({
 									type="checkbox"
 									checked={data.confirm_data}
 									onChange={(e) => {
-										setData("confirm_data", e.target.checked);
+										setData(
+											"confirm_data",
+											e.target.checked,
+										);
 										clearErrors("confirm_data");
 									}}
 									className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -1715,13 +1838,18 @@ export default function TaxProfileForm({
 								/>
 								<div>
 									<span className="font-medium text-slate-900 dark:text-white">
-										Confirmo que los datos extraídos de mi constancia son correctos
+										Confirmo que los datos extraídos de mi
+										constancia son correctos
 									</span>
 									<p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-										He verificado que la información coincide con mi Constancia de Situación Fiscal.
+										He verificado que la información
+										coincide con mi Constancia de Situación
+										Fiscal.
 									</p>
 									{errors.confirm_data && (
-										<p className="mt-1 text-sm text-red-600">{errors.confirm_data}</p>
+										<p className="mt-1 text-sm text-red-600">
+											{errors.confirm_data}
+										</p>
 									)}
 								</div>
 							</label>
@@ -1730,25 +1858,40 @@ export default function TaxProfileForm({
 				</DialogBody>
 
 				<DialogActions>
-					<Button plain type="button" onClick={handleBackFromReview} disabled={isSaving}>
+					<Button
+						plain
+						type="button"
+						onClick={handleBackFromReview}
+						disabled={isSaving}
+					>
 						Volver
 					</Button>
 					<Button
 						dusk="saveTaxProfile"
 						type="submit"
-						disabled={isSaving || (!!extractedData && !data.confirm_data)}
+						disabled={
+							isSaving || (!!extractedData && !data.confirm_data)
+						}
 						aria-busy={isSaving}
 						aria-live="polite"
-						className={`min-w-[11.5rem] transition-opacity ${isSaving ? "cursor-wait opacity-90" : ""
-							}`}
+						className={`min-w-[11.5rem] transition-opacity ${
+							isSaving ? "cursor-wait opacity-90" : ""
+						}`}
 					>
 						{isSaving ? (
 							<span className="inline-flex items-center justify-center gap-2">
-								<ArrowPathIcon className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+								<ArrowPathIcon
+									className="h-4 w-4 shrink-0 animate-spin"
+									aria-hidden
+								/>
 								<span>Guardando...</span>
 							</span>
 						) : (
-							<span>{cachedEditMode ? "Actualizar perfil" : "Guardar perfil fiscal"}</span>
+							<span>
+								{cachedEditMode
+									? "Actualizar perfil"
+									: "Guardar perfil fiscal"}
+							</span>
 						)}
 					</Button>
 				</DialogActions>
@@ -1783,7 +1926,9 @@ export default function TaxProfileForm({
 						id="saving-progress-title"
 						className="text-lg font-semibold text-slate-900 dark:text-white"
 					>
-						{cachedEditMode ? "Actualizando perfil fiscal..." : "Guardando perfil fiscal..."}
+						{cachedEditMode
+							? "Actualizando perfil fiscal..."
+							: "Guardando perfil fiscal..."}
 					</h3>
 					<p
 						id="saving-progress-desc"
@@ -1835,10 +1980,10 @@ export default function TaxProfileForm({
 			<Dialog
 				size="3xl"
 				open={isOpen}
-				onClose={isSaving || processingPdf ? () => { } : requestClose}
+				onClose={isSaving || processingPdf ? () => {} : requestClose}
 			>
 				<form dusk="taxProfileForm" onSubmit={submit}>
-					<div className="relative border-b border-slate-200/80 pb-5 pt-1 dark:border-slate-800 sm:pt-0">
+					<div className="relative border-b border-slate-200/80 pb-5 pt-1 sm:pt-0 dark:border-slate-800">
 						<TaxProfileModalCloseButton
 							onClose={requestClose}
 							disabled={isSaving || processingPdf}
@@ -1856,7 +2001,8 @@ export default function TaxProfileForm({
 			>
 				<AlertTitle>¿Descartar los cambios?</AlertTitle>
 				<AlertDescription>
-					Si cierras, se descartarán los datos no guardados. ¿Deseas continuar?
+					Si cierras, se descartarán los datos no guardados. ¿Deseas
+					continuar?
 				</AlertDescription>
 				<AlertActions>
 					<Button

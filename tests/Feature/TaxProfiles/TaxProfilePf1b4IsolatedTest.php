@@ -16,16 +16,14 @@ use App\Policies\TaxProfilePolicy;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
  * PF-1B.4: payload is_used/is_default, presentCollectionForPatient (N+1),
- * Update→422, props Inertia listado/lab/farmacia, SetDefault/Destroy de usados.
+ * Update de usados, props Inertia listado/lab/farmacia, SetDefault/Destroy de usados.
  */
 class TaxProfilePf1b4IsolatedTest extends TestCase
 {
@@ -269,23 +267,25 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
     }
 
     #[Test]
-    public function http_update_de_usado_sigue_403_por_policy(): void
+    public function http_update_de_usado_actualiza_por_policy(): void
     {
         [$user, $profile, $customer] = $this->makeCustomerWithProfile('http403@test.local');
         Storage::put($profile->fiscal_certificate, '%PDF');
         app(CreateInvoiceRequestAction::class)($this->makeLaboratoryPurchase($customer), $profile, 'G03');
 
-        $this->assertFalse((new TaxProfilePolicy)->update($user, $profile->fresh()));
+        $this->assertTrue((new TaxProfilePolicy)->update($user, $profile->fresh()));
 
         $this->actingAs($user)
             ->put(route('tax-profiles.update', ['tax_profile' => $profile->id]), [
-                'name' => 'X',
+                'name' => 'Nombre Actualizado',
                 'rfc' => 'MEBE931209BI2',
                 'zipcode' => '64000',
                 'tax_regime' => '612',
                 'cfdi_use' => 'G03',
             ])
-            ->assertForbidden();
+            ->assertRedirect(route('tax-profiles.index'));
+
+        $this->assertSame('Nombre Actualizado', $profile->fresh()->name);
     }
 
     #[Test]
@@ -331,17 +331,24 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
     }
 
     #[Test]
-    public function perfil_usado_no_puede_abrirse_para_edicion(): void
+    public function perfil_usado_puede_abrirse_para_edicion(): void
     {
         [$user, $profile, $customer] = $this->makeCustomerWithProfile('edit-used@test.local');
         Storage::put($profile->fiscal_certificate, '%PDF');
         app(CreateInvoiceRequestAction::class)($this->makeLaboratoryPurchase($customer), $profile, 'G03');
 
-        $this->assertFalse((new TaxProfilePolicy)->update($user, $profile->fresh()));
+        $this->assertTrue((new TaxProfilePolicy)->update($user, $profile->fresh()));
 
         $this->actingAs($user)
             ->get(route('tax-profiles.edit', ['tax_profile' => $profile->id]))
-            ->assertForbidden();
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('TaxProfiles')
+                ->has('taxProfile')
+                ->where('taxProfile.id', $profile->id)
+                ->where('taxProfile.is_used', true)
+                ->has('taxRegimes')
+            );
     }
 
     #[Test]
@@ -403,7 +410,7 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
     }
 
     #[Test]
-    public function action_update_de_usado_via_controller_responde_422_si_policy_permite(): void
+    public function action_update_de_usado_via_controller_actualiza(): void
     {
         $rfc = 'ABCD010101AAA';
         [$user, $profile, $customer] = $this->makeCustomerWithProfile('http422@test.local', [
@@ -413,45 +420,41 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
         Storage::put($profile->fiscal_certificate, '%PDF');
         app(CreateInvoiceRequestAction::class)($this->makeLaboratoryPurchase($customer), $profile, 'G03');
 
-        Gate::before(fn () => true);
-
         $this->actingAs($user)
             ->putJson(route('tax-profiles.update', ['tax_profile' => $profile->id]), [
-                'name' => 'Hack',
+                'name' => 'Perfil Actualizado',
                 'rfc' => $rfc,
                 'zipcode' => '64000',
                 'tax_regime' => '612',
                 'cfdi_use' => 'G03',
             ])
-            ->assertStatus(422)
+            ->assertOk()
             ->assertJson([
-                'success' => false,
-                'message' => 'Este perfil ya no se puede modificar porque fue utilizado en una solicitud de factura. Puedes usarlo en nuevas solicitudes o crear otro perfil con datos distintos.',
+                'success' => true,
+                'message' => 'Perfil fiscal actualizado exitosamente.',
             ]);
 
-        $this->assertSame('Persona Fiscal', $profile->fresh()->name);
+        $this->assertSame('Perfil Actualizado', $profile->fresh()->name);
     }
 
     #[Test]
-    public function update_action_lanza_invalid_argument_con_mensaje_aprobado(): void
+    public function update_action_de_usado_actualiza(): void
     {
         [, $profile, $customer] = $this->makeCustomerWithProfile();
         Storage::put($profile->fiscal_certificate, '%PDF');
         app(CreateInvoiceRequestAction::class)($this->makeLaboratoryPurchase($customer), $profile, 'G03');
 
-        try {
-            app(UpdateTaxProfileAction::class)(
-                name: 'Hack',
-                rfc: $profile->rfc,
-                zipcode: '64000',
-                taxRegime: '612',
-                cfdiUse: 'D01',
-                taxProfile: $profile->fresh(),
-            );
-            $this->fail('Se esperaba InvalidArgumentException');
-        } catch (InvalidArgumentException $e) {
-            $this->assertStringContainsString('ya no se puede modificar', $e->getMessage());
-        }
+        app(UpdateTaxProfileAction::class)(
+            name: 'Perfil Actualizado',
+            rfc: $profile->rfc,
+            zipcode: '64000',
+            taxRegime: '612',
+            cfdiUse: 'D01',
+            taxProfile: $profile->fresh(),
+        );
+
+        $this->assertSame('Perfil Actualizado', $profile->fresh()->name);
+        $this->assertSame('D01', $profile->fresh()->cfdi_use);
     }
 
     #[Test]
