@@ -51,6 +51,7 @@ return [
         'AWS_SECRET_ACCESS_KEY' => 'filesystems.disks.s3.secret',
         'AWS_DEFAULT_REGION' => 'filesystems.disks.s3.region',
         'AWS_BUCKET' => 'filesystems.disks.s3.bucket',
+        'AWS_ROOT' => 'filesystems.disks.s3.root',
         'AWS_URL' => 'filesystems.disks.s3.url',
         'AWS_ENDPOINT' => 'filesystems.disks.s3.endpoint',
         'AWS_USE_PATH_STYLE_ENDPOINT' => 'filesystems.disks.s3.use_path_style_endpoint',

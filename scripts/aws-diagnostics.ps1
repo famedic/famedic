@@ -167,10 +167,12 @@ function Invoke-AwsJson {
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $dotenv = Read-DotEnv -Path (Join-Path $repoRoot ".env")
 
-$region = Get-Setting -Key "AWS_DEFAULT_REGION" -DotEnv $dotenv -Default "us-east-1"
+$region = Get-Setting -Key "AWS_DEFAULT_REGION" -DotEnv $dotenv -Default "us-east-2"
 $configuredBucket = Get-Setting -Key "AWS_BUCKET" -DotEnv $dotenv
+$root = (Get-Setting -Key "AWS_ROOT" -DotEnv $dotenv).Trim("/")
 $accessKey = Get-Setting -Key "AWS_ACCESS_KEY_ID" -DotEnv $dotenv
 $secretKey = Get-Setting -Key "AWS_SECRET_ACCESS_KEY" -DotEnv $dotenv
+$filesystemDisk = Get-Setting -Key "FILESYSTEM_DISK" -DotEnv $dotenv -Default "local"
 
 if ([string]::IsNullOrWhiteSpace($Bucket)) {
     $Bucket = $configuredBucket
@@ -178,10 +180,13 @@ if ([string]::IsNullOrWhiteSpace($Bucket)) {
 
 Write-Section "Configuracion detectada"
 Write-Status ([bool] (Get-Command aws -ErrorAction SilentlyContinue)) "AWS CLI disponible"
+Write-Host "FILESYSTEM_DISK=$filesystemDisk"
 Write-Status (-not [string]::IsNullOrWhiteSpace($region)) "AWS_DEFAULT_REGION=$region"
 Write-Status (-not [string]::IsNullOrWhiteSpace($Bucket)) "AWS_BUCKET=$Bucket"
+Write-Host "AWS_ROOT=$(if ($root) { $root } else { '(sin prefijo)' })"
 Write-Status (-not [string]::IsNullOrWhiteSpace($accessKey)) ("AWS_ACCESS_KEY_ID=" + (Mask-Value $accessKey))
 Write-Status (-not [string]::IsNullOrWhiteSpace($secretKey)) ("AWS_SECRET_ACCESS_KEY=" + $(if ($secretKey) { "presente ($($secretKey.Length) chars)" } else { "(vacio)" }))
+Write-Host "Ruta efectiva: s3://$Bucket/$(if ($root) { "$root/" })"
 
 Write-Section "Red hacia AWS"
 Test-Host443 -HostName "sts.$region.amazonaws.com"
@@ -232,13 +237,53 @@ if ($head.ExitCode -eq 0) {
     Write-Host (Sanitize-Output -Text $head.Output -AccessKey $accessKey -SecretKey $secretKey)
 }
 
-$list = Invoke-AwsJson -Arguments @("s3api", "list-objects-v2", "--bucket", $Bucket, "--max-keys", "1")
+$listArgs = @("s3api", "list-objects-v2", "--bucket", $Bucket, "--max-keys", "5")
+if ($root) {
+    $listArgs += @("--prefix", "$root/")
+}
+
+$list = Invoke-AwsJson -Arguments $listArgs
 if ($list.ExitCode -eq 0) {
     Write-Status $true "list-objects-v2 permitido"
     $objects = $list.Output | ConvertFrom-Json
+    Write-Host "Prefix: $(if ($root) { "$root/" } else { '(raiz del bucket)' })"
     Write-Host "KeyCount: $($objects.KeyCount)"
 } else {
     Write-Status $false "list-objects-v2"
     Write-Host (Sanitize-Output -Text $list.Output -AccessKey $accessKey -SecretKey $secretKey)
 }
+
+Write-Section "S3 lectura/escritura en prefijo"
+$probeRelativePath = ".famedic-diagnostics/$(Get-Date -Format 'yyyyMMdd-HHmmss')-$([Guid]::NewGuid().ToString('N').Substring(0,8)).txt"
+$probeKey = if ($root) { "$root/$probeRelativePath" } else { $probeRelativePath }
+$probeBody = "famedic s3 diagnostics $(Get-Date -Format o)"
+$probeFile = Join-Path $env:TEMP "famedic-s3-probe.txt"
+Set-Content -LiteralPath $probeFile -Value $probeBody -NoNewline -Encoding utf8
+
+$put = Invoke-AwsJson -Arguments @("s3api", "put-object", "--bucket", $Bucket, "--key", $probeKey, "--body", $probeFile, "--content-type", "text/plain")
+if ($put.ExitCode -eq 0) {
+    Write-Status $true "put-object s3://$Bucket/$probeKey"
+} else {
+    Write-Status $false "put-object"
+    Write-Host (Sanitize-Output -Text $put.Output -AccessKey $accessKey -SecretKey $secretKey)
+}
+
+$get = Invoke-AwsJson -Arguments @("s3api", "get-object", "--bucket", $Bucket, "--key", $probeKey, (Join-Path $env:TEMP "famedic-s3-probe-download.txt"))
+if ($get.ExitCode -eq 0) {
+    Write-Status $true "get-object del archivo de prueba"
+} else {
+    Write-Status $false "get-object"
+    Write-Host (Sanitize-Output -Text $get.Output -AccessKey $accessKey -SecretKey $secretKey)
+}
+
+$delete = Invoke-AwsJson -Arguments @("s3api", "delete-object", "--bucket", $Bucket, "--key", $probeKey)
+if ($delete.ExitCode -eq 0) {
+    Write-Status $true "delete-object del archivo de prueba"
+} else {
+    Write-Status $false "delete-object"
+    Write-Host (Sanitize-Output -Text $delete.Output -AccessKey $accessKey -SecretKey $secretKey)
+}
+
+Remove-Item -LiteralPath $probeFile -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $env:TEMP "famedic-s3-probe-download.txt") -ErrorAction SilentlyContinue
 
