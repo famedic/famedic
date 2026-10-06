@@ -8,7 +8,6 @@ use App\Http\Requests\Laboratories\EmailLaboratoryPurchasePdfRequest;
 use App\Models\LaboratoryPurchase;
 use App\Notifications\LaboratoryPurchasePdfEmail;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Storage;
 
 class LaboratoryPurchasePdfController extends Controller
 {
@@ -20,7 +19,7 @@ class LaboratoryPurchasePdfController extends Controller
     public function download(DownloadLaboratoryPurchasePdfRequest $request, LaboratoryPurchase $laboratoryPurchase)
     {
         try {
-            $storagePath = ($this->resolvePdfPath)($laboratoryPurchase);
+            $binary = $this->resolvePdfPath->binary($laboratoryPurchase);
         } catch (\Throwable $exception) {
             report($exception);
 
@@ -33,8 +32,9 @@ class LaboratoryPurchasePdfController extends Controller
 
         $filename = 'orden-laboratorio-'.($laboratoryPurchase->gda_order_id ?: $laboratoryPurchase->id).'.pdf';
 
-        return Storage::disk(config('filesystems.default'))->download($storagePath, $filename, [
+        return response($binary, 200, [
             'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 

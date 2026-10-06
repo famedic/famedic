@@ -101,6 +101,36 @@ class LaboratoryActiveCampaignDiagnostics
                 'title' => 'Resultados Disponibles',
                 'types' => ['text'],
             ],
+            'estudios_comprados' => [
+                'env' => 'ACTIVECAMPAIGN_FIELD_LAB_ESTUDIOS',
+                'config' => 'services.activecampaign.fields.lab.estudios_comprados',
+                'title' => 'EstudiosComprados',
+                'types' => ['text'],
+            ],
+            'cantidad_estudios' => [
+                'env' => 'ACTIVECAMPAIGN_FIELD_LAB_CANTIDAD_ESTUDIOS',
+                'config' => 'services.activecampaign.fields.lab.cantidad_estudios',
+                'title' => 'Cantidad de Estudios',
+                'types' => ['text', 'number'],
+            ],
+            'fecha_compra' => [
+                'env' => 'ACTIVECAMPAIGN_FIELD_LAB_FECHA_COMPRA',
+                'config' => 'services.activecampaign.fields.lab.fecha_compra',
+                'title' => 'Fecha de Compra',
+                'types' => ['date', 'text'],
+            ],
+            'marca_laboratorio' => [
+                'env' => 'ACTIVECAMPAIGN_FIELD_LAB_MARCA',
+                'config' => 'services.activecampaign.fields.lab.marca_laboratorio',
+                'title' => 'Marca Laboratorio',
+                'types' => ['text'],
+            ],
+            'total_compra' => [
+                'env' => 'ACTIVECAMPAIGN_FIELD_LAB_TOTAL',
+                'config' => 'services.activecampaign.fields.lab.total_compra',
+                'title' => 'Total',
+                'types' => ['text', 'number'],
+            ],
         ];
     }
 
@@ -124,6 +154,16 @@ class LaboratoryActiveCampaignDiagnostics
                 'config' => 'services.activecampaign.tag_laboratory_purchase_completed',
                 'label' => 'Tag laboratorio compra completada',
                 'expected_name' => null,
+            ],
+            'laboratory_purchase_with_appointment' => [
+                'config' => 'services.activecampaign.tag_laboratory_purchase_with_appointment',
+                'label' => 'Tag laboratorio compra con cita',
+                'expected_name' => 'Compra-lab-con-cita',
+            ],
+            'laboratory_purchase_without_appointment' => [
+                'config' => 'services.activecampaign.tag_laboratory_purchase_without_appointment',
+                'label' => 'Tag laboratorio compra sin cita',
+                'expected_name' => 'Compra-lab-sin-cita',
             ],
             'lab_sample_collected' => [
                 'config' => 'services.activecampaign.tag_lab_sample_collected',

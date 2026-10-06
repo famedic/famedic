@@ -50,11 +50,26 @@ class LaboratoryActiveCampaignPayloadBuilder
             ? $purchase->brand
             : LaboratoryBrand::tryFrom((string) $purchase->brand);
 
+        $purchase->loadMissing('laboratoryPurchaseItems');
+        $studyNames = $purchase->laboratoryPurchaseItems
+            ->pluck('name')
+            ->map(static fn ($name) => trim((string) $name))
+            ->filter()
+            ->unique()
+            ->values();
+
         return $this->withoutNulls([
             'folio_famedic' => $purchase->gda_order_id ?: null,
             'gda_consecutivo' => $purchase->gda_consecutivo ? (string) $purchase->gda_consecutivo : null,
             'mapa_sucursales_labs' => $brand ? $this->storesMapUrl($brand) : null,
             'url_finalizar_compra' => '',
+            'estudios_comprados' => $studyNames->isEmpty() ? null : $studyNames->implode(', '),
+            'cantidad_estudios' => (string) $purchase->laboratoryPurchaseItems->count(),
+            'fecha_compra' => $this->formatPurchaseDate($purchase->paid_at),
+            'marca_laboratorio' => $brand?->label(),
+            'total_compra' => $purchase->total_cents === null
+                ? null
+                : number_format(((int) $purchase->total_cents) / 100, 2, '.', ''),
         ], keepEmptyStrings: true);
     }
 
@@ -118,6 +133,23 @@ class LaboratoryActiveCampaignPayloadBuilder
         }
 
         return LaboratoryBrand::tryFrom((string) $brands->first());
+    }
+
+    private function formatPurchaseDate(mixed $value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($value)->format('Y-m-d');
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function formatStoreAddress(LaboratoryStore $store): ?string

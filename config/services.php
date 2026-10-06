@@ -204,6 +204,8 @@ return [
         ),
         'tag_pharmacy_purchase_completed' => (int) env('ACTIVE_CAMPAIGN_TAG_PHARMACY_PURCHASE_COMPLETED', 17),
         'tag_laboratory_purchase_completed' => (int) env('ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_COMPLETED', 18),
+        'tag_laboratory_purchase_with_appointment' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_WITH_APPOINTMENT', 'Compra-lab-con-cita'),
+        'tag_laboratory_purchase_without_appointment' => active_campaign_env('ACTIVE_CAMPAIGN_TAG_LABORATORY_PURCHASE_WITHOUT_APPOINTMENT', 'Compra-lab-sin-cita'),
         // Tags específicos laboratorio
         'tag_registro_nuevo' => (function () {
             $raw = env('ACTIVE_CAMPAIGN_TAG_REGISTRO_NUEVO');
@@ -297,6 +299,11 @@ return [
                 'mapa_sucursales_labs' => active_campaign_env('ACTIVECAMPAIGN_FIELD_LAB_MAPA_SUCURSALES'),
                 'toma_de_muestra_lab' => active_campaign_env('ACTIVECAMPAIGN_FIELD_LAB_TOMA_MUESTRA'),
                 'resultados_lab' => active_campaign_env('ACTIVECAMPAIGN_FIELD_LAB_RESULTADOS'),
+                'estudios_comprados' => active_campaign_env('ACTIVECAMPAIGN_FIELD_LAB_ESTUDIOS'),
+                'cantidad_estudios' => active_campaign_env('ACTIVECAMPAIGN_FIELD_LAB_CANTIDAD_ESTUDIOS'),
+                'fecha_compra' => active_campaign_env('ACTIVECAMPAIGN_FIELD_LAB_FECHA_COMPRA'),
+                'marca_laboratorio' => active_campaign_env('ACTIVECAMPAIGN_FIELD_LAB_MARCA'),
+                'total_compra' => active_campaign_env('ACTIVECAMPAIGN_FIELD_LAB_TOTAL'),
             ],
         ],
     ],

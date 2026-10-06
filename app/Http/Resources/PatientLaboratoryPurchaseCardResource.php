@@ -5,7 +5,6 @@ namespace App\Http\Resources;
 use App\Models\LaboratoryPurchase;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Tarjeta de pedido de laboratorio para el panel del paciente (sin datos sensibles innecesarios).
@@ -19,7 +18,7 @@ class PatientLaboratoryPurchaseCardResource extends JsonResource
         /** @var LaboratoryPurchase $p */
         $p = $this->resource;
 
-        $hasStoredResults = ! empty($p->results) && Storage::exists($p->results);
+        $hasStoredResults = storage_path_exists($p->results);
         $resultsNotif = $p->resultsNotification()->first();
         $apiResultsReady = $resultsNotif !== null
             && $resultsNotif->results_received_at !== null;

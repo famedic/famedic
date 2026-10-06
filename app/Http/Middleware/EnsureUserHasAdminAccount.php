@@ -253,26 +253,30 @@ class EnsureUserHasAdminAccount
 
         $simulatorsNavItem = $request->user()->administrator->hasPermissionTo('simulators.manage') ? [
             'label' => 'Simuladores',
-            'icon' => 'BeakerIcon',
+            'icon' => 'PlayCircleIcon',
             'items' => [
                 [
-                    'label' => 'Inicio',
+                    'label' => 'Todos los simuladores',
                     'url' => route('admin.simulators.index'),
+                    'icon' => 'Squares2X2Icon',
                     'current' => Route::currentRouteName() === 'admin.simulators.index',
                 ],
                 [
                     'label' => 'Simulador OTP',
                     'url' => route('admin.simulators.otp'),
+                    'icon' => 'ShieldCheckIcon',
                     'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.otp'),
                 ],
                 [
                     'label' => 'Simulador de correos',
                     'url' => route('admin.simulators.emails'),
+                    'icon' => 'EnvelopeIcon',
                     'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.emails'),
                 ],
                 [
                     'label' => 'Simulador GDA',
                     'url' => route('admin.simulators.gda'),
+                    'icon' => 'BellAlertIcon',
                     'current' => str_starts_with((string) Route::currentRouteName(), 'admin.simulators.gda'),
                 ],
             ],
@@ -288,6 +292,12 @@ class EnsureUserHasAdminAccount
                 'label' => 'Jobs fallidos',
                 'url' => route('admin.failed-jobs.index'),
                 'current' => Route::currentRouteName() === 'admin.failed-jobs.index',
+            ] : null,
+            ($this->adminHasPermission($administrator, 'activecampaign.manage')
+                || $this->adminHasPermission($administrator, 'logs-general.manage')) ? [
+                'label' => 'Jobs ActiveCampaign',
+                'url' => route('admin.activecampaign-jobs.index'),
+                'current' => Route::currentRouteName() === 'admin.activecampaign-jobs.index',
             ] : null,
             $request->user()->administrator->hasPermissionTo('laboratory-notifications.monitor') ? [
                 'label' => 'Monitor de notificaciones',
@@ -464,10 +474,10 @@ class EnsureUserHasAdminAccount
                     ...$integrationsItems,
                 ])),
                 'laboratory' => $laboratoryTopItems,
+                'simulators' => $simulatorsNavItem,
                 'personal' => $personalNavItem,
                 'configuration' => array_values(array_filter([
                     $legalDocumentationNavItem,
-                    $simulatorsNavItem,
                     $this->adminHasPermission($administrator, 'activecampaign.manage') ? [
                         'label' => 'Configuración ActiveCampaign',
                         'url' => route('admin.activecampaign.settings'),

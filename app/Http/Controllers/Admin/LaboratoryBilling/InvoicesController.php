@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\LaboratoryBilling\IndexLaboratoryBillingInvoicesRequ
 use App\Services\LaboratoryBilling\LaboratoryBillingAccess;
 use App\Services\LaboratoryBilling\LaboratoryBillingDateRange;
 use App\Services\LaboratoryBilling\LaboratoryBillingInvoicesQuery;
+use App\Services\LaboratoryBilling\LaboratoryBillingNavCounts;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,6 +17,7 @@ class InvoicesController extends Controller
         IndexLaboratoryBillingInvoicesRequest $request,
         LaboratoryBillingInvoicesQuery $query,
         LaboratoryBillingAccess $access,
+        LaboratoryBillingNavCounts $navCounts,
     ): Response {
         $range = LaboratoryBillingDateRange::fromInput($request->input('from'), $request->input('to'));
         $filters = collect($request->only([
@@ -31,6 +33,7 @@ class InvoicesController extends Controller
             'invoices' => $query->paginate($filters, $range),
             'filters' => $filters,
             'canManageAutomaticReports' => $access->allowsReports($request->user()),
+            'navCounts' => $navCounts->toArray(),
         ]);
     }
 }

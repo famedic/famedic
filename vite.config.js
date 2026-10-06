@@ -33,6 +33,7 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     const appUrl = env.APP_URL;
     const devServerOrigin = env.VITE_DEV_SERVER_ORIGIN || 'http://localhost:5173';
+    const devServerUrl = new URL(devServerOrigin);
 
     return {
         server: {
@@ -41,9 +42,9 @@ export default defineConfig(({ mode }) => {
             strictPort: true,
             origin: devServerOrigin,
             hmr: {
-                host: 'localhost',
-                port: 5173,
-                clientPort: 5173,
+                host: devServerUrl.hostname,
+                port: Number(devServerUrl.port) || 5173,
+                clientPort: Number(devServerUrl.port) || 5173,
             },
             cors: {
                 origin: devServerCorsOrigins(appUrl),

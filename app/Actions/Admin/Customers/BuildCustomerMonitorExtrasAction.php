@@ -174,39 +174,18 @@ class BuildCustomerMonitorExtrasAction
      */
     private function buildNotificationGroups(Customer $customer, User $user): array
     {
-        $orderKeys = $this->customerNotificationsQuery($customer, $user)
-            ->selectRaw('COALESCE(gda_consecutivo, gda_order_id, CAST(laboratory_purchase_id AS CHAR)) as order_key')
-            ->selectRaw('MAX(created_at) as last_at')
-            ->groupBy(DB::raw('COALESCE(gda_consecutivo, gda_order_id, CAST(laboratory_purchase_id AS CHAR))'))
-            ->orderByDesc('last_at')
-            ->limit(8)
-            ->pluck('order_key')
-            ->map(fn ($key) => (string) $key)
-            ->all();
+        $notifications = $this->customerNotificationsQuery($customer, $user)
+            ->with(['laboratoryPurchase'])
+            ->latest()
+            ->limit(300)
+            ->get();
 
-        if ($orderKeys === []) {
+        if ($notifications->isEmpty()) {
             return [];
         }
 
-        $notifications = $this->customerNotificationsQuery($customer, $user)
-            ->where(function (Builder $query) use ($orderKeys) {
-                $query->whereIn('gda_consecutivo', $orderKeys)
-                    ->orWhereIn('gda_order_id', $orderKeys);
-
-                $purchaseIds = collect($orderKeys)
-                    ->filter(fn (string $key) => ctype_digit($key))
-                    ->all();
-
-                if ($purchaseIds !== []) {
-                    $query->orWhereIn('laboratory_purchase_id', $purchaseIds);
-                }
-            })
-            ->with(['laboratoryPurchase'])
-            ->orderBy('created_at')
-            ->get();
-
         return $notifications
-            ->groupBy(fn (LaboratoryNotification $notification) => $this->notificationOrderKey($notification))
+            ->groupBy(fn (LaboratoryNotification $notification) => $this->notificationFolioKey($notification))
             ->map(fn (Collection $group, string $orderKey) => $this->formatNotificationGroup($group, $orderKey))
             ->sortByDesc(fn (array $group) => collect($group['events'])->max('timestamp') ?? 0)
             ->values()
@@ -227,11 +206,16 @@ class BuildCustomerMonitorExtrasAction
             });
     }
 
-    private function notificationOrderKey(LaboratoryNotification $notification): string
+    private function notificationFolioKey(LaboratoryNotification $notification): string
     {
+        $payload = is_array($notification->payload) ? $notification->payload : null;
+        $etiqueta = data_get($payload, 'code.coding.0.infogda_muestras.0.infogda_etiqueta');
+
         return (string) (
-            $notification->gda_consecutivo
+            (is_string($etiqueta) && $etiqueta !== '' ? $etiqueta : null)
+            ?? $notification->laboratoryPurchase?->gda_order_id
             ?? $notification->gda_order_id
+            ?? $notification->gda_consecutivo
             ?? $notification->laboratory_purchase_id
             ?? ('notification-'.$notification->id)
         );

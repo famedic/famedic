@@ -19,18 +19,28 @@ class EnrichLaboratoryAppointmentIndexRowAction
     {
         $progress = ($this->checkoutProgress)($appointment);
         $payable = $progress['payment_blocked_reason'] === null;
+        $paid = $appointment->hasPaidLaboratoryPurchase();
 
         $lastActivityHuman = null;
         if ($appointment->cart_id && $appointment->relationLoaded('cart') && $appointment->cart !== null) {
-            $lastActivityHuman = $this->activityResolver
+            $lastActivityAt = $this->activityResolver
                 ->lastUserActivityAt($appointment->cart)
                 ->timezone('America/Monterrey')
-                ->format('d/m/Y H:i');
+                ->locale('es');
+
+            $lastActivityHuman = sprintf(
+                '%s/%s/%s %s',
+                $lastActivityAt->format('d'),
+                str_replace('.', '', mb_strtolower($lastActivityAt->isoFormat('MMM'))),
+                $lastActivityAt->format('Y'),
+                $lastActivityAt->format('h:i A'),
+            );
         }
 
         return [
             'admin_checkout_flow' => $progress['checkout_flow'],
-            'admin_payment_status_label' => $payable ? 'Pago disponible' : 'Pago bloqueado',
+            'admin_payment_status_label' => $paid ? 'Pago confirmado' : ($payable ? 'Pago disponible' : 'Pago bloqueado'),
+            'admin_is_paid' => $paid,
             'admin_payment_blocked' => ! $payable,
             'admin_payment_blocked_reason' => $progress['payment_blocked_reason'],
             'admin_last_user_activity_human' => $lastActivityHuman,

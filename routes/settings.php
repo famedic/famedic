@@ -18,6 +18,7 @@ use App\Http\Controllers\InAppNotificationController;
 use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\TaxProfileController;
 use App\Http\Controllers\TaxProfiles\FiscalCertificateController;
+use App\Http\Controllers\UserInvitationController;
 use App\Http\Controllers\UserSupportController;
 use Illuminate\Support\Facades\Route;
 
@@ -44,6 +45,7 @@ Route::middleware([
     Route::post('checkout/contacts', CheckoutContactController::class)->name('checkout.contacts.store');
 
     Route::get('/user/support', UserSupportController::class)->name('user.support');
+    Route::get('/user/invitations', UserInvitationController::class)->name('user.invitations');
 
     // Métodos de pago con EfevooPay        
     Route::resource('payment-methods', PaymentMethodController::class)->only([

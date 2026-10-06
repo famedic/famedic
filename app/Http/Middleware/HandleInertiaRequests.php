@@ -246,6 +246,12 @@ class HandleInertiaRequests extends Middleware
                     Route::currentRouteName() === 'contacts.edit',
             ],
             [
+                'label' => 'Invita a tus amigos',
+                'url' => route('user.invitations'),
+                'icon' => 'UsersIcon',
+                'current' => Route::currentRouteName() === 'user.invitations',
+            ],
+            [
                 'label' => 'Soporte',
                 'url' => route('user.support'),
                 'icon' => 'LifebuoyIcon',

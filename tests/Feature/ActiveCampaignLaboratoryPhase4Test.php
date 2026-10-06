@@ -20,6 +20,11 @@ beforeEach(function () {
         'services.activecampaign.fields.lab.mapa_sucursales_labs' => 110,
         'services.activecampaign.fields.lab.toma_de_muestra_lab' => 111,
         'services.activecampaign.fields.lab.resultados_lab' => 112,
+        'services.activecampaign.fields.lab.estudios_comprados' => 113,
+        'services.activecampaign.fields.lab.cantidad_estudios' => 114,
+        'services.activecampaign.fields.lab.fecha_compra' => 115,
+        'services.activecampaign.fields.lab.marca_laboratorio' => 116,
+        'services.activecampaign.fields.lab.total_compra' => 117,
     ]);
 });
 
@@ -38,6 +43,11 @@ function phase4AcFields(array $overrides = []): array
         ['id' => '110', 'title' => 'Mapa Sucursales Laboratorio', 'type' => 'text', 'perstag' => '%MAPA_SUCURSALES_LABS%'],
         ['id' => '111', 'title' => 'Toma de Muestra', 'type' => 'text', 'perstag' => '%TOMA_DE_MUESTRA_LAB%'],
         ['id' => '112', 'title' => 'Resultados Disponibles', 'type' => 'text', 'perstag' => '%RESULTADOS_LAB%'],
+        ['id' => '113', 'title' => 'EstudiosComprados', 'type' => 'text', 'perstag' => '%ESTUDIOSCOMPRADOS%'],
+        ['id' => '114', 'title' => 'Cantidad de Estudios', 'type' => 'text', 'perstag' => '%CANTIDAD_DE_ESTUDIOS%'],
+        ['id' => '115', 'title' => 'Fecha de Compra', 'type' => 'date', 'perstag' => '%FECHA_DE_COMPRA%'],
+        ['id' => '116', 'title' => 'Marca Laboratorio', 'type' => 'text', 'perstag' => '%MARCA_LABORATORIO%'],
+        ['id' => '117', 'title' => 'Total', 'type' => 'text', 'perstag' => '%TOTAL%'],
     ];
 
     foreach ($overrides as $id => $override) {
@@ -129,8 +139,8 @@ it('emits valid json when requested', function () {
 
     expect($exit)->toBe(0)
         ->and($json)->toBeArray()
-        ->and($json['ok'])->toBe(12)
-        ->and($json['fields'])->toHaveCount(12);
+        ->and($json['ok'])->toBe(17)
+        ->and($json['fields'])->toHaveCount(17);
 });
 
 it('verifies configured tags and reports invalid ids', function () {
@@ -138,6 +148,8 @@ it('verifies configured tags and reports invalid ids', function () {
         'services.activecampaign.tags.cart.abandoned' => 20,
         'services.activecampaign.tags.cart.appointment_pending' => 'Cita pendiente',
         'services.activecampaign.tag_laboratory_purchase_completed' => 18,
+        'services.activecampaign.tag_laboratory_purchase_with_appointment' => 'Compra-lab-con-cita',
+        'services.activecampaign.tag_laboratory_purchase_without_appointment' => 'Compra-lab-sin-cita',
         'services.activecampaign.tag_lab_sample_collected' => 999,
         'services.activecampaign.tag_lab_results_available' => 33,
     ]);
@@ -152,9 +164,11 @@ it('verifies configured tags and reports invalid ids', function () {
                 ['id' => '20', 'tag' => 'Carrito abandonado'],
                 ['id' => '21', 'tag' => 'Cita pendiente'],
                 ['id' => '18', 'tag' => 'Compra laboratorio completada'],
+                ['id' => '34', 'tag' => 'Compra-lab-con-cita'],
+                ['id' => '35', 'tag' => 'Compra-lab-sin-cita'],
                 ['id' => '33', 'tag' => 'Resultados disponibles'],
             ],
-            'meta' => ['total' => 4],
+            'meta' => ['total' => 6],
         ], 200),
     ]);
 

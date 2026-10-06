@@ -48,6 +48,15 @@ class ActiveCampaignOutboundDispatcher
         return $this->dispatchService->isCartCallSignalsEnabled();
     }
 
+    private function siteTrackingConfigured(): bool
+    {
+        $accountId = config('services.activecampaign.account_id');
+        $eventKey = config('services.activecampaign.event_key');
+
+        return is_string($accountId) && trim($accountId) !== ''
+            && is_string($eventKey) && trim($eventKey) !== '';
+    }
+
     public function idempotencyKeyForCartAbandonedTag(int $cartId, int $episode): string
     {
         return "cart:{$cartId}:abandoned:episode:{$episode}:tag:add";
@@ -199,6 +208,7 @@ class ActiveCampaignOutboundDispatcher
                 'brand' => $purchase->brand instanceof \BackedEnum ? $purchase->brand->value : $purchase->brand,
                 'total_cents' => $purchase->total_cents,
                 'email' => $email,
+                'tags' => $this->plannedLaboratoryPurchaseTags($purchase),
                 'custom_fields' => $this->laboratoryPayloadBuilder->forPurchaseCompleted($purchase),
             ],
         ]);
@@ -1028,6 +1038,17 @@ class ActiveCampaignOutboundDispatcher
             );
         }
 
+        if (! $this->siteTrackingConfigured()) {
+            return $this->createSkippedSiteEventDispatch(
+                cart: $cart,
+                siteEvent: $siteEvent,
+                sourceEventType: $sourceEventType,
+                idempotencyKey: $idempotencyKey,
+                reason: 'site_event_not_configured',
+                payloadExtras: $payloadExtras,
+            );
+        }
+
         $eventName = $siteEvent->resolvedName();
         $eventData = $this->siteEventPayloadBuilder->build($siteEvent, $cart, $cartEvent);
 
@@ -1207,6 +1228,42 @@ class ActiveCampaignOutboundDispatcher
         if ($dispatch->wasRecentlyCreated && $dispatch->status === ActiveCampaignDispatch::STATUS_PENDING) {
             DispatchActiveCampaignOutboundJob::dispatch($dispatch->id);
         }
+    }
+
+    /**
+     * Tags expected to be applied by ActiveCampaignService::laboratoryPurchase.
+     *
+     * @return list<array{key: string, id?: int|null, name?: string|null}>
+     */
+    private function plannedLaboratoryPurchaseTags(LaboratoryPurchase $purchase): array
+    {
+        $purchase->loadMissing('laboratoryAppointment');
+
+        $tags = [];
+        $completedId = (int) config('services.activecampaign.tag_laboratory_purchase_completed', 18);
+
+        if ($completedId > 0) {
+            $tags[] = [
+                'key' => 'tag_laboratory_purchase_completed',
+                'id' => $completedId,
+                'name' => null,
+            ];
+        }
+
+        $modeKey = $purchase->laboratoryAppointment
+            ? 'tag_laboratory_purchase_with_appointment'
+            : 'tag_laboratory_purchase_without_appointment';
+        $modeName = config('services.activecampaign.'.$modeKey);
+
+        if (is_string($modeName) && trim($modeName) !== '' && trim($modeName) !== '0') {
+            $tags[] = [
+                'key' => $modeKey,
+                'id' => null,
+                'name' => trim($modeName),
+            ];
+        }
+
+        return $tags;
     }
 
     private function resolveEligibleEmail(?User $user): ?string

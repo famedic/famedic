@@ -26,8 +26,13 @@ export default function ResultsDialog({
 	resultsRoute,
 	hasResults,
 	className = "",
+	open,
+	onOpenChange,
+	hideTrigger = false,
 }) {
-	const [isOpen, setIsOpen] = useState(false);
+	const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+	const isOpen = open ?? uncontrolledOpen;
+	const setIsOpen = onOpenChange ?? setUncontrolledOpen;
 	const [showChangeResultsButton, setShowChangeResultsButton] =
 		useState(!!resultsRoute);
 
@@ -55,14 +60,18 @@ export default function ResultsDialog({
 
 	return (
 		<>
-			<Button
-				outline
-				onClick={() => setIsOpen(true)}
-				className={className}
-			>
-				<BeakerIcon />
-				{hasResults ? "Resultados" : "Agregar resultados"}
-			</Button>
+			{!hideTrigger && (
+				<Button
+					outline
+					onClick={() => setIsOpen(true)}
+					className={className}
+				>
+					<BeakerIcon />
+					{hasResults
+						? "Gestionar PDF manual"
+						: "Subir resultados manualmente"}
+				</Button>
+			)}
 
 			<Dialog open={isOpen} onClose={() => setIsOpen(false)}>
 				<form onSubmit={submit}>

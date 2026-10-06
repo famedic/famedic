@@ -65,7 +65,11 @@ class OpenAiClient
         }
 
         if (! $response->successful()) {
-            throw new RuntimeException('OpenAI request failed with status '.$response->status());
+            $responseBody = mb_substr((string) $response->body(), 0, 500);
+
+            throw new RuntimeException(
+                'OpenAI request failed with status '.$response->status().': '.$responseBody
+            );
         }
 
         $content = $response->json('choices.0.message.content');

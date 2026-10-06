@@ -38,6 +38,8 @@ beforeEach(function () {
         'services.activecampaign.account_id' => '12345',
         'services.activecampaign.event_key' => 'event-key-test',
         'services.activecampaign.tag_laboratory_purchase_completed' => 18,
+        'services.activecampaign.tag_laboratory_purchase_with_appointment' => 34,
+        'services.activecampaign.tag_laboratory_purchase_without_appointment' => 35,
         'services.activecampaign.fields.lab.url_finalizar_compra' => 101,
         'services.activecampaign.fields.lab.paciente_lab' => 102,
         'services.activecampaign.fields.lab.sucursal_lab' => 103,
@@ -229,9 +231,16 @@ it('purchase completed payload uses GDA identifiers and clears checkout URL fiel
         ->where('idempotency_key', "laboratory_purchase:{$purchase->id}:purchase_completed")
         ->firstOrFail();
 
+    $studyNames = $purchase->laboratoryPurchaseItems->pluck('name')->map(fn ($name) => trim((string) $name))->filter()->unique()->implode(', ');
+
     expect($dispatch->payload['custom_fields']['folio_famedic'])->toBe($purchase->gda_order_id)
         ->and($dispatch->payload['custom_fields']['gda_consecutivo'])->toBe((string) $purchase->gda_consecutivo)
         ->and($dispatch->payload['custom_fields']['url_finalizar_compra'])->toBe('')
+        ->and($dispatch->payload['custom_fields']['estudios_comprados'])->toBe($studyNames)
+        ->and($dispatch->payload['custom_fields']['cantidad_estudios'])->toBe((string) $purchase->laboratoryPurchaseItems->count())
+        ->and($dispatch->payload['custom_fields']['marca_laboratorio'])->toBe('Olab')
+        ->and($dispatch->payload['custom_fields']['fecha_compra'])->toBe(\Illuminate\Support\Carbon::parse($purchase->paid_at)->format('Y-m-d'))
+        ->and($dispatch->payload['custom_fields']['total_compra'])->toBe(number_format(((int) $purchase->total_cents) / 100, 2, '.', ''))
         ->and($dispatch->payload['custom_fields'])->not->toHaveKey('lista_estudios_lab');
 });
 
@@ -334,9 +343,14 @@ it('sample and results lab fields dispatch only after gates are complete and ign
 });
 
 it('omits unconfigured lab field ids and updates configured fields', function () {
+    \Illuminate\Support\Facades\Cache::forget('ac.lab_fields_by_title');
     config(['services.activecampaign.fields.lab.google_maps_lab' => null]);
 
     Http::fake([
+        'https://ac.test/api/3/fields*' => Http::response([
+            'fields' => [],
+            'meta' => ['total' => 0],
+        ], 200),
         'https://ac.test/api/3/contacts*' => Http::response([
             'contacts' => [['id' => 42, 'email' => 'fields-phase3@example.com']],
         ], 200),
@@ -352,10 +366,40 @@ it('omits unconfigured lab field ids and updates configured fields', function ()
         ],
     ]);
 
-    Http::assertSentCount(2);
+    Http::assertSentCount(3);
     Http::assertSent(fn ($request) => $request->url() === 'https://ac.test/api/3/fieldValues'
         && (int) data_get($request->data(), 'fieldValue.field') === 102
         && data_get($request->data(), 'fieldValue.value') === 'Ana Lopez');
+});
+
+it('resolves an unconfigured purchase field by its ActiveCampaign title', function () {
+    \Illuminate\Support\Facades\Cache::forget('ac.lab_fields_by_title');
+    config(['services.activecampaign.fields.lab.estudios_comprados' => null]);
+
+    Http::fake([
+        'https://ac.test/api/3/fields*' => Http::response([
+            'fields' => [
+                ['id' => '77', 'title' => 'EstudiosComprados', 'type' => 'text'],
+            ],
+            'meta' => ['total' => 1],
+        ], 200),
+        'https://ac.test/api/3/contacts*' => Http::response([
+            'contacts' => [['id' => 42, 'email' => 'estudios@example.com']],
+        ], 200),
+        'https://ac.test/api/3/fieldValues' => Http::response(['fieldValue' => ['id' => 1]], 201),
+    ]);
+
+    app(ActiveCampaignService::class)->handleOutboundLaboratoryCustomFields([
+        'email' => 'estudios@example.com',
+        'event_type' => 'laboratory_purchase_completed',
+        'custom_fields' => [
+            'estudios_comprados' => 'Biometria, Glucosa',
+        ],
+    ]);
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/fieldValues')
+        && (int) data_get($request->data(), 'fieldValue.field') === 77
+        && data_get($request->data(), 'fieldValue.value') === 'Biometria, Glucosa');
 });
 
 it('marks lab custom field dispatch as failed on ActiveCampaign 500 without blocking the flow', function () {

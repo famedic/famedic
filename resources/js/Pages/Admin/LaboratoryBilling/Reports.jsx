@@ -112,6 +112,7 @@ export default function Reports({
 	unusedOldest,
 	topPatients,
 	canManageAutomaticReports = false,
+	navCounts = {},
 }) {
 	const [processing, setProcessing] = useState(false);
 	const onProcessingChange = useCallback((value) => setProcessing(value), []);
@@ -130,6 +131,7 @@ export default function Reports({
 					active="reports"
 					query={filters}
 					canManageAutomaticReports={canManageAutomaticReports}
+					navCounts={navCounts}
 				/>
 
 				<BillingDateRangeFilter

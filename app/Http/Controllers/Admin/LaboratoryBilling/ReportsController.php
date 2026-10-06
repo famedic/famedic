@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\LaboratoryBilling\LaboratoryBillingDateRangeRequest;
 use App\Services\LaboratoryBilling\LaboratoryBillingAccess;
 use App\Services\LaboratoryBilling\LaboratoryBillingDateRange;
 use App\Services\LaboratoryBilling\LaboratoryBillingMetricsService;
+use App\Services\LaboratoryBilling\LaboratoryBillingNavCounts;
 use App\Services\LaboratoryBilling\LaboratoryBillingStatusResolver;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,6 +19,7 @@ class ReportsController extends Controller
         LaboratoryBillingMetricsService $metrics,
         LaboratoryBillingStatusResolver $resolver,
         LaboratoryBillingAccess $access,
+        LaboratoryBillingNavCounts $navCounts,
     ): Response {
         $range = LaboratoryBillingDateRange::fromInput($request->input('from'), $request->input('to'));
         $compliance = $metrics->compliance($range);
@@ -50,6 +52,7 @@ class ReportsController extends Controller
             'unusedOldest' => $metrics->unusedProfilesOldest(10),
             'topPatients' => $metrics->topPatientsByRequests($range, 10),
             'canManageAutomaticReports' => $access->allowsReports($request->user()),
+            'navCounts' => $navCounts->toArray(),
         ]);
     }
 }

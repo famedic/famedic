@@ -27,6 +27,7 @@ import {
 	DocumentArrowUpIcon,
 	PencilSquareIcon,
 	ArrowLeftIcon,
+	SparklesIcon,
 } from "@heroicons/react/24/solid";
 import {
 	Listbox,
@@ -39,6 +40,7 @@ import {
 	TaxProfileEntryModeCard,
 	TaxProfileCompactAlert,
 	TaxProfilePhysicalPersonNotice,
+	TaxProfilePersonTypeCard,
 } from "@/Pages/TaxProfiles/TaxProfileFormUI";
 import {
 	mapExtractionResponseToTaxProfileForm,
@@ -58,14 +60,20 @@ import {
 
 // Pasos del proceso. La revisión final incluye la confirmación y el guardado.
 const STEPS = {
-	UPLOAD: 1,
-	REVIEW: 2,
+	ELIGIBILITY: 1,
+	METHOD: 2,
+	REVIEW: 3,
 };
 
 // Modos de entrada de datos
 const ENTRY_MODES = {
 	AUTOMATIC: "automatic",
 	MANUAL: "manual",
+};
+
+const TAX_PERSON_TYPES = {
+	INDIVIDUAL: "individual",
+	COMPANY: "company",
 };
 
 const FIELD_LABELS = {
@@ -112,9 +120,11 @@ export default function TaxProfileForm({
 	);
 	const [cachedTaxProfile, setCachedTaxProfile] = useState(resolvedTaxProfile);
 
-	const [activeStep, setActiveStep] = useState(STEPS.UPLOAD);
+	const [activeStep, setActiveStep] = useState(STEPS.ELIGIBILITY);
+	const [taxPersonType, setTaxPersonType] = useState(null);
 	const [entryMode, setEntryMode] = useState(ENTRY_MODES.AUTOMATIC);
 	const [isModeSelected, setIsModeSelected] = useState(false);
+	const [showAutomaticUpload, setShowAutomaticUpload] = useState(false);
 
 	const [uploadedFile, setUploadedFile] = useState(null);
 	const [isDragging, setIsDragging] = useState(false);
@@ -270,13 +280,17 @@ export default function TaxProfileForm({
 		abortReasonRef.current = null;
 
 		if (isEditMode && profileSource) {
+			setTaxPersonType(TAX_PERSON_TYPES.INDIVIDUAL);
 			setEntryMode(ENTRY_MODES.MANUAL);
 			setIsModeSelected(true);
+			setShowAutomaticUpload(false);
 			setActiveStep(STEPS.REVIEW);
 		} else {
+			setTaxPersonType(null);
 			setEntryMode(ENTRY_MODES.AUTOMATIC);
 			setIsModeSelected(false);
-			setActiveStep(STEPS.UPLOAD);
+			setShowAutomaticUpload(false);
+			setActiveStep(STEPS.ELIGIBILITY);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [isOpen, adminMode, taxProfileProp, pageTaxProfile, resolvedTaxRegimes, setData]);
@@ -615,9 +629,11 @@ export default function TaxProfileForm({
 		setData("zipcode", "");
 		setData("tax_regime", null);
 		setData("confirm_data", false);
+		setTaxPersonType(TAX_PERSON_TYPES.INDIVIDUAL);
 		setIsModeSelected(true);
 		setEntryMode(ENTRY_MODES.AUTOMATIC);
-		setActiveStep(STEPS.UPLOAD);
+		setShowAutomaticUpload(true);
+		setActiveStep(STEPS.METHOD);
 		if (fileInputRef.current) fileInputRef.current.value = "";
 	};
 
@@ -625,6 +641,7 @@ export default function TaxProfileForm({
 		// Conserva el archivo (si lo hay) para el envío final, pero descarta
 		// cualquier metadato de la extracción automática.
 		setEntryMode(ENTRY_MODES.MANUAL);
+		setShowAutomaticUpload(false);
 		setExtractionError(null);
 		setExtractedData(null);
 		setMissingFields([]);
@@ -639,6 +656,7 @@ export default function TaxProfileForm({
 	const handleEntryModeChange = (mode) => {
 		setEntryMode(mode);
 		setIsModeSelected(true);
+		setShowAutomaticUpload(false);
 		clearErrors("fiscal_certificate");
 		setExtractionError(null);
 
@@ -654,6 +672,7 @@ export default function TaxProfileForm({
 	const handleBackToModeSelection = () => {
 		if (processingPdf) return;
 		setIsModeSelected(false);
+		setShowAutomaticUpload(false);
 		setUploadedFile(null);
 		setData("fiscal_certificate", null);
 		setExtractedData(null);
@@ -664,7 +683,21 @@ export default function TaxProfileForm({
 	};
 
 	const handleNextStep = () => {
-		if (activeStep !== STEPS.UPLOAD) return;
+		if (activeStep === STEPS.ELIGIBILITY) {
+			if (taxPersonType !== TAX_PERSON_TYPES.INDIVIDUAL) {
+				setInfoMessage({
+					type: "error",
+					message: "Para continuar, confirma que el perfil fiscal corresponde a una persona física.",
+				});
+				return;
+			}
+
+			setInfoMessage(null);
+			setActiveStep(STEPS.METHOD);
+			return;
+		}
+
+		if (activeStep !== STEPS.METHOD) return;
 
 		if (!isModeSelected) {
 			setInfoMessage({
@@ -675,12 +708,13 @@ export default function TaxProfileForm({
 		}
 
 		if (entryMode === ENTRY_MODES.MANUAL) {
+			setInfoMessage(null);
 			setActiveStep(STEPS.REVIEW);
 			return;
 		}
 
-		// Modo automático: al seleccionar la tarjeta ya se muestra la subida.
-		setIsModeSelected(true);
+		setInfoMessage(null);
+		setShowAutomaticUpload(true);
 	};
 
 	const handleBackFromReview = () => {
@@ -689,7 +723,8 @@ export default function TaxProfileForm({
 			requestClose();
 			return;
 		}
-		setActiveStep(STEPS.UPLOAD);
+		setShowAutomaticUpload(false);
+		setActiveStep(STEPS.METHOD);
 	};
 
 	const handleReplaceCertificate = () => {
@@ -705,7 +740,8 @@ export default function TaxProfileForm({
 			setExtractionError(null);
 			setData("confirm_data", false);
 			clearErrors("fiscal_certificate");
-			setActiveStep(STEPS.UPLOAD);
+			setShowAutomaticUpload(true);
+			setActiveStep(STEPS.METHOD);
 			return;
 		}
 		manualFileInputRef.current?.click();
@@ -719,9 +755,6 @@ export default function TaxProfileForm({
 		if (uploadedFile) return true;
 		if (extractedData) return true;
 		if (extractionError) return true;
-		if (!cachedEditMode && isModeSelected && entryMode === ENTRY_MODES.MANUAL) {
-			return true;
-		}
 
 		if (cachedEditMode && initialFormSnapshotRef.current) {
 			const initial = initialFormSnapshotRef.current;
@@ -747,8 +780,10 @@ export default function TaxProfileForm({
 		setExtractionError(null);
 		setInfoMessage(null);
 		clearErrors();
-		setActiveStep(STEPS.UPLOAD);
+		setActiveStep(STEPS.ELIGIBILITY);
+		setTaxPersonType(null);
 		setIsModeSelected(false);
+		setShowAutomaticUpload(false);
 		initialFormSnapshotRef.current = null;
 
 		if (adminMode && onClose) {
@@ -1060,6 +1095,89 @@ export default function TaxProfileForm({
 	};
 
 	// ------------------------------------------------------------------
+	// Paso: confirmación de persona física
+	// ------------------------------------------------------------------
+
+	const renderEligibilityStep = () => {
+		const isIndividual = taxPersonType === TAX_PERSON_TYPES.INDIVIDUAL;
+		const isCompany = taxPersonType === TAX_PERSON_TYPES.COMPANY;
+
+		return (
+			<>
+				<DialogTitle>
+					{dialogTitle ||
+						(cachedEditMode
+							? "Actualizar perfil fiscal"
+							: "Nuevo perfil fiscal")}
+				</DialogTitle>
+				<DialogDescription>
+					Primero confirma el tipo de persona fiscal para tu factura.
+				</DialogDescription>
+
+				<DialogBody className="space-y-5 sm:space-y-6">
+					<TaxProfilePhysicalPersonNotice />
+
+					{renderInfoMessage()}
+
+					<div className="space-y-3">
+						<p className="text-base font-semibold text-slate-900 dark:text-white">
+							¿Eres persona física?
+						</p>
+						<div
+							className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4"
+							role="group"
+							aria-label="Tipo de persona fiscal"
+						>
+							<TaxProfilePersonTypeCard
+								selected={isIndividual}
+								onSelect={() => {
+									setTaxPersonType(TAX_PERSON_TYPES.INDIVIDUAL);
+									setInfoMessage(null);
+								}}
+								title="Sí, soy persona física"
+								subtitle="Puedes crear tu perfil fiscal y solicitar factura a tu nombre."
+								tone="blue"
+							/>
+							<TaxProfilePersonTypeCard
+								selected={isCompany}
+								onSelect={() => {
+									setTaxPersonType(TAX_PERSON_TYPES.COMPANY);
+									setInfoMessage(null);
+								}}
+								title="No, soy persona moral"
+								subtitle="Por ahora Famedic no registra perfiles fiscales de empresas."
+								tone="slate"
+							/>
+						</div>
+					</div>
+
+					{isCompany && (
+						<TaxProfileCompactAlert tone="blue">
+							En este momento la facturación en Famedic está disponible para
+							personas físicas. Si necesitas facturar como empresa, contáctanos
+							para revisar alternativas.
+						</TaxProfileCompactAlert>
+					)}
+				</DialogBody>
+
+				<DialogActions>
+					<Button autoFocus dusk="cancel" plain type="button" onClick={requestClose}>
+						Cancelar
+					</Button>
+					<Button
+						type="button"
+						onClick={handleNextStep}
+						disabled={!isIndividual}
+					>
+						Continuar
+						<ChevronRightIcon className="ml-2 h-4 w-4" />
+					</Button>
+				</DialogActions>
+			</>
+		);
+	};
+
+	// ------------------------------------------------------------------
 	// Paso: selección de modo de entrada
 	// ------------------------------------------------------------------
 
@@ -1092,10 +1210,11 @@ export default function TaxProfileForm({
 							onSelect={() => handleEntryModeChange(ENTRY_MODES.AUTOMATIC)}
 							icon={DocumentArrowUpIcon}
 							title="Subir constancia fiscal"
-							subtitle="Extraeremos automáticamente tus datos desde el PDF. Podrás revisarlos antes de guardar."
-							features={["Más rápido", "Requiere un archivo PDF"]}
+							subtitle="La IA leerá tu PDF y extraerá tus datos automáticamente. Podrás revisarlos antes de guardar."
+							features={["Lectura asistida con IA", "Requiere un PDF legible de tu constancia"]}
 							ctaLabel="Usar extracción automática"
 							accent="blue"
+							methodBadge={{ label: "Lectura con IA", icon: "chip" }}
 						/>
 						<TaxProfileEntryModeCard
 							selected={isModeSelected && entryMode === ENTRY_MODES.MANUAL}
@@ -1103,9 +1222,10 @@ export default function TaxProfileForm({
 							icon={PencilSquareIcon}
 							title="Capturar datos manualmente"
 							subtitle="Completa directamente la información de tu perfil fiscal."
-							features={["Captura paso a paso", "Adjunta tu constancia al guardar"]}
+							features={["Captura paso a paso", "Deberás adjuntar tu constancia al guardar"]}
 							ctaLabel="Capturar manualmente"
 							accent="emerald"
+							methodBadge={{ label: "Captura manual", icon: "manual" }}
 						/>
 					</div>
 				</DialogBody>
@@ -1239,13 +1359,16 @@ export default function TaxProfileForm({
 					)}
 
 					{uploadedFile && (
-						<div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800/40">
-							<div className="flex items-center justify-between gap-3">
+						<div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/40">
+							<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 								<div className="flex min-w-0 items-center gap-3">
 									<div className="p-2 bg-blue-100 rounded-lg shrink-0">
 										<DocumentTextIcon className="h-6 w-6 text-blue-600" />
 									</div>
 									<div className="min-w-0">
+										<p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">
+											Constancia lista para leer
+										</p>
 										<p className="truncate text-sm font-medium text-slate-900 dark:text-white">
 											{uploadedFile.name}
 										</p>
@@ -1254,47 +1377,65 @@ export default function TaxProfileForm({
 										</p>
 									</div>
 								</div>
-								<Button
+								<button
 									type="button"
-									plain
 									onClick={handleRemoveFile}
 									disabled={processingPdf}
+									className="self-start text-sm font-medium text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline disabled:pointer-events-none disabled:opacity-50 dark:text-slate-400 dark:hover:text-slate-200"
 								>
 									Cambiar archivo
-								</Button>
+								</button>
 							</div>
 
 							{!processingPdf && !extractionError && (
-								<div className="mt-4 flex flex-wrap items-center gap-4">
-									<Button type="button" onClick={startExtraction} disabled={processingPdf}>
-										Extraer datos
-									</Button>
-									<button
-										type="button"
-										onClick={handleSwitchToManual}
-										className="text-sm text-slate-500 underline hover:text-slate-700 dark:text-slate-400"
-									>
-										Prefiero capturar mis datos manualmente
-									</button>
+								<div className="mt-5 rounded-lg border border-blue-100 bg-blue-50/70 p-4 dark:border-blue-500/20 dark:bg-blue-500/10">
+									<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+										<div className="min-w-0">
+											<p className="text-sm font-semibold text-slate-900 dark:text-white">
+												Lee la constancia automáticamente
+											</p>
+											<p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+												La IA extraerá los datos fiscales del PDF y después podrás revisarlos.
+											</p>
+										</div>
+										<Button
+											type="button"
+											onClick={startExtraction}
+											disabled={processingPdf}
+											className="w-full shrink-0 sm:w-auto"
+										>
+											<SparklesIcon className="mr-2 h-4 w-4" />
+											Leer constancia con IA
+										</Button>
+									</div>
+									<div className="mt-4 border-t border-blue-100 pt-3 dark:border-blue-400/20">
+										<button
+											type="button"
+											onClick={handleSwitchToManual}
+											className="text-sm text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline dark:text-slate-400 dark:hover:text-slate-200"
+										>
+											Prefiero capturar mis datos manualmente
+										</button>
+									</div>
 								</div>
 							)}
 
 							{processingPdf && (
-								<div className="mt-4 space-y-3">
+								<div className="mt-5 rounded-lg border border-blue-100 bg-blue-50/70 p-4 dark:border-blue-500/20 dark:bg-blue-500/10">
 									<div className="flex items-center gap-3">
 										<ArrowPathIcon
 											className="h-5 w-5 shrink-0 animate-spin text-blue-600"
 											aria-hidden
 										/>
-										<span role="status" aria-live="polite" className="text-sm text-slate-700 dark:text-slate-300">
+										<span role="status" aria-live="polite" className="text-sm font-medium text-slate-700 dark:text-slate-300">
 											{extractionMessage}
 										</span>
 									</div>
-									<div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+									<div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-slate-700">
 										<div className="h-full w-full animate-pulse rounded-full bg-gradient-to-r from-blue-400 via-blue-600 to-blue-400" />
 									</div>
 									{showSlowNotice && (
-										<p className="text-xs text-amber-600 dark:text-amber-400" role="status" aria-live="polite">
+										<p className="mt-3 text-xs text-amber-600 dark:text-amber-400" role="status" aria-live="polite">
 											Está tomando más tiempo de lo esperado. Puedes esperar, reintentar o capturar tus datos manualmente.
 										</p>
 									)}
@@ -1670,8 +1811,12 @@ export default function TaxProfileForm({
 			return renderBlockedStep();
 		}
 
-		if (activeStep === STEPS.UPLOAD) {
-			if (isModeSelected && entryMode === ENTRY_MODES.AUTOMATIC) {
+		if (activeStep === STEPS.ELIGIBILITY) {
+			return renderEligibilityStep();
+		}
+
+		if (activeStep === STEPS.METHOD) {
+			if (showAutomaticUpload && entryMode === ENTRY_MODES.AUTOMATIC) {
 				return renderUploadStep();
 			}
 			return renderModeSelectionStep();
@@ -1681,7 +1826,7 @@ export default function TaxProfileForm({
 			return renderReviewStep();
 		}
 
-		return renderModeSelectionStep();
+		return renderEligibilityStep();
 	};
 
 	return (

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActiveCampaignController;
+use App\Http\Controllers\Admin\ActiveCampaignJobsController;
 use App\Http\Controllers\Admin\ActiveCampaignOperationsController;
 use App\Http\Controllers\Admin\AdministratorController;
 use App\Http\Controllers\Admin\ArchiveMarketingCampaignController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Admin\FailedJobsController;
 use App\Http\Controllers\Admin\GdaNotificationSimulatorController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
+use App\Http\Controllers\Admin\LaboratoryBilling\AwaitingSampleController;
 use App\Http\Controllers\Admin\LaboratoryBilling\DashboardController;
 use App\Http\Controllers\Admin\LaboratoryBilling\ExportController as LaboratoryBillingExportController;
 use App\Http\Controllers\Admin\LaboratoryBilling\InvoicesController;
@@ -262,6 +264,7 @@ Route::prefix('admin')->middleware([
 
         Route::prefix('laboratory-billing')->name('laboratory-billing.')->group(function () {
             Route::get('/', DashboardController::class)->name('dashboard');
+            Route::get('/awaiting-sample', AwaitingSampleController::class)->name('awaiting-sample');
             Route::get('/requests', RequestsController::class)->name('requests');
             Route::get('/invoices', InvoicesController::class)->name('invoices');
             Route::get('/tax-profiles', [TaxProfilesBillingController::class, 'index'])->name('tax-profiles.index');
@@ -322,6 +325,7 @@ Route::prefix('admin')->middleware([
         Route::get('logs-general/manage', [LogsGeneralController::class, 'index'])->name('logs-general.manage');
         Route::get('logs-general/download', [LogsGeneralController::class, 'download'])->name('logs-general.download');
         Route::get('failed-jobs', [FailedJobsController::class, 'index'])->name('failed-jobs.index');
+        Route::get('activecampaign-jobs', [ActiveCampaignJobsController::class, 'index'])->name('activecampaign-jobs.index');
 
         // Asistente IA de monitoreo
         Route::get('monitoring-ai', [MonitoringAiController::class, 'index'])->name('monitoring-ai.index');
@@ -482,6 +486,9 @@ Route::prefix('admin')->middleware([
         Route::get('simulators/emails/preview/{type}', [EmailSimulatorController::class, 'preview'])
             ->where('type', '[a-z0-9_]+')
             ->name('simulators.emails.preview');
+        Route::post('simulators/emails/send/{type}', [EmailSimulatorController::class, 'send'])
+            ->where('type', '[a-z0-9_]+')
+            ->name('simulators.emails.send');
         Route::get('simulators/otp', [OtpSimulatorController::class, 'show'])->name('simulators.otp');
         Route::prefix('simulators/otp/{laboratory_purchase}')->name('simulators.otp.')->group(function () {
             Route::get('status', [OtpSimulatorController::class, 'status'])->name('status');
