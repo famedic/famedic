@@ -27,6 +27,7 @@ export default function ResultsSection({
 	otpExpiresIn = 0,
 	isNewResult = false,
 	resultControl = null,
+	errorMessage = null,
 }) {
 	const statusLabel = patientResultStatusLabel(resultControl, hasResults);
 	const statusColor = patientResultStatusColor(resultControl, hasResults);
@@ -82,10 +83,10 @@ export default function ResultsSection({
 						color="famedic-lime"
 						className="w-full justify-center"
 					>
-						{isProcessing && otpRequired ? (
+						{isProcessing ? (
 							<>
 								<ArrowPathIcon className="size-4 animate-spin" />
-								Validando...
+								Obteniendo resultados...
 							</>
 						) : (
 							<>
@@ -94,6 +95,11 @@ export default function ResultsSection({
 							</>
 						)}
 					</Button>
+					{errorMessage ? (
+						<Text className="text-sm text-red-600 dark:text-red-300" role="alert">
+							{errorMessage}
+						</Text>
+					) : null}
 				</>
 			) : null}
 		</div>

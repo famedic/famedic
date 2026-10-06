@@ -16,7 +16,11 @@ class StoreLaboratoryResultPdfAction
         array $metadata = [],
         bool $overwrite = false
     ): string {
+        $updatePurchaseResults = (bool) ($metadata['update_purchase_results'] ?? true);
+
         if (
+            $updatePurchaseResults
+            &&
             ! $overwrite
             && ! empty($laboratoryPurchase->results)
             && Storage::exists($laboratoryPurchase->results)
@@ -61,12 +65,14 @@ class StoreLaboratoryResultPdfAction
             throw new RuntimeException('No se pudo confirmar el archivo PDF en storage.');
         }
 
-        $laboratoryPurchase->results = $path;
-        $laboratoryPurchase->save();
+        if ($updatePurchaseResults) {
+            $laboratoryPurchase->results = $path;
+            $laboratoryPurchase->save();
+        }
 
         $preserveExisting = (bool) ($metadata['preserve_existing'] ?? false);
 
-        if ($existingResults && $existingResults !== $path && $overwrite && ! $preserveExisting) {
+        if ($updatePurchaseResults && $existingResults && $existingResults !== $path && $overwrite && ! $preserveExisting) {
             dispatch(function () use ($existingResults) {
                 if (Storage::exists($existingResults)) {
                     Storage::delete($existingResults);

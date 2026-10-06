@@ -35,4 +35,13 @@ return [
 
     /** Límite de peticiones por minuto e IP en rutas públicas de resultados (send/verify/resend) */
     'rate_limit_per_minute' => (int) env('LAB_RESULTS_RATE_LIMIT', 12),
+
+    'recovery' => [
+        'gda_first' => filter_var(env('LAB_RESULTS_RECOVERY_GDA_FIRST', false), FILTER_VALIDATE_BOOLEAN),
+        'lock_seconds' => (int) env('LAB_RESULTS_RECOVERY_LOCK_SECONDS', 120),
+    ],
+
+    'max_pdf_bytes' => env('LAB_RESULTS_MAX_PDF_BYTES') !== null
+        ? (int) env('LAB_RESULTS_MAX_PDF_BYTES')
+        : 25 * 1024 * 1024,
 ];
