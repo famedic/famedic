@@ -22,7 +22,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * PF-1B.3: FK tax_profile_id, isUsed(), inmutabilidad de edición, sin sync cfdi.
+ * PF-1B.3: FK tax_profile_id, isUsed(), edición de perfiles usados, sin sync cfdi.
  */
 class TaxProfilePf1b3IsolatedTest extends TestCase
 {
@@ -151,25 +151,33 @@ class TaxProfilePf1b3IsolatedTest extends TestCase
     }
 
     #[Test]
-    public function perfil_usado_no_puede_actualizarse_por_policy_ni_action(): void
+    public function perfil_usado_puede_actualizarse_sin_modificar_snapshot_de_solicitud(): void
     {
         [$user, $profile, $customer] = $this->makeCustomerWithProfile();
         Storage::put($profile->fiscal_certificate, '%PDF');
-        app(CreateInvoiceRequestAction::class)($this->makeLaboratoryPurchase($customer), $profile, 'G03');
+        $invoiceRequest = app(CreateInvoiceRequestAction::class)(
+            $this->makeLaboratoryPurchase($customer),
+            $profile,
+            'G03'
+        );
 
-        $this->assertFalse((new TaxProfilePolicy)->update($user, $profile->fresh()));
+        $this->assertTrue((new TaxProfilePolicy)->update($user, $profile->fresh()));
         $this->assertTrue((new TaxProfilePolicy)->delete($user, $profile->fresh()));
         $this->assertTrue((new TaxProfilePolicy)->setDefault($user, $profile->fresh()));
 
-        $this->expectException(InvalidArgumentException::class);
         app(UpdateTaxProfileAction::class)(
-            name: 'Hack',
+            name: 'Persona Fiscal Actualizada',
             rfc: $profile->rfc,
             zipcode: '64000',
             taxRegime: '612',
             cfdiUse: 'D01',
             taxProfile: $profile->fresh(),
         );
+
+        $this->assertSame('Persona Fiscal Actualizada', $profile->fresh()->name);
+        $this->assertSame('D01', $profile->fresh()->cfdi_use);
+        $this->assertSame('Persona Fiscal', $invoiceRequest->fresh()->name);
+        $this->assertSame('G03', $invoiceRequest->fresh()->cfdi_use);
     }
 
     #[Test]
@@ -209,7 +217,7 @@ class TaxProfilePf1b3IsolatedTest extends TestCase
     }
 
     #[Test]
-    public function http_update_de_usado_responde_403_y_destroy_sigue_ok(): void
+    public function http_update_de_usado_actualiza_y_destroy_sigue_ok(): void
     {
         [$user, $profile, $customer] = $this->makeCustomerWithProfile('http@test.local');
         Storage::put($profile->fiscal_certificate, '%PDF');
@@ -217,13 +225,15 @@ class TaxProfilePf1b3IsolatedTest extends TestCase
 
         $this->actingAs($user)
             ->put(route('tax-profiles.update', ['tax_profile' => $profile->id]), [
-                'name' => 'X',
+                'name' => 'Perfil Actualizado',
                 'rfc' => 'MEBE931209BI2',
                 'zipcode' => '64000',
                 'tax_regime' => '612',
                 'cfdi_use' => 'G03',
             ])
-            ->assertForbidden();
+            ->assertRedirect(route('tax-profiles.index'));
+
+        $this->assertSame('Perfil Actualizado', $profile->fresh()->name);
 
         $this->actingAs($user)
             ->delete(route('tax-profiles.destroy', ['tax_profile' => $profile->id]))
