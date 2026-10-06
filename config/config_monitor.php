@@ -22,6 +22,8 @@ return [
         'APP_ENV' => 'app.env',
         'APP_DEBUG' => 'app.debug',
         'APP_URL' => 'app.url',
+        'APP_URL_FROM_REQUEST' => 'app.url_from_request',
+        'TRUSTED_PROXIES' => 'app.trusted_proxies',
         'APP_TIMEZONE' => 'app.timezone',
         'APP_LOCALE' => 'app.locale',
         'APP_FALLBACK_LOCALE' => 'app.fallback_locale',

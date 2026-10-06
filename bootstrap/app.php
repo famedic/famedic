@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -13,15 +14,35 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Nginx (y Cloudflare Tunnel) van delante de PHP; hay que confiar en
+        // X-Forwarded-Proto o Laravel genera http:// y el navegador bloquea el JS.
+        $trustedProxies = env('TRUSTED_PROXIES', '*');
+        $at = $trustedProxies === '*'
+            ? '*'
+            : array_values(array_filter(array_map('trim', explode(',', (string) $trustedProxies))));
+        $middleware->trustProxies(
+            at: $at === [] ? '*' : $at,
+            headers: Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO
+                | Request::HEADER_X_FORWARDED_PREFIX,
+        );
+
         $middleware->validateCsrfTokens(except: [
             'paypal/webhook',
             'apigda/*',
         ]);
 
-        $middleware->web(append: [
-            \App\Http\Middleware\HandleInertiaRequests::class,
-            \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
-        ])->alias([
+        $middleware->web(
+            prepend: [
+                \App\Http\Middleware\UseForwardedRootUrl::class,
+            ],
+            append: [
+                \App\Http\Middleware\HandleInertiaRequests::class,
+                \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
+            ]
+        )->alias([
             'admin' => \App\Http\Middleware\EnsureUserHasAdminAccount::class,
             'super.admin' => \App\Http\Middleware\EnsureUserHasSuperAdminRole::class,
             'customer' => \App\Http\Middleware\EnsureUserHasCustomerAccount::class,

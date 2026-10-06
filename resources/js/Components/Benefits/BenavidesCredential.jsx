@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
 import {
+	ArrowUturnLeftIcon,
 	CheckIcon,
 	ClipboardDocumentIcon,
 } from "@heroicons/react/20/solid";
@@ -9,6 +10,13 @@ import {
 	BENAVIDES_BARCODE_FORMAT,
 	BENAVIDES_BARCODE_OPTIONS,
 } from "@/lib/benavidesBarcode";
+
+const BENAVIDES_CARD_TEMPLATE = "/images/benefits/benavides/card-template-integrated.png";
+const CREDENTIAL_BARCODE_OPTIONS = {
+	...BENAVIDES_BARCODE_OPTIONS,
+	height: 58,
+	width: 1.8,
+};
 
 function fallbackCopy(text) {
 	const textArea = document.createElement("textarea");
@@ -30,17 +38,18 @@ export default function BenavidesCredential({ code, holderName, assignedAt }) {
 	const barcodeRef = useRef(null);
 	const [barcodeFailed, setBarcodeFailed] = useState(false);
 	const [copied, setCopied] = useState(false);
+	const [showBack, setShowBack] = useState(false);
 
 	useEffect(() => {
-		if (!barcodeRef.current || !code) return;
+		if (showBack || !barcodeRef.current || !code) return;
 
 		try {
-			JsBarcode(barcodeRef.current, code, BENAVIDES_BARCODE_OPTIONS);
+			JsBarcode(barcodeRef.current, code, CREDENTIAL_BARCODE_OPTIONS);
 			setBarcodeFailed(false);
 		} catch (error) {
 			setBarcodeFailed(true);
 		}
-	}, [code]);
+	}, [code, showBack]);
 
 	const copyCode = async () => {
 		try {
@@ -70,67 +79,76 @@ export default function BenavidesCredential({ code, holderName, assignedAt }) {
 			aria-label="Credencial Farmacias Benavides"
 			className="w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
 		>
-			<div className="bg-famedic-dark px-5 py-5 text-white dark:bg-slate-950">
-				<p className="text-xs font-semibold uppercase tracking-[0.08em] text-famedic-lime">
-					FAMEDIC x Farmacias Benavides
-				</p>
-				<div className="mt-4 flex items-start justify-between gap-4">
-					<div className="min-w-0">
-						<h2 className="text-xl font-semibold leading-tight">Credencial de beneficio</h2>
-						<p className="mt-1 truncate text-sm text-white/75">{holderName}</p>
-					</div>
-					<div className="rounded-md border border-white/15 px-2.5 py-1 text-xs font-semibold uppercase text-white/80">
-						Activa
-					</div>
+			<div className="relative aspect-[736/1023] overflow-hidden bg-sky-700">
+				<img
+					src={BENAVIDES_CARD_TEMPLATE}
+					alt="Tarjeta de beneficio Farmacias Benavides"
+					className="absolute inset-0 h-full w-full object-cover"
+				/>
+
+				<div className="absolute bottom-[5.9%] left-[14.5%] right-[14.5%] flex h-[7.6%] items-center justify-center">
+					{showBack ? (
+						<div className="flex h-full w-full items-center justify-between gap-3 rounded-xl bg-white/95 px-4 shadow-sm">
+							<div>
+								<p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+									Código
+								</p>
+								<p className="mt-0.5 break-all font-mono text-sm font-semibold tracking-normal text-slate-950 sm:text-base">
+									{code}
+								</p>
+							</div>
+							<Button
+								type="button"
+								outline
+								onClick={copyCode}
+								aria-live="polite"
+								className="shrink-0"
+							>
+								{copied ? (
+									<CheckIcon data-slot="icon" />
+								) : (
+									<ClipboardDocumentIcon data-slot="icon" />
+								)}
+								{copied ? "Copiado" : "Copiar"}
+							</Button>
+						</div>
+					) : (
+						<div className="h-full w-full bg-transparent px-[2%]">
+							<svg
+								ref={barcodeRef}
+								role="img"
+								aria-label={`Código de barras ${code}`}
+								className={barcodeFailed ? "hidden" : "h-full w-full"}
+							/>
+							{barcodeFailed && (
+								<p className="rounded-md bg-white/95 py-3 text-center text-xs text-slate-600">
+									Usa el reverso para ver el código.
+								</p>
+							)}
+						</div>
+					)}
 				</div>
 			</div>
 
-			<div className="space-y-5 px-5 py-5">
-				<div>
-					<p className="text-xs font-medium uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
-						Código
-					</p>
-					<div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-						<p className="break-all font-mono text-2xl font-semibold tracking-normal text-slate-950 dark:text-white">
-							{code}
+			<div className="px-5 py-4">
+				<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+					<div className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
+						<p className="font-medium text-slate-950 dark:text-white">{holderName}</p>
+						<p>
+							Formato de código de barras:{" "}
+							<span className="font-medium">{BENAVIDES_BARCODE_FORMAT}</span>.
 						</p>
-						<Button
-							type="button"
-							outline
-							onClick={copyCode}
-							aria-live="polite"
-							className="w-full sm:w-auto"
-						>
-							{copied ? (
-								<CheckIcon data-slot="icon" />
-							) : (
-								<ClipboardDocumentIcon data-slot="icon" />
-							)}
-							{copied ? "Código copiado" : "Copiar código"}
-						</Button>
+						{formattedDate && <p>Activado el {formattedDate}.</p>}
 					</div>
-				</div>
-
-				<div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700">
-					<svg
-						ref={barcodeRef}
-						role="img"
-						aria-label={`Código de barras ${code}`}
-						className={barcodeFailed ? "hidden" : "h-24 w-full"}
-					/>
-					{barcodeFailed && (
-						<p className="py-8 text-center text-sm text-slate-600">
-							Muestra este código en texto: <span className="font-mono">{code}</span>
-						</p>
-					)}
-				</div>
-
-				<div className="flex flex-col gap-1 border-t border-slate-200 pt-4 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
-					<p>
-						Formato de código de barras:{" "}
-						<span className="font-medium">{BENAVIDES_BARCODE_FORMAT}</span>.
-					</p>
-					{formattedDate && <p>Activado el {formattedDate}.</p>}
+					<Button
+						type="button"
+						outline
+						onClick={() => setShowBack((current) => !current)}
+						className="w-full shrink-0 sm:w-auto"
+					>
+						<ArrowUturnLeftIcon data-slot="icon" />
+						{showBack ? "Frente" : "Reverso"}
+					</Button>
 				</div>
 			</div>
 		</section>

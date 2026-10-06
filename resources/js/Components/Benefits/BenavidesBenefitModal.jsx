@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import {
 	ArrowRightIcon,
-	BuildingStorefrontIcon,
 	CheckCircleIcon,
 	XMarkIcon,
 } from "@heroicons/react/20/solid";
@@ -15,6 +14,8 @@ import {
 	DialogDescription,
 	DialogTitle,
 } from "@/Components/Catalyst/dialog";
+
+const BENAVIDES_HERO = "/images/benefits/benavides/hero.png";
 
 export default function BenavidesBenefitModal({ benefit }) {
 	const [isOpen, setIsOpen] = useState(Boolean(benefit?.showPromotionModal));
@@ -66,10 +67,15 @@ export default function BenavidesBenefitModal({ benefit }) {
 
 	return (
 		<Dialog open={isOpen} onClose={handleClose} size="lg">
-			<div className="flex items-start justify-between gap-4">
-				<div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-famedic-dark text-famedic-lime dark:bg-famedic-lime dark:text-famedic-darker">
-					<BuildingStorefrontIcon className="size-7" aria-hidden="true" />
-				</div>
+			<div className="-mx-6 -mt-6 overflow-hidden rounded-t-lg sm:-mx-8 sm:-mt-8">
+				<img
+					src={BENAVIDES_HERO}
+					alt=""
+					className="h-44 w-full object-cover object-[60%_center]"
+				/>
+			</div>
+
+			<div className="mt-5 flex items-start justify-end">
 				<button
 					type="button"
 					onClick={dismiss}
@@ -81,8 +87,8 @@ export default function BenavidesBenefitModal({ benefit }) {
 				</button>
 			</div>
 
-			<div className="mt-5">
-				<p className="text-xs font-semibold uppercase tracking-[0.08em] text-famedic-dark dark:text-famedic-300">
+			<div className="-mt-4">
+				<p className="text-xs font-semibold uppercase tracking-[0.08em] text-sky-700 dark:text-sky-300">
 					FAMEDIC + Farmacias Benavides
 				</p>
 				<DialogTitle className="mt-2 text-2xl/8 sm:text-2xl/8">

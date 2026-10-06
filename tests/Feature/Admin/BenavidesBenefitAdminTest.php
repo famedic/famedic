@@ -8,6 +8,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
     Storage::fake('local');
@@ -27,6 +28,18 @@ function benavidesAdmin(bool $withPermission = true): User
             'guard_name' => 'web',
         ]));
     }
+
+    return $user->fresh('administrator');
+}
+
+function benavidesAdminWithRole(string $roleName = 'Administrador'): User
+{
+    $user = User::factory()
+        ->withCompleteProfile()
+        ->create(['documentation_accepted_at' => now()]);
+
+    $administrator = Administrator::factory()->for($user)->create();
+    $administrator->assignRole($roleName);
 
     return $user->fresh('administrator');
 }
@@ -77,6 +90,48 @@ it('allows authorized administrators to access the Benavides admin monitor', fun
             ->has('codes'));
 });
 
+it('assigns the Benavides permission to admin roles', function () {
+    $permission = Permission::query()
+        ->where('name', 'benavides-benefit.manage')
+        ->where('guard_name', 'web')
+        ->first();
+
+    expect($permission)->not->toBeNull()
+        ->and(Role::where('name', 'Administrador')->first()->hasPermissionTo('benavides-benefit.manage'))->toBeTrue()
+        ->and(Role::where('name', 'superadmin')->first()->hasPermissionTo('benavides-benefit.manage'))->toBeTrue();
+});
+
+it('allows administrators through the Administrador role permission', function () {
+    $this->actingAs(benavidesAdminWithRole())
+        ->withSession(benavidesAdminSession())
+        ->get(route('admin.benavides-benefit.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/BenavidesBenefit/Index'));
+});
+
+it('shows the Benavides benefit item in the admin pharmacy sidebar when permitted', function () {
+    $this->actingAs(benavidesAdminWithRole())
+        ->withSession(benavidesAdminSession())
+        ->get(route('admin.benavides-benefit.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('adminNavigation.1.label', 'OPERACIÓN')
+            ->where('adminNavigation.1.items.1.label', 'Farmacia')
+            ->where('adminNavigation.1.items.1.items.2.label', 'Beneficio Benavides')
+            ->where('adminNavigation.1.items.1.items.2.url', route('admin.benavides-benefit.index'))
+            ->where('adminNavigation.1.items.1.items.2.current', true));
+});
+
+it('hides the Benavides benefit sidebar item from admins without permission', function () {
+    $this->actingAs(benavidesAdmin(false))
+        ->withSession(benavidesAdminSession())
+        ->get(route('admin.admin'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->missing('adminNavigation.1.items.1.items.2'));
+});
+
 it('blocks administrators without permission from importing', function () {
     $this->actingAs(benavidesAdmin(false))
         ->withSession(benavidesAdminSession())
@@ -116,6 +171,37 @@ it('enforces the Benavides permission on every admin route', function () {
         ->withSession(benavidesAdminSession())
         ->post(route('admin.benavides-benefit.import.confirm'), ['import_id' => $import->id])
         ->assertForbidden();
+});
+
+it('allows authorized administrators to open every Benavides admin route', function () {
+    $authorizedAdmin = benavidesAdminWithRole();
+    $import = BenavidesCodeImport::query()->create([
+        'original_filename' => 'codes.csv',
+        'status' => BenavidesCodeImport::STATUS_PREVIEWED,
+        'uploaded_by_user_id' => $authorizedAdmin->id,
+    ]);
+
+    $this->actingAs($authorizedAdmin)
+        ->withSession(benavidesAdminSession())
+        ->get(route('admin.benavides-benefit.index'))
+        ->assertOk();
+
+    $this->actingAs($authorizedAdmin)
+        ->withSession(benavidesAdminSession())
+        ->get(route('admin.benavides-benefit.import'))
+        ->assertOk();
+
+    $this->actingAs($authorizedAdmin)
+        ->withSession(benavidesAdminSession())
+        ->post(route('admin.benavides-benefit.import.preview'), [
+            'source_file' => benavidesCsvUpload("code\n0001\n"),
+        ])
+        ->assertRedirect(route('admin.benavides-benefit.import'));
+
+    $this->actingAs($authorizedAdmin)
+        ->withSession(benavidesAdminSession())
+        ->post(route('admin.benavides-benefit.import.confirm'), ['import_id' => $import->id])
+        ->assertRedirect(route('admin.benavides-benefit.import'));
 });
 
 it('generates preview for a valid file and preserves leading zeroes', function () {

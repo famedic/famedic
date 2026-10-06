@@ -55,6 +55,18 @@ return [
     'url' => env('APP_URL', 'http://localhost'),
 
     /*
+    | En local, con un túnel (Cloudflare, ngrok, etc.), usa el Host de la petición
+    | para generar URLs (Ziggy, redirects, assets). Artisan sigue usando APP_URL.
+    */
+    'url_from_request' => (bool) env('APP_URL_FROM_REQUEST', false),
+
+    /*
+    | Proxies de confianza para X-Forwarded-* (HTTPS del túnel). "*" solo en local.
+    | Lista separada por comas, o "*" para confiar en todos.
+    */
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------

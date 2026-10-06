@@ -3,7 +3,7 @@ import laravel from 'laravel-vite-plugin';
 import react from '@vitejs/plugin-react';
 
 /** Orígenes que pueden cargar módulos desde el dev server (página en nginx u otro puerto). */
-function devServerCorsOrigins(appUrl) {
+function devServerCorsOrigins(appUrl, env = {}) {
     const base = (appUrl || 'http://localhost:8080').replace(/\/$/, '');
     const origins = new Set([
         base,
@@ -12,6 +12,11 @@ function devServerCorsOrigins(appUrl) {
         'http://localhost:5173',
         'http://127.0.0.1:5173',
     ]);
+    String(env.VITE_TUNNEL_ORIGIN || '')
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+        .forEach((origin) => origins.add(origin.replace(/\/$/, '')));
     try {
         const u = new URL(base);
         const alt =
@@ -47,7 +52,7 @@ export default defineConfig(({ mode }) => {
                 clientPort: Number(devServerUrl.port) || 5173,
             },
             cors: {
-                origin: devServerCorsOrigins(appUrl),
+                origin: devServerCorsOrigins(appUrl, env),
             },
             watch: {
                 usePolling: true,

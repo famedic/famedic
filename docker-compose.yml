@@ -9,7 +9,22 @@
 #
 # URLs:
 #   - Aplicación: http://localhost:8080
-#   - Vite (HMR): http://localhost:5173
+#   - Vite (HMR): http://localhost:5173  (solo con perfil dev)
+#
+# Túnel Cloudflare automático (celular / otra red):
+#   En .env:
+#     COMPOSE_PROFILES=tunnel
+#     TRUSTED_PROXIES=*
+#     APP_URL_FROM_REQUEST=true
+#   Luego: docker compose up -d --remove-orphans
+#   URL pública: bash docker/tunnel-url.sh
+#   (o: docker compose logs cloudflared | grep trycloudflare)
+#
+# Desarrollo con HMR (sin túnel): en .env pon COMPOSE_PROFILES=dev (o comenta tunnel)
+#   docker compose up -d
+#
+# Recompilar assets para el túnel tras cambios en JS/CSS:
+#   TUNNEL_REBUILD_ASSETS=true docker compose up -d tunnel-assets
 #
 # MySQL arranca con el stack. En .env usa DB_HOST=mysql (desde el contenedor app).
 # Desde MySQL Workbench en tu PC: Host 127.0.0.1, Puerto 3306 (o MYSQL_PORT).
@@ -71,8 +86,11 @@ services:
       retries: 10
       start_period: 30s
 
+  # Vite HMR: solo con perfil dev (COMPOSE_PROFILES=dev). No correr junto al túnel.
   node:
     image: node:20-bookworm
+    profiles:
+      - dev
     working_dir: /var/www/html
     command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
     volumes:
@@ -83,6 +101,36 @@ services:
       - famedic
     tty: true
     stdin_open: true
+
+  # Prepara assets compilados y borra public/hot antes de abrir el túnel.
+  tunnel-assets:
+    image: node:20-bookworm
+    profiles:
+      - tunnel
+    working_dir: /var/www/html
+    environment:
+      TUNNEL_REBUILD_ASSETS: "${TUNNEL_REBUILD_ASSETS:-false}"
+    command: bash docker/tunnel-assets.sh
+    volumes:
+      - .:/var/www/html
+    networks:
+      - famedic
+
+  # Quick Tunnel: no requiere cuenta ni instalar cloudflared en el host.
+  # La URL cambia cada vez que el contenedor arranca.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles:
+      - tunnel
+    command: tunnel --no-autoupdate --url http://nginx:80
+    networks:
+      - famedic
+    depends_on:
+      nginx:
+        condition: service_started
+      tunnel-assets:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
 volumes:
   mysql_data:

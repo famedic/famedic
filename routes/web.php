@@ -9,6 +9,7 @@ use App\Http\Controllers\InvoiceXmlController;
 use App\Http\Controllers\LaboratoryPurchasePdfController;
 use App\Http\Controllers\Marketing\MarketingCampaignLinkAuthController;
 use App\Http\Controllers\Marketing\MarketingCampaignLinkController;
+use App\Http\Controllers\PharmacyPartnershipController;
 use App\Http\Controllers\PrivacyPolicyController;
 use App\Http\Controllers\ResultsController;
 use App\Http\Controllers\SharedLaboratoryOrderController;
@@ -21,6 +22,7 @@ use App\Http\Middleware\EnsureLabResultsOtpVerified;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', WelcomeController::class)->name('welcome');
+Route::get('/farmacias', PharmacyPartnershipController::class)->name('pharmacies.index');
 
 Route::get('/c/{slug}', MarketingCampaignLinkController::class)
     ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')

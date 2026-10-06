@@ -1,5 +1,6 @@
 import { Head, useForm } from "@inertiajs/react";
 import {
+	ChevronDownIcon,
 	CheckCircleIcon,
 	ExclamationCircleIcon,
 	GiftIcon,
@@ -9,6 +10,9 @@ import {
 import BenavidesCredential from "@/Components/Benefits/BenavidesCredential";
 import { Button } from "@/Components/Catalyst/button";
 import SettingsLayout from "@/Layouts/SettingsLayout";
+
+const BENAVIDES_HERO = "/images/benefits/benavides/hero.png";
+const BENAVIDES_LOGO = "/images/benefits/benavides/official-logo.png";
 
 function InfoPanel({ icon: Icon, title, children, tone = "neutral" }) {
 	const tones = {
@@ -34,15 +38,38 @@ function InfoPanel({ icon: Icon, title, children, tone = "neutral" }) {
 }
 
 function Instructions() {
+	const steps = [
+		[
+			"Muestra tu credencial",
+			"Presenta el código de barras en farmacia o usa el reverso si te piden dictarlo.",
+		],
+		[
+			"Validación en Benavides",
+			"El personal de Farmacias Benavides validará el código según sus procesos vigentes.",
+		],
+		[
+			"Consúltala cuando quieras",
+			"Esta credencial queda disponible en Mis beneficios para futuras visitas.",
+		],
+	];
+
 	return (
 		<section className="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
 			<h2 className="text-base font-semibold text-slate-950 dark:text-white">
 				Cómo usar tu beneficio
 			</h2>
-			<ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-				<li>Muestra tu credencial o dicta el código cuando te lo soliciten en farmacia.</li>
-				<li>El personal de Farmacias Benavides validará el código de acuerdo con sus procesos vigentes.</li>
-				<li>Conserva esta pantalla para futuras consultas desde tu cuenta FAMEDIC.</li>
+			<ul className="mt-5 space-y-4">
+				{steps.map(([title, text], index) => (
+					<li key={title} className="flex gap-3">
+						<span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-famedic-dark text-sm font-semibold text-white dark:bg-famedic-300 dark:text-slate-950">
+							{index + 1}
+						</span>
+						<div>
+							<h3 className="text-sm font-semibold text-slate-950 dark:text-white">{title}</h3>
+							<p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{text}</p>
+						</div>
+					</li>
+				))}
 			</ul>
 		</section>
 	);
@@ -50,22 +77,35 @@ function Instructions() {
 
 function ActivationState({ processing, onActivate }) {
 	return (
-		<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] lg:items-start">
-			<section className="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 sm:p-6">
-				<p className="text-sm font-semibold uppercase tracking-[0.08em] text-famedic-dark dark:text-famedic-300">
-					FAMEDIC x Farmacias Benavides
-				</p>
-				<h1 className="mt-3 text-2xl font-semibold tracking-normal text-slate-950 dark:text-white sm:text-3xl">
-					Nuevo beneficio para ti
-				</h1>
-				<p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300 sm:text-base">
-					Activa tu credencial FAMEDIC para recibir un código personal de Farmacias Benavides.
-					La activación es explícita y el código quedará asociado a tu cuenta.
-				</p>
+		<div className="space-y-4">
+			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+				<div className="relative min-h-64 overflow-hidden bg-slate-950 sm:min-h-80">
+					<img
+						src={BENAVIDES_HERO}
+						alt="Farmacias Benavides"
+						className="absolute inset-0 h-full w-full object-cover object-center"
+					/>
+					<div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/50 to-slate-950/20" />
+					<div className="relative flex min-h-64 max-w-2xl flex-col justify-end p-5 text-white sm:min-h-80 sm:p-6">
+						<div className="mb-5 inline-flex w-fit items-center rounded-md bg-white/95 px-3 py-2 shadow-sm">
+							<img
+								src={BENAVIDES_LOGO}
+								alt="Farmacias Benavides"
+								className="h-8 w-52 object-contain object-left"
+							/>
+						</div>
+						<h1 className="max-w-lg text-2xl font-semibold tracking-normal drop-shadow-sm sm:text-3xl">
+							Tu beneficio Benavides
+						</h1>
+						<p className="mt-4 max-w-lg rounded-md bg-slate-950/55 p-3 text-sm leading-6 text-white shadow-sm ring-1 ring-white/10 backdrop-blur-[2px] sm:text-base">
+							Activa tu credencial para recibir un código personal y consultarlo desde tu cuenta cuando lo necesites.
+						</p>
+					</div>
+				</div>
 
-				<div className="mt-6 grid gap-3 sm:grid-cols-3">
+				<div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">
 					{[
-						["Código personal", "Asignado a tu cuenta FAMEDIC."],
+						["Código personal", "Asignado a tu cuenta."],
 						["Consulta permanente", "Disponible desde Mis beneficios."],
 						["Uso simple", "Muestra el código cuando te lo soliciten."],
 					].map(([title, text]) => (
@@ -82,7 +122,7 @@ function ActivationState({ processing, onActivate }) {
 					))}
 				</div>
 
-				<form onSubmit={onActivate} className="mt-7">
+				<form onSubmit={onActivate} className="px-5 pb-5 sm:px-6 sm:pb-6">
 					<Button type="submit" disabled={processing} className="w-full sm:w-auto">
 						<SparklesIcon data-slot="icon" />
 						{processing ? "Activando..." : "Activar mi beneficio"}
@@ -90,12 +130,22 @@ function ActivationState({ processing, onActivate }) {
 				</form>
 			</section>
 
-			<InfoPanel icon={ShieldCheckIcon} title="Antes de activar">
-				<p>
+			<details className="group rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+				<summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-950 marker:hidden dark:text-white">
+					<span className="inline-flex items-center gap-2">
+						<ShieldCheckIcon className="size-5 text-slate-500 dark:text-slate-400" aria-hidden="true" />
+						Antes de activar
+					</span>
+					<ChevronDownIcon
+						className="size-5 text-slate-400 transition group-open:rotate-180"
+						aria-hidden="true"
+					/>
+				</summary>
+				<div className="border-t border-slate-100 px-4 pb-4 pt-3 text-sm leading-6 text-slate-600 dark:border-slate-800 dark:text-slate-300">
 					El beneficio se asigna por disponibilidad de códigos. Si la disponibilidad se agota durante
 					el proceso, te mostraremos un mensaje claro y podrás volver a consultar esta sección.
-				</p>
-			</InfoPanel>
+				</div>
+			</details>
 		</div>
 	);
 }

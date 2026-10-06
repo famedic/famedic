@@ -30,6 +30,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Routing\Redirector;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Cashier\Cashier;
 use Stripe\StripeClient;
@@ -114,6 +115,12 @@ class AppServiceProvider extends ServiceProvider
                 $connectionName,
                 config('database.connections.'.$connectionName, []),
             );
+        }
+
+        if (config('app.url_from_request')) {
+            Vite::createAssetPathsUsing(function (string $path, ?bool $secure = null) {
+                return '/'.ltrim($path, '/');
+            });
         }
 
         RateLimiter::for('tax-profile-extract', function (Request $request) {

@@ -93,6 +93,11 @@ class HandleInertiaRequests extends Middleware
                     'url' => route('laboratory-brand-selection'),
                     'current' => Route::currentRouteName() === 'laboratory-brand-selection' || Route::currentRouteName() === 'laboratory-stores.index' || Route::currentRouteName() === 'laboratory-tests' || Route::currentRouteName() === 'laboratory.shopping-cart',
                 ],
+                [
+                    'label' => 'Farmacias',
+                    'url' => route('pharmacies.index'),
+                    'current' => Route::currentRouteName() === 'pharmacies.index' || Route::currentRouteName() === 'user.benefits.benavides.show',
+                ],
                 /*[
                     'label' => 'Farmacía en línea',
                     'url' => route('online-pharmacy'),
