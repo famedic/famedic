@@ -22,6 +22,35 @@ function patientResultMessage(status, hasSampleCollected = false) {
 	}
 }
 
+function PatientResultStatusBadge({ resultStatus }) {
+	const label = resultStatus.status_label || "Estado del resultado";
+	const isSensitiveStatus = resultStatus.status === "manual_review" || resultStatus.status === "error";
+
+	if (isSensitiveStatus) {
+		return (
+			<Badge
+				color={resultStatus.status_color || "slate"}
+				className="size-6 justify-center rounded-full p-0"
+				title={label}
+				aria-label={label}
+			>
+				<ClockIcon className="size-3.5" />
+			</Badge>
+		);
+	}
+
+	return (
+		<Badge color={resultStatus.status_color || "slate"} className="inline-flex items-center gap-1">
+			{resultStatus.status === "complete" ? (
+				<CheckCircleIcon className="size-3.5" />
+			) : (
+				<ClockIcon className="size-3.5" />
+			)}
+			{label}
+		</Badge>
+	);
+}
+
 function normalizePackageFeatures(raw) {
 	if (raw == null) return [];
 	const list = Array.isArray(raw) ? raw : [];
@@ -103,14 +132,18 @@ export default function StudiesTable({
 									<td className="px-3 py-3 align-top text-right sm:px-4">
 										{study.resultStatus ? (
 											<div className="inline-flex max-w-44 flex-col items-end gap-1">
-												<Badge color={study.resultStatus.status_color || "slate"} className="inline-flex items-center gap-1">
-													{study.resultStatus.status === "complete" ? (
-														<CheckCircleIcon className="size-3.5" />
-													) : (
-														<ClockIcon className="size-3.5" />
-													)}
-													{study.resultStatus.status_label}
-												</Badge>
+												{showAdminMetadata ? (
+													<Badge color={study.resultStatus.status_color || "slate"} className="inline-flex items-center gap-1">
+														{study.resultStatus.status === "complete" ? (
+															<CheckCircleIcon className="size-3.5" />
+														) : (
+															<ClockIcon className="size-3.5" />
+														)}
+														{study.resultStatus.status_label}
+													</Badge>
+												) : (
+													<PatientResultStatusBadge resultStatus={study.resultStatus} />
+												)}
 												<span className="text-right text-[11px] leading-snug text-zinc-500 dark:text-slate-400">
 													{showAdminMetadata
 														? study.resultStatus.message

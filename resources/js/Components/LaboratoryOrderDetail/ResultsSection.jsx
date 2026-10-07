@@ -33,6 +33,7 @@ export default function ResultsSection({
 	const statusColor = patientResultStatusColor(resultControl, hasResults);
 	const statusMessage = patientResultStatusMessage(resultControl, hasResults);
 	const buttonLabel = resultControl?.button_label || "Ver resultados";
+	const compactStatusBadge = statusColor === "red";
 
 	return (
 		<div className="space-y-4">
@@ -40,7 +41,14 @@ export default function ResultsSection({
 				<h3 className="break-words text-base font-semibold text-zinc-900 dark:text-white">Resultados</h3>
 				<div className="flex flex-wrap items-center gap-2">
 					{isNewResult && <NewResultBadge compact />}
-					<Badge color={statusColor}>{statusLabel}</Badge>
+					<Badge
+						color={statusColor}
+						className={compactStatusBadge ? "size-6 justify-center rounded-full p-0" : undefined}
+						title={statusLabel}
+						aria-label={statusLabel}
+					>
+						{compactStatusBadge ? <ClockIcon className="size-3.5" /> : statusLabel}
+					</Badge>
 				</div>
 			</div>
 			<Text className="text-sm text-zinc-600 dark:text-slate-400">{statusMessage}</Text>
