@@ -65,6 +65,15 @@ class LaboratoryResultPdfClassifier
             );
         }
 
+        if ($this->hasSwisslabReleasedResultSignal($normalized)) {
+            return new LaboratoryResultPdfClassificationResult(
+                classification: LaboratoryResultPdfClassification::Complete,
+                reason: 'swisslab_released_result_signal',
+                matchedRule: 'gda_swisslab_released_result_v1',
+                confidence: 1.0,
+            );
+        }
+
         return new LaboratoryResultPdfClassificationResult(
             classification: LaboratoryResultPdfClassification::Unknown,
             reason: 'unknown_document',
@@ -134,5 +143,23 @@ class LaboratoryResultPdfClassifier
         return (bool) preg_match('/\bresultado\s+final\b/u', $normalizedText)
             || (bool) preg_match('/\binterpretacion\s+realizada\b/u', $normalizedText)
             || (bool) preg_match('/\bestudio\s+interpretado\b/u', $normalizedText);
+    }
+
+    private function hasSwisslabReleasedResultSignal(string $normalizedText): bool
+    {
+        if (! str_contains($normalizedText, 'swisslab')) {
+            return false;
+        }
+
+        $hasReleasedLaboratoryResult = str_contains($normalizedText, 'estudio resultado unidades valores de referencia')
+            && (bool) preg_match('/\bliberacion\b/u', $normalizedText)
+            && (bool) preg_match('/\blibero\b/u', $normalizedText);
+
+        $hasReleasedRadiologyResult = str_contains($normalizedText, 'reporte radiologico')
+            && str_contains($normalizedText, 'datos del estudio')
+            && (bool) preg_match('/\bimpresion\s+diagnostica\b/u', $normalizedText)
+            && (bool) preg_match('/\bmedico\s+radiologo\b/u', $normalizedText);
+
+        return $hasReleasedLaboratoryResult || $hasReleasedRadiologyResult;
     }
 }

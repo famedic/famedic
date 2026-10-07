@@ -69,6 +69,45 @@ class LaboratoryResultPdfClassifierTest extends TestCase
         }
     }
 
+    #[Test]
+    public function detecta_pdf_liberado_de_swisslab_con_resultados_de_laboratorio(): void
+    {
+        $result = app(LaboratoryResultPdfClassifier::class)->classifyBinary(
+            $this->pdfWithText(
+                'SwissLab S.A. de C.V. ESTUDIO RESULTADO UNIDADES VALORES DE REFERENCIA GLUCOSA 78 mg/dL Liberacion 17/06/2026 04:51:00 p.m. Libero QCBSMCT'
+            )
+        );
+
+        $this->assertSame(LaboratoryResultPdfClassification::Complete, $result->classification);
+        $this->assertSame('gda_swisslab_released_result_v1', $result->matchedRule);
+    }
+
+    #[Test]
+    public function detecta_pdf_liberado_de_swisslab_con_reporte_radiologico(): void
+    {
+        $result = app(LaboratoryResultPdfClassifier::class)->classifyBinary(
+            $this->pdfWithText(
+                'SWISSLAB REPORTE RADIOLOGICO DATOS DEL ESTUDIO MEDICO RADIOLOGO Tecnica Hallazgos Impresion diagnostica Colecistitis litiasica aguda.'
+            )
+        );
+
+        $this->assertSame(LaboratoryResultPdfClassification::Complete, $result->classification);
+        $this->assertSame('gda_swisslab_released_result_v1', $result->matchedRule);
+    }
+
+    #[Test]
+    public function frase_pendiente_tiene_prioridad_sobre_senal_liberada_de_swisslab(): void
+    {
+        $result = app(LaboratoryResultPdfClassifier::class)->classifyBinary(
+            $this->pdfWithText(
+                'SwissLab S.A. de C.V. ESTUDIO RESULTADO UNIDADES VALORES DE REFERENCIA Liberacion Libero. La interpretacion de este estudio aun no se ha realizado.'
+            )
+        );
+
+        $this->assertSame(LaboratoryResultPdfClassification::PendingInterpretation, $result->classification);
+        $this->assertSame('gda_interpretation_not_performed_v1', $result->matchedRule);
+    }
+
     private function pdfWithText(string $text): string
     {
         $dompdf = new Dompdf;
