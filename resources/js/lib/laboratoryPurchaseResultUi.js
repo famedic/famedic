@@ -14,10 +14,9 @@ const PATIENT_STATUS_MESSAGES = {
 	pending_interpretation: "El laboratorio ya está procesando tus resultados.",
 	awaiting_sample:
 		"El siguiente paso es acudir a tu toma de muestra. Cuando el laboratorio la confirme, aquí verás que tus resultados están en proceso.",
-	manual_review: "Nuestro equipo está validando tus resultados.",
-	error: "Estamos dando seguimiento a tu orden.",
-	pending:
-		"Ya registramos tu toma de muestra. El laboratorio está procesando tus resultados y te avisaremos cuando estén listos.",
+	manual_review: "",
+	error: "",
+	pending: "",
 };
 
 /**
@@ -53,7 +52,7 @@ export function patientResultStatusColor(resultControl, hasResults = false) {
 	const status = resolveEffectiveResultStatus(resultControl, hasResults);
 
 	if (status === "complete" || status === "legacy_available") return "green";
-	if (status === "manual_review" || status === "error") return "red";
+	if (status === "manual_review" || status === "error") return "amber";
 	if (status === "pending_interpretation" || status === "pending") return "amber";
 	if (status === "awaiting_sample") return "sky";
 

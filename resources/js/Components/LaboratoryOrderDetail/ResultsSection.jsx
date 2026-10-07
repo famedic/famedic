@@ -1,7 +1,7 @@
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Text, Strong } from "@/Components/Catalyst/text";
-import { ArrowPathIcon, ClockIcon, EyeIcon, LockClosedIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, FlagIcon, ClockIcon, EyeIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 
 function formatCountdown(totalSeconds = 0) {
 	const safe = Math.max(0, Number(totalSeconds) || 0);
@@ -15,6 +15,7 @@ import {
 	patientResultStatusColor,
 	patientResultStatusLabel,
 	patientResultStatusMessage,
+	resolveEffectiveResultStatus,
 } from "@/lib/laboratoryPurchaseResultUi";
 
 export default function ResultsSection({
@@ -32,8 +33,10 @@ export default function ResultsSection({
 	const statusLabel = patientResultStatusLabel(resultControl, hasResults);
 	const statusColor = patientResultStatusColor(resultControl, hasResults);
 	const statusMessage = patientResultStatusMessage(resultControl, hasResults);
+	const effectiveStatus = resolveEffectiveResultStatus(resultControl, hasResults);
 	const buttonLabel = resultControl?.button_label || "Ver resultados";
-	const compactStatusBadge = statusColor === "red";
+	const compactStatusBadge = effectiveStatus === "manual_review" || effectiveStatus === "error";
+	const compactStatusLabel = "Señal de seguimiento";
 
 	return (
 		<div className="space-y-4">
@@ -44,14 +47,16 @@ export default function ResultsSection({
 					<Badge
 						color={statusColor}
 						className={compactStatusBadge ? "size-6 justify-center rounded-full p-0" : undefined}
-						title={statusLabel}
-						aria-label={statusLabel}
+						title={compactStatusBadge ? compactStatusLabel : statusLabel}
+						aria-label={compactStatusBadge ? compactStatusLabel : statusLabel}
 					>
-						{compactStatusBadge ? <ClockIcon className="size-3.5" /> : statusLabel}
+						{compactStatusBadge ? <FlagIcon className="size-3.5" /> : statusLabel}
 					</Badge>
 				</div>
 			</div>
-			<Text className="text-sm text-zinc-600 dark:text-slate-400">{statusMessage}</Text>
+			{statusMessage ? (
+				<Text className="text-sm text-zinc-600 dark:text-slate-400">{statusMessage}</Text>
+			) : null}
 
 			{hasResults ? (
 				<>

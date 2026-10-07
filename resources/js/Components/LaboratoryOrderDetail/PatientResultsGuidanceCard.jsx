@@ -9,7 +9,7 @@ import {
 	CheckCircleIcon,
 	ClockIcon,
 	EyeIcon,
-	InformationCircleIcon,
+	FlagIcon,
 } from "@heroicons/react/24/outline";
 
 function patientGuidance(resultControl, hasResults) {
@@ -59,27 +59,24 @@ function patientGuidance(resultControl, hasResults) {
 			],
 		},
 		manual_review: {
-			title: "Tu orden está en revisión",
-			description:
-				"Nuestro equipo valida tus resultados para asegurarnos de que todo esté correcto antes de avisarte.",
-			badge: "En revisión",
+			title: "Tus resultados siguen en proceso",
+			description: "",
+			badge: "Seguimiento",
 			badgeColor: "amber",
-			icon: ClockIcon,
+			icon: FlagIcon,
 			tips: ["Si necesitamos algo adicional, te contactaremos."],
 		},
 		error: {
-			title: "Estamos atendiendo tu orden",
-			description:
-				"Hubo un detalle al sincronizar con el laboratorio. Nuestro equipo ya lo está revisando.",
-			badge: "En seguimiento",
+			title: "Tus resultados siguen en proceso",
+			description: "",
+			badge: "Seguimiento",
 			badgeColor: "amber",
-			icon: InformationCircleIcon,
+			icon: FlagIcon,
 			tips: ["No necesitas hacer nada por ahora.", "Te avisaremos cuando haya actualización."],
 		},
 		pending: {
 			title: "Tus resultados están en proceso",
-			description:
-				"Ya registramos tu toma de muestra. El laboratorio está procesando tus estudios y te avisaremos cuando estén listos.",
+			description: "",
 			badge: "En proceso",
 			badgeColor: "amber",
 			icon: ClockIcon,
@@ -121,9 +118,11 @@ export default function PatientResultsGuidanceCard({
 							</Badge>
 						</div>
 					</div>
-					<p className="mt-3 text-sm leading-relaxed text-zinc-700 dark:text-slate-200">
-						{guidance.description}
-					</p>
+					{guidance.description ? (
+						<p className="mt-3 text-sm leading-relaxed text-zinc-700 dark:text-slate-200">
+							{guidance.description}
+						</p>
+					) : null}
 					{guidance.tips?.length > 0 && (
 						<ul className="mt-3 space-y-1.5 text-sm text-zinc-600 dark:text-slate-400">
 							{guidance.tips.map((tip) => (

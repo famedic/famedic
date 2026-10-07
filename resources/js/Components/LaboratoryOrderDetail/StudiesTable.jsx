@@ -1,7 +1,7 @@
 import Card from "@/Components/Card";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
-import { BeakerIcon, CheckCircleIcon, ClockIcon, LockClosedIcon } from "@heroicons/react/24/outline";
+import { BeakerIcon, CheckCircleIcon, ClockIcon, FlagIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 
 function patientResultMessage(status, hasSampleCollected = false) {
 	switch (status) {
@@ -10,9 +10,9 @@ function patientResultMessage(status, hasSampleCollected = false) {
 		case "pending_interpretation":
 			return "En proceso de interpretación.";
 		case "manual_review":
-			return "En revisión por nuestro equipo.";
+			return "";
 		case "error":
-			return "Estamos dando seguimiento.";
+			return "";
 		case "available_unchecked":
 			return "Documento recibido.";
 		default:
@@ -25,16 +25,17 @@ function patientResultMessage(status, hasSampleCollected = false) {
 function PatientResultStatusBadge({ resultStatus }) {
 	const label = resultStatus.status_label || "Estado del resultado";
 	const isSensitiveStatus = resultStatus.status === "manual_review" || resultStatus.status === "error";
+	const sensitiveLabel = "Señal de seguimiento";
 
 	if (isSensitiveStatus) {
 		return (
 			<Badge
-				color={resultStatus.status_color || "slate"}
+				color="amber"
 				className="size-6 justify-center rounded-full p-0"
-				title={label}
-				aria-label={label}
+				title={sensitiveLabel}
+				aria-label={sensitiveLabel}
 			>
-				<ClockIcon className="size-3.5" />
+				<FlagIcon className="size-3.5" />
 			</Badge>
 		);
 	}
@@ -106,82 +107,83 @@ export default function StudiesTable({
 						<tbody>
 							{studies.map((study) => {
 								const packageFeatures = normalizePackageFeatures(study.featureList);
+								const patientMessage = study.resultStatus
+									? patientResultMessage(study.resultStatus.status, hasSampleCollected)
+									: "";
+
 								return (
-								<tr
-									key={study.id}
-									className="border-t border-zinc-100 transition hover:bg-zinc-50/70 dark:border-slate-800 dark:hover:bg-slate-800/50"
-								>
-									<td className="max-w-[200px] px-3 py-3 font-medium break-words text-zinc-900 dark:text-white sm:max-w-xs sm:px-4 md:max-w-md">
-										<div>{study.name}</div>
-										{packageFeatures.length > 0 && (
-											<div className="mt-2.5 border-l-2 border-orange-400/80 pl-3 text-left font-normal dark:border-orange-500/70">
-												<p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
-													Incluye en este paquete
-												</p>
-												<ul className="list-disc space-y-1 pl-4 text-xs leading-snug text-zinc-600 dark:text-slate-400">
-													{packageFeatures.map((label, idx) => (
-														<li key={`${study.id}-pkg-${idx}`}>{label}</li>
-													))}
-												</ul>
-											</div>
-										)}
-									</td>
-									<td className="whitespace-nowrap px-3 py-3 align-top tabular-nums text-zinc-900 dark:text-white sm:px-4">
-										{study.formattedPrice}
-									</td>
-									<td className="px-3 py-3 align-top text-right sm:px-4">
-										{study.resultStatus ? (
-											<div className="inline-flex max-w-44 flex-col items-end gap-1">
-												{showAdminMetadata ? (
-													<Badge color={study.resultStatus.status_color || "slate"} className="inline-flex items-center gap-1">
-														{study.resultStatus.status === "complete" ? (
-															<CheckCircleIcon className="size-3.5" />
-														) : (
-															<ClockIcon className="size-3.5" />
-														)}
-														{study.resultStatus.status_label}
-													</Badge>
-												) : (
-													<PatientResultStatusBadge resultStatus={study.resultStatus} />
-												)}
-												<span className="text-right text-[11px] leading-snug text-zinc-500 dark:text-slate-400">
-													{showAdminMetadata
-														? study.resultStatus.message
-														: patientResultMessage(
-																study.resultStatus.status,
-																hasSampleCollected,
+									<tr
+										key={study.id}
+										className="border-t border-zinc-100 transition hover:bg-zinc-50/70 dark:border-slate-800 dark:hover:bg-slate-800/50"
+									>
+										<td className="max-w-[200px] px-3 py-3 font-medium break-words text-zinc-900 dark:text-white sm:max-w-xs sm:px-4 md:max-w-md">
+											<div>{study.name}</div>
+											{packageFeatures.length > 0 && (
+												<div className="mt-2.5 border-l-2 border-orange-400/80 pl-3 text-left font-normal dark:border-orange-500/70">
+													<p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+														Incluye en este paquete
+													</p>
+													<ul className="list-disc space-y-1 pl-4 text-xs leading-snug text-zinc-600 dark:text-slate-400">
+														{packageFeatures.map((label, idx) => (
+															<li key={`${study.id}-pkg-${idx}`}>{label}</li>
+														))}
+													</ul>
+												</div>
+											)}
+										</td>
+										<td className="whitespace-nowrap px-3 py-3 align-top tabular-nums text-zinc-900 dark:text-white sm:px-4">
+											{study.formattedPrice}
+										</td>
+										<td className="px-3 py-3 align-top text-right sm:px-4">
+											{study.resultStatus ? (
+												<div className="inline-flex max-w-44 flex-col items-end gap-1">
+													{showAdminMetadata ? (
+														<Badge color={study.resultStatus.status_color || "slate"} className="inline-flex items-center gap-1">
+															{study.resultStatus.status === "complete" ? (
+																<CheckCircleIcon className="size-3.5" />
+															) : (
+																<ClockIcon className="size-3.5" />
 															)}
-												</span>
-												{showAdminMetadata && study.resultStatus.gda_id && (
-													<span className="text-[11px] text-zinc-400 dark:text-slate-500">
-														GDA {study.resultStatus.gda_id}
+															{study.resultStatus.status_label}
+														</Badge>
+													) : (
+														<PatientResultStatusBadge resultStatus={study.resultStatus} />
+													)}
+													{(showAdminMetadata || patientMessage) && (
+														<span className="text-right text-[11px] leading-snug text-zinc-500 dark:text-slate-400">
+															{showAdminMetadata ? study.resultStatus.message : patientMessage}
+														</span>
+													)}
+													{showAdminMetadata && study.resultStatus.gda_id && (
+														<span className="text-[11px] text-zinc-400 dark:text-slate-500">
+															GDA {study.resultStatus.gda_id}
+														</span>
+													)}
+													{showAdminMetadata && study.resultStatus.result_status_id && (
+														<span className="text-[11px] text-zinc-400 dark:text-slate-500">
+															Checks: {study.resultStatus.check_attempts ?? 0}
+														</span>
+													)}
+												</div>
+											) : study.hasResults || study.resultsUrl ? (
+												<div className="inline-flex flex-col items-end gap-1">
+													<Badge color="green" className="inline-flex items-center gap-1">
+														<CheckCircleIcon className="size-3.5" />
+														Disponible
+													</Badge>
+													<span className="inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-slate-400">
+														<LockClosedIcon className="size-3" />
+														Protegido OTP
 													</span>
-												)}
-												{showAdminMetadata && study.resultStatus.result_status_id && (
-													<span className="text-[11px] text-zinc-400 dark:text-slate-500">
-														Checks: {study.resultStatus.check_attempts ?? 0}
-													</span>
-												)}
-											</div>
-										) : study.hasResults || study.resultsUrl ? (
-											<div className="inline-flex flex-col items-end gap-1">
-												<Badge color="green" className="inline-flex items-center gap-1">
-													<CheckCircleIcon className="size-3.5" />
-													Disponible
+												</div>
+											) : (
+												<Badge color="amber" className="inline-flex items-center gap-1">
+													<ClockIcon className="size-3.5" />
+													Pendiente
 												</Badge>
-												<span className="inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-slate-400">
-													<LockClosedIcon className="size-3" />
-													Protegido OTP
-												</span>
-											</div>
-										) : (
-											<Badge color="amber" className="inline-flex items-center gap-1">
-												<ClockIcon className="size-3.5" />
-												Pendiente
-											</Badge>
-										)}
-									</td>
-								</tr>
+											)}
+										</td>
+									</tr>
 								);
 							})}
 						</tbody>
