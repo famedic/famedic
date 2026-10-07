@@ -34,7 +34,7 @@ export default function ResultsSection({
 	const statusColor = patientResultStatusColor(resultControl, hasResults);
 	const statusMessage = patientResultStatusMessage(resultControl, hasResults);
 	const effectiveStatus = resolveEffectiveResultStatus(resultControl, hasResults);
-	const buttonLabel = resultControl?.button_label || "Ver resultados";
+	const buttonLabel = "Ver resultados";
 	const compactStatusBadge = effectiveStatus === "manual_review" || effectiveStatus === "error";
 	const compactStatusLabel = "Señal de seguimiento";
 

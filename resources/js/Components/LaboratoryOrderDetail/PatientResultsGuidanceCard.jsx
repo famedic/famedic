@@ -99,7 +99,7 @@ export default function PatientResultsGuidanceCard({
 	const guidance = patientGuidance(resultControl, hasResults);
 	const Icon = guidance.icon;
 	const canView = Boolean(hasResults && resultControl.can_view_results && onViewResults);
-	const buttonLabel = resultControl.button_label || "Ver resultados";
+	const buttonLabel = "Ver resultados";
 
 	return (
 		<Card className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50/80 to-white p-4 shadow-sm dark:border-sky-900/40 dark:from-sky-950/20 dark:to-slate-900 sm:p-6">
