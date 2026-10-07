@@ -52,7 +52,7 @@ export function patientResultStatusColor(resultControl, hasResults = false) {
 	const status = resolveEffectiveResultStatus(resultControl, hasResults);
 
 	if (status === "complete" || status === "legacy_available") return "green";
-	if (status === "manual_review" || status === "error") return "amber";
+	if (status === "manual_review" || status === "error") return "green";
 	if (status === "pending_interpretation" || status === "pending") return "amber";
 	if (status === "awaiting_sample") return "sky";
 

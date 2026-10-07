@@ -6,6 +6,7 @@ use App\Actions\Laboratories\GetGDAResultsAction;
 use App\Actions\Laboratories\RecordGdaResultPdfVersionAction;
 use App\Enums\Gender;
 use App\Enums\LaboratoryBrand;
+use App\Enums\LaboratoryResultStatus as ResultStatusEnum;
 use App\Models\Customer;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
@@ -169,6 +170,28 @@ class GdaResultsRecoveryPatientAccessTest extends TestCase
 
         $this->assertNull($purchase->fresh()->results);
         $this->assertCount(1, Storage::allFiles());
+    }
+
+    #[Test]
+    public function pdf_recuperado_con_revision_manual_se_sirve_al_paciente(): void
+    {
+        [$user, $purchase] = $this->seedPatientPurchaseWithItems();
+        $this->seedResultsNotificationRecord($purchase);
+
+        $this->mockGdaPdf('Documento recibido sin patron deterministico para clasificacion automatica.');
+
+        $this->actingAs($user)
+            ->getJson(route('laboratory-purchases.results', $purchase))
+            ->assertOk()
+            ->assertJsonPath('url', 'https://results.test/'.$purchase->fresh()->results);
+
+        $purchase->refresh();
+        $this->assertNotEmpty($purchase->results);
+        $this->assertTrue(Storage::exists($purchase->results));
+        $this->assertSame(
+            ResultStatusEnum::ManualReview,
+            $purchase->laboratoryResultStatuses()->firstOrFail()->status,
+        );
     }
 
     #[Test]

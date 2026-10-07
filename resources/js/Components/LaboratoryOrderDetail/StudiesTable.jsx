@@ -30,7 +30,7 @@ function PatientResultStatusBadge({ resultStatus }) {
 	if (isSensitiveStatus) {
 		return (
 			<Badge
-				color="amber"
+				color="green"
 				className="size-6 justify-center rounded-full p-0"
 				title={sensitiveLabel}
 				aria-label={sensitiveLabel}

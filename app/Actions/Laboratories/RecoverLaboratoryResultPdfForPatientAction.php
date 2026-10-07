@@ -53,7 +53,7 @@ class RecoverLaboratoryResultPdfForPatientAction
                 return $this->serveExistingPath($purchase, $correlationId, $startedAt, recovered: false);
             }
 
-            if ($assessment->isGdaCurrent() && $this->currentStoredGdaResultIsComplete($purchase)) {
+            if ($assessment->isGdaCurrent() && $this->currentStoredGdaResultIsServable($purchase)) {
                 return $this->serveExistingPath($purchase, $correlationId, $startedAt, recovered: false);
             }
 
@@ -109,13 +109,6 @@ class RecoverLaboratoryResultPdfForPatientAction
                     'classification' => $latestVersion?->classification?->value,
                 ] + $completion->toLogContext());
 
-                if (! $completion->isComplete && ! $completion->legacyFallback) {
-                    throw new LaboratoryResultsRecoveryUnavailableException(
-                        'result_incomplete',
-                        'Recovered result is not complete.'
-                    );
-                }
-
                 $this->log('s3_started', $purchase, $correlationId, [
                     'notification_id' => $notification->id,
                 ]);
@@ -127,8 +120,22 @@ class RecoverLaboratoryResultPdfForPatientAction
                     );
                 }
 
+                if (! $completion->isComplete && ! $completion->legacyFallback && ! $this->hasReviewablePdf($completion)) {
+                    throw new LaboratoryResultsRecoveryUnavailableException(
+                        'result_incomplete',
+                        'Recovered result is not complete.'
+                    );
+                }
+
                 $purchase->forceFill(['results' => $path])->save();
                 $purchase->refresh();
+
+                if (! $completion->isComplete && ! $completion->legacyFallback) {
+                    $this->log('semantic_incomplete_pdf_available', $purchase, $correlationId, [
+                        'notification_id' => $notification->id,
+                        'storage_path' => $path,
+                    ] + $completion->toLogContext());
+                }
 
                 $this->log('s3_completed', $purchase, $correlationId, [
                     'notification_id' => $notification->id,
@@ -224,11 +231,16 @@ class RecoverLaboratoryResultPdfForPatientAction
         throw new LaboratoryResultsRecoveryUnavailableException($errorCode);
     }
 
-    private function currentStoredGdaResultIsComplete(LaboratoryPurchase $purchase): bool
+    private function currentStoredGdaResultIsServable(LaboratoryPurchase $purchase): bool
     {
         $completion = $this->completionService->evaluate($purchase);
 
-        return $completion->isComplete && ! $completion->legacyFallback;
+        return ($completion->isComplete || $this->hasReviewablePdf($completion)) && ! $completion->legacyFallback;
+    }
+
+    private function hasReviewablePdf(object $completion): bool
+    {
+        return ($completion->manualReview ?? 0) > 0 || ($completion->error ?? 0) > 0;
     }
 
     private function logStoredPdf(
