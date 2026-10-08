@@ -271,6 +271,7 @@ export default function LaboratoryPurchase({
 	sampleCollectionNotifications = [],
 	resultsGdaSummary = null,
 	invoiceRequestWorkflow = null,
+	fiscalCertificateAvailability = null,
 }) {
 	const [activeTab, setActiveTab] = useState("summary");
 	const paymentCard = (
@@ -278,6 +279,7 @@ export default function LaboratoryPurchase({
 			laboratoryPurchase={laboratoryPurchase}
 			canUploadInvoice={canUploadInvoice}
 			invoiceRequestWorkflow={invoiceRequestWorkflow}
+			fiscalCertificateAvailability={fiscalCertificateAvailability}
 		/>
 	);
 	const appointmentCard = (
@@ -926,6 +928,7 @@ function PaymentBillingPanel({
 	laboratoryPurchase,
 	canUploadInvoice = false,
 	invoiceRequestWorkflow = null,
+	fiscalCertificateAvailability = null,
 }) {
 	const [invoiceOpen, setInvoiceOpen] = useState(false);
 	const transaction = laboratoryPurchase.transactions[0] ?? null;
@@ -1022,6 +1025,9 @@ function PaymentBillingPanel({
 					<TaxInformationPanel
 						invoiceRequest={invoiceRequest}
 						taxProfile={taxProfile}
+						fiscalCertificateAvailability={
+							fiscalCertificateAvailability
+						}
 					/>
 				</div>
 
@@ -1212,7 +1218,11 @@ function InvoiceTimelineItem({
 	);
 }
 
-function TaxInformationPanel({ invoiceRequest, taxProfile }) {
+function TaxInformationPanel({
+	invoiceRequest,
+	taxProfile,
+	fiscalCertificateAvailability,
+}) {
 	if (!invoiceRequest) {
 		return (
 			<div className="rounded-xl border border-slate-100 p-4">
@@ -1236,19 +1246,30 @@ function TaxInformationPanel({ invoiceRequest, taxProfile }) {
 		: null;
 	const certificateRoute =
 		requestCertificateRoute ?? taxProfileCertificateRoute;
+	const certificateAvailability = requestCertificateRoute
+		? fiscalCertificateAvailability?.invoice_request
+		: taxProfileCertificateRoute
+			? fiscalCertificateAvailability?.tax_profile
+			: null;
+	const certificateExists = certificateAvailability?.exists === true;
+	const certificateHasPath = certificateAvailability?.has_path === true;
 
 	return (
 		<div className="rounded-xl border border-slate-100 p-4">
 			<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div>
 					<Subheading>Informacion fiscal enviada</Subheading>
-					{taxProfile?.id && (
-						<Badge color="emerald" className="mt-2">
-							Perfil vinculado
-						</Badge>
-					)}
+					<div className="mt-2 flex flex-wrap gap-2">
+						{taxProfile?.id && (
+							<Badge color="emerald">Perfil vinculado</Badge>
+						)}
+						<FiscalCertificateAvailabilityBadge
+							exists={certificateExists}
+							hasPath={certificateHasPath}
+						/>
+					</div>
 				</div>
-				{certificateRoute && (
+				{certificateRoute && certificateExists && (
 					<Button href={certificateRoute} target="_blank" outline>
 						<DocumentTextIcon />
 						Ver constancia fiscal
@@ -1285,8 +1306,25 @@ function TaxInformationPanel({ invoiceRequest, taxProfile }) {
 						{taxProfile.estatus_sat}
 					</FiscalInfoItem>
 				)}
+				{taxProfile?.formatted_profile_updated_at && (
+					<FiscalInfoItem label="Información fiscal actualizada">
+						{taxProfile.formatted_profile_updated_at}
+					</FiscalInfoItem>
+				)}
 			</div>
 		</div>
+	);
+}
+
+function FiscalCertificateAvailabilityBadge({ exists, hasPath }) {
+	if (exists) {
+		return <Badge color="emerald">Constancia disponible en S3</Badge>;
+	}
+
+	return (
+		<Badge color={hasPath ? "amber" : "zinc"}>
+			{hasPath ? "Constancia no disponible" : "Sin constancia fiscal"}
+		</Badge>
 	);
 }
 

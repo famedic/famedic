@@ -267,29 +267,21 @@ function TaxProfilesTab({
 				<EmptyListCard />
 			) : (
 				<div className="overflow-x-auto">
-					<Table dense className="min-w-[1080px] table-fixed">
+					<Table dense wrap className="table-fixed">
 						<colgroup>
-							<col className="w-[22%]" />
+							<col className="w-[30%]" />
 							<col className="w-[11%]" />
-							<col className="w-[6%]" />
-							<col className="w-[18%]" />
-							<col className="w-[14%]" />
-							<col className="w-[11%]" />
-							<col className="w-[10%]" />
-							<col className="w-[8%]" />
+							<col className="w-[23%]" />
+							<col className="w-[16%]" />
+							<col className="w-[20%]" />
 						</colgroup>
 						<TableHead>
 							<TableRow>
-								<TableHeader>Nombre / razón social</TableHeader>
-								<TableHeader>RFC</TableHeader>
+								<TableHeader>Perfil fiscal</TableHeader>
 								<TableHeader>CP</TableHeader>
-								<TableHeader>Régimen</TableHeader>
-								<TableHeader>Uso CFDI</TableHeader>
+								<TableHeader>Régimen / CFDI</TableHeader>
+								<TableHeader>Actualización</TableHeader>
 								<TableHeader>Estado</TableHeader>
-								<TableHeader>Registrado</TableHeader>
-								<TableHeader className="text-right">
-									Acciones
-								</TableHeader>
 							</TableRow>
 						</TableHead>
 						<TableBody>
@@ -305,6 +297,8 @@ function TaxProfilesTab({
 								const isUsed = profileIsUsed(profile);
 								const canEdit =
 									canManageTaxProfiles && !profile.deleted_at;
+								const needsUpdate =
+									profile.needs_update === true;
 
 								return (
 									<TableRow key={profile.id}>
@@ -317,6 +311,10 @@ function TaxProfilesTab({
 												}
 												className="font-medium"
 											/>
+											<TruncatedText
+												value={profile.rfc || "—"}
+												className="mt-1 font-mono text-xs text-zinc-500"
+											/>
 											{profile.is_default && (
 												<Badge
 													color="famedic-lime"
@@ -326,40 +324,35 @@ function TaxProfilesTab({
 												</Badge>
 											)}
 										</TableCell>
-										<TableCell className="align-top font-mono text-xs">
-											<TruncatedText
-												value={profile.rfc || "—"}
-											/>
-										</TableCell>
 										<TableCell className="align-top text-xs">
 											{profile.zipcode || "—"}
 										</TableCell>
 										<TableCell className="align-top">
-											<div className="min-w-0">
+											<div className="min-w-0 space-y-2">
 												<TruncatedText
-													value={regime.code}
+													value={`${regime.code}${regime.label ? ` · ${regime.label}` : ""}`}
 													className="text-xs font-medium"
 												/>
-												{regime.label && (
-													<TruncatedText
-														value={regime.label}
-														className="text-xs text-zinc-500"
-													/>
-												)}
+												<TruncatedText
+													value={`${cfdi.code}${cfdi.label ? ` · ${cfdi.label}` : ""}`}
+													className="text-xs text-zinc-500"
+												/>
 											</div>
 										</TableCell>
-										<TableCell className="align-top">
-											<div className="min-w-0">
-												<TruncatedText
-													value={cfdi.code}
-													className="text-xs font-medium"
-												/>
-												{cfdi.label && (
-													<TruncatedText
-														value={cfdi.label}
-														className="text-xs text-zinc-500"
-													/>
-												)}
+										<TableCell className="align-top text-xs">
+											<div>
+												<p className="font-medium text-zinc-700 dark:text-zinc-200">
+													{formatDateTime(
+														profile.updated_at ||
+															profile.created_at,
+													)}
+												</p>
+												<p className="mt-1 text-zinc-500">
+													Registrado:{" "}
+													{formatDateTime(
+														profile.created_at,
+													)}
+												</p>
 											</div>
 										</TableCell>
 										<TableCell className="align-top">
@@ -383,41 +376,47 @@ function TaxProfilesTab({
 														Usado en factura
 													</Badge>
 												)}
-											</div>
-										</TableCell>
-										<TableCell className="whitespace-nowrap align-top text-xs text-zinc-500">
-											{formatDateTime(profile.created_at)}
-										</TableCell>
-										<TableCell className="text-right align-top">
-											<div className="flex flex-col items-end gap-1">
-												{canEdit && (
-													<Button
-														outline
-														size="sm"
-														onClick={() =>
-															onEdit(profile)
-														}
-													>
-														<PencilSquareIcon />
-														Editar
-													</Button>
-												)}
-												{canManageTaxProfiles &&
-													profile.fiscal_certificate && (
+												<Badge
+													color={
+														needsUpdate
+															? "amber"
+															: "emerald"
+													}
+												>
+													{needsUpdate
+														? "Pendiente de actualización"
+														: "Información actualizada"}
+												</Badge>
+												<div className="mt-1 flex flex-wrap gap-1">
+													{canEdit && (
 														<Button
 															outline
 															size="sm"
-															href={route(
-																"admin.tax-profiles.fiscal-certificate",
-																{
-																	tax_profile:
-																		profile.id,
-																},
-															)}
+															onClick={() =>
+																onEdit(profile)
+															}
 														>
-															Constancia
+															<PencilSquareIcon />
+															Editar
 														</Button>
 													)}
+													{canManageTaxProfiles &&
+														profile.fiscal_certificate && (
+															<Button
+																outline
+																size="sm"
+																href={route(
+																	"admin.tax-profiles.fiscal-certificate",
+																	{
+																		tax_profile:
+																			profile.id,
+																	},
+																)}
+															>
+																Constancia
+															</Button>
+														)}
+												</div>
 											</div>
 										</TableCell>
 									</TableRow>

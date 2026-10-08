@@ -45,6 +45,20 @@ class InvoiceRequestController extends Controller
             return redirect()->back()->withErrors(['tax_profile' => 'Perfil fiscal no encontrado.']);
         }
 
+        if ($taxProfile->needsTaxProfileUpdate()) {
+            Log::warning('Solicitud de factura laboratorio: perfil fiscal requiere actualización.', [
+                'user_id' => auth()->id(),
+                'customer_id' => auth()->user()->customer->id,
+                'laboratory_purchase_id' => $laboratoryPurchase->id,
+                'tax_profile_id' => $taxProfile->id,
+                'operation' => 'laboratory_invoice_request',
+            ]);
+
+            return redirect()->back()->withErrors([
+                'tax_profile' => 'Actualiza la información fiscal de este perfil para que el área de facturación pueda apoyarte con tu solicitud de factura.',
+            ]);
+        }
+
         $cfdiUse = $request->validated('cfdi_use');
 
         Log::info('Ejecutando CreateInvoiceRequestAction', [

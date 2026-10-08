@@ -4,7 +4,12 @@ import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Anchor, Strong, Text, TextLink } from "@/Components/Catalyst/text";
 import { Field, Label, ErrorMessage } from "@/Components/Catalyst/fieldset";
-import { Listbox, ListboxOption, ListboxLabel, ListboxDescription } from "@/Components/Catalyst/listbox";
+import {
+	Listbox,
+	ListboxOption,
+	ListboxLabel,
+	ListboxDescription,
+} from "@/Components/Catalyst/listbox";
 import {
 	ArrowDownTrayIcon,
 	ArrowPathIcon,
@@ -19,18 +24,70 @@ import { WorkflowStatusBadge } from "@/Components/Admin/LaboratoryBilling/Billin
 const CFDI_OPTIONS = [
 	{ value: "G03", label: "G03", description: "Gastos en general" },
 	{ value: "G01", label: "G01", description: "Adquisicion de mercancias" },
-	{ value: "G02", label: "G02", description: "Devoluciones, descuentos o bonificaciones" },
+	{
+		value: "G02",
+		label: "G02",
+		description: "Devoluciones, descuentos o bonificaciones",
+	},
 	{ value: "P01", label: "P01", description: "Por definir" },
-	{ value: "D01", label: "D01", description: "Honorarios medicos, dentales y gastos hospitalarios" },
+	{
+		value: "D01",
+		label: "D01",
+		description: "Honorarios medicos, dentales y gastos hospitalarios",
+	},
 	{ value: "D02", label: "D02", description: "Gastos de funeral" },
 	{ value: "D03", label: "D03", description: "Donativos" },
-	{ value: "D04", label: "D04", description: "Intereses reales pagados por creditos hipotecarios" },
-	{ value: "D05", label: "D05", description: "Aportaciones voluntarias al SAR" },
-	{ value: "D06", label: "D06", description: "Primas por seguros de gastos medicos" },
-	{ value: "D07", label: "D07", description: "Gastos de transportacion escolar obligatoria" },
-	{ value: "D08", label: "D08", description: "Depositos en cuentas para el ahorro" },
-	{ value: "D09", label: "D09", description: "Pagos por servicios educativos (colegiaturas)" },
+	{
+		value: "D04",
+		label: "D04",
+		description: "Intereses reales pagados por creditos hipotecarios",
+	},
+	{
+		value: "D05",
+		label: "D05",
+		description: "Aportaciones voluntarias al SAR",
+	},
+	{
+		value: "D06",
+		label: "D06",
+		description: "Primas por seguros de gastos medicos",
+	},
+	{
+		value: "D07",
+		label: "D07",
+		description: "Gastos de transportacion escolar obligatoria",
+	},
+	{
+		value: "D08",
+		label: "D08",
+		description: "Depositos en cuentas para el ahorro",
+	},
+	{
+		value: "D09",
+		label: "D09",
+		description: "Pagos por servicios educativos (colegiaturas)",
+	},
 ];
+
+function InvoiceRequestTaxProfileUpdateNotice({ updateUrl, tone = "blue" }) {
+	const toneClasses =
+		tone === "sky"
+			? "border-sky-200/80 bg-white/70 text-sky-900 dark:border-sky-900/70 dark:bg-sky-950/30 dark:text-sky-100"
+			: "border-blue-200/80 bg-white/70 text-blue-900 dark:border-blue-900/70 dark:bg-blue-950/30 dark:text-blue-100";
+
+	return (
+		<div className={`rounded-lg border p-3 ${toneClasses}`}>
+			<Text className="text-sm font-medium">
+				Ayúdanos actualizando tu información fiscal para que el área de
+				facturación no tenga inconvenientes al generar tu factura. No es
+				necesario volver a enviar la solicitud.
+			</Text>
+			<TextLink href={updateUrl} className="mt-2 inline-flex text-sm">
+				Actualizar perfil fiscal
+			</TextLink>
+		</div>
+	);
+}
 
 export default function InvoiceSection({ purchase, inlineForm = false }) {
 	const { daysLeftToRequestInvoice, taxProfiles = [] } = usePage().props;
@@ -50,6 +107,25 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 	const invoiceUploadedAt = invoiceRecord?.formatted_created_at || null;
 	const invoiceRequestedAt = invoiceRequest?.formatted_created_at || null;
 	const workflowStatus = invoiceRequest?.workflow_status;
+	const selectedTaxProfile = taxProfiles.find(
+		(profile) => String(profile.id) === String(data.tax_profile),
+	);
+	const selectedTaxProfileNeedsUpdate =
+		selectedTaxProfile?.needs_update === true;
+	const selectedTaxProfileUpdateUrl = selectedTaxProfile
+		? route("tax-profiles.edit", { tax_profile: selectedTaxProfile.id })
+		: route("tax-profiles.index");
+	const invoiceRequestTaxProfile = taxProfiles.find(
+		(profile) =>
+			String(profile.id) === String(invoiceRequest?.tax_profile_id),
+	);
+	const invoiceRequestTaxProfileNeedsUpdate =
+		invoiceRequestTaxProfile?.needs_update === true;
+	const invoiceRequestTaxProfileUpdateUrl = invoiceRequestTaxProfile
+		? route("tax-profiles.edit", {
+				tax_profile: invoiceRequestTaxProfile.id,
+			})
+		: route("tax-profiles.index");
 	const isAwaitingSample = workflowStatus === "awaiting_sample_collection";
 	const isInBilling =
 		Boolean(invoiceRequest) &&
@@ -66,7 +142,7 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 
 	const submitInvoiceRequest = (e) => {
 		e.preventDefault();
-		if (processing) return;
+		if (processing || selectedTaxProfileNeedsUpdate) return;
 		post(
 			route("laboratory-purchases.invoice-request", {
 				laboratory_purchase: purchase,
@@ -86,7 +162,7 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 				</Badge>
 			</div>
 
-					{hasInvoice && (
+			{hasInvoice && (
 				<div className="space-y-3">
 					<div className="flex flex-col gap-2 sm:flex-row">
 						<Anchor
@@ -110,13 +186,18 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 								href={
 									invoiceRecord?.invoice_xml_url ||
 									route("invoice.xml", {
-										invoice: invoiceRecord?.id ?? invoiceRecord,
+										invoice:
+											invoiceRecord?.id ?? invoiceRecord,
 									})
 								}
 								target="_blank"
 								className="flex-1"
 							>
-								<Button outline className="w-full" type="button">
+								<Button
+									outline
+									className="w-full"
+									type="button"
+								>
 									<ArrowDownTrayIcon className="size-4" />
 									Descargar XML
 								</Button>
@@ -127,7 +208,9 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 					<div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
 						<div className="flex items-center gap-2">
 							<DocumentTextIcon className="size-5 text-emerald-700 dark:text-emerald-300" />
-							<Text className="font-medium text-emerald-700 dark:text-emerald-300">Factura disponible</Text>
+							<Text className="font-medium text-emerald-700 dark:text-emerald-300">
+								Factura disponible
+							</Text>
 						</div>
 						{invoiceUploadedAt && (
 							<Text className="mt-1 text-sm text-emerald-700/90 dark:text-emerald-300/90">
@@ -147,17 +230,22 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 									hasInvoice={hasInvoice}
 								/>
 								<div className="space-y-1 text-sm text-zinc-600 dark:text-slate-300">
-								<Text>
-									<Strong>Perfil fiscal:</Strong> {invoiceRequest.name} ({invoiceRequest.rfc})
-								</Text>
-								<Text>
-									<Strong>Uso de CFDI:</Strong> {invoiceRequest.formatted_cfdi_use || invoiceRequest.cfdi_use}
-								</Text>
-								{invoiceRequestedAt && (
 									<Text>
-										<Strong>Solicitud enviada:</Strong> {invoiceRequestedAt}
+										<Strong>Perfil fiscal:</Strong>{" "}
+										{invoiceRequest.name} (
+										{invoiceRequest.rfc})
 									</Text>
-								)}
+									<Text>
+										<Strong>Uso de CFDI:</Strong>{" "}
+										{invoiceRequest.formatted_cfdi_use ||
+											invoiceRequest.cfdi_use}
+									</Text>
+									{invoiceRequestedAt && (
+										<Text>
+											<Strong>Solicitud enviada:</Strong>{" "}
+											{invoiceRequestedAt}
+										</Text>
+									)}
 								</div>
 							</div>
 						</div>
@@ -177,11 +265,18 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 						Tu solicitud de factura fue registrada correctamente.
 					</Text>
 					<Text className="break-words text-sm text-sky-800/90 dark:text-sky-200/90">
-						La factura se procesará automáticamente cuando se complete tu estudio.
+						La factura se procesará automáticamente cuando se
+						complete tu estudio.
 					</Text>
 					<Text className="break-words text-sm text-sky-800/90 dark:text-sky-200/90">
-						No necesitas realizar ninguna acción adicional.
+						No necesitas volver a enviar tu solicitud.
 					</Text>
+					{invoiceRequestTaxProfileNeedsUpdate && (
+						<InvoiceRequestTaxProfileUpdateNotice
+							updateUrl={invoiceRequestTaxProfileUpdateUrl}
+							tone="sky"
+						/>
+					)}
 					<InvoiceRequestWorkflowTimeline
 						invoiceRequest={invoiceRequest}
 						hasInvoice={hasInvoice}
@@ -189,21 +284,27 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 					<div className="rounded-lg border border-sky-200/80 bg-white/70 p-3 dark:border-sky-900/70 dark:bg-sky-950/30">
 						<div className="space-y-1 text-sm text-sky-800 dark:text-sky-200">
 							<Text>
-								<Strong>Perfil fiscal usado:</Strong> {invoiceRequest?.name} ({invoiceRequest?.rfc})
+								<Strong>Perfil fiscal usado:</Strong>{" "}
+								{invoiceRequest?.name} ({invoiceRequest?.rfc})
 							</Text>
 							<Text>
 								<Strong>Uso de CFDI:</Strong>{" "}
-								{invoiceRequest?.formatted_cfdi_use || invoiceRequest?.cfdi_use || "No disponible"}
+								{invoiceRequest?.formatted_cfdi_use ||
+									invoiceRequest?.cfdi_use ||
+									"No disponible"}
 							</Text>
 							{invoiceRequestedAt && (
 								<Text>
-									<Strong>Solicitada el:</Strong> {invoiceRequestedAt}
+									<Strong>Solicitada el:</Strong>{" "}
+									{invoiceRequestedAt}
 								</Text>
 							)}
 							{invoiceRequest?.formatted_sample_completed_at && (
 								<Text>
 									<Strong>Toma completada:</Strong>{" "}
-									{invoiceRequest.formatted_sample_completed_at}
+									{
+										invoiceRequest.formatted_sample_completed_at
+									}
 								</Text>
 							)}
 						</div>
@@ -221,11 +322,17 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 						Tu solicitud ya fue enviada al área de facturación.
 					</Text>
 					<Text className="break-words text-sm text-blue-700/90 dark:text-blue-300/90">
-						La factura estará disponible una vez que termine el proceso.
+						La factura estará disponible una vez que termine el
+						proceso.
 					</Text>
 					<Text className="break-words text-sm text-blue-700/90 dark:text-blue-300/90">
 						Recibirás la factura por correo en 3 a 5 días hábiles.
 					</Text>
+					{invoiceRequestTaxProfileNeedsUpdate && (
+						<InvoiceRequestTaxProfileUpdateNotice
+							updateUrl={invoiceRequestTaxProfileUpdateUrl}
+						/>
+					)}
 					<InvoiceRequestWorkflowTimeline
 						invoiceRequest={invoiceRequest}
 						hasInvoice={hasInvoice}
@@ -233,21 +340,27 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 					<div className="rounded-lg border border-blue-200/80 bg-white/70 p-3 dark:border-blue-900/70 dark:bg-blue-950/30">
 						<div className="space-y-1 text-sm text-blue-800 dark:text-blue-200">
 							<Text>
-								<Strong>Perfil fiscal usado:</Strong> {invoiceRequest?.name} ({invoiceRequest?.rfc})
+								<Strong>Perfil fiscal usado:</Strong>{" "}
+								{invoiceRequest?.name} ({invoiceRequest?.rfc})
 							</Text>
 							<Text>
 								<Strong>Uso de CFDI:</Strong>{" "}
-								{invoiceRequest?.formatted_cfdi_use || invoiceRequest?.cfdi_use || "No disponible"}
+								{invoiceRequest?.formatted_cfdi_use ||
+									invoiceRequest?.cfdi_use ||
+									"No disponible"}
 							</Text>
 							{invoiceRequestedAt && (
 								<Text>
-									<Strong>Solicitada el:</Strong> {invoiceRequestedAt}
+									<Strong>Solicitada el:</Strong>{" "}
+									{invoiceRequestedAt}
 								</Text>
 							)}
 							{invoiceRequest?.formatted_submitted_to_billing_at && (
 								<Text>
 									<Strong>Enviada a facturación:</Strong>{" "}
-									{invoiceRequest.formatted_submitted_to_billing_at}
+									{
+										invoiceRequest.formatted_submitted_to_billing_at
+									}
 								</Text>
 							)}
 						</div>
@@ -255,33 +368,49 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 				</div>
 			)}
 
-			{!hasInvoice && hasInvoiceRequest && !isAwaitingSample && !isInBilling && (
-				<div className="space-y-3 rounded-xl bg-blue-50/70 p-4 dark:bg-blue-950/20">
-					<div className="flex items-center gap-2">
-						<ClockIcon className="size-5 text-blue-700 dark:text-blue-300" />
-						<Text className="font-medium text-blue-700 dark:text-blue-300">Factura solicitada</Text>
-					</div>
-					<Text className="break-words text-sm text-blue-700/90 dark:text-blue-300/90">
-						Tu solicitud esta en proceso. Recibiras la factura por correo en 3 a 5 dias habiles.
-					</Text>
-					<div className="rounded-lg border border-blue-200/80 bg-white/70 p-3 dark:border-blue-900/70 dark:bg-blue-950/30">
-						<div className="space-y-1 text-sm text-blue-800 dark:text-blue-200">
-							<Text>
-								<Strong>Perfil fiscal usado:</Strong> {invoiceRequest?.name} ({invoiceRequest?.rfc})
+			{!hasInvoice &&
+				hasInvoiceRequest &&
+				!isAwaitingSample &&
+				!isInBilling && (
+					<div className="space-y-3 rounded-xl bg-blue-50/70 p-4 dark:bg-blue-950/20">
+						<div className="flex items-center gap-2">
+							<ClockIcon className="size-5 text-blue-700 dark:text-blue-300" />
+							<Text className="font-medium text-blue-700 dark:text-blue-300">
+								Factura solicitada
 							</Text>
-							<Text>
-								<Strong>Uso de CFDI:</Strong>{" "}
-								{invoiceRequest?.formatted_cfdi_use || invoiceRequest?.cfdi_use || "No disponible"}
-							</Text>
-							{invoiceRequestedAt && (
+						</div>
+						<Text className="break-words text-sm text-blue-700/90 dark:text-blue-300/90">
+							Tu solicitud esta en proceso. Recibiras la factura
+							por correo en 3 a 5 dias habiles.
+						</Text>
+						{invoiceRequestTaxProfileNeedsUpdate && (
+							<InvoiceRequestTaxProfileUpdateNotice
+								updateUrl={invoiceRequestTaxProfileUpdateUrl}
+							/>
+						)}
+						<div className="rounded-lg border border-blue-200/80 bg-white/70 p-3 dark:border-blue-900/70 dark:bg-blue-950/30">
+							<div className="space-y-1 text-sm text-blue-800 dark:text-blue-200">
 								<Text>
-									<Strong>Solicitada el:</Strong> {invoiceRequestedAt}
+									<Strong>Perfil fiscal usado:</Strong>{" "}
+									{invoiceRequest?.name} (
+									{invoiceRequest?.rfc})
 								</Text>
-							)}
+								<Text>
+									<Strong>Uso de CFDI:</Strong>{" "}
+									{invoiceRequest?.formatted_cfdi_use ||
+										invoiceRequest?.cfdi_use ||
+										"No disponible"}
+								</Text>
+								{invoiceRequestedAt && (
+									<Text>
+										<Strong>Solicitada el:</Strong>{" "}
+										{invoiceRequestedAt}
+									</Text>
+								)}
+							</div>
 						</div>
 					</div>
-				</div>
-			)}
+				)}
 
 			{canRequestInvoice && !inlineForm && (
 				<div className="space-y-2">
@@ -297,7 +426,8 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 						</Button>
 					</Anchor>
 					<p className="break-words text-xs text-zinc-500 dark:text-slate-400">
-						Te quedan {daysLeftToRequestInvoice} días para solicitar la factura.
+						Te quedan {daysLeftToRequestInvoice} días para solicitar
+						la factura.
 					</p>
 				</div>
 			)}
@@ -309,14 +439,20 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 							<ReceiptPercentIcon className="mt-0.5 size-5 text-famedic-dark dark:text-famedic-light" />
 							<div className="space-y-1">
 								<Text className="font-medium text-zinc-800 dark:text-slate-200">
-									Para solicitar tu factura completa los siguientes datos
+									Para solicitar tu factura completa los
+									siguientes datos
 								</Text>
 								<Text className="text-sm text-zinc-600 dark:text-slate-400">
-									1) Selecciona tu perfil fiscal. 2) Elige el uso de CFDI. 3) Envía la solicitud.
+									1) Selecciona tu perfil fiscal. 2) Elige el
+									uso de CFDI. 3) Envía la solicitud.
 								</Text>
 								<Text className="text-xs text-amber-700 dark:text-amber-300">
-									<Strong>Tiempo restante:</Strong> {daysLeftToRequestInvoice} dia
-									{daysLeftToRequestInvoice > 1 ? "s" : ""} para solicitar factura.
+									<Strong>Tiempo restante:</Strong>{" "}
+									{daysLeftToRequestInvoice} dia
+									{daysLeftToRequestInvoice > 1
+										? "s"
+										: ""}{" "}
+									para solicitar factura.
 								</Text>
 							</div>
 						</div>
@@ -325,9 +461,14 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 					{!hasTaxProfiles && (
 						<div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/70 dark:bg-amber-950/30">
 							<Text className="text-sm text-amber-800 dark:text-amber-200">
-								No tienes perfiles fiscales registrados. Antes de solicitar factura necesitas crear al menos uno.
+								No tienes perfiles fiscales registrados. Antes
+								de solicitar factura necesitas crear al menos
+								uno.
 							</Text>
-							<TextLink href={route("tax-profiles.index")} className="mt-2 inline-flex text-sm">
+							<TextLink
+								href={route("tax-profiles.index")}
+								className="mt-2 inline-flex text-sm"
+							>
 								Ir a perfiles fiscales
 							</TextLink>
 						</div>
@@ -341,15 +482,34 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 									invalid={!!errors.tax_profile}
 									placeholder="Selecciona un perfil fiscal"
 									value={data.tax_profile}
-									onChange={(value) => setData("tax_profile", value)}
+									onChange={(value) =>
+										setData("tax_profile", value)
+									}
 									disabled={processing}
 								>
 									{taxProfiles.map((profile) => (
-										<ListboxOption key={profile.id} value={profile.id}>
+										<ListboxOption
+											key={profile.id}
+											value={profile.id}
+										>
 											<ListboxLabel className="w-40">
-												{profile.rfc}
-												<br />
-												{profile.name}
+												<span className="block">
+													{profile.rfc}
+												</span>
+												<span className="block truncate">
+													{profile.name}
+												</span>
+												<span
+													className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+														profile.needs_update
+															? "bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-100"
+															: "bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-100"
+													}`}
+												>
+													{profile.needs_update
+														? "Requiere actualización"
+														: "Apto para facturar"}
+												</span>
 											</ListboxLabel>
 											<ListboxDescription className="w-40">
 												{profile.formatted_tax_regime}
@@ -357,7 +517,27 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 										</ListboxOption>
 									))}
 								</Listbox>
-								{errors.tax_profile && <ErrorMessage>{errors.tax_profile}</ErrorMessage>}
+								{errors.tax_profile && (
+									<ErrorMessage>
+										{errors.tax_profile}
+									</ErrorMessage>
+								)}
+								{selectedTaxProfileNeedsUpdate && (
+									<div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/70 dark:bg-amber-950/30">
+										<Text className="text-sm font-medium text-amber-900 dark:text-amber-100">
+											Actualiza la información fiscal de
+											este perfil para que el área de
+											facturación pueda apoyarte con tu
+											solicitud de factura.
+										</Text>
+										<TextLink
+											href={selectedTaxProfileUpdateUrl}
+											className="mt-2 inline-flex text-sm"
+										>
+											Actualizar perfil fiscal
+										</TextLink>
+									</div>
+								)}
 							</Field>
 
 							<Field>
@@ -366,22 +546,43 @@ export default function InvoiceSection({ purchase, inlineForm = false }) {
 									invalid={!!errors.cfdi_use}
 									placeholder="Selecciona un uso de CFDI"
 									value={data.cfdi_use}
-									onChange={(value) => setData("cfdi_use", value)}
+									onChange={(value) =>
+										setData("cfdi_use", value)
+									}
 									disabled={processing}
 								>
 									{CFDI_OPTIONS.map((option) => (
-										<ListboxOption key={option.value} value={option.value}>
-											<ListboxLabel className="w-24">{option.label}</ListboxLabel>
-											<ListboxDescription className="flex-1">{option.description}</ListboxDescription>
+										<ListboxOption
+											key={option.value}
+											value={option.value}
+										>
+											<ListboxLabel className="w-24">
+												{option.label}
+											</ListboxLabel>
+											<ListboxDescription className="flex-1">
+												{option.description}
+											</ListboxDescription>
 										</ListboxOption>
 									))}
 								</Listbox>
-								{errors.cfdi_use && <ErrorMessage>{errors.cfdi_use}</ErrorMessage>}
+								{errors.cfdi_use && (
+									<ErrorMessage>
+										{errors.cfdi_use}
+									</ErrorMessage>
+								)}
 							</Field>
 
-							<Button type="submit" disabled={processing} className="w-full sm:w-auto">
+							<Button
+								type="submit"
+								disabled={
+									processing || selectedTaxProfileNeedsUpdate
+								}
+								className="w-full sm:w-auto"
+							>
 								Solicitar factura
-								{processing && <ArrowPathIcon className="ml-2 size-4 animate-spin" />}
+								{processing && (
+									<ArrowPathIcon className="ml-2 size-4 animate-spin" />
+								)}
 							</Button>
 						</>
 					)}

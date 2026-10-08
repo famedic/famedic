@@ -6,6 +6,7 @@ import { Button } from "@/Components/Catalyst/button";
 import { Code } from "@/Components/Catalyst/text";
 import { Subheading } from "@/Components/Catalyst/heading";
 import {
+	ArrowRightIcon,
 	DocumentTextIcon,
 	PlusIcon,
 	QrCodeIcon,
@@ -14,6 +15,8 @@ import {
 	DocumentDuplicateIcon,
 	EllipsisHorizontalIcon,
 	CheckIcon,
+	InformationCircleIcon,
+	MegaphoneIcon,
 } from "@heroicons/react/24/outline";
 import { PencilIcon, TrashIcon, StarIcon } from "@heroicons/react/24/outline";
 import TaxProfileForm from "@/Pages/TaxProfiles/TaxProfileForm";
@@ -46,7 +49,12 @@ import {
 	PaginationPrevious,
 } from "@/Components/Catalyst/pagination";
 
-export default function TaxProfiles({ taxProfiles, invoices }) {
+export default function TaxProfiles({
+	taxProfiles,
+	invoices,
+	showTaxProfileUpdateBanner = false,
+	taxProfileUpdateUrl = null,
+}) {
 	const taxProfileFormIsOpen =
 		route().current("tax-profiles.create") ||
 		route().current("tax-profiles.edit");
@@ -89,6 +97,12 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 						Agregar perfil fiscal
 					</Button>
 				</div>
+
+				{showTaxProfileUpdateBanner && (
+					<TaxProfileUpdateBanner
+						taxProfileUpdateUrl={taxProfileUpdateUrl}
+					/>
+				)}
 
 				<TaxProfilesInfoPanel />
 
@@ -265,6 +279,67 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 	);
 }
 
+function TaxProfileUpdateBanner({ taxProfileUpdateUrl }) {
+	return (
+		<section className="relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 via-indigo-50 to-violet-100 px-5 py-6 shadow-sm sm:px-6 lg:px-8 dark:border-blue-900/60 dark:from-slate-950 dark:via-blue-950/50 dark:to-violet-950/50">
+			<div className="relative z-10 grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
+				<div className="min-w-0">
+					<div className="mb-4 inline-flex max-w-full items-center gap-2 rounded-full bg-white/70 px-3 py-1.5 text-xs font-semibold text-blue-700 ring-1 ring-blue-100 dark:bg-white/10 dark:text-blue-200 dark:ring-white/10">
+						<MegaphoneIcon className="h-4 w-4 shrink-0" />
+						<span className="truncate">
+							Actualiza tus datos fiscales
+						</span>
+					</div>
+
+					<h2 className="max-w-2xl text-2xl font-bold leading-tight text-slate-950 sm:text-3xl dark:text-white">
+						Mantén tu información{" "}
+						<span className="text-blue-600 dark:text-blue-300">
+							fiscal al día
+						</span>
+					</h2>
+
+					<p className="mt-3 max-w-2xl text-sm leading-6 text-slate-700 dark:text-slate-300">
+						Si diste de alta tu perfil fiscal antes del 7 de octubre
+						de 2026, necesitamos que actualices tus datos y tu
+						Constancia de Situación Fiscal para continuar facturando
+						tus compras sin contratiempos.
+					</p>
+
+					<div className="mt-5 flex flex-col gap-3 sm:flex-row">
+						<Button
+							href={
+								taxProfileUpdateUrl ||
+								route("tax-profiles.create")
+							}
+							className="justify-center"
+						>
+							Actualizar información
+							<ArrowRightIcon className="h-4 w-4" />
+						</Button>
+					</div>
+
+					<div className="mt-4 flex items-start gap-2 text-xs text-blue-800/80 dark:text-blue-200/80">
+						<InformationCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
+						<span>
+							Esto ayuda a que tus facturas se emitan
+							correctamente.
+						</span>
+					</div>
+				</div>
+
+				<div className="relative mx-auto w-full max-w-[15rem] lg:max-w-none">
+					<img
+						src="/images/asset-tax-update.png"
+						alt=""
+						className="aspect-square mx-auto w-full object-contain drop-shadow-2xl"
+						loading="lazy"
+					/>
+				</div>
+			</div>
+		</section>
+	);
+}
+
 function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
 	if (taxProfiles.length === 0) {
 		return <TaxProfilesEmptyState />;
@@ -313,6 +388,7 @@ function TaxProfilesEmptyState() {
 function TaxProfileCard({ taxProfile, onDelete }) {
 	const isUsed = taxProfile.is_used === true;
 	const isDefault = taxProfile.is_default === true;
+	const needsUpdate = taxProfile.needs_update === true;
 	const certificateUrl = route("tax-profiles.fiscal-certificate", {
 		tax_profile: taxProfile,
 	});
@@ -322,6 +398,9 @@ function TaxProfileCard({ taxProfile, onDelete }) {
 			<div className="flex h-full min-h-0 flex-col gap-4">
 				<div className="space-y-2">
 					<div className="flex flex-wrap gap-2">
+						{needsUpdate && (
+							<Badge color="amber">Requiere actualización</Badge>
+						)}
 						{isDefault && (
 							<Badge color="emerald">Predeterminado</Badge>
 						)}
@@ -353,6 +432,13 @@ function TaxProfileCard({ taxProfile, onDelete }) {
 							Este perfil fiscal ya fue utilizado en una solicitud
 							de factura. Los cambios aplicarán para futuras
 							solicitudes.
+						</p>
+					)}
+
+					{needsUpdate && (
+						<p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
+							Este perfil necesita actualizar sus datos fiscales y
+							Constancia de Situación Fiscal.
 						</p>
 					)}
 				</div>

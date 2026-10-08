@@ -352,6 +352,65 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
     }
 
     #[Test]
+    public function banner_de_actualizacion_se_muestra_si_existe_perfil_creado_antes_del_siete_de_octubre(): void
+    {
+        [$user] = $this->makeCustomerWithProfile('campaign-old-profile@test.local', [
+            'created_at' => '2026-10-06 23:59:59',
+            'updated_at' => '2026-10-06 23:59:59',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('tax-profiles.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('TaxProfiles')
+                ->where('taxProfiles.0.needs_update', true)
+                ->where('showTaxProfileUpdateBanner', true)
+                ->where('taxProfileUpdateUrl', route('tax-profiles.edit', [
+                    'tax_profile' => $user->customer->taxProfiles()->first()->id,
+                ]))
+            );
+    }
+
+    #[Test]
+    public function banner_de_actualizacion_no_se_muestra_para_perfiles_creados_desde_el_siete_de_octubre(): void
+    {
+        [$user] = $this->makeCustomerWithProfile('campaign-new-profile@test.local', [
+            'created_at' => '2026-10-07 00:00:00',
+            'updated_at' => '2026-10-07 00:00:00',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('tax-profiles.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('TaxProfiles')
+                ->where('taxProfiles.0.needs_update', false)
+                ->where('showTaxProfileUpdateBanner', false)
+                ->where('taxProfileUpdateUrl', null)
+            );
+    }
+
+    #[Test]
+    public function banner_de_actualizacion_no_se_muestra_si_el_perfil_viejo_ya_fue_actualizado_desde_el_siete_de_octubre(): void
+    {
+        [$user] = $this->makeCustomerWithProfile('campaign-updated-profile@test.local', [
+            'created_at' => '2026-10-06 23:59:59',
+            'updated_at' => '2026-10-07 00:00:00',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('tax-profiles.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('TaxProfiles')
+                ->where('taxProfiles.0.needs_update', false)
+                ->where('showTaxProfileUpdateBanner', false)
+                ->where('taxProfileUpdateUrl', null)
+            );
+    }
+
+    #[Test]
     public function cliente_ajeno_no_puede_editar_ni_set_default(): void
     {
         [, $profile] = $this->makeCustomerWithProfile('owner-edit@test.local');

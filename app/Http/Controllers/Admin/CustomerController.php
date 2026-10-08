@@ -191,6 +191,18 @@ class CustomerController extends Controller
             $customer->customerable->load('parentCustomer.user');
         }
 
+        $customer->taxProfiles->each(function ($profile) {
+            $needsUpdate = $profile->needsTaxProfileUpdate();
+
+            $profile->setAttribute('needs_update', $needsUpdate);
+            $profile->setAttribute(
+                'tax_update_status_label',
+                $needsUpdate
+                    ? 'Pendiente de actualización'
+                    : 'Información actualizada'
+            );
+        });
+
         $customer->loadCount([
             'laboratoryPurchases',
             'onlinePharmacyPurchases',

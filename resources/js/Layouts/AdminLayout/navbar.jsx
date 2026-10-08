@@ -69,12 +69,18 @@ const iconMap = {
 	UsersIcon,
 };
 
+const accountDropdownItemClassName =
+	"!grid-cols-[auto_auto] !justify-start !gap-x-2.5 [&>[data-slot=icon]]:!mr-0";
+
 function itemIsCurrent(item) {
 	if (!item) {
 		return false;
 	}
 
-	return Boolean(item.current) || (item.items || []).some((child) => itemIsCurrent(child));
+	return (
+		Boolean(item.current) ||
+		(item.items || []).some((child) => itemIsCurrent(child))
+	);
 }
 
 function TopDropdownItem({ item, showIcon = true }) {
@@ -117,7 +123,9 @@ function TopDropdown({
 				{Icon && <Icon data-slot="icon" />}
 				{!iconOnly ? (
 					<>
-						<NavbarLabel className="hidden xl:inline">{label}</NavbarLabel>
+						<NavbarLabel className="hidden xl:inline">
+							{label}
+						</NavbarLabel>
 						<ChevronDownIcon data-slot="icon" />
 					</>
 				) : null}
@@ -253,7 +261,9 @@ export default function NavBar() {
 						className="gap-2"
 					>
 						<Avatar src={user.profile_photo_url} square />
-						<NavbarLabel className="hidden xl:inline">Cuenta</NavbarLabel>
+						<NavbarLabel className="hidden xl:inline">
+							Cuenta
+						</NavbarLabel>
 						<ChevronDownIcon data-slot="icon" />
 					</DropdownButton>
 					<DropdownMenu className="min-w-64" anchor="bottom end">
@@ -266,7 +276,10 @@ export default function NavBar() {
 							</div>
 						</div>
 						<DropdownDivider />
-						<DropdownItem href={route("user.edit")}>
+						<DropdownItem
+							href={route("user.edit")}
+							className={accountDropdownItemClassName}
+						>
 							<UserCircleIcon data-slot="icon" />
 							<DropdownLabel>Ver mi cuenta</DropdownLabel>
 						</DropdownItem>
@@ -274,7 +287,11 @@ export default function NavBar() {
 							const Icon = iconMap[icon];
 
 							return (
-								<DropdownItem href={url} key={label}>
+								<DropdownItem
+									href={url}
+									key={label}
+									className={accountDropdownItemClassName}
+								>
 									{Icon ? <Icon data-slot="icon" /> : null}
 									<DropdownLabel>{label}</DropdownLabel>
 								</DropdownItem>
@@ -286,6 +303,7 @@ export default function NavBar() {
 							href={route("logout")}
 							method="post"
 							as="button"
+							className={accountDropdownItemClassName}
 						>
 							<ArrowRightStartOnRectangleIcon data-slot="icon" />
 							<DropdownLabel>Cerrar sesión</DropdownLabel>

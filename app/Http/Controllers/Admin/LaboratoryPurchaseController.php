@@ -25,6 +25,7 @@ use App\Support\Laboratory\GdaResultsPdfStatus;
 use Illuminate\Support\Facades\Log;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
+use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 use Inertia\Inertia;
 
@@ -110,7 +111,7 @@ class LaboratoryPurchaseController extends Controller
             && $request->user()->can('recoverGda', $laboratoryPurchase);
 
         return Inertia::render('Admin/LaboratoryPurchase', [
-            'laboratoryPurchase' => $laboratoryPurchase,
+            'laboratoryPurchase' => $this->presentForShow($laboratoryPurchase),
             'isCancelled' => $laboratoryPurchase->trashed(),
             'couponReversal' => $laboratoryPurchase->getCouponReversalSummary(),
             'showDeleteButton' => $request->user()->can('delete', $laboratoryPurchase),
@@ -141,7 +142,58 @@ class LaboratoryPurchaseController extends Controller
             'invoiceRequestWorkflow' => $laboratoryPurchase->invoiceRequest
                 ? $invoiceRequestWorkflowPresenter->presentForAdmin($laboratoryPurchase->invoiceRequest)
                 : null,
+            'fiscalCertificateAvailability' => $this->fiscalCertificateAvailabilityFor($laboratoryPurchase),
         ]);
+    }
+
+    private function presentForShow(LaboratoryPurchase $laboratoryPurchase): LaboratoryPurchase
+    {
+        $taxProfile = $laboratoryPurchase->invoiceRequest?->taxProfile;
+
+        if ($taxProfile) {
+            $taxProfile->setAttribute(
+                'formatted_profile_updated_at',
+                localizedDate($taxProfile->updated_at)?->locale('es')->isoFormat('D MMM Y h:mm a')
+            );
+        }
+
+        return $laboratoryPurchase;
+    }
+
+    private function fiscalCertificateAvailabilityFor(LaboratoryPurchase $laboratoryPurchase): array
+    {
+        $invoiceRequest = $laboratoryPurchase->invoiceRequest;
+        $taxProfile = $invoiceRequest?->taxProfile;
+
+        return [
+            'invoice_request' => [
+                'has_path' => filled($invoiceRequest?->fiscal_certificate),
+                'exists' => filled($invoiceRequest?->fiscal_certificate)
+                    ? Storage::exists($invoiceRequest->fiscal_certificate)
+                    : false,
+            ],
+            'tax_profile' => [
+                'has_path' => filled($taxProfile?->fiscal_certificate),
+                'exists' => filled($taxProfile?->fiscal_certificate)
+                    ? $this->storedFileExists($taxProfile->fiscal_certificate)
+                    : false,
+            ],
+        ];
+    }
+
+    private function storedFileExists(string $path): bool
+    {
+        foreach (array_filter(['local', 'private', config('filesystems.default')]) as $disk) {
+            if (! is_string($disk) || $disk === '') {
+                continue;
+            }
+
+            if (config("filesystems.disks.{$disk}") && Storage::disk($disk)->exists($path)) {
+                return true;
+            }
+        }
+
+        return Storage::exists($path);
     }
 
     private function sampleCollectionNotificationsFor(LaboratoryPurchase $laboratoryPurchase): array

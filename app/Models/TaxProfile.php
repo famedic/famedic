@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 
 class TaxProfile extends Model
@@ -88,6 +89,7 @@ class TaxProfile extends Model
             'formatted_tax_regime',
             'formatted_cfdi_use',
             'formatted_activity_label',
+            'needs_update',
         ];
 
         // Solo cuando el esquema tiene invoice_requests (suites aisladas pueden omitirla).
@@ -101,9 +103,21 @@ class TaxProfile extends Model
             $visible[] = 'is_used';
         }
 
+        $this->setAttribute('needs_update', $this->needsTaxProfileUpdate());
+
         $this->setVisible($visible);
 
         return $this;
+    }
+
+    public function needsTaxProfileUpdate(): bool
+    {
+        $campaignStartsAt = Carbon::create(2026, 10, 7)->startOfDay();
+
+        $wasCreatedSinceCampaign = $this->created_at?->gte($campaignStartsAt) ?? false;
+        $wasUpdatedSinceCampaign = $this->updated_at?->gte($campaignStartsAt) ?? false;
+
+        return ! $wasCreatedSinceCampaign && ! $wasUpdatedSinceCampaign;
     }
 
     /**
