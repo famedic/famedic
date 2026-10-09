@@ -36,5 +36,7 @@
         <env name="TELESCOPE_ENABLED" value="false" force="true"/>
         <env name="SCOUT_DRIVER" value="null" force="true"/>
         <env name="COUPON_CREATION_OTP_REQUIRED" value="true" force="true"/>
+        <env name="LAB_PREPARATION_DETERMINISTIC_V3_ENABLED" value="false" force="true"/>
+        <env name="LAB_PREPARATION_DETERMINISTIC_V3_SHADOW_ENABLED" value="false" force="true"/>
     </php>
 </phpunit>

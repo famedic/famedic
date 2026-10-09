@@ -32,6 +32,8 @@ abstract class TestCase extends BaseTestCase
             'services.activecampaign.cart_tag_remove_enabled' => false,
             'scout.driver' => 'collection',
             'scout.queue' => false,
+            'services.laboratory_preparation.deterministic_v3_enabled' => false,
+            'services.laboratory_preparation.deterministic_v3_shadow_enabled' => false,
         ]);
 
         return $app;
@@ -51,6 +53,8 @@ abstract class TestCase extends BaseTestCase
             'QUEUE_CONNECTION' => 'sync',
             'MAIL_MAILER' => 'array',
             'SCOUT_DRIVER' => 'null',
+            'LAB_PREPARATION_DETERMINISTIC_V3_ENABLED' => 'false',
+            'LAB_PREPARATION_DETERMINISTIC_V3_SHADOW_ENABLED' => 'false',
         ];
 
         foreach ($overrides as $key => $value) {
@@ -65,6 +69,17 @@ abstract class TestCase extends BaseTestCase
         parent::setUp();
 
         $this->assertTestingDatabaseIsSafe();
+
+        config([
+            'services.laboratory_preparation.deterministic_v3_enabled' => filter_var(
+                env('LAB_PREPARATION_DETERMINISTIC_V3_ENABLED', false),
+                FILTER_VALIDATE_BOOLEAN,
+            ),
+            'services.laboratory_preparation.deterministic_v3_shadow_enabled' => filter_var(
+                env('LAB_PREPARATION_DETERMINISTIC_V3_SHADOW_ENABLED', false),
+                FILTER_VALIDATE_BOOLEAN,
+            ),
+        ]);
 
         $this->withoutMiddleware([
             'password.confirm',

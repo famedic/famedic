@@ -347,9 +347,21 @@ class LaboratoryInstructionParser
             );
 
             $alreadyCovered = collect($existing)->contains(
-                fn (LaboratoryInstructionRequirement $requirement) => $requirement->requirementType !== 'unrecognized_fragment'
-                    && $requirement->recognitionStatus !== LaboratoryInstructionRecognitionStatus::UNRECOGNIZED
-                    && str_contains($requirement->sourceSpan, $span),
+                function (LaboratoryInstructionRequirement $requirement) use ($span, $spanStart, $spanEnd) {
+                    if ($requirement->requirementType === 'unrecognized_fragment') {
+                        return false;
+                    }
+
+                    if ($requirement->recognitionStatus === LaboratoryInstructionRecognitionStatus::UNRECOGNIZED) {
+                        return false;
+                    }
+
+                    if ($requirement->sourceSpanEnd <= $requirement->sourceSpanStart) {
+                        return str_contains($requirement->sourceSpan, trim($span));
+                    }
+
+                    return $requirement->sourceSpanStart <= $spanStart && $requirement->sourceSpanEnd >= $spanEnd;
+                },
             );
 
             if ($alreadyCovered) {

@@ -10,6 +10,12 @@ namespace App\Services\LaboratoryPreparation\Parsing;
 final class LaboratoryInstructionRecognizerRules
 {
     /**
+     * Unidad de duración en contexto de ayuno (GDA: horas, hrs, h, h.).
+     * Usar solo en patrones que ya exigen señal de ayuno en la misma cláusula.
+     */
+    private const FASTING_DURATION_HOUR_UNIT = '(?:horas?|hrs?|h\.?)';
+
+    /**
      * @return list<array{
      *     category: string,
      *     requirement_type: string,
@@ -46,6 +52,8 @@ final class LaboratoryInstructionRecognizerRules
      */
     private static function fastingRules(): array
     {
+        $hour = self::FASTING_DURATION_HOUR_UNIT;
+
         return [
             self::rule(
                 LaboratoryInstructionCategory::FASTING,
@@ -57,7 +65,7 @@ final class LaboratoryInstructionRecognizerRules
             self::rule(
                 LaboratoryInstructionCategory::FASTING,
                 'fasting_range_hours',
-                '/\bayuno\b.{0,40}?\b(\d+)\s*(?:a|y|-)\s*(\d+)\s*horas?\b/iu',
+                '/\bayuno\b.{0,40}?\b(\d+)\s*(?:a|y|-)\s*(\d+)\s*'.$hour.'\b/iu',
                 LaboratoryInstructionRecognitionStatus::RECOGNIZED,
                 fn (array $m) => [
                     'kind' => 'closed_range',
@@ -69,7 +77,7 @@ final class LaboratoryInstructionRecognizerRules
             self::rule(
                 LaboratoryInstructionCategory::FASTING,
                 'fasting_range_hours_maximo',
-                '/\b(?:de\s+)?(\d+)\s*hrs?,?\s*(?:maximo|m[aá]ximo)\s+(\d+)\s*hrs?\b/iu',
+                '/\b(?:de\s+)?(\d+)\s*(?:hrs?|h\.?),?\s*(?:maximo|m[aá]ximo)\s+(\d+)\s*(?:hrs?|h\.?)\b/iu',
                 LaboratoryInstructionRecognitionStatus::RECOGNIZED,
                 fn (array $m) => [
                     'kind' => 'closed_range',
@@ -81,7 +89,7 @@ final class LaboratoryInstructionRecognizerRules
             self::rule(
                 LaboratoryInstructionCategory::FASTING,
                 'fasting_solids_range_hours',
-                '/\b(?:en\s+)?ayuno\s+a\s+solidos\b.{0,30}?\b(\d+)\s*(?:a|y|-)\s*(\d+)\s*horas?\b/iu',
+                '/\b(?:en\s+)?ayuno\s+a\s+solidos\b.{0,30}?\b(\d+)\s*(?:a|y|-)\s*(\d+)\s*'.$hour.'\b/iu',
                 LaboratoryInstructionRecognitionStatus::RECOGNIZED,
                 fn (array $m) => [
                     'kind' => 'closed_range',
@@ -94,7 +102,7 @@ final class LaboratoryInstructionRecognizerRules
             self::rule(
                 LaboratoryInstructionCategory::FASTING,
                 'fasting_solids_and_soda_maximo',
-                '/\bayuno\s+total\s+a\s+alimentos\s+solidos\s+y\s+bebidas\s+gaseosas\b.{0,50}?\bde\s+(\d+)\s*hrs?,?\s*(?:maximo|m[aá]ximo)\s+(\d+)\s*hrs?\b/iu',
+                '/\bayuno\s+total\s+a\s+alimentos\s+solidos\s+y\s+bebidas\s+gaseosas\b.{0,50}?\bde\s+(\d+)\s*(?:hrs?|h\.?),?\s*(?:maximo|m[aá]ximo)\s+(\d+)\s*(?:hrs?|h\.?)\b/iu',
                 LaboratoryInstructionRecognitionStatus::RECOGNIZED,
                 fn (array $m) => [
                     'kind' => 'closed_range',
@@ -107,7 +115,7 @@ final class LaboratoryInstructionRecognizerRules
             self::rule(
                 LaboratoryInstructionCategory::FASTING,
                 'fasting_range_hours',
-                '/\b(?:presentarse|acudir)\s+con\s+ayuno\s+de\s+(\d+)\s*-\s*(\d+)\s*horas?\b/iu',
+                '/\b(?:presentarse|acudir)\s+con\s+ayuno\s+de\s+(\d+)\s*-\s*(\d+)\s*'.$hour.'\b/iu',
                 LaboratoryInstructionRecognitionStatus::RECOGNIZED,
                 fn (array $m) => [
                     'kind' => 'closed_range',
@@ -119,7 +127,7 @@ final class LaboratoryInstructionRecognizerRules
             self::rule(
                 LaboratoryInstructionCategory::FASTING,
                 'fasting_range_hours',
-                '/\b(?:presentarse|acudir)\s+(?:con\s+)?ayuno\b.{0,30}?\b(\d+)\s*(?:a|y|-)\s*(\d+)\s*horas?\b/iu',
+                '/\b(?:presentarse|acudir)\s+(?:con\s+)?ayuno\b.{0,30}?\b(\d+)\s*(?:a|y|-)\s*(\d+)\s*'.$hour.'\b/iu',
                 LaboratoryInstructionRecognitionStatus::RECOGNIZED,
                 fn (array $m) => [
                     'kind' => 'closed_range',
@@ -131,7 +139,7 @@ final class LaboratoryInstructionRecognizerRules
             self::rule(
                 LaboratoryInstructionCategory::FASTING,
                 'fasting_pediatric_patients_line',
-                '/\-En\s+pacientes\s+pedi[aá]tricos\s*\(\s*\d+\s*(?:a|-)\s*\d+\s*a[nñ]os\s*\)\s*,?\s*presentarse\s+con\s+ayuno\s+de\s+(\d+)\s*(?:a|-)\s*(\d+)\s*horas?\.?/iu',
+                '/\-En\s+pacientes\s+pedi[aá]tricos\s*\(\s*\d+\s*(?:a|-)\s*\d+\s*a[nñ]os\s*\)\s*,?\s*presentarse\s+con\s+ayuno\s+de\s+(\d+)\s*(?:a|-)\s*(\d+)\s*'.$hour.'\.?/iu',
                 LaboratoryInstructionRecognitionStatus::RECOGNIZED,
                 fn (array $m) => [
                     'kind' => 'closed_range',
@@ -143,7 +151,7 @@ final class LaboratoryInstructionRecognizerRules
             self::rule(
                 LaboratoryInstructionCategory::FASTING,
                 'fasting_adult_patients_line',
-                '/\-En\s+pacientes\s+adultos\s*,?\s*presentarse\s+con\s+ayuno\s+de\s+(\d+)\s*(?:a|-)\s*(\d+)\s*horas?\.?/iu',
+                '/\-En\s+pacientes\s+adultos\s*,?\s*presentarse\s+con\s+ayuno\s+de\s+(\d+)\s*(?:a|-)\s*(\d+)\s*'.$hour.'\.?/iu',
                 LaboratoryInstructionRecognitionStatus::RECOGNIZED,
                 fn (array $m) => [
                     'kind' => 'closed_range',
@@ -155,7 +163,7 @@ final class LaboratoryInstructionRecognizerRules
             self::rule(
                 LaboratoryInstructionCategory::FASTING,
                 'fasting_minimum_hours',
-                '/\b(?:al\s+menos|minimo|mínimo)\s+(\d+)\s*horas?\b.{0,25}?\bayuno\b|\bayuno\b.{0,25}?\b(?:al\s+menos|minimo|mínimo)\s+(\d+)\s*horas?\b/iu',
+                '/\b(?:al\s+menos|minimo|mínimo)\s+(\d+)\s*'.$hour.'\b.{0,25}?\bayuno\b|\bayuno\b.{0,25}?\b(?:al\s+menos|minimo|mínimo)\s+(\d+)\s*'.$hour.'\b/iu',
                 LaboratoryInstructionRecognitionStatus::RECOGNIZED,
                 fn (array $m) => [
                     'kind' => 'minimum',
@@ -166,7 +174,7 @@ final class LaboratoryInstructionRecognizerRules
             self::rule(
                 LaboratoryInstructionCategory::FASTING,
                 'fasting_exact_hours',
-                '/\bayuno\b.{0,20}?\bde\s+(\d+)\s*horas?\b|\ben\s+ayunas\b.{0,20}?\b(\d+)\s*horas?\b/iu',
+                '/\bayuno\b.{0,20}?\bde\s+(\d+)\s*'.$hour.'\b|\ben\s+ayunas\b.{0,20}?\b(\d+)\s*'.$hour.'\b/iu',
                 LaboratoryInstructionRecognitionStatus::RECOGNIZED,
                 fn (array $m) => [
                     'kind' => 'exact',
@@ -177,7 +185,7 @@ final class LaboratoryInstructionRecognizerRules
             self::rule(
                 LaboratoryInstructionCategory::FASTING,
                 'fasting_present_exact_hours',
-                '/\b(?:presentarse|acudir)\s+con\s+ayuno\s+de\s+(\d+)\s*horas?\b/iu',
+                '/\b(?:presentarse|acudir)\s+con\s+ayuno\s+de\s+(\d+)\s*'.$hour.'\b/iu',
                 LaboratoryInstructionRecognitionStatus::RECOGNIZED,
                 fn (array $m) => [
                     'kind' => 'exact',
@@ -412,8 +420,68 @@ final class LaboratoryInstructionRecognizerRules
             ),
             self::rule(
                 LaboratoryInstructionCategory::URINE_SIMPLE,
+                'urine_collect_sample_required',
+                '/\bSe requiere recolectar muestra de orina\b/iu',
+                LaboratoryInstructionRecognitionStatus::RECOGNIZED,
+                fn () => [
+                    'kind' => 'collect_urine_sample',
+                    'protocol_scope' => 'gda_metabolite_urine',
+                ],
+            ),
+            self::rule(
+                LaboratoryInstructionCategory::URINE_SIMPLE,
+                'urine_sample_volume_ml',
+                '/\(\s*(\d+(?:[.,]\d+)?)\s*m[lL]\s*\)(?=\s*final del d[ií]a de la jornada laboral)/iu',
+                LaboratoryInstructionRecognitionStatus::RECOGNIZED,
+                fn (array $m) => [
+                    'kind' => 'sample_volume',
+                    'amount_ml' => (float) str_replace(',', '.', (string) $m[1]),
+                    'unit' => 'mL',
+                ],
+                'ml',
+            ),
+            self::rule(
+                LaboratoryInstructionCategory::SAMPLE_TIMING,
+                'urine_collection_workday_end',
+                '/\bfinal del d[ií]a de la jornada laboral\b/iu',
+                LaboratoryInstructionRecognitionStatus::RECOGNIZED,
+                fn () => [
+                    'kind' => 'workday_end_collection',
+                    'timing_scope' => 'end_of_workday',
+                ],
+            ),
+            self::rule(
+                LaboratoryInstructionCategory::CONTAINER_PRESERVATIVE,
+                'urine_plastic_sterile_screw_cap_container',
+                '/\bcontenedor de pl[aá]stico est[eé]ril tapa de rosca\b/iu',
+                LaboratoryInstructionRecognitionStatus::RECOGNIZED,
+                fn () => [
+                    'kind' => 'plastic_sterile_screw_cap_container',
+                ],
+            ),
+            self::rule(
+                LaboratoryInstructionCategory::URINE_SIMPLE,
+                'urine_discard_midstream_fill_combined',
+                '/\bDesechar el primer chorro de orina y recolectar el chorro medio en el contenedor,\s*llenar por lo menos hasta las tres cuartas partes\.?/iu',
+                LaboratoryInstructionRecognitionStatus::RECOGNIZED,
+                fn () => [
+                    'kind' => 'discard_midstream_fill_three_quarters',
+                    'protocol_scope' => 'gda_metabolite_urine',
+                ],
+            ),
+            self::rule(
+                LaboratoryInstructionCategory::URINE_SIMPLE,
+                'urine_container_seal_no_spill',
+                '/\bCerrar el contenedor,\s*asegurando que la tapa cierre correctamente,\s*para evitar derrame\.?/iu',
+                LaboratoryInstructionRecognitionStatus::RECOGNIZED,
+                fn () => [
+                    'kind' => 'seal_container_prevent_spill',
+                ],
+            ),
+            self::rule(
+                LaboratoryInstructionCategory::URINE_SIMPLE,
                 'collect_urine',
-                '/\b(?:recolectar|recolecci[oó]n\s+de)\s+orina\b/iu',
+                '/\b(?:recolectar\s+(?:(?:la\s+)?muestra\s+de\s+)?|recolecci[oó]n\s+(?:de\s+)?(?:(?:la\s+)?muestra\s+de\s+)?)orina\b/iu',
                 LaboratoryInstructionRecognitionStatus::PARTIAL,
                 fn () => ['kind' => 'collect_urine'],
             ),
