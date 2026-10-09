@@ -4,6 +4,7 @@ namespace App\Services\LaboratoryPreparation;
 
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryPurchaseItem;
+use Carbon\CarbonInterface;
 
 class LaboratoryPreparationSource
 {
@@ -27,6 +28,40 @@ class LaboratoryPreparationSource
                 ])
                 ->all(),
         ];
+    }
+
+    /**
+     * @return array{
+     *     items: list<array{id: int, name: string, gda_id: string|null, indications: string|null, feature_list: list<string>}>,
+     *     patient_context: array{age_years: int|null, age_source: string},
+     *     rules_version: string
+     * }
+     */
+    public function buildDeterministicInput(LaboratoryPurchase $purchase): array
+    {
+        return [
+            ...$this->buildInput($purchase),
+            'patient_context' => $this->patientContext($purchase)->toHashPayload(),
+            'rules_version' => LaboratoryPreparationRuleEngine::RULES_VERSION,
+        ];
+    }
+
+    public function deterministicHash(LaboratoryPurchase $purchase): string
+    {
+        return $this->hash($this->buildDeterministicInput($purchase));
+    }
+
+    public function patientContext(LaboratoryPurchase $purchase): LaboratoryPreparationPatientContext
+    {
+        $birthDate = $purchase->birth_date;
+        $ageYears = $birthDate instanceof CarbonInterface
+            ? (int) $birthDate->diffInYears(now())
+            : null;
+
+        return new LaboratoryPreparationPatientContext(
+            ageYears: $ageYears,
+            ageSource: $ageYears === null ? 'purchase_missing_birth_date' : 'purchase_birth_date',
+        );
     }
 
     /**

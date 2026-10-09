@@ -20,6 +20,20 @@ class LaboratoryPreparationSummaryNotificationService
             return false;
         }
 
+        if (
+            $summary->rules_version === LaboratoryPreparationRuleEngine::RULES_VERSION
+            && ! (bool) config('services.laboratory_preparation.deterministic_v3_enabled', false)
+        ) {
+            return false;
+        }
+
+        if (
+            $summary->isFallbackOriginal()
+            && $summary->rules_version === LaboratoryPreparationRuleEngine::RULES_VERSION
+        ) {
+            return false;
+        }
+
         $shouldSendMail = false;
         $lockedSummary = null;
         $user = null;

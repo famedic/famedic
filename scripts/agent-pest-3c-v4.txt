@@ -1,0 +1,287 @@
+
+   PASS  Tests\Unit\LaboratoryPreparation\LaboratoryInstructionOfficialCasesTest
+  ✓ it carga exactamente 40 casos oficiales QA01 a QA40 con textos lite… 0.15s  
+  ✓ it parsea cada estudio oficial sin perder el texto fuente ni mezcla… 0.07s  
+  ✓ it reconstruye los bloques oficiales con el splitter sin alterar en… 0.03s  
+  ✓ it marca ambigüedades e incompletos explícitamente en casos oficial… 0.05s  
+
+   FAIL  Tests\Unit\LaboratoryPreparation\LaboratoryInstructionParserTest
+  ✓ it expone categorías reconocidas sin consolidar estudios             0.04s  
+  ✓ it conserva texto original y trazabilidad por span                   0.02s  
+  ✓ it marca instrucciones vacías sin inventar requisitos                0.02s  
+  ✓ it detecta ayuno con intervalo cerrado 8-10 sin decidir compatibili… 0.02s  
+  ✓ it preserva negaciones explícitas de ayuno                           0.02s  
+  ✓ it expone unidades desconocidas sin convertirlas en instrucciones v… 0.02s  
+  ✓ it integra con LaboratoryPreparationSource sin usar feature_list     0.02s  
+  ⨯ it ejecuta escenarios de regresión internos del parser               0.03s  
+  ✓ it delega casos oficiales al fixture JSON generado desde Excel       0.02s  
+  ✓ it marca entradas incompletas de ayuno                               0.02s  
+  ✓ it marca fragmentos no reconocidos explícitamente en lugar de desca… 0.02s  
+
+   PASS  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationFragmentSecurityTest
+  ✓ it no consolida AUTO cuando hay ayuno reconocido y medicamento no e… 0.05s  
+  ✓ it no consolida AUTO cuando hay ayuno y restricción temporal no cla… 0.02s  
+  ✓ it no consolida AUTO cuando hay preparación de muestra y texto adic… 0.02s  
+  ✓ it tolera conectores lingüísticos aislados sin forzar fallback       0.02s  
+  ✓ it no consolida AUTO ante instrucción desconocida con negación clín… 0.02s  
+  ✓ it no consolida AUTO cuando una oración queda parcialmente reconoci… 0.02s  
+  ✓ it marca fallback cuando hay requisito reconocido fuera del alcance… 0.02s  
+  ✓ it marca fallback clínico por metformina incompatible entre estudio… 0.02s  
+
+   FAIL  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineTest
+  ✓ it interseca ayuno 8 h con 10–12 h en AUTO (R01)                     0.04s  
+  ✓ it interseca 8–10 h con 10–12 h en un punto de 10 h (R01)            0.03s  
+  ✓ it marca FALLBACK clínico cuando 6–8 h choca con 10–12 h (R01)       0.02s  
+  ✓ it aplica condición pediátrica sin inventar edad (R02)               0.02s  
+  ✓ it conserva hidratación y vejiga sin secuenciar orina ambigua (R03)  0.02s  
+  ✓ it evalúa casos oficiales R01 con ruta AUTO cuando el parser no dej… 0.02s  
+  ✓ it evalúa casos oficiales R01 con ruta AUTO cuando el parser no dej… 0.02s  
+  ✓ it evalúa casos oficiales R01 con ruta AUTO cuando el parser no dej… 0.02s  
+  ✓ it aplica FALLBACK oficial QA26 por ayuno incompatible 6–8 h vs 10–… 0.02s  
+  ✓ it consolida QA04 adulto con intersección 8–14 h y 10–12 h (R01,R02… 0.02s  
+  ⨯ it consolida QA27 con intersección 10 h preservando restricción de…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ⨯ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.03s  
+  ⨯ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ⨯ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.03s  
+  ⨯ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ⨯ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ⨯ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ⨯ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales operativos R09–R14 según ruta esperada de… 0.03s  
+  ✓ it evalúa casos oficiales operativos R09–R14 según ruta esperada de… 0.02s  
+  ✓ it evalúa casos oficiales operativos R09–R14 según ruta esperada de… 0.02s  
+  ✓ it evalúa casos oficiales operativos R09–R14 según ruta esperada de… 0.02s  
+  ✓ it evalúa casos oficiales operativos R09–R14 según ruta esperada de… 0.02s  
+  ✓ it evalúa casos oficiales operativos R09–R14 según ruta esperada de… 0.03s  
+  ✓ it evalúa casos oficiales operativos R09–R14 según ruta esperada de… 0.02s  
+  ⨯ it evalúa casos oficiales operativos R09–R14 según ruta esperada de… 0.02s  
+  ✓ it evalúa casos oficiales operativos R09–R14 según ruta esperada de… 0.02s  
+  ✓ it evalúa casos oficiales operativos R09–R14 según ruta esperada de… 0.02s  
+  ⨯ it evalúa casos oficiales operativos R09–R14 según ruta esperada de… 0.02s  
+  ✓ it aplica FALLBACK oficial QA39 por secuenciación vejiga llena vs o… 0.02s  
+  ✓ it aplica FALLBACK oficial QA40 por ambigüedad VPH multi-muestra co… 0.02s  
+  ✓ it serializa decisiones AUTO y FALLBACK compatibles con schema v2    0.02s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryPreparation\LaboratoryInstructionParserTest…    
+  Failed asserting that an array contains 'fasting_range_hours'.
+
+  at tests/Unit/LaboratoryPreparation/LaboratoryInstructionParserTest.php:45
+     41▕         expect(collect($study->requirements)->pluck('category')->all())->toContain($category);
+     42▕     }
+     43▕ 
+     44▕     foreach ($case['expected_requirement_types'] as $type) {
+  ➜  45▕         expect(collect($study->requirements)->pluck('requirementType')->all())->toContain($type);
+     46▕     }
+     47▕ 
+     48▕     if (! $case['allow_unrecognized']) {
+     49▕         expect($study->hasUnrecognizedContent)->toBeFalse();
+
+  1   tests/Unit/LaboratoryPreparation/LaboratoryInstructionParserTest.php:45
+  2   tests/Unit/LaboratoryPreparation/LaboratoryInstructionParserTest.php:158
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineT…   
+  Failed asserting that false is true.
+
+  at tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:213
+    209▕         ->and($decision->consolidatedRequirements['fasting']['exact_hours'])->toBe(10)
+    210▕         ->and($decision->consolidatedRequirements['fasting']['dietary_restrictions'])->not->toBeEmpty()
+    211▕         ->and(collect($decision->consolidatedRequirements['fasting']['dietary_restrictions'])->pluck('kinds')->flatten()->unique()->all())
+    212▕         ->toContain('solid_foods', 'carbonated_drinks')
+  ➜ 213▕         ->and($decision->consolidatedRequirements['hydration']['full_bladder_required'])->toBeTrue();
+    214▕ });
+    215▕ 
+    216▕ it('evalúa casos oficiales de muestra QA08–QA22 según ruta esperada del Excel', function (string $caseId) {
+    217▕     $case = collect(ruleEngineOfficialCases())->firstWhere('case_id', $caseId);
+
+  1   tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:213
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineT…   
+  Failed asserting that two strings are identical.
+  -'AUTO_CONSOLIDATED'
+  +'FALLBACK_ORIGINAL'
+  
+
+  at tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+    227▕     $expectedStatus = $case['expected_route'] === 'AUTO'
+    228▕         ? LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED
+    229▕         : LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL;
+    230▕ 
+  ➜ 231▕     expect($decision->status)->toBe($expectedStatus);
+    232▕ 
+    233▕     $expectedRules = array_map('trim', explode(',', (string) $case['expected_rules']));
+    234▕     foreach ($expectedRules as $rule) {
+    235▕         if (in_array($rule, ['R18', 'R15', 'R16'], true)) {
+
+  1   tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineT…   
+  Failed asserting that two strings are identical.
+  -'AUTO_CONSOLIDATED'
+  +'FALLBACK_ORIGINAL'
+  
+
+  at tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+    227▕     $expectedStatus = $case['expected_route'] === 'AUTO'
+    228▕         ? LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED
+    229▕         : LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL;
+    230▕ 
+  ➜ 231▕     expect($decision->status)->toBe($expectedStatus);
+    232▕ 
+    233▕     $expectedRules = array_map('trim', explode(',', (string) $case['expected_rules']));
+    234▕     foreach ($expectedRules as $rule) {
+    235▕         if (in_array($rule, ['R18', 'R15', 'R16'], true)) {
+
+  1   tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineT…   
+  Failed asserting that two strings are identical.
+  -'AUTO_CONSOLIDATED'
+  +'FALLBACK_ORIGINAL'
+  
+
+  at tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+    227▕     $expectedStatus = $case['expected_route'] === 'AUTO'
+    228▕         ? LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED
+    229▕         : LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL;
+    230▕ 
+  ➜ 231▕     expect($decision->status)->toBe($expectedStatus);
+    232▕ 
+    233▕     $expectedRules = array_map('trim', explode(',', (string) $case['expected_rules']));
+    234▕     foreach ($expectedRules as $rule) {
+    235▕         if (in_array($rule, ['R18', 'R15', 'R16'], true)) {
+
+  1   tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineT…   
+  Failed asserting that two strings are identical.
+  -'AUTO_CONSOLIDATED'
+  +'FALLBACK_ORIGINAL'
+  
+
+  at tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+    227▕     $expectedStatus = $case['expected_route'] === 'AUTO'
+    228▕         ? LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED
+    229▕         : LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL;
+    230▕ 
+  ➜ 231▕     expect($decision->status)->toBe($expectedStatus);
+    232▕ 
+    233▕     $expectedRules = array_map('trim', explode(',', (string) $case['expected_rules']));
+    234▕     foreach ($expectedRules as $rule) {
+    235▕         if (in_array($rule, ['R18', 'R15', 'R16'], true)) {
+
+  1   tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineT…   
+  Failed asserting that two strings are identical.
+  -'AUTO_CONSOLIDATED'
+  +'FALLBACK_ORIGINAL'
+  
+
+  at tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+    227▕     $expectedStatus = $case['expected_route'] === 'AUTO'
+    228▕         ? LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED
+    229▕         : LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL;
+    230▕ 
+  ➜ 231▕     expect($decision->status)->toBe($expectedStatus);
+    232▕ 
+    233▕     $expectedRules = array_map('trim', explode(',', (string) $case['expected_rules']));
+    234▕     foreach ($expectedRules as $rule) {
+    235▕         if (in_array($rule, ['R18', 'R15', 'R16'], true)) {
+
+  1   tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineT…   
+  Failed asserting that two strings are identical.
+  -'AUTO_CONSOLIDATED'
+  +'FALLBACK_ORIGINAL'
+  
+
+  at tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+    227▕     $expectedStatus = $case['expected_route'] === 'AUTO'
+    228▕         ? LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED
+    229▕         : LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL;
+    230▕ 
+  ➜ 231▕     expect($decision->status)->toBe($expectedStatus);
+    232▕ 
+    233▕     $expectedRules = array_map('trim', explode(',', (string) $case['expected_rules']));
+    234▕     foreach ($expectedRules as $rule) {
+    235▕         if (in_array($rule, ['R18', 'R15', 'R16'], true)) {
+
+  1   tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineT…   
+  Failed asserting that two strings are identical.
+  -'AUTO_CONSOLIDATED'
+  +'FALLBACK_ORIGINAL'
+  
+
+  at tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+    227▕     $expectedStatus = $case['expected_route'] === 'AUTO'
+    228▕         ? LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED
+    229▕         : LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL;
+    230▕ 
+  ➜ 231▕     expect($decision->status)->toBe($expectedStatus);
+    232▕ 
+    233▕     $expectedRules = array_map('trim', explode(',', (string) $case['expected_rules']));
+    234▕     foreach ($expectedRules as $rule) {
+    235▕         if (in_array($rule, ['R18', 'R15', 'R16'], true)) {
+
+  1   tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:231
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineT…   
+  Failed asserting that an array contains 'R09'.
+
+  at tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:267
+    263▕     foreach ($expectedRules as $rule) {
+    264▕         if (in_array($rule, ['R15', 'R16', 'R18'], true)) {
+    265▕             continue;
+    266▕         }
+  ➜ 267▕         expect($decision->rulesApplied)->toContain($rule);
+    268▕     }
+    269▕ })->with([
+    270▕     'QA06', 'QA07', 'QA25', 'QA27', 'QA28', 'QA29', 'QA30', 'QA31', 'QA32', 'QA37', 'QA38',
+    271▕ ]);
+
+  1   tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:267
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineT…   
+  Failed asserting that two strings are identical.
+  -'AUTO_CONSOLIDATED'
+  +'FALLBACK_ORIGINAL'
+  
+
+  at tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:260
+    256▕     $expectedStatus = $case['expected_route'] === 'AUTO'
+    257▕         ? LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED
+    258▕         : LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL;
+    259▕ 
+  ➜ 260▕     expect($decision->status)->toBe($expectedStatus);
+    261▕ 
+    262▕     $expectedRules = array_map('trim', explode(',', (string) $case['expected_rules']));
+    263▕     foreach ($expectedRules as $rule) {
+    264▕         if (in_array($rule, ['R15', 'R16', 'R18'], true)) {
+
+  1   tests/Unit/LaboratoryPreparation/LaboratoryPreparationRuleEngineTest.php:260
+
+
+  Tests:    11 failed, 52 passed (2323 assertions)
+  Duration: 1.68s
+

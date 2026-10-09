@@ -1,0 +1,28 @@
+=== QA27 rule engine + validate_parser grep ===
+=== started 2026-10-08T14:46:11-06:00 ===
+=== QA27 parse ===
+hasUnrecognizedContent (order): true
+  study QA27-01 (ECO ABDOMEN TOTAL  (VESICULA, HIGADO, PANCREAS BAZ): hasUnrecognizedContent=true
+  study QA27-02 (QUIMICA SANGUINEA 28 ELEMENTOS): hasUnrecognizedContent=false
+
+=== evaluate restrictToPhase3aCategories=false ===
+status: FALLBACK_ORIGINAL
+rulesApplied: []
+fallbackReason: unrecognized_instruction_fragments
+consolidated fasting: null
+consolidated hydration: null
+
+=== evaluate restrictToPhase3aCategories=true ===
+status: FALLBACK_ORIGINAL
+rulesApplied: []
+fallbackReason: unrecognized_instruction_fragments
+consolidated fasting: null
+consolidated hydration: null
+
+=== validate_parser grep ===
+QA08 | 7/17 reqs | de laboratorio estéril para la recolección de la muestra de orina o comprarlo en | — | —
+QA18 | 3/13 reqs | de mínimo 3 días máximo 7. | b. Sin aplicación de medicamentos, cremas, pomadas  | — | —
+QA27 | 6/10 reqs | con el nombre completo del paciente, diagnostico y los datos del medico tratante | — | —
+QA39 | 12/25 reqs | con el nombre completo del paciente, diagnostico y los datos del medico tratante | — | —
+QA40 | 9/31 reqs | de laboratorio estéril para la recolección de la muestra de orina o comprarlo en | — | —
+=== exit code: 0 ===

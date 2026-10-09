@@ -1,0 +1,998 @@
+[
+    {
+        "case_id": "QA01",
+        "nivel": "Básico",
+        "patient_context": "Adulto",
+        "order_studies_list": "INDICE HOMA\nPERFIL TIROIDEO (T-UPTAKE,FT7,T3,T3RU,T4,FT4,TSH,IPROT)",
+        "source_text": "INDICE HOMA [Sanguíneo] — Cita: No\nAyuno de 8 horas\n\nPERFIL TIROIDEO (T-UPTAKE,FT7,T3,T3RU,T4,FT4,TSH,IPROT)  [Sanguíneo] — Cita: No\nAyuno de 8 horas",
+        "expected_route": "AUTO",
+        "expected_rules": "R01",
+        "acceptance_criteria": "Una sola indicación de ayuno de 8 horas.",
+        "expected_output": "🧪 RECOMENDACIONES E INSTRUCCIONES DE PREPARACIÓN\n• Ayuno: acude con 8 horas de ayuno.",
+        "studies": [
+            {
+                "study_id": "QA01-01",
+                "study_name": "INDICE HOMA",
+                "indications": "Ayuno de 8 horas",
+                "appointment_required": false,
+                "header_line": "INDICE HOMA [Sanguíneo] — Cita: No"
+            },
+            {
+                "study_id": "QA01-02",
+                "study_name": "PERFIL TIROIDEO (T-UPTAKE,FT7,T3,T3RU,T4,FT4,TSH,IPROT)",
+                "indications": "Ayuno de 8 horas",
+                "appointment_required": false,
+                "header_line": "PERFIL TIROIDEO (T-UPTAKE,FT7,T3,T3RU,T4,FT4,TSH,IPROT)  [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA02",
+        "nivel": "Básico",
+        "patient_context": "Adulto",
+        "order_studies_list": "INDICE HOMA\nQUIMICA SANGUINEA 28 ELEMENTOS",
+        "source_text": "INDICE HOMA [Sanguíneo] — Cita: No\nAyuno de 8 horas\n\nQUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No\nAyuno de 10 a 12 horas",
+        "expected_route": "AUTO",
+        "expected_rules": "R01",
+        "acceptance_criteria": "Debe gobernar el ayuno mayor compatible: 10 a 12 horas.",
+        "expected_output": "🧪 RECOMENDACIONES E INSTRUCCIONES DE PREPARACIÓN\n• Ayuno: acude con 10 a 12 horas de ayuno.",
+        "studies": [
+            {
+                "study_id": "QA02-01",
+                "study_name": "INDICE HOMA",
+                "indications": "Ayuno de 8 horas",
+                "appointment_required": false,
+                "header_line": "INDICE HOMA [Sanguíneo] — Cita: No"
+            },
+            {
+                "study_id": "QA02-02",
+                "study_name": "QUIMICA SANGUINEA 28 ELEMENTOS",
+                "indications": "Ayuno de 10 a 12 horas",
+                "appointment_required": false,
+                "header_line": "QUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA03",
+        "nivel": "Básico",
+        "patient_context": "Adulto",
+        "order_studies_list": "AC. ANTI-HELICOBACTER PYLORI IgG\nINDICE HOMA",
+        "source_text": "AC. ANTI-HELICOBACTER PYLORI IgG [Sanguíneo] — Cita: No\nAyuno de 4 horas\n\nINDICE HOMA [Sanguíneo] — Cita: No\nAyuno de 8 horas",
+        "expected_route": "AUTO",
+        "expected_rules": "R01",
+        "acceptance_criteria": "4 h + 8 h → una sola indicación de 8 h.",
+        "expected_output": "🧪 RECOMENDACIONES E INSTRUCCIONES DE PREPARACIÓN\n• Ayuno: acude con 8 horas de ayuno.",
+        "studies": [
+            {
+                "study_id": "QA03-01",
+                "study_name": "AC. ANTI-HELICOBACTER PYLORI IgG",
+                "indications": "Ayuno de 4 horas",
+                "appointment_required": false,
+                "header_line": "AC. ANTI-HELICOBACTER PYLORI IgG [Sanguíneo] — Cita: No"
+            },
+            {
+                "study_id": "QA03-02",
+                "study_name": "INDICE HOMA",
+                "indications": "Ayuno de 8 horas",
+                "appointment_required": false,
+                "header_line": "INDICE HOMA [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA04",
+        "nivel": "Básico",
+        "patient_context": "Adulto",
+        "order_studies_list": "17 HIDROXIPREGNENOLONA\nQUIMICA SANGUINEA 28 ELEMENTOS",
+        "source_text": "17 HIDROXIPREGNENOLONA [Sanguíneo] — Cita: No \nPresentarse con ayuno de 8 -14 horas. Menores de 3 años con ayuno de al menos 4 horas.\n\nQUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No\nAyuno de 10 a 12 horas",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R02",
+        "acceptance_criteria": "8–14 h + 10–12 h → 10–12 h para adulto.",
+        "expected_output": "🧪 RECOMENDACIONES E INSTRUCCIONES DE PREPARACIÓN\n• Ayuno: acude con 10 a 12 horas de ayuno.",
+        "studies": [
+            {
+                "study_id": "QA04-01",
+                "study_name": "17 HIDROXIPREGNENOLONA",
+                "indications": "Presentarse con ayuno de 8 -14 horas. Menores de 3 años con ayuno de al menos 4 horas.",
+                "appointment_required": false,
+                "header_line": "17 HIDROXIPREGNENOLONA [Sanguíneo] — Cita: No"
+            },
+            {
+                "study_id": "QA04-02",
+                "study_name": "QUIMICA SANGUINEA 28 ELEMENTOS",
+                "indications": "Ayuno de 10 a 12 horas",
+                "appointment_required": false,
+                "header_line": "QUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA05",
+        "nivel": "Condicional",
+        "patient_context": "Menor de 3 años",
+        "order_studies_list": "17 HIDROXIPREGNENOLONA",
+        "source_text": "17 HIDROXIPREGNENOLONA [Sanguíneo] — Cita: No \nPresentarse con ayuno de 8 -14 horas. Menores de 3 años con ayuno de al menos 4 horas.",
+        "expected_route": "AUTO",
+        "expected_rules": "R02",
+        "acceptance_criteria": "Aplicar la condición pediátrica específica: al menos 4 h.",
+        "expected_output": "🧪 RECOMENDACIONES E INSTRUCCIONES DE PREPARACIÓN\n• Ayuno: acude con al menos 4 horas de ayuno.",
+        "studies": [
+            {
+                "study_id": "QA05-01",
+                "study_name": "17 HIDROXIPREGNENOLONA",
+                "indications": "Presentarse con ayuno de 8 -14 horas. Menores de 3 años con ayuno de al menos 4 horas.",
+                "appointment_required": false,
+                "header_line": "17 HIDROXIPREGNENOLONA [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA06",
+        "nivel": "Condicional",
+        "patient_context": "10 años",
+        "order_studies_list": "ANGIOTAC DE ARTERIAS RENALES",
+        "source_text": "ANGIOTAC DE ARTERIAS RENALES [Tomografía] — Cita: Si\n -Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-En pacientes pediatricos (6 a 12 años), presentarse con ayuno de 4 - 6 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-Acudir acompañado de una persona mayor de 18 años.",
+        "expected_route": "AUTO",
+        "expected_rules": "R02,R09,R10,R11,R12,R13",
+        "acceptance_criteria": "Usar ayuno pediátrico 4–6 h. Mantener cita, receta, creatinina, metformina condicional y acompañante exactamente como la fuente.",
+        "expected_output": "SALIDA ESPERADA: ayuno pediátrico 4–6 h + cita + receta + creatinina vigente 1 mes + condición de metformina + acompañante >18 años. No aplicar ayuno adulto.",
+        "studies": [
+            {
+                "study_id": "QA06-01",
+                "study_name": "ANGIOTAC DE ARTERIAS RENALES",
+                "indications": "-Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-En pacientes pediatricos (6 a 12 años), presentarse con ayuno de 4 - 6 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-Acudir acompañado de una persona mayor de 18 años.",
+                "appointment_required": true,
+                "header_line": "ANGIOTAC DE ARTERIAS RENALES [Tomografía] — Cita: Si"
+            }
+        ]
+    },
+    {
+        "case_id": "QA07",
+        "nivel": "Condicional",
+        "patient_context": "Adulto",
+        "order_studies_list": "ANGIOTAC DE ARTERIAS RENALES",
+        "source_text": "ANGIOTAC DE ARTERIAS RENALES [Tomografía] — Cita: Si\n -Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-En pacientes pediatricos (6 a 12 años), presentarse con ayuno de 4 - 6 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-Acudir acompañado de una persona mayor de 18 años.",
+        "expected_route": "AUTO",
+        "expected_rules": "R02,R09,R10,R11,R12,R13",
+        "acceptance_criteria": "Usar ayuno adulto 8–10 h y conservar todos los requisitos operativos.",
+        "expected_output": "SALIDA ESPERADA: ayuno 8–10 h + cita + receta + creatinina vigente 1 mes + condición de metformina + acompañante >18 años.",
+        "studies": [
+            {
+                "study_id": "QA07-01",
+                "study_name": "ANGIOTAC DE ARTERIAS RENALES",
+                "indications": "-Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-En pacientes pediatricos (6 a 12 años), presentarse con ayuno de 4 - 6 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-Acudir acompañado de una persona mayor de 18 años.",
+                "appointment_required": true,
+                "header_line": "ANGIOTAC DE ARTERIAS RENALES [Tomografía] — Cita: Si"
+            }
+        ]
+    },
+    {
+        "case_id": "QA08",
+        "nivel": "Mixto",
+        "patient_context": "Adulto",
+        "order_studies_list": "INDICE HOMA\nEXAMEN GENERAL DE ORINA",
+        "source_text": "INDICE HOMA [Sanguíneo] — Cita: No\nAyuno de 8 horas\n\nEXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No\nAcudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R04,R18",
+        "acceptance_criteria": "No mezclar sangre y orina. Mostrar ayuno una vez y bloque independiente de recolección de orina.",
+        "expected_output": "SALIDA ESPERADA: ayuno 8 h + frasco estéril + reglas de EGO (menstruación si aplica, higiene, primera orina preferente/4 h desde última micción, chorro medio, llenar 3/4, entregar ≤2 h).",
+        "studies": [
+            {
+                "study_id": "QA08-01",
+                "study_name": "INDICE HOMA",
+                "indications": "Ayuno de 8 horas",
+                "appointment_required": false,
+                "header_line": "INDICE HOMA [Sanguíneo] — Cita: No"
+            },
+            {
+                "study_id": "QA08-02",
+                "study_name": "EXAMEN GENERAL DE ORINA",
+                "indications": "Acudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.",
+                "appointment_required": false,
+                "header_line": "EXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA09",
+        "nivel": "Mixto",
+        "patient_context": "Adulto",
+        "order_studies_list": "INDICE HOMA\nCOPROPARASITOSCOPICO (UNICA MUESTRA)",
+        "source_text": "INDICE HOMA [Sanguíneo] — Cita: No\nAyuno de 8 horas\n\nCOPROPARASITOSCOPICO (UNICA MUESTRA) [Copro] — Cita: No\nAcudir a la sucursal por los recipientes para la recolección de la muestra o podrá comprarlos en la farmacia. - Recolectar muestra de materia fecal, no debe tener contacto con el agua, ni con orina. - La cantidad de muestra a entregar es aproximadamente de 5 a 10 gramos de materia fecal, lo equivalente al tamaño de una nuez.",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R06,R18",
+        "acceptance_criteria": "Ayuno y muestra fecal deben coexistir sin repetir estudios.",
+        "expected_output": "SALIDA ESPERADA: ayuno 8 h + recipiente para heces + evitar contacto con agua/orina + cantidad 5–10 g aprox.",
+        "studies": [
+            {
+                "study_id": "QA09-01",
+                "study_name": "INDICE HOMA",
+                "indications": "Ayuno de 8 horas",
+                "appointment_required": false,
+                "header_line": "INDICE HOMA [Sanguíneo] — Cita: No"
+            },
+            {
+                "study_id": "QA09-02",
+                "study_name": "COPROPARASITOSCOPICO (UNICA MUESTRA)",
+                "indications": "Acudir a la sucursal por los recipientes para la recolección de la muestra o podrá comprarlos en la farmacia. - Recolectar muestra de materia fecal, no debe tener contacto con el agua, ni con orina. - La cantidad de muestra a entregar es aproximadamente de 5 a 10 gramos de materia fecal, lo equivalente al tamaño de una nuez.",
+                "appointment_required": false,
+                "header_line": "COPROPARASITOSCOPICO (UNICA MUESTRA) [Copro] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA10",
+        "nivel": "Mixto",
+        "patient_context": "Mujer adulta",
+        "order_studies_list": "INDICE HOMA\nPAPANICOLAOU (CITOLOGIA VAGINAL)",
+        "source_text": "INDICE HOMA [Sanguíneo] — Cita: No\nAyuno de 8 horas\n\nPAPANICOLAOU (CITOLOGIA VAGINAL) [Especiales] — Cita: No\n- Presentarse con aseo habitual. \n - Abstinencia sexual mínimo 48 horas antes de la toma del estudio. \n - Es preferible no acudir durante el período de menstruación, se recomienda que pasen 3 días después de haber cesado el sangrado. \n - No aplicarse duchas vaginales, tampones, espumas espermicidas, medicamentos (óvulos, cremas o pomadas) vía vaginal dos días antes. \n - Puede realizarse el estudio durante el embarazo únicamente bajo orden médica.\n - En mujeres postparto realizar la toma hasta 12 semanas después del parto.",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R08",
+        "acceptance_criteria": "Ayuno + preparación ginecológica en bloques independientes.",
+        "expected_output": "SALIDA ESPERADA: ayuno 8 h + aseo habitual + abstinencia ≥48 h + preferir fuera de menstruación/3 días tras cese + 2 días sin duchas/tampones/espermicidas/medicación vaginal + condiciones de embarazo/postparto.",
+        "studies": [
+            {
+                "study_id": "QA10-01",
+                "study_name": "INDICE HOMA",
+                "indications": "Ayuno de 8 horas",
+                "appointment_required": false,
+                "header_line": "INDICE HOMA [Sanguíneo] — Cita: No"
+            },
+            {
+                "study_id": "QA10-02",
+                "study_name": "PAPANICOLAOU (CITOLOGIA VAGINAL)",
+                "indications": "- Presentarse con aseo habitual. \n - Abstinencia sexual mínimo 48 horas antes de la toma del estudio. \n - Es preferible no acudir durante el período de menstruación, se recomienda que pasen 3 días después de haber cesado el sangrado. \n - No aplicarse duchas vaginales, tampones, espumas espermicidas, medicamentos (óvulos, cremas o pomadas) vía vaginal dos días antes. \n - Puede realizarse el estudio durante el embarazo únicamente bajo orden médica.\n - En mujeres postparto realizar la toma hasta 12 semanas después del parto.",
+                "appointment_required": false,
+                "header_line": "PAPANICOLAOU (CITOLOGIA VAGINAL) [Especiales] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA11",
+        "nivel": "Mixto",
+        "patient_context": "Mujer adulta",
+        "order_studies_list": "QUIMICA SANGUINEA 28 ELEMENTOS\nEXAMEN GENERAL DE ORINA\nPAPANICOLAOU (CITOLOGIA VAGINAL)",
+        "source_text": "QUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No\nAyuno de 10 a 12 horas\n\nEXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No\nAcudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.\n\nPAPANICOLAOU (CITOLOGIA VAGINAL) [Especiales] — Cita: No\n- Presentarse con aseo habitual. \n - Abstinencia sexual mínimo 48 horas antes de la toma del estudio. \n - Es preferible no acudir durante el período de menstruación, se recomienda que pasen 3 días después de haber cesado el sangrado. \n - No aplicarse duchas vaginales, tampones, espumas espermicidas, medicamentos (óvulos, cremas o pomadas) vía vaginal dos días antes. \n - Puede realizarse el estudio durante el embarazo únicamente bajo orden médica.\n - En mujeres postparto realizar la toma hasta 12 semanas después del parto.",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R04,R08,R18",
+        "acceptance_criteria": "Una sola sección con 3 bloques funcionales: ayuno, orina, preparación ginecológica.",
+        "expected_output": "SALIDA ESPERADA: ayuno 10–12 h + EGO consolidado + Papanicolaou consolidado. Nunca listar indicaciones por estudio.",
+        "studies": [
+            {
+                "study_id": "QA11-01",
+                "study_name": "QUIMICA SANGUINEA 28 ELEMENTOS",
+                "indications": "Ayuno de 10 a 12 horas",
+                "appointment_required": false,
+                "header_line": "QUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No"
+            },
+            {
+                "study_id": "QA11-02",
+                "study_name": "EXAMEN GENERAL DE ORINA",
+                "indications": "Acudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.",
+                "appointment_required": false,
+                "header_line": "EXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No"
+            },
+            {
+                "study_id": "QA11-03",
+                "study_name": "PAPANICOLAOU (CITOLOGIA VAGINAL)",
+                "indications": "- Presentarse con aseo habitual. \n - Abstinencia sexual mínimo 48 horas antes de la toma del estudio. \n - Es preferible no acudir durante el período de menstruación, se recomienda que pasen 3 días después de haber cesado el sangrado. \n - No aplicarse duchas vaginales, tampones, espumas espermicidas, medicamentos (óvulos, cremas o pomadas) vía vaginal dos días antes. \n - Puede realizarse el estudio durante el embarazo únicamente bajo orden médica.\n - En mujeres postparto realizar la toma hasta 12 semanas después del parto.",
+                "appointment_required": false,
+                "header_line": "PAPANICOLAOU (CITOLOGIA VAGINAL) [Especiales] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA12",
+        "nivel": "Muestra",
+        "patient_context": "Mujer adulta",
+        "order_studies_list": "EXAMEN GENERAL DE ORINA",
+        "source_text": "EXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No\nAcudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.",
+        "expected_route": "AUTO",
+        "expected_rules": "R04,R18",
+        "acceptance_criteria": "Preservar todos los pasos relevantes de EGO y la condición menstrual.",
+        "expected_output": "SALIDA ESPERADA: obtener frasco estéril; no estar en menstruación; higiene; primera orina preferente o 4 h desde última micción; chorro medio; llenar al menos 3/4; entregar ≤2 h.",
+        "studies": [
+            {
+                "study_id": "QA12-01",
+                "study_name": "EXAMEN GENERAL DE ORINA",
+                "indications": "Acudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.",
+                "appointment_required": false,
+                "header_line": "EXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA13",
+        "nivel": "Muestra",
+        "patient_context": "Paciente pediátrico",
+        "order_studies_list": "EXAMEN GENERAL DE ORINA",
+        "source_text": "EXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No\nAcudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.",
+        "expected_route": "AUTO",
+        "expected_rules": "R04,R18",
+        "acceptance_criteria": "Aplicar la condición pediátrica: bolsa pediátrica solicitada previamente al laboratorio.",
+        "expected_output": "SALIDA ESPERADA: indicar bolsa pediátrica y seguir instrucciones de uso; no imponer instrucciones adultas incompatibles.",
+        "studies": [
+            {
+                "study_id": "QA13-01",
+                "study_name": "EXAMEN GENERAL DE ORINA",
+                "indications": "Acudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.",
+                "appointment_required": false,
+                "header_line": "EXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA14",
+        "nivel": "Muestra",
+        "patient_context": "Adulto",
+        "order_studies_list": "CORTISOL LIBRE EN ORINA DE 24 HRS.",
+        "source_text": "CORTISOL LIBRE EN ORINA DE 24 HRS. [Urianálisis] — Cita: No\nRecolectar orina durante 24 horas",
+        "expected_route": "AUTO",
+        "expected_rules": "R05",
+        "acceptance_criteria": "Mantener la recolección de 24 h como bloque propio.",
+        "expected_output": "🧪 RECOMENDACIONES E INSTRUCCIONES DE PREPARACIÓN\n• Orina de 24 horas: recolecta la orina durante 24 horas.",
+        "studies": [
+            {
+                "study_id": "QA14-01",
+                "study_name": "CORTISOL LIBRE EN ORINA DE 24 HRS.",
+                "indications": "Recolectar orina durante 24 horas",
+                "appointment_required": false,
+                "header_line": "CORTISOL LIBRE EN ORINA DE 24 HRS. [Urianálisis] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA15",
+        "nivel": "Muestra",
+        "patient_context": "Adulto",
+        "order_studies_list": "CORTISOL LIBRE EN ORINA DE 24 HRS.\nEXAMEN GENERAL DE ORINA",
+        "source_text": "CORTISOL LIBRE EN ORINA DE 24 HRS. [Urianálisis] — Cita: No\nRecolectar orina durante 24 horas\n\nEXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No\nAcudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.",
+        "expected_route": "AUTO",
+        "expected_rules": "R04,R05,R18",
+        "acceptance_criteria": "NO mezclar orina simple con orina de 24 h. Mostrar dos bloques claramente diferenciados.",
+        "expected_output": "SALIDA ESPERADA: bloque 'Muestra de orina' con EGO + bloque 'Orina de 24 horas'.",
+        "studies": [
+            {
+                "study_id": "QA15-01",
+                "study_name": "CORTISOL LIBRE EN ORINA DE 24 HRS.",
+                "indications": "Recolectar orina durante 24 horas",
+                "appointment_required": false,
+                "header_line": "CORTISOL LIBRE EN ORINA DE 24 HRS. [Urianálisis] — Cita: No"
+            },
+            {
+                "study_id": "QA15-02",
+                "study_name": "EXAMEN GENERAL DE ORINA",
+                "indications": "Acudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.",
+                "appointment_required": false,
+                "header_line": "EXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA16",
+        "nivel": "Muestra",
+        "patient_context": "Adulto",
+        "order_studies_list": "COPROPARASITOSCOPICO (UNICA MUESTRA)",
+        "source_text": "COPROPARASITOSCOPICO (UNICA MUESTRA) [Copro] — Cita: No\nAcudir a la sucursal por los recipientes para la recolección de la muestra o podrá comprarlos en la farmacia. - Recolectar muestra de materia fecal, no debe tener contacto con el agua, ni con orina. - La cantidad de muestra a entregar es aproximadamente de 5 a 10 gramos de materia fecal, lo equivalente al tamaño de una nuez.",
+        "expected_route": "AUTO",
+        "expected_rules": "R06,R18",
+        "acceptance_criteria": "Consolidar preparación de heces sin tecnicismos innecesarios.",
+        "expected_output": "SALIDA ESPERADA: conseguir recipiente; recolectar heces sin contacto con agua/orina; entregar 5–10 g aprox. (tamaño de una nuez).",
+        "studies": [
+            {
+                "study_id": "QA16-01",
+                "study_name": "COPROPARASITOSCOPICO (UNICA MUESTRA)",
+                "indications": "Acudir a la sucursal por los recipientes para la recolección de la muestra o podrá comprarlos en la farmacia. - Recolectar muestra de materia fecal, no debe tener contacto con el agua, ni con orina. - La cantidad de muestra a entregar es aproximadamente de 5 a 10 gramos de materia fecal, lo equivalente al tamaño de una nuez.",
+                "appointment_required": false,
+                "header_line": "COPROPARASITOSCOPICO (UNICA MUESTRA) [Copro] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA17",
+        "nivel": "Calidad de datos",
+        "patient_context": "Adulto",
+        "order_studies_list": "COPROPARASITOSCOPICO (TRES MUESTRAS)",
+        "source_text": "COPROPARASITOSCOPICO (TRES MUESTRAS) [Copro] — Cita: No\nAcudir a la sucursal por los recipientes para la recolección de la muestra o podrá comprarlos en la farmacia. - Recolectar muestra de materia fecal, no debe tener contacto con el agua, ni con orina. - La cantidad de muestra a entregar es aproximadamente de 5 a 10 gramos de materia fecal, lo equivalente al tamaño de una nuez.",
+        "expected_route": "FALLBACK_ORIGINAL",
+        "expected_rules": "R06",
+        "acceptance_criteria": "El nombre dice 'tres muestras', pero el texto de indicaciones no especifica frecuencia/separación entre muestras. No inventar calendario.",
+        "expected_output": "Mostrar al paciente las indicaciones originales completas de todos los estudios de la orden, sin consolidarlas ni reinterpretarlas. Registrar internamente el motivo del fallback.",
+        "studies": [
+            {
+                "study_id": "QA17-01",
+                "study_name": "COPROPARASITOSCOPICO (TRES MUESTRAS)",
+                "indications": "Acudir a la sucursal por los recipientes para la recolección de la muestra o podrá comprarlos en la farmacia. - Recolectar muestra de materia fecal, no debe tener contacto con el agua, ni con orina. - La cantidad de muestra a entregar es aproximadamente de 5 a 10 gramos de materia fecal, lo equivalente al tamaño de una nuez.",
+                "appointment_required": false,
+                "header_line": "COPROPARASITOSCOPICO (TRES MUESTRAS) [Copro] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA18",
+        "nivel": "Muestra",
+        "patient_context": "Adulto",
+        "order_studies_list": "ESPERMATOBIOSCOPIA (ESPERMOGRAMA)",
+        "source_text": "ESPERMATOBIOSCOPIA (ESPERMOGRAMA) [Especiales] — Cita: Cita directo en sucursal\na. Abstinencia sexual de mínimo 3 días máximo 7.\nb. Sin aplicación de medicamentos, cremas, pomadas vía tópica.\nc. Suspender ingesta de bebidas alcohólicas, drogas y tabaco 3 días antes de su estudio.\nd. No haber orinado mínimo 1h antes de la recolección de la muestra.\ne. Realizar el aseo de genitales y manos, con agua y jabón antes de la recolección de la muestra.\nf. El semen deberá obtenerse por masturbación: no deberá usarse ningún otro método para la recolección de la muestra (ejemplo: condón, coito interrumpido, etc.). \ng. Recolectar el eyaculado en un frasco de plástico estéril proporcionado por el laboratorio o adquirido en una farmacia procure no tocar los bordes del recipiente estéril (no se recibirán frascos de vidrio u otro tipo de contenedor que no sea el solicitado). \nh. El estudio solo se realiza de lunes a sabado.",
+        "expected_route": "AUTO",
+        "expected_rules": "R07,R18",
+        "acceptance_criteria": "Conservar abstinencia 3–7 días, restricciones 3 días, 1 h sin orinar, aseo, método de obtención, recipiente y disponibilidad lunes-sábado.",
+        "expected_output": "SALIDA ESPERADA: un solo bloque de semen con todos los puntos de fuente, simplificados sin cambiar cifras ni condiciones.",
+        "studies": [
+            {
+                "study_id": "QA18-01",
+                "study_name": "ESPERMATOBIOSCOPIA (ESPERMOGRAMA) [Especiales] — Cita: Cita directo en sucursal",
+                "indications": "a. Abstinencia sexual de mínimo 3 días máximo 7.\nb. Sin aplicación de medicamentos, cremas, pomadas vía tópica.\nc. Suspender ingesta de bebidas alcohólicas, drogas y tabaco 3 días antes de su estudio.\nd. No haber orinado mínimo 1h antes de la recolección de la muestra.\ne. Realizar el aseo de genitales y manos, con agua y jabón antes de la recolección de la muestra.\nf. El semen deberá obtenerse por masturbación: no deberá usarse ningún otro método para la recolección de la muestra (ejemplo: condón, coito interrumpido, etc.). \ng. Recolectar el eyaculado en un frasco de plástico estéril proporcionado por el laboratorio o adquirido en una farmacia procure no tocar los bordes del recipiente estéril (no se recibirán frascos de vidrio u otro tipo de contenedor que no sea el solicitado). \nh. El estudio solo se realiza de lunes a sabado.",
+                "appointment_required": null,
+                "header_line": "ESPERMATOBIOSCOPIA (ESPERMOGRAMA) [Especiales] — Cita: Cita directo en sucursal"
+            }
+        ]
+    },
+    {
+        "case_id": "QA19",
+        "nivel": "Mixto",
+        "patient_context": "Adulto",
+        "order_studies_list": "ESPERMATOBIOSCOPIA (ESPERMOGRAMA)\nINDICE HOMA",
+        "source_text": "ESPERMATOBIOSCOPIA (ESPERMOGRAMA) [Especiales] — Cita: Cita directo en sucursal\na. Abstinencia sexual de mínimo 3 días máximo 7.\nb. Sin aplicación de medicamentos, cremas, pomadas vía tópica.\nc. Suspender ingesta de bebidas alcohólicas, drogas y tabaco 3 días antes de su estudio.\nd. No haber orinado mínimo 1h antes de la recolección de la muestra.\ne. Realizar el aseo de genitales y manos, con agua y jabón antes de la recolección de la muestra.\nf. El semen deberá obtenerse por masturbación: no deberá usarse ningún otro método para la recolección de la muestra (ejemplo: condón, coito interrumpido, etc.). \ng. Recolectar el eyaculado en un frasco de plástico estéril proporcionado por el laboratorio o adquirido en una farmacia procure no tocar los bordes del recipiente estéril (no se recibirán frascos de vidrio u otro tipo de contenedor que no sea el solicitado). \nh. El estudio solo se realiza de lunes a sabado.\n\nINDICE HOMA [Sanguíneo] — Cita: No\nAyuno de 8 horas",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R07,R18",
+        "acceptance_criteria": "Ayuno 8 h y preparación de semen deben coexistir.",
+        "expected_output": "SALIDA ESPERADA: ayuno 8 h + bloque de semen completo, sin confundir ambos requisitos.",
+        "studies": [
+            {
+                "study_id": "QA19-01",
+                "study_name": "ESPERMATOBIOSCOPIA (ESPERMOGRAMA) [Especiales] — Cita: Cita directo en sucursal",
+                "indications": "a. Abstinencia sexual de mínimo 3 días máximo 7.\nb. Sin aplicación de medicamentos, cremas, pomadas vía tópica.\nc. Suspender ingesta de bebidas alcohólicas, drogas y tabaco 3 días antes de su estudio.\nd. No haber orinado mínimo 1h antes de la recolección de la muestra.\ne. Realizar el aseo de genitales y manos, con agua y jabón antes de la recolección de la muestra.\nf. El semen deberá obtenerse por masturbación: no deberá usarse ningún otro método para la recolección de la muestra (ejemplo: condón, coito interrumpido, etc.). \ng. Recolectar el eyaculado en un frasco de plástico estéril proporcionado por el laboratorio o adquirido en una farmacia procure no tocar los bordes del recipiente estéril (no se recibirán frascos de vidrio u otro tipo de contenedor que no sea el solicitado). \nh. El estudio solo se realiza de lunes a sabado.",
+                "appointment_required": null,
+                "header_line": "ESPERMATOBIOSCOPIA (ESPERMOGRAMA) [Especiales] — Cita: Cita directo en sucursal"
+            },
+            {
+                "study_id": "QA19-02",
+                "study_name": "INDICE HOMA",
+                "indications": "Ayuno de 8 horas",
+                "appointment_required": false,
+                "header_line": "INDICE HOMA [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA20",
+        "nivel": "Ginecológico",
+        "patient_context": "Mujer adulta",
+        "order_studies_list": "PAPANICOLAOU (CITOLOGIA VAGINAL)",
+        "source_text": "PAPANICOLAOU (CITOLOGIA VAGINAL) [Especiales] — Cita: No\n- Presentarse con aseo habitual. \n - Abstinencia sexual mínimo 48 horas antes de la toma del estudio. \n - Es preferible no acudir durante el período de menstruación, se recomienda que pasen 3 días después de haber cesado el sangrado. \n - No aplicarse duchas vaginales, tampones, espumas espermicidas, medicamentos (óvulos, cremas o pomadas) vía vaginal dos días antes. \n - Puede realizarse el estudio durante el embarazo únicamente bajo orden médica.\n - En mujeres postparto realizar la toma hasta 12 semanas después del parto.",
+        "expected_route": "AUTO",
+        "expected_rules": "R08",
+        "acceptance_criteria": "Conservar todas las condiciones de la fuente sin añadir conocimiento externo.",
+        "expected_output": "SALIDA ESPERADA: aseo habitual; abstinencia ≥48 h; preferir 3 días después del sangrado; 2 días sin duchas/tampones/espermicidas/óvulos/cremas/pomadas; embarazo solo bajo orden médica; postparto 12 semanas.",
+        "studies": [
+            {
+                "study_id": "QA20-01",
+                "study_name": "PAPANICOLAOU (CITOLOGIA VAGINAL)",
+                "indications": "- Presentarse con aseo habitual. \n - Abstinencia sexual mínimo 48 horas antes de la toma del estudio. \n - Es preferible no acudir durante el período de menstruación, se recomienda que pasen 3 días después de haber cesado el sangrado. \n - No aplicarse duchas vaginales, tampones, espumas espermicidas, medicamentos (óvulos, cremas o pomadas) vía vaginal dos días antes. \n - Puede realizarse el estudio durante el embarazo únicamente bajo orden médica.\n - En mujeres postparto realizar la toma hasta 12 semanas después del parto.",
+                "appointment_required": false,
+                "header_line": "PAPANICOLAOU (CITOLOGIA VAGINAL) [Especiales] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA21",
+        "nivel": "Ginecológico",
+        "patient_context": "Mujer adulta",
+        "order_studies_list": "PAPANICOLAOU (CITOLOGIA VAGINAL)\nCITOLOGIA VAGINAL EN FASE LIQUIDA",
+        "source_text": "PAPANICOLAOU (CITOLOGIA VAGINAL) [Especiales] — Cita: No\n- Presentarse con aseo habitual. \n - Abstinencia sexual mínimo 48 horas antes de la toma del estudio. \n - Es preferible no acudir durante el período de menstruación, se recomienda que pasen 3 días después de haber cesado el sangrado. \n - No aplicarse duchas vaginales, tampones, espumas espermicidas, medicamentos (óvulos, cremas o pomadas) vía vaginal dos días antes. \n - Puede realizarse el estudio durante el embarazo únicamente bajo orden médica.\n - En mujeres postparto realizar la toma hasta 12 semanas después del parto.\n\nCITOLOGIA VAGINAL EN FASE LIQUIDA [Especiales] — Cita: No\n- Se requiere previa cita.\n - Presentarse con baño habitual. \n - Abstinencia sexual mínimo 48 horas antes de la toma del estudio. \n - Sin haberse realizado ducha vaginal 48 horas antes de la toma del estudio. \n - Es preferible no acudir durante el período de menstruación, se recomienda que pasen 3 días después de haber cesado el sangrado. \n - No aplicarse tampones, espumas espermicidas, medicamentos (óvulos, cremas o pomadas) vía vaginal una semana antes. \n - Puede realizarse el estudio durante el embarazo únicamente bajo receta médica.\n - En mujeres postparto realizar la toma hasta 12 semanas después del parto.",
+        "expected_route": "AUTO",
+        "expected_rules": "R08,R12",
+        "acceptance_criteria": "Fusionar plazos compatibles usando el más restrictivo. La citología líquida exige cita y una semana sin productos vaginales.",
+        "expected_output": "SALIDA ESPERADA: cita previa + aseo habitual + abstinencia ≥48 h + 48 h sin ducha vaginal + esperar 3 días tras sangrado + 1 semana sin tampones/espermicidas/medicación vaginal + condiciones de embarazo/postparto.",
+        "studies": [
+            {
+                "study_id": "QA21-01",
+                "study_name": "PAPANICOLAOU (CITOLOGIA VAGINAL)",
+                "indications": "- Presentarse con aseo habitual. \n - Abstinencia sexual mínimo 48 horas antes de la toma del estudio. \n - Es preferible no acudir durante el período de menstruación, se recomienda que pasen 3 días después de haber cesado el sangrado. \n - No aplicarse duchas vaginales, tampones, espumas espermicidas, medicamentos (óvulos, cremas o pomadas) vía vaginal dos días antes. \n - Puede realizarse el estudio durante el embarazo únicamente bajo orden médica.\n - En mujeres postparto realizar la toma hasta 12 semanas después del parto.",
+                "appointment_required": false,
+                "header_line": "PAPANICOLAOU (CITOLOGIA VAGINAL) [Especiales] — Cita: No"
+            },
+            {
+                "study_id": "QA21-02",
+                "study_name": "CITOLOGIA VAGINAL EN FASE LIQUIDA",
+                "indications": "- Se requiere previa cita.\n - Presentarse con baño habitual. \n - Abstinencia sexual mínimo 48 horas antes de la toma del estudio. \n - Sin haberse realizado ducha vaginal 48 horas antes de la toma del estudio. \n - Es preferible no acudir durante el período de menstruación, se recomienda que pasen 3 días después de haber cesado el sangrado. \n - No aplicarse tampones, espumas espermicidas, medicamentos (óvulos, cremas o pomadas) vía vaginal una semana antes. \n - Puede realizarse el estudio durante el embarazo únicamente bajo receta médica.\n - En mujeres postparto realizar la toma hasta 12 semanas después del parto.",
+                "appointment_required": false,
+                "header_line": "CITOLOGIA VAGINAL EN FASE LIQUIDA [Especiales] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA22",
+        "nivel": "Ginecológico",
+        "patient_context": "Mujer adulta",
+        "order_studies_list": "PAPANICOLAOU (CITOLOGIA VAGINAL)\nDETECCION DEL VIRUS DEL PAPILOMA HUMANO (VPH 28 GENOTIPOS)",
+        "source_text": "PAPANICOLAOU (CITOLOGIA VAGINAL) [Especiales] — Cita: No\n- Presentarse con aseo habitual. \n - Abstinencia sexual mínimo 48 horas antes de la toma del estudio. \n - Es preferible no acudir durante el período de menstruación, se recomienda que pasen 3 días después de haber cesado el sangrado. \n - No aplicarse duchas vaginales, tampones, espumas espermicidas, medicamentos (óvulos, cremas o pomadas) vía vaginal dos días antes. \n - Puede realizarse el estudio durante el embarazo únicamente bajo orden médica.\n - En mujeres postparto realizar la toma hasta 12 semanas después del parto.\n\nDETECCION DEL VIRUS DEL PAPILOMA HUMANO (VPH 28 GENOTIPOS) [Urianálisis] — Cita: No\nMuestra Cervico Vaginal y Uretral \n - Abstinencia sexual de 3 a 5 días antes del estudio. \n - Baño diario habitual. \n - En pacientes masculinos, no haber orinado de 2 a 4 horas antes del estudio.\n- En pacientes femeninos: No aplicar duchas vaginales, cremas, pomadas en la región genital, No presentarse durante la menstruación, acudir a la toma del estudio 5 días después de haber cesado el sangrado.\nMuestra Anal:\n- No aplicar duchas, cremas, pomadas en la región anal.\nMuestra Ocular: \n - No aplicar gotas, cremas en el ojo.  \n - No realizar limpieza en el ojo.\nMuestra de orina:\nPrimera orina de la mañana",
+        "expected_route": "AUTO",
+        "expected_rules": "R08,R16",
+        "acceptance_criteria": "Combinar solo condiciones compatibles. Abstinencia 3–5 días satisface el mínimo de 48 h; para menstruación gobierna 5 días tras cese. Conservar las variantes de muestra del VPH sin asumir cuál se tomará.",
+        "expected_output": "SALIDA ESPERADA: abstinencia 3–5 días; baño habitual; sin productos vaginales; no durante menstruación y acudir 5 días después del cese; conservar instrucciones específicas según muestra (cervicovaginal/uretral, anal, ocular u orina).",
+        "studies": [
+            {
+                "study_id": "QA22-01",
+                "study_name": "PAPANICOLAOU (CITOLOGIA VAGINAL)",
+                "indications": "- Presentarse con aseo habitual. \n - Abstinencia sexual mínimo 48 horas antes de la toma del estudio. \n - Es preferible no acudir durante el período de menstruación, se recomienda que pasen 3 días después de haber cesado el sangrado. \n - No aplicarse duchas vaginales, tampones, espumas espermicidas, medicamentos (óvulos, cremas o pomadas) vía vaginal dos días antes. \n - Puede realizarse el estudio durante el embarazo únicamente bajo orden médica.\n - En mujeres postparto realizar la toma hasta 12 semanas después del parto.",
+                "appointment_required": false,
+                "header_line": "PAPANICOLAOU (CITOLOGIA VAGINAL) [Especiales] — Cita: No"
+            },
+            {
+                "study_id": "QA22-02",
+                "study_name": "DETECCION DEL VIRUS DEL PAPILOMA HUMANO (VPH 28 GENOTIPOS)",
+                "indications": "Muestra Cervico Vaginal y Uretral \n - Abstinencia sexual de 3 a 5 días antes del estudio. \n - Baño diario habitual. \n - En pacientes masculinos, no haber orinado de 2 a 4 horas antes del estudio.\n- En pacientes femeninos: No aplicar duchas vaginales, cremas, pomadas en la región genital, No presentarse durante la menstruación, acudir a la toma del estudio 5 días después de haber cesado el sangrado.\nMuestra Anal:\n- No aplicar duchas, cremas, pomadas en la región anal.\nMuestra Ocular: \n - No aplicar gotas, cremas en el ojo.  \n - No realizar limpieza en el ojo.\nMuestra de orina:\nPrimera orina de la mañana",
+                "appointment_required": false,
+                "header_line": "DETECCION DEL VIRUS DEL PAPILOMA HUMANO (VPH 28 GENOTIPOS) [Urianálisis] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA23",
+        "nivel": "Imagen",
+        "patient_context": "Mujer adulta",
+        "order_studies_list": "RX MAMOGRAFIA BILATERAL\nECO DE MAMA BILATERAL",
+        "source_text": "RX MAMOGRAFIA BILATERAL [Rayos X] — Cita: Si\nPresentarse con axilas depiladas, sin desodorante, crema, ni perfume.\n\nECO DE MAMA BILATERAL [Ultrasonido] — Cita: Si\nPresentarse con axilas depiladas, sin desodorante, crema, ni perfume.",
+        "expected_route": "AUTO",
+        "expected_rules": "R15",
+        "acceptance_criteria": "Ambos textos son equivalentes: deduplicar completamente.",
+        "expected_output": "🧪 RECOMENDACIONES E INSTRUCCIONES DE PREPARACIÓN\n• Acude con las axilas depiladas y sin desodorante, crema ni perfume.",
+        "studies": [
+            {
+                "study_id": "QA23-01",
+                "study_name": "RX MAMOGRAFIA BILATERAL",
+                "indications": "Presentarse con axilas depiladas, sin desodorante, crema, ni perfume.",
+                "appointment_required": true,
+                "header_line": "RX MAMOGRAFIA BILATERAL [Rayos X] — Cita: Si"
+            },
+            {
+                "study_id": "QA23-02",
+                "study_name": "ECO DE MAMA BILATERAL",
+                "indications": "Presentarse con axilas depiladas, sin desodorante, crema, ni perfume.",
+                "appointment_required": true,
+                "header_line": "ECO DE MAMA BILATERAL [Ultrasonido] — Cita: Si"
+            }
+        ]
+    },
+    {
+        "case_id": "QA24",
+        "nivel": "Imagen + sangre",
+        "patient_context": "Mujer adulta",
+        "order_studies_list": "PAQUETE PERFIL MUJER MAYOR 40\nRX MAMOGRAFIA BILATERAL",
+        "source_text": "PAQUETE PERFIL MUJER MAYOR 40 [Sanguíneo y RX] — Cita: Si\nAyuno de 8 horas; Presentarse con axilas depiladas, sin desodorante, crema, ni perfume.\n\nRX MAMOGRAFIA BILATERAL [Rayos X] — Cita: Si\nPresentarse con axilas depiladas, sin desodorante, crema, ni perfume.",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R15",
+        "acceptance_criteria": "No repetir preparación de axilas. Conservar ayuno 8 h una sola vez.",
+        "expected_output": "SALIDA ESPERADA: ayuno 8 h + axilas depiladas, sin desodorante/crema/perfume.",
+        "studies": [
+            {
+                "study_id": "QA24-01",
+                "study_name": "PAQUETE PERFIL MUJER MAYOR 40",
+                "indications": "Ayuno de 8 horas; Presentarse con axilas depiladas, sin desodorante, crema, ni perfume.",
+                "appointment_required": true,
+                "header_line": "PAQUETE PERFIL MUJER MAYOR 40 [Sanguíneo y RX] — Cita: Si"
+            },
+            {
+                "study_id": "QA24-02",
+                "study_name": "RX MAMOGRAFIA BILATERAL",
+                "indications": "Presentarse con axilas depiladas, sin desodorante, crema, ni perfume.",
+                "appointment_required": true,
+                "header_line": "RX MAMOGRAFIA BILATERAL [Rayos X] — Cita: Si"
+            }
+        ]
+    },
+    {
+        "case_id": "QA25",
+        "nivel": "Imagen + sangre",
+        "patient_context": "Adulto",
+        "order_studies_list": "ECO ABDOMEN TOTAL  (VESICULA, HIGADO, PANCREAS BAZ\nINDICE HOMA",
+        "source_text": "ECO ABDOMEN TOTAL  (VESICULA, HIGADO, PANCREAS BAZ [Ultrasonido] — Cita: Si\n -Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente, diagnostico y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Ayuno total a alimentos solidos y bebidas gaseosas (de 8 hrs, maximo 10 hrs),  debera tomar 1.5 L de agua 1 hora previa a su estudio (llegar a su cita con vejiga llena).\n\nINDICE HOMA [Sanguíneo] — Cita: No\nAyuno de 8 horas",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R03,R11,R12",
+        "acceptance_criteria": "El ultrasonido exige ayuno 8 h máximo 10 h y agua/vejiga llena. HOMA exige 8 h. Resultado: 8–10 h + agua + cita + receta.",
+        "expected_output": "SALIDA ESPERADA: cita + receta + ayuno 8–10 h + 1.5 L de agua 1 h antes + llegar con vejiga llena.",
+        "studies": [
+            {
+                "study_id": "QA25-01",
+                "study_name": "ECO ABDOMEN TOTAL  (VESICULA, HIGADO, PANCREAS BAZ",
+                "indications": "-Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente, diagnostico y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Ayuno total a alimentos solidos y bebidas gaseosas (de 8 hrs, maximo 10 hrs),  debera tomar 1.5 L de agua 1 hora previa a su estudio (llegar a su cita con vejiga llena).",
+                "appointment_required": true,
+                "header_line": "ECO ABDOMEN TOTAL  (VESICULA, HIGADO, PANCREAS BAZ [Ultrasonido] — Cita: Si"
+            },
+            {
+                "study_id": "QA25-02",
+                "study_name": "INDICE HOMA",
+                "indications": "Ayuno de 8 horas",
+                "appointment_required": false,
+                "header_line": "INDICE HOMA [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA26",
+        "nivel": "Conflicto potencial",
+        "patient_context": "Adulto",
+        "order_studies_list": "ECO DE RENAL Y DE  VIAS URINARIAS\nQUIMICA SANGUINEA 28 ELEMENTOS",
+        "source_text": "ECO DE RENAL Y DE  VIAS URINARIAS [Ultrasonido] — Cita: Si\n -Realizar previa cita-presentar receta medica debidamente requisitada con el nombre completo del paciente, diagnostico y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-En ayuno a solidos de 6 a 8 horas.\n-1 hora antes del estudio tomar 1.5 l de agua (llegar con vejiga llena).\n\nQUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No\nAyuno de 10 a 12 horas",
+        "expected_route": "FALLBACK_ORIGINAL",
+        "expected_rules": "R01,R03",
+        "acceptance_criteria": "La fuente da 6–8 h a sólidos para ultrasonido y 10–12 h de ayuno para química. No asumir que exceder 8 h es válido para el ultrasonido.",
+        "expected_output": "Mostrar al paciente las indicaciones originales completas de todos los estudios de la orden, sin consolidarlas ni reinterpretarlas. Registrar internamente el motivo del fallback.",
+        "studies": [
+            {
+                "study_id": "QA26-01",
+                "study_name": "ECO DE RENAL Y DE  VIAS URINARIAS",
+                "indications": "-Realizar previa cita-presentar receta medica debidamente requisitada con el nombre completo del paciente, diagnostico y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-En ayuno a solidos de 6 a 8 horas.\n-1 hora antes del estudio tomar 1.5 l de agua (llegar con vejiga llena).",
+                "appointment_required": true,
+                "header_line": "ECO DE RENAL Y DE  VIAS URINARIAS [Ultrasonido] — Cita: Si"
+            },
+            {
+                "study_id": "QA26-02",
+                "study_name": "QUIMICA SANGUINEA 28 ELEMENTOS",
+                "indications": "Ayuno de 10 a 12 horas",
+                "appointment_required": false,
+                "header_line": "QUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA27",
+        "nivel": "Intersección límite",
+        "patient_context": "Adulto",
+        "order_studies_list": "ECO ABDOMEN TOTAL  (VESICULA, HIGADO, PANCREAS BAZ\nQUIMICA SANGUINEA 28 ELEMENTOS",
+        "source_text": "ECO ABDOMEN TOTAL  (VESICULA, HIGADO, PANCREAS BAZ [Ultrasonido] — Cita: Si\n -Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente, diagnostico y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Ayuno total a alimentos solidos y bebidas gaseosas (de 8 hrs, maximo 10 hrs),  debera tomar 1.5 L de agua 1 hora previa a su estudio (llegar a su cita con vejiga llena).\n\nQUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No\nAyuno de 10 a 12 horas",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R03,R11,R12",
+        "acceptance_criteria": "8–10 h (máximo 10) + 10–12 h → único punto compatible: 10 h.",
+        "expected_output": "SALIDA ESPERADA: ayuno exactamente de 10 horas + 1.5 L de agua 1 h antes + vejiga llena + cita + receta.",
+        "studies": [
+            {
+                "study_id": "QA27-01",
+                "study_name": "ECO ABDOMEN TOTAL  (VESICULA, HIGADO, PANCREAS BAZ",
+                "indications": "-Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente, diagnostico y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Ayuno total a alimentos solidos y bebidas gaseosas (de 8 hrs, maximo 10 hrs),  debera tomar 1.5 L de agua 1 hora previa a su estudio (llegar a su cita con vejiga llena).",
+                "appointment_required": true,
+                "header_line": "ECO ABDOMEN TOTAL  (VESICULA, HIGADO, PANCREAS BAZ [Ultrasonido] — Cita: Si"
+            },
+            {
+                "study_id": "QA27-02",
+                "study_name": "QUIMICA SANGUINEA 28 ELEMENTOS",
+                "indications": "Ayuno de 10 a 12 horas",
+                "appointment_required": false,
+                "header_line": "QUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA28",
+        "nivel": "Intersección límite",
+        "patient_context": "Adulto",
+        "order_studies_list": "ANGIOTAC DE ARTERIAS RENALES\nQUIMICA SANGUINEA 28 ELEMENTOS",
+        "source_text": "ANGIOTAC DE ARTERIAS RENALES [Tomografía] — Cita: Si\n -Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-En pacientes pediatricos (6 a 12 años), presentarse con ayuno de 4 - 6 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-Acudir acompañado de una persona mayor de 18 años.\n\nQUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No\nAyuno de 10 a 12 horas",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R02,R09,R10,R11,R12,R13",
+        "acceptance_criteria": "AngioTAC adulto 8–10 h + química 10–12 h → 10 h. Mantener demás requisitos.",
+        "expected_output": "SALIDA ESPERADA: ayuno 10 h + cita + receta + creatinina + condición de metformina + acompañante >18.",
+        "studies": [
+            {
+                "study_id": "QA28-01",
+                "study_name": "ANGIOTAC DE ARTERIAS RENALES",
+                "indications": "-Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-En pacientes pediatricos (6 a 12 años), presentarse con ayuno de 4 - 6 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-Acudir acompañado de una persona mayor de 18 años.",
+                "appointment_required": true,
+                "header_line": "ANGIOTAC DE ARTERIAS RENALES [Tomografía] — Cita: Si"
+            },
+            {
+                "study_id": "QA28-02",
+                "study_name": "QUIMICA SANGUINEA 28 ELEMENTOS",
+                "indications": "Ayuno de 10 a 12 horas",
+                "appointment_required": false,
+                "header_line": "QUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA29",
+        "nivel": "Conflicto por edad",
+        "patient_context": "10 años",
+        "order_studies_list": "ANGIOTAC DE ARTERIAS RENALES\nQUIMICA SANGUINEA 28 ELEMENTOS",
+        "source_text": "ANGIOTAC DE ARTERIAS RENALES [Tomografía] — Cita: Si\n -Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-En pacientes pediatricos (6 a 12 años), presentarse con ayuno de 4 - 6 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-Acudir acompañado de una persona mayor de 18 años.\n\nQUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No\nAyuno de 10 a 12 horas",
+        "expected_route": "FALLBACK_ORIGINAL",
+        "expected_rules": "R01,R02",
+        "acceptance_criteria": "AngioTAC pediátrico 4–6 h y química 10–12 h no se deben reconciliar por intuición.",
+        "expected_output": "Mostrar al paciente las indicaciones originales completas de todos los estudios de la orden, sin consolidarlas ni reinterpretarlas. Registrar internamente el motivo del fallback.",
+        "studies": [
+            {
+                "study_id": "QA29-01",
+                "study_name": "ANGIOTAC DE ARTERIAS RENALES",
+                "indications": "-Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-En pacientes pediatricos (6 a 12 años), presentarse con ayuno de 4 - 6 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-Acudir acompañado de una persona mayor de 18 años.",
+                "appointment_required": true,
+                "header_line": "ANGIOTAC DE ARTERIAS RENALES [Tomografía] — Cita: Si"
+            },
+            {
+                "study_id": "QA29-02",
+                "study_name": "QUIMICA SANGUINEA 28 ELEMENTOS",
+                "indications": "Ayuno de 10 a 12 horas",
+                "appointment_required": false,
+                "header_line": "QUIMICA SANGUINEA 28 ELEMENTOS [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA30",
+        "nivel": "Imagen compleja",
+        "patient_context": "Adulto",
+        "order_studies_list": "ANGIOTAC DE ARTERIAS RENALES\nANGIORESONANCIA ARTERIAS ILIACAS",
+        "source_text": "ANGIOTAC DE ARTERIAS RENALES [Tomografía] — Cita: Si\n -Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-En pacientes pediatricos (6 a 12 años), presentarse con ayuno de 4 - 6 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-Acudir acompañado de una persona mayor de 18 años.\n\nANGIORESONANCIA ARTERIAS ILIACAS [Resonancia] — Cita: Si\n -Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-El paciente debe de ir sin objetos metalicos y portar ropa comoda.\n-Si el paciente tiene marcapasos favor de informar a la sucursal y al tecnico radiologo.\n-Acudir acompañado de una persona mayor de 18 años.",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R09,R10,R11,R12,R13,R14",
+        "acceptance_criteria": "Ambos comparten cita, receta, creatinina, ayuno 8–10 h, metformina 24 h antes/después y acompañante; resonancia añade metal/marcapasos/ropa cómoda.",
+        "expected_output": "SALIDA ESPERADA: deduplicar requisitos compartidos y añadir una sola vez las advertencias metálicas/ropa/marcapasos de resonancia.",
+        "studies": [
+            {
+                "study_id": "QA30-01",
+                "study_name": "ANGIOTAC DE ARTERIAS RENALES",
+                "indications": "-Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-En pacientes pediatricos (6 a 12 años), presentarse con ayuno de 4 - 6 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-Acudir acompañado de una persona mayor de 18 años.",
+                "appointment_required": true,
+                "header_line": "ANGIOTAC DE ARTERIAS RENALES [Tomografía] — Cita: Si"
+            },
+            {
+                "study_id": "QA30-02",
+                "study_name": "ANGIORESONANCIA ARTERIAS ILIACAS",
+                "indications": "-Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-El paciente debe de ir sin objetos metalicos y portar ropa comoda.\n-Si el paciente tiene marcapasos favor de informar a la sucursal y al tecnico radiologo.\n-Acudir acompañado de una persona mayor de 18 años.",
+                "appointment_required": true,
+                "header_line": "ANGIORESONANCIA ARTERIAS ILIACAS [Resonancia] — Cita: Si"
+            }
+        ]
+    },
+    {
+        "case_id": "QA31",
+        "nivel": "Conflicto medicamento",
+        "patient_context": "Adulto",
+        "order_studies_list": "ANGIOTAC DE ARTERIAS RENALES\nUROGRAFIA EXCRETORA CON PLACAS TARDIAS",
+        "source_text": "ANGIOTAC DE ARTERIAS RENALES [Tomografía] — Cita: Si\n -Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-En pacientes pediatricos (6 a 12 años), presentarse con ayuno de 4 - 6 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-Acudir acompañado de una persona mayor de 18 años.\n\nUROGRAFIA EXCRETORA CON PLACAS TARDIAS [Especiales] — Cita: Si\nPor tratarse de un procedimiento contrastado, debe acudir a la sucursal con la receta original del médico tratante debidamente requisitada, con firma autógrafa y cédula profesional. \npara plena seguridad del paciente y como requisito para poder administrar el medio de contraste, debe mostrar también un estudio reciente de creatinina en sangre (antigüedad no mayor a 30 días) y con valores dentro de la normalidad. \nsi el paciente es diabético y toma metformina, debe consultar con su médico tratante quien a criterio médico, le indicará suspender este medicamento 48 horas antes del examen. \nes necesario que se presente en total ayuno de 8 horas el día de su estudio; en niños escolares de 6 hasta 12 años requiere ayuno de 2 horas para líquidos claros, 6 horas para lácteos y 8 horas para sólidos.\nacudirá acompañado de familiar mayor de 18 años y se le entregará un consentimiento informado, que usted leerá y firmará para que autorice realizarse el estudio. \npreparación intestinal: es estrictamente necesaria ya que de no hacerla, al momento del estudio una mala preparación intestinal puede evitar que se detecten algunas lesiones o alteraciones en la vía urinaria alta y baja, importantes para el diagnóstico y por ello se tendrá que reprogramar su estudio: el medicamento a utilizar se llama nulytely (caja con 4 sobres) y se tomará de acuerdo a las instrucciones de la caja el día previo a la fecha del estudio, durante el cual mantendrá dieta líquida todo el día a base de agua, te, gelatina ( no color rojo ); caldos y sopas sin vegetales ni carnes. iniciar la toma de nulytely a las 15:00hrs. diluir 1 sobre de nulytely  en 1 litro de agua simple. ( 4 sobres en 4 litros de agua en total ). tomar 1 litro de preparación en el lapso de 1 hora y continuar hasta acabarse los 4 litros. a partir de las 22:00 hrs ayuno total. están indicaciones ayudarán a realizar una preparación intestinal adecuada para un estudio satisfactorio, de lo contrario el procedimiento podría suspenderse. en el caso de bebés lactantes, tomarán gotas de laxoberón (2 gotitas por cada kilo que pese, disuelto en té en una sola toma).",
+        "expected_route": "FALLBACK_ORIGINAL",
+        "expected_rules": "R09,R10",
+        "acceptance_criteria": "Una fuente indica metformina 24 h antes/después; la otra indica consultar al médico y posible suspensión 48 h antes. No elegir una.",
+        "expected_output": "Mostrar al paciente las indicaciones originales completas de todos los estudios de la orden, sin consolidarlas ni reinterpretarlas. Registrar internamente el motivo del fallback.",
+        "studies": [
+            {
+                "study_id": "QA31-01",
+                "study_name": "ANGIOTAC DE ARTERIAS RENALES",
+                "indications": "-Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-En pacientes pediatricos (6 a 12 años), presentarse con ayuno de 4 - 6 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-Acudir acompañado de una persona mayor de 18 años.",
+                "appointment_required": true,
+                "header_line": "ANGIOTAC DE ARTERIAS RENALES [Tomografía] — Cita: Si"
+            },
+            {
+                "study_id": "QA31-02",
+                "study_name": "UROGRAFIA EXCRETORA CON PLACAS TARDIAS",
+                "indications": "Por tratarse de un procedimiento contrastado, debe acudir a la sucursal con la receta original del médico tratante debidamente requisitada, con firma autógrafa y cédula profesional. \npara plena seguridad del paciente y como requisito para poder administrar el medio de contraste, debe mostrar también un estudio reciente de creatinina en sangre (antigüedad no mayor a 30 días) y con valores dentro de la normalidad. \nsi el paciente es diabético y toma metformina, debe consultar con su médico tratante quien a criterio médico, le indicará suspender este medicamento 48 horas antes del examen. \nes necesario que se presente en total ayuno de 8 horas el día de su estudio; en niños escolares de 6 hasta 12 años requiere ayuno de 2 horas para líquidos claros, 6 horas para lácteos y 8 horas para sólidos.\nacudirá acompañado de familiar mayor de 18 años y se le entregará un consentimiento informado, que usted leerá y firmará para que autorice realizarse el estudio. \npreparación intestinal: es estrictamente necesaria ya que de no hacerla, al momento del estudio una mala preparación intestinal puede evitar que se detecten algunas lesiones o alteraciones en la vía urinaria alta y baja, importantes para el diagnóstico y por ello se tendrá que reprogramar su estudio: el medicamento a utilizar se llama nulytely (caja con 4 sobres) y se tomará de acuerdo a las instrucciones de la caja el día previo a la fecha del estudio, durante el cual mantendrá dieta líquida todo el día a base de agua, te, gelatina ( no color rojo ); caldos y sopas sin vegetales ni carnes. iniciar la toma de nulytely a las 15:00hrs. diluir 1 sobre de nulytely  en 1 litro de agua simple. ( 4 sobres en 4 litros de agua en total ). tomar 1 litro de preparación en el lapso de 1 hora y continuar hasta acabarse los 4 litros. a partir de las 22:00 hrs ayuno total. están indicaciones ayudarán a realizar una preparación intestinal adecuada para un estudio satisfactorio, de lo contrario el procedimiento podría suspenderse. en el caso de bebés lactantes, tomarán gotas de laxoberón (2 gotitas por cada kilo que pese, disuelto en té en una sola toma).",
+                "appointment_required": true,
+                "header_line": "UROGRAFIA EXCRETORA CON PLACAS TARDIAS [Especiales] — Cita: Si"
+            }
+        ]
+    },
+    {
+        "case_id": "QA32",
+        "nivel": "Imagen compleja",
+        "patient_context": "Mujer adulta",
+        "order_studies_list": "ANGIORESONANCIA ARTERIAS ILIACAS\nRX MAMOGRAFIA BILATERAL",
+        "source_text": "ANGIORESONANCIA ARTERIAS ILIACAS [Resonancia] — Cita: Si\n -Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-El paciente debe de ir sin objetos metalicos y portar ropa comoda.\n-Si el paciente tiene marcapasos favor de informar a la sucursal y al tecnico radiologo.\n-Acudir acompañado de una persona mayor de 18 años.\n\nRX MAMOGRAFIA BILATERAL [Rayos X] — Cita: Si\nPresentarse con axilas depiladas, sin desodorante, crema, ni perfume.",
+        "expected_route": "AUTO",
+        "expected_rules": "R10,R11,R12,R13,R14,R15",
+        "acceptance_criteria": "Conservar preparación de resonancia y preparación de mama; no mezclar ni omitir ninguna.",
+        "expected_output": "SALIDA ESPERADA: cita/receta/creatinina/ayuno/metformina/metal-marcapasos/acompañante + axilas depiladas sin desodorante/crema/perfume.",
+        "studies": [
+            {
+                "study_id": "QA32-01",
+                "study_name": "ANGIORESONANCIA ARTERIAS ILIACAS",
+                "indications": "-Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Debera presentar estudio de creatinina con un nivel maximo de 1.2 (1.20 - 1.29), con vigencia de un mes.\n-En pacientes adultos, presentarse con ayuno de 8 - 10 horas.\n-Si el paciente toma metformina, es necesario suspenderlo 24 horas antes y 24 horas despues del estudio.\n-El paciente debe de ir sin objetos metalicos y portar ropa comoda.\n-Si el paciente tiene marcapasos favor de informar a la sucursal y al tecnico radiologo.\n-Acudir acompañado de una persona mayor de 18 años.",
+                "appointment_required": true,
+                "header_line": "ANGIORESONANCIA ARTERIAS ILIACAS [Resonancia] — Cita: Si"
+            },
+            {
+                "study_id": "QA32-02",
+                "study_name": "RX MAMOGRAFIA BILATERAL",
+                "indications": "Presentarse con axilas depiladas, sin desodorante, crema, ni perfume.",
+                "appointment_required": true,
+                "header_line": "RX MAMOGRAFIA BILATERAL [Rayos X] — Cita: Si"
+            }
+        ]
+    },
+    {
+        "case_id": "QA33",
+        "nivel": "Calidad de datos",
+        "patient_context": "Adulto",
+        "order_studies_list": "CLAVICULA AP CON ANGULACION",
+        "source_text": "CLAVICULA AP CON ANGULACION [Rayos X] — Cita: No\nNo requiere preparación, se aplica una vacuna la cual debera ser revisada al siguiente dia por el q. en turno",
+        "expected_route": "FALLBACK_ORIGINAL",
+        "expected_rules": "R17",
+        "acceptance_criteria": "La indicación de la fuente menciona una vacuna y revisión al día siguiente, texto incongruente con el tipo de estudio de imagen. No exponer automáticamente.",
+        "expected_output": "Mostrar al paciente las indicaciones originales completas de todos los estudios de la orden, sin consolidarlas ni reinterpretarlas. Registrar internamente el motivo del fallback.",
+        "studies": [
+            {
+                "study_id": "QA33-01",
+                "study_name": "CLAVICULA AP CON ANGULACION",
+                "indications": "No requiere preparación, se aplica una vacuna la cual debera ser revisada al siguiente dia por el q. en turno",
+                "appointment_required": false,
+                "header_line": "CLAVICULA AP CON ANGULACION [Rayos X] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA34",
+        "nivel": "Calidad de datos",
+        "patient_context": "Adulto",
+        "order_studies_list": "ACS. ANTI RECEPTOR DE FOLATO A (FRAT)",
+        "source_text": "ACS. ANTI RECEPTOR DE FOLATO A (FRAT) [Especiales] — Cita: No \nNo requiere preparación, se aplica una vacuna la cual debera ser revisada al siguiente dia por el q. en turno",
+        "expected_route": "FALLBACK_ORIGINAL",
+        "expected_rules": "R17",
+        "acceptance_criteria": "La indicación fuente menciona aplicación de vacuna. Requiere validación de origen antes de uso automático.",
+        "expected_output": "Mostrar al paciente las indicaciones originales completas de todos los estudios de la orden, sin consolidarlas ni reinterpretarlas. Registrar internamente el motivo del fallback.",
+        "studies": [
+            {
+                "study_id": "QA34-01",
+                "study_name": "ACS. ANTI RECEPTOR DE FOLATO A (FRAT)",
+                "indications": "No requiere preparación, se aplica una vacuna la cual debera ser revisada al siguiente dia por el q. en turno",
+                "appointment_required": false,
+                "header_line": "ACS. ANTI RECEPTOR DE FOLATO A (FRAT) [Especiales] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA35",
+        "nivel": "Sin preparación",
+        "patient_context": "Adulto",
+        "order_studies_list": "ACIDO ISOPROPILICO (ISOPROPANOL O 2 PROPANOL)",
+        "source_text": "ACIDO ISOPROPILICO (ISOPROPANOL O 2 PROPANOL) [Sanguíneo] — Cita: No\nNo requiere ningún tipo de preparación previa al estudio (No se requiere ayuno).",
+        "expected_route": "AUTO",
+        "expected_rules": "R17",
+        "acceptance_criteria": "Si es el único estudio, se puede indicar que no requiere preparación/ayuno.",
+        "expected_output": "🧪 RECOMENDACIONES E INSTRUCCIONES DE PREPARACIÓN\n• No necesitas preparación especial ni ayuno para este estudio.",
+        "studies": [
+            {
+                "study_id": "QA35-01",
+                "study_name": "ACIDO ISOPROPILICO (ISOPROPANOL O 2 PROPANOL)",
+                "indications": "No requiere ningún tipo de preparación previa al estudio (No se requiere ayuno).",
+                "appointment_required": false,
+                "header_line": "ACIDO ISOPROPILICO (ISOPROPANOL O 2 PROPANOL) [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA36",
+        "nivel": "Sin preparación + preparación",
+        "patient_context": "Adulto",
+        "order_studies_list": "ACIDO ISOPROPILICO (ISOPROPANOL O 2 PROPANOL)\nINDICE HOMA",
+        "source_text": "ACIDO ISOPROPILICO (ISOPROPANOL O 2 PROPANOL) [Sanguíneo] — Cita: No\nNo requiere ningún tipo de preparación previa al estudio (No se requiere ayuno).\n\nINDICE HOMA [Sanguíneo] — Cita: No\nAyuno de 8 horas",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R17",
+        "acceptance_criteria": "Suprimir 'no requiere preparación' porque la orden sí exige ayuno por otro estudio.",
+        "expected_output": "🧪 RECOMENDACIONES E INSTRUCCIONES DE PREPARACIÓN\n• Ayuno: acude con 8 horas de ayuno.",
+        "studies": [
+            {
+                "study_id": "QA36-01",
+                "study_name": "ACIDO ISOPROPILICO (ISOPROPANOL O 2 PROPANOL)",
+                "indications": "No requiere ningún tipo de preparación previa al estudio (No se requiere ayuno).",
+                "appointment_required": false,
+                "header_line": "ACIDO ISOPROPILICO (ISOPROPANOL O 2 PROPANOL) [Sanguíneo] — Cita: No"
+            },
+            {
+                "study_id": "QA36-02",
+                "study_name": "INDICE HOMA",
+                "indications": "Ayuno de 8 horas",
+                "appointment_required": false,
+                "header_line": "INDICE HOMA [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA37",
+        "nivel": "Operativo",
+        "patient_context": "Adulto",
+        "order_studies_list": "AGREGOMETRIA PLAQUETARIA 1 AGONISTA\nINDICE HOMA",
+        "source_text": "AGREGOMETRIA PLAQUETARIA 1 AGONISTA [Sanguíneo] — Cita: No\nPrevia cita. Solicitar información al laboratorio. Solo se realiza los días lunes en las sucursales Olab Anzures, Azteca Santa Maria la Rivera\nPresentarse con ayuno de 8 -14 horas. Menores de 3 años con ayuno de al menos 4 horas.\n\nINDICE HOMA [Sanguíneo] — Cita: No\nAyuno de 8 horas",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R02,R12,R16",
+        "acceptance_criteria": "Conservar cita, restricción de día/sucursales e intervalo 8–14 h; HOMA no debe generar una segunda línea de ayuno.",
+        "expected_output": "SALIDA ESPERADA: previa cita + solo lunes en sucursales señaladas + ayuno 8–14 h para adulto.",
+        "studies": [
+            {
+                "study_id": "QA37-01",
+                "study_name": "AGREGOMETRIA PLAQUETARIA 1 AGONISTA",
+                "indications": "Previa cita. Solicitar información al laboratorio. Solo se realiza los días lunes en las sucursales Olab Anzures, Azteca Santa Maria la Rivera\nPresentarse con ayuno de 8 -14 horas. Menores de 3 años con ayuno de al menos 4 horas.",
+                "appointment_required": false,
+                "header_line": "AGREGOMETRIA PLAQUETARIA 1 AGONISTA [Sanguíneo] — Cita: No"
+            },
+            {
+                "study_id": "QA37-02",
+                "study_name": "INDICE HOMA",
+                "indications": "Ayuno de 8 horas",
+                "appointment_required": false,
+                "header_line": "INDICE HOMA [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA38",
+        "nivel": "Preparación intestinal",
+        "patient_context": "Adulto",
+        "order_studies_list": "ECO DE PROSTATA TRANSRECTAL\nINDICE HOMA",
+        "source_text": "ECO DE PROSTATA TRANSRECTAL [Ultrasonido] — Cita: Si\n -Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente, diagnostico y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Llenado de consentimiento informado previo a su estudio.\n-Dieta blanda tres dias previos a su estudio. aplicacion de dos enemas evacuantes (microlax o fleet ps-fosfosoda enema) por via rectal una noche anterior al estudio y 2 horas previos al estudio.\n\nINDICE HOMA [Sanguíneo] — Cita: No\nAyuno de 8 horas",
+        "expected_route": "AUTO",
+        "expected_rules": "R01,R11,R12,R15",
+        "acceptance_criteria": "Conservar dieta blanda 3 días + dos enemas (noche anterior y 2 h antes), consentimiento, cita y receta. Añadir ayuno 8 h por HOMA.",
+        "expected_output": "SALIDA ESPERADA: dieta blanda 3 días + enemas según fuente + cita + receta + consentimiento + ayuno 8 h.",
+        "studies": [
+            {
+                "study_id": "QA38-01",
+                "study_name": "ECO DE PROSTATA TRANSRECTAL",
+                "indications": "-Realizar previa cita.\n-Presentar receta medica debidamente requisitada con el nombre completo del paciente, diagnostico y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-Llenado de consentimiento informado previo a su estudio.\n-Dieta blanda tres dias previos a su estudio. aplicacion de dos enemas evacuantes (microlax o fleet ps-fosfosoda enema) por via rectal una noche anterior al estudio y 2 horas previos al estudio.",
+                "appointment_required": true,
+                "header_line": "ECO DE PROSTATA TRANSRECTAL [Ultrasonido] — Cita: Si"
+            },
+            {
+                "study_id": "QA38-02",
+                "study_name": "INDICE HOMA",
+                "indications": "Ayuno de 8 horas",
+                "appointment_required": false,
+                "header_line": "INDICE HOMA [Sanguíneo] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA39",
+        "nivel": "Secuenciación",
+        "patient_context": "Adulto",
+        "order_studies_list": "ECO DE RENAL Y DE  VIAS URINARIAS\nEXAMEN GENERAL DE ORINA",
+        "source_text": "ECO DE RENAL Y DE  VIAS URINARIAS [Ultrasonido] — Cita: Si\n -Realizar previa cita-presentar receta medica debidamente requisitada con el nombre completo del paciente, diagnostico y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-En ayuno a solidos de 6 a 8 horas.\n-1 hora antes del estudio tomar 1.5 l de agua (llegar con vejiga llena).\n\nEXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No\nAcudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.",
+        "expected_route": "FALLBACK_ORIGINAL",
+        "expected_rules": "R03,R04,R18",
+        "acceptance_criteria": "Una orden pide llegar con vejiga llena y otra pide recolectar/entregar orina. La fuente no define el orden operativo de ambas acciones. Evitar inventar secuencia.",
+        "expected_output": "Mostrar al paciente las indicaciones originales completas de todos los estudios de la orden, sin consolidarlas ni reinterpretarlas. Registrar internamente el motivo del fallback.",
+        "studies": [
+            {
+                "study_id": "QA39-01",
+                "study_name": "ECO DE RENAL Y DE  VIAS URINARIAS",
+                "indications": "-Realizar previa cita-presentar receta medica debidamente requisitada con el nombre completo del paciente, diagnostico y los datos del medico tratante, nombre completo, cedula profesional y firma autografa.\n-En ayuno a solidos de 6 a 8 horas.\n-1 hora antes del estudio tomar 1.5 l de agua (llegar con vejiga llena).",
+                "appointment_required": true,
+                "header_line": "ECO DE RENAL Y DE  VIAS URINARIAS [Ultrasonido] — Cita: Si"
+            },
+            {
+                "study_id": "QA39-02",
+                "study_name": "EXAMEN GENERAL DE ORINA",
+                "indications": "Acudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.",
+                "appointment_required": false,
+                "header_line": "EXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No"
+            }
+        ]
+    },
+    {
+        "case_id": "QA40",
+        "nivel": "Muestra ambigua",
+        "patient_context": "Mujer adulta",
+        "order_studies_list": "EXAMEN GENERAL DE ORINA\nDETECCION DEL VIRUS DEL PAPILOMA HUMANO (VPH 28 GENOTIPOS)",
+        "source_text": "EXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No\nAcudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.\n\nDETECCION DEL VIRUS DEL PAPILOMA HUMANO (VPH 28 GENOTIPOS) [Urianálisis] — Cita: No\nMuestra Cervico Vaginal y Uretral \n - Abstinencia sexual de 3 a 5 días antes del estudio. \n - Baño diario habitual. \n - En pacientes masculinos, no haber orinado de 2 a 4 horas antes del estudio.\n- En pacientes femeninos: No aplicar duchas vaginales, cremas, pomadas en la región genital, No presentarse durante la menstruación, acudir a la toma del estudio 5 días después de haber cesado el sangrado.\nMuestra Anal:\n- No aplicar duchas, cremas, pomadas en la región anal.\nMuestra Ocular: \n - No aplicar gotas, cremas en el ojo.  \n - No realizar limpieza en el ojo.\nMuestra de orina:\nPrimera orina de la mañana",
+        "expected_route": "FALLBACK_ORIGINAL",
+        "expected_rules": "R04,R08,R16",
+        "acceptance_criteria": "El VPH admite varias muestras y la orden no identifica cuál será tomada. No asumir que será orina ni fusionarla con EGO.",
+        "expected_output": "Mostrar al paciente las indicaciones originales completas de todos los estudios de la orden, sin consolidarlas ni reinterpretarlas. Registrar internamente el motivo del fallback.",
+        "studies": [
+            {
+                "study_id": "QA40-01",
+                "study_name": "EXAMEN GENERAL DE ORINA",
+                "indications": "Acudir a la sucursal por el frasco de laboratorio estéril para la recolección de la muestra de orina o comprarlo en la farmacia.\n- Pacientes femeninas: no estar en periodo menstrual.\n- Lavarse las manos con agua y jabón previo al aseo genital. \n- Preferible recolectar la primera orina de la mañana; en caso contrario, recolecte una orina aleatoria (esta se obtiene después de 4 horas de su última micción).\n- Desechar el primer y recolectar el chorro medio (llenar por lo menos hasta las tres cuartas partes del frasco), desechar tambien el último chorro.\n- Deberá entregar el contenedor de orina al laboratorio en un lapso no mayor a 2 horas después de recolectarlo. \nPacientes pediátricos: Utilizar bolsa pediátrica de recolección para orina (solicitela previamente al laboratorio), y seguir instrucciones de uso.",
+                "appointment_required": false,
+                "header_line": "EXAMEN GENERAL DE ORINA [Urianálisis] — Cita: No"
+            },
+            {
+                "study_id": "QA40-02",
+                "study_name": "DETECCION DEL VIRUS DEL PAPILOMA HUMANO (VPH 28 GENOTIPOS)",
+                "indications": "Muestra Cervico Vaginal y Uretral \n - Abstinencia sexual de 3 a 5 días antes del estudio. \n - Baño diario habitual. \n - En pacientes masculinos, no haber orinado de 2 a 4 horas antes del estudio.\n- En pacientes femeninos: No aplicar duchas vaginales, cremas, pomadas en la región genital, No presentarse durante la menstruación, acudir a la toma del estudio 5 días después de haber cesado el sangrado.\nMuestra Anal:\n- No aplicar duchas, cremas, pomadas en la región anal.\nMuestra Ocular: \n - No aplicar gotas, cremas en el ojo.  \n - No realizar limpieza en el ojo.\nMuestra de orina:\nPrimera orina de la mañana",
+                "appointment_required": false,
+                "header_line": "DETECCION DEL VIRUS DEL PAPILOMA HUMANO (VPH 28 GENOTIPOS) [Urianálisis] — Cita: No"
+            }
+        ]
+    }
+]

@@ -1,0 +1,177 @@
+=== Step 1: Unit LaboratoryPreparation pest ===
+=== started 2026-10-08T14:51:21-06:00 ===
+
+   PASS  Tests\Unit\LaboratoryPreparation\LaboratoryInstructionOfficialCasesTest
+  ✓ it carga exactamente 40 casos oficiales QA01 a QA40 con textos lite… 0.15s  
+  ✓ it parsea cada estudio oficial sin perder el texto fuente ni mezcla… 0.06s  
+  ✓ it reconstruye los bloques oficiales con el splitter sin alterar en… 0.03s  
+  ✓ it marca ambigüedades e incompletos explícitamente en casos oficial… 0.04s  
+
+   PASS  Tests\Unit\LaboratoryPreparation\LaboratoryInstructionParserTest
+  ✓ it expone categorías reconocidas sin consolidar estudios             0.03s  
+  ✓ it conserva texto original y trazabilidad por span                   0.02s  
+  ✓ it marca instrucciones vacías sin inventar requisitos                0.02s  
+  ✓ it detecta ayuno con intervalo cerrado 8-10 sin decidir compatibili… 0.02s  
+  ✓ it preserva negaciones explícitas de ayuno                           0.02s  
+  ✓ it expone unidades desconocidas sin convertirlas en instrucciones v… 0.02s  
+  ✓ it integra con LaboratoryPreparationSource sin usar feature_list     0.02s  
+  ✓ it ejecuta escenarios de regresión internos del parser               0.03s  
+  ✓ it delega casos oficiales al fixture JSON generado desde Excel       0.03s  
+  ✓ it marca entradas incompletas de ayuno                               0.02s  
+  ✓ it marca fragmentos no reconocidos explícitamente en lugar de desca… 0.02s  
+
+   PASS  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineTest
+  ✓ it interseca ayuno 8 h con 10–12 h en AUTO (R01)                     0.05s  
+  ✓ it interseca 8–10 h con 10–12 h en un punto de 10 h (R01)            0.03s  
+  ✓ it marca FALLBACK clínico cuando 6–8 h choca con 10–12 h (R01)       0.02s  
+  ✓ it aplica condición pediátrica sin inventar edad (R02)               0.02s  
+  ✓ it conserva hidratación y vejiga sin secuenciar orina ambigua (R03)  0.02s  
+  ✓ it evalúa casos oficiales R01 con ruta AUTO cuando el parser no dej… 0.02s  
+  ✓ it evalúa casos oficiales R01 con ruta AUTO cuando el parser no dej… 0.02s  
+  ✓ it evalúa casos oficiales R01 con ruta AUTO cuando el parser no dej… 0.02s  
+  ✓ it aplica FALLBACK oficial QA26 por ayuno incompatible 6–8 h vs 10–… 0.02s  
+  ✓ it consolida QA04 adulto con intersección 8–14 h y 10–12 h (R01,R02… 0.02s  
+  ✓ it consolida QA27 con intersección 10 h preservando restricción de…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.03s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.03s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.03s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.03s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.02s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.03s  
+  ✓ it evalúa casos oficiales de muestra QA08–QA22 según ruta esperada…  0.03s  
+  ✓ it aplica FALLBACK oficial QA39 por secuenciación vejiga llena vs o… 0.03s  
+  ✓ it aplica FALLBACK oficial QA40 por ambigüedad VPH multi-muestra co… 0.02s  
+  ✓ it serializa decisiones AUTO y FALLBACK compatibles con schema v2    0.02s  
+
+  Tests:    44 passed (3320 assertions)
+  Duration: 1.32s
+
+STEP1_EXIT_CODE=0
+
+=== Step 2: Feature sequential script ===
+=== started 2026-10-08T14:51:23-06:00 ===
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\LaboratoryPreparationChannelRenderTest
+  ✓ it renders ai sections in email when preparation is ai ready        81.80s  
+  ✓ it renders pending message and original instructions in email when…  0.04s  
+  ✓ it renders original instructions in email when preparation failed w… 0.05s  
+  ✓ it renders original instructions in email when preparation is fallb… 0.05s  
+  ✓ it renders special and individual instructions in email when ai rea… 0.05s  
+  ✓ it renders ai sections in pdf when preparation is ai ready           0.06s  
+  ✓ it renders original instructions in pdf when preparation is ai pend… 0.07s  
+  ✓ it renders original instructions in pdf when preparation is fallbac… 0.05s  
+  ✓ it renders special and individual instructions in pdf when ai ready  0.05s  
+  ✓ it renders multi section ai preparation consistently in email and p… 0.05s  
+  ✓ it shows purchase item indications in email and pdf when no prepara… 0.05s  
+
+   PASS  Tests\Feature\LaboratoryPreparationDecisionPersistenceTest
+  ✓ it persists an AUTO_CONSOLIDATED functional decision with rules and… 0.04s  
+  ✓ it rejects AUTO_CONSOLIDATED decisions without validated consolidat… 0.02s  
+  ✓ it persists a FALLBACK_ORIGINAL decision for provider review causes  0.03s  
+  ✓ it persists technical AI fallback without provider review            0.03s  
+  ✓ it rejects technical AI fallback decisions marked for provider revi… 0.02s  
+  ✓ it reads historical preparation summaries without v3 decision metad… 0.04s  
+  ✓ it serializes and deserializes decision JSON fields through model c… 0.03s  
+  ✓ it serializes AUTO_CONSOLIDATED decisions as schema v2 compatible p… 0.02s  
+  ✓ it serializes FALLBACK_ORIGINAL decisions as schema v2 compatible p… 0.02s  
+  ✓ it rejects original instructions that do not match schema v2 item s… 0.02s  
+
+   PASS  Tests\Feature\LaboratoryPreparationGenerationDispatchTest
+  ✓ it dispatches preparation summary generation after a confirmed labo… 0.13s  
+  ✓ it does not call OpenAI during the purchase fulfillment request      0.11s  
+  ✓ it does not break purchase fulfillment when queueing the preparatio… 0.12s  
+  ✓ it the preparation job supports bounded retries and records failed…  0.04s  
+  ✓ it the preparation job does not retry fidelity validation failures   0.09s  
+  ✓ it the preparation job keeps retry behavior for transient provider…  0.04s  
+  ✓ it the preparation job reuses an unchanged source hash without dupl… 0.07s  
+  ✓ it a missing purchase does not create a generation execution         0.02s  
+  ✓ it a changed source hash can be queued for regeneration              0.04s  
+
+   PASS  Tests\Feature\LaboratoryPreparationPresenterTest
+  ✓ it uses ai summary text and json when a valid summary exists         0.06s  
+  ✓ it falls back to purchase item indications when no valid summary ex… 0.04s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.04s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.04s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.05s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.04s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.04s  
+  ✓ it never consults LaboratoryTest indications when presenting a hist… 0.04s  
+  ✓ it falls back when the persisted summary hash no longer matches pur… 0.06s  
+  ✓ it returns AI_PENDING when a current execution is queued or process… 0.04s  
+  ✓ it returns AI_PENDING when a current execution is queued or process… 0.04s  
+  ✓ it returns AI_FAILED when the current generation execution failed    0.04s  
+  ✓ it does not call OpenAI and keeps individual instructions available  0.05s  
+  ✓ it represents one study multiple studies and missing indications sa… 0.05s  
+  ✓ it makes confirmation email and pdf data consume the preparation re… 0.05s  
+  ✓ it adds preparation to shared resource while keeping compatibility…  0.05s  
+
+   PASS  Tests\Feature\LaboratoryPreparationResponseValidationTest
+  ✓ it activates laboratory preparation prompt version 3 with fidelity…  0.03s  
+  ✓ it accepts generic summary text when structured preparation content… 0.05s  
+  ✓ it accepts fixture A consolidating compatible duplicate instruction… 0.05s  
+  ✓ it rejects fixture A when compatible instructions are repeated with… 0.05s  
+  ✓ it accepts fixture B keeping incompatible urine instructions separa… 0.04s  
+  ✓ it rejects fixture B when incompatible instructions are concatenate… 0.04s  
+  ✓ it accepts fixture C keeping a unique instruction in individual_ins… 0.04s  
+  ✓ it accepts fixture D preserving quantities and time ranges in synth… 0.03s  
+  ✓ it accepts fixture E when studies have no indications and sections…  0.04s  
+  ✓ it accepts fixture F with structured urine preparation bullets       0.04s  
+  ✓ it accepts fixture G keeping different fasting ranges in separate s… 0.05s  
+  ✓ it rejects responses that omit source item coverage for indicated s… 0.03s  
+  ✓ it rejects tetra marcador responses that preserve source_item_id bu… 0.03s  
+  ✓ it accepts tetra marcador responses that preserve all critical inst… 0.03s  
+  ✓ it rejects responses that source items with null indications         0.04s  
+  ✓ it accepts a feature that appears only as study_name for an indicat… 0.03s  
+  ✓ it accepts a feature mentioned in instructions when backed by anoth… 0.03s  
+  ✓ it rejects a preparation instruction based only on feature_list con… 0.04s  
+  ✓ it rejects responses that invent preparation instructions from feat… 0.03s  
+  ✓ it rejects responses that lose numeric ranges from the original ind… 0.04s  
+  ✓ it rejects responses that lose critical units from the original ind… 0.04s  
+  ✓ it accepts safe textual variations when critical information is pre… 0.04s  
+  ✓ it accepts valid mixed purchases synthesizing indicated items and o… 0.04s  
+  ✓ it stores the validated OpenAI response payload when fidelity valid… 0.05s  
+  ✓ it keeps response_payload null when OpenAI fails before returning s… 0.04s  
+  ✓ it accepts tirosina newborn preparation with safe paraphrasing of n… 0.03s  
+  ✓ it accepts tirosina newborn preparation when ordinals are expressed… 0.03s  
+  ✓ it rejects responses that drop a concrete conditional requirement    0.04s  
+  ✓ it stores response_payload on successful preparation generation      0.04s  
+
+   PASS  Tests\Feature\LaboratoryPreparationSummaryServiceTest
+  ✓ it generates and persists a preparation summary for a purchase with… 0.07s  
+  ✓ it keeps current AI generated summaries without a v3 functional dec… 0.04s  
+  ✓ it persists existing fidelity fallback as a technical original fall… 0.04s  
+  ✓ it uses LaboratoryPurchaseItem indications and does not reconstruct… 0.04s  
+  ✓ it does not call OpenAI again when source hash is unchanged          0.04s  
+  ✓ it changes source hash when source indications change and keeps one… 0.05s  
+  ✓ it records failed AI execution without breaking the purchase flow    0.05s  
+  ✓ it does not include patient PII in the provider payload or redacted… 0.04s  
+
+  Tests:    83 passed (319 assertions)
+  Duration: 85.64s
+
+STEP2_EXIT_CODE=0
+
+=== Step 3: pint --dirty ===
+=== started 2026-10-08T14:52:49-06:00 ===
+
+
+  ──────────────────────────────────────────────────────────────────── Laravel  
+    PASS   ........................................................... 0 files  
+
+STEP3_EXIT_CODE=0
+
+=== Step 4: git diff --check ===
+=== started 2026-10-08T14:52:49-06:00 ===
+STEP4_EXIT_CODE=0
+
+=== ALL DONE ===
+SUMMARY: step1=0 step2=0 step3=0 step4=0

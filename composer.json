@@ -67,6 +67,12 @@
 		}
 	},
 	"scripts": {
+		"test:laboratory-preparation-feature": [
+			"bash scripts/run-laboratory-preparation-feature-sequential.sh"
+		],
+		"test:laboratory-preparation-parser": [
+			"@php scripts/validate_parser_oficial_v3.php"
+		],
 		"post-autoload-dump": [
 			"Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
 			"@php artisan package:discover --ansi"

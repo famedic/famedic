@@ -65,6 +65,7 @@ function bindPreparationValidationOpenAi(array $content): object
             ?array $jsonSchema = null,
             ?string $schemaName = null,
             float $temperature = 0,
+            ?int $timeoutSeconds = null,
         ): array {
             $this->calls++;
 
@@ -855,6 +856,7 @@ it('keeps response_payload null when OpenAI fails before returning structured co
             ?array $jsonSchema = null,
             ?string $schemaName = null,
             float $temperature = 0,
+            ?int $timeoutSeconds = null,
         ): array {
             throw new \RuntimeException('Proveedor no disponible');
         }

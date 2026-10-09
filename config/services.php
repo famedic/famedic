@@ -143,6 +143,11 @@ return [
         ],
     ],
 
+    'laboratory_preparation' => [
+        'deterministic_v3_enabled' => filter_var(env('LAB_PREPARATION_DETERMINISTIC_V3_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'deterministic_v3_shadow_enabled' => filter_var(env('LAB_PREPARATION_DETERMINISTIC_V3_SHADOW_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
     'odessa' => [
         'url' => env('ODESSA_URL'),
         'public_key' => env('ODESSA_PUBLIC_KEY'),

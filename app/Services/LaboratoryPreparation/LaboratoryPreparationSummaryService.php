@@ -9,6 +9,7 @@ use App\Models\LaboratoryPurchasePreparationSummary;
 use App\Services\OpenAi\OpenAiClient;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
@@ -34,10 +35,32 @@ class LaboratoryPreparationSummaryService
     public function __construct(
         private readonly OpenAiClient $openAiClient,
         private readonly LaboratoryPreparationSource $source,
+        private readonly LaboratoryInstructionParser $parser,
+        private readonly LaboratoryPreparationRuleEngine $ruleEngine,
+        private readonly LaboratoryPreparationOpenAiRedactor $redactor,
     ) {}
+
+    public function deterministicV3Enabled(): bool
+    {
+        return (bool) config('services.laboratory_preparation.deterministic_v3_enabled', false);
+    }
+
+    public function deterministicV3ShadowEnabled(): bool
+    {
+        return (bool) config('services.laboratory_preparation.deterministic_v3_shadow_enabled', false);
+    }
+
+    public function deterministicV3ShadowEffectiveEnabled(): bool
+    {
+        return $this->deterministicV3ShadowEnabled() && ! $this->deterministicV3Enabled();
+    }
 
     public function queueExecution(LaboratoryPurchase $purchase): ?AiExecution
     {
+        if ($this->deterministicV3Enabled()) {
+            return null;
+        }
+
         $purchase->loadMissing('laboratoryPurchaseItems');
 
         $input = $this->buildSourceInput($purchase);
@@ -89,6 +112,10 @@ class LaboratoryPreparationSummaryService
         ?AiExecution $execution = null,
         bool $throwOnFailure = false,
     ): ?LaboratoryPurchasePreparationSummary {
+        if ($this->deterministicV3Enabled()) {
+            return $this->generateDeterministicV3($purchase, $throwOnFailure);
+        }
+
         $purchase->loadMissing('laboratoryPurchaseItems');
 
         $input = $this->buildSourceInput($purchase);
@@ -156,6 +183,12 @@ class LaboratoryPreparationSummaryService
                         'ai_execution_id' => $execution->id,
                         'source_hash' => $sourceHash,
                         'status' => LaboratoryPurchasePreparationSummary::STATUS_GENERATED,
+                        'decision_status' => null,
+                        'rules_version' => null,
+                        'rules_applied' => null,
+                        'fallback_reason' => null,
+                        'fallback_category' => null,
+                        'needs_provider_review' => null,
                         'summary_text' => $content['summary'],
                         'summary_json' => $content,
                         'generated_at' => now(),
@@ -244,6 +277,12 @@ class LaboratoryPreparationSummaryService
                     'ai_execution_id' => $execution?->id,
                     'source_hash' => $sourceHash,
                     'status' => LaboratoryPurchasePreparationSummary::STATUS_GENERATED,
+                    'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_FALLBACK_ORIGINAL,
+                    'rules_version' => null,
+                    'rules_applied' => [],
+                    'fallback_reason' => 'ai_fidelity_validation_failed',
+                    'fallback_category' => LaboratoryPurchasePreparationSummary::FALLBACK_TECHNICAL_AI_FAILURE,
+                    'needs_provider_review' => false,
                     'summary_text' => $content['summary'],
                     'summary_json' => $content,
                     'generated_at' => now(),
@@ -267,6 +306,325 @@ class LaboratoryPreparationSummaryService
     public function sourceHash(array $input): string
     {
         return $this->source->hash($input);
+    }
+
+    public function expectedSourceHash(LaboratoryPurchase $purchase): string
+    {
+        if ($this->deterministicV3Enabled()) {
+            return $this->source->deterministicHash($purchase);
+        }
+
+        return $this->sourceHash($this->buildSourceInput($purchase));
+    }
+
+    public function shouldQueueGeneration(LaboratoryPurchase $purchase): bool
+    {
+        $purchase->loadMissing('laboratoryPurchaseItems');
+
+        if ($purchase->laboratoryPurchaseItems->isEmpty()) {
+            return false;
+        }
+
+        $sourceHash = $this->expectedSourceHash($purchase);
+        $existing = $purchase->preparationSummary()->first();
+
+        return ! (
+            $existing
+            && $existing->source_hash === $sourceHash
+            && $existing->status === LaboratoryPurchasePreparationSummary::STATUS_GENERATED
+            && $existing->invalidated_at === null
+        );
+    }
+
+    public function hasCurrentGeneratedSummary(LaboratoryPurchase $purchase): bool
+    {
+        $sourceHash = $this->expectedSourceHash($purchase);
+        $existing = $purchase->preparationSummary()->first();
+
+        return $existing
+            && $existing->source_hash === $sourceHash
+            && $existing->status === LaboratoryPurchasePreparationSummary::STATUS_GENERATED
+            && $existing->invalidated_at === null;
+    }
+
+    public function deterministicV3SourceHash(LaboratoryPurchase $purchase): string
+    {
+        return $this->source->deterministicHash($purchase);
+    }
+
+    public function runDeterministicV3Shadow(
+        LaboratoryPurchase $purchase,
+        ?string $expectedSourceHash = null,
+    ): ?LaboratoryPreparationDecision {
+        if (! $this->deterministicV3ShadowEffectiveEnabled()) {
+            if ($this->deterministicV3ShadowEnabled() && $this->deterministicV3Enabled()) {
+                Log::info('laboratory_preparation_v3_shadow_skipped_active_v3_precedence', [
+                    'purchase_id' => $purchase->id,
+                    'order_id' => $this->orderId($purchase),
+                    'rules_version' => LaboratoryPreparationRuleEngine::RULES_VERSION,
+                ]);
+            }
+
+            return null;
+        }
+
+        $purchase->loadMissing('laboratoryPurchaseItems');
+        if ($purchase->laboratoryPurchaseItems->isEmpty()) {
+            Log::info('laboratory_preparation_v3_shadow_skipped_empty_order', [
+                'purchase_id' => $purchase->id,
+                'order_id' => $this->orderId($purchase),
+                'rules_version' => LaboratoryPreparationRuleEngine::RULES_VERSION,
+            ]);
+
+            return null;
+        }
+
+        $startedAt = microtime(true);
+        $sourceHash = $this->deterministicV3SourceHash($purchase);
+
+        if ($expectedSourceHash !== null && $expectedSourceHash !== $sourceHash) {
+            Log::info('laboratory_preparation_v3_shadow_skipped_stale_source', [
+                'purchase_id' => $purchase->id,
+                'order_id' => $this->orderId($purchase),
+                'expected_source_hash' => $expectedSourceHash,
+                'actual_source_hash' => $sourceHash,
+                'rules_version' => LaboratoryPreparationRuleEngine::RULES_VERSION,
+            ]);
+
+            return null;
+        }
+
+        try {
+            $input = $this->buildSourceInput($purchase);
+            $parseResult = $this->parser->parseItems($input['items'] ?? []);
+            $decision = $this->ruleEngine->evaluate(
+                orderId: $this->orderId($purchase),
+                parseResult: $parseResult,
+                patient: $this->source->patientContext($purchase),
+                restrictToPhase3aCategories: false,
+            );
+
+            Log::info('laboratory_preparation_v3_shadow_completed', [
+                'purchase_id' => $purchase->id,
+                'order_id' => $this->orderId($purchase),
+                'source_hash' => $sourceHash,
+                'decision_status' => $decision->status,
+                'rules_version' => $decision->rulesVersion,
+                'rules_applied' => $decision->rulesApplied,
+                'fallback_category' => $decision->fallbackCategory,
+                'fallback_reason' => $decision->fallbackReason,
+                'needs_provider_review' => $decision->needsProviderReview,
+                'duration_ms' => $this->durationMs($startedAt),
+            ]);
+
+            return $decision;
+        } catch (Throwable $exception) {
+            Log::warning('laboratory_preparation_v3_shadow_failed', [
+                'purchase_id' => $purchase->id,
+                'order_id' => $this->orderId($purchase),
+                'source_hash' => $sourceHash,
+                'rules_version' => LaboratoryPreparationRuleEngine::RULES_VERSION,
+                'exception' => $exception::class,
+                'duration_ms' => $this->durationMs($startedAt),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function generateDeterministicV3(
+        LaboratoryPurchase $purchase,
+        bool $throwOnFailure = false,
+    ): ?LaboratoryPurchasePreparationSummary {
+        $purchase->loadMissing('laboratoryPurchaseItems');
+
+        $input = $this->buildSourceInput($purchase);
+        $sourceHash = $this->source->deterministicHash($purchase);
+
+        $existing = $purchase->preparationSummary()->first();
+        if (
+            $existing
+            && $existing->source_hash === $sourceHash
+            && $existing->status === LaboratoryPurchasePreparationSummary::STATUS_GENERATED
+            && $existing->invalidated_at === null
+        ) {
+            return $existing;
+        }
+
+        if ($existing && $existing->source_hash !== $sourceHash && $existing->invalidated_at === null) {
+            $existing->update([
+                'status' => LaboratoryPurchasePreparationSummary::STATUS_STALE,
+                'invalidated_at' => now(),
+            ]);
+        }
+
+        try {
+            $startedAt = microtime(true);
+            $parseResult = $this->parser->parseItems($input['items'] ?? []);
+            $decision = $this->ruleEngine->evaluate(
+                orderId: $this->orderId($purchase),
+                parseResult: $parseResult,
+                patient: $this->source->patientContext($purchase),
+                restrictToPhase3aCategories: false,
+            );
+
+            $result = $decision->status === LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED
+                ? $this->redactor->redact($decision, $purchase)
+                : LaboratoryPreparationRedactionResult::originalFallback($decision);
+
+            $summary = $this->persistV3Result($purchase, $sourceHash, $result);
+
+            $this->logV3Completed(
+                purchase: $purchase,
+                result: $result,
+                durationMs: $this->durationMs($startedAt),
+                summary: $summary,
+            );
+
+            return $summary;
+        } catch (Throwable $exception) {
+            Log::warning('laboratory_preparation_v3_failed', [
+                'purchase_id' => $purchase->id,
+                'order_id' => $this->orderId($purchase),
+                'rules_version' => LaboratoryPreparationRuleEngine::RULES_VERSION,
+                'exception' => $exception::class,
+            ]);
+
+            if (! $throwOnFailure) {
+                report($exception);
+            }
+
+            if ($throwOnFailure) {
+                throw $exception;
+            }
+
+            return null;
+        }
+    }
+
+    private function persistV3Result(
+        LaboratoryPurchase $purchase,
+        string $sourceHash,
+        LaboratoryPreparationRedactionResult $result,
+    ): ?LaboratoryPurchasePreparationSummary {
+        $decision = $result->decision;
+        $content = $result->usedOpenAiText()
+            ? $this->v3AutoContent($result)
+            : $this->v3FallbackContent($decision, $result->technicalFailureReason);
+
+        return DB::transaction(function () use ($purchase, $sourceHash, $result, $decision, $content) {
+            $freshPurchase = $purchase->fresh('laboratoryPurchaseItems');
+            if (! $freshPurchase || $this->source->deterministicHash($freshPurchase) !== $sourceHash) {
+                return null;
+            }
+
+            $locked = LaboratoryPurchasePreparationSummary::query()
+                ->where('laboratory_purchase_id', $purchase->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (
+                $locked
+                && $locked->source_hash === $sourceHash
+                && $locked->status === LaboratoryPurchasePreparationSummary::STATUS_GENERATED
+                && $locked->invalidated_at === null
+            ) {
+                return $locked;
+            }
+
+            return LaboratoryPurchasePreparationSummary::query()->updateOrCreate(
+                ['laboratory_purchase_id' => $purchase->id],
+                [
+                    'ai_execution_id' => $result->aiExecution?->id,
+                    'source_hash' => $sourceHash,
+                    'status' => LaboratoryPurchasePreparationSummary::STATUS_GENERATED,
+                    'decision_status' => $decision->status,
+                    'rules_version' => $decision->rulesVersion,
+                    'rules_applied' => $decision->rulesApplied,
+                    'fallback_reason' => $decision->fallbackReason,
+                    'fallback_category' => $decision->fallbackCategory,
+                    'needs_provider_review' => $decision->needsProviderReview,
+                    'summary_text' => $content['summary'],
+                    'summary_json' => $content,
+                    'generated_at' => now(),
+                    'invalidated_at' => null,
+                ]
+            );
+        });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function v3AutoContent(LaboratoryPreparationRedactionResult $result): array
+    {
+        $content = $result->content ?? [];
+        $patientText = trim((string) ($content['patient_text'] ?? ''));
+        $title = trim((string) ($content['title'] ?? LaboratoryPreparationRedactionValidator::TITLE));
+
+        return [
+            'summary' => $patientText,
+            'sections' => [
+                [
+                    'key' => 'v3_consolidated',
+                    'title' => $title !== '' ? $title : 'Indicaciones consolidadas',
+                    'content' => $patientText,
+                    'source_item_ids' => [],
+                ],
+            ],
+            'special_instructions' => [],
+            'individual_instructions' => [],
+            'decision' => $result->decision->toSchemaPayload(),
+            'redaction' => $content,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function v3FallbackContent(LaboratoryPreparationDecision $decision, ?string $technicalFailureReason): array
+    {
+        return [
+            'summary' => 'Consulta las indicaciones de preparación por estudio.',
+            'sections' => [],
+            'special_instructions' => [],
+            'individual_instructions' => [],
+            'fallback' => true,
+            'technical_failure_reason' => $technicalFailureReason,
+            'decision' => $decision->toSchemaPayload(),
+        ];
+    }
+
+    private function orderId(LaboratoryPurchase $purchase): string
+    {
+        return filled($purchase->gda_order_id)
+            ? (string) $purchase->gda_order_id
+            : 'laboratory_purchase_'.$purchase->id;
+    }
+
+    private function logV3Completed(
+        LaboratoryPurchase $purchase,
+        LaboratoryPreparationRedactionResult $result,
+        int $durationMs,
+        ?LaboratoryPurchasePreparationSummary $summary,
+    ): void {
+        $decision = $result->decision;
+
+        Log::info('laboratory_preparation_v3_completed', [
+            'purchase_id' => $purchase->id,
+            'order_id' => $this->orderId($purchase),
+            'summary_id' => $summary?->id,
+            'decision_status' => $decision->status,
+            'rules_version' => $decision->rulesVersion,
+            'rules_applied' => $decision->rulesApplied,
+            'fallback_category' => $decision->fallbackCategory,
+            'needs_provider_review' => $decision->needsProviderReview,
+            'duration_ms' => $durationMs,
+            'ai_execution_id' => $result->aiExecution?->id,
+            'ai_execution_status' => $result->aiExecution?->status,
+            'redaction_validated' => $result->usedOpenAiText(),
+            'technical_failure_reason' => $result->technicalFailureReason,
+        ]);
     }
 
     public function activePrompt(): AiPrompt

@@ -44,16 +44,37 @@ class LaboratoryPreparationPresenter
         }
 
         $input = $this->source->buildInput($purchase);
-        $sourceHash = $this->source->hash($input);
+        $legacySourceHash = $this->source->hash($input);
         $individualInstructions = $this->individualInstructions($purchase);
         $legacyStudies = $this->legacyStudies($individualInstructions);
+        $rawSummary = $purchase->relationLoaded('preparationSummary') ? $purchase->preparationSummary : null;
+        $sourceHash = $this->expectedSummaryHash($purchase, $rawSummary, $legacySourceHash);
         $summary = $this->validSummary(
-            $purchase->relationLoaded('preparationSummary') ? $purchase->preparationSummary : null,
+            $rawSummary,
             $sourceHash,
         );
 
         if ($summary !== null) {
             $summaryJson = $summary->summary_json;
+
+            if ($summary->isFallbackOriginal()) {
+                return [
+                    'has_ai_summary' => false,
+                    'ai_status' => self::STATUS_FALLBACK,
+                    'source' => 'fallback',
+                    'source_hash' => $sourceHash,
+                    'generated_at' => $summary->generated_at?->toIso8601String(),
+                    'prompt_version' => null,
+                    'summary' => [
+                        'text' => null,
+                        'sections' => [],
+                        'special_instructions' => [],
+                        'individual_instructions' => [],
+                    ],
+                    'individual_instructions' => $individualInstructions,
+                    'studies' => $legacyStudies,
+                ];
+            }
 
             return [
                 'has_ai_summary' => true,
@@ -141,6 +162,13 @@ class LaboratoryPreparationPresenter
             return null;
         }
 
+        if (
+            $summary->rules_version === LaboratoryPreparationRuleEngine::RULES_VERSION
+            && ! (bool) config('services.laboratory_preparation.deterministic_v3_enabled', false)
+        ) {
+            return null;
+        }
+
         if ($summary->status !== LaboratoryPurchasePreparationSummary::STATUS_GENERATED) {
             return null;
         }
@@ -149,7 +177,7 @@ class LaboratoryPreparationPresenter
             return null;
         }
 
-        if ($summary->aiExecution?->status === AiExecution::STATUS_FAILED) {
+        if (! $summary->isFallbackOriginal() && $summary->aiExecution?->status === AiExecution::STATUS_FAILED) {
             return null;
         }
 
@@ -164,6 +192,18 @@ class LaboratoryPreparationPresenter
         }
 
         return $summary;
+    }
+
+    private function expectedSummaryHash(
+        LaboratoryPurchase $purchase,
+        ?LaboratoryPurchasePreparationSummary $summary,
+        string $legacySourceHash,
+    ): string {
+        if ($summary?->rules_version === LaboratoryPreparationRuleEngine::RULES_VERSION) {
+            return $this->source->deterministicHash($purchase);
+        }
+
+        return $legacySourceHash;
     }
 
     private function latestExecutionForHash(LaboratoryPurchase $purchase, string $sourceHash): ?AiExecution

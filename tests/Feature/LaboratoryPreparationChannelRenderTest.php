@@ -59,8 +59,11 @@ function channelRenderItem(LaboratoryPurchase $purchase, array $attributes = [])
 function channelRenderAiSummary(LaboratoryPurchase $purchase, array $summaryJson = [], array $attributes = []): LaboratoryPurchasePreparationSummary
 {
     $source = app(LaboratoryPreparationSource::class);
-    $input = $source->buildInput($purchase->fresh('laboratoryPurchaseItems'));
-    $hash = $source->hash($input);
+    $freshPurchase = $purchase->fresh('laboratoryPurchaseItems');
+    $input = $source->buildInput($freshPurchase);
+    $hash = ($attributes['rules_version'] ?? null) === 'famedic-indicaciones-v3'
+        ? $source->deterministicHash($freshPurchase)
+        : $source->hash($input);
     $prompt = AiPrompt::query()->create([
         'key' => 'laboratory_preparation_summary',
         'domain' => 'laboratory',
@@ -122,6 +125,7 @@ function channelRenderOpenAiSpy(): object
             ?array $jsonSchema = null,
             ?string $schemaName = null,
             float $temperature = 0,
+            ?int $timeoutSeconds = null,
         ): array {
             $this->calls++;
 
@@ -341,6 +345,81 @@ it('renders ai sections in pdf when preparation is ai ready', function () {
         ->and($pdfHtml)->not->toContain('Texto original del PDF que no debe dominar la salida.');
 });
 
+it('renders deterministic v3 auto as a single consolidated section in email and pdf', function () {
+    config(['services.laboratory_preparation.deterministic_v3_enabled' => true]);
+
+    $purchase = channelRenderPurchase();
+    channelRenderItem($purchase, ['indications' => 'Ayuno original que no debe repetirse por estudio.']);
+    channelRenderAiSummary($purchase->fresh('laboratoryPurchaseItems'), [
+        'summary' => '• Acude con ayuno de 8 horas.',
+        'sections' => [
+            [
+                'key' => 'v3_consolidated',
+                'title' => 'Indicaciones consolidadas',
+                'content' => '• Acude con ayuno de 8 horas.',
+                'source_item_ids' => [],
+            ],
+        ],
+        'special_instructions' => [],
+        'individual_instructions' => [],
+    ], [
+        'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_AUTO_CONSOLIDATED,
+        'rules_version' => 'famedic-indicaciones-v3',
+        'rules_applied' => ['R01'],
+        'needs_provider_review' => false,
+        'summary_text' => '• Acude con ayuno de 8 horas.',
+    ]);
+
+    $data = channelRenderData($purchase);
+    $emailHtml = channelRenderEmailHtml($data);
+    $pdfHtml = channelRenderPdfHtml($data);
+
+    expect($data['preparation']['ai_status'])->toBe('AI_READY')
+        ->and($emailHtml)->toContain('Indicaciones consolidadas')
+        ->and($pdfHtml)->toContain('Indicaciones consolidadas')
+        ->and($emailHtml)->toContain('Acude con ayuno de 8 horas.')
+        ->and($pdfHtml)->toContain('Acude con ayuno de 8 horas.')
+        ->and($emailHtml)->not->toContain('Ayuno original que no debe repetirse por estudio.')
+        ->and($pdfHtml)->not->toContain('Ayuno original que no debe repetirse por estudio.');
+});
+
+it('renders originals in email and pdf for persisted deterministic v3 auto after rollback to flag off', function () {
+    config(['services.laboratory_preparation.deterministic_v3_enabled' => true]);
+
+    $purchase = channelRenderPurchase();
+    channelRenderItem($purchase, ['indications' => 'Ayuno original rollback.']);
+    channelRenderAiSummary($purchase->fresh('laboratoryPurchaseItems'), [
+        'summary' => '• Texto V3 rollback.',
+        'sections' => [
+            [
+                'key' => 'v3_consolidated',
+                'title' => 'Indicaciones consolidadas',
+                'content' => '• Texto V3 rollback.',
+                'source_item_ids' => [],
+            ],
+        ],
+        'special_instructions' => [],
+        'individual_instructions' => [],
+    ], [
+        'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_AUTO_CONSOLIDATED,
+        'rules_version' => 'famedic-indicaciones-v3',
+        'rules_applied' => ['R01'],
+        'needs_provider_review' => false,
+        'summary_text' => '• Texto V3 rollback.',
+    ]);
+
+    config(['services.laboratory_preparation.deterministic_v3_enabled' => false]);
+    $data = channelRenderData($purchase);
+    $emailHtml = channelRenderEmailHtml($data);
+    $pdfHtml = channelRenderPdfHtml($data);
+
+    expect($data['preparation']['source'])->toBe('fallback')
+        ->and($emailHtml)->toContain('Ayuno original rollback.')
+        ->and($pdfHtml)->toContain('Ayuno original rollback.')
+        ->and($emailHtml)->not->toContain('Texto V3 rollback')
+        ->and($pdfHtml)->not->toContain('Texto V3 rollback');
+});
+
 it('renders original instructions in pdf when preparation is ai pending', function () {
     $purchase = channelRenderPurchase();
     channelRenderItem($purchase, ['indications' => 'Ayuno de 10 horas.']);
@@ -370,6 +449,41 @@ it('renders original instructions in pdf when preparation is fallback', function
     $pdfHtml = channelRenderPdfHtml(channelRenderData($purchase));
 
     expect($pdfHtml)->toContain('Presentarse hidratado.');
+});
+
+it('renders deterministic v3 fallback as original instructions in email and pdf without internal reasons', function () {
+    config(['services.laboratory_preparation.deterministic_v3_enabled' => true]);
+
+    $purchase = channelRenderPurchase();
+    channelRenderItem($purchase, ['name' => 'Estudio A', 'indications' => 'Ayuno de 6 a 8 horas.']);
+    channelRenderItem($purchase, ['name' => 'Estudio B', 'indications' => 'Ayuno de 10 a 12 horas.']);
+    channelRenderAiSummary($purchase->fresh('laboratoryPurchaseItems'), [
+        'summary' => 'Consulta las indicaciones de preparación por estudio.',
+        'sections' => [],
+        'special_instructions' => [],
+        'individual_instructions' => [],
+        'fallback' => true,
+    ], [
+        'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_FALLBACK_ORIGINAL,
+        'rules_version' => 'famedic-indicaciones-v3',
+        'rules_applied' => ['R01'],
+        'fallback_reason' => 'incompatible_fasting_interval',
+        'fallback_category' => LaboratoryPurchasePreparationSummary::FALLBACK_CLINICAL_CONFLICT,
+        'needs_provider_review' => true,
+    ]);
+
+    $data = channelRenderData($purchase);
+    $emailHtml = channelRenderEmailHtml($data);
+    $pdfHtml = channelRenderPdfHtml($data);
+
+    foreach (['Ayuno de 6 a 8 horas.', 'Ayuno de 10 a 12 horas.'] as $needle) {
+        expect($emailHtml)->toContain($needle)
+            ->and($pdfHtml)->toContain($needle);
+    }
+
+    expect($data['preparation']['source'])->toBe('fallback')
+        ->and($emailHtml)->not->toContain('incompatible_fasting_interval')
+        ->and($pdfHtml)->not->toContain('incompatible_fasting_interval');
 });
 
 it('renders special and individual instructions in pdf when ai ready', function () {

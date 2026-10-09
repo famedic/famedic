@@ -40,7 +40,7 @@ class SharedLaboratoryOrderController extends Controller
         ];
 
         if (Schema::hasTable('laboratory_purchase_preparation_summaries')) {
-            $relations[] = 'preparationSummary:id,laboratory_purchase_id,ai_execution_id,source_hash,status,summary_text,summary_json,generated_at,invalidated_at';
+            $relations[] = 'preparationSummary:id,laboratory_purchase_id,ai_execution_id,source_hash,status,decision_status,rules_version,rules_applied,fallback_reason,fallback_category,needs_provider_review,summary_text,summary_json,generated_at,invalidated_at';
             $relations[] = 'preparationSummary.aiExecution:id,status,prompt_version';
         }
 

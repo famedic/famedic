@@ -62,8 +62,11 @@ function preparationPresenterItem(LaboratoryPurchase $purchase, array $attribute
 function preparationPresenterAiSummary(LaboratoryPurchase $purchase, array $summaryJson = [], array $attributes = []): LaboratoryPurchasePreparationSummary
 {
     $source = app(LaboratoryPreparationSource::class);
-    $input = $source->buildInput($purchase->fresh('laboratoryPurchaseItems'));
-    $hash = $source->hash($input);
+    $freshPurchase = $purchase->fresh('laboratoryPurchaseItems');
+    $input = $source->buildInput($freshPurchase);
+    $hash = ($attributes['rules_version'] ?? null) === 'famedic-indicaciones-v3'
+        ? $source->deterministicHash($freshPurchase)
+        : $source->hash($input);
     $prompt = AiPrompt::query()->create([
         'key' => 'laboratory_preparation_summary',
         'domain' => 'laboratory',
@@ -125,6 +128,7 @@ function bindPresenterOpenAiSpy(): object
             ?array $jsonSchema = null,
             ?string $schemaName = null,
             float $temperature = 0,
+            ?int $timeoutSeconds = null,
         ): array {
             $this->calls++;
 
@@ -166,6 +170,109 @@ it('uses ai summary text and json when a valid summary exists', function () {
         ->and($presented['summary']['sections'][0]['source_item_ids'])->toBe([$item->id])
         ->and($presented['summary']['special_instructions'][0]['source_item_ids'])->toBe([$item->id])
         ->and($presented['prompt_version'])->toBe(7);
+});
+
+it('presents deterministic v3 auto summaries as one consolidated patient-facing section', function () {
+    config(['services.laboratory_preparation.deterministic_v3_enabled' => true]);
+
+    $purchase = preparationPresenterPurchase();
+    $item = preparationPresenterItem($purchase, ['indications' => 'Ayuno de 8 horas.']);
+    preparationPresenterAiSummary($purchase->fresh('laboratoryPurchaseItems'), [
+        'summary' => '• Acude con ayuno de 8 horas.',
+        'sections' => [
+            [
+                'key' => 'v3_consolidated',
+                'title' => 'Indicaciones consolidadas',
+                'content' => '• Acude con ayuno de 8 horas.',
+                'source_item_ids' => [],
+            ],
+        ],
+        'special_instructions' => [],
+        'individual_instructions' => [],
+    ], [
+        'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_AUTO_CONSOLIDATED,
+        'rules_version' => 'famedic-indicaciones-v3',
+        'rules_applied' => ['R01'],
+        'needs_provider_review' => false,
+        'summary_text' => '• Acude con ayuno de 8 horas.',
+    ]);
+
+    $presented = app(LaboratoryPreparationPresenter::class)->present($purchase->fresh());
+
+    expect($presented['has_ai_summary'])->toBeTrue()
+        ->and($presented['source'])->toBe('ai')
+        ->and($presented['summary']['sections'])->toHaveCount(1)
+        ->and($presented['summary']['sections'][0]['content'])->toBe('• Acude con ayuno de 8 horas.')
+        ->and($presented['summary']['sections'][0]['content'])->not->toContain($item->name);
+});
+
+it('presents deterministic v3 fallback summaries as original instructions only', function () {
+    config(['services.laboratory_preparation.deterministic_v3_enabled' => true]);
+
+    $purchase = preparationPresenterPurchase();
+    preparationPresenterItem($purchase, ['name' => 'Estudio A', 'indications' => 'Ayuno de 6 a 8 horas.']);
+    preparationPresenterItem($purchase, ['name' => 'Estudio B', 'indications' => 'Ayuno de 10 a 12 horas.']);
+    preparationPresenterAiSummary($purchase->fresh('laboratoryPurchaseItems'), [
+        'summary' => 'Consulta las indicaciones de preparación por estudio.',
+        'sections' => [],
+        'special_instructions' => [],
+        'individual_instructions' => [],
+        'fallback' => true,
+    ], [
+        'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_FALLBACK_ORIGINAL,
+        'rules_version' => 'famedic-indicaciones-v3',
+        'rules_applied' => ['R01'],
+        'fallback_reason' => 'incompatible_fasting_interval',
+        'fallback_category' => LaboratoryPurchasePreparationSummary::FALLBACK_CLINICAL_CONFLICT,
+        'needs_provider_review' => true,
+    ]);
+
+    $presented = app(LaboratoryPreparationPresenter::class)->present($purchase->fresh());
+
+    expect($presented['has_ai_summary'])->toBeFalse()
+        ->and($presented['ai_status'])->toBe('FALLBACK')
+        ->and($presented['source'])->toBe('fallback')
+        ->and($presented['summary']['sections'])->toBe([])
+        ->and($presented['studies'])->toHaveCount(2)
+        ->and($presented['studies'][0]['instructions'])->toBe('Ayuno de 6 a 8 horas.')
+        ->and(json_encode($presented, JSON_UNESCAPED_UNICODE))->not->toContain('incompatible_fasting_interval');
+});
+
+it('rolls back persisted deterministic v3 auto summaries to original instructions when the flag is off', function () {
+    config(['services.laboratory_preparation.deterministic_v3_enabled' => true]);
+
+    $purchase = preparationPresenterPurchase();
+    preparationPresenterItem($purchase, ['name' => 'Glucosa', 'indications' => 'Ayuno original de 8 horas.']);
+    preparationPresenterAiSummary($purchase->fresh('laboratoryPurchaseItems'), [
+        'summary' => '• Texto V3 consolidado.',
+        'sections' => [
+            [
+                'key' => 'v3_consolidated',
+                'title' => 'Indicaciones consolidadas',
+                'content' => '• Texto V3 consolidado.',
+                'source_item_ids' => [],
+            ],
+        ],
+        'special_instructions' => [],
+        'individual_instructions' => [],
+    ], [
+        'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_AUTO_CONSOLIDATED,
+        'rules_version' => 'famedic-indicaciones-v3',
+        'rules_applied' => ['R01'],
+        'needs_provider_review' => false,
+        'summary_text' => '• Texto V3 consolidado.',
+    ]);
+
+    $enabled = app(LaboratoryPreparationPresenter::class)->present($purchase->fresh());
+    config(['services.laboratory_preparation.deterministic_v3_enabled' => false]);
+    $disabled = app(LaboratoryPreparationPresenter::class)->present($purchase->fresh());
+
+    expect($enabled['source'])->toBe('ai')
+        ->and($enabled['summary']['sections'][0]['content'])->toBe('• Texto V3 consolidado.')
+        ->and($disabled['source'])->toBe('fallback')
+        ->and($disabled['has_ai_summary'])->toBeFalse()
+        ->and($disabled['studies'][0]['instructions'])->toBe('Ayuno original de 8 horas.')
+        ->and(json_encode($disabled, JSON_UNESCAPED_UNICODE))->not->toContain('Texto V3 consolidado');
 });
 
 it('falls back to purchase item indications when no valid summary exists', function () {

@@ -17,12 +17,14 @@ abstract class TestCase extends BaseTestCase
 
         $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
-        $testDbPath = getenv('TEST_ISOLATED_SQLITE') ?: dirname(__DIR__).'/database/test_db.sqlite';
         $app->instance('env', 'testing');
         config([
             'app.env' => 'testing',
-            'database.default' => 'sqlite',
-            'database.connections.sqlite.database' => $testDbPath,
+            'database.default' => 'mysql',
+            'database.connections.mysql.host' => env('DB_HOST', 'mysql'),
+            'database.connections.mysql.database' => env('DB_DATABASE', 'famedic_test'),
+            'database.connections.mysql.username' => env('DB_USERNAME', 'famedic'),
+            'database.connections.mysql.password' => env('DB_PASSWORD', 'famedic'),
             'session.driver' => 'array',
             'cache.default' => 'array',
             'queue.default' => 'sync',
@@ -39,8 +41,11 @@ abstract class TestCase extends BaseTestCase
     {
         $overrides = [
             'APP_ENV' => 'testing',
-            'DB_CONNECTION' => 'sqlite',
-            'DB_DATABASE' => 'test_db.sqlite',
+            'DB_CONNECTION' => 'mysql',
+            'DB_HOST' => 'mysql',
+            'DB_DATABASE' => 'famedic_test',
+            'DB_USERNAME' => 'famedic',
+            'DB_PASSWORD' => 'famedic',
             'CACHE_STORE' => 'array',
             'SESSION_DRIVER' => 'array',
             'QUEUE_CONNECTION' => 'sync',

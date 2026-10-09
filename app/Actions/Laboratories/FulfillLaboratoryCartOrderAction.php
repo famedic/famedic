@@ -245,6 +245,20 @@ class FulfillLaboratoryCartOrderAction
                 return;
             }
 
+            if ($this->laboratoryPreparationSummaryService->deterministicV3Enabled()) {
+                if (! $this->laboratoryPreparationSummaryService->shouldQueueGeneration($laboratoryPurchase)) {
+                    return;
+                }
+
+                GenerateLaboratoryPurchasePreparationSummaryJob::dispatch(
+                    $laboratoryPurchase->id,
+                    null,
+                    $this->laboratoryPreparationSummaryService->expectedSourceHash($laboratoryPurchase),
+                )->afterCommit();
+
+                return;
+            }
+
             $execution = $this->laboratoryPreparationSummaryService->queueExecution($laboratoryPurchase);
 
             if (! $execution) {

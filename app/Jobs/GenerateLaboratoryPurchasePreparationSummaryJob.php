@@ -28,6 +28,7 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
     public function __construct(
         public int $laboratoryPurchaseId,
         public ?int $aiExecutionId = null,
+        public ?string $sourceHash = null,
     ) {
         $this->afterCommit();
     }
@@ -39,6 +40,7 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
         Log::info('laboratory_preparation_summary_job_started', [
             'purchase_id' => $this->laboratoryPurchaseId,
             'ai_execution_id' => $this->aiExecutionId,
+            'source_hash' => $this->sourceHash,
         ]);
 
         $purchase = LaboratoryPurchase::query()
@@ -54,9 +56,34 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
             return;
         }
 
+        if ($this->sourceHash && ! $service->deterministicV3Enabled()) {
+            Log::info('laboratory_preparation_summary_job_skipped_v3_disabled', [
+                'purchase_id' => $purchase->id,
+                'source_hash' => $this->sourceHash,
+            ]);
+
+            return;
+        }
+
         $execution = $this->aiExecutionId
             ? AiExecution::query()->find($this->aiExecutionId)
             : $service->queueExecution($purchase);
+
+        $expectedSourceHash = $execution?->input_hash ?? $this->sourceHash;
+        if ($expectedSourceHash && $service->expectedSourceHash($purchase) !== $expectedSourceHash) {
+            Log::info('laboratory_preparation_summary_job_skipped_stale_source', [
+                'purchase_id' => $purchase->id,
+                'ai_execution_id' => $execution?->id,
+                'expected_source_hash' => $expectedSourceHash,
+            ]);
+
+            return;
+        }
+
+        $hadCurrentSummary = $service->hasCurrentGeneratedSummary($purchase);
+        $shadowSourceHash = $service->deterministicV3ShadowEffectiveEnabled()
+            ? $service->deterministicV3SourceHash($purchase)
+            : null;
 
         try {
             $summary = $service->generate($purchase, $execution, throwOnFailure: true);
@@ -68,6 +95,13 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
                 'summary_status' => $summary?->status,
                 'generated_at' => $summary?->generated_at?->toIso8601String(),
             ]);
+
+            if ($summary && ! $hadCurrentSummary && $shadowSourceHash !== null) {
+                $service->runDeterministicV3Shadow(
+                    $purchase->fresh('laboratoryPurchaseItems') ?? $purchase,
+                    $shadowSourceHash,
+                );
+            }
 
             if ($summary) {
                 $notificationService->notifyIfNeeded($summary);
@@ -88,6 +122,13 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
                 'summary_status' => $summary?->status,
                 'generated_at' => $summary?->generated_at?->toIso8601String(),
             ]);
+
+            if ($summary && ! $hadCurrentSummary && $shadowSourceHash !== null) {
+                $service->runDeterministicV3Shadow(
+                    $purchase->fresh('laboratoryPurchaseItems') ?? $purchase,
+                    $shadowSourceHash,
+                );
+            }
 
             if ($summary) {
                 $notificationService->notifyIfNeeded($summary);
