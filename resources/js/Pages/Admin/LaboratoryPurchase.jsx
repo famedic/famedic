@@ -951,46 +951,6 @@ function PaymentBillingPanel({
 			}
 		>
 			<div className="space-y-5">
-				<div className="grid gap-3 sm:grid-cols-3">
-					<BillingStatusCard
-						icon={CreditCardIcon}
-						title="Pago"
-						value={transaction ? "Confirmado" : "Sin pago"}
-						tone={transaction ? "emerald" : "slate"}
-						detail={
-							transaction?.formatted_amount ??
-							laboratoryPurchase.formatted_net_total ??
-							"Pendiente"
-						}
-					/>
-					<BillingStatusCard
-						icon={DocumentDuplicateIcon}
-						title="Solicitud de factura"
-						value={
-							hasInvoiceRequest ? "Solicitada" : "No solicitada"
-						}
-						tone={hasInvoiceRequest ? "violet" : "slate"}
-						detail={
-							invoiceRequestWorkflow?.workflow_status_label ??
-							invoiceRequest?.formatted_created_at ??
-							"Sin solicitud registrada"
-						}
-					/>
-					<BillingStatusCard
-						icon={DocumentTextIcon}
-						title="Factura"
-						value={hasInvoice ? "Cargada" : "Pendiente"}
-						tone={hasInvoice ? "emerald" : "amber"}
-						detail={
-							hasInvoice
-								? "PDF/XML disponibles"
-								: hasInvoiceRequest
-									? "Lista para cargar"
-									: "Requiere solicitud"
-						}
-					/>
-				</div>
-
 				{canUploadInvoice && hasInvoiceRequest && !hasInvoice && (
 					<div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
 						<div className="flex items-start gap-3">
@@ -1017,17 +977,17 @@ function PaymentBillingPanel({
 				)}
 
 				<div className="space-y-4">
-					<InvoiceRequestPanel
-						invoiceRequest={invoiceRequest}
-						invoiceRequestWorkflow={invoiceRequestWorkflow}
-						hasInvoice={hasInvoice}
-					/>
 					<TaxInformationPanel
 						invoiceRequest={invoiceRequest}
 						taxProfile={taxProfile}
 						fiscalCertificateAvailability={
 							fiscalCertificateAvailability
 						}
+					/>
+					<InvoiceRequestPanel
+						invoiceRequest={invoiceRequest}
+						invoiceRequestWorkflow={invoiceRequestWorkflow}
+						hasInvoice={hasInvoice}
 					/>
 				</div>
 
@@ -1078,21 +1038,6 @@ function PaymentBillingPanel({
 				hideTrigger
 			/>
 		</SummaryCard>
-	);
-}
-
-function BillingStatusCard({ icon: Icon, title, value, detail, tone }) {
-	return (
-		<div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
-			<SoftIcon icon={Icon} color={tone} className="size-10" />
-			<div className="min-w-0">
-				<p className="text-xs font-semibold uppercase text-slate-500">
-					{title}
-				</p>
-				<p className="mt-1 font-bold text-famedic-darker">{value}</p>
-				<p className="mt-1 text-sm text-slate-500">{detail}</p>
-			</div>
-		</div>
 	);
 }
 
@@ -1234,25 +1179,23 @@ function TaxInformationPanel({
 		);
 	}
 
-	const requestCertificateRoute = invoiceRequest?.fiscal_certificate
-		? route("invoice-requests.fiscal-certificate", {
-				invoice_request: invoiceRequest,
-			})
-		: null;
-	const taxProfileCertificateRoute = taxProfile?.fiscal_certificate
-		? route("admin.tax-profiles.fiscal-certificate", {
-				tax_profile: taxProfile.id,
-			})
-		: null;
+	const effectiveSource = fiscalCertificateAvailability?.effective?.source;
 	const certificateRoute =
-		requestCertificateRoute ?? taxProfileCertificateRoute;
-	const certificateAvailability = requestCertificateRoute
-		? fiscalCertificateAvailability?.invoice_request
-		: taxProfileCertificateRoute
-			? fiscalCertificateAvailability?.tax_profile
-			: null;
-	const certificateExists = certificateAvailability?.exists === true;
-	const certificateHasPath = certificateAvailability?.has_path === true;
+		effectiveSource === "invoice_request"
+			? route("invoice-requests.fiscal-certificate", {
+					invoice_request: invoiceRequest,
+				})
+			: effectiveSource === "tax_profile" && taxProfile?.id
+				? route("admin.tax-profiles.fiscal-certificate", {
+						tax_profile: taxProfile.id,
+					})
+				: null;
+	const certificateExists =
+		fiscalCertificateAvailability?.effective?.exists === true;
+	const certificateHasPath =
+		fiscalCertificateAvailability?.effective?.has_path === true;
+	const certificateUsesFallback =
+		fiscalCertificateAvailability?.effective?.uses_fallback === true;
 
 	return (
 		<div className="rounded-xl border border-slate-100 p-4">
@@ -1266,14 +1209,22 @@ function TaxInformationPanel({
 						<FiscalCertificateAvailabilityBadge
 							exists={certificateExists}
 							hasPath={certificateHasPath}
+							usesFallback={certificateUsesFallback}
 						/>
 					</div>
 				</div>
 				{certificateRoute && certificateExists && (
-					<Button href={certificateRoute} target="_blank" outline>
-						<DocumentTextIcon />
-						Ver constancia fiscal
-					</Button>
+					<a
+						href={certificateRoute}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="inline-flex shrink-0 self-start"
+					>
+						<Button type="button" outline>
+							<DocumentTextIcon />
+							Ver constancia fiscal
+						</Button>
+					</a>
 				)}
 			</div>
 			<div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -1316,9 +1267,19 @@ function TaxInformationPanel({
 	);
 }
 
-function FiscalCertificateAvailabilityBadge({ exists, hasPath }) {
+function FiscalCertificateAvailabilityBadge({
+	exists,
+	hasPath,
+	usesFallback = false,
+}) {
 	if (exists) {
-		return <Badge color="emerald">Constancia disponible en S3</Badge>;
+		return (
+			<Badge color="emerald">
+				{usesFallback
+					? "Constancia disponible (perfil vinculado)"
+					: "Constancia disponible"}
+			</Badge>
+		);
 	}
 
 	return (

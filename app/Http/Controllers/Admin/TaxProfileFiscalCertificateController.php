@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\TaxProfile;
+use App\Support\TaxProfiles\FiscalCertificateStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -21,7 +22,7 @@ class TaxProfileFiscalCertificateController extends Controller
             abort(404);
         }
 
-        $disk = $this->resolveDisk($path);
+        $disk = FiscalCertificateStorage::resolveDisk($path);
         if (! $disk) {
             abort(404);
         }
@@ -37,18 +38,4 @@ class TaxProfileFiscalCertificateController extends Controller
         );
     }
 
-    private function resolveDisk(string $path): ?string
-    {
-        foreach (array_filter(['local', 'private', config('filesystems.default')]) as $disk) {
-            if (! is_string($disk) || $disk === '') {
-                continue;
-            }
-
-            if (config("filesystems.disks.{$disk}") && Storage::disk($disk)->exists($path)) {
-                return $disk;
-            }
-        }
-
-        return Storage::exists($path) ? config('filesystems.default') : null;
-    }
 }

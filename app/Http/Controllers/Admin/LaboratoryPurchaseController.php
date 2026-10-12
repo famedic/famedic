@@ -162,38 +162,10 @@ class LaboratoryPurchaseController extends Controller
 
     private function fiscalCertificateAvailabilityFor(LaboratoryPurchase $laboratoryPurchase): array
     {
-        $invoiceRequest = $laboratoryPurchase->invoiceRequest;
-        $taxProfile = $invoiceRequest?->taxProfile;
-
-        return [
-            'invoice_request' => [
-                'has_path' => filled($invoiceRequest?->fiscal_certificate),
-                'exists' => filled($invoiceRequest?->fiscal_certificate)
-                    ? Storage::exists($invoiceRequest->fiscal_certificate)
-                    : false,
-            ],
-            'tax_profile' => [
-                'has_path' => filled($taxProfile?->fiscal_certificate),
-                'exists' => filled($taxProfile?->fiscal_certificate)
-                    ? $this->storedFileExists($taxProfile->fiscal_certificate)
-                    : false,
-            ],
-        ];
-    }
-
-    private function storedFileExists(string $path): bool
-    {
-        foreach (array_filter(['local', 'private', config('filesystems.default')]) as $disk) {
-            if (! is_string($disk) || $disk === '') {
-                continue;
-            }
-
-            if (config("filesystems.disks.{$disk}") && Storage::disk($disk)->exists($path)) {
-                return true;
-            }
-        }
-
-        return Storage::exists($path);
+        return \App\Support\TaxProfiles\FiscalCertificateStorage::availabilityFor(
+            $laboratoryPurchase->invoiceRequest,
+            $laboratoryPurchase->invoiceRequest?->taxProfile,
+        );
     }
 
     private function sampleCollectionNotificationsFor(LaboratoryPurchase $laboratoryPurchase): array
