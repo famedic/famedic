@@ -2,6 +2,7 @@
 
 use App\Enums\CartEventType;
 use App\Enums\Gender;
+use App\Enums\GdaOrderStatus;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
@@ -112,6 +113,7 @@ function phase3LabPurchase(?User $user = null, ?Cart $cart = null, int $items = 
         'brand' => LaboratoryBrand::OLAB->value,
         'gda_order_id' => 'GDA-PHASE3-'.fake()->unique()->numberBetween(1000, 9999),
         'gda_consecutivo' => fake()->unique()->numberBetween(10000, 99999),
+        'gda_status' => GdaOrderStatus::Confirmed,
         'name' => 'Paciente',
         'paternal_lastname' => 'Uno',
         'maternal_lastname' => 'Dos',
@@ -234,6 +236,7 @@ it('purchase completed payload uses GDA identifiers and clears checkout URL fiel
     $studyNames = $purchase->laboratoryPurchaseItems->pluck('name')->map(fn ($name) => trim((string) $name))->filter()->unique()->implode(', ');
 
     expect($dispatch->payload['custom_fields']['folio_famedic'])->toBe($purchase->gda_order_id)
+        ->and($dispatch->payload['custom_fields']['paciente_lab'])->toBe('Paciente Uno Dos')
         ->and($dispatch->payload['custom_fields']['gda_consecutivo'])->toBe((string) $purchase->gda_consecutivo)
         ->and($dispatch->payload['custom_fields']['url_finalizar_compra'])->toBe('')
         ->and($dispatch->payload['custom_fields']['estudios_comprados'])->toBe($studyNames)
@@ -242,6 +245,71 @@ it('purchase completed payload uses GDA identifiers and clears checkout URL fiel
         ->and($dispatch->payload['custom_fields']['fecha_compra'])->toBe(\Illuminate\Support\Carbon::parse($purchase->paid_at)->format('Y-m-d'))
         ->and($dispatch->payload['custom_fields']['total_compra'])->toBe(number_format(((int) $purchase->total_cents) / 100, 2, '.', ''))
         ->and($dispatch->payload['custom_fields'])->not->toHaveKey('lista_estudios_lab');
+});
+
+it('purchase completed payload uses the persisted patient snapshot instead of the account holder', function () {
+    Queue::fake();
+
+    $user = phase3LabUser([
+        'email' => 'holder-family@example.com',
+        'name' => 'Titular',
+        'paternal_lastname' => 'Cuenta',
+        'maternal_lastname' => 'Principal',
+    ]);
+    $purchase = phase3LabPurchase($user);
+    $purchase->update([
+        'name' => 'Familiar',
+        'paternal_lastname' => 'Paciente',
+        'maternal_lastname' => 'Real',
+    ]);
+
+    app(ActiveCampaignOutboundDispatcher::class)->enqueueLaboratoryPurchaseCompleted($purchase->fresh());
+
+    $dispatch = ActiveCampaignDispatch::query()
+        ->where('idempotency_key', "laboratory_purchase:{$purchase->id}:purchase_completed")
+        ->firstOrFail();
+
+    expect($dispatch->email)->toBe('holder-family@example.com')
+        ->and($dispatch->payload['custom_fields']['paciente_lab'])->toBe('Familiar Paciente Real')
+        ->and($dispatch->payload['contact']['first_name'])->toBe('Titular');
+});
+
+it('purchase completed patient name tolerates partial names without extra spaces', function () {
+    Queue::fake();
+
+    $purchase = phase3LabPurchase();
+    $purchase->update([
+        'name' => '  Ana  Maria ',
+        'paternal_lastname' => '',
+        'maternal_lastname' => '  Rios ',
+    ]);
+
+    app(ActiveCampaignOutboundDispatcher::class)->enqueueLaboratoryPurchaseCompleted($purchase->fresh());
+
+    $dispatch = ActiveCampaignDispatch::query()
+        ->where('idempotency_key', "laboratory_purchase:{$purchase->id}:purchase_completed")
+        ->firstOrFail();
+
+    expect($dispatch->payload['custom_fields']['paciente_lab'])->toBe('Ana Maria Rios');
+});
+
+it('purchase completed payload omits paciente_lab when the purchase patient snapshot is empty', function () {
+    Queue::fake();
+
+    $purchase = phase3LabPurchase();
+    $purchase->update([
+        'name' => '',
+        'paternal_lastname' => '',
+        'maternal_lastname' => ' ',
+    ]);
+
+    app(ActiveCampaignOutboundDispatcher::class)->enqueueLaboratoryPurchaseCompleted($purchase->fresh());
+
+    $dispatch = ActiveCampaignDispatch::query()
+        ->where('idempotency_key', "laboratory_purchase:{$purchase->id}:purchase_completed")
+        ->firstOrFail();
+
+    expect($dispatch->payload['custom_fields'])->not->toHaveKey('paciente_lab');
 });
 
 it('appointment confirmed payload includes appointment fields without sample or results fields', function () {
@@ -400,6 +468,78 @@ it('resolves an unconfigured purchase field by its ActiveCampaign title', functi
     Http::assertSent(fn ($request) => str_contains($request->url(), '/fieldValues')
         && (int) data_get($request->data(), 'fieldValue.field') === 77
         && data_get($request->data(), 'fieldValue.value') === 'Biometria, Glucosa');
+});
+
+it('updates purchase completed custom fields before applying the completed tag', function () {
+    Queue::fake();
+
+    $purchase = phase3LabPurchase(user: phase3LabUser(['email' => 'ordered-fields@example.com']));
+
+    Http::fake([
+        'https://ac.test/api/3/ecomOrders' => Http::response(['ecomOrder' => ['id' => 100]], 201),
+        'https://ac.test/api/3/contacts/*/contactTags' => Http::response(['contactTags' => []], 200),
+        'https://ac.test/api/3/contacts*' => Http::response([
+            'contacts' => [['id' => 42, 'email' => 'ordered-fields@example.com']],
+        ], 200),
+        'https://ac.test/api/3/fieldValues' => Http::response(['fieldValue' => ['id' => 1]], 201),
+        'https://ac.test/api/3/contactTags' => Http::response(['contactTag' => ['id' => 1]], 201),
+    ]);
+
+    $dispatch = app(ActiveCampaignOutboundDispatcher::class)->enqueueLaboratoryPurchaseCompleted($purchase);
+
+    (new DispatchActiveCampaignOutboundJob($dispatch->id))->handle(app(ActiveCampaignService::class));
+
+    $requests = Http::recorded()->map(fn ($record) => $record[0]);
+    $fieldIndex = $requests->search(fn ($request) => $request->url() === 'https://ac.test/api/3/fieldValues'
+        && data_get($request->data(), 'fieldValue.value') === 'Paciente Uno Dos');
+    $tagIndex = $requests->search(fn ($request) => $request->url() === 'https://ac.test/api/3/contactTags'
+        && (int) data_get($request->data(), 'contactTag.tag') === 18);
+
+    expect($fieldIndex)->not->toBeFalse()
+        ->and($tagIndex)->not->toBeFalse()
+        ->and($fieldIndex)->toBeLessThan($tagIndex);
+});
+
+it('does not apply completed purchase tags when custom field update fails and recovers on retry', function () {
+    Queue::fake();
+
+    $purchase = phase3LabPurchase(user: phase3LabUser(['email' => 'retry-fields@example.com']));
+    $dispatch = app(ActiveCampaignOutboundDispatcher::class)->enqueueLaboratoryPurchaseCompleted($purchase);
+    $fieldAttempts = 0;
+
+    Http::fake(function ($request) use (&$fieldAttempts) {
+        if ($request->url() === 'https://ac.test/api/3/fieldValues') {
+            $fieldAttempts++;
+
+            return $fieldAttempts === 1
+                ? Http::response(['message' => 'server error'], 500)
+                : Http::response(['fieldValue' => ['id' => $fieldAttempts]], 201);
+        }
+
+        return match (true) {
+            $request->url() === 'https://ac.test/api/3/ecomOrders' => Http::response(['ecomOrder' => ['id' => 100]], 201),
+            str_contains($request->url(), '/contacts/42/contactTags') => Http::response(['contactTags' => []], 200),
+            str_contains($request->url(), '/contacts') => Http::response([
+                'contacts' => [['id' => 42, 'email' => 'retry-fields@example.com']],
+            ], 200),
+            $request->url() === 'https://ac.test/api/3/contactTags' => Http::response(['contactTag' => ['id' => 1]], 201),
+            default => Http::response([], 200),
+        };
+    });
+
+    expect(fn () => (new DispatchActiveCampaignOutboundJob($dispatch->id))->handle(app(ActiveCampaignService::class)))
+        ->toThrow(ActiveCampaignSyncException::class);
+
+    expect($dispatch->fresh()->status)->toBe(ActiveCampaignDispatch::STATUS_FAILED)
+        ->and(Http::recorded()->filter(fn ($record) => $record[0]->url() === 'https://ac.test/api/3/contactTags')->count())->toBe(0);
+
+    expect(fn () => (new DispatchActiveCampaignOutboundJob($dispatch->id))->handle(app(ActiveCampaignService::class)))
+        ->not->toThrow(ActiveCampaignSyncException::class);
+
+    expect($dispatch->fresh()->status)->toBe(ActiveCampaignDispatch::STATUS_SYNCED)
+        ->and(ActiveCampaignDispatch::query()->where('idempotency_key', $dispatch->idempotency_key)->count())->toBe(1)
+        ->and(Http::recorded()->filter(fn ($record) => $record[0]->url() === 'https://ac.test/api/3/contactTags'
+            && (int) data_get($record[0]->data(), 'contactTag.tag') === 18)->count())->toBe(1);
 });
 
 it('marks lab custom field dispatch as failed on ActiveCampaign 500 without blocking the flow', function () {

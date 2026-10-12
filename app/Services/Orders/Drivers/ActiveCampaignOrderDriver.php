@@ -4,6 +4,7 @@ namespace App\Services\Orders\Drivers;
 
 use App\DTOs\Orders\OrderAutomationContext;
 use App\DTOs\Orders\OrderAutomationResult;
+use App\Enums\GdaOrderStatus;
 use App\Models\LaboratoryPurchase;
 use App\Models\MedicalAttentionSubscription;
 use App\Models\OnlinePharmacyPurchase;
@@ -45,6 +46,21 @@ class ActiveCampaignOrderDriver
                 message: 'Laboratory purchase missing from context.',
                 error: 'missing_laboratory_purchase',
                 operation: 'laboratoryPurchase',
+            );
+        }
+
+        if ($purchase->gda_status !== GdaOrderStatus::Confirmed) {
+            return $this->finish(
+                handler: 'handleLaboratoryOrder',
+                context: $context,
+                started: $started,
+                operations: $operations,
+                success: true,
+                executed: false,
+                message: 'Laboratory order skipped until GDA is confirmed.',
+                error: null,
+                operation: 'laboratory_purchase_completed_outbox',
+                retryable: false,
             );
         }
 

@@ -49,6 +49,7 @@ class LaboratoryActiveCampaignPayloadBuilder
         $brand = $purchase->brand instanceof LaboratoryBrand
             ? $purchase->brand
             : LaboratoryBrand::tryFrom((string) $purchase->brand);
+        $patientFullName = $this->patientFullNameFromPurchase($purchase);
 
         $purchase->loadMissing('laboratoryPurchaseItems');
         $studyNames = $purchase->laboratoryPurchaseItems
@@ -59,6 +60,7 @@ class LaboratoryActiveCampaignPayloadBuilder
             ->values();
 
         return $this->withoutNulls([
+            'paciente_lab' => $patientFullName,
             'folio_famedic' => $purchase->gda_order_id ?: null,
             'gda_consecutivo' => $purchase->gda_consecutivo ? (string) $purchase->gda_consecutivo : null,
             'mapa_sucursales_labs' => $brand ? $this->storesMapUrl($brand) : null,
@@ -150,6 +152,30 @@ class LaboratoryActiveCampaignPayloadBuilder
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function patientFullNameFromPurchase(LaboratoryPurchase $purchase): ?string
+    {
+        $name = collect([
+            $purchase->name,
+            $purchase->paternal_lastname,
+            $purchase->maternal_lastname,
+        ])
+            ->map(static fn ($part) => preg_replace('/\s+/', ' ', trim((string) $part)))
+            ->filter(static fn ($part) => is_string($part) && $part !== '')
+            ->implode(' ');
+
+        if ($name === '') {
+            Log::info('AC lab fields: paciente_lab omitted for purchase completed because patient name snapshot is empty', [
+                'laboratory_purchase_id' => $purchase->id,
+                'customer_id' => $purchase->customer_id,
+                'cart_id' => $purchase->cart_id,
+            ]);
+
+            return null;
+        }
+
+        return $name;
     }
 
     private function formatStoreAddress(LaboratoryStore $store): ?string

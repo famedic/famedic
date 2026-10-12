@@ -2,6 +2,7 @@
 
 use App\DTOs\Orders\OrderAutomationContext;
 use App\Enums\Gender;
+use App\Enums\GdaOrderStatus;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
@@ -65,6 +66,7 @@ function phase1LabPurchase(int $items = 1, ?User $user = null): LaboratoryPurcha
         'brand' => LaboratoryBrand::OLAB->value,
         'gda_order_id' => 'GDA-PHASE1-'.fake()->unique()->numberBetween(1000, 9999),
         'gda_consecutivo' => fake()->unique()->numberBetween(10000, 99999),
+        'gda_status' => GdaOrderStatus::Confirmed,
         'name' => 'Paciente',
         'paternal_lastname' => 'Uno',
         'maternal_lastname' => 'Dos',
@@ -290,6 +292,39 @@ it('completed laboratory purchase creates exactly one ActiveCampaign outbox disp
         ->where('idempotency_key', "laboratory_purchase:{$purchase->id}:purchase_completed")
         ->count())->toBe(1);
 });
+
+it('laboratory order automation skips purchase completed dispatch until GDA is confirmed', function (GdaOrderStatus $gdaStatus) {
+    Queue::fake();
+
+    $purchase = phase1LabPurchase(items: 1);
+    $purchase->update(['gda_status' => $gdaStatus]);
+    $context = new OrderAutomationContext(
+        order: $purchase->fresh(['customer.user', 'laboratoryPurchaseItems']),
+        customer: $purchase->customer,
+        transaction: null,
+        paymentAttempt: null,
+        laboratoryPurchase: $purchase->fresh(['customer.user', 'laboratoryPurchaseItems']),
+        pharmacyOrder: null,
+        membership: null,
+        amountCents: $purchase->total_cents,
+        reference: null,
+        gateway: null,
+        createdAt: now(),
+        channel: OrderAutomationContext::CHANNEL_LABORATORY,
+    );
+
+    $result = app(ActiveCampaignOrderDriver::class)->handleLaboratoryOrder($context);
+
+    expect($result->status)->toBe('synced')
+        ->and($result->activecampaign['executed'])->toBeFalse()
+        ->and(ActiveCampaignDispatch::query()
+            ->where('idempotency_key', "laboratory_purchase:{$purchase->id}:purchase_completed")
+            ->exists())->toBeFalse();
+})->with([
+    'pending' => GdaOrderStatus::Pending,
+    'failed' => GdaOrderStatus::Failed,
+    'uncertain' => GdaOrderStatus::Uncertain,
+]);
 
 it('ActiveCampaign outage leaves dispatch failed without creating a second purchase signal', function () {
     $purchase = phase1LabPurchase(items: 1);

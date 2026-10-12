@@ -210,6 +210,18 @@ class ActiveCampaignOutboundDispatcher
                 'email' => $email,
                 'tags' => $this->plannedLaboratoryPurchaseTags($purchase),
                 'custom_fields' => $this->laboratoryPayloadBuilder->forPurchaseCompleted($purchase),
+                'user_id' => $user?->id,
+                'contact' => $user instanceof User ? [
+                    'email' => $user->email,
+                    'first_name' => $user->name,
+                    'paternal_lastname' => $user->paternal_lastname,
+                    'maternal_lastname' => $user->maternal_lastname,
+                    'phone' => $user->phone,
+                    'gender' => $user->gender == 1 ? 'Masculino' : 'Femenino',
+                    'birth_date' => optional($user->birth_date)?->format('Y-m-d'),
+                    'phone_country' => $user->phone_country,
+                    'state' => $user->state,
+                ] : null,
             ],
         ]);
 

@@ -1794,14 +1794,6 @@ class ActiveCampaignService
             throw new ActiveCampaignSyncException("AC laboratory purchase completed: compra {$purchaseId} no encontrada.");
         }
 
-        $result = $this->laboratoryPurchase($purchase);
-
-        if (! $result->success) {
-            throw new ActiveCampaignSyncException(
-                'AC laboratoryPurchase falló: '.($result->error ?? 'unknown')
-            );
-        }
-
         $customFields = is_array($payload['custom_fields'] ?? null) ? $payload['custom_fields'] : [];
 
         if ($customFields !== []) {
@@ -1809,6 +1801,14 @@ class ActiveCampaignService
                 'email' => $payload['email'] ?? $purchase->customer?->user?->email,
                 'custom_fields' => $customFields,
             ]));
+        }
+
+        $result = $this->laboratoryPurchase($purchase);
+
+        if (! $result->success) {
+            throw new ActiveCampaignSyncException(
+                'AC laboratoryPurchase falló: '.($result->error ?? 'unknown')
+            );
         }
     }
 
