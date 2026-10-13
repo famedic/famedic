@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Services\CouponAuthorizationInboxService;
+use App\Services\LaboratoryPreparation\Admin\LaboratoryPreparationMonitorAccess;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +20,7 @@ class EnsureUserHasAdminAccount
         }
 
         $administrator = $request->user()->administrator;
+        $canViewPreparationMonitor = app(LaboratoryPreparationMonitorAccess::class)->allows($request->user());
         $isAuthorizer = $administrator->hasRole('autorizador');
         $pendingAuthorizationsCount = 0;
 
@@ -58,6 +60,11 @@ class EnsureUserHasAdminAccount
                         'current' => Route::currentRouteName() === 'admin.laboratory-purchases.index' ||
                             Route::currentRouteName() === 'admin.laboratory-purchases.chart' ||
                             Route::currentRouteName() === 'admin.laboratory-purchases.show',
+                    ] : null,
+                    $canViewPreparationMonitor ? [
+                        'label' => 'Indicaciones IA',
+                        'url' => route('admin.laboratory-preparation.monitor.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-preparation.monitor'),
                     ] : null,
                     $request->user()->administrator->hasPermissionTo('laboratory-tests.manage') ? [
                         'label' => 'Catálogo de estudios',
