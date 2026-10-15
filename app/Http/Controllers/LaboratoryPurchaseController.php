@@ -17,6 +17,7 @@ use App\Models\Contact;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use App\Services\Laboratory\LaboratoryCheckoutStepGuard;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationPresenter;
 use App\Services\LaboratoryResults\LaboratoryPurchaseResultControlPresenter;
 use App\Services\Tracking\Purchase;
 use App\Support\ClientContext;
@@ -319,6 +320,7 @@ class LaboratoryPurchaseController extends Controller
     public function show(
         Request $request,
         LaboratoryPurchase $laboratoryPurchase,
+        LaboratoryPreparationPresenter $preparationPresenter,
         LaboratoryPurchaseResultControlPresenter $resultControlPresenter,
     )
     {
@@ -379,6 +381,7 @@ class LaboratoryPurchaseController extends Controller
             'latestResultsAt' => $latestResultsAt,
             'hasResultsPdfCached' => $hasResultsPdfCached,
             ...$resultControl,
+            'preparation' => $preparationPresenter->present($laboratoryPurchase),
             'is_new_result' => $isNewResult,
             'activeLaboratoryPurchaseShare' => $activeShare ? [
                 'id' => $activeShare->id,

@@ -8,6 +8,7 @@ use App\Enums\GdaOrderStatus;
 use App\Enums\LaboratoryBrand;
 use App\Enums\LaboratoryGdaFailureOperation;
 use App\Exceptions\GdaOrderResultUncertainException;
+use App\Jobs\GenerateLaboratoryPurchasePreparationSummaryJob;
 use App\Models\Address;
 use App\Models\Cart;
 use App\Models\Contact;
@@ -24,6 +25,8 @@ use App\Services\Carts\CartAbandonmentService;
 use App\Services\Carts\CartEventRecorder;
 use App\Services\CouponApplicationService;
 use App\Services\Laboratory\LaboratoryGdaFailureLogService;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationEligibility;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationSummaryService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\Orders\OrderAutomationService;
 use App\Services\PromoCodeService;
@@ -47,6 +50,8 @@ class FulfillLaboratoryCartOrderAction
         private CartAbandonmentService $cartAbandonmentService,
         private RecordMarketingCampaignConversionAction $recordMarketingCampaignConversionAction,
         private LaboratoryGdaFailureLogService $laboratoryGdaFailureLogService,
+        private LaboratoryPreparationSummaryService $laboratoryPreparationSummaryService,
+        private LaboratoryPreparationEligibility $laboratoryPreparationEligibility,
     ) {}
 
     /**
@@ -223,6 +228,7 @@ class FulfillLaboratoryCartOrderAction
         }
 
         // Post-commit only: purchase + transaction are durable. Never rollback checkout on automation failure.
+        $this->dispatchLaboratoryPreparationSummaryGeneration($laboratoryPurchase);
         ($this->recordMarketingCampaignConversionAction)($laboratoryPurchase);
         $this->dispatchLaboratoryOrderAutomation($laboratoryPurchase);
 
@@ -264,6 +270,60 @@ class FulfillLaboratoryCartOrderAction
         $this->checkAndSendInvoiceDeadlineNotification($laboratoryPurchase);
 
         return $laboratoryPurchase;
+    }
+
+    private function dispatchLaboratoryPreparationSummaryGeneration(LaboratoryPurchase $laboratoryPurchase): void
+    {
+        try {
+            $v3Enabled = $this->laboratoryPreparationSummaryService->deterministicV3Enabled();
+            $shadowEnabled = $this->laboratoryPreparationSummaryService->deterministicV3ShadowEnabled();
+
+            if (! $v3Enabled && ! $shadowEnabled) {
+                return;
+            }
+
+            $laboratoryPurchase->refresh();
+            $laboratoryPurchase->loadMissing('laboratoryPurchaseItems');
+
+            $eligibility = $this->laboratoryPreparationEligibility->evaluate($laboratoryPurchase);
+            if (! $eligibility->eligible) {
+                Log::info('[Laboratory Preparation AI] Skipped queueing for ineligible purchase', [
+                    'purchase_id' => $laboratoryPurchase->id,
+                    'reason' => $eligibility->reason,
+                    'payment_method' => $eligibility->paymentMethod,
+                ]);
+
+                return;
+            }
+
+            if ($v3Enabled) {
+                if (! $this->laboratoryPreparationSummaryService->shouldQueueGeneration($laboratoryPurchase)) {
+                    return;
+                }
+
+                GenerateLaboratoryPurchasePreparationSummaryJob::dispatch(
+                    $laboratoryPurchase->id,
+                    null,
+                    $this->laboratoryPreparationSummaryService->expectedSourceHash($laboratoryPurchase),
+                    GenerateLaboratoryPurchasePreparationSummaryJob::MODE_GENERATE,
+                )->afterCommit();
+
+                return;
+            }
+
+            GenerateLaboratoryPurchasePreparationSummaryJob::dispatch(
+                $laboratoryPurchase->id,
+                null,
+                $this->laboratoryPreparationSummaryService->deterministicV3SourceHash($laboratoryPurchase),
+                GenerateLaboratoryPurchasePreparationSummaryJob::MODE_SHADOW_ONLY,
+            )->afterCommit();
+        } catch (Throwable $e) {
+            Log::warning('[Laboratory Preparation AI] Failed to queue summary generation', [
+                'purchase_id' => $laboratoryPurchase->id,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

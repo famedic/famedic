@@ -84,4 +84,81 @@ class OpenAiClient
 
         return $decoded;
     }
+
+    /**
+     * Chat completion for preparation redaction, including provider metadata.
+     *
+     * @param  list<array{role: string, content: string|list<array<string, mixed>>}>  $messages
+     * @param  array<string, mixed>|null  $jsonSchema
+     * @return array{content: array<string, mixed>, model: string, usage: array<string, mixed>, raw: array<string, mixed>}
+     */
+    public function chatCompletionWithMetadata(
+        array $messages,
+        ?string $model = null,
+        ?array $jsonSchema = null,
+        ?string $schemaName = null,
+        float $temperature = 0,
+        ?int $timeoutSeconds = null,
+    ): array {
+        $apiKey = config('services.openai.key');
+        if (! is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException('OpenAI API key is not configured.');
+        }
+
+        $resolvedModel = $model
+            ?: (config('services.openai.tax_profile_model') ?: null)
+            ?: config('services.openai.model', 'gpt-4o-mini');
+
+        $payload = [
+            'model' => $resolvedModel,
+            'temperature' => $temperature,
+            'messages' => $messages,
+        ];
+
+        if ($jsonSchema !== null) {
+            $payload['response_format'] = [
+                'type' => 'json_schema',
+                'json_schema' => [
+                    'name' => $schemaName ?: 'structured_response',
+                    'strict' => true,
+                    'schema' => $jsonSchema,
+                ],
+            ];
+        }
+
+        try {
+            $response = Http::timeout($timeoutSeconds ?? (int) config('services.openai.timeout', 60))
+                ->withToken($apiKey)
+                ->acceptJson()
+                ->post('https://api.openai.com/v1/chat/completions', $payload);
+        } catch (ConnectionException $e) {
+            throw ConstanciaExtractionException::extractionTimeout();
+        }
+
+        if (in_array($response->status(), [408, 504], true)) {
+            throw ConstanciaExtractionException::extractionTimeout();
+        }
+
+        if (! $response->successful()) {
+            $responseBody = mb_substr((string) $response->body(), 0, 500);
+            throw new RuntimeException('OpenAI request failed with status '.$response->status().': '.$responseBody);
+        }
+
+        $content = $response->json('choices.0.message.content');
+        if (! is_string($content) || trim($content) === '') {
+            throw new RuntimeException('OpenAI returned an empty completion.');
+        }
+
+        $decoded = json_decode($content, true);
+        if (! is_array($decoded)) {
+            throw new RuntimeException('OpenAI returned non-JSON structured content.');
+        }
+
+        return [
+            'content' => $decoded,
+            'model' => (string) ($response->json('model') ?: $resolvedModel),
+            'usage' => $response->json('usage') ?? [],
+            'raw' => $response->json() ?? [],
+        ];
+    }
 }

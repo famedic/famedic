@@ -230,6 +230,11 @@ class LaboratoryPurchase extends Model
         return $this->hasMany(LaboratoryResultStatus::class);
     }
 
+    public function preparationSummary()
+    {
+        return $this->hasOne(LaboratoryPurchasePreparationSummary::class);
+    }
+
     /**
      * Resumen del reverso de saldo a favor, si el pedido tuvo cupón restaurado al cancelarse.
      *

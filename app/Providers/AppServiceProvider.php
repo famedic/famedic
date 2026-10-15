@@ -159,6 +159,10 @@ class AppServiceProvider extends ServiceProvider
             return app(\App\Services\LaboratoryBilling\LaboratoryBillingAccess::class)->allows($user);
         });
 
+        Gate::define('view-laboratory-preparation-monitor', function ($user): bool {
+            return app(\App\Services\LaboratoryPreparation\Admin\LaboratoryPreparationMonitorAccess::class)->allows($user);
+        });
+
         Route::bind('laboratory_purchase', function ($value) {
             return LaboratoryPurchase::withTrashed()->findOrFail($value);
         });

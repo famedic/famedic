@@ -4,6 +4,7 @@ namespace App\Actions\Laboratories;
 
 use App\Models\LaboratoryPurchase;
 use App\Models\Transaction;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationPresenter;
 use App\Support\FamedicPublicContactConfig;
 use App\Support\Laboratory\PatientEmailDetails;
 use Illuminate\Support\Facades\URL;
@@ -30,13 +31,8 @@ final class LaboratoryPurchaseConfirmationViewData
         $appointment = $purchase->laboratoryAppointment;
         $transaction = $purchase->transactions->first();
 
-        $studies = $purchase->laboratoryPurchaseItems->map(function ($item) {
-            return [
-                'name' => $item->name,
-                'instructions' => ($item->indications !== null && $item->indications !== '') ? $item->indications : '—',
-                'feature_list' => self::normalizePackageFeatureList($item->feature_list),
-            ];
-        })->values()->all();
+        $preparation = app(LaboratoryPreparationPresenter::class)->present($purchase);
+        $studies = $preparation['studies'];
 
         $patientDetails = PatientEmailDetails::fromPurchase($purchase);
 
@@ -77,6 +73,7 @@ final class LaboratoryPurchaseConfirmationViewData
             'total' => formattedCentsPrice($netCents),
             'total_gross' => formattedCentsPrice($grossCents),
             'fecha_compra' => $purchase->formatted_created_at ?? '—',
+            'preparation' => $preparation,
             'studies' => $studies,
             'branches_url' => URL::route('laboratory-stores.index', ['brand' => $purchase->brand->value]),
             ...self::supportContactData(),

@@ -3,6 +3,7 @@
 namespace App\Actions\Laboratories;
 
 use App\Models\LaboratoryPurchase;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationPresenter;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -197,6 +198,9 @@ class ResolveLaboratoryPurchasePdfPath
                 'indications' => $item->indications,
                 'feature_list' => LaboratoryPurchaseConfirmationViewData::normalizePackageFeatureList($item->feature_list),
             ])->toArray(),
+            'preparation' => $this->visiblePreparationContent(
+                app(LaboratoryPreparationPresenter::class)->present($laboratoryPurchase),
+            ),
             'appointment' => $laboratoryPurchase->laboratoryAppointment ? [
                 'appointment_date' => $laboratoryPurchase->laboratoryAppointment->appointment_date?->format('Y-m-d H:i:s'),
                 'store_name' => $laboratoryPurchase->laboratoryAppointment->laboratoryStore?->name,
@@ -208,5 +212,23 @@ class ResolveLaboratoryPurchasePdfPath
         ];
 
         return substr(md5(serialize($contentData)), 0, 12);
+    }
+
+    /** @return array<string, mixed> */
+    protected function visiblePreparationContent(array $preparation): array
+    {
+        return [
+            'ai_status' => $preparation['ai_status'] ?? null,
+            'summary' => [
+                'sections' => $preparation['summary']['sections'] ?? [],
+                'special_instructions' => $preparation['summary']['special_instructions'] ?? [],
+                'individual_instructions' => $preparation['summary']['individual_instructions'] ?? [],
+            ],
+            'studies' => array_map(fn (array $study) => [
+                'name' => $study['name'] ?? null,
+                'instructions' => $study['instructions'] ?? null,
+                'feature_list' => $study['feature_list'] ?? [],
+            ], $preparation['studies'] ?? []),
+        ];
     }
 }

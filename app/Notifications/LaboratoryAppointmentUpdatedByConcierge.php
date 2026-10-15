@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\LaboratoryAppointment;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationPresenter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -47,11 +48,12 @@ class LaboratoryAppointmentUpdatedByConcierge extends Notification
         $dt = localizedDate($appointment->appointment_date);
         $hasPurchase = $purchase !== null;
 
+        $preparation = $hasPurchase
+            ? app(LaboratoryPreparationPresenter::class)->present($purchase)
+            : null;
+
         $studies = $hasPurchase
-            ? $purchase->laboratoryPurchaseItems->map(fn($item) => [
-                'name' => $item->name,
-                'instructions' => ($item->indications !== null && $item->indications !== '') ? $item->indications : '—',
-            ])->values()->all()
+            ? $preparation['studies']
             : $appointment->customer->laboratoryCartItems
             ->filter(function ($item) use ($appointment) {
                 return $item->laboratoryTest?->brand?->value === $appointment->brand->value;
@@ -79,6 +81,7 @@ class LaboratoryAppointmentUpdatedByConcierge extends Notification
             'metodo_pago' => $hasPurchase ? $this->paymentMethodLabel($transaction?->payment_method ?? $transaction?->gateway) : null,
             'total' => $hasPurchase ? $purchase->formatted_total : null,
             'fecha_compra' => $hasPurchase ? ($purchase->formatted_created_at ?? '—') : null,
+            'preparation' => $preparation,
             'studies' => $studies,
         ];
     }

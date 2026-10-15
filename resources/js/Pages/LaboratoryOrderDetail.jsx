@@ -65,6 +65,7 @@ export default function LaboratoryOrderDetail({
 	isNewResult = false,
 	resultControl = null,
 	studyResultStatuses = [],
+	preparation = null,
 }) {
 	const [activeTab, setActiveTab] = useState("patient");
 	const [pendingScrollToPreparation, setPendingScrollToPreparation] = useState(false);
@@ -202,13 +203,12 @@ export default function LaboratoryOrderDetail({
 	}, [studies]);
 
 	const studiesWithIndications = useMemo(
-		() =>
-			(laboratoryPurchase?.laboratory_purchase_items || []).map((item) => ({
+		() => preparation?.studies || (laboratoryPurchase?.laboratory_purchase_items || []).map((item) => ({
 				id: item.id,
 				name: item.name,
 				indications: item.indications || "",
 			})),
-		[laboratoryPurchase],
+		[preparation, laboratoryPurchase],
 	);
 
 	const orderType = useMemo(() => {
@@ -604,6 +604,7 @@ export default function LaboratoryOrderDetail({
 					hasAppointment={Boolean(laboratoryPurchase?.laboratory_appointment)}
 					appointment={laboratoryPurchase?.laboratory_appointment}
 					studiesWithIndications={studiesWithIndications}
+					preparation={preparation}
 				/>
 			)}
 

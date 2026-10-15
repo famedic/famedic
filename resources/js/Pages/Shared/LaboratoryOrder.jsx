@@ -210,6 +210,63 @@ function CheckLine({ children }) {
 	);
 }
 
+function PreparationContent({ preparation, studies }) {
+	const summary = preparation?.summary || {};
+	const sections = Array.isArray(summary.sections) ? summary.sections : [];
+	const specialInstructions = Array.isArray(summary.special_instructions)
+		? summary.special_instructions
+		: [];
+	const individualInstructions = Array.isArray(summary.individual_instructions)
+		? summary.individual_instructions
+		: [];
+	const isReady = preparation?.ai_status === "AI_READY";
+
+	if (!isReady) {
+		return (
+			<div className="space-y-3">
+				{preparation?.ai_status === "AI_PENDING" && (
+					<p className="text-base leading-7 text-zinc-600">
+						Estamos preparando un resumen más sencillo de estas indicaciones.
+					</p>
+				)}
+				<IndicationsAccordion studies={studies} />
+			</div>
+		);
+	}
+
+	return (
+		<div className="space-y-4">
+			<p className="text-base leading-7 text-zinc-700">
+				Hemos simplificado las indicaciones para que sea más fácil prepararte.
+			</p>
+			{sections.map((section, index) => (
+				<div key={section.key || `${section.title}-${index}`} className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
+					<h3 className="break-words text-base font-semibold text-zinc-900">{section.title || "Preparación"}</h3>
+					<p className="mt-2 whitespace-pre-line break-words text-base leading-7 text-zinc-800">{section.content}</p>
+				</div>
+			))}
+			{specialInstructions.map((instruction, index) => (
+				<div key={`special-${index}`} className="rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-950">
+					<p className="text-sm font-semibold uppercase">Importante</p>
+					<p className="mt-2 whitespace-pre-line break-words text-base leading-7">{instruction.content}</p>
+				</div>
+			))}
+			{individualInstructions.map((instruction, index) => (
+				<div key={`individual-${instruction.source_item_id || index}`} className="rounded-md border border-zinc-200 p-4">
+					<p className="text-sm font-semibold uppercase text-zinc-500">{instruction.study_name || "Estudio"}</p>
+					<p className="mt-2 whitespace-pre-line break-words text-base leading-7 text-zinc-800">{instruction.content}</p>
+				</div>
+			))}
+			<details className="rounded-md border border-zinc-200 p-4">
+				<summary className="cursor-pointer text-base font-semibold text-sky-800">Consultar indicaciones originales</summary>
+				<div className="mt-4">
+					<IndicationsAccordion studies={preparation.studies?.length ? preparation.studies : studies} />
+				</div>
+			</details>
+		</div>
+	);
+}
+
 function OperationalDatum({ label, value }) {
 	if (!value) return null;
 
@@ -314,6 +371,7 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 	const appointment = laboratoryOrder?.appointment || {};
 	const store = laboratoryOrder?.store;
 	const studies = laboratoryOrder?.studies || [];
+	const preparation = laboratoryOrder?.preparation ?? null;
 	const brand = laboratoryOrder?.order?.brand || {};
 	const patient = laboratoryOrder?.patient || {};
 	const purchaser = laboratoryOrder?.purchaser || {};
@@ -430,7 +488,7 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 	);
 	const preparationCard = (
 		<Section title="Indicaciones de preparación" icon={ClipboardDocumentCheckIcon}>
-			<IndicationsAccordion studies={studies} />
+			<PreparationContent preparation={preparation} studies={studies} />
 		</Section>
 	);
 	const visitGuideCards = (

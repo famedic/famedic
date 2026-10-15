@@ -35,6 +35,7 @@ use App\Http\Controllers\Admin\LaboratoryBilling\RequestsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\TaxProfilesController as TaxProfilesBillingController;
 use App\Http\Controllers\Admin\LaboratoryNotificationController;
 use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
+use App\Http\Controllers\Admin\LaboratoryPreparationMonitorController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseChartController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseResultControlController;
@@ -236,6 +237,10 @@ Route::prefix('admin')->middleware([
         ]);
         Route::get('laboratory-purchases/chart', [LaboratoryPurchaseChartController::class, 'index'])
             ->name('laboratory-purchases.chart');
+        Route::get('laboratory-preparation/monitor', [LaboratoryPreparationMonitorController::class, 'index'])
+            ->name('laboratory-preparation.monitor.index');
+        Route::get('laboratory-preparation/monitor/{laboratory_purchase}', [LaboratoryPreparationMonitorController::class, 'show'])
+            ->name('laboratory-preparation.monitor.show');
         Route::resource('laboratory-purchases', LaboratoryPurchaseController::class)->only(['index', 'show', 'destroy']);
         Route::post(
             'laboratory-purchases/{laboratory_purchase}/resend-confirmation-email',
